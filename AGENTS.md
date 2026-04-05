@@ -5,13 +5,12 @@ This document is the standing brief for anyone working on `ibkr-go`, human or ag
 ## Core Mindset
 
 - **Solo dev / YAGNI.** Do not overengineer. Do not overabstract. Build against the current codebase. Keep one implementation per behavior and move deliberately forward. No duplicate implementations, compatibility shims, or fallback code paths.
-- **Implementation-first docs.** Docs are implementation-first: if a doc conflicts with code, the code wins — then update the doc.
+- **Implementation-first docs.** Docs are implementation-first: if a doc conflicts with code, the code wins — then update the doc. docs are aimed to be complementary to the code, with in-line code comments explaining why where it adds signal without noise and is worth the extra maintenance
 - **Prefer clean breaks.** Breaking changes are acceptable when they simplify the system. Avoid compatibility baggage.
-- **One direction.** Build against the current codebase. Move the project forward deliberately. Do not maintain parallel designs.
 
 ## Scope and Non-Goals
 
-`ibkr-go` is a clean-room Go client for the Interactive Brokers TWS and IB Gateway socket protocol. It is not a port of the official Interactive Brokers client libraries. It is not a wrapper over any other OSS Go IBKR library. The `EWrapper` / `EClient` callback-inheritance shape is explicitly not part of the v1 public design.
+`ibkr-go` is an idiomatic Go client for the Interactive Brokers TWS and IB Gateway socket protocol designed from first principles.
 
 **v1 target: read-only production core.** Handshake, negotiated version, managed accounts, account values, positions, contract details, quotes, real-time and historical bars, execution and open-order observation, explicit reconnect and resume behavior.
 
@@ -34,8 +33,6 @@ The full v1 charter lives in [`docs/roadmap.md`](docs/roadmap.md). The clean-roo
 - **Earned and local abstractions.** YAGNI applies aggressively. If breaking one of these rules makes the code simpler, clearer, and more explicit, prefer the simpler design.
 
 ## Build by Specification
-
-Build by specification, not by accumulation. The library grows as a chain of verified systems, not as one large pile of interacting guesses. For every new protocol area or mechanic, follow this sequence:
 
 1. **Specify.** Name the truth first — the framing invariants, the codec round-trip laws, the session state transitions, the named scenarios that must hold over time.
 2. **Test.** Write the tests in layers (see next section).
@@ -77,10 +74,10 @@ The library is a clean-room implementation. The full policy is in [`docs/provena
 
 Applies to every commit in this repository. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the developer-facing version.
 
-- **Subject.** ≤72 characters, imperative mood, concrete. Lowercase after any prefix. No trailing period.
-- **Body (optional, only when warranted).** Focuses on **why**. What constraint or design pressure forced the change. What alternatives were rejected. What invariant the change preserves.
+- **Subject.** imperative mood, concrete. Lowercase after any prefix. No trailing period.
+- **Body (optional,  when warranted).** Focuses on **why**. What constraint or design pressure forced the change. What alternatives were rejected. What invariant the change preserves.
 - **One logical change per commit.**
-- **Never** mention LLM, agent, Claude, Opus, Sonnet, Haiku, AI, "generated with", or any co-author trailer implying non-human authorship. The commit history reads as a senior engineer's work because that is the quality bar.
+- **Never** mention LLM, agent, Claude, Opus, Sonnet, Haiku, AI, "generated with", or any co-author trailer implying non-human authorship. The commit history reads as a senior engineer's work because that is the quality bar. Commit history needs to be meaningful without noise.
 - No WIP commits, no "fix typo" follow-ups — squash before landing.
 - No emoji, no marketing voice, no excitement.
 - Protocol-adjacent commits carry a clean-room attestation line in the body.
