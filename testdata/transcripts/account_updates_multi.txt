@@ -1,0 +1,9 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_account_updates_multi {"req_id":"$req1","account":"DU12345","model_code":""}
+server account_update_multi {"req_id":"$req1","account":"DU12345","model_code":"","key":"NetLiquidation","value":"100000.00","currency":"USD"}
+server account_update_multi {"req_id":"$req1","account":"DU12345","model_code":"","key":"BuyingPower","value":"200000.00","currency":"USD"}
+server account_update_multi_end {"req_id":"$req1"}
+client cancel_account_updates_multi {"req_id":"$req1"}
+disconnect

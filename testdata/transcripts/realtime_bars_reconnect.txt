@@ -1,0 +1,13 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_realtime_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"what_to_show":"TRADES","use_rth":true}
+server realtime_bar {"req_id":"$req1","time":"2026-04-05T12:00:00Z","open":"189.00","high":"189.20","low":"188.95","close":"189.10","volume":"100"}
+disconnect
+handshake {"server_version":200,"connection_time":"20260405 12:00:01 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1002}
+client req_realtime_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"what_to_show":"TRADES","use_rth":true}
+server realtime_bar {"req_id":"$req1","time":"2026-04-05T12:00:05Z","open":"189.10","high":"189.25","low":"189.05","close":"189.20","volume":"125"}
+client cancel_realtime_bars {"req_id":"$req1"}
+disconnect

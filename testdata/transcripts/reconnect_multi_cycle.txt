@@ -1,0 +1,13 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+server tick_price {"req_id":"$req1","field":4,"price":"250.00"}
+disconnect
+handshake {"server_version":200,"connection_time":"20260406 12:01:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":100}
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+server tick_price {"req_id":"$req1","field":4,"price":"251.00"}
+client cancel_quote {"req_id":"$req1"}
+disconnect

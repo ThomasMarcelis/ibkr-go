@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_contract_details {"req_id":"$req1","contract":{"symbol":"ZZZZNONE","sec_type":"STK","exchange":"SMART","currency":"USD"}}
+server api_error {"req_id":"$req1","code":200,"message":"No security definition has been found for the request","advanced_order_reject_json":"","error_time_ms":"1000"}
+disconnect

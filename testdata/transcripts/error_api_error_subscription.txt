@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+server api_error {"req_id":"$req1","code":354,"message":"Requested market data is not subscribed","advanced_order_reject_json":"","error_time_ms":"1000"}
+disconnect

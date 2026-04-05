@@ -1,0 +1,10 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1000"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1000"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefil","advanced_order_reject_json":"","error_time_ms":"1000"}
+client req_contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"}}
+server contract_details {"req_id":"$req1","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"AAPL","primary_exchange":"NASDAQ"},"market_name":"NMS","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
+server contract_details_end {"req_id":"$req1"}
+disconnect

@@ -1,0 +1,10 @@
+# Grounded bootstrap from captures/20260405T214926Z-bootstrap/raw.txt
+# IB Gateway session fixture: server_version=200, account DU9000001, orderID=1
+handshake {"server_version":200,"connection_time":"20260405 23:49:26 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425766350"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425766350"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425766351"}
+sleep 500ms
+disconnect

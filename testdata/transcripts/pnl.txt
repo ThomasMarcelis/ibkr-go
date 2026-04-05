@@ -1,0 +1,7 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_pnl {"req_id":"$req1","account":"DU12345","model_code":""}
+server pnl {"req_id":"$req1","daily_pnl":"150.25","unrealized_pnl":"45.00","realized_pnl":"105.25"}
+client cancel_pnl {"req_id":"$req1"}
+disconnect

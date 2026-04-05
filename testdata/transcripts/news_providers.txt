@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_news_providers {}
+server news_providers {"providers":[{"code":"BZ","name":"Benzinga Pro"},{"code":"FLY","name":"Fly On The Wall"}]}
+disconnect

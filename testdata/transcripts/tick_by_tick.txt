@@ -1,0 +1,7 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_tick_by_tick {"req_id":"$req1"}
+server tick_by_tick {"req_id":"$req1","tick_type":1,"time":"1712300400","price":"189.50","size":"100","tick_attrib_last":0,"exchange":"NASDAQ","special_conditions":""}
+client cancel_tick_by_tick {"req_id":"$req1"}
+disconnect

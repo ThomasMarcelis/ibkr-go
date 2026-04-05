@@ -1,0 +1,10 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_account_updates {"subscribe":true,"account":"DU12345"}
+server update_account_value {"key":"NetLiquidation","value":"100000.00","currency":"USD","account":"DU12345"}
+server update_portfolio {"contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"","currency":"USD","primary_exchange":"NASDAQ","local_symbol":"","trading_class":"","multiplier":""},"position":"10","market_price":"189.50","market_value":"1895.00","avg_cost":"185.00","unrealized_pnl":"45.00","realized_pnl":"0","account":"DU12345"}
+server update_account_time {"timestamp":"12:00:00"}
+server account_download_end {"account":"DU12345"}
+client req_account_updates {"subscribe":false,"account":"DU12345"}
+disconnect

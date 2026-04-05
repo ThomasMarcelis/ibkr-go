@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_histogram_data {"req_id":"$req1"}
+server histogram_data {"req_id":"$req1","entries":[{"price":"170.50","size":"1500"},{"price":"171.00","size":"2300"},{"price":"171.50","size":"800"}]}
+disconnect

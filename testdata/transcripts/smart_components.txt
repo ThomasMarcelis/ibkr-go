@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_smart_components {"req_id":"$req1","bbo_exchange":"9c0001"}
+server smart_components {"req_id":"$req1","components":[{"bit_number":1,"exchange_name":"IEX","exchange_letter":"I"},{"bit_number":2,"exchange_name":"NYSE","exchange_letter":"N"}]}
+disconnect

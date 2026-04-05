@@ -1,0 +1,16 @@
+# Grounded account summary from captures/20260405T215025Z-account_summary_snapshot/raw.txt
+# IB Gateway fixture: DU9000001, EUR values: BuyingPower, ExcessLiquidity, NetLiquidation, TotalCashValue
+handshake {"server_version":200,"connection_time":"20260405 23:50:23 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425823939"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425823939"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425823939"}
+client req_account_summary {"req_id":"$req1","account":"All","tags":["NetLiquidation","TotalCashValue","BuyingPower","ExcessLiquidity"]}
+server account_summary {"req_id":"$req1","account":"DU9000001","tag":"BuyingPower","value":"300000.00","currency":"EUR"}
+server account_summary {"req_id":"$req1","account":"DU9000001","tag":"ExcessLiquidity","value":"50000.00","currency":"EUR"}
+server account_summary {"req_id":"$req1","account":"DU9000001","tag":"NetLiquidation","value":"68000.00","currency":"EUR"}
+server account_summary {"req_id":"$req1","account":"DU9000001","tag":"TotalCashValue","value":"12000.00","currency":"EUR"}
+server account_summary_end {"req_id":"$req1"}
+client cancel_account_summary {"req_id":"$req1"}
+disconnect

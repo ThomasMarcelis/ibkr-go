@@ -1,0 +1,8 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_historical_news {"req_id":"$req1"}
+server historical_news {"req_id":"$req1","time":"1775385000000","provider_code":"BRFG","article_id":"BRFG$12345","headline":"AAPL Q1 Earnings Preview"}
+server historical_news {"req_id":"$req1","time":"1775379600000","provider_code":"BRFG","article_id":"BRFG$12344","headline":"Tech Sector Outlook"}
+server historical_news_end {"req_id":"$req1","has_more":false}
+disconnect

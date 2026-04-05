@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_calc_option_price {"req_id":"$req1"}
+server tick_option_computation {"req_id":"$req1","tick_type":13,"tick_attrib":0,"implied_vol":"0.30","delta":"0.60","opt_price":"6.50","pv_dividend":"0.05","gamma":"0.03","vega":"0.12","theta":"-0.02","und_price":"175.00"}
+disconnect

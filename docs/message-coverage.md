@@ -1,0 +1,210 @@
+# Message Coverage
+
+This matrix tracks the v1 message surface. The codec uses real IBKR integer
+message IDs and field layouts validated against server_version 200 captures.
+
+## Bootstrap
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 71 | StartAPI | landed |
+| in | — | server hello ack | landed |
+| in | 15 | ManagedAccounts | landed |
+| in | 9 | NextValidID | landed |
+| in | 49 | CurrentTime | landed |
+| in | 4 | APIError / status codes | landed |
+| out | 59 | reqMarketDataType | landed |
+| out | 104 | reqUserInfo | landed |
+| in | 103 | UserInfo | landed |
+
+Bootstrap is load-bearing. `DialContext` is not ready until the negotiated
+server version and managed-account bootstrap fields are known.
+
+## Contract and Reference Data
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 9 | ContractDetailsRequest | landed |
+| in | 10 | ContractDetails | landed |
+| in | 52 | ContractDetailsEnd | landed |
+| out | 81 | reqMatchingSymbols | landed |
+| in | 82 | SymbolSamples | landed |
+| out | 91 | reqMarketRule | landed |
+| in | 92 | MarketRule | landed |
+| out | 78 | reqSecDefOptParams | landed |
+| in | 75 | SecurityDefinitionOptionParameter | landed |
+| in | 76 | SecurityDefinitionOptionParameterEnd | landed |
+| out | 83 | reqSmartComponents | landed |
+| in | 82 | SmartComponents | landed |
+
+## Accounts and Positions
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 62 | AccountSummaryRequest | landed |
+| out | 63 | CancelAccountSummary | landed |
+| in | 63 | AccountSummaryValue | landed |
+| in | 64 | AccountSummaryEnd | landed |
+| out | 61 | PositionsRequest | landed |
+| out | 64 | CancelPositions | landed |
+| in | 61 | Position | landed |
+| in | 62 | PositionEnd | landed |
+| out | 6 | reqAccountUpdates | landed |
+| in | 6 | UpdateAccountValue | landed |
+| in | 7 | UpdatePortfolio | landed |
+| in | 8 | UpdateAccountTime | landed |
+| in | 54 | AccountDownloadEnd | landed |
+| out | 76 | reqAccountUpdatesMulti | landed |
+| out | 77 | cancelAccountUpdatesMulti | landed |
+| in | 73 | AccountUpdateMulti | landed |
+| in | 74 | AccountUpdateMultiEnd | landed |
+| out | 74 | reqPositionsMulti | landed |
+| out | 75 | cancelPositionsMulti | landed |
+| in | 71 | PositionMulti | landed |
+| in | 72 | PositionMultiEnd | landed |
+| out | 80 | reqFamilyCodes | landed |
+| in | 78 | FamilyCodes | landed |
+
+## Account PnL
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 92 | reqPnL | landed |
+| out | 93 | cancelPnL | landed |
+| in | 94 | PnL | landed |
+| out | 94 | reqPnLSingle | landed |
+| out | 95 | cancelPnLSingle | landed |
+| in | 95 | PnLSingle | landed |
+
+## Market Data
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 1 | QuoteRequest (reqMktData) | landed |
+| out | 2 | CancelQuote (cancelMktData) | landed |
+| in | 1 | TickPrice | landed |
+| in | 2 | TickSize | landed |
+| in | 45 | TickGeneric | landed |
+| in | 46 | TickString | landed |
+| in | 81 | TickReqParams | landed |
+| in | 58 | MarketDataType | landed |
+| in | 57 | TickSnapshotEnd | landed |
+| out | 59 | reqMarketDataType | landed |
+| out | 97 | reqTickByTickData | landed |
+| out | 98 | cancelTickByTickData | landed |
+| in | 99 | TickByTick | landed |
+
+## Real-Time and Historical Bars
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 50 | RealTimeBarsRequest | landed |
+| out | 51 | CancelRealTimeBars | landed |
+| in | 50 | RealTimeBar | landed |
+| out | 20 | HistoricalBarsRequest | landed |
+| out | 25 | cancelHistoricalData | landed |
+| in | 17 | HistoricalBar / HistoricalBarsEnd | landed |
+| — | 20 | keepUpToDate flag | landed |
+| in | 108 | HistoricalDataUpdate | landed |
+
+## Historical Data Extensions
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 87 | reqHeadTimestamp | landed |
+| out | 90 | cancelHeadTimestamp | landed |
+| in | 88 | HeadTimestamp | landed |
+| out | 88 | reqHistogramData | landed |
+| out | 89 | cancelHistogramData | landed |
+| in | 89 | HistogramData | landed |
+| out | 96 | reqHistoricalTicks | landed |
+| in | 96 | HistoricalTicks | landed |
+| in | 97 | HistoricalTicksBidAsk | landed |
+| in | 98 | HistoricalTicksLast | landed |
+
+## Option Calculations
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 54 | reqCalcImpliedVolatility | landed |
+| out | 56 | cancelCalcImpliedVolatility | landed |
+| out | 55 | reqCalcOptionPrice | landed |
+| out | 57 | cancelCalcOptionPrice | landed |
+| in | 21 | TickOptionComputation | landed |
+
+## Order and Execution Observation
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 5 | ReqOpenOrders | landed |
+| out | 15 | ReqAutoOpenOrders | landed |
+| out | 16 | ReqAllOpenOrders | landed |
+| in | 5 | OpenOrder | landed |
+| in | 53 | OpenOrderEnd | landed |
+| in | 3 | OrderStatus | landed |
+| out | 7 | ExecutionsRequest | landed |
+| in | 11 | ExecutionDetail | landed |
+| in | 55 | ExecutionsEnd | landed |
+| in | 59 | CommissionReport | landed |
+| out | 99 | reqCompletedOrders | landed |
+| in | 101 | CompletedOrder | landed |
+| in | 102 | CompletedOrdersEnd | landed |
+
+## News
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 85 | reqNewsProviders | landed |
+| in | 85 | NewsProviders | landed |
+| out | 12 | reqNewsBulletins | landed |
+| out | 13 | cancelNewsBulletins | landed |
+| in | 14 | NewsBulletins | landed |
+| out | 84 | reqNewsArticle | landed |
+| in | 83 | NewsArticle | landed |
+| out | 86 | reqHistoricalNews | landed |
+| in | 87 | HistoricalNews | landed |
+| in | 80 | HistoricalNewsEnd | landed |
+
+## Scanner
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 24 | reqScannerParameters | landed |
+| in | 19 | ScannerParameters | landed |
+| out | 22 | reqScannerSubscription | landed |
+| out | 23 | cancelScannerSubscription | landed |
+| in | 20 | ScannerData | landed |
+
+## Other
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 82 | reqMktDepthExchanges | landed |
+| in | 80 | MktDepthExchanges | landed |
+| out | 104 | reqUserInfo | landed |
+| in | 103 | UserInfo | landed |
+
+## Session-Level Status
+
+API/system codes that drive `Ready`, `Degraded`, `Reconnecting`, and
+`Gap`/`Resumed` semantics.
+
+## Completion Markers
+
+Snapshot and one-shot flows rely on explicit end markers:
+
+| Msg ID | Name | Status |
+|--------|------|--------|
+| 52 | ContractDetailsEnd | landed |
+| 64 | AccountSummaryEnd | landed |
+| 62 | PositionEnd | landed |
+| 57 | TickSnapshotEnd | landed |
+| 17 | HistoricalBarsEnd | landed |
+| 53 | OpenOrderEnd | landed |
+| 55 | ExecutionsEnd | landed |
+| 54 | AccountDownloadEnd | landed |
+| 74 | AccountUpdateMultiEnd | landed |
+| 72 | PositionMultiEnd | landed |
+| 76 | SecurityDefinitionOptionParameterEnd | landed |
+| 80 | HistoricalNewsEnd | landed |
+| 102 | CompletedOrdersEnd | landed |

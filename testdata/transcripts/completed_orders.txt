@@ -1,0 +1,7 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_completed_orders {"api_only":true}
+server completed_order {"contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","order_type":"LMT","status":"Filled","quantity":"100","filled":"100","remaining":"0"}
+server completed_order_end {}
+disconnect

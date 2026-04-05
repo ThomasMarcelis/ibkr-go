@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_scanner_subscription {"req_id":"$req1"}
+server scanner_data {"req_id":"$req1","entries":[{"rank":0,"contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"NASDAQ","currency":"USD"},"distance":"","benchmark":"","projection":"","legs_str":""},{"rank":1,"contract":{"con_id":4815747,"symbol":"MSFT","sec_type":"STK","exchange":"NASDAQ","currency":"USD"},"distance":"","benchmark":"","projection":"","legs_str":""}]}
+disconnect

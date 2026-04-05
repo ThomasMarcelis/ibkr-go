@@ -1,0 +1,10 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
+client req_contract_details {"req_id":"$req2","contract":{"symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
+server contract_details {"req_id":"$req2","contract":{"symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"market_name":"NMS","min_tick":"0.01","time_zone_id":"US/Eastern"}
+server contract_details_end {"req_id":"$req2"}
+server contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"market_name":"NMS","min_tick":"0.01","time_zone_id":"US/Eastern"}
+server contract_details_end {"req_id":"$req1"}
+disconnect

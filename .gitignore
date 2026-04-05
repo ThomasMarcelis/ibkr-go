@@ -1,0 +1,47 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+
+# Build outputs
+/bin/
+/dist/
+
+# Built capture driver binaries (produced by `go build ./cmd/...`)
+/ibkr-capture
+/ibkr-normalize
+/ibkr-probe
+/ibkr-recorder
+
+# Raw live captures from ibkr-recorder. These contain real account data
+# (account ids, conids, positions, fills, prices) and must never be committed.
+# Scrubbed fixtures live in testdata/transcripts/ and are committed separately.
+/captures/
+
+# Dependencies (only if vendoring is ever added)
+/vendor/
+
+# AI agent configuration (local development only)
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+.claude/
+.codex/
+.gemini/

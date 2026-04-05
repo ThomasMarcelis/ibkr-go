@@ -1,0 +1,4 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server next_valid_id {"order_id":1}
+sleep 6s
+disconnect

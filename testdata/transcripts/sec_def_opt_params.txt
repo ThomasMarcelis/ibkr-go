@@ -1,0 +1,8 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_sec_def_opt_params {"req_id":"$req1"}
+server sec_def_opt_params {"req_id":"$req1","exchange":"SMART","underlying_con_id":265598,"trading_class":"AAPL","multiplier":"100","expirations":["20260417","20260515"],"strikes":["150","160","170"]}
+server sec_def_opt_params {"req_id":"$req1","exchange":"CBOE","underlying_con_id":265598,"trading_class":"AAPL","multiplier":"100","expirations":["20260417"],"strikes":["155","165"]}
+server sec_def_opt_params_end {"req_id":"$req1"}
+disconnect

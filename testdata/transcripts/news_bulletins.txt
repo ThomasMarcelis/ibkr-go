@@ -1,0 +1,7 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_news_bulletins {"all_messages":true}
+server news_bulletin {"msg_id":1,"msg_type":1,"headline":"Test bulletin headline","source":"IB System"}
+client cancel_news_bulletins {}
+disconnect

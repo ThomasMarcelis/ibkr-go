@@ -1,0 +1,13 @@
+# When the account lacks real-time market data permissions, the gateway
+# sends code 10167 as a warning, then switches to delayed data (type 3).
+# The subscription must stay open and deliver the delayed ticks.
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":true,"generic_ticks":[]}
+server api_error {"req_id":"$req1","code":10167,"message":"Requested market data is not subscribed. Displaying delayed market data.","advanced_order_reject_json":"","error_time_ms":""}
+server market_data_type {"req_id":"$req1","data_type":3}
+server tick_price {"req_id":"$req1","field":1,"price":"188.50"}
+server tick_price {"req_id":"$req1","field":2,"price":"188.60"}
+server tick_snapshot_end {"req_id":"$req1"}
+disconnect

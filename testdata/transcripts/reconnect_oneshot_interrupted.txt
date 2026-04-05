@@ -1,0 +1,5 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_historical_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"end_time":"20260406-12:00:00","duration":"1 D","bar_size":"1 hour","what_to_show":"TRADES","use_rth":true}
+disconnect

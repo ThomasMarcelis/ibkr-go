@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_user_info {"req_id":"$req_id"}
+server user_info {"req_id":"$req_id","white_branding_id":""}
+disconnect

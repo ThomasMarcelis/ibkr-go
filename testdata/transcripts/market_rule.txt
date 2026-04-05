@@ -1,0 +1,6 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_market_rule {"market_rule_id":"26"}
+server market_rule {"market_rule_id":26,"increments":[{"low_edge":"0","increment":"0.01"},{"low_edge":"1","increment":"0.05"}]}
+disconnect

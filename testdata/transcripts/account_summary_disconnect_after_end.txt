@@ -1,0 +1,7 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_account_summary {"req_id":"$req1","account":"All","tags":["NetLiquidation"]}
+server account_summary {"req_id":"$req1","account":"DU12345","tag":"NetLiquidation","value":"100000.00","currency":"USD"}
+server account_summary_end {"req_id":"$req1"}
+disconnect

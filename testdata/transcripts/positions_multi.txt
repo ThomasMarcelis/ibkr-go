@@ -1,0 +1,8 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_positions_multi {"req_id":"$req1","account":"DU12345","model_code":""}
+server position_multi {"req_id":"$req1","account":"DU12345","model_code":"","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":"","trading_class":""},"position":"10","avg_cost":"189.12"}
+server position_multi_end {"req_id":"$req1"}
+client cancel_positions_multi {"req_id":"$req1"}
+disconnect

@@ -1,0 +1,10 @@
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+server api_error {"req_id":"-1","code":10167,"message":"Delayed market data type is used","advanced_order_reject_json":"","error_time_ms":"1000"}
+server market_data_type {"req_id":"$req1","data_type":3}
+server tick_price {"req_id":"$req1","field":66,"price":"250.00"}
+server tick_price {"req_id":"$req1","field":67,"price":"250.05"}
+client cancel_quote {"req_id":"$req1"}
+disconnect

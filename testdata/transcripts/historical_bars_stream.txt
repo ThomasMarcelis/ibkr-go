@@ -1,0 +1,10 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_historical_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"end_time":"","bar_size":"5 secs","duration":"300 S","use_rth":false,"what_to_show":"TRADES"}
+server historical_bar {"req_id":"$req1","time":"20260405  11:59:55","open":"189.00","high":"189.10","low":"188.95","close":"189.05","volume":"1000","wap":"189.02","count":"50"}
+server historical_bars_end {"req_id":"$req1"}
+sleep 100ms
+server historical_data_update {"req_id":"$req1","bar_count":1,"time":"20260405  12:00:00","open":"189.05","high":"189.20","low":"189.00","close":"189.15","volume":"500","wap":"189.10","count":"25"}
+client cancel_historical_data {"req_id":"$req1"}
+disconnect

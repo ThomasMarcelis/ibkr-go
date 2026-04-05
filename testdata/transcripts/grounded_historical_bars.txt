@@ -1,0 +1,18 @@
+# Grounded historical bars from captures/20260405T215056Z-historical_bars_1d_1h/raw.txt
+# AAPL STK, 1 D, 1 hour bars, TRADES, useRTH=true — 7 hourly bars from 2026-04-02
+handshake {"server_version":200,"connection_time":"20260405 23:50:55 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425855344"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425855344"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425855344"}
+client req_historical_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"end_time":"$endtime","duration":"1 D","bar_size":"1 hour","what_to_show":"TRADES","use_rth":true}
+server historical_bar {"req_id":"$req1","time":"20260402 09:30:00 US/Eastern","open":"254.20","high":"254.80","low":"250.65","close":"252.53","volume":"2829736","wap":"252.266","count":"13633"}
+server historical_bar {"req_id":"$req1","time":"20260402 10:00:00 US/Eastern","open":"252.52","high":"255.40","low":"251.19","close":"255.38","volume":"2797972","wap":"252.971","count":"16541"}
+server historical_bar {"req_id":"$req1","time":"20260402 11:00:00 US/Eastern","open":"255.40","high":"255.73","low":"254.36","close":"254.57","volume":"1400669","wap":"255.002","count":"7744"}
+server historical_bar {"req_id":"$req1","time":"20260402 12:00:00 US/Eastern","open":"254.57","high":"255.00","low":"254.00","close":"254.42","volume":"983738","wap":"254.453","count":"5662"}
+server historical_bar {"req_id":"$req1","time":"20260402 13:00:00 US/Eastern","open":"254.42","high":"255.49","low":"254.17","close":"254.61","volume":"1024324","wap":"254.878","count":"5832"}
+server historical_bar {"req_id":"$req1","time":"20260402 14:00:00 US/Eastern","open":"254.58","high":"255.46","low":"254.58","close":"255.28","volume":"1399189","wap":"255.101","count":"7342"}
+server historical_bar {"req_id":"$req1","time":"20260402 15:00:00 US/Eastern","open":"255.29","high":"256.13","low":"254.80","close":"255.89","volume":"2938382","wap":"255.576","count":"17376"}
+server historical_bars_end {"req_id":"$req1"}
+disconnect

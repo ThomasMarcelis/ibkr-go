@@ -1,0 +1,5 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345","DU67890"]}
+server next_valid_id {"order_id":1001}
+sleep 500ms
+disconnect
