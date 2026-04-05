@@ -2,52 +2,44 @@
 
 ## Invariants
 
-- This is the `ibkr-go` project's own tracker. It is the single source of truth for slice progress in this repository. It does not depend on, reference, or sync with any other project's tracker.
-- Clean-room boundary is load-bearing. Every protocol-adjacent commit carries a clean-room attestation line in its body.
-- License: MIT. Visibility: currently private; will flip to public manually once v1 is in place.
-- Testing philosophy: high signal, low maintenance, grown deliberately. See `AGENTS.md`.
-- Commit convention: see `AGENTS.md` and `CONTRIBUTING.md`.
+- This file is the single source of truth for implementation progress in this
+  repository.
+- Clean-room boundary is load-bearing. Every protocol-adjacent commit carries a
+  clean-room attestation line in its body.
+- The repo remains independent. No status is synced from or to any other repo.
+- The active implementation truth is now contract-first and phase-based.
 
-## Ready / Blocked Summary
+## Current State
 
-- Completed:
-  - `10` repo and charter — initial commit `502be28`
-- Ready now:
-  - `11` `ibkr-go` core
-- Conditional (not yet ready):
-  - `11b` reconciliation — only created if dogfooding from an external consumer (the personalapps stonks slice `12`) reveals a missing primitive or contract gap. Not triggered as part of normal forward progress.
+- Baseline charter work is complete at `502be28`.
+- The public source of truth lives in:
+  - `docs/architecture.md`
+  - `docs/session-contract.md`
+  - `docs/message-coverage.md`
+  - `docs/transcripts.md`
+- The repo has a real contract/harness implementation, but it is not yet a
+  live IBKR-compatible protocol implementation.
 
-## Current Next-Ready Slice Set
+## Milestone Table
 
-- `11` `ibkr-go` core
+| Milestone | Status | Notes |
+|---|---|---|
+| contract freeze | landed | live docs and public contracts are in repo |
+| wire | landed | generic frame and field invariants are implemented |
+| contract harness | landed | typed public API, session engine, fake host, and deterministic scenarios are in repo |
+| real IBKR wire mapping | not started | replace symbolic codec/messages with real protocol compatibility |
+| live transcript capture | not started | capture and normalize contributor-owned Gateway / TWS traces |
+| reconnect and pacing hardening | not started | grow system-code, reconnect, and rate-limit coverage against the real protocol |
+| compatibility floor | not started | establish minimum supported server version and tested host range |
+| recorder + hardening | not started | capture, replay, race, fuzz, benchmark |
 
-## Allowed Parallel Pairings Right Now
+## Conditional Follow-Up
 
-- none (`11` is the only active slice; no parallelism within ibkr-go)
+- The old `11b` reconciliation concept still applies as a downstream-gap
+  follow-up, but any such work should be tracked as a concrete issue or
+  milestone against the frozen contracts rather than as an architectural reset.
 
-## Slice Table
+## Next Step
 
-| Slice | Depends On | Status | Write Scope | Last Commit | Notes |
-|---|---|---|---|---|---|
-| `10` | none | complete | entire `ibkr-go` repo (initial population) | `502be28` | initial charter, clean-room policy, module skeleton, CI — see `docs/slices/10-repo-and-charter.md` |
-| `11` | `10` | ready | entire `ibkr-go` implementation tree (`ibkr/`, `internal/{wire,codec,transport,session}/`, `testing/testhost/`, `testdata/transcripts/`) | - | read-only production core — see `docs/slices/11-core.md` |
-| `11b` | `11` + external dogfood feedback | blocked (conditional) | `ibkr-go` repo only | - | only if dogfooding exposes a missing primitive — see `docs/slices/11b-reconciliation.md` |
-
-## Prompt Mapping
-
-| Slice | Prompt File |
-|---|---|
-| `10` | `docs/slices/10-repo-and-charter.md` |
-| `11` | `docs/slices/11-core.md` |
-| `11b` | `docs/slices/11b-reconciliation.md` |
-
-## Current Blockers
-
-- none
-
-## Notes
-
-- This project is developed independently. The `personalapps` platform consumes `ibkr-go` as an external published Go library via `go get github.com/ThomasMarcelis/ibkr-go@<version>`. If a downstream consumer discovers a missing primitive, they file it against this project's tracker and slice `11b` is created.
-- Every slice must update this file before completion.
-- Do not mark a slice complete without tests, review, docs, and a commit.
-- Every protocol-adjacent commit carries the clean-room attestation line in its body: `clean-room: no official TWS API source was referenced.`
+- land the real IBKR handshake and message mapping behind the already-frozen
+  public contracts

@@ -1,0 +1,6 @@
+client hello {"min_version":1,"max_version":1,"client_id":1}
+server hello_ack {"server_version":1,"connection_time":"2026-04-05T12:00:00Z"}
+server managed_accounts {"accounts":["DU12345","DU67890"]}
+server next_valid_id {"order_id":1001}
+sleep 500ms
+disconnect

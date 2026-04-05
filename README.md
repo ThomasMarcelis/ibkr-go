@@ -1,66 +1,90 @@
 # ibkr-go
 
-A Go library for the Interactive Brokers TWS and IB Gateway socket API.
-
-`ibkr-go` is a Go library for the Interactive Brokers TWS and IB Gateway socket API. It is a clean-room implementation focused on correctness, durable session semantics, explicit version negotiation, and an idiomatic typed Go API. It is not a port of the official IB client libraries and does not expose an `EWrapper` or `EClient` surface. The v1 target is a read-only production core covering accounts, positions, contract details, quotes, real-time and historical bars, and execution observation.
+`ibkr-go` is a clean-room Go client for the Interactive Brokers TWS and IB
+Gateway socket API. The library is built around a typed session engine,
+typed one-shot requests, and typed subscriptions with explicit lifecycle and
+reconnect semantics. It does not expose `EWrapper` / `EClient` as its primary
+public surface.
 
 ## Status
 
-Day 1: project charter, clean-room policy, module skeleton, CI pipeline, and testing philosophy are locked. The v1 read-only protocol core lands in the next release milestone. The repository will flip to public once v1 is in place.
+The active repo docs are contract-first and implementation-backed. Historical
+planning briefs have been removed. The current repo contains a real typed
+session/testhost harness, but it is not yet validated as a live IBKR protocol
+client. The repository remains private until the v1 read-only core is complete.
 
 ## Install
 
-```
+```bash
 go get github.com/ThomasMarcelis/ibkr-go@latest
 ```
 
-## Example
-
-The public API direction is typed one-shot request methods and typed subscriptions. The shape below reflects the v1 target. Working code lands in the next release milestone.
+## Public Shape
 
 ```go
-package main
-
-import (
-    "context"
-    "fmt"
-    "time"
-
-    "github.com/ThomasMarcelis/ibkr-go/ibkr"
-)
-
-func main() {
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-
-    client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(7497))
-    if err != nil {
-        panic(err)
-    }
-    defer client.Close()
-
-    accounts, err := client.ManagedAccounts(ctx)
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println("accounts:", accounts)
-
-    summary, err := client.AccountSummary(ctx, accounts[0])
-    if err != nil {
-        panic(err)
-    }
-    fmt.Println("summary:", summary)
+client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(7497))
+if err != nil {
+    return err
 }
+defer client.Close()
+
+snapshot := client.Session()
+fmt.Println(snapshot.ManagedAccounts)
+
+details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
+    Contract: ibkr.Contract{
+        Symbol:   "AAPL",
+        SecType:  "STK",
+        Exchange: "SMART",
+        Currency: "USD",
+    },
+})
+if err != nil {
+    return err
+}
+
+quotes, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
+    Contract: ibkr.Contract{
+        Symbol:   "AAPL",
+        SecType:  "STK",
+        Exchange: "SMART",
+        Currency: "USD",
+    },
+})
+if err != nil {
+    return err
+}
+defer quotes.Close()
 ```
+
+## Contracts
+
+- `DialContext` returns a ready session, not a bare TCP connection.
+- Managed accounts are bootstrap state on `SessionSnapshot`.
+- Subscriptions expose `Events()`, `State()`, `Done()`, `Wait()`, and `Close()`.
+- `State()` carries lifecycle events such as `SnapshotComplete`, `Gap`, and
+  `Resumed`.
+- Snapshot completion is driven by explicit protocol end markers.
+- Numeric fields use an exact `Decimal` type rather than `float64` in the
+  public contract.
+
+## Current Implementation Boundary
+
+- The public/session/subscription contracts are real.
+- The deterministic transcript and fake-host test path is real.
+- The current codec/testhost messages are still symbolic logical messages.
+- Real TWS / IB Gateway message compatibility is the next major step.
 
 ## Documentation
 
-- [`docs/roadmap.md`](docs/roadmap.md) — v1 charter and explicit non-v1 list
-- [`docs/provenance.md`](docs/provenance.md) — clean-room policy
-- [`docs/anti-patterns.md`](docs/anti-patterns.md) — patterns this library deliberately rejects
-- [`docs/feature-matrix.md`](docs/feature-matrix.md) — comparison with existing Go IBKR libraries
-- [`AGENTS.md`](AGENTS.md) — engineering mindset, Go style, testing philosophy
-- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to contribute
+- [`docs/architecture.md`](docs/architecture.md)
+- [`docs/session-contract.md`](docs/session-contract.md)
+- [`docs/message-coverage.md`](docs/message-coverage.md)
+- [`docs/transcripts.md`](docs/transcripts.md)
+- [`docs/roadmap.md`](docs/roadmap.md)
+- [`docs/provenance.md`](docs/provenance.md)
+- [`docs/anti-patterns.md`](docs/anti-patterns.md)
+- [`AGENTS.md`](AGENTS.md)
 
 ## License
 
