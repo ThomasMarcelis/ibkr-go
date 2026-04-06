@@ -43,8 +43,10 @@ func (c *Client) SessionEvents() <-chan SessionEvent
 
 Current repo truth:
 
-- this contract is implemented and exercised against the in-repo fake host
-- it is not yet validated against live TWS / IB Gateway protocol traffic
+- this contract is implemented in code, but the current protocol plumbing still
+  contains a legacy symbolic replay path
+- live TWS / IB Gateway behavior is the source of truth for ongoing protocol
+  work and must drive replacement of that legacy path
 
 ## Subscriptions
 
@@ -73,7 +75,10 @@ Default subscription behavior:
 - bounded event queue
 - close on slow consumer
 - no implicit replay
-- `ResumeAuto` only for transcript-proven safe flows
+- `ResumeAuto` is currently supported only for quote streams and real-time bars
+- account summary, positions, open orders, and executions require explicit re-subscribe after disconnect
+- `SubscribeExecutions` is a finite snapshot flow: after `SnapshotComplete`, it closes with `nil`
+- account summary, positions, and open orders remain open after their initial snapshot boundary until the caller closes them or the session drops
 
 ## Managed Accounts
 
@@ -111,4 +116,4 @@ Public error taxonomy:
 ## Stability Goal
 
 The intent is to keep this contract stable while the internals move from the
-current symbolic protocol model to real IBKR wire compatibility.
+legacy symbolic protocol model to real IBKR wire compatibility.

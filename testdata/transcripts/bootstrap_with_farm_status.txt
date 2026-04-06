@@ -1,0 +1,10 @@
+# Real gateways send 2xxx farm-status codes during bootstrap.
+# These are informational and must not block the session from reaching Ready.
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":""}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":""}
+server next_valid_id {"order_id":1001}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":""}
+sleep 500ms
+disconnect

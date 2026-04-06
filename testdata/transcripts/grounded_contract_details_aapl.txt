@@ -1,0 +1,12 @@
+# Grounded contract details from captures/20260405T214938Z-contract_details_aapl_stk/raw.txt
+# Real AAPL STK contract: conID=265598, SMART/USD, APPLE INC, NMS, NASDAQ
+handshake {"server_version":200,"connection_time":"20260405 23:49:38 Central European Standard Time"}
+server managed_accounts {"accounts":["U10597365"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425778445"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425778445"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425778445"}
+client req_contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
+server contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"NASDAQ","local_symbol":"AAPL","con_id":265598,"trading_class":"NMS"},"market_name":"NMS","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
+server contract_details_end {"req_id":"$req1"}
+disconnect

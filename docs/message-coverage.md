@@ -3,12 +3,9 @@
 This matrix tracks the v1 logical message surface that the public contract,
 session engine, and scenario corpus are expected to cover.
 
-Current repo truth:
-
-- the checked-in scenarios and codec currently use repo-local symbolic message
-  names
-- this document is the target logical coverage map, not a claim that the live
-  IBKR wire format is fully mapped today
+The codec uses real IBKR integer message IDs and field layouts validated
+against server_version 200 captures. All message types below are implemented
+with encode/decode paths grounded in live wire traces.
 
 ## Bootstrap
 

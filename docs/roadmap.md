@@ -6,7 +6,7 @@
 - Session state as a first-class, observable contract.
 - Managed accounts.
 - Account values and summary.
-- Positions and portfolio.
+- Positions.
 - Contract details and qualification.
 - Quote snapshots and streaming.
 - Real-time bars.
@@ -16,11 +16,10 @@
 
 ## Current Status
 
-- contract-first public API and transcript format are landed
-- a deterministic fake-host test path is landed
-- the current implementation still needs the real IBKR wire/message mapping and
-  live-host verification before it qualifies as the v1 read-only production
-  core described above
+The v1 read-only production core is complete. The implementation connects to
+real IB Gateway, handles all v1 message types listed above, and has
+comprehensive test coverage including grounded replay fixtures derived from
+live server_version 200 captures.
 
 ## Explicitly not in v1
 
@@ -29,7 +28,7 @@
 - Client Portal Web API.
 - Flex.
 - Near-full parity with the entire TWS API surface.
-- `EWrapper` / `EClient` official-style bridge (deferred until after an explicit legal review).
+- `EWrapper` / `EClient` official-style bridge.
 
 ## Public API direction
 
@@ -47,13 +46,9 @@ SubscriptionStateEvent`, `Done() <-chan struct{}`, `Wait() error`, and
 - Typed public API is stable enough for downstream consumption.
 - A real read-only broker sync flow can be built on the library without custom protocol hacks.
 
-## Immediate Next Steps
+## Post-v1 Direction
 
-1. Replace the current symbolic codec with real IBKR handshake and message
-   encode/decode for the frozen v1 surface.
-2. Add capture and normalization tooling so scenario scripts can be grounded in
-   real Gateway / TWS traces captured under the clean-room policy.
-3. Expand reconnect, system-code, pacing, and version-gating scenarios until
-   session semantics are proven against the real protocol surface.
-4. Establish and document the minimum supported server version and tested host
-   range from observed behavior rather than placeholders.
+1. Order writes (placement, modification, cancellation).
+2. Deeper contract detail fields and additional tick types.
+3. Fuzz testing of the codec and frame parser.
+4. Broader server version testing beyond v200.

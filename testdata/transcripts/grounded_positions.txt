@@ -1,0 +1,16 @@
+# Grounded positions from captures/20260405T215052Z-positions_snapshot/raw.txt
+# 4 representative positions: AMZN STK, AAPL STK, YW FUT, QQQ OPT
+handshake {"server_version":200,"connection_time":"20260405 23:50:51 Central European Standard Time"}
+server managed_accounts {"accounts":["U10597365"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425851252"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425851252"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425851252"}
+client req_positions {}
+server position {"account":"U10597365","contract":{"symbol":"AMZN","sec_type":"STK","con_id":3691937,"exchange":"NASDAQ","currency":"USD","primary_exchange":"","local_symbol":"AMZN","trading_class":"NMS"},"position":"15","avg_cost":"199.66666665"}
+server position {"account":"U10597365","contract":{"symbol":"AAPL","sec_type":"STK","con_id":265598,"exchange":"NASDAQ","currency":"USD","primary_exchange":"","local_symbol":"AAPL","trading_class":"NMS"},"position":"10","avg_cost":"255.244"}
+server position {"account":"U10597365","contract":{"symbol":"YW","sec_type":"FUT","con_id":715358256,"expiry":"20261214","strike":"0.0","multiplier":"1000","exchange":"","currency":"USD","primary_exchange":"","local_symbol":"XWZ6","trading_class":"XW"},"position":"1","avg_cost":"6384.43"}
+server position {"account":"U10597365","contract":{"symbol":"QQQ","sec_type":"OPT","con_id":728937835,"expiry":"20270115","strike":"500.0","right":"P","multiplier":"100","exchange":"","currency":"USD","primary_exchange":"","local_symbol":"QQQ   270115P00500000","trading_class":"QQQ"},"position":"-3","avg_cost":"2100.6321"}
+server position_end {}
+client cancel_positions {}
+disconnect

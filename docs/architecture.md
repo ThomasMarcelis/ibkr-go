@@ -6,9 +6,10 @@ not expose an `EWrapper` / `EClient` callback surface as its primary model.
 Current repo truth:
 
 - public/session/subscription contracts are frozen in code
-- the testhost and transcript harness are real and test-backed
-- the current codec is still a repo-local symbolic protocol model used to lock
-  lifecycle and API behavior before the live IBKR message mapping lands
+- the current testhost and transcript harness are real and test-backed, but
+  they are legacy replay tooling rather than a protocol design source
+- the current codec is still a repo-local symbolic protocol model pending
+  replacement by live-derived real IBKR message mapping
 - live TWS / IB Gateway protocol compatibility is the next major milestone
 
 ## Layers
@@ -19,10 +20,12 @@ Current repo truth:
 - `internal/transport/`: socket dial, frame read/write loops, pacing
 - `internal/codec/`: typed message encode/decode
 - `internal/wire/`: frame and field framing
-- `testing/testhost/`: in-process fake host driven by checked-in scripts
+- `testing/testhost/`: deterministic replay and fault-injection harness for
+  checked-in fixtures
 
 The layer split is stable. The protocol details inside `codec`, `session`, and
-`testhost` are still expected to evolve as the real IBKR wire mapping lands.
+`testhost` are expected to evolve as the legacy symbolic path is replaced with
+real IBKR wire behavior derived from live traces and official docs.
 
 ## Runtime Model
 

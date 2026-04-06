@@ -4,13 +4,23 @@ type Message interface {
 	messageName() string
 }
 
+// Contract holds the fields used for contract identification on the wire.
+// The full TWS wire contract has 11 fields (conID, symbol, secType, expiry,
+// strike, right, multiplier, exchange, currency, localSymbol, tradingClass).
+// PrimaryExchange is used by some request/response messages outside the 11-field block.
 type Contract struct {
+	ConID           int
 	Symbol          string
 	SecType         string
+	Expiry          string
+	Strike          string
+	Right           string
+	Multiplier      string
 	Exchange        string
 	Currency        string
-	PrimaryExchange string
 	LocalSymbol     string
+	TradingClass    string
+	PrimaryExchange string
 }
 
 type StartAPI struct {
@@ -67,6 +77,7 @@ type ContractDetails struct {
 	Contract   Contract
 	MarketName string
 	MinTick    string
+	LongName   string
 	TimeZoneID string
 }
 
@@ -98,14 +109,14 @@ type HistoricalBar struct {
 	Low    string
 	Close  string
 	Volume string
+	WAP    string
+	Count  string
 }
 
 func (HistoricalBar) messageName() string { return "historical_bar" }
 
 type HistoricalBarsEnd struct {
 	ReqID int
-	Start string
-	End   string
 }
 
 func (HistoricalBarsEnd) messageName() string { return "historical_bars_end" }
@@ -177,17 +188,19 @@ type CancelQuote struct {
 func (CancelQuote) messageName() string { return "cancel_quote" }
 
 type TickPrice struct {
-	ReqID int
-	Field string
-	Price string
+	ReqID    int
+	TickType int
+	Price    string
+	Size     string // companion size from the same frame
+	AttrMask int    // tick attrib bitmask
 }
 
 func (TickPrice) messageName() string { return "tick_price" }
 
 type TickSize struct {
-	ReqID int
-	Field string
-	Size  string
+	ReqID    int
+	TickType int
+	Size     string
 }
 
 func (TickSize) messageName() string { return "tick_size" }
@@ -228,6 +241,8 @@ type RealTimeBar struct {
 	Low    string
 	Close  string
 	Volume string
+	WAP    string
+	Count  string
 }
 
 func (RealTimeBar) messageName() string { return "realtime_bar" }
@@ -246,6 +261,8 @@ type OpenOrder struct {
 	OrderID   int64
 	Account   string
 	Contract  Contract
+	Action    string
+	OrderType string
 	Status    string
 	Quantity  string
 	Filled    string
@@ -257,6 +274,15 @@ func (OpenOrder) messageName() string { return "open_order" }
 type OpenOrderEnd struct{}
 
 func (OpenOrderEnd) messageName() string { return "open_order_end" }
+
+type OrderStatus struct {
+	OrderID   int64
+	Status    string
+	Filled    string
+	Remaining string
+}
+
+func (OrderStatus) messageName() string { return "order_status" }
 
 type ExecutionsRequest struct {
 	ReqID   int

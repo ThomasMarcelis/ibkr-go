@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
 func messageName(msg any) string {
@@ -70,8 +71,6 @@ func messageName(msg any) string {
 		return "realtime_bar"
 	case codec.OpenOrdersRequest:
 		return "req_open_orders"
-	case codec.CancelOpenOrders:
-		return "cancel_open_orders"
 	case codec.OpenOrder:
 		return "open_order"
 	case codec.OpenOrderEnd:
@@ -104,7 +103,11 @@ func messageBody(msg any) (map[string]any, error) {
 	case codec.ContractDetailsRequest:
 		return map[string]any{"req_id": float64(m.ReqID), "contract": contractBody(m.Contract)}, nil
 	case codec.ContractDetails:
-		return map[string]any{"req_id": float64(m.ReqID), "contract": contractBody(m.Contract), "market_name": m.MarketName, "min_tick": m.MinTick, "time_zone_id": m.TimeZoneID}, nil
+		body := map[string]any{"req_id": float64(m.ReqID), "contract": contractBody(m.Contract), "market_name": m.MarketName, "min_tick": m.MinTick, "time_zone_id": m.TimeZoneID}
+		if m.LongName != "" {
+			body["long_name"] = m.LongName
+		}
+		return body, nil
 	case codec.ContractDetailsEnd:
 		return map[string]any{"req_id": float64(m.ReqID)}, nil
 	case codec.HistoricalBarsRequest:
@@ -112,7 +115,7 @@ func messageBody(msg any) (map[string]any, error) {
 	case codec.HistoricalBar:
 		return map[string]any{"req_id": float64(m.ReqID), "time": m.Time, "open": m.Open, "high": m.High, "low": m.Low, "close": m.Close, "volume": m.Volume}, nil
 	case codec.HistoricalBarsEnd:
-		return map[string]any{"req_id": float64(m.ReqID), "start": m.Start, "end": m.End}, nil
+		return map[string]any{"req_id": float64(m.ReqID)}, nil
 	case codec.AccountSummaryRequest:
 		return map[string]any{"req_id": float64(m.ReqID), "account": m.Account, "tags": stringsToAny(m.Tags)}, nil
 	case codec.CancelAccountSummary:
@@ -121,7 +124,7 @@ func messageBody(msg any) (map[string]any, error) {
 		return map[string]any{"req_id": float64(m.ReqID), "account": m.Account, "tag": m.Tag, "value": m.Value, "currency": m.Currency}, nil
 	case codec.AccountSummaryEnd:
 		return map[string]any{"req_id": float64(m.ReqID)}, nil
-	case codec.PositionsRequest, codec.CancelPositions, codec.OpenOrderEnd, codec.PositionEnd, codec.CancelOpenOrders:
+	case codec.PositionsRequest, codec.CancelPositions, codec.OpenOrderEnd, codec.PositionEnd:
 		return map[string]any{}, nil
 	case codec.Position:
 		return map[string]any{"account": m.Account, "contract": contractBody(m.Contract), "position": m.Position, "avg_cost": m.AvgCost}, nil
@@ -130,9 +133,9 @@ func messageBody(msg any) (map[string]any, error) {
 	case codec.CancelQuote:
 		return map[string]any{"req_id": float64(m.ReqID)}, nil
 	case codec.TickPrice:
-		return map[string]any{"req_id": float64(m.ReqID), "field": m.Field, "price": m.Price}, nil
+		return map[string]any{"req_id": float64(m.ReqID), "field": float64(m.TickType), "price": m.Price}, nil
 	case codec.TickSize:
-		return map[string]any{"req_id": float64(m.ReqID), "field": m.Field, "size": m.Size}, nil
+		return map[string]any{"req_id": float64(m.ReqID), "field": float64(m.TickType), "size": m.Size}, nil
 	case codec.MarketDataType:
 		return map[string]any{"req_id": float64(m.ReqID), "data_type": float64(m.DataType)}, nil
 	case codec.TickSnapshotEnd:
@@ -146,7 +149,7 @@ func messageBody(msg any) (map[string]any, error) {
 	case codec.OpenOrdersRequest:
 		return map[string]any{"scope": m.Scope}, nil
 	case codec.OpenOrder:
-		return map[string]any{"order_id": float64(m.OrderID), "account": m.Account, "contract": contractBody(m.Contract), "status": m.Status, "quantity": m.Quantity, "filled": m.Filled, "remaining": m.Remaining}, nil
+		return map[string]any{"order_id": float64(m.OrderID), "account": m.Account, "contract": contractBody(m.Contract), "action": m.Action, "order_type": m.OrderType, "status": m.Status, "quantity": m.Quantity, "filled": m.Filled, "remaining": m.Remaining}, nil
 	case codec.ExecutionsRequest:
 		return map[string]any{"req_id": float64(m.ReqID), "account": m.Account, "symbol": m.Symbol}, nil
 	case codec.ExecutionDetail:
@@ -180,6 +183,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			Contract:   asContract(resolve(body["contract"])),
 			MarketName: asString(resolve(body["market_name"])),
 			MinTick:    asString(resolve(body["min_tick"])),
+			LongName:   asString(resolve(body["long_name"])),
 			TimeZoneID: asString(resolve(body["time_zone_id"])),
 		}, nil
 	case "contract_details_end":
@@ -187,7 +191,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "historical_bar":
 		return codec.HistoricalBar{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"]))}, nil
 	case "historical_bars_end":
-		return codec.HistoricalBarsEnd{ReqID: asInt(resolve(body["req_id"])), Start: asString(resolve(body["start"])), End: asString(resolve(body["end"]))}, nil
+		return codec.HistoricalBarsEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
 	case "account_summary":
 		return codec.AccountSummaryValue{ReqID: asInt(resolve(body["req_id"])), Account: asString(resolve(body["account"])), Tag: asString(resolve(body["tag"])), Value: asString(resolve(body["value"])), Currency: asString(resolve(body["currency"]))}, nil
 	case "account_summary_end":
@@ -197,9 +201,9 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "position_end":
 		return codec.PositionEnd{}, nil
 	case "tick_price":
-		return codec.TickPrice{ReqID: asInt(resolve(body["req_id"])), Field: asString(resolve(body["field"])), Price: asString(resolve(body["price"]))}, nil
+		return codec.TickPrice{ReqID: asInt(resolve(body["req_id"])), TickType: asInt(resolve(body["field"])), Price: asString(resolve(body["price"]))}, nil
 	case "tick_size":
-		return codec.TickSize{ReqID: asInt(resolve(body["req_id"])), Field: asString(resolve(body["field"])), Size: asString(resolve(body["size"]))}, nil
+		return codec.TickSize{ReqID: asInt(resolve(body["req_id"])), TickType: asInt(resolve(body["field"])), Size: asString(resolve(body["size"]))}, nil
 	case "market_data_type":
 		return codec.MarketDataType{ReqID: asInt(resolve(body["req_id"])), DataType: asInt(resolve(body["data_type"]))}, nil
 	case "tick_snapshot_end":
@@ -207,7 +211,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "realtime_bar":
 		return codec.RealTimeBar{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"]))}, nil
 	case "open_order":
-		return codec.OpenOrder{OrderID: int64(asInt(resolve(body["order_id"]))), Account: asString(resolve(body["account"])), Contract: asContract(resolve(body["contract"])), Status: asString(resolve(body["status"])), Quantity: asString(resolve(body["quantity"])), Filled: asString(resolve(body["filled"])), Remaining: asString(resolve(body["remaining"]))}, nil
+		return codec.OpenOrder{OrderID: int64(asInt(resolve(body["order_id"]))), Account: asString(resolve(body["account"])), Contract: asContract(resolve(body["contract"])), Action: asString(resolve(body["action"])), OrderType: asString(resolve(body["order_type"])), Status: asString(resolve(body["status"])), Quantity: asString(resolve(body["quantity"])), Filled: asString(resolve(body["filled"])), Remaining: asString(resolve(body["remaining"]))}, nil
 	case "open_order_end":
 		return codec.OpenOrderEnd{}, nil
 	case "execution_detail":
@@ -221,8 +225,39 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	}
 }
 
+// buildPackedHistoricalBars encodes consecutive historical_bar steps into a
+// single packed frame matching the real IBKR wire format for msg 17:
+// [17, reqID, barCount, bar1_time, bar1_O, bar1_H, bar1_L, bar1_C, bar1_vol, bar1_wap, bar1_count, ...]
+func buildPackedHistoricalBars(bars []step, bindings map[string]any) ([]byte, error) {
+	resolve := func(v any) any { return resolveBindings(v, bindings) }
+
+	if len(bars) == 0 {
+		return nil, fmt.Errorf("testhost: no bars to pack")
+	}
+
+	reqID := asString(resolve(bars[0].body["req_id"]))
+	fields := []string{
+		strconv.Itoa(codec.InHistoricalData),
+		reqID,
+		strconv.Itoa(len(bars)),
+	}
+	for _, bar := range bars {
+		fields = append(fields,
+			asString(resolve(bar.body["time"])),
+			asString(resolve(bar.body["open"])),
+			asString(resolve(bar.body["high"])),
+			asString(resolve(bar.body["low"])),
+			asString(resolve(bar.body["close"])),
+			asString(resolve(bar.body["volume"])),
+			asString(resolve(bar.body["wap"])),
+			asString(resolve(bar.body["count"])),
+		)
+	}
+	return wire.EncodeFields(fields), nil
+}
+
 func contractBody(c codec.Contract) map[string]any {
-	return map[string]any{
+	body := map[string]any{
 		"symbol":           c.Symbol,
 		"sec_type":         c.SecType,
 		"exchange":         c.Exchange,
@@ -230,6 +265,25 @@ func contractBody(c codec.Contract) map[string]any {
 		"primary_exchange": c.PrimaryExchange,
 		"local_symbol":     c.LocalSymbol,
 	}
+	if c.ConID != 0 {
+		body["con_id"] = float64(c.ConID)
+	}
+	if c.TradingClass != "" {
+		body["trading_class"] = c.TradingClass
+	}
+	if c.Expiry != "" {
+		body["expiry"] = c.Expiry
+	}
+	if c.Strike != "" && c.Strike != "0" {
+		body["strike"] = c.Strike
+	}
+	if c.Right != "" {
+		body["right"] = c.Right
+	}
+	if c.Multiplier != "" {
+		body["multiplier"] = c.Multiplier
+	}
+	return body
 }
 
 func stringsToAny(values []string) []any {
@@ -306,11 +360,17 @@ func asStrings(value any) []string {
 func asContract(value any) codec.Contract {
 	m, _ := value.(map[string]any)
 	return codec.Contract{
+		ConID:           asInt(m["con_id"]),
 		Symbol:          asString(m["symbol"]),
 		SecType:         asString(m["sec_type"]),
+		Expiry:          asString(m["expiry"]),
+		Strike:          asString(m["strike"]),
+		Right:           asString(m["right"]),
+		Multiplier:      asString(m["multiplier"]),
 		Exchange:        asString(m["exchange"]),
 		Currency:        asString(m["currency"]),
-		PrimaryExchange: asString(m["primary_exchange"]),
 		LocalSymbol:     asString(m["local_symbol"]),
+		TradingClass:    asString(m["trading_class"]),
+		PrimaryExchange: asString(m["primary_exchange"]),
 	}
 }

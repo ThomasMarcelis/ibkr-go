@@ -1,6 +1,6 @@
 # ibkr-go
 
-`ibkr-go` is a clean-room Go client for the Interactive Brokers TWS and IB
+`ibkr-go` is a Go client for the Interactive Brokers TWS and IB
 Gateway socket API. The library is built around a typed session engine,
 typed one-shot requests, and typed subscriptions with explicit lifecycle and
 reconnect semantics. It does not expose `EWrapper` / `EClient` as its primary
@@ -10,8 +10,10 @@ public surface.
 
 The active repo docs are contract-first and implementation-backed. Historical
 planning briefs have been removed. The current repo contains a real typed
-session/testhost harness, but it is not yet validated as a live IBKR protocol
-client. The repository remains private until the v1 read-only core is complete.
+session engine plus legacy replay tooling, but it is not yet a real IBKR
+protocol client. New protocol work is grounded in live TWS / IB Gateway
+behavior and official IBKR docs rather than the legacy symbolic harness. The
+repository remains private until the v1 read-only core is complete.
 
 ## Install
 
@@ -67,12 +69,20 @@ defer quotes.Close()
 - Snapshot completion is driven by explicit protocol end markers.
 - Numeric fields use an exact `Decimal` type rather than `float64` in the
   public contract.
+- `WithClientID` overrides the handshake client ID. The default is `1`.
+- `OpenOrdersScopeAuto` requires `WithClientID(0)`.
+- `ResumeAuto` is currently supported on quote streams and real-time bars only.
+- `SubscribeExecutions` is a finite snapshot subscription and closes after
+  `SnapshotComplete`.
 
 ## Current Implementation Boundary
 
 - The public/session/subscription contracts are real.
-- The deterministic transcript and fake-host test path is real.
-- The current codec/testhost messages are still symbolic logical messages.
+- Capture and normalization tooling for live transcript work is landed.
+- Raw capture logs store connect/disconnect markers plus socket chunks;
+  normalized replay artifacts reconstruct framed payloads offline.
+- The current codec/testhost path is a legacy symbolic replay harness and not
+  the desired implementation target.
 - Real TWS / IB Gateway message compatibility is the next major step.
 
 ## Documentation
@@ -82,7 +92,6 @@ defer quotes.Close()
 - [`docs/message-coverage.md`](docs/message-coverage.md)
 - [`docs/transcripts.md`](docs/transcripts.md)
 - [`docs/roadmap.md`](docs/roadmap.md)
-- [`docs/provenance.md`](docs/provenance.md)
 - [`docs/anti-patterns.md`](docs/anti-patterns.md)
 - [`AGENTS.md`](AGENTS.md)
 

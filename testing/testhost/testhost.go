@@ -86,10 +86,11 @@ func (h *Host) run() {
 	bindings := map[string]any{}
 	var conn net.Conn
 
-	for _, step := range h.steps {
-		switch step.kind {
+	for i := 0; i < len(h.steps); i++ {
+		cur := h.steps[i]
+		switch cur.kind {
 		case "sleep":
-			time.Sleep(step.duration)
+			time.Sleep(cur.duration)
 		case "handshake":
 			if conn == nil {
 				var err error
@@ -117,8 +118,8 @@ func (h *Host) run() {
 			}
 			_ = versionPayload
 			// 3. Send framed server info
-			serverVersion := asInt(resolveBindings(step.body["server_version"], bindings))
-			connTime := asString(resolveBindings(step.body["connection_time"], bindings))
+			serverVersion := asInt(resolveBindings(cur.body["server_version"], bindings))
+			connTime := asString(resolveBindings(cur.body["connection_time"], bindings))
 			serverInfoPayload := wire.EncodeFields([]string{strconv.Itoa(serverVersion), connTime})
 			if err := wire.WriteFrame(conn, serverInfoPayload); err != nil {
 				h.finish(fmt.Errorf("testhost: handshake: write server info: %w", err))
@@ -140,7 +141,7 @@ func (h *Host) run() {
 				return
 			}
 			// Store client_id in bindings if body requests it
-			if cid, ok := step.body["client_id"]; ok {
+			if cid, ok := cur.body["client_id"]; ok {
 				if s, ok := cid.(string); ok && strings.HasPrefix(s, "$") {
 					if len(startFields) >= 3 {
 						bindings[s] = startFields[2]
@@ -166,21 +167,16 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			msg, err := codec.DecodeSymbolic(payload)
+			name, body, err := decodeClientMessage(payload)
 			if err != nil {
 				h.finish(err)
 				return
 			}
-			body, err := messageBody(msg)
-			if err != nil {
-				h.finish(err)
+			if name != cur.name {
+				h.finish(fmt.Errorf("testhost: client message = %q, want %q", name, cur.name))
 				return
 			}
-			if messageName(msg) != step.name {
-				h.finish(fmt.Errorf("testhost: client message = %q, want %q", messageName(msg), step.name))
-				return
-			}
-			if err := matchValue(step.body, body, bindings); err != nil {
+			if err := matchValue(cur.body, body, bindings); err != nil {
 				h.finish(err)
 				return
 			}
@@ -193,7 +189,47 @@ func (h *Host) run() {
 					return
 				}
 			}
-			msg, err := buildMessage(step.name, step.body, bindings)
+
+			// Pack consecutive historical_bar steps into a single frame,
+			// matching the real IBKR protocol where msg 17 carries all bars
+			// in one batch: [17, reqID, N, bar1_fields..., bar2_fields...].
+			if cur.name == "historical_bar" {
+				bars := []step{cur}
+				reqID := asString(resolveBindings(cur.body["req_id"], bindings))
+				for j := i + 1; j < len(h.steps); j++ {
+					next := h.steps[j]
+					if next.kind != "server" || next.name != "historical_bar" {
+						break
+					}
+					nextReqID := asString(resolveBindings(next.body["req_id"], bindings))
+					if nextReqID != reqID {
+						break
+					}
+					bars = append(bars, next)
+				}
+				payload, err := buildPackedHistoricalBars(bars, bindings)
+				if err != nil {
+					h.finish(err)
+					return
+				}
+				if err := wire.WriteFrame(conn, payload); err != nil {
+					h.finish(err)
+					return
+				}
+				// Advance past consumed bar steps (current step is bars[0])
+				i += len(bars) - 1
+				// Skip a trailing historical_bars_end step if present, since
+				// the packed frame already causes the decoder to emit one.
+				if i+1 < len(h.steps) {
+					next := h.steps[i+1]
+					if next.kind == "server" && next.name == "historical_bars_end" {
+						i++
+					}
+				}
+				continue
+			}
+
+			msg, err := buildMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)
 				return
@@ -216,13 +252,13 @@ func (h *Host) run() {
 					return
 				}
 			}
-			msg, err := buildMessage(step.name, step.body, bindings)
+			msg, err := buildMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)
 				return
 			}
 			var payload []byte
-			if step.direction == "server" {
+			if cur.direction == "server" {
 				payload, err = codec.EncodeWire(msg)
 			} else {
 				payload, err = codec.Encode(msg)
@@ -232,10 +268,10 @@ func (h *Host) run() {
 				return
 			}
 			frame := appendLengthPrefix(payload)
-			switch step.direction {
+			switch cur.direction {
 			case "server":
 				cursor := 0
-				for _, size := range step.sizes {
+				for _, size := range cur.sizes {
 					if cursor >= len(frame) {
 						break
 					}
@@ -256,7 +292,7 @@ func (h *Host) run() {
 					}
 				}
 			case "client":
-				got, err := readChunked(conn, len(frame), step.sizes)
+				got, err := readChunked(conn, len(frame), cur.sizes)
 				if err != nil {
 					h.finish(err)
 					return
@@ -266,7 +302,7 @@ func (h *Host) run() {
 					return
 				}
 			default:
-				h.finish(fmt.Errorf("testhost: unsupported split direction %q", step.direction))
+				h.finish(fmt.Errorf("testhost: unsupported split direction %q", cur.direction))
 				return
 			}
 		case "raw":
@@ -278,24 +314,24 @@ func (h *Host) run() {
 					return
 				}
 			}
-			switch step.direction {
+			switch cur.direction {
 			case "server":
-				if _, err := conn.Write(step.raw); err != nil {
+				if _, err := conn.Write(cur.raw); err != nil {
 					h.finish(err)
 					return
 				}
 			case "client":
-				got, err := readExact(conn, len(step.raw))
+				got, err := readExact(conn, len(cur.raw))
 				if err != nil {
 					h.finish(err)
 					return
 				}
-				if !bytes.Equal(got, step.raw) {
-					h.finish(fmt.Errorf("testhost: raw client bytes = %x, want %x", got, step.raw))
+				if !bytes.Equal(got, cur.raw) {
+					h.finish(fmt.Errorf("testhost: raw client bytes = %x, want %x", got, cur.raw))
 					return
 				}
 			default:
-				h.finish(fmt.Errorf("testhost: unsupported raw direction %q", step.direction))
+				h.finish(fmt.Errorf("testhost: unsupported raw direction %q", cur.direction))
 				return
 			}
 		}
@@ -448,6 +484,190 @@ func readChunked(r io.Reader, total int, sizes []int) ([]byte, error) {
 		buf = append(buf, chunk...)
 	}
 	return buf, nil
+}
+
+// decodeClientMessage decodes a real wire format client message into
+// a name and body map for transcript matching.
+func decodeClientMessage(payload []byte) (string, map[string]any, error) {
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(fields) == 0 {
+		return "", nil, fmt.Errorf("testhost: empty client message")
+	}
+	msgID, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return "", nil, fmt.Errorf("testhost: parse client msg_id %q: %w", fields[0], err)
+	}
+
+	switch msgID {
+	case 71: // OutStartAPI
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["client_id"] = fields[2]
+		}
+		if len(fields) >= 4 {
+			body["optional_capabilities"] = fields[3]
+		}
+		return "start_api", body, nil
+	case 9: // OutReqContractData: [9, 8, reqId, conId, symbol, secType, ...]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 8 {
+			body["contract"] = map[string]any{
+				"symbol":           fields[4],
+				"sec_type":         fields[5],
+				"exchange":         safeField(fields, 10),
+				"currency":        safeField(fields, 12),
+				"primary_exchange": safeField(fields, 11),
+				"local_symbol":     safeField(fields, 13),
+			}
+		}
+		return "req_contract_details", body, nil
+	case 20: // OutReqHistoricalData: [20, reqId, conId, symbol, secType, ..., endDateTime, barSize, duration, useRTH, whatToShow, ...]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["req_id"] = fields[1]
+		}
+		if len(fields) >= 23 {
+			body["contract"] = map[string]any{
+				"symbol":           fields[3],
+				"sec_type":         fields[4],
+				"exchange":         safeField(fields, 9),
+				"currency":        safeField(fields, 11),
+				"primary_exchange": safeField(fields, 10),
+				"local_symbol":     safeField(fields, 12),
+			}
+			body["end_time"] = fields[15]
+			body["bar_size"] = fields[16]
+			body["duration"] = fields[17]
+			body["use_rth"] = fields[18] == "1"
+			body["what_to_show"] = fields[19]
+		}
+		return "req_historical_bars", body, nil
+	case 62: // OutReqAccountSummary: [62, 1, reqId, group, tags_csv]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 4 {
+			body["account"] = fields[3]
+		}
+		if len(fields) >= 5 {
+			tags := []any{}
+			if fields[4] != "" {
+				for _, t := range strings.Split(fields[4], ",") {
+					tags = append(tags, t)
+				}
+			}
+			body["tags"] = tags
+		}
+		return "req_account_summary", body, nil
+	case 63: // OutCancelAccountSummary: [63, 1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "cancel_account_summary", body, nil
+	case 61: // OutReqPositions: [61, 1]
+		return "req_positions", map[string]any{}, nil
+	case 64: // OutCancelPositions: [64, 1]
+		return "cancel_positions", map[string]any{}, nil
+	case 1: // OutReqMktData: [1, 11, reqId, conId, contract(11), deltaNeutral, genericTicks, snapshot, regSnapshot, opts]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 20 {
+			body["contract"] = map[string]any{
+				"symbol":           fields[4],
+				"sec_type":         fields[5],
+				"exchange":         safeField(fields, 10),
+				"currency":        safeField(fields, 12),
+				"primary_exchange": safeField(fields, 11),
+				"local_symbol":     safeField(fields, 13),
+			}
+			body["snapshot"] = fields[17] == "1"
+			genericTicks := []any{}
+			if fields[16] != "" {
+				for _, t := range strings.Split(fields[16], ",") {
+					genericTicks = append(genericTicks, t)
+				}
+			}
+			body["generic_ticks"] = genericTicks
+		}
+		return "req_quote", body, nil
+	case 2: // OutCancelMktData: [2, 1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "cancel_quote", body, nil
+	case 50: // OutReqRealTimeBars: [50, 3, reqId, conId, symbol, secType, ...]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 19 {
+			body["contract"] = map[string]any{
+				"symbol":           fields[4],
+				"sec_type":         fields[5],
+				"exchange":         safeField(fields, 10),
+				"currency":        safeField(fields, 12),
+				"primary_exchange": safeField(fields, 11),
+				"local_symbol":     safeField(fields, 13),
+			}
+			body["what_to_show"] = fields[16]
+			body["use_rth"] = fields[17] == "1"
+		}
+		return "req_realtime_bars", body, nil
+	case 51: // OutCancelRealTimeBars: [51, 1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "cancel_realtime_bars", body, nil
+	case 5: // OutReqOpenOrders: [5, 1]
+		return "req_open_orders", map[string]any{"scope": "client"}, nil
+	case 16: // OutReqAllOpenOrders: [16, 1]
+		return "req_open_orders", map[string]any{"scope": "all"}, nil
+	case 15: // OutReqAutoOpenOrders: [15, 1, bind] — bind=1 means subscribe, bind=0 means cancel
+		if len(fields) >= 3 && fields[2] == "0" {
+			return "cancel_open_orders", map[string]any{}, nil
+		}
+		return "req_open_orders", map[string]any{"scope": "auto"}, nil
+	case 7: // OutReqExecutions: [7, 3, reqId, clientId, acct, time, symbol, secType, exchange, side]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 5 {
+			body["account"] = fields[4]
+		}
+		if len(fields) >= 7 {
+			body["symbol"] = fields[6]
+		}
+		return "req_executions", body, nil
+	case 59: // OutReqMarketDataType: [59, 1, dataType]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			dt, _ := strconv.Atoi(fields[2])
+			body["data_type"] = float64(dt)
+		}
+		return "req_market_data_type", body, nil
+	default:
+		return "", nil, fmt.Errorf("testhost: unsupported client msg_id %d", msgID)
+	}
+}
+
+func safeField(fields []string, idx int) string {
+	if idx < len(fields) {
+		return fields[idx]
+	}
+	return ""
 }
 
 func matchValue(expected, actual any, bindings map[string]any) error {

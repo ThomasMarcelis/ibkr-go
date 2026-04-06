@@ -3,8 +3,8 @@ server managed_accounts {"accounts":["DU12345"]}
 server next_valid_id {"order_id":1001}
 client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":true,"generic_ticks":[]}
 server market_data_type {"req_id":"$req1","data_type":1}
-server tick_price {"req_id":"$req1","field":"bid","price":"189.10"}
-server tick_size {"req_id":"$req1","field":"bid_size","size":"400"}
-server tick_price {"req_id":"$req1","field":"ask","price":"189.15"}
+server tick_price {"req_id":"$req1","field":1,"price":"189.10"}
+server tick_size {"req_id":"$req1","field":0,"size":"400"}
+server tick_price {"req_id":"$req1","field":2,"price":"189.15"}
 server tick_snapshot_end {"req_id":"$req1"}
 disconnect

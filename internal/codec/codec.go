@@ -19,7 +19,6 @@ func EncodeVersionRange(minVer, maxVer int) []byte {
 }
 
 // DecodeServerInfo parses the server info frame returned during the handshake.
-// The frame contains [server_version, connection_time] with no msg_id prefix.
 func DecodeServerInfo(payload []byte) (ServerInfo, error) {
 	fields, err := wire.ParseFields(payload)
 	if err != nil {
@@ -48,93 +47,10 @@ func DecodeBatch(payload []byte) ([]Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("codec: parse msg_id %q: %w", fields[0], err)
 	}
-	msg, err := decodeByMsgID(msgID, fields)
-	if err != nil {
-		return nil, err
-	}
-	return []Message{msg}, nil
+	return decodeByMsgID(msgID, fields)
 }
 
-func Encode(msg Message) ([]byte, error) {
-	fields, err := encodeFields(msg)
-	if err != nil {
-		return nil, err
-	}
-	return wire.EncodeFields(fields), nil
-}
-
-// EncodeWire encodes a message in the real TWS wire format (integer msg_id prefix).
-// Used by testhost to send server messages that the session engine can decode.
-func EncodeWire(msg Message) ([]byte, error) {
-	fields, err := encodeWireFields(msg)
-	if err != nil {
-		return nil, err
-	}
-	return wire.EncodeFields(fields), nil
-}
-
-func encodeWireFields(msg Message) ([]string, error) {
-	switch m := msg.(type) {
-	case StartAPI:
-		return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
-	case ManagedAccounts:
-		return []string{itoa(InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
-	case NextValidID:
-		return []string{itoa(InNextValidID), "1", i64toa(m.OrderID)}, nil
-	case CurrentTime:
-		return []string{itoa(InCurrentTime), "1", m.Time}, nil
-	case APIError:
-		return []string{itoa(InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
-	case ContractDetails:
-		fields := []string{itoa(InContractData), "1", itoa(m.ReqID)}
-		fields = append(fields, contractFields(m.Contract)...)
-		fields = append(fields, m.MarketName, m.MinTick, m.TimeZoneID)
-		return fields, nil
-	case ContractDetailsEnd:
-		return []string{itoa(InContractDataEnd), "1", itoa(m.ReqID)}, nil
-	case HistoricalBar:
-		return []string{itoa(InHistoricalData), itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume}, nil
-	case HistoricalBarsEnd:
-		return []string{itoa(InHistoricalData), itoa(m.ReqID), m.Start, m.End}, nil
-	case AccountSummaryValue:
-		return []string{itoa(InAccountSummary), "1", itoa(m.ReqID), m.Account, m.Tag, m.Value, m.Currency}, nil
-	case AccountSummaryEnd:
-		return []string{itoa(InAccountSummaryEnd), "1", itoa(m.ReqID)}, nil
-	case Position:
-		fields := []string{itoa(InPositionData), "1", m.Account}
-		fields = append(fields, contractFields(m.Contract)...)
-		fields = append(fields, m.Position, m.AvgCost)
-		return fields, nil
-	case PositionEnd:
-		return []string{itoa(InPositionEnd), "1"}, nil
-	case TickPrice:
-		return []string{itoa(InTickPrice), "1", itoa(m.ReqID), m.Field, m.Price}, nil
-	case TickSize:
-		return []string{itoa(InTickSize), "1", itoa(m.ReqID), m.Field, m.Size}, nil
-	case MarketDataType:
-		return []string{itoa(InMarketDataType), "1", itoa(m.ReqID), itoa(m.DataType)}, nil
-	case TickSnapshotEnd:
-		return []string{itoa(InTickSnapshotEnd), "1", itoa(m.ReqID)}, nil
-	case RealTimeBar:
-		return []string{itoa(InRealTimeBars), "1", itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume}, nil
-	case OpenOrder:
-		fields := []string{itoa(InOpenOrder), "1", i64toa(m.OrderID), m.Account}
-		fields = append(fields, contractFields(m.Contract)...)
-		fields = append(fields, m.Status, m.Quantity, m.Filled, m.Remaining)
-		return fields, nil
-	case OpenOrderEnd:
-		return []string{itoa(InOpenOrderEnd), "1"}, nil
-	case ExecutionDetail:
-		return []string{itoa(InExecutionData), "1", itoa(m.ReqID), m.ExecID, m.Account, m.Symbol, m.Side, m.Shares, m.Price, m.Time}, nil
-	case ExecutionsEnd:
-		return []string{itoa(InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
-	case CommissionReport:
-		return []string{itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency, m.RealizedPNL}, nil
-	default:
-		return nil, fmt.Errorf("codec: unsupported wire encode for %T", msg)
-	}
-}
-
+// Decode decodes a framed payload into exactly one message.
 func Decode(payload []byte) (Message, error) {
 	msgs, err := DecodeBatch(payload)
 	if err != nil {
@@ -146,733 +62,561 @@ func Decode(payload []byte) (Message, error) {
 	return msgs[0], nil
 }
 
-// DecodeSymbolic decodes a payload using the symbolic field layout
-// (message name as first field). Used by testhost for transcript replay.
-func DecodeSymbolic(payload []byte) (Message, error) {
-	fields, err := wire.ParseFields(payload)
+// Encode encodes a message in the real TWS wire format (integer msg_id prefix).
+func Encode(msg Message) ([]byte, error) {
+	fields, err := encodeFields(msg)
 	if err != nil {
 		return nil, err
 	}
-	return decodeFields(fields)
+	return wire.EncodeFields(fields), nil
 }
 
-func encodeFields(msg Message) ([]string, error) {
-	switch m := msg.(type) {
-	case StartAPI:
-		return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
-	case ServerInfo:
-		return []string{m.messageName(), itoa(m.ServerVersion), m.ConnectionTime}, nil
-	case ManagedAccounts:
-		return []string{m.messageName(), strings.Join(m.Accounts, ",")}, nil
-	case NextValidID:
-		return []string{m.messageName(), i64toa(m.OrderID)}, nil
-	case CurrentTime:
-		return []string{m.messageName(), m.Time}, nil
-	case APIError:
-		return []string{m.messageName(), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
-	case ContractDetailsRequest:
-		return append([]string{m.messageName(), itoa(m.ReqID)}, contractFields(m.Contract)...), nil
-	case ContractDetails:
-		fields := append([]string{m.messageName(), itoa(m.ReqID)}, contractFields(m.Contract)...)
-		fields = append(fields, m.MarketName, m.MinTick, m.TimeZoneID)
-		return fields, nil
-	case ContractDetailsEnd:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case HistoricalBarsRequest:
-		fields := append([]string{m.messageName(), itoa(m.ReqID)}, contractFields(m.Contract)...)
-		fields = append(fields, m.EndDateTime, m.Duration, m.BarSize, m.WhatToShow, boolString(m.UseRTH))
-		return fields, nil
-	case HistoricalBar:
-		return []string{m.messageName(), itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume}, nil
-	case HistoricalBarsEnd:
-		return []string{m.messageName(), itoa(m.ReqID), m.Start, m.End}, nil
-	case AccountSummaryRequest:
-		return []string{m.messageName(), itoa(m.ReqID), m.Account, strings.Join(m.Tags, ",")}, nil
-	case CancelAccountSummary:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case AccountSummaryValue:
-		return []string{m.messageName(), itoa(m.ReqID), m.Account, m.Tag, m.Value, m.Currency}, nil
-	case AccountSummaryEnd:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case PositionsRequest:
-		return []string{m.messageName()}, nil
-	case CancelPositions:
-		return []string{m.messageName()}, nil
-	case Position:
-		fields := append([]string{m.messageName(), m.Account}, contractFields(m.Contract)...)
-		fields = append(fields, m.Position, m.AvgCost)
-		return fields, nil
-	case PositionEnd:
-		return []string{m.messageName()}, nil
-	case QuoteRequest:
-		fields := append([]string{m.messageName(), itoa(m.ReqID)}, contractFields(m.Contract)...)
-		fields = append(fields, boolString(m.Snapshot), strings.Join(m.GenericTicks, ","))
-		return fields, nil
-	case CancelQuote:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case TickPrice:
-		return []string{m.messageName(), itoa(m.ReqID), m.Field, m.Price}, nil
-	case TickSize:
-		return []string{m.messageName(), itoa(m.ReqID), m.Field, m.Size}, nil
-	case MarketDataType:
-		return []string{m.messageName(), itoa(m.ReqID), itoa(m.DataType)}, nil
-	case TickSnapshotEnd:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case RealTimeBarsRequest:
-		fields := append([]string{m.messageName(), itoa(m.ReqID)}, contractFields(m.Contract)...)
-		fields = append(fields, m.WhatToShow, boolString(m.UseRTH))
-		return fields, nil
-	case CancelRealTimeBars:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case RealTimeBar:
-		return []string{m.messageName(), itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume}, nil
-	case OpenOrdersRequest:
-		return []string{m.messageName(), m.Scope}, nil
-	case CancelOpenOrders:
-		return []string{m.messageName()}, nil
-	case OpenOrder:
-		fields := append([]string{m.messageName(), i64toa(m.OrderID), m.Account}, contractFields(m.Contract)...)
-		fields = append(fields, m.Status, m.Quantity, m.Filled, m.Remaining)
-		return fields, nil
-	case OpenOrderEnd:
-		return []string{m.messageName()}, nil
-	case ExecutionsRequest:
-		return []string{m.messageName(), itoa(m.ReqID), m.Account, m.Symbol}, nil
-	case ExecutionDetail:
-		return []string{m.messageName(), itoa(m.ReqID), m.ExecID, m.Account, m.Symbol, m.Side, m.Shares, m.Price, m.Time}, nil
-	case ExecutionsEnd:
-		return []string{m.messageName(), itoa(m.ReqID)}, nil
-	case CommissionReport:
-		return []string{m.messageName(), m.ExecID, m.Commission, m.Currency, m.RealizedPNL}, nil
-	default:
-		return nil, fmt.Errorf("codec: unsupported message type %T", msg)
-	}
+// EncodeWire is an alias for Encode.
+func EncodeWire(msg Message) ([]byte, error) {
+	return Encode(msg)
 }
 
-func decodeByMsgID(msgID int, fields []string) (Message, error) {
+// decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
+// Returns []Message because historical data packs multiple bars into one frame.
+func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 	r := newFieldReader(fields[1:]) // skip msg_id
 	switch msgID {
-	case InTickPrice: // 1
+
+	case InTickPrice: // [1, version, reqID, tickType, price, size, attrMask]
 		r.Skip(1) // version
 		reqID, _ := r.ReadInt()
-		field := r.ReadString()
+		tickType, _ := r.ReadInt()
 		price := r.ReadString()
-		return TickPrice{ReqID: reqID, Field: field, Price: price}, nil
-	case InTickSize: // 2
+		size := r.ReadString()
+		attrMask, _ := r.ReadInt()
+		return []Message{TickPrice{ReqID: reqID, TickType: tickType, Price: price, Size: size, AttrMask: attrMask}}, nil
+
+	case InTickSize: // [2, version, reqID, tickType, size]
 		r.Skip(1) // version
 		reqID, _ := r.ReadInt()
-		field := r.ReadString()
+		tickType, _ := r.ReadInt()
 		size := r.ReadString()
-		return TickSize{ReqID: reqID, Field: field, Size: size}, nil
-	case InErrMsg: // 4
-		// v200: [4, reqId, code, message, advancedJson, errorTimeMs] — no version field
+		return []Message{TickSize{ReqID: reqID, TickType: tickType, Size: size}}, nil
+
+	case InOrderStatus: // [3, orderId, status, filled, remaining, ...]
+		orderID, _ := r.ReadInt64()
+		status := r.ReadString()
+		filled := r.ReadString()
+		remaining := r.ReadString()
+		return []Message{OrderStatus{OrderID: orderID, Status: status, Filled: filled, Remaining: remaining}}, nil
+
+	case InErrMsg: // [4, reqId, code, message, advancedJson, errorTimeMs]
 		reqID, _ := r.ReadInt()
 		code, _ := r.ReadInt()
 		message := r.ReadString()
 		advJSON := r.ReadString()
 		errTime := r.ReadString()
-		return APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}, nil
-	case InOpenOrder: // 5
-		r.Skip(1) // version
+		return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
+
+	case InOpenOrder:
+		// v200 wire layout verified against live IB Gateway capture (server_version 200).
+		// Field positions (0-indexed from after msg_id):
+		//   [0]     orderID
+		//   [1..11] contract (11-field server→client block)
+		//   [12]    action
+		//   [13]    totalQty
+		//   [14]    orderType
+		//   [15..18] lmtPrice, auxPrice, tif, ocaGroup
+		//   [19]    account
+		//   [20..90] 71 order detail fields (permId, FA params, algo, etc.)
+		//   [91]    OrderState.status
+		//   [92..159] 68 margin/state fields
+		//   [160]   filled   (trailing order-status section)
+		//   [161]   remaining
 		orderID, _ := r.ReadInt64()
-		account := r.ReadString()
-		symbol := r.ReadString()
-		secType := r.ReadString()
-		exchange := r.ReadString()
-		currency := r.ReadString()
-		primaryExchange := r.ReadString()
-		localSymbol := r.ReadString()
-		status := r.ReadString()
+		contract := readWireContract(r)
+		action := r.ReadString()
 		quantity := r.ReadString()
+		orderType := r.ReadString()
+		r.Skip(4)  // lmtPrice, auxPrice, tif, ocaGroup
+		account := r.ReadString()
+		r.Skip(71) // order detail fields through to OrderState
+		status := r.ReadString()
+		r.Skip(68) // margin/state fields through to trailing order-status
 		filled := r.ReadString()
 		remaining := r.ReadString()
-		return OpenOrder{
-			OrderID: orderID, Account: account,
-			Contract:  Contract{Symbol: symbol, SecType: secType, Exchange: exchange, Currency: currency, PrimaryExchange: primaryExchange, LocalSymbol: localSymbol},
-			Status:    status, Quantity: quantity, Filled: filled, Remaining: remaining,
-		}, nil
-	case InNextValidID: // 9
+		return []Message{OpenOrder{
+			OrderID: orderID, Account: account, Contract: contract,
+			Action: action, OrderType: orderType,
+			Status: status, Quantity: quantity, Filled: filled, Remaining: remaining,
+		}}, nil
+
+	case InNextValidID: // [9, version, orderID]
 		r.Skip(1) // version
 		orderID, err := r.ReadInt64()
 		if err != nil {
 			return nil, err
 		}
-		return NextValidID{OrderID: orderID}, nil
-	case InContractData: // 10
-		r.Skip(1) // version
+		return []Message{NextValidID{OrderID: orderID}}, nil
+
+	case InContractData: // v200 wire layout verified against live IB Gateway capture.
+		// [10, reqID, symbol, secType, lastTradeDate, lastTradeDateOrContractMonth,
+		//   strike, right, exchange, currency, localSymbol, marketName, tradingClass,
+		//   conID, minTick, mdSizeMultiplier, orderTypes, validExchanges,
+		//   priceMagnifier, underConID, longName, primaryExchange, contractMonth,
+		//   industry, category, subcategory, timeZoneID, ...]
 		reqID, _ := r.ReadInt()
 		symbol := r.ReadString()
 		secType := r.ReadString()
+		expiry := r.ReadString()
+		r.Skip(1) // lastTradeDateOrContractMonth (duplicate/variant of expiry)
+		strike := r.ReadString()
+		right := r.ReadString()
 		exchange := r.ReadString()
 		currency := r.ReadString()
-		primaryExchange := r.ReadString()
 		localSymbol := r.ReadString()
 		marketName := r.ReadString()
+		tradingClass := r.ReadString()
+		conID, _ := r.ReadInt()
 		minTick := r.ReadString()
+		r.Skip(5) // mdSizeMultiplier, orderTypes, validExchanges, priceMagnifier, underConID
+		longName := r.ReadString()
+		primaryExchange := r.ReadString()
+		r.Skip(4) // contractMonth, industry, category, subcategory
 		timeZoneID := r.ReadString()
-		return ContractDetails{
-			ReqID:    reqID,
-			Contract: Contract{Symbol: symbol, SecType: secType, Exchange: exchange, Currency: currency, PrimaryExchange: primaryExchange, LocalSymbol: localSymbol},
-			MarketName: marketName, MinTick: minTick, TimeZoneID: timeZoneID,
-		}, nil
-	case InExecutionData: // 11
-		r.Skip(1) // version
+		return []Message{ContractDetails{
+			ReqID: reqID,
+			Contract: Contract{
+				ConID: conID, Symbol: symbol, SecType: secType,
+				Expiry: expiry, Strike: strike, Right: right,
+				Exchange: exchange, Currency: currency,
+				LocalSymbol: localSymbol, TradingClass: tradingClass,
+				PrimaryExchange: primaryExchange,
+			},
+			MarketName: marketName, MinTick: minTick,
+			LongName: longName, TimeZoneID: timeZoneID,
+		}}, nil
+
+	case InExecutionData: // [11, reqID, orderId, conID, symbol, secType, expiry, strike,
+		//   right, multiplier, exchange, localSymbol, tradingClass,
+		//   execID, time, account, exchange(exec), side, shares, price, ...]
 		reqID, _ := r.ReadInt()
-		execID := r.ReadString()
-		account := r.ReadString()
+		r.Skip(2) // orderId, conID
 		symbol := r.ReadString()
+		r.Skip(8) // secType, expiry, strike, right, multiplier, exchange, localSymbol, tradingClass
+		execID := r.ReadString()
+		execTime := r.ReadString()
+		account := r.ReadString()
+		r.Skip(1) // execution exchange
 		side := r.ReadString()
 		shares := r.ReadString()
 		price := r.ReadString()
-		execTime := r.ReadString()
-		return ExecutionDetail{ReqID: reqID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}, nil
-	case InManagedAccounts: // 15
-		r.Skip(1) // version
+		return []Message{ExecutionDetail{ReqID: reqID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}}, nil
+
+	case InManagedAccounts: // [15, version, accountsList]
+		r.Skip(1)
 		raw := r.ReadString()
 		accounts := []string{}
 		if raw != "" {
 			accounts = strings.Split(strings.TrimRight(raw, ","), ",")
 		}
-		return ManagedAccounts{Accounts: accounts}, nil
-	case InHistoricalData: // 17
-		// Historical data uses reqID as second field (no version field in practice)
+		return []Message{ManagedAccounts{Accounts: accounts}}, nil
+
+	case InHistoricalData: // [17, reqID, barCount, time, O, H, L, C, vol, wap, count, ...]
 		reqID, _ := r.ReadInt()
-		field2 := r.ReadString()
-		field3 := r.ReadString()
-		// Distinguish bar from end by field count: bar has more fields
-		if r.Remaining() >= 4 {
-			// This is a bar: [17, reqID, time, open, high, low, close, volume]
-			return HistoricalBar{ReqID: reqID, Time: field2, Open: field3, High: r.ReadString(), Low: r.ReadString(), Close: r.ReadString(), Volume: r.ReadString()}, nil
+		barCount, _ := r.ReadInt()
+		if barCount <= 0 {
+			return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
 		}
-		// This is end: [17, reqID, start, end]
-		return HistoricalBarsEnd{ReqID: reqID, Start: field2, End: field3}, nil
-	case InCurrentTime: // 49
-		r.Skip(1) // version
-		return CurrentTime{Time: r.ReadString()}, nil
-	case InRealTimeBars: // 50
-		r.Skip(1) // version
+		msgs := make([]Message, 0, barCount+1)
+		for i := 0; i < barCount; i++ {
+			msgs = append(msgs, HistoricalBar{
+				ReqID: reqID, Time: r.ReadString(),
+				Open: r.ReadString(), High: r.ReadString(),
+				Low: r.ReadString(), Close: r.ReadString(),
+				Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
+			})
+		}
+		msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID})
+		return msgs, nil
+
+	case InTickGeneric, InTickString, InTickReqParams:
+		return nil, nil
+
+	case InCurrentTime: // [49, version, time]
+		r.Skip(1)
+		return []Message{CurrentTime{Time: r.ReadString()}}, nil
+
+	case InRealTimeBars: // [50, version, reqID, time, O, H, L, C, vol, wap, count]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
-		return RealTimeBar{ReqID: reqID, Time: r.ReadString(), Open: r.ReadString(), High: r.ReadString(), Low: r.ReadString(), Close: r.ReadString(), Volume: r.ReadString()}, nil
-	case InContractDataEnd: // 52
-		r.Skip(1) // version
+		return []Message{RealTimeBar{
+			ReqID: reqID, Time: r.ReadString(),
+			Open: r.ReadString(), High: r.ReadString(), Low: r.ReadString(),
+			Close: r.ReadString(), Volume: r.ReadString(),
+			WAP: r.ReadString(), Count: r.ReadString(),
+		}}, nil
+
+	case InContractDataEnd: // [52, version, reqID]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
-		return ContractDetailsEnd{ReqID: reqID}, nil
-	case InOpenOrderEnd: // 53
-		return OpenOrderEnd{}, nil
-	case InExecutionDataEnd: // 55
-		r.Skip(1) // version
+		return []Message{ContractDetailsEnd{ReqID: reqID}}, nil
+
+	case InOpenOrderEnd:
+		return []Message{OpenOrderEnd{}}, nil
+
+	case InExecutionDataEnd: // [55, version, reqID]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
-		return ExecutionsEnd{ReqID: reqID}, nil
-	case InTickSnapshotEnd: // 57
-		r.Skip(1) // version
+		return []Message{ExecutionsEnd{ReqID: reqID}}, nil
+
+	case InTickSnapshotEnd: // [57, version, reqID]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
-		return TickSnapshotEnd{ReqID: reqID}, nil
-	case InMarketDataType: // 58
-		r.Skip(1) // version
+		return []Message{TickSnapshotEnd{ReqID: reqID}}, nil
+
+	case InMarketDataType: // [58, version, reqID, dataType]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
 		dataType, _ := r.ReadInt()
-		return MarketDataType{ReqID: reqID, DataType: dataType}, nil
-	case InCommissionReport: // 59
-		r.Skip(1) // version
+		return []Message{MarketDataType{ReqID: reqID, DataType: dataType}}, nil
+
+	case InCommissionReport: // [59, version, execID, commission, currency, realizedPNL, ...]
+		r.Skip(1)
 		execID := r.ReadString()
 		commission := r.ReadString()
 		currency := r.ReadString()
 		realizedPNL := r.ReadString()
-		return CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}, nil
-	case InPositionData: // 61
-		r.Skip(1) // version
+		return []Message{CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}}, nil
+
+	case InPositionData: // [61, version, account, contract(11), position, avgCost]
+		r.Skip(1)
 		account := r.ReadString()
-		symbol := r.ReadString()
-		secType := r.ReadString()
-		exchange := r.ReadString()
-		currency := r.ReadString()
-		primaryExchange := r.ReadString()
-		localSymbol := r.ReadString()
+		contract := readWireContract(r)
 		position := r.ReadString()
 		avgCost := r.ReadString()
-		return Position{
-			Account:  account,
-			Contract: Contract{Symbol: symbol, SecType: secType, Exchange: exchange, Currency: currency, PrimaryExchange: primaryExchange, LocalSymbol: localSymbol},
-			Position: position, AvgCost: avgCost,
-		}, nil
-	case InPositionEnd: // 62
-		return PositionEnd{}, nil
-	case InAccountSummary: // 63
-		r.Skip(1) // version
+		return []Message{Position{Account: account, Contract: contract, Position: position, AvgCost: avgCost}}, nil
+
+	case InPositionEnd:
+		return []Message{PositionEnd{}}, nil
+
+	case InAccountSummary: // [63, version, reqID, account, tag, value, currency]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
 		account := r.ReadString()
 		tag := r.ReadString()
 		value := r.ReadString()
 		currency := r.ReadString()
-		return AccountSummaryValue{ReqID: reqID, Account: account, Tag: tag, Value: value, Currency: currency}, nil
-	case InAccountSummaryEnd: // 64
-		r.Skip(1) // version
+		return []Message{AccountSummaryValue{ReqID: reqID, Account: account, Tag: tag, Value: value, Currency: currency}}, nil
+
+	case InAccountSummaryEnd: // [64, version, reqID]
+		r.Skip(1)
 		reqID, _ := r.ReadInt()
-		return AccountSummaryEnd{ReqID: reqID}, nil
+		return []Message{AccountSummaryEnd{ReqID: reqID}}, nil
+
 	default:
 		return nil, fmt.Errorf("codec: unknown msg_id %d", msgID)
 	}
 }
 
-func decodeFields(fields []string) (Message, error) {
-	switch fields[0] {
-	case "start_api":
-		if err := wantLen(fields, 3); err != nil {
-			return nil, err
+func encodeFields(msg Message) ([]string, error) {
+	switch m := msg.(type) {
+
+	case StartAPI:
+		return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
+
+	case ContractDetailsRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqContractData)
+		w.WriteInt(8) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		writeWireContract(&w, m.Contract)
+		w.WriteBool(false) // includeExpired
+		w.WriteString("")  // secIdType
+		w.WriteString("")  // secId
+		w.WriteString("")  // issuerId (v>=MinServerVersionBondIssuerId)
+		return w.Fields(), nil
+
+	case HistoricalBarsRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqHistoricalData)
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		writeWireContract(&w, m.Contract)
+		w.WriteBool(false)         // includeExpired
+		w.WriteString(m.EndDateTime)
+		w.WriteString(m.BarSize)
+		w.WriteString(m.Duration)
+		w.WriteBool(m.UseRTH)
+		w.WriteString(m.WhatToShow)
+		w.WriteInt(1)       // formatDate
+		w.WriteBool(false)  // keepUpToDate
+		w.WriteString("")   // chartOptions
+		return w.Fields(), nil
+
+	case AccountSummaryRequest:
+		return []string{itoa(OutReqAccountSummary), "1", itoa(m.ReqID), m.Account, strings.Join(m.Tags, ",")}, nil
+
+	case CancelAccountSummary:
+		return []string{itoa(OutCancelAccountSummary), "1", itoa(m.ReqID)}, nil
+
+	case PositionsRequest:
+		return []string{itoa(OutReqPositions), "1"}, nil
+
+	case CancelPositions:
+		return []string{itoa(OutCancelPositions), "1"}, nil
+
+	case QuoteRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqMktData)
+		w.WriteInt(11) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		writeWireContract(&w, m.Contract)
+		// BAG combo legs omitted (not supported in v1).
+		w.WriteBool(false) // deltaNeutralContract present
+		w.WriteString(strings.Join(m.GenericTicks, ","))
+		w.WriteBool(m.Snapshot)
+		w.WriteBool(false) // regulatorySnapshot
+		w.WriteString("")  // mktDataOptions
+		return w.Fields(), nil
+
+	case CancelQuote:
+		return []string{itoa(OutCancelMktData), "1", itoa(m.ReqID)}, nil
+
+	case RealTimeBarsRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqRealTimeBars)
+		w.WriteInt(3) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		writeWireContract(&w, m.Contract)
+		w.WriteInt(5) // barSize (always 5 sec)
+		w.WriteString(m.WhatToShow)
+		w.WriteBool(m.UseRTH)
+		w.WriteString("") // options
+		return w.Fields(), nil
+
+	case CancelRealTimeBars:
+		return []string{itoa(OutCancelRealTimeBars), "1", itoa(m.ReqID)}, nil
+
+	case OpenOrdersRequest:
+		switch m.Scope {
+		case "all":
+			return []string{itoa(OutReqAllOpenOrders), "1"}, nil
+		case "client":
+			return []string{itoa(OutReqOpenOrders), "1"}, nil
+		case "auto":
+			return []string{itoa(OutReqAutoOpenOrders), "1", "1"}, nil
+		default:
+			return []string{itoa(OutReqAllOpenOrders), "1"}, nil
 		}
-		clientID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return StartAPI{ClientID: clientID, OptionalCapabilities: fields[2]}, nil
-	case "server_info":
-		if err := wantLen(fields, 3); err != nil {
-			return nil, err
-		}
-		serverVersion, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return ServerInfo{ServerVersion: serverVersion, ConnectionTime: fields[2]}, nil
-	case "managed_accounts":
-		if err := wantLen(fields, 2); err != nil {
-			return nil, err
-		}
-		accounts := []string{}
-		if fields[1] != "" {
-			accounts = strings.Split(fields[1], ",")
-		}
-		return ManagedAccounts{Accounts: accounts}, nil
-	case "next_valid_id":
-		if err := wantLen(fields, 2); err != nil {
-			return nil, err
-		}
-		orderID, err := atoi64(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return NextValidID{OrderID: orderID}, nil
-	case "current_time":
-		if err := wantLen(fields, 2); err != nil {
-			return nil, err
-		}
-		return CurrentTime{Time: fields[1]}, nil
-	case "api_error":
-		if len(fields) < 4 {
-			return nil, fmt.Errorf("codec: field count = %d, want >= 4 for %q", len(fields), fields[0])
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		code, err := atoi(fields[2])
-		if err != nil {
-			return nil, err
-		}
-		msg := APIError{ReqID: reqID, Code: code, Message: fields[3]}
-		if len(fields) > 4 {
-			msg.AdvancedOrderRejectJSON = fields[4]
-		}
-		if len(fields) > 5 {
-			msg.ErrorTimeMs = fields[5]
-		}
-		return msg, nil
-	case "req_contract_details":
-		reqID, contract, err := parseReqContract(fields)
-		if err != nil {
-			return nil, err
-		}
-		return ContractDetailsRequest{ReqID: reqID, Contract: contract}, nil
-	case "contract_details":
-		if err := wantLen(fields, 11); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		contract, _, err := parseContract(fields, 2)
-		if err != nil {
-			return nil, err
-		}
-		return ContractDetails{
-			ReqID:      reqID,
-			Contract:   contract,
-			MarketName: fields[8],
-			MinTick:    fields[9],
-			TimeZoneID: fields[10],
+
+	case CancelOpenOrders:
+		return []string{itoa(OutReqAutoOpenOrders), "1", "0"}, nil
+
+	case ExecutionsRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqExecutions)
+		w.WriteInt(3) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(0) // clientId filter
+		w.WriteString(m.Account)
+		w.WriteString("") // time
+		w.WriteString(m.Symbol)
+		w.WriteString("") // secType
+		w.WriteString("") // exchange
+		w.WriteString("") // side
+		return w.Fields(), nil
+
+	// Server -> client (testhost)
+
+	case ManagedAccounts:
+		return []string{itoa(InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
+
+	case NextValidID:
+		return []string{itoa(InNextValidID), "1", i64toa(m.OrderID)}, nil
+
+	case CurrentTime:
+		return []string{itoa(InCurrentTime), "1", m.Time}, nil
+
+	case APIError:
+		return []string{itoa(InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
+
+	case ContractDetails:
+		return []string{
+			itoa(InContractData), itoa(m.ReqID),
+			m.Contract.Symbol, m.Contract.SecType, m.Contract.Expiry,
+			m.Contract.Expiry, // lastTradeDateOrContractMonth (duplicate)
+			m.Contract.Strike, m.Contract.Right,
+			m.Contract.Exchange, m.Contract.Currency,
+			m.Contract.LocalSymbol, m.MarketName, m.Contract.TradingClass,
+			itoa(m.Contract.ConID), m.MinTick,
+			"", "", "", "", "",
+			m.LongName, m.Contract.PrimaryExchange,
+			"", "", "", "",
+			m.TimeZoneID,
 		}, nil
-	case "contract_details_end":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return ContractDetailsEnd{ReqID: reqID}, nil
-	case "req_historical_bars":
-		if err := wantLen(fields, 13); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		contract, _, err := parseContract(fields, 2)
-		if err != nil {
-			return nil, err
-		}
-		useRTH, err := parseBool(fields[12])
-		if err != nil {
-			return nil, err
-		}
-		return HistoricalBarsRequest{
-			ReqID:       reqID,
-			Contract:    contract,
-			EndDateTime: fields[8],
-			Duration:    fields[9],
-			BarSize:     fields[10],
-			WhatToShow:  fields[11],
-			UseRTH:      useRTH,
+
+	case ContractDetailsEnd:
+		return []string{itoa(InContractDataEnd), "1", itoa(m.ReqID)}, nil
+
+	case HistoricalBar:
+		return []string{
+			itoa(InHistoricalData), itoa(m.ReqID), "1",
+			m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count,
 		}, nil
-	case "historical_bar":
-		if err := wantLen(fields, 8); err != nil {
-			return nil, err
+
+	case HistoricalBarsEnd:
+		return []string{itoa(InHistoricalData), itoa(m.ReqID), "0"}, nil
+
+	case AccountSummaryValue:
+		return []string{itoa(InAccountSummary), "1", itoa(m.ReqID), m.Account, m.Tag, m.Value, m.Currency}, nil
+
+	case AccountSummaryEnd:
+		return []string{itoa(InAccountSummaryEnd), "1", itoa(m.ReqID)}, nil
+
+	case Position:
+		// Encode in server→client wire format matching readWireContract:
+		// [conID, symbol, secType, expiry, strike, right, multiplier,
+		//  exchange, currency, localSymbol, tradingClass]
+		w := fieldWriter{}
+		w.WriteInt(InPositionData)
+		w.WriteInt(3) // version
+		w.WriteString(m.Account)
+		w.WriteInt(m.Contract.ConID)
+		w.WriteString(m.Contract.Symbol)
+		w.WriteString(m.Contract.SecType)
+		w.WriteString(m.Contract.Expiry)
+		if m.Contract.Strike == "" {
+			w.WriteString("0")
+		} else {
+			w.WriteString(m.Contract.Strike)
 		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
+		w.WriteString(m.Contract.Right)
+		w.WriteString(m.Contract.Multiplier)
+		w.WriteString(m.Contract.Exchange)
+		w.WriteString(m.Contract.Currency)
+		w.WriteString(m.Contract.LocalSymbol)
+		w.WriteString(m.Contract.TradingClass)
+		w.WriteString(m.Position)
+		w.WriteString(m.AvgCost)
+		return w.Fields(), nil
+
+	case PositionEnd:
+		return []string{itoa(InPositionEnd), "1"}, nil
+
+	case TickPrice:
+		return []string{itoa(InTickPrice), "6", itoa(m.ReqID), itoa(m.TickType), m.Price, m.Size, itoa(m.AttrMask)}, nil
+
+	case TickSize:
+		return []string{itoa(InTickSize), "6", itoa(m.ReqID), itoa(m.TickType), m.Size}, nil
+
+	case MarketDataType:
+		return []string{itoa(InMarketDataType), "1", itoa(m.ReqID), itoa(m.DataType)}, nil
+
+	case TickSnapshotEnd:
+		return []string{itoa(InTickSnapshotEnd), "1", itoa(m.ReqID)}, nil
+
+	case RealTimeBar:
+		return []string{itoa(InRealTimeBars), "3", itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count}, nil
+
+	case OpenOrder:
+		// Encode in the v200 wire layout. The decoder reads fields at fixed
+		// positions verified against live captures, so the encoder must pad
+		// intermediate fields to keep positions aligned.
+		w := fieldWriter{}
+		w.WriteInt(InOpenOrder)
+		w.WriteInt64(m.OrderID)            // r[0]
+		writeWireContract(&w, m.Contract)  // r[1..11]
+		w.WriteString(m.Action)            // r[12]
+		w.WriteString(m.Quantity)          // r[13]
+		w.WriteString(m.OrderType)         // r[14]
+		for range 4 {                      // r[15..18] lmtPrice, auxPrice, tif, ocaGroup
+			w.WriteString("")
 		}
-		return HistoricalBar{ReqID: reqID, Time: fields[2], Open: fields[3], High: fields[4], Low: fields[5], Close: fields[6], Volume: fields[7]}, nil
-	case "historical_bars_end":
-		if err := wantLen(fields, 4); err != nil {
-			return nil, err
+		w.WriteString(m.Account)           // r[19]
+		for range 71 {                     // r[20..90] order detail padding
+			w.WriteString("")
 		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
+		w.WriteString(m.Status)            // r[91]
+		for range 68 {                     // r[92..159] margin/state padding
+			w.WriteString("")
 		}
-		return HistoricalBarsEnd{ReqID: reqID, Start: fields[2], End: fields[3]}, nil
-	case "req_account_summary":
-		if err := wantLen(fields, 4); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		tags := []string{}
-		if fields[3] != "" {
-			tags = strings.Split(fields[3], ",")
-		}
-		return AccountSummaryRequest{ReqID: reqID, Account: fields[2], Tags: tags}, nil
-	case "cancel_account_summary":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return CancelAccountSummary{ReqID: reqID}, nil
-	case "account_summary":
-		if err := wantLen(fields, 6); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return AccountSummaryValue{ReqID: reqID, Account: fields[2], Tag: fields[3], Value: fields[4], Currency: fields[5]}, nil
-	case "account_summary_end":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return AccountSummaryEnd{ReqID: reqID}, nil
-	case "req_positions":
-		if err := wantLen(fields, 1); err != nil {
-			return nil, err
-		}
-		return PositionsRequest{}, nil
-	case "cancel_positions":
-		if err := wantLen(fields, 1); err != nil {
-			return nil, err
-		}
-		return CancelPositions{}, nil
-	case "position":
-		if err := wantLen(fields, 10); err != nil {
-			return nil, err
-		}
-		contract, _, err := parseContract(fields, 2)
-		if err != nil {
-			return nil, err
-		}
-		return Position{Account: fields[1], Contract: contract, Position: fields[8], AvgCost: fields[9]}, nil
-	case "position_end":
-		if err := wantLen(fields, 1); err != nil {
-			return nil, err
-		}
-		return PositionEnd{}, nil
-	case "req_quote":
-		if err := wantLen(fields, 10); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		contract, _, err := parseContract(fields, 2)
-		if err != nil {
-			return nil, err
-		}
-		snapshot, err := parseBool(fields[8])
-		if err != nil {
-			return nil, err
-		}
-		genericTicks := []string{}
-		if fields[9] != "" {
-			genericTicks = strings.Split(fields[9], ",")
-		}
-		return QuoteRequest{ReqID: reqID, Contract: contract, Snapshot: snapshot, GenericTicks: genericTicks}, nil
-	case "cancel_quote":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return CancelQuote{ReqID: reqID}, nil
-	case "tick_price":
-		if err := wantLen(fields, 4); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return TickPrice{ReqID: reqID, Field: fields[2], Price: fields[3]}, nil
-	case "tick_size":
-		if err := wantLen(fields, 4); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return TickSize{ReqID: reqID, Field: fields[2], Size: fields[3]}, nil
-	case "market_data_type":
-		if err := wantLen(fields, 3); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		dataType, err := atoi(fields[2])
-		if err != nil {
-			return nil, err
-		}
-		return MarketDataType{ReqID: reqID, DataType: dataType}, nil
-	case "tick_snapshot_end":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return TickSnapshotEnd{ReqID: reqID}, nil
-	case "req_realtime_bars":
-		if err := wantLen(fields, 10); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		contract, _, err := parseContract(fields, 2)
-		if err != nil {
-			return nil, err
-		}
-		useRTH, err := parseBool(fields[9])
-		if err != nil {
-			return nil, err
-		}
-		return RealTimeBarsRequest{ReqID: reqID, Contract: contract, WhatToShow: fields[8], UseRTH: useRTH}, nil
-	case "cancel_realtime_bars":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return CancelRealTimeBars{ReqID: reqID}, nil
-	case "realtime_bar":
-		if err := wantLen(fields, 8); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return RealTimeBar{ReqID: reqID, Time: fields[2], Open: fields[3], High: fields[4], Low: fields[5], Close: fields[6], Volume: fields[7]}, nil
-	case "req_open_orders":
-		if err := wantLen(fields, 2); err != nil {
-			return nil, err
-		}
-		return OpenOrdersRequest{Scope: fields[1]}, nil
-	case "cancel_open_orders":
-		if err := wantLen(fields, 1); err != nil {
-			return nil, err
-		}
-		return CancelOpenOrders{}, nil
-	case "open_order":
-		if err := wantLen(fields, 13); err != nil {
-			return nil, err
-		}
-		orderID, err := atoi64(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		contract, _, err := parseContract(fields, 3)
-		if err != nil {
-			return nil, err
-		}
-		return OpenOrder{
-			OrderID:   orderID,
-			Account:   fields[2],
-			Contract:  contract,
-			Status:    fields[9],
-			Quantity:  fields[10],
-			Filled:    fields[11],
-			Remaining: fields[12],
+		w.WriteString(m.Filled)            // r[160]
+		w.WriteString(m.Remaining)         // r[161]
+		return w.Fields(), nil
+
+	case OrderStatus:
+		w := fieldWriter{}
+		w.WriteInt(InOrderStatus)
+		w.WriteInt64(m.OrderID)
+		w.WriteString(m.Status)
+		w.WriteString(m.Filled)
+		w.WriteString(m.Remaining)
+		return w.Fields(), nil
+
+	case OpenOrderEnd:
+		return []string{itoa(InOpenOrderEnd), "1"}, nil
+
+	case ExecutionDetail:
+		return []string{
+			itoa(InExecutionData), itoa(m.ReqID),
+			"0", "0",
+			m.Symbol, "", "", "", "", "", "", "", "",
+			m.ExecID, m.Time, m.Account,
+			"",
+			m.Side, m.Shares, m.Price,
 		}, nil
-	case "open_order_end":
-		if err := wantLen(fields, 1); err != nil {
-			return nil, err
-		}
-		return OpenOrderEnd{}, nil
-	case "req_executions":
-		if err := wantLen(fields, 4); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return ExecutionsRequest{ReqID: reqID, Account: fields[2], Symbol: fields[3]}, nil
-	case "execution_detail":
-		if err := wantLen(fields, 9); err != nil {
-			return nil, err
-		}
-		reqID, err := atoi(fields[1])
-		if err != nil {
-			return nil, err
-		}
-		return ExecutionDetail{
-			ReqID:   reqID,
-			ExecID:  fields[2],
-			Account: fields[3],
-			Symbol:  fields[4],
-			Side:    fields[5],
-			Shares:  fields[6],
-			Price:   fields[7],
-			Time:    fields[8],
-		}, nil
-	case "executions_end":
-		reqID, err := parseSingleReqID(fields)
-		if err != nil {
-			return nil, err
-		}
-		return ExecutionsEnd{ReqID: reqID}, nil
-	case "commission_report":
-		if err := wantLen(fields, 5); err != nil {
-			return nil, err
-		}
-		return CommissionReport{ExecID: fields[1], Commission: fields[2], Currency: fields[3], RealizedPNL: fields[4]}, nil
+
+	case ExecutionsEnd:
+		return []string{itoa(InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
+
+	case CommissionReport:
+		return []string{itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency, m.RealizedPNL}, nil
+
 	default:
-		return nil, fmt.Errorf("codec: unknown message %q", fields[0])
+		return nil, fmt.Errorf("codec: unsupported message type %T", msg)
 	}
 }
 
-func contractFields(c Contract) []string {
-	return []string{
-		c.Symbol,
-		c.SecType,
-		c.Exchange,
-		c.Currency,
-		c.PrimaryExchange,
-		c.LocalSymbol,
+// writeWireContract writes the 11-field contract block (client->server):
+// [symbol, secType, expiry, strike, right, multiplier, exchange, primaryExchange, currency, localSymbol, tradingClass]
+func writeWireContract(w *fieldWriter, c Contract) {
+	w.WriteString(c.Symbol)
+	w.WriteString(c.SecType)
+	w.WriteString(c.Expiry)
+	if c.Strike == "" {
+		w.WriteString("0")
+	} else {
+		w.WriteString(c.Strike)
 	}
+	w.WriteString(c.Right)
+	w.WriteString(c.Multiplier)
+	w.WriteString(c.Exchange)
+	w.WriteString(c.PrimaryExchange)
+	w.WriteString(c.Currency)
+	w.WriteString(c.LocalSymbol)
+	w.WriteString(c.TradingClass)
 }
 
-func parseReqContract(fields []string) (int, Contract, error) {
-	if err := wantLen(fields, 8); err != nil {
-		return 0, Contract{}, err
-	}
-	reqID, err := atoi(fields[1])
-	if err != nil {
-		return 0, Contract{}, err
-	}
-	contract, _, err := parseContract(fields, 2)
-	return reqID, contract, err
-}
-
-func parseContract(fields []string, idx int) (Contract, int, error) {
-	if idx+6 > len(fields) {
-		return Contract{}, idx, fmt.Errorf("codec: contract fields truncated")
-	}
+// readWireContract reads the 11-field contract block (server->client):
+// [conID, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass]
+func readWireContract(r *fieldReader) Contract {
+	conID, _ := r.ReadInt()
+	symbol := r.ReadString()
+	secType := r.ReadString()
+	expiry := r.ReadString()
+	strike := r.ReadString()
+	right := r.ReadString()
+	multiplier := r.ReadString()
+	exchange := r.ReadString()
+	currency := r.ReadString()
+	localSymbol := r.ReadString()
+	tradingClass := r.ReadString()
 	return Contract{
-		Symbol:          fields[idx],
-		SecType:         fields[idx+1],
-		Exchange:        fields[idx+2],
-		Currency:        fields[idx+3],
-		PrimaryExchange: fields[idx+4],
-		LocalSymbol:     fields[idx+5],
-	}, idx + 6, nil
-}
-
-func parseSingleReqID(fields []string) (int, error) {
-	if err := wantLen(fields, 2); err != nil {
-		return 0, err
-	}
-	return atoi(fields[1])
-}
-
-func wantLen(fields []string, want int) error {
-	if len(fields) != want {
-		return fmt.Errorf("codec: field count = %d, want %d for %q", len(fields), want, fields[0])
-	}
-	return nil
-}
-
-func atoi(v string) (int, error) {
-	i, err := strconv.Atoi(v)
-	if err != nil {
-		return 0, fmt.Errorf("codec: parse int %q: %w", v, err)
-	}
-	return i, nil
-}
-
-func atoi64(v string) (int64, error) {
-	i, err := strconv.ParseInt(v, 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("codec: parse int64 %q: %w", v, err)
-	}
-	return i, nil
-}
-
-func itoa(v int) string {
-	return strconv.Itoa(v)
-}
-
-func i64toa(v int64) string {
-	return strconv.FormatInt(v, 10)
-}
-
-func boolString(v bool) string {
-	if v {
-		return "1"
-	}
-	return "0"
-}
-
-func parseBool(v string) (bool, error) {
-	switch v {
-	case "1", "true":
-		return true, nil
-	case "0", "false":
-		return false, nil
-	default:
-		return false, fmt.Errorf("codec: parse bool %q", v)
+		ConID: conID, Symbol: symbol, SecType: secType,
+		Expiry: expiry, Strike: strike, Right: right,
+		Multiplier: multiplier, Exchange: exchange, Currency: currency,
+		LocalSymbol: localSymbol, TradingClass: tradingClass,
 	}
 }
+
+func itoa(v int) string    { return strconv.Itoa(v) }
+func i64toa(v int64) string { return strconv.FormatInt(v, 10) }

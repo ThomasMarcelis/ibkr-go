@@ -124,6 +124,8 @@ type Bar struct {
 	Low    Decimal
 	Close  Decimal
 	Volume Decimal
+	WAP    Decimal
+	Count  int
 }
 
 type AccountSummaryRequest struct {
@@ -216,6 +218,8 @@ type OpenOrder struct {
 	OrderID   int64
 	Account   string
 	Contract  Contract
+	Action    string
+	OrderType string
 	Status    string
 	Quantity  Decimal
 	Filled    Decimal

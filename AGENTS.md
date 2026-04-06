@@ -7,6 +7,7 @@ This document is the standing brief for anyone working on `ibkr-go`, human or ag
 - **Solo dev / YAGNI.** Do not overengineer. Do not overabstract. Build against the current codebase. Keep one implementation per behavior and move deliberately forward. No duplicate implementations, compatibility shims, or fallback code paths.
 - **Implementation-first docs.** Docs are implementation-first: if a doc conflicts with code, the code wins — then update the doc. docs are aimed to be complementary to the code, with in-line code comments explaining why where it adds signal without noise and is worth the extra maintenance
 - **Prefer clean breaks.** Breaking changes are acceptable when they simplify the system. Avoid compatibility baggage.
+- **Real protocol first.** When a local TWS or IB Gateway session is available, protocol design and manual verification start from the live local API plus official IBKR docs and source references. Do not invent repo-local symbolic IBKR message vocabularies or fake protocol semantics.
 
 ## Scope and Non-Goals
 
@@ -16,7 +17,15 @@ This document is the standing brief for anyone working on `ibkr-go`, human or ag
 
 **Not in v1.** Order writes, scanners, news breadth, Flex, Client Portal Web API, near-full parity with the entire TWS API surface, an `EWrapper` / `EClient` compatibility bridge.
 
-The full v1 charter lives in [`docs/roadmap.md`](docs/roadmap.md). The clean-room posture is in [`docs/provenance.md`](docs/provenance.md).
+The full v1 charter lives in [`docs/roadmap.md`](docs/roadmap.md).
+
+## Reference Policy
+
+- The running local TWS or IB Gateway is the primary source of truth for protocol behavior when it is available.
+- Official IBKR protocol documentation, official client-library source, contributor-captured live traces, and other IBKR library implementations are allowed reference inputs for protocol work.
+- `testing/testhost` and checked-in fixtures are for deterministic replay and fault injection of live-derived behavior. They are not a license to define a fake IBKR protocol.
+- If live behavior conflicts with an existing fixture, transcript, or helper, the live behavior wins and the replay artifact must be updated or removed.
+- Do not add new repo-local symbolic message names, fake protocol surfaces, or adapter layers that preserve them as an implementation target.
 
 ## Go Style
 
@@ -51,9 +60,9 @@ Every subsystem gets its own layered tests. Each test proves one hypothesis.
 
 1. **Invariants.** Protocol framing, codec round-trip, session state machine transitions. Must never regress. Small, exhaustive.
 2. **State transitions.** Single-message encode and decode cases. Table-driven.
-3. **Behavioral scenarios.** End-to-end typed one-shot flows (e.g., `DialContext` → `ManagedAccounts` → `AccountSummary`, subscription lifecycle) against the in-process `testing/testhost/` with deterministic checked-in transcripts.
+3. **Behavioral scenarios.** End-to-end typed one-shot flows (e.g., `DialContext` → `ManagedAccounts` → `AccountSummary`, subscription lifecycle) grounded in live IBKR behavior and then frozen into deterministic replay fixtures.
 4. **Stress and edge.** Malformed frames, partial reads, reconnect mid-subscription, negotiated-version edge cases.
-5. **Deterministic first.** All tests use `testhost` plus checked-in transcripts. Live Gateway is only for transcript refresh, never routine CI.
+5. **Deterministic CI, live-first development.** Routine CI stays deterministic, but protocol-adjacent design and manual verification use the local live Gateway or TWS when available. Replay fixtures are derived from live behavior rather than invented protocol semantics.
 
 ### Quality bar
 
@@ -61,14 +70,6 @@ Every subsystem gets its own layered tests. Each test proves one hypothesis.
 - Tests target public API behavior, not implementation. Internal refactors must not force test rewrites.
 - No test exists solely to prove the code was written.
 - Every bug fix lands with the transcript or test that would have caught it. That test becomes a permanent regression freeze.
-
-## Clean-Room Boundary
-
-The library is a clean-room implementation. The full policy is in [`docs/provenance.md`](docs/provenance.md). Summary of the normative rules:
-
-- **Forbidden sources.** Official Interactive Brokers client source in any language. Official package layout or file structure as a template. Official state machine structure or `EWrapper` / `EClient` callback shape as the primary public design. Code, types, or test fixtures copied from other OSS IB libraries.
-- **Allowed references.** Official protocol documentation. Wire and protocol behavior observed by the contributor against a Gateway or TWS instance the contributor controls. Other OSS IB libraries read for anti-pattern study only.
-- **Contributor gate.** Every protocol-adjacent pull request must include the clean-room attestation checkboxes from the pull request template. Every protocol-adjacent commit body includes the line `clean-room: no official TWS API source was referenced.` or equivalent.
 
 ## Commit Convention
 
@@ -80,4 +81,4 @@ Applies to every commit in this repository. See [`CONTRIBUTING.md`](CONTRIBUTING
 - **Never** mention LLM, agent, Claude, Opus, Sonnet, Haiku, AI, "generated with", or any co-author trailer implying non-human authorship. The commit history reads as a senior engineer's work because that is the quality bar. Commit history needs to be meaningful without noise.
 - No WIP commits, no "fix typo" follow-ups — squash before landing.
 - No emoji, no marketing voice, no excitement.
-- Protocol-adjacent commits carry a clean-room attestation line in the body.
+- Protocol-adjacent commits should mention the live environment, captures, or source/docs references that justified the change when that context matters.
