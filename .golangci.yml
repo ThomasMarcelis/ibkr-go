@@ -17,10 +17,6 @@ linters:
     - misspell
     - unconvert
     - unparam
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/ThomasMarcelis/ibkr-go
-
-issues:
-  exclude-use-default: false
+  settings:
+    goimports:
+      local-packages: github.com/ThomasMarcelis/ibkr-go
