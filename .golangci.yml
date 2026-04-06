@@ -3,6 +3,11 @@ version: "2"
 run:
   timeout: 5m
 
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
 linters:
   default: none
   enable:
@@ -12,8 +17,6 @@ linters:
     - ineffassign
     - staticcheck
     - unused
-    - gofmt
-    - goimports
     - misspell
     - unconvert
     - unparam
