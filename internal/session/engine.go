@@ -10,6 +10,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
 type Engine struct {
@@ -32,6 +33,7 @@ type Engine struct {
 
 	keyed      map[int]*keyedRoute
 	singletons map[string]*singletonRoute
+	executions executionCorrelator
 
 	nextReqID int
 
@@ -40,22 +42,27 @@ type Engine struct {
 }
 
 type bootstrapState struct {
-	helloAck      bool
+	serverInfo    bool
 	managed       bool
 	nextValidID   bool
 	readyReported bool
 }
+
+const (
+	singletonPositions  = "positions"
+	singletonOpenOrders = "open_orders"
+)
 
 type keyedRoute struct {
 	opKind       OpKind
 	subscription bool
 	resume       ResumePolicy
 	request      codec.Message
-	cancel       codec.Message
 	handle       func(any, *Engine)
 	handleAPIErr func(codec.APIError, *Engine)
 	onDisconnect func(*Engine, error) bool
-	onReconnect  func(*Engine)
+	emitGap      func(*Engine)
+	emitResumed  func(*Engine)
 	close        func(error)
 }
 
@@ -64,11 +71,11 @@ type singletonRoute struct {
 	subscription bool
 	resume       ResumePolicy
 	request      codec.Message
-	cancel       codec.Message
 	handle       func(any, *Engine)
 	handleAPIErr func(codec.APIError, *Engine)
 	onDisconnect func(*Engine, error) bool
-	onReconnect  func(*Engine)
+	emitGap      func(*Engine)
+	emitResumed  func(*Engine)
 	close        func(error)
 }
 
@@ -76,6 +83,9 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 	cfg := defaultConfig()
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+	if cfg.clientID < 0 {
+		return nil, fmt.Errorf("ibkr: client id must be >= 0")
 	}
 
 	e := &Engine{
@@ -88,6 +98,7 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 		events:       make(chan Event, cfg.eventBuffer),
 		keyed:        make(map[int]*keyedRoute),
 		singletons:   make(map[string]*singletonRoute),
+		executions:   newExecutionCorrelator(),
 		nextReqID:    1,
 		snapshot: Snapshot{
 			State: StateDisconnected,
@@ -232,6 +243,11 @@ func (e *Engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 
 		reqID = e.allocReqID()
 		values := make([]Bar, 0, 16)
+		request, err := buildHistoricalBarsRequest(reqID, req)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		e.keyed[reqID] = &keyedRoute{
 			opKind: OpHistoricalBars,
 			handle: func(msg any, e *Engine) {
@@ -262,15 +278,7 @@ func (e *Engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.HistoricalBarsRequest{
-			ReqID:       reqID,
-			Contract:    toCodecContract(req.Contract),
-			EndDateTime: req.EndTime.UTC().Format(time.RFC3339),
-			Duration:    req.Duration.String(),
-			BarSize:     req.BarSize.String(),
-			WhatToShow:  req.WhatToShow,
-			UseRTH:      req.UseRTH,
-		}); err != nil {
+		if err := e.send(request); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -306,21 +314,29 @@ func (e *Engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 			resp <- result{err: ErrNotReady}
 			return
 		}
+		if e.activeAccountSummarySubscriptions() >= 2 {
+			resp <- result{err: fmt.Errorf("ibkr: account summary supports at most two active subscriptions")}
+			return
+		}
 
 		cfg := defaultSubscriptionConfig(e.cfg)
 		for _, opt := range opts {
 			opt(&cfg)
 		}
+		if err := validateResumePolicy(OpAccountSummary, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
 
 		reqID := e.allocReqID()
+		plan := newAccountSummaryPlan(reqID, req)
 		var sub *Subscription[AccountSummaryUpdate]
-		snapshotComplete := false
 		sub = newSubscription[AccountSummaryUpdate](cfg, func() {
 			e.enqueue(func() {
 				if _, ok := e.keyed[reqID]; !ok {
 					return
 				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				_ = e.send(codec.CancelAccountSummary{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
@@ -330,15 +346,13 @@ func (e *Engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 			opKind:       OpAccountSummary,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.AccountSummaryRequest{
-				ReqID:   reqID,
-				Account: req.Account,
-				Tags:    append([]string(nil), req.Tags...),
-			},
-			cancel: codec.CancelAccountSummary{ReqID: reqID},
+			request:      plan.request,
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.AccountSummaryValue:
+					if !plan.matches(m.Account) {
+						return
+					}
 					sub.emit(AccountSummaryUpdate{
 						Value: AccountValue{
 							Account:  m.Account,
@@ -348,7 +362,6 @@ func (e *Engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 						},
 					})
 				case codec.AccountSummaryEnd:
-					snapshotComplete = true
 					sub.emitState(SubscriptionStateEvent{
 						Kind:          SubscriptionSnapshotComplete,
 						ConnectionSeq: e.Session().ConnectionSeq,
@@ -356,25 +369,13 @@ func (e *Engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpAccountSummary, m))
 			},
 			onDisconnect: func(e *Engine, err error) bool {
-				if snapshotComplete {
-					delete(e.keyed, reqID)
-					sub.closeWithErr(nil)
-					return false
-				}
-				if cfg.resume == ResumeAuto {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.Session().ConnectionSeq, Err: err})
-					return true
-				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
-			},
-			onReconnect: func(e *Engine) {
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.Session().ConnectionSeq})
 			},
 			close: func(err error) {
 				sub.closeWithErr(err)
@@ -382,7 +383,7 @@ func (e *Engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.Session().ConnectionSeq})
 		if err := e.send(e.keyed[reqID].request); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
 			return
@@ -422,7 +423,7 @@ func (e *Engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		if _, exists := e.singletons["positions"]; exists {
+		if _, exists := e.singletons[singletonPositions]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: positions subscription already active")}
 			return
 		}
@@ -431,56 +432,45 @@ func (e *Engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 		for _, opt := range opts {
 			opt(&cfg)
 		}
+		if err := validateResumePolicy(OpPositions, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
 		var sub *Subscription[PositionUpdate]
-		snapshotComplete := false
 		sub = newSubscription[PositionUpdate](cfg, func() {
 			e.enqueue(func() {
-				if _, ok := e.singletons["positions"]; !ok {
+				if _, ok := e.singletons[singletonPositions]; !ok {
 					return
 				}
-				delete(e.singletons, "positions")
+				delete(e.singletons, singletonPositions)
 				_ = e.send(codec.CancelPositions{})
 				sub.closeWithErr(nil)
 			})
 		})
 
-		e.singletons["positions"] = &singletonRoute{
+		e.singletons[singletonPositions] = &singletonRoute{
 			opKind:       OpPositions,
 			subscription: true,
 			resume:       cfg.resume,
 			request:      codec.PositionsRequest{},
-			cancel:       codec.CancelPositions{},
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.Position:
 					position, err := fromCodecPosition(m)
 					if err != nil {
-						delete(e.singletons, "positions")
+						delete(e.singletons, singletonPositions)
 						sub.closeWithErr(err)
 						return
 					}
 					sub.emit(PositionUpdate{Position: position})
 				case codec.PositionEnd:
-					snapshotComplete = true
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.Session().ConnectionSeq})
 				}
 			},
 			onDisconnect: func(e *Engine, err error) bool {
-				if snapshotComplete {
-					delete(e.singletons, "positions")
-					sub.closeWithErr(nil)
-					return false
-				}
-				if cfg.resume == ResumeAuto {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.Session().ConnectionSeq, Err: err})
-					return true
-				}
-				delete(e.singletons, "positions")
+				delete(e.singletons, singletonPositions)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
-			},
-			onReconnect: func(e *Engine) {
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.Session().ConnectionSeq})
 			},
 			close: func(err error) {
 				sub.closeWithErr(err)
@@ -488,7 +478,7 @@ func (e *Engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.Session().ConnectionSeq})
 		if err := e.send(codec.PositionsRequest{}); err != nil {
-			delete(e.singletons, "positions")
+			delete(e.singletons, singletonPositions)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
 			return
@@ -566,15 +556,22 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 		for _, opt := range opts {
 			opt(&cfg)
 		}
+		if err := validateResumePolicy(OpQuotes, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
+		if err := validateQuoteRequest(req, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
 		reqID := e.allocReqID()
 		var sub *Subscription[QuoteUpdate]
-		snapshotComplete := false
 		sub = newSubscription[QuoteUpdate](cfg, func() {
 			e.enqueue(func() {
 				if _, ok := e.keyed[reqID]; !ok {
 					return
 				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				_ = e.send(codec.CancelQuote{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
@@ -591,13 +588,12 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 				Snapshot:     req.Snapshot,
 				GenericTicks: append([]string(nil), req.GenericTicks...),
 			},
-			cancel: codec.CancelQuote{ReqID: reqID},
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.TickPrice:
 					changed, err := applyTickPrice(&quote, m.Field, m.Price)
 					if err != nil {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
@@ -605,7 +601,7 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 				case codec.TickSize:
 					changed, err := applyTickSize(&quote, m.Field, m.Size)
 					if err != nil {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
@@ -615,40 +611,46 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 					quote.Available |= QuoteFieldMarketDataType
 					sub.emit(QuoteUpdate{Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
 				case codec.TickSnapshotEnd:
-					snapshotComplete = true
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.Session().ConnectionSeq})
 					if req.Snapshot {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(nil)
 					}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpQuotes, m))
 			},
 			onDisconnect: func(e *Engine, err error) bool {
-				if snapshotComplete {
-					delete(e.keyed, reqID)
-					sub.closeWithErr(nil)
-					return false
-				}
-				if cfg.resume == ResumeAuto && !req.Snapshot {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.Session().ConnectionSeq, Err: err})
-					return true
-				}
-				delete(e.keyed, reqID)
 				if req.Snapshot {
+					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(ErrInterrupted)
 					return false
 				}
+				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
+					sub.emitState(SubscriptionStateEvent{
+						Kind:          SubscriptionGap,
+						ConnectionSeq: e.Session().ConnectionSeq,
+						Err:           err,
+					})
+					return true
+				}
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
-			onReconnect: func(e *Engine) {
-				if !req.Snapshot {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.Session().ConnectionSeq})
-				}
+			emitGap: func(e *Engine) {
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionGap,
+					ConnectionSeq: e.Session().ConnectionSeq,
+				})
+			},
+			emitResumed: func(e *Engine) {
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionResumed,
+					ConnectionSeq: e.Session().ConnectionSeq,
+				})
 			},
 			close: func(err error) {
 				sub.closeWithErr(err)
@@ -656,7 +658,7 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.Session().ConnectionSeq})
 		if err := e.send(e.keyed[reqID].request); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
 			return
@@ -692,6 +694,10 @@ func (e *Engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 		for _, opt := range opts {
 			opt(&cfg)
 		}
+		if err := validateResumePolicy(OpRealTimeBars, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
 		reqID := e.allocReqID()
 		var sub *Subscription[Bar]
 		sub = newSubscription[Bar](cfg, func() {
@@ -699,7 +705,7 @@ func (e *Engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				if _, ok := e.keyed[reqID]; !ok {
 					return
 				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				_ = e.send(codec.CancelRealTimeBars{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
@@ -715,7 +721,6 @@ func (e *Engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				WhatToShow: req.WhatToShow,
 				UseRTH:     req.UseRTH,
 			},
-			cancel: codec.CancelRealTimeBars{ReqID: reqID},
 			handle: func(msg any, e *Engine) {
 				barMsg, ok := msg.(codec.RealTimeBar)
 				if !ok {
@@ -723,33 +728,46 @@ func (e *Engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				}
 				bar, err := fromCodecRealtimeBar(barMsg)
 				if err != nil {
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
 					return
 				}
 				sub.emit(bar)
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpRealTimeBars, m))
 			},
 			onDisconnect: func(e *Engine, err error) bool {
-				if cfg.resume == ResumeAuto {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.Session().ConnectionSeq, Err: err})
+				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
+					sub.emitState(SubscriptionStateEvent{
+						Kind:          SubscriptionGap,
+						ConnectionSeq: e.Session().ConnectionSeq,
+						Err:           err,
+					})
 					return true
 				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
-			onReconnect: func(e *Engine) {
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.Session().ConnectionSeq})
+			emitGap: func(e *Engine) {
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionGap,
+					ConnectionSeq: e.Session().ConnectionSeq,
+				})
+			},
+			emitResumed: func(e *Engine) {
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionResumed,
+					ConnectionSeq: e.Session().ConnectionSeq,
+				})
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.Session().ConnectionSeq})
 		if err := e.send(e.keyed[reqID].request); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
 			return
@@ -788,7 +806,11 @@ func (e *Engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		if _, exists := e.singletons["open_orders"]; exists {
+		if err := validateOpenOrdersScope(scope, e.cfg.clientID); err != nil {
+			resp <- result{err: err}
+			return
+		}
+		if _, exists := e.singletons[singletonOpenOrders]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: open orders subscription already active")}
 			return
 		}
@@ -797,63 +819,52 @@ func (e *Engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		for _, opt := range opts {
 			opt(&cfg)
 		}
+		if err := validateResumePolicy(OpOpenOrders, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
 		var sub *Subscription[OpenOrderUpdate]
-		snapshotComplete := false
 		sub = newSubscription[OpenOrderUpdate](cfg, func() {
 			e.enqueue(func() {
-				if _, ok := e.singletons["open_orders"]; !ok {
+				if _, ok := e.singletons[singletonOpenOrders]; !ok {
 					return
 				}
-				delete(e.singletons, "open_orders")
+				delete(e.singletons, singletonOpenOrders)
 				_ = e.send(codec.CancelOpenOrders{})
 				sub.closeWithErr(nil)
 			})
 		})
 
-		e.singletons["open_orders"] = &singletonRoute{
+		e.singletons[singletonOpenOrders] = &singletonRoute{
 			opKind:       OpOpenOrders,
 			subscription: true,
 			resume:       cfg.resume,
 			request:      codec.OpenOrdersRequest{Scope: string(scope)},
-			cancel:       codec.CancelOpenOrders{},
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.OpenOrder:
 					order, err := fromCodecOpenOrder(m)
 					if err != nil {
-						delete(e.singletons, "open_orders")
+						delete(e.singletons, singletonOpenOrders)
 						sub.closeWithErr(err)
 						return
 					}
 					sub.emit(OpenOrderUpdate{Order: order})
 				case codec.OpenOrderEnd:
-					snapshotComplete = true
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.Session().ConnectionSeq})
 				}
 			},
 			onDisconnect: func(e *Engine, err error) bool {
-				if snapshotComplete {
-					delete(e.singletons, "open_orders")
-					sub.closeWithErr(nil)
-					return false
-				}
-				if cfg.resume == ResumeAuto {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.Session().ConnectionSeq, Err: err})
-					return true
-				}
-				delete(e.singletons, "open_orders")
+				delete(e.singletons, singletonOpenOrders)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
-			},
-			onReconnect: func(e *Engine) {
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.Session().ConnectionSeq})
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.Session().ConnectionSeq})
 		if err := e.send(codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
-			delete(e.singletons, "open_orders")
+			delete(e.singletons, singletonOpenOrders)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
 			return
@@ -898,18 +909,22 @@ func (e *Engine) SubscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		for _, opt := range opts {
 			opt(&cfg)
 		}
+		if err := validateResumePolicy(OpExecutions, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
 		reqID := e.allocReqID()
 		var sub *Subscription[ExecutionUpdate]
-		snapshotComplete := false
 		sub = newSubscription[ExecutionUpdate](cfg, func() {
 			e.enqueue(func() {
 				if _, ok := e.keyed[reqID]; !ok {
 					return
 				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(nil)
 			})
 		})
+		e.executions.registerRoute(reqID, req)
 
 		e.keyed[reqID] = &keyedRoute{
 			opKind:       OpExecutions,
@@ -925,50 +940,39 @@ func (e *Engine) SubscribeExecutions(ctx context.Context, req ExecutionsRequest,
 				case codec.ExecutionDetail:
 					update, err := fromCodecExecution(m)
 					if err != nil {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
+					e.executions.observeExecution(reqID, m)
 					sub.emit(update)
-				case codec.ExecutionsEnd:
-					snapshotComplete = true
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.Session().ConnectionSeq})
-				case codec.CommissionReport:
-					report, err := fromCodecCommission(m)
-					if err != nil {
-						delete(e.keyed, reqID)
-						sub.closeWithErr(err)
+					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
 						return
 					}
-					sub.emit(ExecutionUpdate{Commission: &report})
+				case codec.ExecutionsEnd:
+					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.Session().ConnectionSeq})
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(nil)
+				case codec.CommissionReport:
+					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
+						return
+					}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpExecutions, m))
 			},
 			onDisconnect: func(e *Engine, err error) bool {
-				if snapshotComplete {
-					delete(e.keyed, reqID)
-					sub.closeWithErr(nil)
-					return false
-				}
-				if cfg.resume == ResumeAuto {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.Session().ConnectionSeq, Err: err})
-					return true
-				}
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
-			},
-			onReconnect: func(e *Engine) {
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.Session().ConnectionSeq})
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.Session().ConnectionSeq})
 		if err := e.send(e.keyed[reqID].request); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
 			return
@@ -1042,18 +1046,72 @@ func (e *Engine) startConnect(ctx context.Context) {
 		return
 	}
 
+	// Synchronous handshake before starting transport goroutines.
+	deadline := time.Now().Add(10 * time.Second)
+
+	// 1. Send API prefix (raw bytes, not framed)
+	if err := transport.WriteRaw(conn, codec.EncodeHandshakePrefix()); err != nil {
+		conn.Close()
+		e.reportReady(&ConnectError{Op: "handshake", Err: err})
+		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		return
+	}
+
+	// 2. Send version range (framed)
+	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(100, 200)); err != nil {
+		conn.Close()
+		e.reportReady(&ConnectError{Op: "handshake", Err: err})
+		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		return
+	}
+
+	// 3. Read server info (framed, but no msg_id prefix)
+	serverPayload, err := transport.ReadOneFrame(conn, deadline)
+	if err != nil {
+		conn.Close()
+		e.reportReady(&ConnectError{Op: "handshake", Err: err})
+		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		return
+	}
+	info, err := codec.DecodeServerInfo(serverPayload)
+	if err != nil {
+		conn.Close()
+		e.reportReady(&ConnectError{Op: "handshake", Err: err})
+		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		return
+	}
+
+	// 4. Version check
+	if info.ServerVersion < e.cfg.minServerVersion {
+		conn.Close()
+		e.reportReady(ErrUnsupportedServerVersion)
+		e.closeEngine(ErrUnsupportedServerVersion)
+		return
+	}
+	e.updateSnapshot(func(s *Snapshot) {
+		s.ServerVersion = info.ServerVersion
+	})
+	e.bootstrap.serverInfo = true
+
+	// 5. Send START_API (framed normal message)
+	startPayload, err := codec.Encode(codec.StartAPI{ClientID: e.cfg.clientID})
+	if err != nil {
+		conn.Close()
+		e.reportReady(&ConnectError{Op: "handshake", Err: err})
+		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		return
+	}
+	if err := wire.WriteFrame(conn, startPayload); err != nil {
+		conn.Close()
+		e.reportReady(&ConnectError{Op: "handshake", Err: err})
+		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		return
+	}
+
+	// 6. Start async transport — ManagedAccounts + NextValidID arrive on incoming channel
 	e.transport = transport.New(conn, e.cfg.logger, e.cfg.sendRate)
 	e.attachTransport(e.transport)
 	e.setState(StateHandshaking, 0, "", nil)
-	if err := e.send(codec.Hello{
-		MinVersion: e.cfg.minServerVersion,
-		MaxVersion: e.cfg.minServerVersion,
-		ClientID:   1,
-	}); err != nil {
-		e.reportReady(err)
-		e.closeEngine(err)
-		return
-	}
 }
 
 func (e *Engine) attachTransport(tr *transport.Conn) {
@@ -1061,12 +1119,14 @@ func (e *Engine) attachTransport(tr *transport.Conn) {
 	go func() {
 		defer close(decodedDone)
 		for payload := range tr.Incoming() {
-			msg, err := codec.Decode(payload)
+			msgs, err := codec.DecodeBatch(payload)
 			if err != nil {
 				e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}
 				return
 			}
-			e.incoming <- msg
+			for _, msg := range msgs {
+				e.incoming <- msg
+			}
 		}
 	}()
 
@@ -1079,19 +1139,6 @@ func (e *Engine) attachTransport(tr *transport.Conn) {
 
 func (e *Engine) handleIncoming(msg any) {
 	switch m := msg.(type) {
-	case codec.HelloAck:
-		if m.ServerVersion < e.cfg.minServerVersion {
-			err := ErrUnsupportedServerVersion
-			e.reportReady(err)
-			e.closeEngine(err)
-			return
-		}
-		e.updateSnapshot(func(s *Snapshot) {
-			s.ServerVersion = m.ServerVersion
-		})
-		e.bootstrap.helloAck = true
-		e.maybeReady()
-		return
 	case codec.ManagedAccounts:
 		e.updateSnapshot(func(s *Snapshot) {
 			s.ManagedAccounts = append([]string(nil), m.Accounts...)
@@ -1127,19 +1174,16 @@ func (e *Engine) handleIncoming(msg any) {
 
 	switch msg.(type) {
 	case codec.Position, codec.PositionEnd:
-		if route, ok := e.singletons["positions"]; ok {
+		if route, ok := e.singletons[singletonPositions]; ok {
 			route.handle(msg, e)
 		}
 	case codec.OpenOrder, codec.OpenOrderEnd:
-		if route, ok := e.singletons["open_orders"]; ok {
+		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			route.handle(msg, e)
 		}
 	case codec.CommissionReport:
-		for _, route := range e.keyed {
-			if route.opKind == OpExecutions {
-				route.handle(msg, e)
-			}
-		}
+		report := msg.(codec.CommissionReport)
+		e.routeCommissionReport(report)
 	}
 }
 
@@ -1147,13 +1191,13 @@ func (e *Engine) handleAPIError(msg codec.APIError) {
 	switch msg.Code {
 	case 1100:
 		e.setState(StateDegraded, msg.Code, msg.Message, nil)
-		e.emitGap(msg.Message)
+		e.emitGap()
 	case 1101:
 		e.setState(StateReady, msg.Code, msg.Message, nil)
-		e.emitGap(msg.Message)
+		e.resumeRoutes()
 	case 1102:
 		e.setState(StateReady, msg.Code, msg.Message, nil)
-		e.emitResumed(msg.Message)
+		e.emitResumed()
 	case 1300:
 		if e.transport != nil {
 			_ = e.transport.Close()
@@ -1169,7 +1213,7 @@ func (e *Engine) handleAPIError(msg codec.APIError) {
 }
 
 func (e *Engine) maybeReady() {
-	if !e.bootstrap.helloAck || !e.bootstrap.managed || !e.bootstrap.nextValidID {
+	if !e.bootstrap.serverInfo || !e.bootstrap.managed || !e.bootstrap.nextValidID {
 		return
 	}
 	e.updateSnapshot(func(s *Snapshot) {
@@ -1188,10 +1232,12 @@ func (e *Engine) handleTransportLoss(err error) {
 		return
 	}
 	e.transport = nil
+	e.executions.reset()
 	if e.cfg.reconnect == ReconnectOff {
 		if err == nil {
 			err = ErrClosed
 		}
+		e.disconnectRoutes(err)
 		e.closeEngine(err)
 		return
 	}
@@ -1214,11 +1260,11 @@ func (e *Engine) disconnectRoutes(err error) {
 	for reqID, route := range e.keyed {
 		if route.onDisconnect == nil {
 			route.close(ErrInterrupted)
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			continue
 		}
 		if !route.onDisconnect(e, err) {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 		}
 	}
 	for key, route := range e.singletons {
@@ -1234,19 +1280,27 @@ func (e *Engine) disconnectRoutes(err error) {
 }
 
 func (e *Engine) resumeRoutes() {
-	for _, route := range e.keyed {
+	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
-			_ = e.send(route.request)
-			if route.onReconnect != nil {
-				route.onReconnect(e)
+			if err := e.send(route.request); err != nil {
+				route.close(err)
+				e.deleteKeyedRoute(reqID)
+				continue
+			}
+			if route.emitResumed != nil {
+				route.emitResumed(e)
 			}
 		}
 	}
-	for _, route := range e.singletons {
+	for key, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto {
-			_ = e.send(route.request)
-			if route.onReconnect != nil {
-				route.onReconnect(e)
+			if err := e.send(route.request); err != nil {
+				route.close(err)
+				delete(e.singletons, key)
+				continue
+			}
+			if route.emitResumed != nil {
+				route.emitResumed(e)
 			}
 		}
 	}
@@ -1262,12 +1316,13 @@ func (e *Engine) closeEngine(err error) {
 	}
 	for reqID, route := range e.keyed {
 		route.close(err)
-		delete(e.keyed, reqID)
+		e.deleteKeyedRoute(reqID)
 	}
 	for key, route := range e.singletons {
 		route.close(err)
 		delete(e.singletons, key)
 	}
+	e.executions.reset()
 	e.setState(StateClosed, 0, "", err)
 	e.reportReady(err)
 	e.waitMu.Lock()
@@ -1342,22 +1397,78 @@ func (e *Engine) apiErr(opKind OpKind, msg codec.APIError) error {
 	}
 }
 
-func (e *Engine) emitGap(message string) {
+func (e *Engine) emitGap() {
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.onReconnect != nil {
-			route.onReconnect(e)
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil {
+			route.emitGap(e)
 		}
 	}
-	_ = message
+	for _, route := range e.singletons {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil {
+			route.emitGap(e)
+		}
+	}
 }
 
-func (e *Engine) emitResumed(message string) {
+func (e *Engine) emitResumed() {
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.onReconnect != nil {
-			route.onReconnect(e)
+		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.emitResumed(e)
 		}
 	}
-	_ = message
+	for _, route := range e.singletons {
+		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.emitResumed(e)
+		}
+	}
+}
+
+func (e *Engine) activeAccountSummarySubscriptions() int {
+	count := 0
+	for _, route := range e.keyed {
+		if route.subscription && route.opKind == OpAccountSummary {
+			count++
+		}
+	}
+	return count
+}
+
+func (e *Engine) deleteKeyedRoute(reqID int) {
+	route, ok := e.keyed[reqID]
+	if !ok {
+		return
+	}
+	delete(e.keyed, reqID)
+	if route.opKind == OpExecutions {
+		e.executions.unregisterRoute(reqID)
+	}
+}
+
+func (e *Engine) routeCommissionReport(report codec.CommissionReport) {
+	for _, reqID := range e.executions.recordCommission(report) {
+		route, found := e.keyed[reqID]
+		if !found || route.opKind != OpExecutions {
+			continue
+		}
+		route.handle(report, e)
+	}
+}
+
+func (e *Engine) undeliveredCommissions(reqID int, execID string) []codec.CommissionReport {
+	return e.executions.undeliveredCommissions(reqID, execID)
+}
+
+func (e *Engine) emitUndeliveredExecutionCommissions(reqID int, execID string, sub *Subscription[ExecutionUpdate]) bool {
+	for _, commissionMsg := range e.undeliveredCommissions(reqID, execID) {
+		report, err := fromCodecCommission(commissionMsg)
+		if err != nil {
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(err)
+			return false
+		}
+		sub.emit(ExecutionUpdate{Commission: &report})
+	}
+	return true
 }
 
 func messageReqID(msg any) (int, bool) {
@@ -1409,17 +1520,26 @@ func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], ma
 		select {
 		case item, ok := <-sub.Events():
 			if !ok {
+				if sub.snapshotComplete() {
+					return values, nil
+				}
 				return values, sub.Wait()
 			}
 			values = append(values, mapFn(item))
 		case state, ok := <-sub.State():
 			if !ok {
+				if sub.snapshotComplete() {
+					return drainSnapshotEvents(values, sub, mapFn), nil
+				}
 				return values, sub.Wait()
 			}
 			switch state.Kind {
 			case SubscriptionSnapshotComplete:
 				return drainSnapshotEvents(values, sub, mapFn), nil
 			case SubscriptionClosed:
+				if sub.snapshotComplete() {
+					return drainSnapshotEvents(values, sub, mapFn), nil
+				}
 				return values, state.Err
 			}
 		case <-ctx.Done():

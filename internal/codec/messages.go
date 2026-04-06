@@ -13,20 +13,19 @@ type Contract struct {
 	LocalSymbol     string
 }
 
-type Hello struct {
-	MinVersion int
-	MaxVersion int
-	ClientID   int
+type StartAPI struct {
+	ClientID             int
+	OptionalCapabilities string
 }
 
-func (Hello) messageName() string { return "hello" }
+func (StartAPI) messageName() string { return "start_api" }
 
-type HelloAck struct {
+type ServerInfo struct {
 	ServerVersion  int
 	ConnectionTime string
 }
 
-func (HelloAck) messageName() string { return "hello_ack" }
+func (ServerInfo) messageName() string { return "server_info" }
 
 type ManagedAccounts struct {
 	Accounts []string
@@ -47,9 +46,11 @@ type CurrentTime struct {
 func (CurrentTime) messageName() string { return "current_time" }
 
 type APIError struct {
-	ReqID   int
-	Code    int
-	Message string
+	ReqID                   int
+	Code                    int
+	Message                 string
+	AdvancedOrderRejectJSON string
+	ErrorTimeMs             string
 }
 
 func (APIError) messageName() string { return "api_error" }

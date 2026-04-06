@@ -15,6 +15,7 @@ type SubscriptionOption func(*subscriptionConfig)
 type config struct {
 	host                string
 	port                int
+	clientID            int
 	dialer              transport.Dialer
 	logger              *slog.Logger
 	reconnect           ReconnectPolicy
@@ -37,6 +38,7 @@ func defaultConfig() config {
 	return config{
 		host:                "127.0.0.1",
 		port:                7497,
+		clientID:            1,
 		dialer:              &net.Dialer{},
 		logger:              slog.New(slog.NewTextHandler(ioDiscard{}, nil)),
 		reconnect:           ReconnectAuto,
@@ -46,7 +48,7 @@ func defaultConfig() config {
 		defaultResume:       ResumeNever,
 		defaultSlowConsumer: SlowConsumerClose,
 		reconnectBackoff:    100 * time.Millisecond,
-		minServerVersion:    1,
+		minServerVersion:    100,
 	}
 }
 
@@ -67,6 +69,12 @@ func WithHost(host string) Option {
 func WithPort(port int) Option {
 	return func(cfg *config) {
 		cfg.port = port
+	}
+}
+
+func WithClientID(clientID int) Option {
+	return func(cfg *config) {
+		cfg.clientID = clientID
 	}
 }
 

@@ -10,10 +10,10 @@ import (
 
 func messageName(msg any) string {
 	switch msg.(type) {
-	case codec.Hello:
-		return "hello"
-	case codec.HelloAck:
-		return "hello_ack"
+	case codec.StartAPI:
+		return "start_api"
+	case codec.ServerInfo:
+		return "server_info"
 	case codec.ManagedAccounts:
 		return "managed_accounts"
 	case codec.NextValidID:
@@ -91,16 +91,16 @@ func messageName(msg any) string {
 
 func messageBody(msg any) (map[string]any, error) {
 	switch m := msg.(type) {
-	case codec.Hello:
-		return map[string]any{"min_version": float64(m.MinVersion), "max_version": float64(m.MaxVersion), "client_id": float64(m.ClientID)}, nil
-	case codec.HelloAck:
+	case codec.StartAPI:
+		return map[string]any{"client_id": float64(m.ClientID), "optional_capabilities": m.OptionalCapabilities}, nil
+	case codec.ServerInfo:
 		return map[string]any{"server_version": float64(m.ServerVersion), "connection_time": m.ConnectionTime}, nil
 	case codec.ManagedAccounts:
 		return map[string]any{"accounts": stringsToAny(m.Accounts)}, nil
 	case codec.NextValidID:
 		return map[string]any{"order_id": float64(m.OrderID)}, nil
 	case codec.APIError:
-		return map[string]any{"req_id": float64(m.ReqID), "code": float64(m.Code), "message": m.Message}, nil
+		return map[string]any{"req_id": float64(m.ReqID), "code": float64(m.Code), "message": m.Message, "advanced_order_reject_json": m.AdvancedOrderRejectJSON, "error_time_ms": m.ErrorTimeMs}, nil
 	case codec.ContractDetailsRequest:
 		return map[string]any{"req_id": float64(m.ReqID), "contract": contractBody(m.Contract)}, nil
 	case codec.ContractDetails:
@@ -164,8 +164,8 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	resolve := func(v any) any { return resolveBindings(v, bindings) }
 
 	switch name {
-	case "hello_ack":
-		return codec.HelloAck{ServerVersion: asInt(resolve(body["server_version"])), ConnectionTime: asString(resolve(body["connection_time"]))}, nil
+	case "server_info":
+		return codec.ServerInfo{ServerVersion: asInt(resolve(body["server_version"])), ConnectionTime: asString(resolve(body["connection_time"]))}, nil
 	case "managed_accounts":
 		return codec.ManagedAccounts{Accounts: asStrings(resolve(body["accounts"]))}, nil
 	case "next_valid_id":
@@ -173,7 +173,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "current_time":
 		return codec.CurrentTime{Time: asString(resolve(body["time"]))}, nil
 	case "api_error":
-		return codec.APIError{ReqID: asInt(resolve(body["req_id"])), Code: asInt(resolve(body["code"])), Message: asString(resolve(body["message"]))}, nil
+		return codec.APIError{ReqID: asInt(resolve(body["req_id"])), Code: asInt(resolve(body["code"])), Message: asString(resolve(body["message"])), AdvancedOrderRejectJSON: asString(resolve(body["advanced_order_reject_json"])), ErrorTimeMs: asString(resolve(body["error_time_ms"]))}, nil
 	case "contract_details":
 		return codec.ContractDetails{
 			ReqID:      asInt(resolve(body["req_id"])),

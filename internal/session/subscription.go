@@ -6,14 +6,17 @@ import (
 )
 
 type Subscription[T any] struct {
-	events    chan T
-	state     chan SubscriptionStateEvent
-	done      chan struct{}
-	cancelFn  func()
-	closeOnce sync.Once
-	errMu     sync.Mutex
-	err       error
-	cfg       subscriptionConfig
+	events         chan T
+	state          chan SubscriptionStateEvent
+	done           chan struct{}
+	cancelFn       func()
+	cancelOnce     sync.Once
+	closeOnce      sync.Once
+	errMu          sync.Mutex
+	err            error
+	stateMu        sync.Mutex
+	snapshotClosed bool
+	cfg            subscriptionConfig
 }
 
 func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscription[T] {
@@ -43,7 +46,7 @@ func (s *Subscription[T]) Wait() error {
 }
 
 func (s *Subscription[T]) Close() error {
-	s.closeOnce.Do(func() {
+	s.cancelOnce.Do(func() {
 		if s.cancelFn != nil {
 			s.cancelFn()
 		}
@@ -92,6 +95,11 @@ func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
 	if evt.At.IsZero() {
 		evt.At = time.Now().UTC()
 	}
+	if evt.Kind == SubscriptionSnapshotComplete {
+		s.stateMu.Lock()
+		s.snapshotClosed = true
+		s.stateMu.Unlock()
+	}
 	select {
 	case s.state <- evt:
 	default:
@@ -100,6 +108,12 @@ func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
 
 func (s *Subscription[T]) fail(err error) {
 	s.closeWithErr(err)
+}
+
+func (s *Subscription[T]) snapshotComplete() bool {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
+	return s.snapshotClosed
 }
 
 func (s *Subscription[T]) closeWithErr(err error) {

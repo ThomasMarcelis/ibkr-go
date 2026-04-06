@@ -106,6 +106,7 @@ var (
 
 	WithHost                      = session.WithHost
 	WithPort                      = session.WithPort
+	WithClientID                  = session.WithClientID
 	WithDialer                    = session.WithDialer
 	WithLogger                    = session.WithLogger
 	WithReconnectPolicy           = session.WithReconnectPolicy

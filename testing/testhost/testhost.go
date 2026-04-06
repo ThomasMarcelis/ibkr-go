@@ -1,9 +1,11 @@
 package testhost
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
@@ -88,6 +90,63 @@ func (h *Host) run() {
 		switch step.kind {
 		case "sleep":
 			time.Sleep(step.duration)
+		case "handshake":
+			if conn == nil {
+				var err error
+				conn, err = h.listener.Accept()
+				if err != nil {
+					h.finish(err)
+					return
+				}
+			}
+			// 1. Read raw API prefix (4 bytes)
+			prefix, err := readExact(conn, 4)
+			if err != nil {
+				h.finish(fmt.Errorf("testhost: handshake: read prefix: %w", err))
+				return
+			}
+			if !bytes.Equal(prefix, []byte("API\x00")) {
+				h.finish(fmt.Errorf("testhost: handshake: prefix = %x, want API\\x00", prefix))
+				return
+			}
+			// 2. Read framed version string
+			versionPayload, err := wire.ReadFrame(conn)
+			if err != nil {
+				h.finish(fmt.Errorf("testhost: handshake: read version: %w", err))
+				return
+			}
+			_ = versionPayload
+			// 3. Send framed server info
+			serverVersion := asInt(resolveBindings(step.body["server_version"], bindings))
+			connTime := asString(resolveBindings(step.body["connection_time"], bindings))
+			serverInfoPayload := wire.EncodeFields([]string{strconv.Itoa(serverVersion), connTime})
+			if err := wire.WriteFrame(conn, serverInfoPayload); err != nil {
+				h.finish(fmt.Errorf("testhost: handshake: write server info: %w", err))
+				return
+			}
+			// 4. Read framed START_API
+			startPayload, err := wire.ReadFrame(conn)
+			if err != nil {
+				h.finish(fmt.Errorf("testhost: handshake: read start_api: %w", err))
+				return
+			}
+			startFields, err := wire.ParseFields(startPayload)
+			if err != nil {
+				h.finish(fmt.Errorf("testhost: handshake: parse start_api: %w", err))
+				return
+			}
+			if len(startFields) < 1 || startFields[0] != "71" {
+				h.finish(fmt.Errorf("testhost: handshake: start_api msg_id = %v, want 71", startFields[0]))
+				return
+			}
+			// Store client_id in bindings if body requests it
+			if cid, ok := step.body["client_id"]; ok {
+				if s, ok := cid.(string); ok && strings.HasPrefix(s, "$") {
+					if len(startFields) >= 3 {
+						bindings[s] = startFields[2]
+					}
+				}
+			}
 		case "disconnect":
 			if conn != nil {
 				_ = conn.Close()
@@ -107,7 +166,7 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			msg, err := codec.Decode(payload)
+			msg, err := codec.DecodeSymbolic(payload)
 			if err != nil {
 				h.finish(err)
 				return
@@ -139,7 +198,7 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			payload, err := codec.Encode(msg)
+			payload, err := codec.EncodeWire(msg)
 			if err != nil {
 				h.finish(err)
 				return
@@ -162,32 +221,53 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			payload, err := codec.Encode(msg)
+			var payload []byte
+			if step.direction == "server" {
+				payload, err = codec.EncodeWire(msg)
+			} else {
+				payload, err = codec.Encode(msg)
+			}
 			if err != nil {
 				h.finish(err)
 				return
 			}
 			frame := appendLengthPrefix(payload)
-			cursor := 0
-			for _, size := range step.sizes {
-				if cursor >= len(frame) {
-					break
+			switch step.direction {
+			case "server":
+				cursor := 0
+				for _, size := range step.sizes {
+					if cursor >= len(frame) {
+						break
+					}
+					end := cursor + size
+					if end > len(frame) {
+						end = len(frame)
+					}
+					if _, err := conn.Write(frame[cursor:end]); err != nil {
+						h.finish(err)
+						return
+					}
+					cursor = end
 				}
-				end := cursor + size
-				if end > len(frame) {
-					end = len(frame)
+				if cursor < len(frame) {
+					if _, err := conn.Write(frame[cursor:]); err != nil {
+						h.finish(err)
+						return
+					}
 				}
-				if _, err := conn.Write(frame[cursor:end]); err != nil {
+			case "client":
+				got, err := readChunked(conn, len(frame), step.sizes)
+				if err != nil {
 					h.finish(err)
 					return
 				}
-				cursor = end
-			}
-			if cursor < len(frame) {
-				if _, err := conn.Write(frame[cursor:]); err != nil {
-					h.finish(err)
+				if !bytes.Equal(got, frame) {
+					h.finish(fmt.Errorf("testhost: split client frame = %x, want %x", got, frame))
 					return
 				}
+			default:
+				h.finish(fmt.Errorf("testhost: unsupported split direction %q", step.direction))
+				return
 			}
 		case "raw":
 			if conn == nil {
@@ -198,8 +278,24 @@ func (h *Host) run() {
 					return
 				}
 			}
-			if _, err := conn.Write(step.raw); err != nil {
-				h.finish(err)
+			switch step.direction {
+			case "server":
+				if _, err := conn.Write(step.raw); err != nil {
+					h.finish(err)
+					return
+				}
+			case "client":
+				got, err := readExact(conn, len(step.raw))
+				if err != nil {
+					h.finish(err)
+					return
+				}
+				if !bytes.Equal(got, step.raw) {
+					h.finish(fmt.Errorf("testhost: raw client bytes = %x, want %x", got, step.raw))
+					return
+				}
+			default:
+				h.finish(fmt.Errorf("testhost: unsupported raw direction %q", step.direction))
 				return
 			}
 		}
@@ -231,6 +327,12 @@ func parse(script string) ([]step, error) {
 				return nil, fmt.Errorf("line %d: %w", idx+1, err)
 			}
 			steps = append(steps, step{kind: "sleep", duration: d})
+		case strings.HasPrefix(line, "handshake "):
+			body, err := parseBody(strings.TrimPrefix(line, "handshake "))
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %w", idx+1, err)
+			}
+			steps = append(steps, step{kind: "handshake", body: body})
 		case line == "disconnect":
 			steps = append(steps, step{kind: "disconnect"})
 		case strings.HasPrefix(line, "raw "):
@@ -307,6 +409,45 @@ func appendLengthPrefix(payload []byte) []byte {
 	header[2] = byte(size >> 8)
 	header[3] = byte(size)
 	return append(header, payload...)
+}
+
+func readExact(r io.Reader, size int) ([]byte, error) {
+	buf := make([]byte, size)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
+func readChunked(r io.Reader, total int, sizes []int) ([]byte, error) {
+	buf := make([]byte, 0, total)
+	cursor := 0
+	for _, size := range sizes {
+		if cursor >= total {
+			break
+		}
+		if size <= 0 {
+			continue
+		}
+		remaining := total - cursor
+		if size > remaining {
+			size = remaining
+		}
+		chunk, err := readExact(r, size)
+		if err != nil {
+			return nil, err
+		}
+		buf = append(buf, chunk...)
+		cursor += size
+	}
+	if cursor < total {
+		chunk, err := readExact(r, total-cursor)
+		if err != nil {
+			return nil, err
+		}
+		buf = append(buf, chunk...)
+	}
+	return buf, nil
 }
 
 func matchValue(expected, actual any, bindings map[string]any) error {

@@ -1,0 +1,11 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_executions {"req_id":"$req1","account":"DU12345","symbol":""}
+client req_executions {"req_id":"$req2","account":"DU12345","symbol":"AAPL"}
+server commission_report {"exec_id":"exec-aapl","commission":"1.25","currency":"USD","realized_pnl":"0"}
+server execution_detail {"req_id":"$req1","exec_id":"exec-aapl","account":"DU12345","symbol":"AAPL","side":"BOT","shares":"10","price":"189.11","time":"2026-04-05T12:01:00Z"}
+server execution_detail {"req_id":"$req2","exec_id":"exec-aapl","account":"DU12345","symbol":"AAPL","side":"BOT","shares":"10","price":"189.11","time":"2026-04-05T12:01:00Z"}
+server executions_end {"req_id":"$req1"}
+server executions_end {"req_id":"$req2"}
+disconnect

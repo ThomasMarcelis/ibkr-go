@@ -8,6 +8,53 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
+// EncodeHandshakePrefix returns the raw API prefix bytes sent before framing begins.
+func EncodeHandshakePrefix() []byte {
+	return []byte("API\x00")
+}
+
+// EncodeVersionRange returns the version negotiation payload (to be length-framed by caller).
+func EncodeVersionRange(minVer, maxVer int) []byte {
+	return []byte(fmt.Sprintf("v%d..%d", minVer, maxVer))
+}
+
+// DecodeServerInfo parses the server info frame returned during the handshake.
+// The frame contains [server_version, connection_time] with no msg_id prefix.
+func DecodeServerInfo(payload []byte) (ServerInfo, error) {
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		return ServerInfo{}, err
+	}
+	if len(fields) < 2 {
+		return ServerInfo{}, fmt.Errorf("codec: server info: want >= 2 fields, got %d", len(fields))
+	}
+	version, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return ServerInfo{}, fmt.Errorf("codec: server info: parse version %q: %w", fields[0], err)
+	}
+	return ServerInfo{ServerVersion: version, ConnectionTime: fields[1]}, nil
+}
+
+// DecodeBatch decodes a framed payload into one or more messages keyed by integer msg_id.
+func DecodeBatch(payload []byte) ([]Message, error) {
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		return nil, err
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("codec: empty message")
+	}
+	msgID, err := strconv.Atoi(fields[0])
+	if err != nil {
+		return nil, fmt.Errorf("codec: parse msg_id %q: %w", fields[0], err)
+	}
+	msg, err := decodeByMsgID(msgID, fields)
+	if err != nil {
+		return nil, err
+	}
+	return []Message{msg}, nil
+}
+
 func Encode(msg Message) ([]byte, error) {
 	fields, err := encodeFields(msg)
 	if err != nil {
@@ -16,7 +63,92 @@ func Encode(msg Message) ([]byte, error) {
 	return wire.EncodeFields(fields), nil
 }
 
+// EncodeWire encodes a message in the real TWS wire format (integer msg_id prefix).
+// Used by testhost to send server messages that the session engine can decode.
+func EncodeWire(msg Message) ([]byte, error) {
+	fields, err := encodeWireFields(msg)
+	if err != nil {
+		return nil, err
+	}
+	return wire.EncodeFields(fields), nil
+}
+
+func encodeWireFields(msg Message) ([]string, error) {
+	switch m := msg.(type) {
+	case StartAPI:
+		return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
+	case ManagedAccounts:
+		return []string{itoa(InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
+	case NextValidID:
+		return []string{itoa(InNextValidID), "1", i64toa(m.OrderID)}, nil
+	case CurrentTime:
+		return []string{itoa(InCurrentTime), "1", m.Time}, nil
+	case APIError:
+		return []string{itoa(InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
+	case ContractDetails:
+		fields := []string{itoa(InContractData), "1", itoa(m.ReqID)}
+		fields = append(fields, contractFields(m.Contract)...)
+		fields = append(fields, m.MarketName, m.MinTick, m.TimeZoneID)
+		return fields, nil
+	case ContractDetailsEnd:
+		return []string{itoa(InContractDataEnd), "1", itoa(m.ReqID)}, nil
+	case HistoricalBar:
+		return []string{itoa(InHistoricalData), itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume}, nil
+	case HistoricalBarsEnd:
+		return []string{itoa(InHistoricalData), itoa(m.ReqID), m.Start, m.End}, nil
+	case AccountSummaryValue:
+		return []string{itoa(InAccountSummary), "1", itoa(m.ReqID), m.Account, m.Tag, m.Value, m.Currency}, nil
+	case AccountSummaryEnd:
+		return []string{itoa(InAccountSummaryEnd), "1", itoa(m.ReqID)}, nil
+	case Position:
+		fields := []string{itoa(InPositionData), "1", m.Account}
+		fields = append(fields, contractFields(m.Contract)...)
+		fields = append(fields, m.Position, m.AvgCost)
+		return fields, nil
+	case PositionEnd:
+		return []string{itoa(InPositionEnd), "1"}, nil
+	case TickPrice:
+		return []string{itoa(InTickPrice), "1", itoa(m.ReqID), m.Field, m.Price}, nil
+	case TickSize:
+		return []string{itoa(InTickSize), "1", itoa(m.ReqID), m.Field, m.Size}, nil
+	case MarketDataType:
+		return []string{itoa(InMarketDataType), "1", itoa(m.ReqID), itoa(m.DataType)}, nil
+	case TickSnapshotEnd:
+		return []string{itoa(InTickSnapshotEnd), "1", itoa(m.ReqID)}, nil
+	case RealTimeBar:
+		return []string{itoa(InRealTimeBars), "1", itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume}, nil
+	case OpenOrder:
+		fields := []string{itoa(InOpenOrder), "1", i64toa(m.OrderID), m.Account}
+		fields = append(fields, contractFields(m.Contract)...)
+		fields = append(fields, m.Status, m.Quantity, m.Filled, m.Remaining)
+		return fields, nil
+	case OpenOrderEnd:
+		return []string{itoa(InOpenOrderEnd), "1"}, nil
+	case ExecutionDetail:
+		return []string{itoa(InExecutionData), "1", itoa(m.ReqID), m.ExecID, m.Account, m.Symbol, m.Side, m.Shares, m.Price, m.Time}, nil
+	case ExecutionsEnd:
+		return []string{itoa(InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
+	case CommissionReport:
+		return []string{itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency, m.RealizedPNL}, nil
+	default:
+		return nil, fmt.Errorf("codec: unsupported wire encode for %T", msg)
+	}
+}
+
 func Decode(payload []byte) (Message, error) {
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		return nil, err
+	}
+	if len(msgs) != 1 {
+		return nil, fmt.Errorf("codec: expected 1 message, got %d", len(msgs))
+	}
+	return msgs[0], nil
+}
+
+// DecodeSymbolic decodes a payload using the symbolic field layout
+// (message name as first field). Used by testhost for transcript replay.
+func DecodeSymbolic(payload []byte) (Message, error) {
 	fields, err := wire.ParseFields(payload)
 	if err != nil {
 		return nil, err
@@ -26,9 +158,9 @@ func Decode(payload []byte) (Message, error) {
 
 func encodeFields(msg Message) ([]string, error) {
 	switch m := msg.(type) {
-	case Hello:
-		return []string{m.messageName(), itoa(m.MinVersion), itoa(m.MaxVersion), itoa(m.ClientID)}, nil
-	case HelloAck:
+	case StartAPI:
+		return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
+	case ServerInfo:
 		return []string{m.messageName(), itoa(m.ServerVersion), m.ConnectionTime}, nil
 	case ManagedAccounts:
 		return []string{m.messageName(), strings.Join(m.Accounts, ",")}, nil
@@ -37,7 +169,7 @@ func encodeFields(msg Message) ([]string, error) {
 	case CurrentTime:
 		return []string{m.messageName(), m.Time}, nil
 	case APIError:
-		return []string{m.messageName(), itoa(m.ReqID), itoa(m.Code), m.Message}, nil
+		return []string{m.messageName(), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
 	case ContractDetailsRequest:
 		return append([]string{m.messageName(), itoa(m.ReqID)}, contractFields(m.Contract)...), nil
 	case ContractDetails:
@@ -117,26 +249,183 @@ func encodeFields(msg Message) ([]string, error) {
 	}
 }
 
+func decodeByMsgID(msgID int, fields []string) (Message, error) {
+	r := newFieldReader(fields[1:]) // skip msg_id
+	switch msgID {
+	case InTickPrice: // 1
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		field := r.ReadString()
+		price := r.ReadString()
+		return TickPrice{ReqID: reqID, Field: field, Price: price}, nil
+	case InTickSize: // 2
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		field := r.ReadString()
+		size := r.ReadString()
+		return TickSize{ReqID: reqID, Field: field, Size: size}, nil
+	case InErrMsg: // 4
+		// v200: [4, reqId, code, message, advancedJson, errorTimeMs] — no version field
+		reqID, _ := r.ReadInt()
+		code, _ := r.ReadInt()
+		message := r.ReadString()
+		advJSON := r.ReadString()
+		errTime := r.ReadString()
+		return APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}, nil
+	case InOpenOrder: // 5
+		r.Skip(1) // version
+		orderID, _ := r.ReadInt64()
+		account := r.ReadString()
+		symbol := r.ReadString()
+		secType := r.ReadString()
+		exchange := r.ReadString()
+		currency := r.ReadString()
+		primaryExchange := r.ReadString()
+		localSymbol := r.ReadString()
+		status := r.ReadString()
+		quantity := r.ReadString()
+		filled := r.ReadString()
+		remaining := r.ReadString()
+		return OpenOrder{
+			OrderID: orderID, Account: account,
+			Contract:  Contract{Symbol: symbol, SecType: secType, Exchange: exchange, Currency: currency, PrimaryExchange: primaryExchange, LocalSymbol: localSymbol},
+			Status:    status, Quantity: quantity, Filled: filled, Remaining: remaining,
+		}, nil
+	case InNextValidID: // 9
+		r.Skip(1) // version
+		orderID, err := r.ReadInt64()
+		if err != nil {
+			return nil, err
+		}
+		return NextValidID{OrderID: orderID}, nil
+	case InContractData: // 10
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		symbol := r.ReadString()
+		secType := r.ReadString()
+		exchange := r.ReadString()
+		currency := r.ReadString()
+		primaryExchange := r.ReadString()
+		localSymbol := r.ReadString()
+		marketName := r.ReadString()
+		minTick := r.ReadString()
+		timeZoneID := r.ReadString()
+		return ContractDetails{
+			ReqID:    reqID,
+			Contract: Contract{Symbol: symbol, SecType: secType, Exchange: exchange, Currency: currency, PrimaryExchange: primaryExchange, LocalSymbol: localSymbol},
+			MarketName: marketName, MinTick: minTick, TimeZoneID: timeZoneID,
+		}, nil
+	case InExecutionData: // 11
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		execID := r.ReadString()
+		account := r.ReadString()
+		symbol := r.ReadString()
+		side := r.ReadString()
+		shares := r.ReadString()
+		price := r.ReadString()
+		execTime := r.ReadString()
+		return ExecutionDetail{ReqID: reqID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}, nil
+	case InManagedAccounts: // 15
+		r.Skip(1) // version
+		raw := r.ReadString()
+		accounts := []string{}
+		if raw != "" {
+			accounts = strings.Split(strings.TrimRight(raw, ","), ",")
+		}
+		return ManagedAccounts{Accounts: accounts}, nil
+	case InHistoricalData: // 17
+		// Historical data uses reqID as second field (no version field in practice)
+		reqID, _ := r.ReadInt()
+		field2 := r.ReadString()
+		field3 := r.ReadString()
+		// Distinguish bar from end by field count: bar has more fields
+		if r.Remaining() >= 4 {
+			// This is a bar: [17, reqID, time, open, high, low, close, volume]
+			return HistoricalBar{ReqID: reqID, Time: field2, Open: field3, High: r.ReadString(), Low: r.ReadString(), Close: r.ReadString(), Volume: r.ReadString()}, nil
+		}
+		// This is end: [17, reqID, start, end]
+		return HistoricalBarsEnd{ReqID: reqID, Start: field2, End: field3}, nil
+	case InCurrentTime: // 49
+		r.Skip(1) // version
+		return CurrentTime{Time: r.ReadString()}, nil
+	case InRealTimeBars: // 50
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		return RealTimeBar{ReqID: reqID, Time: r.ReadString(), Open: r.ReadString(), High: r.ReadString(), Low: r.ReadString(), Close: r.ReadString(), Volume: r.ReadString()}, nil
+	case InContractDataEnd: // 52
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		return ContractDetailsEnd{ReqID: reqID}, nil
+	case InOpenOrderEnd: // 53
+		return OpenOrderEnd{}, nil
+	case InExecutionDataEnd: // 55
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		return ExecutionsEnd{ReqID: reqID}, nil
+	case InTickSnapshotEnd: // 57
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		return TickSnapshotEnd{ReqID: reqID}, nil
+	case InMarketDataType: // 58
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		dataType, _ := r.ReadInt()
+		return MarketDataType{ReqID: reqID, DataType: dataType}, nil
+	case InCommissionReport: // 59
+		r.Skip(1) // version
+		execID := r.ReadString()
+		commission := r.ReadString()
+		currency := r.ReadString()
+		realizedPNL := r.ReadString()
+		return CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}, nil
+	case InPositionData: // 61
+		r.Skip(1) // version
+		account := r.ReadString()
+		symbol := r.ReadString()
+		secType := r.ReadString()
+		exchange := r.ReadString()
+		currency := r.ReadString()
+		primaryExchange := r.ReadString()
+		localSymbol := r.ReadString()
+		position := r.ReadString()
+		avgCost := r.ReadString()
+		return Position{
+			Account:  account,
+			Contract: Contract{Symbol: symbol, SecType: secType, Exchange: exchange, Currency: currency, PrimaryExchange: primaryExchange, LocalSymbol: localSymbol},
+			Position: position, AvgCost: avgCost,
+		}, nil
+	case InPositionEnd: // 62
+		return PositionEnd{}, nil
+	case InAccountSummary: // 63
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		account := r.ReadString()
+		tag := r.ReadString()
+		value := r.ReadString()
+		currency := r.ReadString()
+		return AccountSummaryValue{ReqID: reqID, Account: account, Tag: tag, Value: value, Currency: currency}, nil
+	case InAccountSummaryEnd: // 64
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		return AccountSummaryEnd{ReqID: reqID}, nil
+	default:
+		return nil, fmt.Errorf("codec: unknown msg_id %d", msgID)
+	}
+}
+
 func decodeFields(fields []string) (Message, error) {
 	switch fields[0] {
-	case "hello":
-		if err := wantLen(fields, 4); err != nil {
+	case "start_api":
+		if err := wantLen(fields, 3); err != nil {
 			return nil, err
 		}
-		minVersion, err := atoi(fields[1])
+		clientID, err := atoi(fields[1])
 		if err != nil {
 			return nil, err
 		}
-		maxVersion, err := atoi(fields[2])
-		if err != nil {
-			return nil, err
-		}
-		clientID, err := atoi(fields[3])
-		if err != nil {
-			return nil, err
-		}
-		return Hello{MinVersion: minVersion, MaxVersion: maxVersion, ClientID: clientID}, nil
-	case "hello_ack":
+		return StartAPI{ClientID: clientID, OptionalCapabilities: fields[2]}, nil
+	case "server_info":
 		if err := wantLen(fields, 3); err != nil {
 			return nil, err
 		}
@@ -144,7 +433,7 @@ func decodeFields(fields []string) (Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		return HelloAck{ServerVersion: serverVersion, ConnectionTime: fields[2]}, nil
+		return ServerInfo{ServerVersion: serverVersion, ConnectionTime: fields[2]}, nil
 	case "managed_accounts":
 		if err := wantLen(fields, 2); err != nil {
 			return nil, err
@@ -169,8 +458,8 @@ func decodeFields(fields []string) (Message, error) {
 		}
 		return CurrentTime{Time: fields[1]}, nil
 	case "api_error":
-		if err := wantLen(fields, 4); err != nil {
-			return nil, err
+		if len(fields) < 4 {
+			return nil, fmt.Errorf("codec: field count = %d, want >= 4 for %q", len(fields), fields[0])
 		}
 		reqID, err := atoi(fields[1])
 		if err != nil {
@@ -180,7 +469,14 @@ func decodeFields(fields []string) (Message, error) {
 		if err != nil {
 			return nil, err
 		}
-		return APIError{ReqID: reqID, Code: code, Message: fields[3]}, nil
+		msg := APIError{ReqID: reqID, Code: code, Message: fields[3]}
+		if len(fields) > 4 {
+			msg.AdvancedOrderRejectJSON = fields[4]
+		}
+		if len(fields) > 5 {
+			msg.ErrorTimeMs = fields[5]
+		}
+		return msg, nil
 	case "req_contract_details":
 		reqID, contract, err := parseReqContract(fields)
 		if err != nil {

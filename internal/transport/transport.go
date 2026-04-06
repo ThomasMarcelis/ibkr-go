@@ -16,6 +16,21 @@ type Dialer interface {
 	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
+// WriteRaw writes raw bytes directly to the connection without framing.
+func WriteRaw(conn net.Conn, data []byte) error {
+	_, err := conn.Write(data)
+	return err
+}
+
+// ReadOneFrame reads a single length-prefixed frame with a deadline.
+func ReadOneFrame(conn net.Conn, deadline time.Time) ([]byte, error) {
+	if err := conn.SetReadDeadline(deadline); err != nil {
+		return nil, err
+	}
+	defer conn.SetReadDeadline(time.Time{})
+	return wire.ReadFrame(conn)
+}
+
 type Conn struct {
 	conn      net.Conn
 	logger    *slog.Logger

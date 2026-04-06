@@ -4,5 +4,4 @@ server next_valid_id {"order_id":1001}
 client req_open_orders {"scope":"all"}
 server open_order {"order_id":2001,"account":"DU12345","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"status":"Submitted","quantity":"10","filled":"2","remaining":"8"}
 server open_order_end {}
-client cancel_open_orders {}
 disconnect
