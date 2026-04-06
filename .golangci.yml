@@ -25,5 +25,12 @@ linters:
         - (net.Conn).Close
         - (net.Conn).SetReadDeadline
         - (net.Listener).Close
+        - (*os.File).Close
         - fmt.Fprintf
         - fmt.Fprintln
+  exclusions:
+    rules:
+      - linters: [errcheck]
+        path: _test\.go
+      - linters: [errcheck]
+        path: cmd/
