@@ -18,3 +18,12 @@ linters:
     - misspell
     - unconvert
     - unparam
+  settings:
+    errcheck:
+      exclude-functions:
+        - (io.Closer).Close
+        - (net.Conn).Close
+        - (net.Conn).SetReadDeadline
+        - (net.Listener).Close
+        - fmt.Fprintf
+        - fmt.Fprintln
