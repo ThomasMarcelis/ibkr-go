@@ -72,7 +72,6 @@ type singletonRoute struct {
 	resume       ResumePolicy
 	request      codec.Message
 	handle       func(any, *Engine)
-	handleAPIErr func(codec.APIError, *Engine)
 	onDisconnect func(*Engine, error) bool
 	emitGap      func(*Engine)
 	emitResumed  func(*Engine)
@@ -791,7 +790,7 @@ func (e *Engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 	if err != nil {
 		return nil, err
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 	return collectSnapshot(ctx, sub, func(update OpenOrderUpdate) OpenOrder { return update.Order })
 }
 
@@ -842,13 +841,7 @@ func (e *Engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.OpenOrder:
-					order, err := fromCodecOpenOrder(m)
-					if err != nil {
-						delete(e.singletons, singletonOpenOrders)
-						sub.closeWithErr(err)
-						return
-					}
-					sub.emit(OpenOrderUpdate{Order: order})
+					sub.emit(OpenOrderUpdate{Order: fromCodecOpenOrder(m)})
 				case codec.OpenOrderEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.Session().ConnectionSeq})
 				}
@@ -887,7 +880,7 @@ func (e *Engine) Executions(ctx context.Context, req ExecutionsRequest) ([]Execu
 	if err != nil {
 		return nil, err
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 	return collectSnapshot(ctx, sub, func(update ExecutionUpdate) ExecutionUpdate { return update })
 }
 
@@ -1709,7 +1702,7 @@ func fromCodecPosition(m codec.Position) (Position, error) {
 	}, nil
 }
 
-func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
+func fromCodecOpenOrder(m codec.OpenOrder) OpenOrder {
 	// Lenient decimal parsing: the v200 OpenOrder message has ~170 fields
 	// and skip counts may not be exact for all order types. Parse what we
 	// can; zero values are acceptable for read-only observation.
@@ -1726,7 +1719,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		Quantity:  quantity,
 		Filled:    filled,
 		Remaining: remaining,
-	}, nil
+	}
 }
 
 func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
