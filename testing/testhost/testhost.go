@@ -521,7 +521,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 				"symbol":           fields[4],
 				"sec_type":         fields[5],
 				"exchange":         safeField(fields, 10),
-				"currency":        safeField(fields, 12),
+				"currency":         safeField(fields, 12),
 				"primary_exchange": safeField(fields, 11),
 				"local_symbol":     safeField(fields, 13),
 			}
@@ -537,7 +537,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 				"symbol":           fields[3],
 				"sec_type":         fields[4],
 				"exchange":         safeField(fields, 9),
-				"currency":        safeField(fields, 11),
+				"currency":         safeField(fields, 11),
 				"primary_exchange": safeField(fields, 10),
 				"local_symbol":     safeField(fields, 12),
 			}
@@ -586,7 +586,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 				"symbol":           fields[4],
 				"sec_type":         fields[5],
 				"exchange":         safeField(fields, 10),
-				"currency":        safeField(fields, 12),
+				"currency":         safeField(fields, 12),
 				"primary_exchange": safeField(fields, 11),
 				"local_symbol":     safeField(fields, 13),
 			}
@@ -616,7 +616,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 				"symbol":           fields[4],
 				"sec_type":         fields[5],
 				"exchange":         safeField(fields, 10),
-				"currency":        safeField(fields, 12),
+				"currency":         safeField(fields, 12),
 				"primary_exchange": safeField(fields, 11),
 				"local_symbol":     safeField(fields, 13),
 			}

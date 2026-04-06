@@ -133,7 +133,7 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		action := r.ReadString()
 		quantity := r.ReadString()
 		orderType := r.ReadString()
-		r.Skip(4)  // lmtPrice, auxPrice, tif, ocaGroup
+		r.Skip(4) // lmtPrice, auxPrice, tif, ocaGroup
 		account := r.ReadString()
 		r.Skip(71) // order detail fields through to OrderState
 		status := r.ReadString()
@@ -339,15 +339,15 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(m.ReqID)
 		w.WriteInt(m.Contract.ConID)
 		writeWireContract(&w, m.Contract)
-		w.WriteBool(false)         // includeExpired
+		w.WriteBool(false) // includeExpired
 		w.WriteString(m.EndDateTime)
 		w.WriteString(m.BarSize)
 		w.WriteString(m.Duration)
 		w.WriteBool(m.UseRTH)
 		w.WriteString(m.WhatToShow)
-		w.WriteInt(1)       // formatDate
-		w.WriteBool(false)  // keepUpToDate
-		w.WriteString("")   // chartOptions
+		w.WriteInt(1)      // formatDate
+		w.WriteBool(false) // keepUpToDate
+		w.WriteString("")  // chartOptions
 		return w.Fields(), nil
 
 	case AccountSummaryRequest:
@@ -523,24 +523,24 @@ func encodeFields(msg Message) ([]string, error) {
 		// intermediate fields to keep positions aligned.
 		w := fieldWriter{}
 		w.WriteInt(InOpenOrder)
-		w.WriteInt64(m.OrderID)            // r[0]
-		writeWireContract(&w, m.Contract)  // r[1..11]
-		w.WriteString(m.Action)            // r[12]
-		w.WriteString(m.Quantity)          // r[13]
-		w.WriteString(m.OrderType)         // r[14]
-		for range 4 {                      // r[15..18] lmtPrice, auxPrice, tif, ocaGroup
+		w.WriteInt64(m.OrderID)           // r[0]
+		writeWireContract(&w, m.Contract) // r[1..11]
+		w.WriteString(m.Action)           // r[12]
+		w.WriteString(m.Quantity)         // r[13]
+		w.WriteString(m.OrderType)        // r[14]
+		for range 4 {                     // r[15..18] lmtPrice, auxPrice, tif, ocaGroup
 			w.WriteString("")
 		}
-		w.WriteString(m.Account)           // r[19]
-		for range 71 {                     // r[20..90] order detail padding
+		w.WriteString(m.Account) // r[19]
+		for range 71 {           // r[20..90] order detail padding
 			w.WriteString("")
 		}
-		w.WriteString(m.Status)            // r[91]
-		for range 68 {                     // r[92..159] margin/state padding
+		w.WriteString(m.Status) // r[91]
+		for range 68 {          // r[92..159] margin/state padding
 			w.WriteString("")
 		}
-		w.WriteString(m.Filled)            // r[160]
-		w.WriteString(m.Remaining)         // r[161]
+		w.WriteString(m.Filled)    // r[160]
+		w.WriteString(m.Remaining) // r[161]
 		return w.Fields(), nil
 
 	case OrderStatus:
@@ -618,5 +618,5 @@ func readWireContract(r *fieldReader) Contract {
 	}
 }
 
-func itoa(v int) string    { return strconv.Itoa(v) }
+func itoa(v int) string     { return strconv.Itoa(v) }
 func i64toa(v int64) string { return strconv.FormatInt(v, 10) }

@@ -47,5 +47,5 @@ const (
 	InPositionEnd       = 62
 	InAccountSummary    = 63
 	InAccountSummaryEnd = 64
-	InTickReqParams    = 81
+	InTickReqParams     = 81
 )
