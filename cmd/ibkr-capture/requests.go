@@ -121,7 +121,7 @@ func sendCancelPositions(conn net.Conn) error {
 //	[20, reqId, <contract fields+tradingClass+includeExpired>,
 //	 endDateTime, barSize, duration, useRTH, whatToShow, formatDate,
 //	 (combo legs iff BAG), keepUpToDate, chartOptions]
-func sendReqHistoricalData(conn net.Conn, reqID, serverVersion int, c contractSpec, endDateTime, duration, barSize, whatToShow string, useRTH bool) error {
+func sendReqHistoricalData(conn net.Conn, reqID, _ int, c contractSpec, endDateTime, duration, barSize, whatToShow string, useRTH bool) error {
 	fields := []string{"20", strconv.Itoa(reqID)}
 	fields = append(fields, contractRequestFields(c)...)
 	fields = append(fields,
@@ -145,7 +145,7 @@ func sendReqHistoricalData(conn net.Conn, reqID, serverVersion int, c contractSp
 //	[1, version=11, reqId, <contract fields no includeExpired>,
 //	 (combo legs if BAG), (delta neutral if v>=40),
 //	 genericTickList, snapshot, regulatorySnapshot, mktDataOptions]
-func sendReqMktData(conn net.Conn, reqID, serverVersion int, c contractSpec, genericTicks string, snapshot bool) error {
+func sendReqMktData(conn net.Conn, reqID, _ int, c contractSpec, genericTicks string, snapshot bool) error {
 	fields := []string{"1", "11", strconv.Itoa(reqID)}
 	fields = append(fields, contractRequestFieldsNoExpired(c)...)
 	// Skip BAG combo legs (not used for STK here).
@@ -166,7 +166,7 @@ func sendCancelMktData(conn net.Conn, reqID int) error {
 // --- Real-time bars (msg_id=50) / cancel (msg_id=51) ---
 //
 //	[50, version=3, reqId, <contract fields no includeExpired>, barSize, whatToShow, useRTH, realTimeBarsOptions]
-func sendReqRealTimeBars(conn net.Conn, reqID, serverVersion int, c contractSpec, whatToShow string, useRTH bool) error {
+func sendReqRealTimeBars(conn net.Conn, reqID, _ int, c contractSpec, whatToShow string, useRTH bool) error {
 	fields := []string{"50", "3", strconv.Itoa(reqID)}
 	fields = append(fields, contractRequestFieldsNoExpired(c)...)
 	fields = append(fields,

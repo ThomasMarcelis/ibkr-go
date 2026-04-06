@@ -298,7 +298,7 @@ func (e *Engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) 
 	if err != nil {
 		return nil, err
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 	return collectSnapshot(ctx, sub, func(update AccountSummaryUpdate) AccountValue { return update.Value })
 }
 
@@ -407,7 +407,7 @@ func (e *Engine) PositionsSnapshot(ctx context.Context) ([]Position, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 	return collectSnapshot(ctx, sub, func(update PositionUpdate) Position { return update.Position })
 }
 
@@ -503,7 +503,7 @@ func (e *Engine) QuoteSnapshot(ctx context.Context, req QuoteSubscriptionRequest
 	if err != nil {
 		return Quote{}, err
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	var latest Quote
 	for {
@@ -1171,7 +1171,7 @@ func (e *Engine) handleIncoming(msg any) {
 		}
 	}
 
-	switch msg.(type) {
+	switch msg := msg.(type) {
 	case codec.Position, codec.PositionEnd:
 		if route, ok := e.singletons[singletonPositions]; ok {
 			route.handle(msg, e)
@@ -1181,8 +1181,7 @@ func (e *Engine) handleIncoming(msg any) {
 			route.handle(msg, e)
 		}
 	case codec.CommissionReport:
-		report := msg.(codec.CommissionReport)
-		e.routeCommissionReport(report)
+		e.routeCommissionReport(msg)
 	}
 }
 
@@ -1690,17 +1689,7 @@ func parseBarTime(raw string) (time.Time, error) {
 }
 
 func fromCodecRealtimeBar(m codec.RealTimeBar) (Bar, error) {
-	return fromCodecBar(codec.HistoricalBar{
-		ReqID:  m.ReqID,
-		Time:   m.Time,
-		Open:   m.Open,
-		High:   m.High,
-		Low:    m.Low,
-		Close:  m.Close,
-		Volume: m.Volume,
-		WAP:    m.WAP,
-		Count:  m.Count,
-	})
+	return fromCodecBar(codec.HistoricalBar(m))
 }
 
 func fromCodecPosition(m codec.Position) (Position, error) {

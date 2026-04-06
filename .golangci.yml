@@ -32,5 +32,5 @@ linters:
     rules:
       - linters: [errcheck]
         path: _test\.go
-      - linters: [errcheck]
+      - linters: [errcheck, unparam]
         path: cmd/
