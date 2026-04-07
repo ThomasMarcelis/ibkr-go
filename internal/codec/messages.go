@@ -305,6 +305,7 @@ type OpenOrder struct {
 	// Trailing order-status block (last 9 fields of the message).
 	Filled    string
 	Remaining string
+	ParentID  string
 }
 
 func (OpenOrder) messageName() string { return "open_order" }

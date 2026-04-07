@@ -441,7 +441,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"TickSize", InTickSize, 5},                            // version, reqID, tickType, size
 		{"OrderStatus", InOrderStatus, 4},                      // orderID, status, filled, remaining
 		{"ErrMsg", InErrMsg, 5},                                // reqID, code, message, advJSON, errorTimeMs
-		{"OpenOrder", InOpenOrder, 162},                        // orderID + 11 contract + action + qty + orderType + 4 skip + account + 71 skip + status + 68 skip + filled + remaining
+		{"OpenOrder", InOpenOrder, 165},                        // orderID + 11 contract + action + qty + orderType + 4 skip + account + 71 skip + status + 68 skip + filled + remaining + 2 skip + parentId
 		{"UpdateAccountValue", InUpdateAccountValue, 5},        // version, key, value, currency, account
 		{"UpdatePortfolio", InUpdatePortfolio, 19},             // version, conID, symbol, secType, expiry, strike, right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice, marketValue, avgCost, unrealizedPNL, realizedPNL, account
 		{"UpdateAccountTime", InUpdateAccountTime, 2},          // version, timestamp

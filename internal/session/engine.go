@@ -4198,17 +4198,25 @@ func (e *Engine) send(msg codec.Message) error {
 }
 
 func (e *Engine) allocReqID() int {
-	reqID := e.nextReqID
-	e.nextReqID++
-	return reqID
+	for {
+		id := e.nextReqID
+		e.nextReqID++
+		if _, conflict := e.orders[int64(id)]; !conflict {
+			return id
+		}
+	}
 }
 
 func (e *Engine) allocOrderID() int64 {
-	id := e.snapshot.NextValidID
-	e.updateSnapshot(func(s *Snapshot) {
-		s.NextValidID++
-	})
-	return id
+	for {
+		id := e.snapshot.NextValidID
+		e.updateSnapshot(func(s *Snapshot) {
+			s.NextValidID++
+		})
+		if _, conflict := e.keyed[int(id)]; !conflict {
+			return id
+		}
+	}
 }
 
 func (e *Engine) connectionSeq() uint64 {
@@ -4707,6 +4715,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) OpenOrder {
 	origin, _ := strconv.Atoi(m.Origin)
 	clientID, _ := strconv.Atoi(m.ClientID)
 	permID, _ := strconv.ParseInt(m.PermID, 10, 64)
+	parentID, _ := strconv.ParseInt(m.ParentID, 10, 64)
 	return OpenOrder{
 		OrderID:       m.OrderID,
 		Account:       m.Account,
@@ -4729,6 +4738,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) OpenOrder {
 		OutsideRTH:    m.OutsideRTH == "1",
 		Hidden:        m.Hidden == "1",
 		GoodAfterTime: m.GoodAfterTime,
+		ParentID:      parentID,
 	}
 }
 

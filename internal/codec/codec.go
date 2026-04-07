@@ -179,7 +179,9 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		r.Skip(54)                             // r[106..159]: remaining state/post-status fields
 		filled := r.ReadString()               // r[160]
 		remaining := r.ReadString()            // r[161]
-		// r[162..168]: lastFillPrice, permId, parentId, lastLiquidity, whyHeld, mktCapPrice, trailing
+		r.Skip(2)                              // r[162..163]: lastFillPrice, permId
+		parentID := r.ReadString()             // r[164]
+		// r[165..168]: lastLiquidity, whyHeld, mktCapPrice, trailing
 		return []Message{OpenOrder{
 			OrderID: orderID, Contract: contract,
 			Action: action, Quantity: quantity, OrderType: orderType,
@@ -198,7 +200,7 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 			Commission:          commission, MinCommission: minCommission,
 			MaxCommission: maxCommission, CommissionCurrency: commissionCurrency,
 			WarningText: warningText,
-			Filled:      filled, Remaining: remaining,
+			Filled:      filled, Remaining: remaining, ParentID: parentID,
 		}}, nil
 
 	case InNextValidID: // [9, version, orderID]
@@ -1628,7 +1630,10 @@ func encodeFields(msg Message) ([]string, error) {
 		}
 		w.WriteString(m.Filled)    // r[160]
 		w.WriteString(m.Remaining) // r[161]
-		for range 7 {              // r[162..168] trailing status padding
+		w.WriteString("")          // r[162]: lastFillPrice
+		w.WriteString("")          // r[163]: permId
+		w.WriteString(m.ParentID)  // r[164]
+		for range 4 {              // r[165..168] trailing status padding
 			w.WriteString("")
 		}
 		return w.Fields(), nil

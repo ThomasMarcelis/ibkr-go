@@ -43,7 +43,7 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 			Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
 			Status:           "Submitted",
 			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
-			Filled: "2", Remaining: "8",
+			Filled: "2", Remaining: "8", ParentID: "99",
 		}, "open_order"},
 		{OpenOrderEnd{}, "open_order_end"},
 		{PositionEnd{}, "position_end"},

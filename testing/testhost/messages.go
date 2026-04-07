@@ -80,6 +80,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			Hidden:        asString(resolve(body["hidden"])),
 			DiscretionAmt: asString(resolve(body["discretion_amt"])),
 			GoodAfterTime: asString(resolve(body["good_after_time"])),
+			ParentID:      asString(resolve(body["parent_id"])),
 		}, nil
 	case "open_order_end":
 		return codec.OpenOrderEnd{}, nil
