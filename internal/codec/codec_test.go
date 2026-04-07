@@ -314,6 +314,79 @@ func TestDecodeOpenOrderCapture(t *testing.T) {
 	}
 }
 
+// TestDecodeOpenOrderNonSimple verifies that an OpenOrder message with a
+// field count different from the expected simple-order count (169) produces
+// a partial parse with only the reliably-positioned pre-variable-section fields.
+func TestDecodeOpenOrderNonSimple(t *testing.T) {
+	t.Parallel()
+
+	// Build a synthetic OpenOrder payload with extra fields (simulating a
+	// combo order with variable-length sections that expand the message).
+	fields := make([]string, 0, 180)
+	fields = append(fields, itoa(InOpenOrder))                                                  // msg_id
+	fields = append(fields, "42")                                                               // r[0] orderID
+	fields = append(fields, "265598", "AAPL", "STK", "", "", "", "", "SMART", "USD", "", "NMS") // r[1..11] contract
+	fields = append(fields, "BUY", "10", "LMT", "150.00", "0", "DAY", "", "DU9000001")         // r[12..19]
+	fields = append(fields, "", "0", "myref", "1", "99999", "0", "0", "0", "")                  // r[20..28]
+	// Pad to 180 fields (more than 169 — simulates variable-length sections).
+	for len(fields) < 181 {
+		fields = append(fields, "")
+	}
+	payload := wire.EncodeFields(fields)
+
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("len = %d, want 1", len(msgs))
+	}
+	oo, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+
+	// Pre-variable fields should be correctly parsed.
+	if oo.OrderID != 42 {
+		t.Errorf("OrderID = %d, want 42", oo.OrderID)
+	}
+	if oo.Contract.Symbol != "AAPL" {
+		t.Errorf("Symbol = %q, want AAPL", oo.Contract.Symbol)
+	}
+	if oo.Action != "BUY" {
+		t.Errorf("Action = %q, want BUY", oo.Action)
+	}
+	if oo.Quantity != "10" {
+		t.Errorf("Quantity = %q, want 10", oo.Quantity)
+	}
+	if oo.OrderType != "LMT" {
+		t.Errorf("OrderType = %q, want LMT", oo.OrderType)
+	}
+	if oo.LmtPrice != "150.00" {
+		t.Errorf("LmtPrice = %q, want 150.00", oo.LmtPrice)
+	}
+	if oo.Account != "DU9000001" {
+		t.Errorf("Account = %q, want DU9000001", oo.Account)
+	}
+	if oo.OrderRef != "myref" {
+		t.Errorf("OrderRef = %q, want myref", oo.OrderRef)
+	}
+
+	// Post-variable fields should be zero-valued (partial parse).
+	if oo.Status != "" {
+		t.Errorf("Status = %q, want empty (partial parse)", oo.Status)
+	}
+	if oo.Filled != "" {
+		t.Errorf("Filled = %q, want empty (partial parse)", oo.Filled)
+	}
+	if oo.Remaining != "" {
+		t.Errorf("Remaining = %q, want empty (partial parse)", oo.Remaining)
+	}
+	if oo.ParentID != "" {
+		t.Errorf("ParentID = %q, want empty (partial parse)", oo.ParentID)
+	}
+}
+
 func TestDecodeServerInfo(t *testing.T) {
 	t.Parallel()
 

@@ -425,9 +425,12 @@ func (h *OrderHandle) Wait() error {
 }
 
 // Close detaches the handle. The order continues executing on the server.
+// Events() and State() channels are closed.
 func (h *OrderHandle) Close() error {
 	h.closeOnce.Do(func() {
 		close(h.done)
+		close(h.events)
+		close(h.state)
 	})
 	return nil
 }
@@ -505,6 +508,8 @@ func (h *OrderHandle) closeWithErr(err error) {
 		h.err = err
 		h.errMu.Unlock()
 		close(h.done)
+		close(h.events)
+		close(h.state)
 	})
 }
 
@@ -853,4 +858,16 @@ type WSHEventDataRequest struct {
 
 type DisplayGroupUpdate struct {
 	ContractInfo string
+}
+
+// DisplayGroupHandle wraps a display group subscription and exposes an
+// Update method that targets the same protocol-level request ID.
+type DisplayGroupHandle struct {
+	*Subscription[DisplayGroupUpdate]
+	updateFn func(context.Context, string) error
+}
+
+// Update sends an UpdateDisplayGroup request for this subscription's group.
+func (h *DisplayGroupHandle) Update(ctx context.Context, contractInfo string) error {
+	return h.updateFn(ctx, contractInfo)
 }

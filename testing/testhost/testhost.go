@@ -897,6 +897,39 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		return "req_news_bulletins", body, nil
 	case 13: // OutCancelNewsBulletins: [13, 1]
 		return "cancel_news_bulletins", map[string]any{}, nil
+	case 3: // OutPlaceOrder: [3, orderID, conID, symbol, secType, expiry, strike,
+		// right, multiplier, exchange, primaryExchange, currency, localSymbol,
+		// tradingClass, secIdType, secId, action, totalQty, orderType, lmtPrice,
+		// auxPrice, tif, ocaGroup, account, ...]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["order_id"] = fields[1]
+		}
+		if len(fields) >= 24 {
+			body["contract"] = map[string]any{
+				"con_id":   fields[2],
+				"symbol":   fields[3],
+				"sec_type": fields[4],
+				"exchange": fields[9],
+				"currency": fields[11],
+			}
+			body["action"] = fields[16]
+			body["total_quantity"] = fields[17]
+			body["order_type"] = fields[18]
+			body["lmt_price"] = fields[19]
+			body["aux_price"] = fields[20]
+			body["tif"] = fields[21]
+			body["account"] = fields[23]
+		}
+		return "place_order", body, nil
+	case 4: // OutCancelOrder: [4, orderID, manualOrderCancelTime]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["order_id"] = fields[1]
+		}
+		return "cancel_order", body, nil
+	case 58: // OutReqGlobalCancel: [58, 1]
+		return "global_cancel", map[string]any{}, nil
 	default:
 		return "", nil, fmt.Errorf("testhost: unsupported client msg_id %d", msgID)
 	}

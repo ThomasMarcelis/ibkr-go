@@ -140,6 +140,15 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		//   r[101..105] commission..warningText (5 fields, may include empty prefix)
 		//   r[106..159] remaining OrderState and post-status fields
 		//   r[160..168] trailing order-status block (filled, remaining, + 7 more)
+
+		// Fields r[0..28] are reliably positioned for all order types. Fields
+		// after r[28] include variable-length combo/algo/conditions sections
+		// whose presence shifts all downstream positions. The static skip counts
+		// (Skip(62) and Skip(54)) are valid only when these sections are empty
+		// (simple orders). For non-simple orders (combo, algo, conditional), we
+		// return a partial parse with only the safe pre-variable fields.
+		const simpleOrderFieldCount = 169
+
 		orderID, _ := r.ReadInt64()     // r[0]
 		contract := readWireContract(r) // r[1..11]
 		action := r.ReadString()        // r[12]
@@ -159,6 +168,21 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		hidden := r.ReadString()        // r[26]
 		discretionAmt := r.ReadString() // r[27]
 		goodAfterTime := r.ReadString() // r[28]
+
+		if r.Len() != simpleOrderFieldCount {
+			// Non-simple order (combo legs, algo params, or conditions present).
+			// Return a partial parse with only the reliably-positioned fields.
+			return []Message{OpenOrder{
+				OrderID: orderID, Contract: contract,
+				Action: action, Quantity: quantity, OrderType: orderType,
+				LmtPrice: lmtPrice, AuxPrice: auxPrice, TIF: tif,
+				OcaGroup: ocaGroup, Account: account,
+				OpenClose: openClose, Origin: origin, OrderRef: orderRef,
+				ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
+				Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
+			}}, nil
+		}
+
 		r.Skip(62)                      // r[29..90]: FA params, order details, vol params, combos, scale, algo, etc.
 		status := r.ReadString()        // r[91]
 		// OrderState section: margin fields and commission.
@@ -1428,7 +1452,9 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.ActiveStopTime)
 		// Hedge
 		w.WriteString(m.HedgeType)
-		// [hedgeType="" => skip hedgeParam]
+		if m.HedgeType != "" {
+			w.WriteString(m.HedgeParam)
+		}
 		// Misc
 		w.WriteString(m.OptOutSmartRouting)
 		w.WriteString(m.ClearingAccount)

@@ -75,6 +75,7 @@ type route struct {
 	emitGap      func(*Engine)
 	emitResumed  func(*Engine)
 	close        func(error)
+	gapped       bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
 type orderRoute struct {
@@ -514,15 +515,12 @@ func (e *Engine) SetMarketDataType(dataType int) error {
 	if dataType < 1 || dataType > 4 {
 		return fmt.Errorf("invalid market data type %d: must be 1 (live), 2 (frozen), 3 (delayed), or 4 (delayed-frozen)", dataType)
 	}
-	resp := make(chan error, 1)
-	e.enqueue(func() {
+	return awaitFireAndForget(context.Background(), e, func() error {
 		if !e.isReady() {
-			resp <- ErrNotReady
-			return
+			return ErrNotReady
 		}
-		resp <- e.send(codec.ReqMarketDataType{DataType: dataType})
+		return e.send(codec.ReqMarketDataType{DataType: dataType})
 	})
-	return <-resp
 }
 
 func (e *Engine) QuoteSnapshot(ctx context.Context, req QuoteSubscriptionRequest) (Quote, error) {
@@ -1381,8 +1379,7 @@ func (e *Engine) UserInfo(ctx context.Context) (string, error) {
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		reqID = e.nextReqID
-		e.nextReqID++
+		reqID = e.allocReqID()
 
 		e.keyed[reqID] = &route{
 			opKind: OpUserInfo,
@@ -1434,8 +1431,7 @@ func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		reqID = e.nextReqID
-		e.nextReqID++
+		reqID = e.allocReqID()
 
 		e.keyed[reqID] = &route{
 			opKind: OpMatchingSymbols,
@@ -1497,8 +1493,7 @@ func (e *Engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		reqID = e.nextReqID
-		e.nextReqID++
+		reqID = e.allocReqID()
 
 		e.keyed[reqID] = &route{
 			opKind: OpHeadTimestamp,
@@ -3344,12 +3339,13 @@ func (e *Engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 	return out.groups, out.err
 }
 
-func (e *Engine) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ...SubscriptionOption) (*Subscription[DisplayGroupUpdate], error) {
+func (e *Engine) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ...SubscriptionOption) (*DisplayGroupHandle, error) {
 	type result struct {
 		sub *Subscription[DisplayGroupUpdate]
 		err error
 	}
 	resp := make(chan result, 1)
+	var reqID int
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if !e.isReady() {
@@ -3365,7 +3361,7 @@ func (e *Engine) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ..
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID = e.allocReqID()
 		var sub *Subscription[DisplayGroupUpdate]
 		sub = newSubscription[DisplayGroupUpdate](cfg, func() {
 			e.enqueue(func() {
@@ -3420,10 +3416,19 @@ func (e *Engine) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ..
 	if out.err == nil && out.sub != nil {
 		bindContext(ctx, out.sub)
 	}
-	return out.sub, out.err
+	if out.err != nil {
+		return nil, out.err
+	}
+	handle := &DisplayGroupHandle{
+		Subscription: out.sub,
+		updateFn: func(ctx context.Context, contractInfo string) error {
+			return e.updateDisplayGroup(ctx, reqID, contractInfo)
+		},
+	}
+	return handle, nil
 }
 
-func (e *Engine) UpdateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
+func (e *Engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
 	return awaitFireAndForget(ctx, e, func() error {
 		if !e.isReady() {
 			return ErrNotReady
@@ -4035,6 +4040,10 @@ func (e *Engine) handleTransportLoss(err error) {
 
 func (e *Engine) disconnectRoutes(err error) {
 	for reqID, route := range e.keyed {
+		// Already gapped (e.g. from code 1100) — route survives, skip duplicate Gap.
+		if route.gapped {
+			continue
+		}
 		if route.onDisconnect == nil {
 			route.close(ErrInterrupted)
 			e.deleteKeyedRoute(reqID)
@@ -4045,6 +4054,9 @@ func (e *Engine) disconnectRoutes(err error) {
 		}
 	}
 	for key, route := range e.singletons {
+		if route.gapped {
+			continue
+		}
 		if route.onDisconnect == nil {
 			route.close(ErrInterrupted)
 			delete(e.singletons, key)
@@ -4066,6 +4078,7 @@ func (e *Engine) disconnectRoutes(err error) {
 func (e *Engine) resumeRoutes() {
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
+			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
 				e.deleteKeyedRoute(reqID)
@@ -4078,6 +4091,7 @@ func (e *Engine) resumeRoutes() {
 	}
 	for key, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto {
+			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
 				delete(e.singletons, key)
@@ -4243,12 +4257,14 @@ func (e *Engine) apiErr(opKind OpKind, msg codec.APIError) error {
 
 func (e *Engine) emitGap() {
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
+			route.gapped = true
 			route.emitGap(e)
 		}
 	}
 	for _, route := range e.singletons {
-		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
+			route.gapped = true
 			route.emitGap(e)
 		}
 	}
@@ -4263,11 +4279,13 @@ func (e *Engine) emitGap() {
 func (e *Engine) emitResumed() {
 	for _, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.gapped = false
 			route.emitResumed(e)
 		}
 	}
 	for _, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.gapped = false
 			route.emitResumed(e)
 		}
 	}

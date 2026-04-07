@@ -92,6 +92,30 @@ func TestBootstrapOutOfOrder(t *testing.T) {
 	}
 }
 
+// TestSetMarketDataTypeAfterClose verifies that SetMarketDataType returns an
+// error (not blocks forever) when called after the client has been closed.
+func TestSetMarketDataTypeAfterClose(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "lifecycle_set_mdt_after_close.txt")
+	_ = client.Close()
+	<-client.Done()
+	_ = host.Close()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- client.SetMarketDataType(3)
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected error from SetMarketDataType after Close, got nil")
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("SetMarketDataType blocked after Close — deadlock")
+	}
+}
+
 // TestContextCancelDuringOneShot verifies that a one-shot method returns a
 // context error when the caller's context expires before the server responds.
 func TestContextCancelDuringOneShot(t *testing.T) {

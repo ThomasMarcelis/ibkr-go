@@ -92,6 +92,7 @@ type (
 	SoftDollarTier               = session.SoftDollarTier
 	WSHEventDataRequest          = session.WSHEventDataRequest
 	DisplayGroupUpdate           = session.DisplayGroupUpdate
+	DisplayGroupHandle           = session.DisplayGroupHandle
 	MarketDepthRequest           = session.MarketDepthRequest
 	DepthRow                     = session.DepthRow
 	FundamentalDataRequest       = session.FundamentalDataRequest
@@ -221,8 +222,9 @@ var (
 )
 
 var (
-	ParseDecimal     = session.ParseDecimal
-	MustParseDecimal = session.MustParseDecimal
+	ParseDecimal           = session.ParseDecimal
+	MustParseDecimal       = session.MustParseDecimal
+	IsTerminalOrderStatus  = session.IsTerminalOrderStatus
 
 	WithHost                      = session.WithHost
 	WithPort                      = session.WithPort
@@ -489,10 +491,6 @@ func (c *Client) QueryDisplayGroups(ctx context.Context) (string, error) {
 	return c.engine.QueryDisplayGroups(ctx)
 }
 
-func (c *Client) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ...SubscriptionOption) (*Subscription[DisplayGroupUpdate], error) {
+func (c *Client) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ...SubscriptionOption) (*DisplayGroupHandle, error) {
 	return c.engine.SubscribeDisplayGroup(ctx, groupID, opts...)
-}
-
-func (c *Client) UpdateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
-	return c.engine.UpdateDisplayGroup(ctx, reqID, contractInfo)
 }

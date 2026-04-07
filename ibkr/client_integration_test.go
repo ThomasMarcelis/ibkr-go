@@ -1727,7 +1727,10 @@ func TestPlaceOrderWithExecution(t *testing.T) {
 			// Drain any remaining buffered events.
 			for {
 				select {
-				case evt := <-handle.Events():
+				case evt, ok := <-handle.Events():
+					if !ok {
+						goto done
+					}
 					checkEvent(evt)
 				default:
 					goto done
@@ -1810,7 +1813,10 @@ func TestCancelOrder(t *testing.T) {
 			// Drain any remaining buffered events.
 			for {
 				select {
-				case evt := <-handle.Events():
+				case evt, ok := <-handle.Events():
+					if !ok {
+						goto cancelDone
+					}
 					if evt.Status != nil && evt.Status.Status == "Cancelled" {
 						sawCancelled = true
 					}
