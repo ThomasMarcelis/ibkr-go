@@ -39,6 +39,7 @@ lifecycle semantics, error taxonomy, and type guarantees — see
 | `SubscribeRealTimeBars` | `*Subscription[Bar]` |
 | `SubscribeTickByTick` | `*Subscription[TickByTickData]` |
 | `SubscribeHistoricalBars` | `*Subscription[Bar]` |
+| `SubscribeMarketDepth` | `*Subscription[DepthRow]` |
 | `SetMarketDataType` | `error` |
 
 ## Contract and Reference
@@ -85,12 +86,54 @@ lifecycle semantics, error taxonomy, and type guarantees — see
 | `ScannerParameters` | `string` (XML) |
 | `SubscribeScannerResults` | `*Subscription[[]ScannerResult]` |
 
+## Order Management
+
+| Method | Returns |
+|--------|---------|
+| `PlaceOrder` | `*OrderHandle` |
+| `CancelOrder` | `error` |
+| `GlobalCancel` | `error` |
+
 ## Orders and Executions (observation)
 
 | Method | Returns |
 |--------|---------|
 | `OpenOrdersSnapshot` / `SubscribeOpenOrders` | `[]OpenOrder` / `*Subscription[OpenOrderUpdate]` |
 | `Executions` / `SubscribeExecutions` | `[]ExecutionUpdate` / `*Subscription[ExecutionUpdate]` |
+
+## Fundamental Data
+
+| Method | Returns |
+|--------|---------|
+| `FundamentalData` | `string` (XML) |
+
+## Exercise Options
+
+| Method | Returns |
+|--------|---------|
+| `ExerciseOptions` | `error` |
+
+## FA Configuration
+
+| Method | Returns |
+|--------|---------|
+| `RequestFA` | `string` (XML) |
+| `ReplaceFA` | `error` |
+| `SoftDollarTiers` | `[]SoftDollarTier` |
+
+## WSH Calendar
+
+| Method | Returns |
+|--------|---------|
+| `WSHMetaData` | `string` (JSON) |
+| `WSHEventData` | `string` (JSON) |
+
+## Display Groups
+
+| Method | Returns |
+|--------|---------|
+| `QueryDisplayGroups` | `string` |
+| `SubscribeDisplayGroup` | `*DisplayGroupHandle` |
 
 ## Other
 

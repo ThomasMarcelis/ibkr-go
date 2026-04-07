@@ -1,6 +1,10 @@
 # Roadmap
 
-## v1: full free read-only TWS API surface (landed)
+## Current state
+
+ibkr-go covers the complete Interactive Brokers TWS/Gateway socket protocol.
+All protocol areas below are implemented, tested against live IB Gateway
+server_version 200, and frozen into the public API contract.
 
 ### Bootstrap and session
 
@@ -53,15 +57,6 @@ reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23).
 Open orders snapshot and streaming (all three scopes), executions snapshot
 and streaming, commission reports.
 
-### Cross-cutting
-
-reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
-
-## v2: order management and expanded protocol surface (landed)
-
-v2 adds write operations and several protocol areas that require paid
-subscriptions or specific account configurations.
-
 ### Order management
 
 PlaceOrder (msg 3), CancelOrder (msg 4), GlobalCancel (msg 58). OrderHandle
@@ -100,9 +95,15 @@ returning JSON. Requires WSH subscription.
 QueryDisplayGroups (msg 67, inbound 67), SubscribeDisplayGroup (msg 68/70,
 inbound 68), UpdateDisplayGroup (msg 69). TWS window integration.
 
-## Future
+### Cross-cutting
 
-Broader server version testing beyond v200.
+reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
+
+## Ongoing
+
+- Broader server version testing beyond v200.
+- Expanded test coverage and replay scenarios.
+- API ergonomics and documentation improvements.
 
 ## Public API direction
 
