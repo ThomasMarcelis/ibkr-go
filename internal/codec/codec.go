@@ -188,17 +188,17 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 			OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 			ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 			Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
-			Status: status,
+			Status:           status,
 			InitMarginBefore: initMarginBefore, MaintMarginBefore: maintMarginBefore,
 			EquityWithLoanBefore: equityWithLoanBefore,
-			InitMarginChange: initMarginChange, MaintMarginChange: maintMarginChange,
+			InitMarginChange:     initMarginChange, MaintMarginChange: maintMarginChange,
 			EquityWithLoanChange: equityWithLoanChange,
-			InitMarginAfter: initMarginAfter, MaintMarginAfter: maintMarginAfter,
+			InitMarginAfter:      initMarginAfter, MaintMarginAfter: maintMarginAfter,
 			EquityWithLoanAfter: equityWithLoanAfter,
-			Commission: commission, MinCommission: minCommission,
+			Commission:          commission, MinCommission: minCommission,
 			MaxCommission: maxCommission, CommissionCurrency: commissionCurrency,
 			WarningText: warningText,
-			Filled: filled, Remaining: remaining,
+			Filled:      filled, Remaining: remaining,
 		}}, nil
 
 	case InNextValidID: // [9, version, orderID]
@@ -1356,14 +1356,14 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Action)
 		w.WriteString(m.TotalQuantity)
 		w.WriteString(m.OrderType)
-		w.WriteString(m.LmtPrice)  // empty = UNSET
-		w.WriteString(m.AuxPrice)  // empty = UNSET
+		w.WriteString(m.LmtPrice) // empty = UNSET
+		w.WriteString(m.AuxPrice) // empty = UNSET
 		// Extended order fields
 		w.WriteString(m.TIF)
 		w.WriteString(m.OcaGroup)
 		w.WriteString(m.Account)
 		w.WriteString(m.OpenClose)
-		w.WriteString(m.Origin)   // "0" = customer
+		w.WriteString(m.Origin) // "0" = customer
 		w.WriteString(m.OrderRef)
 		w.WriteString(m.Transmit) // "1" = true
 		w.WriteString(m.ParentID) // "0" = no parent
@@ -1375,7 +1375,7 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Hidden)
 		// [BAG combo legs would go here - skipped for non-BAG]
 		// Deprecated + FA + model
-		w.WriteString("")                  // deprecated sharesAllocation
+		w.WriteString("") // deprecated sharesAllocation
 		w.WriteString(m.DiscretionaryAmt)
 		w.WriteString(m.GoodAfterTime)
 		w.WriteString(m.GoodTillDate)
@@ -1393,11 +1393,11 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Rule80A)
 		w.WriteString(m.SettlingFirm)
 		w.WriteString(m.AllOrNone)
-		w.WriteString(m.MinQty)         // empty = UNSET
-		w.WriteString(m.PercentOffset)  // empty = UNSET
-		w.WriteString("0")              // deprecated eTradeOnly
-		w.WriteString("0")              // deprecated firmQuoteOnly
-		w.WriteString("")               // deprecated nbboPriceCap (UNSET=empty)
+		w.WriteString(m.MinQty)        // empty = UNSET
+		w.WriteString(m.PercentOffset) // empty = UNSET
+		w.WriteString("0")             // deprecated eTradeOnly
+		w.WriteString("0")             // deprecated firmQuoteOnly
+		w.WriteString("")              // deprecated nbboPriceCap (UNSET=empty)
 		w.WriteString(m.AuctionStrategy)
 		w.WriteString(m.StartingPrice)
 		w.WriteString(m.StockRefPrice)

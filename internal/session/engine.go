@@ -31,11 +31,11 @@ type Engine struct {
 
 	transport *transport.Conn
 
-	keyed      map[int]*route
-	singletons map[string]*route
-	orders     map[int64]*orderRoute
-	executions   executionCorrelator
-	execToOrder  map[string]int64 // execID → orderID for commission routing to order handles
+	keyed       map[int]*route
+	singletons  map[string]*route
+	orders      map[int64]*orderRoute
+	executions  executionCorrelator
+	execToOrder map[string]int64 // execID → orderID for commission routing to order handles
 
 	nextReqID int
 
@@ -3644,10 +3644,10 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		ParentID:   strconv.FormatInt(req.Order.ParentID, 10),
 		OutsideRTH: boolToString(req.Order.OutsideRTH),
 
-		ExemptCode:                 "-1",
-		GoodAfterTime:              req.Order.GoodAfterTime,
-		GoodTillDate:               req.Order.GoodTillDate,
-		ConditionsCount:            "0",
+		ExemptCode:                  "-1",
+		GoodAfterTime:               req.Order.GoodAfterTime,
+		GoodTillDate:                req.Order.GoodTillDate,
+		ConditionsCount:             "0",
 		DeltaNeutralContractPresent: "0",
 	}
 }
@@ -4726,7 +4726,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) OpenOrder {
 		OrderRef:      m.OrderRef,
 		ClientID:      clientID,
 		PermID:        permID,
-		OutsideRTH:   m.OutsideRTH == "1",
+		OutsideRTH:    m.OutsideRTH == "1",
 		Hidden:        m.Hidden == "1",
 		GoodAfterTime: m.GoodAfterTime,
 	}

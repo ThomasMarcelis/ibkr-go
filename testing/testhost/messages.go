@@ -263,7 +263,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.MarketDepthL2Update{
 			ReqID: asInt(resolve(body["req_id"])), Position: asInt(resolve(body["position"])),
 			MarketMaker: asString(resolve(body["market_maker"])),
-			Operation: asInt(resolve(body["operation"])), Side: asInt(resolve(body["side"])),
+			Operation:   asInt(resolve(body["operation"])), Side: asInt(resolve(body["side"])),
 			Price: asString(resolve(body["price"])), Size: asString(resolve(body["size"])),
 			IsSmartDepth: asBool(resolve(body["is_smart_depth"])),
 		}, nil

@@ -303,7 +303,7 @@ type OpenOrder struct {
 	OrderRef      string
 	ClientID      int
 	PermID        int64
-	OutsideRTH   bool
+	OutsideRTH    bool
 	Hidden        bool
 	GoodAfterTime string
 	ParentID      int64
@@ -364,7 +364,7 @@ type OrderEvent struct {
 }
 
 type Order struct {
-	OrderID       int64       // 0 = auto-allocate
+	OrderID       int64 // 0 = auto-allocate
 	Action        OrderAction
 	OrderType     string // "MKT", "LMT", "STP", etc.
 	Quantity      Decimal
@@ -375,7 +375,7 @@ type Order struct {
 	Transmit      *bool // nil = true (default)
 	ParentID      int64 // 0 = no parent
 	OcaGroup      string
-	OutsideRTH   bool
+	OutsideRTH    bool
 	OrderRef      string
 	GoodAfterTime string
 	GoodTillDate  string
@@ -390,10 +390,10 @@ type PlaceOrderRequest struct {
 // lifecycle state changes (Gap, Resumed) arrive via State(). Close() detaches
 // the handle without cancelling the order. Cancel() sends a cancel request.
 type OrderHandle struct {
-	orderID  int64
-	events   chan OrderEvent
-	state    chan SubscriptionStateEvent
-	done     chan struct{}
+	orderID int64
+	events  chan OrderEvent
+	state   chan SubscriptionStateEvent
+	done    chan struct{}
 
 	closeOnce sync.Once
 	err       error
@@ -412,10 +412,10 @@ func newOrderHandle(orderID int64) *OrderHandle {
 	}
 }
 
-func (h *OrderHandle) OrderID() int64                        { return h.orderID }
-func (h *OrderHandle) Events() <-chan OrderEvent              { return h.events }
-func (h *OrderHandle) State() <-chan SubscriptionStateEvent   { return h.state }
-func (h *OrderHandle) Done() <-chan struct{}                  { return h.done }
+func (h *OrderHandle) OrderID() int64                       { return h.orderID }
+func (h *OrderHandle) Events() <-chan OrderEvent            { return h.events }
+func (h *OrderHandle) State() <-chan SubscriptionStateEvent { return h.state }
+func (h *OrderHandle) Done() <-chan struct{}                { return h.done }
 
 func (h *OrderHandle) Wait() error {
 	<-h.done

@@ -1203,20 +1203,20 @@ type PlaceOrderRequest struct {
 	AuxPrice      string // empty = UNSET
 
 	// Extended order fields
-	TIF            string // "DAY", "GTC", "IOC", "GTD", "OPG", "FOK", "DTC"
-	OcaGroup       string
-	Account        string
-	OpenClose      string
-	Origin         string // "0" = customer
-	OrderRef       string
-	Transmit       string // "0" or "1"
-	ParentID       string // "0" = no parent
-	BlockOrder     string
-	SweepToFill    string
-	DisplaySize    string
-	TriggerMethod  string
+	TIF           string // "DAY", "GTC", "IOC", "GTD", "OPG", "FOK", "DTC"
+	OcaGroup      string
+	Account       string
+	OpenClose     string
+	Origin        string // "0" = customer
+	OrderRef      string
+	Transmit      string // "0" or "1"
+	ParentID      string // "0" = no parent
+	BlockOrder    string
+	SweepToFill   string
+	DisplaySize   string
+	TriggerMethod string
 	OutsideRTH    string
-	Hidden         string
+	Hidden        string
 
 	// FA fields
 	FAGroup      string
@@ -1230,30 +1230,30 @@ type PlaceOrderRequest struct {
 	ExemptCode         string // "-1" default
 
 	// Order type extensions
-	DiscretionaryAmt   string
-	GoodAfterTime      string
-	GoodTillDate       string
-	OcaType            string
-	Rule80A            string
-	SettlingFirm       string
-	AllOrNone          string
-	MinQty             string // empty = UNSET
-	PercentOffset      string // empty = UNSET
-	AuctionStrategy    string
-	StartingPrice      string // empty = UNSET
-	StockRefPrice      string // empty = UNSET
-	Delta              string // empty = UNSET
-	StockRangeLower    string // empty = UNSET
-	StockRangeUpper    string // empty = UNSET
+	DiscretionaryAmt              string
+	GoodAfterTime                 string
+	GoodTillDate                  string
+	OcaType                       string
+	Rule80A                       string
+	SettlingFirm                  string
+	AllOrNone                     string
+	MinQty                        string // empty = UNSET
+	PercentOffset                 string // empty = UNSET
+	AuctionStrategy               string
+	StartingPrice                 string // empty = UNSET
+	StockRefPrice                 string // empty = UNSET
+	Delta                         string // empty = UNSET
+	StockRangeLower               string // empty = UNSET
+	StockRangeUpper               string // empty = UNSET
 	OverridePercentageConstraints string
 
 	// Volatility
-	Volatility              string // empty = UNSET
-	VolatilityType          string // empty = UNSET
-	DeltaNeutralOrderType   string
-	DeltaNeutralAuxPrice    string // empty = UNSET
-	ContinuousUpdate        string
-	ReferencePriceType      string // empty = UNSET
+	Volatility            string // empty = UNSET
+	VolatilityType        string // empty = UNSET
+	DeltaNeutralOrderType string
+	DeltaNeutralAuxPrice  string // empty = UNSET
+	ContinuousUpdate      string
+	ReferencePriceType    string // empty = UNSET
 
 	// Trailing
 	TrailStopPrice  string // empty = UNSET
@@ -1298,9 +1298,9 @@ type PlaceOrderRequest struct {
 	AdjustableTrailingUnit string
 
 	// Ext operator + soft dollar
-	ExtOperator      string
-	SoftDollarName   string
-	SoftDollarValue  string
+	ExtOperator     string
+	SoftDollarName  string
+	SoftDollarValue string
 
 	// Cash, MIFID, flags
 	CashQty                     string // empty = UNSET
