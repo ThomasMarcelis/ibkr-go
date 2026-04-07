@@ -93,12 +93,24 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		size := r.ReadString()
 		return []Message{TickSize{ReqID: reqID, TickType: tickType, Size: size}}, nil
 
-	case InOrderStatus: // [3, orderId, status, filled, remaining, ...]
+	case InOrderStatus: // [3, orderId, status, filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice]
 		orderID, _ := r.ReadInt64()
 		status := r.ReadString()
 		filled := r.ReadString()
 		remaining := r.ReadString()
-		return []Message{OrderStatus{OrderID: orderID, Status: status, Filled: filled, Remaining: remaining}}, nil
+		avgFillPrice := r.ReadString()
+		permID := r.ReadString()
+		parentID := r.ReadString()
+		lastFillPrice := r.ReadString()
+		clientID := r.ReadString()
+		whyHeld := r.ReadString()
+		mktCapPrice := r.ReadString()
+		return []Message{OrderStatus{
+			OrderID: orderID, Status: status, Filled: filled, Remaining: remaining,
+			AvgFillPrice: avgFillPrice, PermID: permID, ParentID: parentID,
+			LastFillPrice: lastFillPrice, ClientID: clientID,
+			WhyHeld: whyHeld, MktCapPrice: mktCapPrice,
+		}}, nil
 
 	case InErrMsg: // [4, reqId, code, message, advancedJson, errorTimeMs]
 		reqID, _ := r.ReadInt()
@@ -109,36 +121,84 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
 
 	case InOpenOrder:
-		// v200 wire layout verified against live IB Gateway capture (server_version 200).
-		// Field positions (0-indexed from after msg_id):
-		//   [0]     orderID
-		//   [1..11] contract (11-field server→client block)
-		//   [12]    action
-		//   [13]    totalQty
-		//   [14]    orderType
-		//   [15..18] lmtPrice, auxPrice, tif, ocaGroup
-		//   [19]    account
-		//   [20..90] 71 order detail fields (permId, FA params, algo, etc.)
-		//   [91]    OrderState.status
-		//   [92..159] 68 margin/state fields
-		//   [160]   filled   (trailing order-status section)
-		//   [161]   remaining
-		orderID, _ := r.ReadInt64()
-		contract := readWireContract(r)
-		action := r.ReadString()
-		quantity := r.ReadString()
-		orderType := r.ReadString()
-		r.Skip(4) // lmtPrice, auxPrice, tif, ocaGroup
-		account := r.ReadString()
-		r.Skip(71) // order detail fields through to OrderState
-		status := r.ReadString()
-		r.Skip(68) // margin/state fields through to trailing order-status
-		filled := r.ReadString()
-		remaining := r.ReadString()
+		// v200 wire layout verified against live IB Gateway captures (server_version 200).
+		// 170 total fields (including msg_id). After msg_id: 169 fields at r[0]-r[168].
+		// The message has a fixed positional layout for simple orders (no combos,
+		// no algo params). Conditional variable-length sections (comboLegs, algo
+		// params, conditions) all have count=0 in the common case.
+		//
+		// Key anchor positions:
+		//   r[0]      orderID
+		//   r[1..11]  contract (11-field server→client block)
+		//   r[12..18] action, totalQty, orderType, lmtPrice, auxPrice, tif, ocaGroup
+		//   r[19]     account
+		//   r[20..28] openClose, origin, orderRef, clientId, permId,
+		//             outsideRth, hidden, discretionaryAmt, goodAfterTime
+		//   r[29..90] 62 order detail fields (FA, model, rule80A, vol params, etc.)
+		//   r[91]     OrderState.status
+		//   r[92..100] initMarginBefore..equityWithLoanAfter (9 margin fields)
+		//   r[101..105] commission..warningText (5 fields, may include empty prefix)
+		//   r[106..159] remaining OrderState and post-status fields
+		//   r[160..168] trailing order-status block (filled, remaining, + 7 more)
+		orderID, _ := r.ReadInt64()     // r[0]
+		contract := readWireContract(r) // r[1..11]
+		action := r.ReadString()        // r[12]
+		quantity := r.ReadString()      // r[13]
+		orderType := r.ReadString()     // r[14]
+		lmtPrice := r.ReadString()      // r[15]
+		auxPrice := r.ReadString()      // r[16]
+		tif := r.ReadString()           // r[17]
+		ocaGroup := r.ReadString()      // r[18]
+		account := r.ReadString()       // r[19]
+		openClose := r.ReadString()     // r[20]
+		origin := r.ReadString()        // r[21]
+		orderRef := r.ReadString()      // r[22]
+		clientID := r.ReadString()      // r[23]
+		permID := r.ReadString()        // r[24]
+		outsideRTH := r.ReadString()    // r[25]
+		hidden := r.ReadString()        // r[26]
+		discretionAmt := r.ReadString() // r[27]
+		goodAfterTime := r.ReadString() // r[28]
+		r.Skip(62)                      // r[29..90]: FA params, order details, vol params, combos, scale, algo, etc.
+		status := r.ReadString()        // r[91]
+		// OrderState section: margin fields and commission.
+		initMarginBefore := r.ReadString()     // r[92]
+		maintMarginBefore := r.ReadString()    // r[93]
+		equityWithLoanBefore := r.ReadString() // r[94]
+		initMarginChange := r.ReadString()     // r[95]
+		maintMarginChange := r.ReadString()    // r[96]
+		equityWithLoanChange := r.ReadString() // r[97]
+		initMarginAfter := r.ReadString()      // r[98]
+		maintMarginAfter := r.ReadString()     // r[99]
+		equityWithLoanAfter := r.ReadString()  // r[100]
+		commission := r.ReadString()           // r[101]
+		minCommission := r.ReadString()        // r[102]
+		maxCommission := r.ReadString()        // r[103]
+		commissionCurrency := r.ReadString()   // r[104]
+		warningText := r.ReadString()          // r[105]
+		r.Skip(54)                             // r[106..159]: remaining state/post-status fields
+		filled := r.ReadString()               // r[160]
+		remaining := r.ReadString()            // r[161]
+		// r[162..168]: lastFillPrice, permId, parentId, lastLiquidity, whyHeld, mktCapPrice, trailing
 		return []Message{OpenOrder{
-			OrderID: orderID, Account: account, Contract: contract,
-			Action: action, OrderType: orderType,
-			Status: status, Quantity: quantity, Filled: filled, Remaining: remaining,
+			OrderID: orderID, Contract: contract,
+			Action: action, Quantity: quantity, OrderType: orderType,
+			LmtPrice: lmtPrice, AuxPrice: auxPrice, TIF: tif,
+			OcaGroup: ocaGroup, Account: account,
+			OpenClose: openClose, Origin: origin, OrderRef: orderRef,
+			ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
+			Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
+			Status: status,
+			InitMarginBefore: initMarginBefore, MaintMarginBefore: maintMarginBefore,
+			EquityWithLoanBefore: equityWithLoanBefore,
+			InitMarginChange: initMarginChange, MaintMarginChange: maintMarginChange,
+			EquityWithLoanChange: equityWithLoanChange,
+			InitMarginAfter: initMarginAfter, MaintMarginAfter: maintMarginAfter,
+			EquityWithLoanAfter: equityWithLoanAfter,
+			Commission: commission, MinCommission: minCommission,
+			MaxCommission: maxCommission, CommissionCurrency: commissionCurrency,
+			WarningText: warningText,
+			Filled: filled, Remaining: remaining,
 		}}, nil
 
 	case InNextValidID: // [9, version, orderID]
@@ -191,7 +251,8 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		//   right, multiplier, exchange, localSymbol, tradingClass,
 		//   execID, time, account, exchange(exec), side, shares, price, ...]
 		reqID, _ := r.ReadInt()
-		r.Skip(2) // orderId, conID
+		orderID, _ := r.ReadInt64()
+		r.Skip(1) // conID
 		symbol := r.ReadString()
 		r.Skip(8) // secType, expiry, strike, right, multiplier, exchange, localSymbol, tradingClass
 		execID := r.ReadString()
@@ -201,7 +262,29 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		side := r.ReadString()
 		shares := r.ReadString()
 		price := r.ReadString()
-		return []Message{ExecutionDetail{ReqID: reqID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}}, nil
+		return []Message{ExecutionDetail{ReqID: reqID, OrderID: orderID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}}, nil
+
+	case InMarketDepth: // [12, version, reqID, position, operation, side, price, size]
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		position, _ := r.ReadInt()
+		operation, _ := r.ReadInt()
+		side, _ := r.ReadInt()
+		price := r.ReadString()
+		size := r.ReadString()
+		return []Message{MarketDepthUpdate{ReqID: reqID, Position: position, Operation: operation, Side: side, Price: price, Size: size}}, nil
+
+	case InMarketDepthL2: // [13, version, reqID, position, marketMaker, operation, side, price, size, isSmartDepth]
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		position, _ := r.ReadInt()
+		marketMaker := r.ReadString()
+		operation, _ := r.ReadInt()
+		side, _ := r.ReadInt()
+		price := r.ReadString()
+		size := r.ReadString()
+		isSmartDepth, _ := r.ReadBool()
+		return []Message{MarketDepthL2Update{ReqID: reqID, Position: position, MarketMaker: marketMaker, Operation: operation, Side: side, Price: price, Size: size, IsSmartDepth: isSmartDepth}}, nil
 
 	case InManagedAccounts: // [15, version, accountsList]
 		r.Skip(1)
@@ -317,6 +400,12 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 			Close: r.ReadString(), Volume: r.ReadString(),
 			WAP: r.ReadString(), Count: r.ReadString(),
 		}}, nil
+
+	case InFundamentalData: // [51, version, reqID, data]
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		data := r.ReadString()
+		return []Message{FundamentalDataResponse{ReqID: reqID, Data: data}}, nil
 
 	case InContractDataEnd: // [52, version, reqID]
 		r.Skip(1)
@@ -790,6 +879,49 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 			WAP: r.ReadString(), Count: r.ReadString(),
 		}}, nil
 
+	case InReceiveFA: // [16, version, faDataType, xml]
+		r.Skip(1) // version
+		faDataType, _ := r.ReadInt()
+		xml := r.ReadString()
+		return []Message{ReceiveFA{FADataType: faDataType, XML: xml}}, nil
+
+	case InSoftDollarTiers: // [77, reqId, count, (name, value, displayName) * count]
+		reqID, _ := r.ReadInt()
+		count, err := r.ReadCount("soft dollar tier count")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("soft dollar tiers", count, 3, 0); err != nil {
+			return nil, err
+		}
+		tiers := make([]SoftDollarTier, count)
+		for i := range tiers {
+			tiers[i] = SoftDollarTier{Name: r.ReadString(), Value: r.ReadString(), DisplayName: r.ReadString()}
+		}
+		return []Message{SoftDollarTiersResponse{ReqID: reqID, Tiers: tiers}}, nil
+
+	case InWSHMetaData: // [105, reqId, dataJson]
+		reqID, _ := r.ReadInt()
+		dataJSON := r.ReadString()
+		return []Message{WSHMetaDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
+
+	case InWSHEventData: // [106, reqId, dataJson]
+		reqID, _ := r.ReadInt()
+		dataJSON := r.ReadString()
+		return []Message{WSHEventDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
+
+	case InDisplayGroupList: // [67, version, reqId, groups]
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		groups := r.ReadString()
+		return []Message{DisplayGroupList{ReqID: reqID, Groups: groups}}, nil
+
+	case InDisplayGroupUpdated: // [68, version, reqId, contractInfo]
+		r.Skip(1) // version
+		reqID, _ := r.ReadInt()
+		contractInfo := r.ReadString()
+		return []Message{DisplayGroupUpdated{ReqID: reqID, ContractInfo: contractInfo}}, nil
+
 	default:
 		return nil, fmt.Errorf("codec: unknown msg_id %d", msgID)
 	}
@@ -882,6 +1014,65 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case CancelRealTimeBars:
 		return []string{itoa(OutCancelRealTimeBars), "1", itoa(m.ReqID)}, nil
+
+	case MarketDepthRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqMktDepth)
+		w.WriteInt(5) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		writeWireContract(&w, m.Contract)
+		w.WriteInt(m.NumRows)
+		w.WriteBool(m.IsSmartDepth)
+		w.WriteString("") // mktDepthOptions
+		return w.Fields(), nil
+
+	case CancelMarketDepth:
+		return []string{itoa(OutCancelMktDepth), "1", itoa(m.ReqID)}, nil
+
+	case FundamentalDataRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqFundamentalData)
+		w.WriteInt(2) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		w.WriteString(m.Contract.Symbol)
+		w.WriteString(m.Contract.SecType)
+		w.WriteString(m.Contract.Exchange)
+		w.WriteString(m.Contract.PrimaryExchange)
+		w.WriteString(m.Contract.Currency)
+		w.WriteString(m.Contract.LocalSymbol)
+		w.WriteString(m.ReportType)
+		return w.Fields(), nil
+
+	case CancelFundamentalData:
+		return []string{itoa(OutCancelFundamentalData), "1", itoa(m.ReqID)}, nil
+
+	case ExerciseOptionsRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutExerciseOptions)
+		w.WriteInt(2) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Contract.ConID)
+		w.WriteString(m.Contract.Symbol)
+		w.WriteString(m.Contract.SecType)
+		w.WriteString(m.Contract.Expiry)
+		if m.Contract.Strike == "" {
+			w.WriteString("0")
+		} else {
+			w.WriteString(m.Contract.Strike)
+		}
+		w.WriteString(m.Contract.Right)
+		w.WriteString(m.Contract.Multiplier)
+		w.WriteString(m.Contract.Exchange)
+		w.WriteString(m.Contract.Currency)
+		w.WriteString(m.Contract.LocalSymbol)
+		w.WriteString(m.Contract.TradingClass)
+		w.WriteInt(m.ExerciseAction)
+		w.WriteInt(m.ExerciseQuantity)
+		w.WriteString(m.Account)
+		w.WriteInt(m.Override)
+		return w.Fields(), nil
 
 	case OpenOrdersRequest:
 		switch m.Scope {
@@ -1095,6 +1286,208 @@ func encodeFields(msg Message) ([]string, error) {
 	case CancelNewsBulletins:
 		return []string{itoa(OutCancelNewsBulletins), "1"}, nil
 
+	case RequestFA:
+		return []string{itoa(OutRequestFA), "1", itoa(m.FADataType)}, nil
+
+	case ReplaceFA:
+		return []string{itoa(OutReplaceFA), "1", itoa(m.FADataType), strings.ReplaceAll(m.XML, "\n", "")}, nil
+
+	case SoftDollarTiersRequest:
+		return []string{itoa(OutReqSoftDollarTiers), itoa(m.ReqID)}, nil
+
+	case WSHMetaDataRequest:
+		return []string{itoa(OutReqWSHMetaData), itoa(m.ReqID)}, nil
+
+	case CancelWSHMetaData:
+		return []string{itoa(OutCancelWSHMetaData), itoa(m.ReqID)}, nil
+
+	case WSHEventDataRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutReqWSHEventData)
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.ConID)
+		w.WriteString(m.Filter)
+		w.WriteBool(m.FillWatchlist)
+		w.WriteBool(m.FillPortfolio)
+		w.WriteBool(m.FillCompetitors)
+		w.WriteString(m.StartDate)
+		w.WriteString(m.EndDate)
+		w.WriteInt(m.TotalLimit)
+		return w.Fields(), nil
+
+	case CancelWSHEventData:
+		return []string{itoa(OutCancelWSHEventData), itoa(m.ReqID)}, nil
+
+	case QueryDisplayGroupsRequest:
+		return []string{itoa(OutQueryDisplayGroups), "1", itoa(m.ReqID)}, nil
+
+	case SubscribeToGroupEventsRequest:
+		return []string{itoa(OutSubscribeToGroupEvents), "1", itoa(m.ReqID), itoa(m.GroupID)}, nil
+
+	case UpdateDisplayGroupRequest:
+		return []string{itoa(OutUpdateDisplayGroup), "1", itoa(m.ReqID), m.ContractInfo}, nil
+
+	case UnsubscribeFromGroupEventsRequest:
+		return []string{itoa(OutUnsubscribeFromGroupEvents), "1", itoa(m.ReqID)}, nil
+
+	case PlaceOrderRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutPlaceOrder)
+		// No version field at sv >= 145
+		w.WriteInt64(m.OrderID)
+		// Contract: 14 fields (conId, symbol, secType, lastTradeDate, strike, right,
+		// multiplier, exchange, primaryExchange, currency, localSymbol, tradingClass,
+		// secIdType, secId)
+		w.WriteInt(m.Contract.ConID)
+		w.WriteString(m.Contract.Symbol)
+		w.WriteString(m.Contract.SecType)
+		w.WriteString(m.Contract.Expiry)
+		w.WriteString(m.Contract.Strike)
+		w.WriteString(m.Contract.Right)
+		w.WriteString(m.Contract.Multiplier)
+		w.WriteString(m.Contract.Exchange)
+		w.WriteString(m.Contract.PrimaryExchange)
+		w.WriteString(m.Contract.Currency)
+		w.WriteString(m.Contract.LocalSymbol)
+		w.WriteString(m.Contract.TradingClass)
+		w.WriteString("") // secIdType
+		w.WriteString("") // secId
+		// Main order fields
+		w.WriteString(m.Action)
+		w.WriteString(m.TotalQuantity)
+		w.WriteString(m.OrderType)
+		w.WriteString(m.LmtPrice)  // empty = UNSET
+		w.WriteString(m.AuxPrice)  // empty = UNSET
+		// Extended order fields
+		w.WriteString(m.TIF)
+		w.WriteString(m.OcaGroup)
+		w.WriteString(m.Account)
+		w.WriteString(m.OpenClose)
+		w.WriteString(m.Origin)   // "0" = customer
+		w.WriteString(m.OrderRef)
+		w.WriteString(m.Transmit) // "1" = true
+		w.WriteString(m.ParentID) // "0" = no parent
+		w.WriteString(m.BlockOrder)
+		w.WriteString(m.SweepToFill)
+		w.WriteString(m.DisplaySize)
+		w.WriteString(m.TriggerMethod)
+		w.WriteString(m.OutsideRTH)
+		w.WriteString(m.Hidden)
+		// [BAG combo legs would go here - skipped for non-BAG]
+		// Deprecated + FA + model
+		w.WriteString("")                  // deprecated sharesAllocation
+		w.WriteString(m.DiscretionaryAmt)
+		w.WriteString(m.GoodAfterTime)
+		w.WriteString(m.GoodTillDate)
+		w.WriteString(m.FAGroup)
+		w.WriteString(m.FAMethod)
+		w.WriteString(m.FAPercentage)
+		// sv >= 177: no deprecated faProfile
+		w.WriteString(m.ModelCode)
+		// Short sale
+		w.WriteString(m.ShortSaleSlot)
+		w.WriteString(m.DesignatedLocation)
+		w.WriteString(m.ExemptCode) // "-1" default
+		// Order type extensions
+		w.WriteString(m.OcaType)
+		w.WriteString(m.Rule80A)
+		w.WriteString(m.SettlingFirm)
+		w.WriteString(m.AllOrNone)
+		w.WriteString(m.MinQty)         // empty = UNSET
+		w.WriteString(m.PercentOffset)  // empty = UNSET
+		w.WriteString("0")              // deprecated eTradeOnly
+		w.WriteString("0")              // deprecated firmQuoteOnly
+		w.WriteString("")               // deprecated nbboPriceCap (UNSET=empty)
+		w.WriteString(m.AuctionStrategy)
+		w.WriteString(m.StartingPrice)
+		w.WriteString(m.StockRefPrice)
+		w.WriteString(m.Delta)
+		w.WriteString(m.StockRangeLower)
+		w.WriteString(m.StockRangeUpper)
+		w.WriteString(m.OverridePercentageConstraints)
+		// Volatility
+		w.WriteString(m.Volatility)
+		w.WriteString(m.VolatilityType)
+		w.WriteString(m.DeltaNeutralOrderType)
+		w.WriteString(m.DeltaNeutralAuxPrice)
+		// [deltaNeutralOrderType="" => skip extended delta neutral fields]
+		w.WriteString(m.ContinuousUpdate)
+		w.WriteString(m.ReferencePriceType)
+		// Trailing
+		w.WriteString(m.TrailStopPrice)
+		w.WriteString(m.TrailingPercent)
+		// Scale
+		w.WriteString(m.ScaleInitLevelSize)
+		w.WriteString(m.ScaleSubsLevelSize)
+		w.WriteString(m.ScalePriceIncrement)
+		// [scalePriceIncrement empty/unset => skip scale3 extended]
+		w.WriteString(m.ScaleTable)
+		w.WriteString(m.ActiveStartTime)
+		w.WriteString(m.ActiveStopTime)
+		// Hedge
+		w.WriteString(m.HedgeType)
+		// [hedgeType="" => skip hedgeParam]
+		// Misc
+		w.WriteString(m.OptOutSmartRouting)
+		w.WriteString(m.ClearingAccount)
+		w.WriteString(m.ClearingIntent)
+		w.WriteString(m.NotHeld)
+		w.WriteString(m.DeltaNeutralContractPresent)
+		// [DeltaNeutralContractPresent="0" => skip DNC fields]
+		w.WriteString(m.AlgoStrategy)
+		// [AlgoStrategy="" => skip algo params]
+		w.WriteString(m.AlgoID)
+		w.WriteString(m.WhatIf)
+		w.WriteString(m.OrderMiscOptions)
+		w.WriteString(m.Solicited)
+		w.WriteString(m.RandomizeSize)
+		w.WriteString(m.RandomizePrice)
+		// [OrderType != "PEG BENCH" => skip peg bench fields]
+		w.WriteString(m.ConditionsCount)
+		// [ConditionsCount="0" => skip condition details]
+		w.WriteString(m.AdjustedOrderType)
+		w.WriteString(m.TriggerPrice)
+		w.WriteString(m.LmtPriceOffset)
+		w.WriteString(m.AdjustedStopPrice)
+		w.WriteString(m.AdjustedStopLimitPrice)
+		w.WriteString(m.AdjustedTrailingAmount)
+		w.WriteString(m.AdjustableTrailingUnit)
+		w.WriteString(m.ExtOperator)
+		w.WriteString(m.SoftDollarName)
+		w.WriteString(m.SoftDollarValue)
+		w.WriteString(m.CashQty)
+		w.WriteString(m.Mifid2DecisionMaker)
+		w.WriteString(m.Mifid2DecisionAlgo)
+		w.WriteString(m.Mifid2ExecutionTrader)
+		w.WriteString(m.Mifid2ExecutionAlgo)
+		w.WriteString(m.DontUseAutoPriceForHedge)
+		w.WriteString(m.IsOmsContainer)
+		w.WriteString(m.DiscretionaryUpToLimitPrice)
+		w.WriteString(m.UsePriceMgmtAlgo)
+		w.WriteString(m.Duration)
+		w.WriteString(m.PostToAts)
+		w.WriteString(m.AutoCancelParent)
+		w.WriteString(m.AdvancedErrorOverride)
+		w.WriteString(m.ManualOrderTime)
+		// [Exchange != IBKRATS, OrderType != PEG BEST/MID => skip peg offsets]
+		w.WriteString(m.CustomerAccount)
+		w.WriteString(m.ProfessionalCustomer)
+		// [sv >= 190 => no RFQ fields]
+		w.WriteString(m.IncludeOvernight)
+		w.WriteString(m.ManualOrderIndicator)
+		w.WriteString(m.ImbalanceOnly)
+		return w.Fields(), nil
+
+	case CancelOrderRequest:
+		w := fieldWriter{}
+		w.WriteInt(OutCancelOrder)
+		w.WriteInt64(m.OrderID)
+		w.WriteString(m.ManualOrderCancelTime)
+		return w.Fields(), nil
+
+	case GlobalCancelRequest:
+		return []string{itoa(OutReqGlobalCancel), "1"}, nil
+
 	// Server -> client (testhost)
 
 	case ManagedAccounts:
@@ -1190,7 +1583,7 @@ func encodeFields(msg Message) ([]string, error) {
 	case OpenOrder:
 		// Encode in the v200 wire layout. The decoder reads fields at fixed
 		// positions verified against live captures, so the encoder must pad
-		// intermediate fields to keep positions aligned.
+		// intermediate fields to keep positions aligned. Total: msg_id + 169 fields.
 		w := fieldWriter{}
 		w.WriteInt(InOpenOrder)
 		w.WriteInt64(m.OrderID)           // r[0]
@@ -1198,19 +1591,46 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Action)           // r[12]
 		w.WriteString(m.Quantity)         // r[13]
 		w.WriteString(m.OrderType)        // r[14]
-		for range 4 {                     // r[15..18] lmtPrice, auxPrice, tif, ocaGroup
+		w.WriteString(m.LmtPrice)         // r[15]
+		w.WriteString(m.AuxPrice)         // r[16]
+		w.WriteString(m.TIF)              // r[17]
+		w.WriteString(m.OcaGroup)         // r[18]
+		w.WriteString(m.Account)          // r[19]
+		w.WriteString(m.OpenClose)        // r[20]
+		w.WriteString(m.Origin)           // r[21]
+		w.WriteString(m.OrderRef)         // r[22]
+		w.WriteString(m.ClientID)         // r[23]
+		w.WriteString(m.PermID)           // r[24]
+		w.WriteString(m.OutsideRTH)       // r[25]
+		w.WriteString(m.Hidden)           // r[26]
+		w.WriteString(m.DiscretionAmt)    // r[27]
+		w.WriteString(m.GoodAfterTime)    // r[28]
+		for range 62 {                    // r[29..90] order detail padding
 			w.WriteString("")
 		}
-		w.WriteString(m.Account) // r[19]
-		for range 71 {           // r[20..90] order detail padding
-			w.WriteString("")
-		}
-		w.WriteString(m.Status) // r[91]
-		for range 68 {          // r[92..159] margin/state padding
+		w.WriteString(m.Status)               // r[91]
+		w.WriteString(m.InitMarginBefore)     // r[92]
+		w.WriteString(m.MaintMarginBefore)    // r[93]
+		w.WriteString(m.EquityWithLoanBefore) // r[94]
+		w.WriteString(m.InitMarginChange)     // r[95]
+		w.WriteString(m.MaintMarginChange)    // r[96]
+		w.WriteString(m.EquityWithLoanChange) // r[97]
+		w.WriteString(m.InitMarginAfter)      // r[98]
+		w.WriteString(m.MaintMarginAfter)     // r[99]
+		w.WriteString(m.EquityWithLoanAfter)  // r[100]
+		w.WriteString(m.Commission)           // r[101]
+		w.WriteString(m.MinCommission)        // r[102]
+		w.WriteString(m.MaxCommission)        // r[103]
+		w.WriteString(m.CommissionCurrency)   // r[104]
+		w.WriteString(m.WarningText)          // r[105]
+		for range 54 {                        // r[106..159] post-commission padding
 			w.WriteString("")
 		}
 		w.WriteString(m.Filled)    // r[160]
 		w.WriteString(m.Remaining) // r[161]
+		for range 7 {              // r[162..168] trailing status padding
+			w.WriteString("")
+		}
 		return w.Fields(), nil
 
 	case OrderStatus:
@@ -1220,6 +1640,13 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Status)
 		w.WriteString(m.Filled)
 		w.WriteString(m.Remaining)
+		w.WriteString(m.AvgFillPrice)
+		w.WriteString(m.PermID)
+		w.WriteString(m.ParentID)
+		w.WriteString(m.LastFillPrice)
+		w.WriteString(m.ClientID)
+		w.WriteString(m.WhyHeld)
+		w.WriteString(m.MktCapPrice)
 		return w.Fields(), nil
 
 	case OpenOrderEnd:
@@ -1228,7 +1655,7 @@ func encodeFields(msg Message) ([]string, error) {
 	case ExecutionDetail:
 		return []string{
 			itoa(InExecutionData), itoa(m.ReqID),
-			"0", "0",
+			i64toa(m.OrderID), "0",
 			m.Symbol, "", "", "", "", "", "", "", "",
 			m.ExecID, m.Time, m.Account,
 			"",
@@ -1609,6 +2036,53 @@ func encodeFields(msg Message) ([]string, error) {
 			w.WriteString(e.LegsStr)
 		}
 		return w.Fields(), nil
+
+	case ReceiveFA:
+		return []string{itoa(InReceiveFA), "1", itoa(m.FADataType), m.XML}, nil
+
+	case SoftDollarTiersResponse:
+		w := fieldWriter{}
+		w.WriteInt(InSoftDollarTiers)
+		w.WriteInt(m.ReqID)
+		w.WriteInt(len(m.Tiers))
+		for _, t := range m.Tiers {
+			w.WriteString(t.Name)
+			w.WriteString(t.Value)
+			w.WriteString(t.DisplayName)
+		}
+		return w.Fields(), nil
+
+	case WSHMetaDataResponse:
+		return []string{itoa(InWSHMetaData), itoa(m.ReqID), m.DataJSON}, nil
+
+	case WSHEventDataResponse:
+		return []string{itoa(InWSHEventData), itoa(m.ReqID), m.DataJSON}, nil
+
+	case DisplayGroupList:
+		return []string{itoa(InDisplayGroupList), "1", itoa(m.ReqID), m.Groups}, nil
+
+	case DisplayGroupUpdated:
+		return []string{itoa(InDisplayGroupUpdated), "1", itoa(m.ReqID), m.ContractInfo}, nil
+
+	case MarketDepthUpdate:
+		return []string{itoa(InMarketDepth), "6", itoa(m.ReqID), itoa(m.Position), itoa(m.Operation), itoa(m.Side), m.Price, m.Size}, nil
+
+	case MarketDepthL2Update:
+		w := fieldWriter{}
+		w.WriteInt(InMarketDepthL2)
+		w.WriteInt(6) // version
+		w.WriteInt(m.ReqID)
+		w.WriteInt(m.Position)
+		w.WriteString(m.MarketMaker)
+		w.WriteInt(m.Operation)
+		w.WriteInt(m.Side)
+		w.WriteString(m.Price)
+		w.WriteString(m.Size)
+		w.WriteBool(m.IsSmartDepth)
+		return w.Fields(), nil
+
+	case FundamentalDataResponse:
+		return []string{itoa(InFundamentalData), "1", itoa(m.ReqID), m.Data}, nil
 
 	case HistoricalDataUpdate:
 		w := fieldWriter{}

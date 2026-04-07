@@ -1582,6 +1582,264 @@ func TestSubscribeScannerResults(t *testing.T) {
 	}
 }
 
+func TestPlaceOrderLimit(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "place_order_limit.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: "LMT",
+			Quantity:  ibkr.MustParseDecimal("1"),
+			LmtPrice:  ibkr.MustParseDecimal("150"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	if handle.OrderID() != 1 {
+		t.Fatalf("OrderID = %d, want 1", handle.OrderID())
+	}
+
+	// Collect events until the handle is done (Filled is terminal).
+	var events []ibkr.OrderEvent
+	for {
+		select {
+		case evt := <-handle.Events():
+			events = append(events, evt)
+		case <-handle.Done():
+			goto collected
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for order events")
+		}
+	}
+collected:
+
+	if len(events) < 2 {
+		t.Fatalf("got %d events, want at least 2", len(events))
+	}
+
+	// Verify terminal status is Filled.
+	var lastStatus string
+	for _, evt := range events {
+		if evt.Status != nil {
+			lastStatus = evt.Status.Status
+		}
+	}
+	if lastStatus != "Filled" {
+		t.Fatalf("last status = %q, want Filled", lastStatus)
+	}
+
+	// Verify the fill price was parsed.
+	for _, evt := range events {
+		if evt.Status != nil && evt.Status.Status == "Filled" {
+			if evt.Status.AvgFillPrice.String() != "149.5" {
+				t.Fatalf("avg fill price = %s, want 149.5", evt.Status.AvgFillPrice.String())
+			}
+		}
+	}
+
+	// Handle should be done after terminal status.
+	select {
+	case <-handle.Done():
+	default:
+		t.Fatal("handle not done after Filled")
+	}
+
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
+}
+
+func TestPlaceOrderWithExecution(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "place_order_fill_with_execution.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: "LMT",
+			Quantity:  ibkr.MustParseDecimal("1"),
+			LmtPrice:  ibkr.MustParseDecimal("150"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	var sawOpenOrder, sawFilled, sawExecution, sawCommission bool
+	checkEvent := func(evt ibkr.OrderEvent) {
+		if evt.OpenOrder != nil {
+			sawOpenOrder = true
+		}
+		if evt.Status != nil && evt.Status.Status == "Filled" {
+			sawFilled = true
+		}
+		if evt.Execution != nil {
+			sawExecution = true
+			if evt.Execution.Price.String() != "149.5" {
+				t.Fatalf("execution price = %s, want 149.5", evt.Execution.Price.String())
+			}
+		}
+		if evt.Commission != nil {
+			sawCommission = true
+			if evt.Commission.Commission.String() != "1" {
+				t.Fatalf("commission = %s, want 1", evt.Commission.Commission.String())
+			}
+		}
+	}
+	for {
+		select {
+		case evt := <-handle.Events():
+			checkEvent(evt)
+		case <-handle.Done():
+			// Drain any remaining buffered events.
+			for {
+				select {
+				case evt := <-handle.Events():
+					checkEvent(evt)
+				default:
+					goto done
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for order events")
+		}
+	}
+done:
+	if !sawOpenOrder {
+		t.Error("never received OpenOrder event")
+	}
+	if !sawFilled {
+		t.Error("never received Filled status")
+	}
+	if !sawExecution {
+		t.Error("never received Execution event")
+	}
+	if !sawCommission {
+		t.Error("never received Commission event")
+	}
+}
+
+func TestCancelOrder(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "cancel_order.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: "LMT",
+			Quantity:  ibkr.MustParseDecimal("1"),
+			LmtPrice:  ibkr.MustParseDecimal("150"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	// Wait for PreSubmitted before sending cancel.
+	preSubmitted := waitForEvent(t, handle.Events())
+	if preSubmitted.Status == nil || preSubmitted.Status.Status != "PreSubmitted" {
+		// Could be the OpenOrder event first; consume until we see PreSubmitted.
+		for preSubmitted.Status == nil || preSubmitted.Status.Status != "PreSubmitted" {
+			preSubmitted = waitForEvent(t, handle.Events())
+		}
+	}
+
+	// Send cancel request (the server already has Cancelled scheduled).
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+
+	// Wait for the Cancelled status.
+	sawCancelled := false
+	for {
+		select {
+		case evt := <-handle.Events():
+			if evt.Status != nil && evt.Status.Status == "Cancelled" {
+				sawCancelled = true
+				goto cancelDone
+			}
+		case <-handle.Done():
+			// Drain any remaining buffered events.
+			for {
+				select {
+				case evt := <-handle.Events():
+					if evt.Status != nil && evt.Status.Status == "Cancelled" {
+						sawCancelled = true
+					}
+				default:
+					goto cancelDone
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for cancel")
+		}
+	}
+cancelDone:
+
+	if !sawCancelled {
+		t.Fatal("never received Cancelled status event")
+	}
+
+	// Handle should be done after terminal status.
+	select {
+	case <-handle.Done():
+	default:
+		t.Fatal("handle not done after Cancelled")
+	}
+
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
+}
+
 func newClient(t *testing.T, script string, opts ...ibkr.Option) (*ibkr.Client, *testhost.Host) {
 	t.Helper()
 

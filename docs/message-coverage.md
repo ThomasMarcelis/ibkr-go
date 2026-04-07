@@ -1,7 +1,8 @@
 # Message Coverage
 
-This matrix tracks the v1 message surface. The codec uses real IBKR integer
-message IDs and field layouts validated against server_version 200 captures.
+This matrix tracks the implemented message surface. The codec uses real IBKR
+integer message IDs and field layouts validated against server_version 200
+captures.
 
 ## Bootstrap
 
@@ -132,6 +133,19 @@ server version and managed-account bootstrap fields are known.
 | out | 57 | cancelCalcOptionPrice | landed |
 | in | 21 | TickOptionComputation | landed |
 
+## Order Management
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 3 | PlaceOrder | landed |
+| out | 4 | CancelOrder | landed |
+| out | 58 | reqGlobalCancel | landed |
+| in | 5 | OpenOrder | landed |
+| in | 3 | OrderStatus | landed |
+
+OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
+singleton open-orders observer.
+
 ## Order and Execution Observation
 
 | Direction | Msg ID | Name | Status |
@@ -174,6 +188,61 @@ server version and managed-account bootstrap fields are known.
 | out | 22 | reqScannerSubscription | landed |
 | out | 23 | cancelScannerSubscription | landed |
 | in | 20 | ScannerData | landed |
+
+## Market Depth (Level 2)
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 10 | reqMktDepth | landed |
+| out | 11 | cancelMktDepth | landed |
+| in | 12 | MarketDepth | landed |
+| in | 13 | MarketDepthL2 | landed |
+
+## Fundamental Data
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 52 | reqFundamentalData | landed |
+| out | 53 | cancelFundamentalData | landed |
+| in | 51 | FundamentalData | landed |
+
+## Exercise Options
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 21 | ExerciseOptions | landed |
+
+## FA Configuration
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 18 | RequestFA | landed |
+| out | 19 | ReplaceFA | landed |
+| in | 16 | ReceiveFA | landed |
+| out | 79 | reqSoftDollarTiers | landed |
+| in | 77 | SoftDollarTiers | landed |
+
+## WSH Calendar
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 100 | reqWSHMetaData | landed |
+| out | 101 | cancelWSHMetaData | landed |
+| in | 105 | WSHMetaData | landed |
+| out | 102 | reqWSHEventData | landed |
+| out | 103 | cancelWSHEventData | landed |
+| in | 106 | WSHEventData | landed |
+
+## Display Groups
+
+| Direction | Msg ID | Name | Status |
+|-----------|--------|------|--------|
+| out | 67 | queryDisplayGroups | landed |
+| out | 68 | subscribeToGroupEvents | landed |
+| out | 69 | updateDisplayGroup | landed |
+| out | 70 | unsubscribeFromGroupEvents | landed |
+| in | 67 | DisplayGroupList | landed |
+| in | 68 | DisplayGroupUpdated | landed |
 
 ## Other
 

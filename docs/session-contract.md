@@ -76,6 +76,38 @@ Default subscription behavior:
 - `SubscribeExecutions` is a finite snapshot flow: after `SnapshotComplete`, it closes with `nil`
 - account summary, positions, and open orders remain open after their initial snapshot boundary until the caller closes them or the session drops
 
+## OrderHandle
+
+```go
+type OrderHandle struct{ /* opaque */ }
+
+func (h *OrderHandle) OrderID() int64
+func (h *OrderHandle) Events() <-chan OrderEvent
+func (h *OrderHandle) State() <-chan SubscriptionStateEvent
+func (h *OrderHandle) Done() <-chan struct{}
+func (h *OrderHandle) Wait() error
+func (h *OrderHandle) Close() error
+func (h *OrderHandle) Cancel(ctx context.Context) error
+func (h *OrderHandle) Modify(ctx context.Context, order Order) error
+```
+
+`PlaceOrder` returns an `OrderHandle` that tracks a single order's lifecycle.
+
+`Events()` delivers `OrderEvent` values. `OrderEvent` is a union: exactly one
+of `OpenOrder`, `Status`, `Execution`, or `Commission` is non-nil per event.
+
+`State()` delivers lifecycle events (Gap on disconnect, Resumed on reconnect).
+
+`Close()` detaches the handle from the engine. The order continues executing
+on the server; the caller simply stops receiving events. This is not a cancel.
+
+`Cancel(ctx)` sends a CancelOrder request for this order.
+
+`Modify(order)` sends a modified PlaceOrder with the same OrderID.
+
+Terminal states: when an OrderStatus arrives with status Filled, Cancelled, or
+Inactive, the handle auto-closes with `nil` error.
+
 ## Managed Accounts
 
 Managed accounts are bootstrap state. They live on `SessionSnapshot` and are
@@ -106,6 +138,8 @@ Public error taxonomy:
 - One-shots complete only on explicit protocol completion markers.
 - Snapshot-style subscriptions surface the initial completion boundary through
   `State()`.
+- Order handles auto-close on terminal OrderStatus (Filled, Cancelled,
+  Inactive).
 - Reconnect boundaries are explicit through `SessionEvent` and
   `SubscriptionStateEvent`, not mixed into business event streams.
 
@@ -117,6 +151,15 @@ This contract is stable.
 
 All methods below are implemented, tested against live IB Gateway
 server_version 200 captures, and frozen into the contract.
+
+### Order management
+
+- `PlaceOrder` — submit a new order, returns an `OrderHandle` that tracks its
+  full lifecycle. Order IDs are auto-allocated from NextValidID.
+- `CancelOrder` — cancel an order by ID (fire-and-forget; result arrives via
+  the OrderHandle's events as an OrderStatus with status Cancelled).
+- `GlobalCancel` — cancel all open orders (fire-and-forget; individual results
+  arrive via active OrderHandle events).
 
 ### Account and portfolio
 
@@ -148,6 +191,9 @@ server_version 200 captures, and frozen into the contract.
 ### Market data
 
 - `SetMarketDataType` — switch to delayed or frozen data (fire-and-forget).
+- `SubscribeMarketDepth` — Level 2 order book depth (keyed subscription with
+  cancel). Receives both L1 depth (IN 12) and L2/SmartDepth (IN 13) updates.
+  Requires paid L2 market data subscription.
 - `SubscribeTickByTick` — individual tick-level data: Last, AllLast, BidAsk,
   MidPoint (keyed subscription with cancel, no snapshot boundary).
 - `SubscribeHistoricalBars` — live-updating historical bars via keepUpToDate
@@ -169,6 +215,15 @@ server_version 200 captures, and frozen into the contract.
 - `CalcOptionPrice` — server-side theoretical price from vol and underlying
   (keyed one-shot).
 
+### Fundamental data
+
+- `FundamentalData` — Reuters fundamental data XML (keyed one-shot with
+  cancel). Requires a subscription.
+
+### Exercise options
+
+- `ExerciseOptions` — option exercise request (fire-and-forget).
+
 ### News
 
 - `NewsProviders` — list available sources (singleton one-shot).
@@ -183,6 +238,27 @@ server_version 200 captures, and frozen into the contract.
 - `ScannerParameters` — XML of all scanner filters (singleton one-shot).
 - `SubscribeScannerResults` — server-side screener results (keyed subscription
   with cancel).
+
+### FA configuration
+
+- `RequestFA` — FA account configuration XML (singleton one-shot).
+- `ReplaceFA` — update FA configuration (fire-and-forget write).
+- `SoftDollarTiers` — available soft dollar tiers (keyed one-shot).
+
+### WSH calendar
+
+- `WSHMetaData` — available WSH event types and filters (keyed one-shot,
+  returns JSON).
+- `WSHEventData` — calendar events matching filter criteria (keyed one-shot,
+  returns JSON).
+
+### Display groups
+
+- `QueryDisplayGroups` — available TWS display groups (keyed one-shot).
+- `SubscribeDisplayGroup` — display group contract changes (keyed subscription
+  with cancel).
+- `UpdateDisplayGroup` — push contract selection to a display group
+  (fire-and-forget targeting an active subscription).
 
 ### Other
 

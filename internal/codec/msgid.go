@@ -4,19 +4,25 @@ package codec
 const (
 	OutReqMktData                  = 1
 	OutCancelMktData               = 2
+	OutPlaceOrder                  = 3
+	OutCancelOrder                 = 4
 	OutReqOpenOrders               = 5
 	OutReqAccountUpdates           = 6
 	OutReqExecutions               = 7
 	OutReqContractData             = 9
+	OutReqMktDepth                 = 10
+	OutCancelMktDepth              = 11
 	OutReqNewsBulletins            = 12
 	OutCancelNewsBulletins         = 13
 	OutReqAutoOpenOrders           = 15
 	OutReqAllOpenOrders            = 16
 	OutReqHistoricalData           = 20
+	OutExerciseOptions             = 21
 	OutReqScannerParameters        = 24
 	OutCancelHistoricalData        = 25
 	OutReqRealTimeBars             = 50
 	OutCancelRealTimeBars          = 51
+	OutReqGlobalCancel             = 58
 	OutReqMarketDataType           = 59
 	OutReqPositions                = 61
 	OutReqAccountSummary           = 62
@@ -40,6 +46,8 @@ const (
 	OutCancelPnLSingle             = 95
 	OutReqScannerSubscription      = 22
 	OutCancelScannerSubscription   = 23
+	OutReqFundamentalData          = 52
+	OutCancelFundamentalData       = 53
 	OutReqCalcImpliedVolatility    = 54
 	OutReqCalcOptionPrice          = 55
 	OutCancelCalcImpliedVolatility = 56
@@ -55,6 +63,17 @@ const (
 	OutCancelTickByTickData        = 98
 	OutReqCompletedOrders          = 99
 	OutReqUserInfo                 = 104
+	OutRequestFA                   = 18
+	OutReplaceFA                   = 19
+	OutReqSoftDollarTiers          = 79
+	OutQueryDisplayGroups          = 67
+	OutSubscribeToGroupEvents      = 68
+	OutUpdateDisplayGroup          = 69
+	OutUnsubscribeFromGroupEvents  = 70
+	OutReqWSHMetaData              = 100
+	OutCancelWSHMetaData           = 101
+	OutReqWSHEventData             = 102
+	OutCancelWSHEventData          = 103
 )
 
 // Inbound message IDs (server → client)
@@ -70,6 +89,8 @@ const (
 	InNextValidID           = 9
 	InContractData          = 10
 	InExecutionData         = 11
+	InMarketDepth           = 12
+	InMarketDepthL2         = 13
 	InNewsBulletins         = 14
 	InManagedAccounts       = 15
 	InHistoricalData        = 17
@@ -80,6 +101,7 @@ const (
 	InTickString            = 46
 	InCurrentTime           = 49
 	InRealTimeBars          = 50
+	InFundamentalData       = 51
 	InContractDataEnd       = 52
 	InOpenOrderEnd          = 53
 	InAccountDownloadEnd    = 54
@@ -117,4 +139,10 @@ const (
 	InHistoricalTicksBidAsk = 97
 	InHistoricalTicksLast   = 98
 	InHistoricalDataUpdate  = 108
+	InReceiveFA             = 16
+	InSoftDollarTiers       = 77
+	InDisplayGroupList      = 67
+	InDisplayGroupUpdated   = 68
+	InWSHMetaData           = 105
+	InWSHEventData          = 106
 )

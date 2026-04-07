@@ -31,11 +31,27 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		{TickGeneric{ReqID: 1, TickType: 49, Value: "0"}, "tick_generic"},
 		{TickString{ReqID: 1, TickType: 45, Value: "1712300400"}, "tick_string"},
 		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3}, "tick_req_params"},
+		{ExecutionDetail{ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345", Symbol: "AAPL", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "execution_detail"},
 		{ExecutionsEnd{ReqID: 1}, "executions_end"},
-		{OpenOrder{OrderID: 42, Account: "DU12345", Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, Action: "BUY", OrderType: "LMT", Status: "Submitted", Quantity: "10", Filled: "2", Remaining: "8"}, "open_order"},
+		{OpenOrder{
+			OrderID: 42, Account: "DU12345",
+			Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+			Action: "BUY", Quantity: "10", OrderType: "LMT",
+			LmtPrice: "150.00", AuxPrice: "0.0", TIF: "DAY",
+			OpenClose: "", Origin: "0", OrderRef: "test-ref",
+			ClientID: "99", PermID: "123456", OutsideRTH: "0",
+			Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
+			Status: "Submitted",
+			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
+			Filled: "2", Remaining: "8",
+		}, "open_order"},
 		{OpenOrderEnd{}, "open_order_end"},
 		{PositionEnd{}, "position_end"},
-		{OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0"}, "order_status"},
+		{OrderStatus{
+			OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0",
+			AvgFillPrice: "150.50", PermID: "123456", ParentID: "0",
+			LastFillPrice: "150.50", ClientID: "99", WhyHeld: "", MktCapPrice: "0",
+		}, "order_status"},
 	}
 
 	for _, tt := range tests {
@@ -267,8 +283,28 @@ func TestDecodeOpenOrderCapture(t *testing.T) {
 	if oo.Account != "DU9000001" {
 		t.Errorf("Account = %q, want DU9000001", oo.Account)
 	}
+	// Newly expanded fields at verified wire positions.
+	if oo.LmtPrice != "1.2" {
+		t.Errorf("LmtPrice = %q, want 1.2", oo.LmtPrice)
+	}
+	if oo.AuxPrice != "0.0" {
+		t.Errorf("AuxPrice = %q, want 0.0", oo.AuxPrice)
+	}
+	if oo.TIF != "GTC" {
+		t.Errorf("TIF = %q, want GTC", oo.TIF)
+	}
+	if oo.Origin != "0" {
+		t.Errorf("Origin = %q, want 0", oo.Origin)
+	}
+	if oo.PermID != "1518189976" {
+		t.Errorf("PermID = %q, want 1518189976", oo.PermID)
+	}
 	if oo.Status != "PreSubmitted" {
 		t.Errorf("Status = %q, want PreSubmitted", oo.Status)
+	}
+	// OrderState margin fields (all UNSET in this capture).
+	if oo.InitMarginBefore != "1.7976931348623157E308" {
+		t.Errorf("InitMarginBefore = %q, want UNSET double", oo.InitMarginBefore)
 	}
 	if oo.Filled != "0" {
 		t.Errorf("Filled = %q, want 0", oo.Filled)

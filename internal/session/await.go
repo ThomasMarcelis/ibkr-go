@@ -68,6 +68,21 @@ func awaitSubscriptionResponse[T any](ctx context.Context, e *Engine, resp <-cha
 	}
 }
 
+// awaitFireAndForget sends a fire-and-forget command through the actor and
+// waits for its result, respecting context cancellation and engine shutdown.
+func awaitFireAndForget(ctx context.Context, e *Engine, fn func() error) error {
+	resp := make(chan error, 1)
+	e.enqueue(func() { resp <- fn() })
+	select {
+	case err := <-resp:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-e.done:
+		return ErrClosed
+	}
+}
+
 func rollbackSubscriptionResponse[T any](e *Engine, resp <-chan T, rollback func(T)) {
 	if rollback == nil {
 		return

@@ -45,6 +45,8 @@ var allInboundMsgIDs = []int{
 	InNextValidID,           // 9
 	InContractData,          // 10
 	InExecutionData,         // 11
+	InMarketDepth,           // 12
+	InMarketDepthL2,         // 13
 	InNewsBulletins,         // 14
 	InManagedAccounts,       // 15
 	InHistoricalData,        // 17
@@ -55,6 +57,7 @@ var allInboundMsgIDs = []int{
 	InTickString,            // 46
 	InCurrentTime,           // 49
 	InRealTimeBars,          // 50
+	InFundamentalData,       // 51
 	InContractDataEnd,       // 52
 	InOpenOrderEnd,          // 53
 	InAccountDownloadEnd,    // 54
@@ -92,6 +95,12 @@ var allInboundMsgIDs = []int{
 	InCompletedOrderEnd,     // 102
 	InUserInfo,              // 103
 	InHistoricalDataUpdate,  // 108
+	InReceiveFA,             // 16
+	InSoftDollarTiers,       // 77
+	InDisplayGroupList,      // 67
+	InDisplayGroupUpdated,   // 68
+	InWSHMetaData,           // 105
+	InWSHEventData,          // 106
 }
 
 // FuzzDecodeBatch proves DecodeBatch never panics on arbitrary byte payloads.
@@ -133,9 +142,10 @@ func FuzzDecodeBatch(f *testing.F) {
 		TickString{ReqID: 1, TickType: 45, Value: "1712300400"},
 		MarketDataType{ReqID: 1, DataType: 3},
 		TickSnapshotEnd{ReqID: 1},
-		OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0"},
+		OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0", AvgFillPrice: "150.50", PermID: "123456", ParentID: "0", LastFillPrice: "150.50", ClientID: "99"},
 		OpenOrderEnd{},
 		PositionEnd{},
+		ExecutionDetail{ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345", Symbol: "AAPL", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"},
 		ExecutionsEnd{ReqID: 1},
 		ContractDetailsEnd{ReqID: 42},
 		CompletedOrderEnd{},
@@ -448,6 +458,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"TickString", InTickString, 4},                        // version, reqID, tickType, value
 		{"CurrentTime", InCurrentTime, 2},                      // version, time
 		{"RealTimeBars", InRealTimeBars, 10},                   // version, reqID, time, O, H, L, C, vol, wap, count
+		{"FundamentalData", InFundamentalData, 3},              // version, reqID, data
 		{"ContractDataEnd", InContractDataEnd, 2},              // version, reqID
 		{"OpenOrderEnd", InOpenOrderEnd, 1},                    // version
 		{"AccountDownloadEnd", InAccountDownloadEnd, 2},        // version, account

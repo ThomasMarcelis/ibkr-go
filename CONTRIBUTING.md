@@ -4,7 +4,7 @@ Contributions are welcome. Read this document first.
 
 ## Scope and direction
 
-`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The v1 target is the **full free read-only TWS API surface** — everything a read-only account can do without paid market data subscriptions. Order writes, Level 2 depth, fundamental data, and the Client Portal Web API are out of v1 scope. See [`docs/roadmap.md`](docs/roadmap.md) for the full charter.
+`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The library covers the full read-only surface plus order management, market depth (Level 2), fundamental data, and option exercise. See [`docs/roadmap.md`](docs/roadmap.md) for the full charter.
 
 ## Development loop
 

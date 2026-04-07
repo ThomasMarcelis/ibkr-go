@@ -89,9 +89,23 @@ type (
 	HistoricalNewsItemResult     = session.HistoricalNewsItem
 	ScannerSubscriptionRequest   = session.ScannerSubscriptionRequest
 	ScannerResult                = session.ScannerResult
+	SoftDollarTier               = session.SoftDollarTier
+	WSHEventDataRequest          = session.WSHEventDataRequest
+	DisplayGroupUpdate           = session.DisplayGroupUpdate
+	MarketDepthRequest           = session.MarketDepthRequest
+	DepthRow                     = session.DepthRow
+	FundamentalDataRequest       = session.FundamentalDataRequest
+	ExerciseOptionsRequest       = session.ExerciseOptionsRequest
 	ConnectError                 = session.ConnectError
 	ProtocolError                = session.ProtocolError
 	APIError                     = session.APIError
+	OrderAction                  = session.OrderAction
+	TimeInForce                  = session.TimeInForce
+	Order                        = session.Order
+	PlaceOrderRequest            = session.PlaceOrderRequest
+	OrderEvent                   = session.OrderEvent
+	OrderStatusUpdate            = session.OrderStatusUpdate
+	OrderHandle                  = session.OrderHandle
 )
 
 const (
@@ -140,6 +154,15 @@ const (
 	OpNewsArticle          = session.OpNewsArticle
 	OpHistoricalNews       = session.OpHistoricalNews
 	OpScannerSubscription  = session.OpScannerSubscription
+	OpFAConfig             = session.OpFAConfig
+	OpSoftDollarTiers      = session.OpSoftDollarTiers
+	OpWSHMetaData          = session.OpWSHMetaData
+	OpWSHEventData         = session.OpWSHEventData
+	OpDisplayGroups        = session.OpDisplayGroups
+	OpDisplayGroupEvents   = session.OpDisplayGroupEvents
+	OpMarketDepth          = session.OpMarketDepth
+	OpFundamentalData      = session.OpFundamentalData
+	OpExerciseOptions      = session.OpExerciseOptions
 
 	ResumeNever = session.ResumeNever
 	ResumeAuto  = session.ResumeAuto
@@ -168,6 +191,21 @@ const (
 	QuoteFieldLow            = session.QuoteFieldLow
 	QuoteFieldClose          = session.QuoteFieldClose
 	QuoteFieldMarketDataType = session.QuoteFieldMarketDataType
+
+	Buy  = session.Buy
+	Sell = session.Sell
+
+	TIFDay = session.TIFDay
+	TIFGTC = session.TIFGTC
+	TIFIOC = session.TIFIOC
+	TIFGTD = session.TIFGTD
+	TIFOPG = session.TIFOPG
+	TIFFOK = session.TIFFOK
+	TIFDTC = session.TIFDTC
+
+	OpPlaceOrder   = session.OpPlaceOrder
+	OpCancelOrder  = session.OpCancelOrder
+	OpGlobalCancel = session.OpGlobalCancel
 )
 
 var (
@@ -269,6 +307,10 @@ func (c *Client) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 
 func (c *Client) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequest, opts ...SubscriptionOption) (*Subscription[Bar], error) {
 	return c.engine.SubscribeRealTimeBars(ctx, req, opts...)
+}
+
+func (c *Client) SubscribeMarketDepth(ctx context.Context, req MarketDepthRequest, opts ...SubscriptionOption) (*Subscription[DepthRow], error) {
+	return c.engine.SubscribeMarketDepth(ctx, req, opts...)
 }
 
 func (c *Client) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) ([]OpenOrder, error) {
@@ -401,4 +443,56 @@ func (c *Client) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 
 func (c *Client) SubscribeScannerResults(ctx context.Context, req ScannerSubscriptionRequest, opts ...SubscriptionOption) (*Subscription[[]ScannerResult], error) {
 	return c.engine.SubscribeScannerResults(ctx, req, opts...)
+}
+
+func (c *Client) FundamentalData(ctx context.Context, req FundamentalDataRequest) (string, error) {
+	return c.engine.FundamentalData(ctx, req)
+}
+
+func (c *Client) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
+	return c.engine.ExerciseOptions(ctx, req)
+}
+
+func (c *Client) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
+	return c.engine.PlaceOrder(ctx, req)
+}
+
+func (c *Client) CancelOrder(ctx context.Context, orderID int64) error {
+	return c.engine.CancelOrder(ctx, orderID)
+}
+
+func (c *Client) GlobalCancel(ctx context.Context) error {
+	return c.engine.GlobalCancel(ctx)
+}
+
+func (c *Client) RequestFA(ctx context.Context, faDataType int) (string, error) {
+	return c.engine.RequestFA(ctx, faDataType)
+}
+
+func (c *Client) ReplaceFA(ctx context.Context, faDataType int, xml string) error {
+	return c.engine.ReplaceFA(ctx, faDataType, xml)
+}
+
+func (c *Client) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) {
+	return c.engine.SoftDollarTiers(ctx)
+}
+
+func (c *Client) WSHMetaData(ctx context.Context) (string, error) {
+	return c.engine.WSHMetaData(ctx)
+}
+
+func (c *Client) WSHEventData(ctx context.Context, req WSHEventDataRequest) (string, error) {
+	return c.engine.WSHEventData(ctx, req)
+}
+
+func (c *Client) QueryDisplayGroups(ctx context.Context) (string, error) {
+	return c.engine.QueryDisplayGroups(ctx)
+}
+
+func (c *Client) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ...SubscriptionOption) (*Subscription[DisplayGroupUpdate], error) {
+	return c.engine.SubscribeDisplayGroup(ctx, groupID, opts...)
+}
+
+func (c *Client) UpdateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
+	return c.engine.UpdateDisplayGroup(ctx, reqID, contractInfo)
 }
