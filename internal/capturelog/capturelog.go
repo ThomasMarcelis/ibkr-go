@@ -126,8 +126,14 @@ func (s *Session) recordEvent(event Event) error {
 func (s *Session) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
+		if syncErr := s.events.Sync(); syncErr != nil && err == nil {
+			err = syncErr
+		}
 		if closeErr := s.events.Close(); closeErr != nil && err == nil {
 			err = closeErr
+		}
+		if syncErr := s.meta.Sync(); syncErr != nil && err == nil {
+			err = syncErr
 		}
 		if closeErr := s.meta.Close(); closeErr != nil && err == nil {
 			err = closeErr
