@@ -5,6 +5,22 @@ import (
 	"strconv"
 )
 
+// orderSpec holds the order fields needed by the capture tool.
+type orderSpec struct {
+	Action        string // "BUY", "SELL"
+	TotalQuantity string // "1", "100", etc.
+	OrderType     string // "MKT", "LMT", "STP", "STP LMT"
+	LmtPrice      string // empty for MKT
+	AuxPrice      string // stop price for STP, empty for LMT/MKT
+	TIF           string // "DAY", "GTC"
+	Account       string
+	Transmit      bool
+	ParentID      int64 // 0 = no parent
+	OcaGroup      string
+	OutsideRTH    bool
+	OrderRef      string
+}
+
 // contractSpec is a minimal contract shape for request building. Any field
 // that is empty on the wire is sent as an empty string.
 type contractSpec struct {
@@ -553,4 +569,371 @@ func sendReqHistoricalDataKeepUp(conn net.Conn, reqID, _ int, c contractSpec, ba
 		"",  // chartOptions
 	)
 	return sendMessage(conn, fields)
+}
+
+// --- Place order (msg_id=3) ---
+//
+// On server v>=145 the version field is elided. Layout:
+//
+//	[3, orderID, conId, symbol, secType, lastTradeDate, strike, right,
+//	 multiplier, exchange, primaryExchange, currency, localSymbol, tradingClass,
+//	 secIdType, secId, action, totalQuantity, orderType, lmtPrice, auxPrice,
+//	 tif, ocaGroup, account, openClose, origin, orderRef, transmit, parentId,
+//	 blockOrder, sweepToFill, displaySize, triggerMethod, outsideRTH, hidden,
+//	 (BAG combo legs - skip for non-BAG),
+//	 deprecated_sharesAllocation, discretionaryAmt, goodAfterTime, goodTillDate,
+//	 faGroup, faMethod, faPercentage, modelCode,
+//	 shortSaleSlot, designatedLocation, exemptCode,
+//	 ocaType, rule80A, settlingFirm, allOrNone, minQty, percentOffset,
+//	 deprecated_eTradeOnly, deprecated_firmQuoteOnly, deprecated_nbboPriceCap,
+//	 auctionStrategy, startingPrice, stockRefPrice, delta, stockRangeLower,
+//	 stockRangeUpper, overridePercentageConstraints,
+//	 volatility, volatilityType, deltaNeutralOrderType, deltaNeutralAuxPrice,
+//	 continuousUpdate, referencePriceType,
+//	 trailStopPrice, trailingPercent,
+//	 scaleInitLevelSize, scaleSubsLevelSize, scalePriceIncrement,
+//	 scaleTable, activeStartTime, activeStopTime,
+//	 hedgeType, optOutSmartRouting, clearingAccount, clearingIntent, notHeld,
+//	 deltaNeutralContractPresent,
+//	 algoStrategy, algoID, whatIf, orderMiscOptions, solicited,
+//	 randomizeSize, randomizePrice,
+//	 conditionsCount,
+//	 adjustedOrderType, triggerPrice, lmtPriceOffset, adjustedStopPrice,
+//	 adjustedStopLimitPrice, adjustedTrailingAmount, adjustableTrailingUnit,
+//	 extOperator, softDollarName, softDollarValue,
+//	 cashQty, mifid2DecisionMaker, mifid2DecisionAlgo,
+//	 mifid2ExecutionTrader, mifid2ExecutionAlgo,
+//	 dontUseAutoPriceForHedge, isOmsContainer, discretionaryUpToLimitPrice,
+//	 usePriceMgmtAlgo, duration, postToAts, autoCancelParent,
+//	 advancedErrorOverride, manualOrderTime,
+//	 customerAccount, professionalCustomer,
+//	 includeOvernight, manualOrderIndicator, imbalanceOnly]
+func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) error {
+	fields := []string{
+		"3",
+		strconv.FormatInt(orderID, 10),
+	}
+	// Contract: conId through tradingClass, plus secIdType and secId.
+	fields = append(fields, contractRequestFieldsNoExpired(c)...)
+	fields = append(fields,
+		"", // secIdType
+		"", // secId
+	)
+	// Main order fields.
+	fields = append(fields,
+		o.Action,
+		o.TotalQuantity,
+		o.OrderType,
+		o.LmtPrice,
+		o.AuxPrice,
+	)
+	// Extended order fields.
+	fields = append(fields,
+		o.TIF,
+		o.OcaGroup,
+		o.Account,
+		"",  // openClose
+		"0", // origin = customer
+		o.OrderRef,
+		boolField(o.Transmit),
+		strconv.FormatInt(o.ParentID, 10),
+		"0", // blockOrder
+		"0", // sweepToFill
+		"",  // displaySize
+		"0", // triggerMethod
+		boolField(o.OutsideRTH),
+		"0", // hidden
+	)
+	// BAG combo legs omitted (non-BAG).
+	// Deprecated + FA + model.
+	fields = append(fields,
+		"",  // deprecated sharesAllocation
+		"0", // discretionaryAmt
+		"",  // goodAfterTime
+		"",  // goodTillDate
+		"",  // faGroup
+		"",  // faMethod
+		"",  // faPercentage
+		"",  // modelCode
+	)
+	// Short sale.
+	fields = append(fields,
+		"0",  // shortSaleSlot
+		"",   // designatedLocation
+		"-1", // exemptCode
+	)
+	// Order type extensions.
+	fields = append(fields,
+		"0", // ocaType
+		"",  // rule80A
+		"",  // settlingFirm
+		"0", // allOrNone
+		"",  // minQty (UNSET)
+		"",  // percentOffset (UNSET)
+		"0", // deprecated eTradeOnly
+		"0", // deprecated firmQuoteOnly
+		"",  // deprecated nbboPriceCap (UNSET)
+		"0", // auctionStrategy
+		"",  // startingPrice
+		"",  // stockRefPrice
+		"",  // delta
+		"",  // stockRangeLower
+		"",  // stockRangeUpper
+		"0", // overridePercentageConstraints
+	)
+	// Volatility.
+	fields = append(fields,
+		"",  // volatility
+		"",  // volatilityType
+		"",  // deltaNeutralOrderType
+		"",  // deltaNeutralAuxPrice
+		"0", // continuousUpdate
+		"0", // referencePriceType
+	)
+	// Trailing.
+	fields = append(fields,
+		"", // trailStopPrice
+		"", // trailingPercent
+	)
+	// Scale.
+	fields = append(fields,
+		"", // scaleInitLevelSize
+		"", // scaleSubsLevelSize
+		"", // scalePriceIncrement
+	)
+	// scalePriceIncrement empty => skip scale3 extended.
+	fields = append(fields,
+		"", // scaleTable
+		"", // activeStartTime
+		"", // activeStopTime
+	)
+	// Hedge: empty hedgeType => no hedgeParam.
+	fields = append(fields,
+		"", // hedgeType
+	)
+	// Misc.
+	fields = append(fields,
+		"0", // optOutSmartRouting
+		"",  // clearingAccount
+		"",  // clearingIntent
+		"0", // notHeld
+		"0", // deltaNeutralContractPresent
+	)
+	// Algo: empty algoStrategy => no algo params.
+	fields = append(fields,
+		"",  // algoStrategy
+		"",  // algoID
+		"0", // whatIf
+		"",  // orderMiscOptions
+		"0", // solicited
+		"0", // randomizeSize
+		"0", // randomizePrice
+	)
+	// PEG BENCH fields skipped (orderType != "PEG BENCH").
+	fields = append(fields,
+		"0", // conditionsCount
+	)
+	// Adjusted order type fields.
+	fields = append(fields,
+		"", // adjustedOrderType
+		"", // triggerPrice
+		"", // lmtPriceOffset
+		"", // adjustedStopPrice
+		"", // adjustedStopLimitPrice
+		"", // adjustedTrailingAmount
+		"", // adjustableTrailingUnit
+	)
+	fields = append(fields,
+		"",  // extOperator
+		"",  // softDollarName
+		"",  // softDollarValue
+		"",  // cashQty
+		"",  // mifid2DecisionMaker
+		"",  // mifid2DecisionAlgo
+		"",  // mifid2ExecutionTrader
+		"",  // mifid2ExecutionAlgo
+		"0", // dontUseAutoPriceForHedge
+		"0", // isOmsContainer
+		"0", // discretionaryUpToLimitPrice
+		"",  // usePriceMgmtAlgo
+		"",  // duration
+		"",  // postToAts
+		"0", // autoCancelParent
+		"",  // advancedErrorOverride
+		"",  // manualOrderTime
+	)
+	// PEG BEST/MID offsets skipped.
+	fields = append(fields,
+		"",  // customerAccount
+		"0", // professionalCustomer
+		"0", // includeOvernight
+		"",  // manualOrderIndicator
+		"0", // imbalanceOnly
+	)
+	return sendMessage(conn, fields)
+}
+
+// --- Cancel order (msg_id=4) ---
+//
+//	[4, orderID, manualOrderCancelTime]
+func sendCancelOrder(conn net.Conn, orderID int64) error {
+	return sendMessage(conn, []string{"4", strconv.FormatInt(orderID, 10), ""})
+}
+
+// --- Global cancel (msg_id=58) ---
+//
+//	[58, 1]
+func sendGlobalCancel(conn net.Conn) error {
+	return sendMessage(conn, []string{"58", "1"})
+}
+
+// --- Market depth (msg_id=10) / cancel (msg_id=11) ---
+//
+//	[10, version=5, reqId, conId, symbol, secType, expiry, strike, right,
+//	 multiplier, exchange, primaryExchange, currency, localSymbol, tradingClass,
+//	 numRows, isSmartDepth, mktDepthOptions]
+func sendReqMktDepth(conn net.Conn, reqID int, c contractSpec, numRows int, isSmartDepth bool) error {
+	fields := []string{"10", "5", strconv.Itoa(reqID)}
+	fields = append(fields, contractRequestFieldsNoExpired(c)...)
+	fields = append(fields,
+		strconv.Itoa(numRows),
+		boolField(isSmartDepth),
+		"", // mktDepthOptions
+	)
+	return sendMessage(conn, fields)
+}
+
+func sendCancelMktDepth(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"11", "1", strconv.Itoa(reqID)})
+}
+
+// --- Fundamental data (msg_id=52) / cancel (msg_id=53) ---
+//
+//	[52, version=2, reqId, conId, symbol, secType, exchange, primaryExchange,
+//	 currency, localSymbol, reportType]
+//	[53, version=1, reqId]
+func sendReqFundamentalData(conn net.Conn, reqID int, c contractSpec, reportType string) error {
+	return sendMessage(conn, []string{
+		"52", "2", strconv.Itoa(reqID),
+		strconv.Itoa(c.ConID),
+		c.Symbol,
+		c.SecType,
+		c.Exchange,
+		c.PrimaryExchange,
+		c.Currency,
+		c.LocalSymbol,
+		reportType,
+	})
+}
+
+func sendCancelFundamentalData(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"53", "1", strconv.Itoa(reqID)})
+}
+
+// --- Exercise options (msg_id=21) ---
+//
+//	[21, version=2, reqId, conId, symbol, secType, expiry, strike, right,
+//	 multiplier, exchange, currency, localSymbol, tradingClass,
+//	 exerciseAction, exerciseQuantity, account, override]
+func sendExerciseOptions(conn net.Conn, reqID int, c contractSpec, exerciseAction, exerciseQuantity int, account string, override int) error {
+	return sendMessage(conn, []string{
+		"21", "2", strconv.Itoa(reqID),
+		strconv.Itoa(c.ConID),
+		c.Symbol,
+		c.SecType,
+		c.LastTradeDateOrContractMonth,
+		strconv.FormatFloat(c.Strike, 'f', -1, 64),
+		c.Right,
+		c.Multiplier,
+		c.Exchange,
+		c.Currency,
+		c.LocalSymbol,
+		c.TradingClass,
+		strconv.Itoa(exerciseAction),
+		strconv.Itoa(exerciseQuantity),
+		account,
+		strconv.Itoa(override),
+	})
+}
+
+// --- Request FA (msg_id=18) / Replace FA (msg_id=19) ---
+//
+//	[18, version=1, faDataType]
+//	[19, version=1, faDataType, xml]
+func sendRequestFA(conn net.Conn, faDataType int) error {
+	return sendMessage(conn, []string{"18", "1", strconv.Itoa(faDataType)})
+}
+
+func sendReplaceFA(conn net.Conn, faDataType int, xml string) error {
+	return sendMessage(conn, []string{"19", "1", strconv.Itoa(faDataType), xml})
+}
+
+// --- Soft dollar tiers (msg_id=79) ---
+//
+//	[79, reqId]
+func sendReqSoftDollarTiers(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"79", strconv.Itoa(reqID)})
+}
+
+// --- WSH meta data (msg_id=100) / cancel (msg_id=101) ---
+//
+//	[100, reqId]
+//	[101, reqId]
+func sendReqWSHMetaData(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"100", strconv.Itoa(reqID)})
+}
+
+func sendCancelWSHMetaData(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"101", strconv.Itoa(reqID)})
+}
+
+// --- WSH event data (msg_id=102) / cancel (msg_id=103) ---
+//
+//	[102, reqId, conId, filter, fillWatchlist, fillPortfolio, fillCompetitors,
+//	 startDate, endDate, totalLimit]
+//	[103, reqId]
+func sendReqWSHEventData(conn net.Conn, reqID, conID int, filter string, fillWatchlist, fillPortfolio, fillCompetitors bool, startDate, endDate string, totalLimit int) error {
+	return sendMessage(conn, []string{
+		"102", strconv.Itoa(reqID),
+		strconv.Itoa(conID),
+		filter,
+		boolField(fillWatchlist),
+		boolField(fillPortfolio),
+		boolField(fillCompetitors),
+		startDate,
+		endDate,
+		strconv.Itoa(totalLimit),
+	})
+}
+
+func sendCancelWSHEventData(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"103", strconv.Itoa(reqID)})
+}
+
+// --- Query display groups (msg_id=67) ---
+//
+//	[67, version=1, reqId]
+func sendQueryDisplayGroups(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"67", "1", strconv.Itoa(reqID)})
+}
+
+// --- Subscribe to group events (msg_id=68) ---
+//
+//	[68, version=1, reqId, groupId]
+func sendSubscribeToGroupEvents(conn net.Conn, reqID, groupID int) error {
+	return sendMessage(conn, []string{"68", "1", strconv.Itoa(reqID), strconv.Itoa(groupID)})
+}
+
+// --- Update display group (msg_id=69) ---
+//
+//	[69, version=1, reqId, contractInfo]
+func sendUpdateDisplayGroup(conn net.Conn, reqID int, contractInfo string) error {
+	return sendMessage(conn, []string{"69", "1", strconv.Itoa(reqID), contractInfo})
+}
+
+// --- Unsubscribe from group events (msg_id=70) ---
+//
+//	[70, version=1, reqId]
+func sendUnsubscribeFromGroupEvents(conn net.Conn, reqID int) error {
+	return sendMessage(conn, []string{"70", "1", strconv.Itoa(reqID)})
 }

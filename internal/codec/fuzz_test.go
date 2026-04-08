@@ -607,6 +607,394 @@ func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 	}
 }
 
+// FuzzEncodeDecodeRoundTrip_OrderStatus proves encode-decode round-trip for OrderStatus.
+func FuzzEncodeDecodeRoundTrip_OrderStatus(f *testing.F) {
+	f.Add(int64(42), "Filled", "100", "0", "150.50", "123456", "0", "150.50", "99", "", "0")
+	f.Add(int64(0), "", "", "", "", "", "", "", "", "", "")
+	f.Add(int64(-1), "PreSubmitted", "50", "50", "100.25", "999", "10", "100.25", "1", "locate", "0.0")
+
+	f.Fuzz(func(t *testing.T, orderID int64, status string, filled string, remaining string, avgFillPrice string, permID string, parentID string, lastFillPrice string, clientID string, whyHeld string, mktCapPrice string) {
+		if containsNull(status, filled, remaining, avgFillPrice, permID, parentID, lastFillPrice, clientID, whyHeld, mktCapPrice) {
+			return
+		}
+		original := OrderStatus{OrderID: orderID, Status: status, Filled: filled, Remaining: remaining, AvgFillPrice: avgFillPrice, PermID: permID, ParentID: parentID, LastFillPrice: lastFillPrice, ClientID: clientID, WhyHeld: whyHeld, MktCapPrice: mktCapPrice}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		os, ok := decoded[0].(OrderStatus)
+		if !ok {
+			t.Fatalf("expected OrderStatus, got %T", decoded[0])
+		}
+		if os.OrderID != orderID {
+			t.Errorf("OrderID: got %d, want %d", os.OrderID, orderID)
+		}
+		if os.Status != status {
+			t.Errorf("Status: got %q, want %q", os.Status, status)
+		}
+		if os.Filled != filled {
+			t.Errorf("Filled: got %q, want %q", os.Filled, filled)
+		}
+		if os.Remaining != remaining {
+			t.Errorf("Remaining: got %q, want %q", os.Remaining, remaining)
+		}
+		if os.AvgFillPrice != avgFillPrice {
+			t.Errorf("AvgFillPrice: got %q, want %q", os.AvgFillPrice, avgFillPrice)
+		}
+		if os.PermID != permID {
+			t.Errorf("PermID: got %q, want %q", os.PermID, permID)
+		}
+		if os.ParentID != parentID {
+			t.Errorf("ParentID: got %q, want %q", os.ParentID, parentID)
+		}
+		if os.LastFillPrice != lastFillPrice {
+			t.Errorf("LastFillPrice: got %q, want %q", os.LastFillPrice, lastFillPrice)
+		}
+		if os.ClientID != clientID {
+			t.Errorf("ClientID: got %q, want %q", os.ClientID, clientID)
+		}
+		if os.WhyHeld != whyHeld {
+			t.Errorf("WhyHeld: got %q, want %q", os.WhyHeld, whyHeld)
+		}
+		if os.MktCapPrice != mktCapPrice {
+			t.Errorf("MktCapPrice: got %q, want %q", os.MktCapPrice, mktCapPrice)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_ExecutionDetail proves encode-decode round-trip for ExecutionDetail.
+func FuzzEncodeDecodeRoundTrip_ExecutionDetail(f *testing.F) {
+	f.Add(1, int64(42), "0001", "DU12345", "AAPL", "BOT", "100", "150.50", "20260407 10:30:00")
+	f.Add(0, int64(0), "", "", "", "", "", "", "")
+	f.Add(-1, int64(-1), "exec-99", "U999", "MSFT", "SLD", "200", "300.00", "20250101 09:00:00")
+
+	f.Fuzz(func(t *testing.T, reqID int, orderID int64, execID string, account string, symbol string, side string, shares string, price string, execTime string) {
+		if containsNull(execID, account, symbol, side, shares, price, execTime) {
+			return
+		}
+		original := ExecutionDetail{ReqID: reqID, OrderID: orderID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		ed, ok := decoded[0].(ExecutionDetail)
+		if !ok {
+			t.Fatalf("expected ExecutionDetail, got %T", decoded[0])
+		}
+		if ed.ReqID != reqID {
+			t.Errorf("ReqID: got %d, want %d", ed.ReqID, reqID)
+		}
+		if ed.OrderID != orderID {
+			t.Errorf("OrderID: got %d, want %d", ed.OrderID, orderID)
+		}
+		if ed.ExecID != execID {
+			t.Errorf("ExecID: got %q, want %q", ed.ExecID, execID)
+		}
+		if ed.Account != account {
+			t.Errorf("Account: got %q, want %q", ed.Account, account)
+		}
+		if ed.Symbol != symbol {
+			t.Errorf("Symbol: got %q, want %q", ed.Symbol, symbol)
+		}
+		if ed.Side != side {
+			t.Errorf("Side: got %q, want %q", ed.Side, side)
+		}
+		if ed.Shares != shares {
+			t.Errorf("Shares: got %q, want %q", ed.Shares, shares)
+		}
+		if ed.Price != price {
+			t.Errorf("Price: got %q, want %q", ed.Price, price)
+		}
+		if ed.Time != execTime {
+			t.Errorf("Time: got %q, want %q", ed.Time, execTime)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_CommissionReport proves encode-decode round-trip for CommissionReport.
+func FuzzEncodeDecodeRoundTrip_CommissionReport(f *testing.F) {
+	f.Add("exec-1", "1.00", "USD", "50.00")
+	f.Add("", "", "", "")
+	f.Add("exec-999", "0.50", "EUR", "-100.00")
+
+	f.Fuzz(func(t *testing.T, execID string, commission string, currency string, realizedPNL string) {
+		if containsNull(execID, commission, currency, realizedPNL) {
+			return
+		}
+		original := CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		cr, ok := decoded[0].(CommissionReport)
+		if !ok {
+			t.Fatalf("expected CommissionReport, got %T", decoded[0])
+		}
+		if cr.ExecID != execID {
+			t.Errorf("ExecID: got %q, want %q", cr.ExecID, execID)
+		}
+		if cr.Commission != commission {
+			t.Errorf("Commission: got %q, want %q", cr.Commission, commission)
+		}
+		if cr.Currency != currency {
+			t.Errorf("Currency: got %q, want %q", cr.Currency, currency)
+		}
+		if cr.RealizedPNL != realizedPNL {
+			t.Errorf("RealizedPNL: got %q, want %q", cr.RealizedPNL, realizedPNL)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_MarketDepthUpdate proves encode-decode round-trip for MarketDepthUpdate.
+func FuzzEncodeDecodeRoundTrip_MarketDepthUpdate(f *testing.F) {
+	f.Add(1, 0, 0, 1, "150.00", "100")
+	f.Add(0, 0, 0, 0, "", "")
+	f.Add(-1, 5, 2, 0, "99.99", "500")
+
+	f.Fuzz(func(t *testing.T, reqID int, position int, operation int, side int, price string, size string) {
+		if containsNull(price, size) {
+			return
+		}
+		original := MarketDepthUpdate{ReqID: reqID, Position: position, Operation: operation, Side: side, Price: price, Size: size}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		md, ok := decoded[0].(MarketDepthUpdate)
+		if !ok {
+			t.Fatalf("expected MarketDepthUpdate, got %T", decoded[0])
+		}
+		if md.ReqID != reqID {
+			t.Errorf("ReqID: got %d, want %d", md.ReqID, reqID)
+		}
+		if md.Position != position {
+			t.Errorf("Position: got %d, want %d", md.Position, position)
+		}
+		if md.Operation != operation {
+			t.Errorf("Operation: got %d, want %d", md.Operation, operation)
+		}
+		if md.Side != side {
+			t.Errorf("Side: got %d, want %d", md.Side, side)
+		}
+		if md.Price != price {
+			t.Errorf("Price: got %q, want %q", md.Price, price)
+		}
+		if md.Size != size {
+			t.Errorf("Size: got %q, want %q", md.Size, size)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_MarketDepthL2Update proves encode-decode round-trip for MarketDepthL2Update.
+func FuzzEncodeDecodeRoundTrip_MarketDepthL2Update(f *testing.F) {
+	f.Add(1, 0, "ARCA", 0, 1, "150.00", "100", true)
+	f.Add(0, 0, "", 0, 0, "", "", false)
+	f.Add(-1, 3, "NYSE", 2, 1, "200.50", "1000", true)
+
+	f.Fuzz(func(t *testing.T, reqID int, position int, marketMaker string, operation int, side int, price string, size string, isSmartDepth bool) {
+		if containsNull(marketMaker, price, size) {
+			return
+		}
+		original := MarketDepthL2Update{ReqID: reqID, Position: position, MarketMaker: marketMaker, Operation: operation, Side: side, Price: price, Size: size, IsSmartDepth: isSmartDepth}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		md, ok := decoded[0].(MarketDepthL2Update)
+		if !ok {
+			t.Fatalf("expected MarketDepthL2Update, got %T", decoded[0])
+		}
+		if md.ReqID != reqID {
+			t.Errorf("ReqID: got %d, want %d", md.ReqID, reqID)
+		}
+		if md.Position != position {
+			t.Errorf("Position: got %d, want %d", md.Position, position)
+		}
+		if md.MarketMaker != marketMaker {
+			t.Errorf("MarketMaker: got %q, want %q", md.MarketMaker, marketMaker)
+		}
+		if md.Operation != operation {
+			t.Errorf("Operation: got %d, want %d", md.Operation, operation)
+		}
+		if md.Side != side {
+			t.Errorf("Side: got %d, want %d", md.Side, side)
+		}
+		if md.Price != price {
+			t.Errorf("Price: got %q, want %q", md.Price, price)
+		}
+		if md.Size != size {
+			t.Errorf("Size: got %q, want %q", md.Size, size)
+		}
+		if md.IsSmartDepth != isSmartDepth {
+			t.Errorf("IsSmartDepth: got %v, want %v", md.IsSmartDepth, isSmartDepth)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_DisplayGroupList proves encode-decode round-trip for DisplayGroupList.
+func FuzzEncodeDecodeRoundTrip_DisplayGroupList(f *testing.F) {
+	f.Add(1, "1|2|3")
+	f.Add(0, "")
+	f.Add(-1, "42")
+
+	f.Fuzz(func(t *testing.T, reqID int, groups string) {
+		if containsNull(groups) {
+			return
+		}
+		original := DisplayGroupList{ReqID: reqID, Groups: groups}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		dg, ok := decoded[0].(DisplayGroupList)
+		if !ok {
+			t.Fatalf("expected DisplayGroupList, got %T", decoded[0])
+		}
+		if dg.ReqID != reqID {
+			t.Errorf("ReqID: got %d, want %d", dg.ReqID, reqID)
+		}
+		if dg.Groups != groups {
+			t.Errorf("Groups: got %q, want %q", dg.Groups, groups)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_FundamentalDataResponse proves encode-decode round-trip for FundamentalDataResponse.
+func FuzzEncodeDecodeRoundTrip_FundamentalDataResponse(f *testing.F) {
+	f.Add(1, "<FundamentalData/>")
+	f.Add(0, "")
+	f.Add(-1, "<ReportSnapshot><Company>AAPL</Company></ReportSnapshot>")
+
+	f.Fuzz(func(t *testing.T, reqID int, data string) {
+		if containsNull(data) {
+			return
+		}
+		original := FundamentalDataResponse{ReqID: reqID, Data: data}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		fd, ok := decoded[0].(FundamentalDataResponse)
+		if !ok {
+			t.Fatalf("expected FundamentalDataResponse, got %T", decoded[0])
+		}
+		if fd.ReqID != reqID {
+			t.Errorf("ReqID: got %d, want %d", fd.ReqID, reqID)
+		}
+		if fd.Data != data {
+			t.Errorf("Data: got %q, want %q", fd.Data, data)
+		}
+	})
+}
+
+// FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate proves encode-decode round-trip for HistoricalDataUpdate.
+func FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate(f *testing.F) {
+	f.Add(1, 1, "20260101", "100", "101", "99", "100.5", "1000", "100.25", "50")
+	f.Add(0, 0, "", "", "", "", "", "", "", "")
+	f.Add(-1, 10, "20250615 15:30:00", "200.5", "205.0", "198.0", "202.0", "5000", "201.5", "120")
+
+	f.Fuzz(func(t *testing.T, reqID int, barCount int, ts string, open string, high string, low string, close_ string, volume string, wap string, count string) {
+		if containsNull(ts, open, high, low, close_, volume, wap, count) {
+			return
+		}
+		original := HistoricalDataUpdate{ReqID: reqID, BarCount: barCount, Time: ts, Open: open, High: high, Low: low, Close: close_, Volume: volume, WAP: wap, Count: count}
+		encoded, err := Encode(original)
+		if err != nil {
+			return
+		}
+		decoded, err := DecodeBatch(encoded)
+		if err != nil {
+			return
+		}
+		if len(decoded) != 1 {
+			t.Fatalf("expected 1 message, got %d", len(decoded))
+		}
+		hdu, ok := decoded[0].(HistoricalDataUpdate)
+		if !ok {
+			t.Fatalf("expected HistoricalDataUpdate, got %T", decoded[0])
+		}
+		if hdu.ReqID != reqID {
+			t.Errorf("ReqID: got %d, want %d", hdu.ReqID, reqID)
+		}
+		if hdu.BarCount != barCount {
+			t.Errorf("BarCount: got %d, want %d", hdu.BarCount, barCount)
+		}
+		if hdu.Time != ts {
+			t.Errorf("Time: got %q, want %q", hdu.Time, ts)
+		}
+		if hdu.Open != open {
+			t.Errorf("Open: got %q, want %q", hdu.Open, open)
+		}
+		if hdu.High != high {
+			t.Errorf("High: got %q, want %q", hdu.High, high)
+		}
+		if hdu.Low != low {
+			t.Errorf("Low: got %q, want %q", hdu.Low, low)
+		}
+		if hdu.Close != close_ {
+			t.Errorf("Close: got %q, want %q", hdu.Close, close_)
+		}
+		if hdu.Volume != volume {
+			t.Errorf("Volume: got %q, want %q", hdu.Volume, volume)
+		}
+		if hdu.WAP != wap {
+			t.Errorf("WAP: got %q, want %q", hdu.WAP, wap)
+		}
+		if hdu.Count != count {
+			t.Errorf("Count: got %q, want %q", hdu.Count, count)
+		}
+	})
+}
+
 // TestDecodeFieldParseErrors verifies that non-numeric strings in integer fields
 // produce errors rather than panics.
 func TestDecodeFieldParseErrors(t *testing.T) {

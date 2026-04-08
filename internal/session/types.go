@@ -451,7 +451,19 @@ func (h *OrderHandle) Modify(ctx context.Context, order Order) error {
 	return h.modifyFn(ctx, order)
 }
 
+func (h *OrderHandle) isDone() bool {
+	select {
+	case <-h.done:
+		return true
+	default:
+		return false
+	}
+}
+
 func (h *OrderHandle) emitOrder(o OpenOrder) {
+	if h.isDone() {
+		return
+	}
 	select {
 	case h.events <- OrderEvent{OpenOrder: &o}:
 	case <-h.done:
@@ -465,6 +477,9 @@ func IsTerminalOrderStatus(status string) bool {
 }
 
 func (h *OrderHandle) emitStatus(s OrderStatusUpdate) {
+	if h.isDone() {
+		return
+	}
 	select {
 	case h.events <- OrderEvent{Status: &s}:
 	case <-h.done:
@@ -475,6 +490,9 @@ func (h *OrderHandle) emitStatus(s OrderStatusUpdate) {
 }
 
 func (h *OrderHandle) emitExecution(exec Execution) {
+	if h.isDone() {
+		return
+	}
 	select {
 	case h.events <- OrderEvent{Execution: &exec}:
 	case <-h.done:
@@ -482,6 +500,9 @@ func (h *OrderHandle) emitExecution(exec Execution) {
 }
 
 func (h *OrderHandle) emitCommission(cr CommissionReport) {
+	if h.isDone() {
+		return
+	}
 	select {
 	case h.events <- OrderEvent{Commission: &cr}:
 	case <-h.done:
@@ -489,6 +510,9 @@ func (h *OrderHandle) emitCommission(cr CommissionReport) {
 }
 
 func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
+	if h.isDone() {
+		return
+	}
 	if evt.At.IsZero() {
 		evt.At = time.Now().UTC()
 	}
