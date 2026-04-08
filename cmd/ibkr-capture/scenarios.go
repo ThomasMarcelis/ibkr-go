@@ -145,14 +145,12 @@ var scenarios = map[string]scenario{
 				return err
 			}
 			// Stop on either CONTRACT_DATA_END (52) or ERR_MSG (4) with matching reqID.
+			// msg 52 wire: [52, version, reqID] — reqID position varies, use field-scanning helper.
+			reqIDStr := strconv.Itoa(reqID)
+			endPred := stopOnMsgIDWithReq(52, reqIDStr, 0)
 			stop := func(msgID int, fields []string) bool {
-				if msgID == 52 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID) {
-					return true
-				}
-				if msgID == 4 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID) {
-					return true
-				}
-				return false
+				return endPred(msgID, fields) ||
+					(msgID == 4 && len(fields) >= 2 && fields[1] == reqIDStr)
 			}
 			return readFrames(conn, 10*time.Second, logFrame, stop)
 		},
@@ -826,9 +824,12 @@ var scenarios = map[string]scenario{
 			if err := sendReqScannerSubscription(conn, reqID, 10, "STK", "STK.US.MAJOR", "HOT_BY_VOLUME"); err != nil {
 				return err
 			}
-			// SCANNER_DATA msg_id=20 (not to be confused with historical data!)
+			// SCANNER_DATA msg_id=20: wire [20, version=3, reqID, ...] — reqID at fields[2].
+			reqIDStr := strconv.Itoa(reqID)
+			endPred := stopOnMsgIDWithReq(20, reqIDStr, 0)
 			stop := func(msgID int, fields []string) bool {
-				return (msgID == 20 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+				return endPred(msgID, fields) ||
+					(msgID == 4 && len(fields) >= 2 && fields[1] == reqIDStr)
 			}
 			if err := readFrames(conn, 15*time.Second, logFrame, stop); err != nil {
 				return err
@@ -860,6 +861,372 @@ var scenarios = map[string]scenario{
 				return err
 			}
 			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(92))
+		},
+	},
+
+	// --- Order management ---
+
+	"place_order_lmt_buy_aapl": {
+		name:        "place_order_lmt_buy_aapl",
+		description: "PLACE_ORDER LMT buy 1 AAPL at $50 (far below market), observe status, then cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "50.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_mkt_buy_aapl": {
+		name:        "place_order_mkt_buy_aapl",
+		description: "PLACE_ORDER MKT buy 1 AAPL (will fill), observe status",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "MKT", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_mkt_sell_aapl": {
+		name:        "place_order_mkt_sell_aapl",
+		description: "PLACE_ORDER MKT sell 1 AAPL, observe status",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "SELL", TotalQuantity: "1", OrderType: "MKT", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_modify": {
+		name:        "place_order_modify",
+		description: "PLACE_ORDER LMT buy 1 AAPL at $50, modify to $51, then cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "50.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			// Modify: send PlaceOrder again with same orderID but new price.
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "51.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_cancel": {
+		name:        "place_order_cancel",
+		description: "PLACE_ORDER LMT buy 1 AAPL at $50, then cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "50.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 2*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_bracket_aapl": {
+		name:        "place_order_bracket_aapl",
+		description: "bracket order: MKT parent + LMT take-profit + STP stop-loss for AAPL",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			parentID := sess.NextValidID
+			tpID := sess.NextValidID + 1
+			slID := sess.NextValidID + 2
+			sess.NextValidID += 3
+			acct := sess.ManagedAccounts
+			aaplSTK := contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}
+
+			// Parent: MKT buy, transmit=false (held until children submitted).
+			if err := sendPlaceOrder(conn, parentID, aaplSTK, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "MKT", TIF: "DAY", Account: acct, Transmit: false}); err != nil {
+				return err
+			}
+			// Take-profit: LMT sell at $300 (far above market), transmit=false.
+			if err := sendPlaceOrder(conn, tpID, aaplSTK, orderSpec{Action: "SELL", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "300.00", TIF: "GTC", Account: acct, ParentID: parentID, Transmit: false}); err != nil {
+				return err
+			}
+			// Stop-loss: STP sell at $50 (far below market), transmit=true (triggers all 3).
+			if err := sendPlaceOrder(conn, slID, aaplSTK, orderSpec{Action: "SELL", TotalQuantity: "1", OrderType: "STP", AuxPrice: "50.00", TIF: "GTC", Account: acct, ParentID: parentID, Transmit: true}); err != nil {
+				return err
+			}
+			return readFrames(conn, 10*time.Second, logFrame, nil)
+		},
+	},
+	"global_cancel": {
+		name:        "global_cancel",
+		description: "place 3 LMT buy orders at $50, then GLOBAL_CANCEL",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			acct := sess.ManagedAccounts
+			aaplSTK := contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}
+			for i := 0; i < 3; i++ {
+				orderID := sess.NextValidID
+				sess.NextValidID++
+				if err := sendPlaceOrder(conn, orderID, aaplSTK, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "50.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+					return err
+				}
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendGlobalCancel(conn); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_option_buy": {
+		name:        "place_order_option_buy",
+		description: "PLACE_ORDER buy 1 AAPL far-OTM call option, observe status",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			// Hardcoded far-OTM AAPL call. The exact contract may need adjustment
+			// for current market conditions; the capture will show any error response.
+			optContract := contractSpec{
+				Symbol:   "AAPL",
+				SecType:  "OPT",
+				Exchange: "SMART",
+				Currency: "USD",
+				Right:    "C",
+				Strike:   300.0,
+				// Use a distant expiry to maximize chance of existence.
+				LastTradeDateOrContractMonth: "20261218",
+				Multiplier:                   "100",
+			}
+			if err := sendPlaceOrder(conn, orderID, optContract, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "MKT", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, nil)
+		},
+	},
+
+	// --- Market depth ---
+
+	"market_depth_aapl": {
+		name:        "market_depth_aapl",
+		description: "REQ_MKT_DEPTH AAPL numRows=5 isSmartDepth=false, read 10s, cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqMktDepth(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, 5, false); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelMktDepth(conn, reqID); err != nil {
+				return err
+			}
+			return readFrames(conn, 1*time.Second, logFrame, nil)
+		},
+	},
+	"market_depth_aapl_smart": {
+		name:        "market_depth_aapl_smart",
+		description: "REQ_MKT_DEPTH AAPL numRows=5 isSmartDepth=true, read 10s, cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqMktDepth(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, 5, true); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelMktDepth(conn, reqID); err != nil {
+				return err
+			}
+			return readFrames(conn, 1*time.Second, logFrame, nil)
+		},
+	},
+
+	// --- Reference data ---
+
+	"fundamental_data_aapl": {
+		name:        "fundamental_data_aapl",
+		description: "REQ_FUNDAMENTAL_DATA ReportSnapshot for AAPL (may error without subscription)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqFundamentalData(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "ReportSnapshot"); err != nil {
+				return err
+			}
+			// FUNDAMENTAL_DATA: [51, version, reqID, data] — reqID at fields[2].
+			// ERR_MSG: [4, reqID, code, msg, ...] — reqID at fields[1].
+			stop := func(msgID int, fields []string) bool {
+				if msgID == 51 && len(fields) >= 3 && fields[2] == strconv.Itoa(reqID) {
+					return true
+				}
+				return msgID == 4 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+			}
+			return readFrames(conn, 10*time.Second, logFrame, stop)
+		},
+	},
+	"soft_dollar_tiers": {
+		name:        "soft_dollar_tiers",
+		description: "REQ_SOFT_DOLLAR_TIERS, read response (msg 77)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqSoftDollarTiers(conn, reqID); err != nil {
+				return err
+			}
+			// SOFT_DOLLAR_TIERS: [77, reqID, count, ...] — reqID at fields[1].
+			stop := func(msgID int, fields []string) bool {
+				return (msgID == 77 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stop)
+		},
+	},
+	"display_groups": {
+		name:        "display_groups",
+		description: "QUERY_DISPLAY_GROUPS, read response (msg 67)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendQueryDisplayGroups(conn, reqID); err != nil {
+				return err
+			}
+			// DISPLAY_GROUP_LIST: [67, version, reqID, groups] — reqID at fields[2].
+			stop := func(msgID int, fields []string) bool {
+				if msgID == 67 && len(fields) >= 3 && fields[2] == strconv.Itoa(reqID) {
+					return true
+				}
+				return msgID == 4 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stop)
+		},
+	},
+	"display_group_subscribe": {
+		name:        "display_group_subscribe",
+		description: "QUERY_DISPLAY_GROUPS then SUBSCRIBE_TO_GROUP_EVENTS for group 1, observe, unsubscribe",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			queryReqID := nextReqID()
+			if err := sendQueryDisplayGroups(conn, queryReqID); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			subReqID := nextReqID()
+			if err := sendSubscribeToGroupEvents(conn, subReqID, 1); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendUnsubscribeFromGroupEvents(conn, subReqID); err != nil {
+				return err
+			}
+			return readFrames(conn, 1*time.Second, logFrame, nil)
+		},
+	},
+	"wsh_meta_data": {
+		name:        "wsh_meta_data",
+		description: "REQ_WSH_META_DATA, read response (msg 105 or error)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqWSHMetaData(conn, reqID); err != nil {
+				return err
+			}
+			// WSH_META_DATA: [105, reqID, data] — reqID at fields[1].
+			stop := func(msgID int, fields []string) bool {
+				return (msgID == 105 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stop)
+		},
+	},
+	"wsh_event_data_aapl": {
+		name:        "wsh_event_data_aapl",
+		description: "REQ_WSH_EVENT_DATA for AAPL conId=265598, read response (msg 106 or error)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqWSHEventData(conn, reqID, 265598, "", false, false, false, "", "", 10); err != nil {
+				return err
+			}
+			// WSH_EVENT_DATA: [106, reqID, data] — reqID at fields[1].
+			stop := func(msgID int, fields []string) bool {
+				return (msgID == 106 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stop)
+		},
+	},
+	"request_fa": {
+		name:        "request_fa",
+		description: "REQUEST_FA groups (faDataType=1), read response (may error on non-FA accounts)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendRequestFA(conn, 1); err != nil {
+				return err
+			}
+			// RECEIVE_FA msg_id=16 or ERR_MSG msg_id=4.
+			stop := func(msgID int, fields []string) bool {
+				if msgID == 16 {
+					return true
+				}
+				if msgID == 4 && len(fields) >= 4 {
+					code, err := strconv.Atoi(fields[3])
+					if err == nil && code >= 2000 && code < 3000 {
+						return false // skip farm-status bootstrap messages
+					}
+					return true
+				}
+				return false
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stop)
+		},
+	},
+	"qualify_contract_aapl_exact": {
+		name:        "qualify_contract_aapl_exact",
+		description: "REQ_CONTRACT_DATA for fully-qualified AAPL STK SMART USD",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}); err != nil {
+				return err
+			}
+			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
+		},
+	},
+	"qualify_contract_ambiguous": {
+		name:        "qualify_contract_ambiguous",
+		description: "REQ_CONTRACT_DATA with just symbol=MSFT, no exchange (may return multiple results)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "MSFT", SecType: "STK", Currency: "USD"}); err != nil {
+				return err
+			}
+			// CONTRACT_DATA_END msg_id=52: wire [52, version, reqID] — use field-scanning helper.
+			reqIDStr := strconv.Itoa(reqID)
+			endPred := stopOnMsgIDWithReq(52, reqIDStr, 0)
+			stop := func(msgID int, fields []string) bool {
+				return endPred(msgID, fields) ||
+					(msgID == 4 && len(fields) >= 2 && fields[1] == reqIDStr)
+			}
+			return readFrames(conn, 10*time.Second, logFrame, stop)
 		},
 	},
 }

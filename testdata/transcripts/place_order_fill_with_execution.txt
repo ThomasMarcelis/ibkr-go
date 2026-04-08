@@ -1,0 +1,15 @@
+# LMT BUY 1 AAPL: PreSubmitted -> execution -> commission -> Filled
+# Real IBKR ordering: execution and commission arrive before terminal OrderStatus.
+handshake {"server_version":200,"connection_time":"20260407 12:00:00 US/Eastern"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":""}
+sleep 100ms
+server open_order {"order_id":1,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"1","filled":"0","remaining":"1","lmt_price":"150.00","aux_price":"0","tif":"DAY","perm_id":"12345","client_id":"1","origin":"0"}
+server order_status {"order_id":1,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+sleep 200ms
+server execution_detail {"req_id":-1,"order_id":1,"exec_id":"0001e","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"149.50","time":"2026-04-07T12:01:00Z"}
+server commission_report {"exec_id":"0001e","commission":"1.00","currency":"USD","realized_pnl":"0"}
+server order_status {"order_id":1,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"149.50","perm_id":"12345","parent_id":"0","last_fill_price":"149.50","client_id":"1","why_held":"","mkt_cap_price":"0"}
+sleep 100ms
+disconnect

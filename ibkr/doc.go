@@ -1,11 +1,108 @@
-// Package ibkr is the public entry point for the ibkr-go client library.
+// Package ibkr is a Go client for the Interactive Brokers TWS/Gateway socket
+// protocol. It covers the full TWS API surface through typed methods and generic
+// subscriptions with explicit lifecycle semantics.
 //
-// The public surface is built around a ready-session dial path, typed one-shot
-// request methods, and typed subscriptions with explicit lifecycle events.
-// Business data flows through Events(), while lifecycle and reconnect semantics
-// flow through State() and SessionEvents().
+// # Connecting
 //
-// DialContext returns only after the session is ready for use. Managed accounts,
-// negotiated server version, and connection sequence live on SessionSnapshot
-// rather than behind request-shaped APIs.
+// [DialContext] establishes a connection and returns a ready [Client]. It blocks
+// until the handshake completes, the server version is negotiated, and managed
+// accounts are loaded. Pass functional options to configure the connection:
+//
+//	client, err := ibkr.DialContext(ctx,
+//	    ibkr.WithHost("127.0.0.1"),
+//	    ibkr.WithPort(7497),
+//	)
+//	if err != nil {
+//	    return err
+//	}
+//	defer client.Close()
+//
+// Once DialContext returns, [Client.Session] provides the negotiated server
+// version, managed accounts, and connection sequence number.
+//
+// # One-Shot Requests
+//
+// Most query methods follow a simple call-and-return pattern. Pass a context
+// for cancellation and a typed request struct; get back typed results:
+//
+//	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
+//	    Contract: ibkr.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+//	})
+//
+// One-shots block until the server sends all result messages and the protocol
+// completion marker. They return [*APIError] when the server rejects the request.
+//
+// # Subscriptions
+//
+// Streaming data uses [Subscription], a generic type that separates business
+// events from lifecycle state. Every subscription exposes three channels:
+//
+//   - Events() delivers business data (quotes, bars, positions, etc.)
+//   - State() delivers lifecycle transitions ([SubscriptionStarted],
+//     [SubscriptionSnapshotComplete], [SubscriptionGap], [SubscriptionResumed],
+//     [SubscriptionClosed])
+//   - Done() closes when the subscription terminates
+//
+// The typical read loop:
+//
+//	sub, err := client.SubscribeQuotes(ctx, req)
+//	if err != nil {
+//	    return err
+//	}
+//	defer sub.Close()
+//
+//	for {
+//	    select {
+//	    case update := <-sub.Events():
+//	        // handle business data
+//	    case state := <-sub.State():
+//	        // handle lifecycle (SnapshotComplete, Gap, Resumed, etc.)
+//	    case <-sub.Done():
+//	        return sub.Wait()
+//	    }
+//	}
+//
+// Call Close to unsubscribe. Wait blocks until termination and returns the
+// final error, if any.
+//
+// # Order Management
+//
+// [Client.PlaceOrder] submits an order and returns an [*OrderHandle] that tracks
+// its full lifecycle. The handle follows the same Events/State/Done pattern as
+// subscriptions. OrderEvent is a union: exactly one of OpenOrder, Status,
+// Execution, or Commission is non-nil per event. The handle auto-closes when
+// the order reaches a terminal state (Filled, Cancelled, Inactive).
+//
+// [OrderHandle.Close] detaches the handle without cancelling the order.
+// [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a
+// modified order with the same ID.
+//
+// # Session Lifecycle
+//
+// The session state machine is observable through [Client.SessionEvents].
+// States progress through Connecting, Handshaking, Ready, and optionally
+// Degraded or Reconnecting on connection loss. Set [WithReconnectPolicy] to
+// control automatic reconnect behavior.
+//
+// During a reconnect cycle, active subscriptions receive a Gap event through
+// State(). When the connection is re-established, subscriptions that support
+// resume receive a Resumed event. The reconnect boundary is always explicit
+// and never mixed into business event streams.
+//
+// # Errors
+//
+// Three structured error types cover the main failure modes:
+//
+//   - [*ConnectError] — connection or handshake failure
+//   - [*ProtocolError] — wire protocol violation
+//   - [*APIError] — server-side rejection (error code + message)
+//
+// Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
+// [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].
+//
+// # Financial Types
+//
+// All prices, quantities, and money values use [Decimal], an exact decimal type
+// that avoids the rounding errors inherent in float64 arithmetic. Parse strings
+// with [ParseDecimal]; use [MustParseDecimal] when the input is known-valid.
 package ibkr

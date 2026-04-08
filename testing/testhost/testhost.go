@@ -897,6 +897,193 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		return "req_news_bulletins", body, nil
 	case 13: // OutCancelNewsBulletins: [13, 1]
 		return "cancel_news_bulletins", map[string]any{}, nil
+	case 3: // OutPlaceOrder: [3, orderID, conID, symbol, secType, expiry, strike,
+		// right, multiplier, exchange, primaryExchange, currency, localSymbol,
+		// tradingClass, secIdType, secId, action, totalQty, orderType, lmtPrice,
+		// auxPrice, tif, ocaGroup, account, ...]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["order_id"] = fields[1]
+		}
+		if len(fields) >= 24 {
+			body["contract"] = map[string]any{
+				"con_id":   fields[2],
+				"symbol":   fields[3],
+				"sec_type": fields[4],
+				"exchange": fields[9],
+				"currency": fields[11],
+			}
+			body["action"] = fields[16]
+			body["total_quantity"] = fields[17]
+			body["order_type"] = fields[18]
+			body["lmt_price"] = fields[19]
+			body["aux_price"] = fields[20]
+			body["tif"] = fields[21]
+			body["account"] = fields[23]
+		}
+		return "place_order", body, nil
+	case 4: // OutCancelOrder: [4, orderID, manualOrderCancelTime]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["order_id"] = fields[1]
+		}
+		return "cancel_order", body, nil
+	case 58: // OutReqGlobalCancel: [58, 1]
+		return "global_cancel", map[string]any{}, nil
+	case 10: // OutReqMktDepth: [10, version=5, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, numRows, isSmartDepth, mktDepthOptions]
+		body := map[string]any{}
+		// fields[1] = version (5)
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 14 {
+			body["contract"] = map[string]any{
+				"symbol":   fields[4],
+				"sec_type": fields[5],
+				"exchange": safeField(fields, 10),
+				"currency": safeField(fields, 11),
+			}
+		}
+		if len(fields) >= 15 {
+			body["num_rows"] = fields[14]
+		}
+		if len(fields) >= 16 {
+			body["is_smart_depth"] = fields[15]
+		}
+		return "req_market_depth", body, nil
+	case 11: // OutCancelMktDepth: [11, version=1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "cancel_market_depth", body, nil
+	case 18: // OutRequestFA: [18, version=1, faDataType]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["fa_data_type"] = fields[2]
+		}
+		return "request_fa", body, nil
+	case 19: // OutReplaceFA: [19, version=1, faDataType, xml]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["fa_data_type"] = fields[2]
+		}
+		if len(fields) >= 4 {
+			body["xml"] = fields[3]
+		}
+		return "replace_fa", body, nil
+	case 21: // OutExerciseOptions: [21, version=2, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, exerciseAction, exerciseQuantity, account, override]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 14 {
+			body["contract"] = map[string]any{
+				"symbol":   fields[4],
+				"sec_type": fields[5],
+				"exchange": safeField(fields, 10),
+				"currency": safeField(fields, 11),
+			}
+		}
+		if len(fields) >= 15 {
+			body["exercise_action"] = fields[14]
+		}
+		if len(fields) >= 16 {
+			body["exercise_quantity"] = fields[15]
+		}
+		if len(fields) >= 17 {
+			body["account"] = fields[16]
+		}
+		if len(fields) >= 18 {
+			body["override"] = fields[17]
+		}
+		return "exercise_options", body, nil
+	case 52: // OutReqFundamentalData: [52, version=2, reqId, conId, symbol, secType, exchange, primaryExchange, currency, localSymbol, reportType]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 7 {
+			body["contract"] = map[string]any{
+				"symbol":   fields[4],
+				"sec_type": fields[5],
+				"exchange": safeField(fields, 6),
+				"currency": safeField(fields, 8),
+			}
+		}
+		if len(fields) >= 11 {
+			body["report_type"] = fields[10]
+		}
+		return "req_fundamental_data", body, nil
+	case 53: // OutCancelFundamentalData: [53, version=1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "cancel_fundamental_data", body, nil
+	case 67: // OutQueryDisplayGroups: [67, version=1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "query_display_groups", body, nil
+	case 68: // OutSubscribeToGroupEvents: [68, version=1, reqId, groupId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 4 {
+			body["group_id"] = fields[3]
+		}
+		return "subscribe_group_events", body, nil
+	case 69: // OutUpdateDisplayGroup: [69, version=1, reqId, contractInfo]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 4 {
+			body["contract_info"] = fields[3]
+		}
+		return "update_display_group", body, nil
+	case 70: // OutUnsubscribeFromGroupEvents: [70, version=1, reqId]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["req_id"] = fields[2]
+		}
+		return "unsubscribe_group_events", body, nil
+	case 79: // OutReqSoftDollarTiers: [79, reqId]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["req_id"] = fields[1]
+		}
+		return "req_soft_dollar_tiers", body, nil
+	case 100: // OutReqWSHMetaData: [100, reqId]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["req_id"] = fields[1]
+		}
+		return "req_wsh_meta_data", body, nil
+	case 101: // OutCancelWSHMetaData: [101, reqId]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["req_id"] = fields[1]
+		}
+		return "cancel_wsh_meta_data", body, nil
+	case 102: // OutReqWSHEventData: [102, reqId, conId, filter, fillWatchlist, fillPortfolio, fillCompetitors, startDate, endDate, totalLimit]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["req_id"] = fields[1]
+		}
+		if len(fields) >= 3 {
+			body["con_id"] = fields[2]
+		}
+		return "req_wsh_event_data", body, nil
+	case 103: // OutCancelWSHEventData: [103, reqId]
+		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["req_id"] = fields[1]
+		}
+		return "cancel_wsh_event_data", body, nil
 	default:
 		return "", nil, fmt.Errorf("testhost: unsupported client msg_id %d", msgID)
 	}

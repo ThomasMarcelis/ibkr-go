@@ -57,11 +57,49 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "realtime_bar":
 		return codec.RealTimeBar{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"]))}, nil
 	case "open_order":
-		return codec.OpenOrder{OrderID: int64(asInt(resolve(body["order_id"]))), Account: asString(resolve(body["account"])), Contract: asContract(resolve(body["contract"])), Action: asString(resolve(body["action"])), OrderType: asString(resolve(body["order_type"])), Status: asString(resolve(body["status"])), Quantity: asString(resolve(body["quantity"])), Filled: asString(resolve(body["filled"])), Remaining: asString(resolve(body["remaining"]))}, nil
+		return codec.OpenOrder{
+			OrderID:       int64(asInt(resolve(body["order_id"]))),
+			Account:       asString(resolve(body["account"])),
+			Contract:      asContract(resolve(body["contract"])),
+			Action:        asString(resolve(body["action"])),
+			OrderType:     asString(resolve(body["order_type"])),
+			Status:        asString(resolve(body["status"])),
+			Quantity:      asString(resolve(body["quantity"])),
+			Filled:        asString(resolve(body["filled"])),
+			Remaining:     asString(resolve(body["remaining"])),
+			LmtPrice:      asString(resolve(body["lmt_price"])),
+			AuxPrice:      asString(resolve(body["aux_price"])),
+			TIF:           asString(resolve(body["tif"])),
+			OcaGroup:      asString(resolve(body["oca_group"])),
+			OpenClose:     asString(resolve(body["open_close"])),
+			Origin:        asString(resolve(body["origin"])),
+			OrderRef:      asString(resolve(body["order_ref"])),
+			ClientID:      asString(resolve(body["client_id"])),
+			PermID:        asString(resolve(body["perm_id"])),
+			OutsideRTH:    asString(resolve(body["outside_rth"])),
+			Hidden:        asString(resolve(body["hidden"])),
+			DiscretionAmt: asString(resolve(body["discretion_amt"])),
+			GoodAfterTime: asString(resolve(body["good_after_time"])),
+			ParentID:      asString(resolve(body["parent_id"])),
+		}, nil
 	case "open_order_end":
 		return codec.OpenOrderEnd{}, nil
+	case "order_status":
+		return codec.OrderStatus{
+			OrderID:       int64(asInt(resolve(body["order_id"]))),
+			Status:        asString(resolve(body["status"])),
+			Filled:        asString(resolve(body["filled"])),
+			Remaining:     asString(resolve(body["remaining"])),
+			AvgFillPrice:  asString(resolve(body["avg_fill_price"])),
+			PermID:        asString(resolve(body["perm_id"])),
+			ParentID:      asString(resolve(body["parent_id"])),
+			LastFillPrice: asString(resolve(body["last_fill_price"])),
+			ClientID:      asString(resolve(body["client_id"])),
+			WhyHeld:       asString(resolve(body["why_held"])),
+			MktCapPrice:   asString(resolve(body["mkt_cap_price"])),
+		}, nil
 	case "execution_detail":
-		return codec.ExecutionDetail{ReqID: asInt(resolve(body["req_id"])), ExecID: asString(resolve(body["exec_id"])), Account: asString(resolve(body["account"])), Symbol: asString(resolve(body["symbol"])), Side: asString(resolve(body["side"])), Shares: asString(resolve(body["shares"])), Price: asString(resolve(body["price"])), Time: asString(resolve(body["time"]))}, nil
+		return codec.ExecutionDetail{ReqID: asInt(resolve(body["req_id"])), OrderID: int64(asInt(resolve(body["order_id"]))), ExecID: asString(resolve(body["exec_id"])), Account: asString(resolve(body["account"])), Symbol: asString(resolve(body["symbol"])), Side: asString(resolve(body["side"])), Shares: asString(resolve(body["shares"])), Price: asString(resolve(body["price"])), Time: asString(resolve(body["time"]))}, nil
 	case "executions_end":
 		return codec.ExecutionsEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
 	case "commission_report":
@@ -216,6 +254,22 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.HistoricalNewsItem{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), ProviderCode: asString(resolve(body["provider_code"])), ArticleID: asString(resolve(body["article_id"])), Headline: asString(resolve(body["headline"]))}, nil
 	case "historical_news_end":
 		return codec.HistoricalNewsEnd{ReqID: asInt(resolve(body["req_id"])), HasMore: asBool(resolve(body["has_more"]))}, nil
+	case "market_depth":
+		return codec.MarketDepthUpdate{
+			ReqID: asInt(resolve(body["req_id"])), Position: asInt(resolve(body["position"])),
+			Operation: asInt(resolve(body["operation"])), Side: asInt(resolve(body["side"])),
+			Price: asString(resolve(body["price"])), Size: asString(resolve(body["size"])),
+		}, nil
+	case "market_depth_l2":
+		return codec.MarketDepthL2Update{
+			ReqID: asInt(resolve(body["req_id"])), Position: asInt(resolve(body["position"])),
+			MarketMaker: asString(resolve(body["market_maker"])),
+			Operation:   asInt(resolve(body["operation"])), Side: asInt(resolve(body["side"])),
+			Price: asString(resolve(body["price"])), Size: asString(resolve(body["size"])),
+			IsSmartDepth: asBool(resolve(body["is_smart_depth"])),
+		}, nil
+	case "fundamental_data":
+		return codec.FundamentalDataResponse{ReqID: asInt(resolve(body["req_id"])), Data: asString(resolve(body["data"]))}, nil
 	case "scanner_data":
 		entries := asCodecEntries(resolve(body["entries"]), func(m map[string]any) codec.ScannerDataEntry {
 			return codec.ScannerDataEntry{
@@ -225,6 +279,21 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			}
 		})
 		return codec.ScannerDataResponse{ReqID: asInt(resolve(body["req_id"])), Entries: entries}, nil
+	case "receive_fa":
+		return codec.ReceiveFA{FADataType: asInt(resolve(body["fa_data_type"])), XML: asString(resolve(body["xml"]))}, nil
+	case "soft_dollar_tiers":
+		entries := asCodecEntries(resolve(body["tiers"]), func(m map[string]any) codec.SoftDollarTier {
+			return codec.SoftDollarTier{Name: asString(m["name"]), Value: asString(m["value"]), DisplayName: asString(m["display_name"])}
+		})
+		return codec.SoftDollarTiersResponse{ReqID: asInt(resolve(body["req_id"])), Tiers: entries}, nil
+	case "wsh_meta_data":
+		return codec.WSHMetaDataResponse{ReqID: asInt(resolve(body["req_id"])), DataJSON: asString(resolve(body["data_json"]))}, nil
+	case "wsh_event_data":
+		return codec.WSHEventDataResponse{ReqID: asInt(resolve(body["req_id"])), DataJSON: asString(resolve(body["data_json"]))}, nil
+	case "display_group_list":
+		return codec.DisplayGroupList{ReqID: asInt(resolve(body["req_id"])), Groups: asString(resolve(body["groups"]))}, nil
+	case "display_group_updated":
+		return codec.DisplayGroupUpdated{ReqID: asInt(resolve(body["req_id"])), ContractInfo: asString(resolve(body["contract_info"]))}, nil
 	default:
 		return nil, fmt.Errorf("testhost: unsupported build message %q", name)
 	}

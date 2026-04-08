@@ -31,11 +31,27 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		{TickGeneric{ReqID: 1, TickType: 49, Value: "0"}, "tick_generic"},
 		{TickString{ReqID: 1, TickType: 45, Value: "1712300400"}, "tick_string"},
 		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3}, "tick_req_params"},
+		{ExecutionDetail{ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345", Symbol: "AAPL", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "execution_detail"},
 		{ExecutionsEnd{ReqID: 1}, "executions_end"},
-		{OpenOrder{OrderID: 42, Account: "DU12345", Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, Action: "BUY", OrderType: "LMT", Status: "Submitted", Quantity: "10", Filled: "2", Remaining: "8"}, "open_order"},
+		{OpenOrder{
+			OrderID: 42, Account: "DU12345",
+			Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+			Action:   "BUY", Quantity: "10", OrderType: "LMT",
+			LmtPrice: "150.00", AuxPrice: "0.0", TIF: "DAY",
+			OpenClose: "", Origin: "0", OrderRef: "test-ref",
+			ClientID: "99", PermID: "123456", OutsideRTH: "0",
+			Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
+			Status:           "Submitted",
+			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
+			Filled: "2", Remaining: "8", ParentID: "99",
+		}, "open_order"},
 		{OpenOrderEnd{}, "open_order_end"},
 		{PositionEnd{}, "position_end"},
-		{OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0"}, "order_status"},
+		{OrderStatus{
+			OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0",
+			AvgFillPrice: "150.50", PermID: "123456", ParentID: "0",
+			LastFillPrice: "150.50", ClientID: "99", WhyHeld: "", MktCapPrice: "0",
+		}, "order_status"},
 	}
 
 	for _, tt := range tests {
@@ -267,14 +283,107 @@ func TestDecodeOpenOrderCapture(t *testing.T) {
 	if oo.Account != "DU9000001" {
 		t.Errorf("Account = %q, want DU9000001", oo.Account)
 	}
+	// Newly expanded fields at verified wire positions.
+	if oo.LmtPrice != "1.2" {
+		t.Errorf("LmtPrice = %q, want 1.2", oo.LmtPrice)
+	}
+	if oo.AuxPrice != "0.0" {
+		t.Errorf("AuxPrice = %q, want 0.0", oo.AuxPrice)
+	}
+	if oo.TIF != "GTC" {
+		t.Errorf("TIF = %q, want GTC", oo.TIF)
+	}
+	if oo.Origin != "0" {
+		t.Errorf("Origin = %q, want 0", oo.Origin)
+	}
+	if oo.PermID != "1518189976" {
+		t.Errorf("PermID = %q, want 1518189976", oo.PermID)
+	}
 	if oo.Status != "PreSubmitted" {
 		t.Errorf("Status = %q, want PreSubmitted", oo.Status)
+	}
+	// OrderState margin fields (all UNSET in this capture).
+	if oo.InitMarginBefore != "1.7976931348623157E308" {
+		t.Errorf("InitMarginBefore = %q, want UNSET double", oo.InitMarginBefore)
 	}
 	if oo.Filled != "0" {
 		t.Errorf("Filled = %q, want 0", oo.Filled)
 	}
 	if oo.Remaining != "1" {
 		t.Errorf("Remaining = %q, want 1", oo.Remaining)
+	}
+}
+
+// TestDecodeOpenOrderNonSimple verifies that an OpenOrder message with a
+// field count different from the expected simple-order count (169) produces
+// a partial parse with only the reliably-positioned pre-variable-section fields.
+func TestDecodeOpenOrderNonSimple(t *testing.T) {
+	t.Parallel()
+
+	// Build a synthetic OpenOrder payload with extra fields (simulating a
+	// combo order with variable-length sections that expand the message).
+	fields := make([]string, 0, 180)
+	fields = append(fields, itoa(InOpenOrder))                                                  // msg_id
+	fields = append(fields, "42")                                                               // r[0] orderID
+	fields = append(fields, "265598", "AAPL", "STK", "", "", "", "", "SMART", "USD", "", "NMS") // r[1..11] contract
+	fields = append(fields, "BUY", "10", "LMT", "150.00", "0", "DAY", "", "DU9000001")          // r[12..19]
+	fields = append(fields, "", "0", "myref", "1", "99999", "0", "0", "0", "")                  // r[20..28]
+	// Pad to 180 fields (more than 169 — simulates variable-length sections).
+	for len(fields) < 181 {
+		fields = append(fields, "")
+	}
+	payload := wire.EncodeFields(fields)
+
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("len = %d, want 1", len(msgs))
+	}
+	oo, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+
+	// Pre-variable fields should be correctly parsed.
+	if oo.OrderID != 42 {
+		t.Errorf("OrderID = %d, want 42", oo.OrderID)
+	}
+	if oo.Contract.Symbol != "AAPL" {
+		t.Errorf("Symbol = %q, want AAPL", oo.Contract.Symbol)
+	}
+	if oo.Action != "BUY" {
+		t.Errorf("Action = %q, want BUY", oo.Action)
+	}
+	if oo.Quantity != "10" {
+		t.Errorf("Quantity = %q, want 10", oo.Quantity)
+	}
+	if oo.OrderType != "LMT" {
+		t.Errorf("OrderType = %q, want LMT", oo.OrderType)
+	}
+	if oo.LmtPrice != "150.00" {
+		t.Errorf("LmtPrice = %q, want 150.00", oo.LmtPrice)
+	}
+	if oo.Account != "DU9000001" {
+		t.Errorf("Account = %q, want DU9000001", oo.Account)
+	}
+	if oo.OrderRef != "myref" {
+		t.Errorf("OrderRef = %q, want myref", oo.OrderRef)
+	}
+
+	// Post-variable fields should be zero-valued (partial parse).
+	if oo.Status != "" {
+		t.Errorf("Status = %q, want empty (partial parse)", oo.Status)
+	}
+	if oo.Filled != "" {
+		t.Errorf("Filled = %q, want empty (partial parse)", oo.Filled)
+	}
+	if oo.Remaining != "" {
+		t.Errorf("Remaining = %q, want empty (partial parse)", oo.Remaining)
+	}
+	if oo.ParentID != "" {
+		t.Errorf("ParentID = %q, want empty (partial parse)", oo.ParentID)
 	}
 }
 

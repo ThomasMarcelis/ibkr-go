@@ -156,6 +156,60 @@ func TestReconnectPolicyOff(t *testing.T) {
 	}
 }
 
+// TestSingleGapOn1100ThenTransportLoss verifies that when IBKR sends code 1100
+// (connectivity lost) and then the TCP connection drops, the subscription
+// receives exactly one Gap event, not two.
+func TestSingleGapOn1100ThenTransportLoss(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "reconnect_1100_then_transport_loss.txt",
+		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+	}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
+	if err != nil {
+		t.Fatalf("SubscribeQuotes() error = %v", err)
+	}
+
+	// Wait for started + initial tick
+	waitForStateKind(t, sub.State(), ibkr.SubscriptionStarted)
+	first := waitForEvent(t, sub.Events())
+	if first.Snapshot.Last.String() != "250" {
+		t.Fatalf("first last = %s, want 250", first.Snapshot.Last.String())
+	}
+
+	// Code 1100 arrives, then transport drops. Should see exactly one Gap.
+	gap := waitForStateKind(t, sub.State(), ibkr.SubscriptionGap)
+	if gap.ConnectionSeq != 1 {
+		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
+	}
+
+	// After reconnect, should get Resumed (not another Gap first).
+	resumed := waitForStateKind(t, sub.State(), ibkr.SubscriptionResumed)
+	if resumed.ConnectionSeq != 2 {
+		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
+	}
+
+	// Verify data flows again
+	second := waitForEvent(t, sub.Events())
+	if second.Snapshot.Last.String() != "251" {
+		t.Fatalf("second last = %s, want 251", second.Snapshot.Last.String())
+	}
+
+	_ = sub.Close()
+}
+
 func TestGapEventWithout1101(t *testing.T) {
 	t.Parallel()
 

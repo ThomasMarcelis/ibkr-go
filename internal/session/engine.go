@@ -31,9 +31,11 @@ type Engine struct {
 
 	transport *transport.Conn
 
-	keyed      map[int]*route
-	singletons map[string]*route
-	executions executionCorrelator
+	keyed       map[int]*route
+	singletons  map[string]*route
+	orders      map[int64]*orderRoute
+	executions  executionCorrelator
+	execToOrder map[string]int64 // execID → orderID for commission routing to order handles
 
 	nextReqID int
 
@@ -59,6 +61,7 @@ const (
 	singletonCompletedOrders   = "completed_orders"
 	singletonAccountUpdates    = "account_updates"
 	singletonNewsBulletins     = "news_bulletins"
+	singletonFA                = "fa"
 )
 
 type route struct {
@@ -72,6 +75,14 @@ type route struct {
 	emitGap      func(*Engine)
 	emitResumed  func(*Engine)
 	close        func(error)
+	gapped       bool // true after Gap emitted, reset on Resumed; prevents double emission
+}
+
+type orderRoute struct {
+	orderID int64
+	handle  *OrderHandle
+	closed  bool
+	gapped  bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
 func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
@@ -93,7 +104,9 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 		events:       make(chan Event, cfg.eventBuffer),
 		keyed:        make(map[int]*route),
 		singletons:   make(map[string]*route),
+		orders:       make(map[int64]*orderRoute),
 		executions:   newExecutionCorrelator(),
+		execToOrder:  make(map[string]int64),
 		nextReqID:    1,
 		snapshot: Snapshot{
 			State: StateDisconnected,
@@ -502,15 +515,12 @@ func (e *Engine) SetMarketDataType(dataType int) error {
 	if dataType < 1 || dataType > 4 {
 		return fmt.Errorf("invalid market data type %d: must be 1 (live), 2 (frozen), 3 (delayed), or 4 (delayed-frozen)", dataType)
 	}
-	resp := make(chan error, 1)
-	e.enqueue(func() {
+	return awaitFireAndForget(context.Background(), e, func() error {
 		if !e.isReady() {
-			resp <- ErrNotReady
-			return
+			return ErrNotReady
 		}
-		resp <- e.send(codec.ReqMarketDataType{DataType: dataType})
+		return e.send(codec.ReqMarketDataType{DataType: dataType})
 	})
-	return <-resp
 }
 
 func (e *Engine) QuoteSnapshot(ctx context.Context, req QuoteSubscriptionRequest) (Quote, error) {
@@ -644,6 +654,12 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				// 10167: delayed market data warning — the subscription
+				// stays open and will receive delayed ticks.
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpQuotes, m))
 			},
@@ -763,8 +779,131 @@ func (e *Engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				sub.emit(bar)
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpRealTimeBars, m))
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
+					sub.emitState(SubscriptionStateEvent{
+						Kind:          SubscriptionGap,
+						ConnectionSeq: e.connectionSeq(),
+						Err:           err,
+					})
+					return true
+				}
+				e.deleteKeyedRoute(reqID)
+				sub.closeWithErr(ErrResumeRequired)
+				return false
+			},
+			emitGap: func(e *Engine) {
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionGap,
+					ConnectionSeq: e.connectionSeq(),
+				})
+			},
+			emitResumed: func(e *Engine) {
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionResumed,
+					ConnectionSeq: e.connectionSeq(),
+				})
+			},
+			close: func(err error) { sub.closeWithErr(err) },
+		}
+		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		if err := e.send(e.keyed[reqID].request); err != nil {
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(err)
+			resp <- result{err: err}
+			return
+		}
+		resp <- result{sub: sub}
+	})
+
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
+		if out.sub != nil {
+			_ = out.sub.Close()
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out.err == nil && out.sub != nil {
+		bindContext(ctx, out.sub)
+	}
+	return out.sub, out.err
+}
+
+func (e *Engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthRequest, opts ...SubscriptionOption) (*Subscription[DepthRow], error) {
+	type result struct {
+		sub *Subscription[DepthRow]
+		err error
+	}
+	resp := make(chan result, 1)
+
+	enqueueSubscriptionSetup(ctx, e, resp, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+
+		cfg := defaultSubscriptionConfig(e.cfg)
+		for _, opt := range opts {
+			opt(&cfg)
+		}
+		if err := validateResumePolicy(OpMarketDepth, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID := e.allocReqID()
+		var sub *Subscription[DepthRow]
+		sub = newSubscription[DepthRow](cfg, func() {
+			e.enqueue(func() {
+				if _, ok := e.keyed[reqID]; !ok {
+					return
+				}
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(codec.CancelMarketDepth{ReqID: reqID})
+				sub.closeWithErr(nil)
+			})
+		})
+
+		e.keyed[reqID] = &route{
+			opKind:       OpMarketDepth,
+			subscription: true,
+			resume:       cfg.resume,
+			request: codec.MarketDepthRequest{
+				ReqID:        reqID,
+				Contract:     toCodecContract(req.Contract),
+				NumRows:      req.NumRows,
+				IsSmartDepth: req.IsSmartDepth,
+			},
+			handle: func(msg any, e *Engine) {
+				switch m := msg.(type) {
+				case codec.MarketDepthUpdate:
+					row, err := fromCodecMarketDepth(m)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					sub.emit(row)
+				case codec.MarketDepthL2Update:
+					row, err := fromCodecMarketDepthL2(m)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					sub.emit(row)
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				e.deleteKeyedRoute(reqID)
+				sub.closeWithErr(e.apiErr(OpMarketDepth, m))
 			},
 			onDisconnect: func(e *Engine, err error) bool {
 				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
@@ -1250,8 +1389,7 @@ func (e *Engine) UserInfo(ctx context.Context) (string, error) {
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		reqID = e.nextReqID
-		e.nextReqID++
+		reqID = e.allocReqID()
 
 		e.keyed[reqID] = &route{
 			opKind: OpUserInfo,
@@ -1303,8 +1441,7 @@ func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		reqID = e.nextReqID
-		e.nextReqID++
+		reqID = e.allocReqID()
 
 		e.keyed[reqID] = &route{
 			opKind: OpMatchingSymbols,
@@ -1366,8 +1503,7 @@ func (e *Engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		reqID = e.nextReqID
-		e.nextReqID++
+		reqID = e.allocReqID()
 
 		e.keyed[reqID] = &route{
 			opKind: OpHeadTimestamp,
@@ -2085,6 +2221,10 @@ func (e *Engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpTickByTick, m))
 			},
@@ -2273,6 +2413,10 @@ func (e *Engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpHistoricalBarsStream, m))
 			},
@@ -2934,6 +3078,383 @@ func (e *Engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 	return out.sub, out.err
 }
 
+// FA Configuration
+
+func (e *Engine) RequestFA(ctx context.Context, faDataType int) (string, error) {
+	type result struct {
+		xml string
+		err error
+	}
+	resp := make(chan result, 1)
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		if _, exists := e.singletons[singletonFA]; exists {
+			resp <- result{err: fmt.Errorf("ibkr: FA request already in progress")}
+			return
+		}
+
+		e.singletons[singletonFA] = &route{
+			opKind: OpFAConfig,
+			handle: func(msg any, eng *Engine) {
+				switch m := msg.(type) {
+				case codec.ReceiveFA:
+					delete(eng.singletons, singletonFA)
+					resp <- result{xml: m.XML}
+				}
+			},
+			onDisconnect: func(eng *Engine, err error) bool {
+				delete(eng.singletons, singletonFA)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.RequestFA{FADataType: faDataType}); err != nil {
+			delete(e.singletons, singletonFA)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { delete(e.singletons, singletonFA) })
+	})
+	if err != nil {
+		return "", err
+	}
+	return out.xml, out.err
+}
+
+func (e *Engine) ReplaceFA(ctx context.Context, faDataType int, xml string) error {
+	return awaitFireAndForget(ctx, e, func() error {
+		if !e.isReady() {
+			return ErrNotReady
+		}
+		return e.send(codec.ReplaceFA{FADataType: faDataType, XML: xml})
+	})
+}
+
+func (e *Engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) {
+	type result struct {
+		tiers []SoftDollarTier
+		err   error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		reqID = e.allocReqID()
+		e.keyed[reqID] = &route{
+			opKind: OpSoftDollarTiers,
+			handle: func(msg any, e *Engine) {
+				switch m := msg.(type) {
+				case codec.SoftDollarTiersResponse:
+					delete(e.keyed, reqID)
+					tiers := make([]SoftDollarTier, len(m.Tiers))
+					for i, t := range m.Tiers {
+						tiers[i] = SoftDollarTier{Name: t.Name, Value: t.Value, DisplayName: t.DisplayName}
+					}
+					resp <- result{tiers: tiers}
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				delete(e.keyed, reqID)
+				resp <- result{err: e.apiErr(OpSoftDollarTiers, m)}
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				delete(e.keyed, reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
+			delete(e.keyed, reqID)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.tiers, out.err
+}
+
+// WSH Calendar Events
+
+func (e *Engine) WSHMetaData(ctx context.Context) (string, error) {
+	type result struct {
+		dataJSON string
+		err      error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		reqID = e.allocReqID()
+		e.keyed[reqID] = &route{
+			opKind: OpWSHMetaData,
+			handle: func(msg any, e *Engine) {
+				switch m := msg.(type) {
+				case codec.WSHMetaDataResponse:
+					delete(e.keyed, reqID)
+					resp <- result{dataJSON: m.DataJSON}
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				delete(e.keyed, reqID)
+				resp <- result{err: e.apiErr(OpWSHMetaData, m)}
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				delete(e.keyed, reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.WSHMetaDataRequest{ReqID: reqID}); err != nil {
+			delete(e.keyed, reqID)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+	})
+	if err != nil {
+		return "", err
+	}
+	return out.dataJSON, out.err
+}
+
+func (e *Engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (string, error) {
+	type result struct {
+		dataJSON string
+		err      error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		reqID = e.allocReqID()
+		e.keyed[reqID] = &route{
+			opKind: OpWSHEventData,
+			handle: func(msg any, e *Engine) {
+				switch m := msg.(type) {
+				case codec.WSHEventDataResponse:
+					delete(e.keyed, reqID)
+					resp <- result{dataJSON: m.DataJSON}
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				delete(e.keyed, reqID)
+				resp <- result{err: e.apiErr(OpWSHEventData, m)}
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				delete(e.keyed, reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.WSHEventDataRequest{
+			ReqID:           reqID,
+			ConID:           req.ConID,
+			Filter:          req.Filter,
+			FillWatchlist:   req.FillWatchlist,
+			FillPortfolio:   req.FillPortfolio,
+			FillCompetitors: req.FillCompetitors,
+			StartDate:       req.StartDate,
+			EndDate:         req.EndDate,
+			TotalLimit:      req.TotalLimit,
+		}); err != nil {
+			delete(e.keyed, reqID)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+	})
+	if err != nil {
+		return "", err
+	}
+	return out.dataJSON, out.err
+}
+
+// Display Groups
+
+func (e *Engine) QueryDisplayGroups(ctx context.Context) (string, error) {
+	type result struct {
+		groups string
+		err    error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		reqID = e.allocReqID()
+		e.keyed[reqID] = &route{
+			opKind: OpDisplayGroups,
+			handle: func(msg any, e *Engine) {
+				switch m := msg.(type) {
+				case codec.DisplayGroupList:
+					delete(e.keyed, reqID)
+					resp <- result{groups: m.Groups}
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				delete(e.keyed, reqID)
+				resp <- result{err: e.apiErr(OpDisplayGroups, m)}
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				delete(e.keyed, reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
+			delete(e.keyed, reqID)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+	})
+	if err != nil {
+		return "", err
+	}
+	return out.groups, out.err
+}
+
+func (e *Engine) SubscribeDisplayGroup(ctx context.Context, groupID int, opts ...SubscriptionOption) (*DisplayGroupHandle, error) {
+	type result struct {
+		sub *Subscription[DisplayGroupUpdate]
+		err error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+
+	enqueueSubscriptionSetup(ctx, e, resp, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+
+		cfg := defaultSubscriptionConfig(e.cfg)
+		for _, opt := range opts {
+			opt(&cfg)
+		}
+		if err := validateResumePolicy(OpDisplayGroupEvents, cfg.resume); err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = e.allocReqID()
+		var sub *Subscription[DisplayGroupUpdate]
+		sub = newSubscription[DisplayGroupUpdate](cfg, func() {
+			e.enqueue(func() {
+				if _, ok := e.keyed[reqID]; !ok {
+					return
+				}
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID})
+				sub.closeWithErr(nil)
+			})
+		})
+
+		e.keyed[reqID] = &route{
+			opKind:       OpDisplayGroupEvents,
+			subscription: true,
+			resume:       cfg.resume,
+			request:      codec.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: groupID},
+			handle: func(msg any, e *Engine) {
+				if m, ok := msg.(codec.DisplayGroupUpdated); ok {
+					sub.emit(DisplayGroupUpdate{ContractInfo: m.ContractInfo})
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				e.deleteKeyedRoute(reqID)
+				sub.closeWithErr(e.apiErr(OpDisplayGroupEvents, m))
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				e.deleteKeyedRoute(reqID)
+				sub.closeWithErr(ErrResumeRequired)
+				return false
+			},
+			close: func(err error) { sub.closeWithErr(err) },
+		}
+		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		if err := e.send(e.keyed[reqID].request); err != nil {
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(err)
+			resp <- result{err: err}
+			return
+		}
+		resp <- result{sub: sub}
+	})
+
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
+		if out.sub != nil {
+			_ = out.sub.Close()
+		}
+	})
+	if err != nil {
+		return nil, err
+	}
+	if out.err == nil && out.sub != nil {
+		bindContext(ctx, out.sub)
+	}
+	if out.err != nil {
+		return nil, out.err
+	}
+	handle := &DisplayGroupHandle{
+		Subscription: out.sub,
+		updateFn: func(ctx context.Context, contractInfo string) error {
+			return e.updateDisplayGroup(ctx, reqID, contractInfo)
+		},
+	}
+	return handle, nil
+}
+
+func (e *Engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
+	return awaitFireAndForget(ctx, e, func() error {
+		if !e.isReady() {
+			return ErrNotReady
+		}
+		return e.send(codec.UpdateDisplayGroupRequest{ReqID: reqID, ContractInfo: contractInfo})
+	})
+}
+
 func fromCodecOptionComputation(m codec.TickOptionComputation) OptionComputation {
 	iv, _ := ParseDecimal(m.ImpliedVol)
 	delta, _ := ParseDecimal(m.Delta)
@@ -2948,6 +3469,234 @@ func fromCodecOptionComputation(m codec.TickOptionComputation) OptionComputation
 		PvDividend: pvDiv, Gamma: gamma, Vega: vega,
 		Theta: theta, UndPrice: undPrice,
 	}
+}
+
+// PlaceOrder submits a new order and returns an OrderHandle that tracks its
+// lifecycle. The handle receives OpenOrder, OrderStatus, Execution, and
+// Commission events via dual dispatch. The order can be modified or cancelled
+// through the returned handle.
+func (e *Engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
+	type result struct {
+		handle *OrderHandle
+		err    error
+	}
+
+	resp := make(chan result, 1)
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+
+		orderID := e.allocOrderID()
+		handle := newOrderHandle(orderID)
+
+		handle.cancelFn = func(ctx context.Context) error {
+			ch := make(chan error, 1)
+			e.enqueue(func() {
+				if !e.isReady() {
+					ch <- ErrNotReady
+					return
+				}
+				ch <- e.send(codec.CancelOrderRequest{OrderID: orderID})
+			})
+			select {
+			case err := <-ch:
+				return err
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-e.done:
+				return e.Wait()
+			}
+		}
+
+		handle.modifyFn = func(ctx context.Context, order Order) error {
+			return awaitFireAndForget(ctx, e, func() error {
+				if !e.isReady() {
+					return ErrNotReady
+				}
+				return e.send(toCodecPlaceOrder(orderID, PlaceOrderRequest{
+					Contract: req.Contract,
+					Order:    order,
+				}))
+			})
+		}
+
+		e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
+
+		if err := e.send(toCodecPlaceOrder(orderID, req)); err != nil {
+			delete(e.orders, orderID)
+			handle.closeWithErr(err)
+			resp <- result{err: err}
+			return
+		}
+
+		resp <- result{handle: handle}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	if err != nil {
+		return nil, err
+	}
+	return out.handle, out.err
+}
+
+// CancelOrder sends a cancel request for the given order ID. This is
+// fire-and-forget; the cancellation result arrives via the OrderHandle's
+// events channel as an OrderStatus with Status "Cancelled".
+func (e *Engine) CancelOrder(ctx context.Context, orderID int64) error {
+	return awaitFireAndForget(ctx, e, func() error {
+		if !e.isReady() {
+			return ErrNotReady
+		}
+		return e.send(codec.CancelOrderRequest{OrderID: orderID})
+	})
+}
+
+// GlobalCancel requests cancellation of all open orders. This is
+// fire-and-forget; individual cancellation results arrive via any active
+// OrderHandle events channels.
+func (e *Engine) GlobalCancel(ctx context.Context) error {
+	return awaitFireAndForget(ctx, e, func() error {
+		if !e.isReady() {
+			return ErrNotReady
+		}
+		return e.send(codec.GlobalCancelRequest{})
+	})
+}
+
+func (e *Engine) FundamentalData(ctx context.Context, req FundamentalDataRequest) (string, error) {
+	type result struct {
+		data string
+		err  error
+	}
+	resp := make(chan result, 1)
+
+	var reqID int
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		reqID = e.allocReqID()
+		e.keyed[reqID] = &route{
+			opKind: OpFundamentalData,
+			handle: func(msg any, e *Engine) {
+				switch m := msg.(type) {
+				case codec.FundamentalDataResponse:
+					delete(e.keyed, reqID)
+					resp <- result{data: m.Data}
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *Engine) {
+				delete(e.keyed, reqID)
+				resp <- result{err: e.apiErr(OpFundamentalData, m)}
+			},
+			onDisconnect: func(e *Engine, err error) bool {
+				delete(e.keyed, reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.FundamentalDataRequest{
+			ReqID:      reqID,
+			Contract:   toCodecContract(req.Contract),
+			ReportType: req.ReportType,
+		}); err != nil {
+			delete(e.keyed, reqID)
+			resp <- result{err: err}
+			return
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(codec.CancelFundamentalData{ReqID: reqID})
+			}
+		})
+	})
+	if err != nil {
+		return "", err
+	}
+	return out.data, out.err
+}
+
+func (e *Engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
+	return awaitFireAndForget(ctx, e, func() error {
+		if !e.isReady() {
+			return ErrNotReady
+		}
+		override := 0
+		if req.Override {
+			override = 1
+		}
+		reqID := e.allocReqID()
+		return e.send(codec.ExerciseOptionsRequest{
+			ReqID:            reqID,
+			Contract:         toCodecContract(req.Contract),
+			ExerciseAction:   req.ExerciseAction,
+			ExerciseQuantity: req.ExerciseQuantity,
+			Account:          req.Account,
+			Override:         override,
+		})
+	})
+}
+
+func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
+	return codec.PlaceOrderRequest{
+		OrderID:  orderID,
+		Contract: toCodecContract(req.Contract),
+
+		Action:        string(req.Order.Action),
+		TotalQuantity: decimalOrEmpty(req.Order.Quantity),
+		OrderType:     req.Order.OrderType,
+		LmtPrice:      decimalOrEmpty(req.Order.LmtPrice),
+		AuxPrice:      decimalOrEmpty(req.Order.AuxPrice),
+
+		TIF:        string(req.Order.TIF),
+		OcaGroup:   req.Order.OcaGroup,
+		Account:    req.Order.Account,
+		Origin:     "0",
+		OrderRef:   req.Order.OrderRef,
+		Transmit:   optBoolToString(req.Order.Transmit, "1"),
+		ParentID:   strconv.FormatInt(req.Order.ParentID, 10),
+		OutsideRTH: boolToString(req.Order.OutsideRTH),
+
+		ExemptCode:                  "-1",
+		GoodAfterTime:               req.Order.GoodAfterTime,
+		GoodTillDate:                req.Order.GoodTillDate,
+		ConditionsCount:             "0",
+		DeltaNeutralContractPresent: "0",
+	}
+}
+
+func decimalOrEmpty(d Decimal) string {
+	if d == (Decimal{}) {
+		return ""
+	}
+	return d.String()
+}
+
+func boolToString(b bool) string {
+	if b {
+		return "1"
+	}
+	return "0"
+}
+
+func optBoolToString(b *bool, dflt string) string {
+	if b == nil {
+		return dflt
+	}
+	if *b {
+		return "1"
+	}
+	return "0"
 }
 
 func (e *Engine) run() {
@@ -3127,16 +3876,43 @@ func (e *Engine) handleIncoming(msg any) {
 	if reqID, ok := messageReqID(msg); ok {
 		if route, found := e.keyed[reqID]; found {
 			route.handle(msg, e)
+			// ExecutionDetail needs dual dispatch: keyed subscription + order handle.
+			if m, ok := msg.(codec.ExecutionDetail); ok {
+				e.dispatchExecutionToOrder(m)
+			}
 			return
 		}
 	}
 
 	switch msg := msg.(type) {
+	case codec.ExecutionDetail:
+		// Unsolicited execution (reqID=-1 or no matching keyed route).
+		e.dispatchExecutionToOrder(msg)
+
 	case codec.Position, codec.PositionEnd:
 		if route, ok := e.singletons[singletonPositions]; ok {
 			route.handle(msg, e)
 		}
-	case codec.OpenOrder, codec.OpenOrderEnd, codec.OrderStatus:
+	case codec.OpenOrder:
+		// Dual dispatch: per-order route first, then singleton observer.
+		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
+			or.handle.emitOrder(fromCodecOpenOrder(msg))
+		}
+		if route, ok := e.singletons[singletonOpenOrders]; ok {
+			route.handle(msg, e)
+		}
+	case codec.OrderStatus:
+		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
+			status := fromCodecOrderStatus(msg)
+			or.handle.emitStatus(status)
+			if IsTerminalOrderStatus(status.Status) {
+				or.closed = true
+			}
+		}
+		if route, ok := e.singletons[singletonOpenOrders]; ok {
+			route.handle(msg, e)
+		}
+	case codec.OpenOrderEnd:
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			route.handle(msg, e)
 		}
@@ -3174,6 +3950,10 @@ func (e *Engine) handleIncoming(msg any) {
 		if rt, ok := e.singletons[singletonNewsBulletins]; ok {
 			rt.handle(msg, e)
 		}
+	case codec.ReceiveFA:
+		if rt, ok := e.singletons[singletonFA]; ok {
+			rt.handle(msg, e)
+		}
 	}
 }
 
@@ -3208,9 +3988,15 @@ func (e *Engine) handleAPIError(msg codec.APIError) {
 	}
 
 	// 10xxx: market-data warnings such as 10167 "displaying delayed data".
-	// The reqID references the subscription that will receive degraded data,
-	// but the subscription must stay open -- this is not a terminal error.
+	// Route to keyed handler when one exists (the handler decides whether
+	// the code is terminal); otherwise emit as a session-level event.
 	if msg.Code >= 10000 && msg.Code < 20000 {
+		if msg.ReqID > 0 {
+			if route, ok := e.keyed[msg.ReqID]; ok && route.handleAPIErr != nil {
+				route.handleAPIErr(msg, e)
+				return
+			}
+		}
 		e.emitEvent(msg.Code, msg.Message)
 		return
 	}
@@ -3221,6 +4007,12 @@ func (e *Engine) handleAPIError(msg codec.APIError) {
 	if msg.ReqID > 0 {
 		if route, ok := e.keyed[msg.ReqID]; ok && route.handleAPIErr != nil {
 			route.handleAPIErr(msg, e)
+			return
+		}
+		// Order-specific API errors: the reqID field carries the orderID
+		// for order rejections (e.g., code 201 "order rejected").
+		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
+			or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
 			return
 		}
 	}
@@ -3272,6 +4064,10 @@ func (e *Engine) handleTransportLoss(err error) {
 
 func (e *Engine) disconnectRoutes(err error) {
 	for reqID, route := range e.keyed {
+		// Already gapped (e.g. from code 1100) — route survives, skip duplicate Gap.
+		if route.gapped {
+			continue
+		}
 		if route.onDisconnect == nil {
 			route.close(ErrInterrupted)
 			e.deleteKeyedRoute(reqID)
@@ -3282,6 +4078,9 @@ func (e *Engine) disconnectRoutes(err error) {
 		}
 	}
 	for key, route := range e.singletons {
+		if route.gapped {
+			continue
+		}
 		if route.onDisconnect == nil {
 			route.close(ErrInterrupted)
 			delete(e.singletons, key)
@@ -3291,11 +4090,19 @@ func (e *Engine) disconnectRoutes(err error) {
 			delete(e.singletons, key)
 		}
 	}
+	// Order handles survive disconnect: emit Gap, do not close.
+	for _, or := range e.orders {
+		if !or.closed && !or.gapped {
+			or.gapped = true
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
+		}
+	}
 }
 
 func (e *Engine) resumeRoutes() {
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
+			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
 				e.deleteKeyedRoute(reqID)
@@ -3308,6 +4115,7 @@ func (e *Engine) resumeRoutes() {
 	}
 	for key, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto {
+			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
 				delete(e.singletons, key)
@@ -3316,6 +4124,13 @@ func (e *Engine) resumeRoutes() {
 			if route.emitResumed != nil {
 				route.emitResumed(e)
 			}
+		}
+	}
+	// Emit Resumed to all active order handles after reconnect.
+	for _, or := range e.orders {
+		if !or.closed && or.gapped {
+			or.gapped = false
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
 		}
 	}
 }
@@ -3336,7 +4151,15 @@ func (e *Engine) closeEngine(err error) {
 		route.close(err)
 		delete(e.singletons, key)
 	}
+	for id, or := range e.orders {
+		if !or.closed {
+			or.closed = true
+			or.handle.closeWithErr(err)
+		}
+		delete(e.orders, id)
+	}
 	e.executions.reset()
+	e.execToOrder = make(map[string]int64)
 	e.setState(StateClosed, 0, "", err)
 	e.reportReady(err)
 	e.waitMu.Lock()
@@ -3413,9 +4236,25 @@ func (e *Engine) send(msg codec.Message) error {
 }
 
 func (e *Engine) allocReqID() int {
-	reqID := e.nextReqID
-	e.nextReqID++
-	return reqID
+	for {
+		id := e.nextReqID
+		e.nextReqID++
+		if _, conflict := e.orders[int64(id)]; !conflict {
+			return id
+		}
+	}
+}
+
+func (e *Engine) allocOrderID() int64 {
+	for {
+		id := e.snapshot.NextValidID
+		e.updateSnapshot(func(s *Snapshot) {
+			s.NextValidID++
+		})
+		if _, conflict := e.keyed[int(id)]; !conflict {
+			return id
+		}
+	}
 }
 
 func (e *Engine) connectionSeq() uint64 {
@@ -3442,13 +4281,21 @@ func (e *Engine) apiErr(opKind OpKind, msg codec.APIError) error {
 
 func (e *Engine) emitGap() {
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
+			route.gapped = true
 			route.emitGap(e)
 		}
 	}
 	for _, route := range e.singletons {
-		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
+			route.gapped = true
 			route.emitGap(e)
+		}
+	}
+	for _, or := range e.orders {
+		if !or.closed && !or.gapped {
+			or.gapped = true
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
 		}
 	}
 }
@@ -3456,12 +4303,20 @@ func (e *Engine) emitGap() {
 func (e *Engine) emitResumed() {
 	for _, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.gapped = false
 			route.emitResumed(e)
 		}
 	}
 	for _, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.gapped = false
 			route.emitResumed(e)
+		}
+	}
+	for _, or := range e.orders {
+		if !or.closed && or.gapped {
+			or.gapped = false
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
 		}
 	}
 }
@@ -3495,6 +4350,31 @@ func (e *Engine) routeCommissionReport(report codec.CommissionReport) {
 		}
 		route.handle(report, e)
 	}
+	// Also dispatch to the order handle that owns this execution.
+	if orderID, ok := e.execToOrder[report.ExecID]; ok {
+		if or, ok := e.orders[orderID]; ok && !or.closed {
+			cr, err := fromCodecCommission(report)
+			if err == nil {
+				or.handle.emitCommission(cr)
+			}
+		}
+	}
+}
+
+func (e *Engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
+	if m.OrderID == 0 {
+		return
+	}
+	or, ok := e.orders[m.OrderID]
+	if !ok || or.closed {
+		return
+	}
+	exec, err := fromCodecExecution(m)
+	if err != nil {
+		return
+	}
+	or.handle.emitExecution(*exec.Execution)
+	e.execToOrder[m.ExecID] = m.OrderID
 }
 
 func (e *Engine) undeliveredCommissions(reqID int, execID string) []codec.CommissionReport {
@@ -3593,6 +4473,22 @@ func messageReqID(msg any) (int, bool) {
 	case codec.HistoricalNewsEnd:
 		return m.ReqID, true
 	case codec.ScannerDataResponse:
+		return m.ReqID, true
+	case codec.SoftDollarTiersResponse:
+		return m.ReqID, true
+	case codec.WSHMetaDataResponse:
+		return m.ReqID, true
+	case codec.WSHEventDataResponse:
+		return m.ReqID, true
+	case codec.DisplayGroupList:
+		return m.ReqID, true
+	case codec.DisplayGroupUpdated:
+		return m.ReqID, true
+	case codec.MarketDepthUpdate:
+		return m.ReqID, true
+	case codec.MarketDepthL2Update:
+		return m.ReqID, true
+	case codec.FundamentalDataResponse:
 		return m.ReqID, true
 	default:
 		return 0, false
@@ -3761,6 +4657,44 @@ func fromCodecRealtimeBar(m codec.RealTimeBar) (Bar, error) {
 	return fromCodecBar(codec.HistoricalBar(m))
 }
 
+func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
+	price, err := ParseDecimal(m.Price)
+	if err != nil {
+		return DepthRow{}, fmt.Errorf("ibkr: market depth price: %w", err)
+	}
+	size, err := ParseDecimal(m.Size)
+	if err != nil {
+		return DepthRow{}, fmt.Errorf("ibkr: market depth size: %w", err)
+	}
+	return DepthRow{
+		Position:  m.Position,
+		Operation: m.Operation,
+		Side:      m.Side,
+		Price:     price,
+		Size:      size,
+	}, nil
+}
+
+func fromCodecMarketDepthL2(m codec.MarketDepthL2Update) (DepthRow, error) {
+	price, err := ParseDecimal(m.Price)
+	if err != nil {
+		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 price: %w", err)
+	}
+	size, err := ParseDecimal(m.Size)
+	if err != nil {
+		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 size: %w", err)
+	}
+	return DepthRow{
+		Position:     m.Position,
+		MarketMaker:  m.MarketMaker,
+		Operation:    m.Operation,
+		Side:         m.Side,
+		Price:        price,
+		Size:         size,
+		IsSmartDepth: m.IsSmartDepth,
+	}, nil
+}
+
 // parseTickByTickTime parses a tick-by-tick timestamp. The wire sends a Unix
 // epoch seconds value as a string. Falls back to RFC3339 for test transcripts.
 func parseTickByTickTime(raw string) (time.Time, error) {
@@ -3818,16 +4752,59 @@ func fromCodecOpenOrder(m codec.OpenOrder) OpenOrder {
 	quantity, _ := ParseDecimal(m.Quantity)
 	filled, _ := ParseDecimal(m.Filled)
 	remaining, _ := ParseDecimal(m.Remaining)
+	lmtPrice, _ := ParseDecimal(m.LmtPrice)
+	auxPrice, _ := ParseDecimal(m.AuxPrice)
+	origin, _ := strconv.Atoi(m.Origin)
+	clientID, _ := strconv.Atoi(m.ClientID)
+	permID, _ := strconv.ParseInt(m.PermID, 10, 64)
+	parentID, _ := strconv.ParseInt(m.ParentID, 10, 64)
 	return OpenOrder{
-		OrderID:   m.OrderID,
-		Account:   m.Account,
-		Contract:  fromCodecContract(m.Contract),
-		Action:    m.Action,
-		OrderType: m.OrderType,
-		Status:    m.Status,
-		Quantity:  quantity,
-		Filled:    filled,
-		Remaining: remaining,
+		OrderID:       m.OrderID,
+		Account:       m.Account,
+		Contract:      fromCodecContract(m.Contract),
+		Action:        m.Action,
+		OrderType:     m.OrderType,
+		Status:        m.Status,
+		Quantity:      quantity,
+		Filled:        filled,
+		Remaining:     remaining,
+		LmtPrice:      lmtPrice,
+		AuxPrice:      auxPrice,
+		TIF:           m.TIF,
+		OcaGroup:      m.OcaGroup,
+		OpenClose:     m.OpenClose,
+		Origin:        origin,
+		OrderRef:      m.OrderRef,
+		ClientID:      clientID,
+		PermID:        permID,
+		OutsideRTH:    m.OutsideRTH == "1",
+		Hidden:        m.Hidden == "1",
+		GoodAfterTime: m.GoodAfterTime,
+		ParentID:      parentID,
+	}
+}
+
+func fromCodecOrderStatus(m codec.OrderStatus) OrderStatusUpdate {
+	filled, _ := ParseDecimal(m.Filled)
+	remaining, _ := ParseDecimal(m.Remaining)
+	avgFillPrice, _ := ParseDecimal(m.AvgFillPrice)
+	lastFillPrice, _ := ParseDecimal(m.LastFillPrice)
+	mktCapPrice, _ := ParseDecimal(m.MktCapPrice)
+	permID, _ := strconv.ParseInt(m.PermID, 10, 64)
+	parentID, _ := strconv.ParseInt(m.ParentID, 10, 64)
+	clientID, _ := strconv.Atoi(m.ClientID)
+	return OrderStatusUpdate{
+		OrderID:       m.OrderID,
+		Status:        m.Status,
+		Filled:        filled,
+		Remaining:     remaining,
+		AvgFillPrice:  avgFillPrice,
+		PermID:        permID,
+		ParentID:      parentID,
+		LastFillPrice: lastFillPrice,
+		ClientID:      clientID,
+		WhyHeld:       m.WhyHeld,
+		MktCapPrice:   mktCapPrice,
 	}
 }
 
@@ -3846,6 +4823,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 	}
 	return ExecutionUpdate{
 		Execution: &Execution{
+			OrderID: m.OrderID,
 			ExecID:  m.ExecID,
 			Account: m.Account,
 			Symbol:  m.Symbol,

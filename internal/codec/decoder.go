@@ -109,6 +109,11 @@ func (r *fieldReader) Skip(n int) {
 	r.pos += n
 }
 
+// Len returns the total number of fields.
+func (r *fieldReader) Len() int {
+	return len(r.fields)
+}
+
 // Remaining returns how many unread fields remain.
 func (r *fieldReader) Remaining() int {
 	rem := len(r.fields) - r.pos

@@ -68,6 +68,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, proxyErr)
 			os.Exit(1)
 		}
+		break // one recorder instance per scenario; exit after first leg
 	}
 
 	if acceptedLegs == 0 {

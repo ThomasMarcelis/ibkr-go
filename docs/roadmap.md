@@ -1,6 +1,10 @@
 # Roadmap
 
-## v1: full free read-only TWS API surface
+## Current state
+
+ibkr-go covers the complete Interactive Brokers TWS/Gateway socket protocol.
+All protocol areas below are implemented, tested against live IB Gateway
+server_version 200, and frozen into the public API contract.
 
 ### Bootstrap and session
 
@@ -53,36 +57,53 @@ reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23).
 Open orders snapshot and streaming (all three scopes), executions snapshot
 and streaming, commission reports.
 
+### Order management
+
+PlaceOrder (msg 3), CancelOrder (msg 4), GlobalCancel (msg 58). OrderHandle
+tracks lifecycle with Events(), State(), Done(), Wait(), Close(), Cancel(),
+and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder and
+OrderStatus messages are dual-dispatched to both per-order handles and the
+singleton open-orders observer. OrderHandle survives disconnects (Gap/Resumed)
+and auto-closes on terminal status (Filled, Cancelled, Inactive).
+
+### Market depth (Level 2)
+
+SubscribeMarketDepth (msg 10/11, inbound 12/13) — full order book depth as a
+keyed subscription. Requires a paid L2 market data subscription.
+
+### Fundamental data
+
+FundamentalData (msg 52/53, inbound 51) — Reuters fundamental data as a keyed
+one-shot returning the XML payload. Requires a subscription.
+
+### Exercise options
+
+ExerciseOptions (msg 21) — fire-and-forget option exercise request.
+
+### FA configuration
+
+RequestFA, ReplaceFA (msg 18/19, inbound 16), SoftDollarTiers (msg 79,
+inbound 77). FA-only account configuration.
+
+### WSH calendar
+
+WSHMetaData, WSHEventData (msg 100-103, inbound 105/106). Keyed one-shots
+returning JSON. Requires WSH subscription.
+
+### Display groups
+
+QueryDisplayGroups (msg 67, inbound 67), SubscribeDisplayGroup (msg 68/70,
+inbound 68), UpdateDisplayGroup (msg 69). TWS window integration.
+
 ### Cross-cutting
 
 reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
 
-## v2: full IBKR API with order management
+## Ongoing
 
-v2 expands the library to the complete Interactive Brokers API surface,
-including all write operations.
-
-### Order management
-
-- Order placement, modification, and cancellation.
-- Bracket orders, OCA groups, and conditional orders.
-- The typed API and session engine were designed from the start to support
-  writes — v1 focused on the read surface to prove the architecture.
-
-### Market depth (Level 2)
-
-- Full order book depth (requires paid L2 subscription).
-
-### Fundamental data
-
-- Reuters fundamental data (requires subscription).
-
-### Additional surfaces
-
-- WSH calendar events (requires WSH subscription).
-- FA-only account configuration (reqFA, reqSoftDollarTiers).
-- Display groups (TWS window integration).
 - Broader server version testing beyond v200.
+- Expanded test coverage and replay scenarios.
+- API ergonomics and documentation improvements.
 
 ## Public API direction
 
@@ -90,7 +111,8 @@ Root package is `ibkr`. Primary shapes are typed one-shot request methods and
 typed subscriptions, with explicit session info and explicit subscription
 lifecycle. Subscriptions expose `Events() <-chan T`, `State() <-chan
 SubscriptionStateEvent`, `Done() <-chan struct{}`, `Wait() error`, and
-`Close() error`.
+`Close() error`. OrderHandle follows the same shape but adds `Cancel()`,
+`Modify()`, and `OrderID()`, and its `Close()` detaches without cancelling.
 
 ## Not planned
 

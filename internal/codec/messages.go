@@ -259,15 +259,53 @@ type CancelOpenOrders struct{}
 func (CancelOpenOrders) messageName() string { return "cancel_open_orders" }
 
 type OpenOrder struct {
-	OrderID   int64
-	Account   string
-	Contract  Contract
+	OrderID  int64
+	Contract Contract
+
+	// Core order fields (fixed wire positions r[12]-r[19] after contract block).
 	Action    string
+	Quantity  string // totalQuantity on wire
 	OrderType string
-	Status    string
-	Quantity  string
+	LmtPrice  string
+	AuxPrice  string
+	TIF       string
+	OcaGroup  string
+	Account   string
+
+	// Order detail fields (r[20]-r[28]).
+	OpenClose     string
+	Origin        string
+	OrderRef      string
+	ClientID      string
+	PermID        string
+	OutsideRTH    string
+	Hidden        string
+	DiscretionAmt string
+	GoodAfterTime string
+
+	// Status at wire position r[91].
+	Status string
+
+	// OrderState margin/commission section (r[92]-r[105]).
+	InitMarginBefore     string
+	MaintMarginBefore    string
+	EquityWithLoanBefore string
+	InitMarginChange     string
+	MaintMarginChange    string
+	EquityWithLoanChange string
+	InitMarginAfter      string
+	MaintMarginAfter     string
+	EquityWithLoanAfter  string
+	Commission           string
+	MinCommission        string
+	MaxCommission        string
+	CommissionCurrency   string
+	WarningText          string
+
+	// Trailing order-status block (last 9 fields of the message).
 	Filled    string
 	Remaining string
+	ParentID  string
 }
 
 func (OpenOrder) messageName() string { return "open_order" }
@@ -277,10 +315,17 @@ type OpenOrderEnd struct{}
 func (OpenOrderEnd) messageName() string { return "open_order_end" }
 
 type OrderStatus struct {
-	OrderID   int64
-	Status    string
-	Filled    string
-	Remaining string
+	OrderID       int64
+	Status        string
+	Filled        string
+	Remaining     string
+	AvgFillPrice  string
+	PermID        string
+	ParentID      string
+	LastFillPrice string
+	ClientID      string
+	WhyHeld       string
+	MktCapPrice   string
 }
 
 func (OrderStatus) messageName() string { return "order_status" }
@@ -295,6 +340,7 @@ func (ExecutionsRequest) messageName() string { return "req_executions" }
 
 type ExecutionDetail struct {
 	ReqID   int
+	OrderID int64
 	ExecID  string
 	Account string
 	Symbol  string
@@ -1006,6 +1052,371 @@ type ScannerDataResponse struct {
 }
 
 func (ScannerDataResponse) messageName() string { return "scanner_data" }
+
+// FA Configuration (OUT 18, OUT 19 / IN 16)
+
+type RequestFA struct {
+	FADataType int // 1=Groups, 2=Profiles, 3=AccountAliases
+}
+
+func (RequestFA) messageName() string { return "req_fa" }
+
+type ReplaceFA struct {
+	FADataType int
+	XML        string
+}
+
+func (ReplaceFA) messageName() string { return "replace_fa" }
+
+type ReceiveFA struct {
+	FADataType int
+	XML        string
+}
+
+func (ReceiveFA) messageName() string { return "receive_fa" }
+
+// SoftDollarTiers (OUT 79 / IN 77)
+
+type SoftDollarTiersRequest struct {
+	ReqID int
+}
+
+func (SoftDollarTiersRequest) messageName() string { return "req_soft_dollar_tiers" }
+
+type SoftDollarTier struct {
+	Name        string
+	Value       string
+	DisplayName string
+}
+
+type SoftDollarTiersResponse struct {
+	ReqID int
+	Tiers []SoftDollarTier
+}
+
+func (SoftDollarTiersResponse) messageName() string { return "soft_dollar_tiers" }
+
+// WSH Calendar Events (OUT 100, cancel OUT 101 / IN 105)
+// WSH Event Data (OUT 102, cancel OUT 103 / IN 106)
+
+type WSHMetaDataRequest struct {
+	ReqID int
+}
+
+func (WSHMetaDataRequest) messageName() string { return "req_wsh_meta_data" }
+
+type CancelWSHMetaData struct {
+	ReqID int
+}
+
+func (CancelWSHMetaData) messageName() string { return "cancel_wsh_meta_data" }
+
+type WSHEventDataRequest struct {
+	ReqID           int
+	ConID           int
+	Filter          string
+	FillWatchlist   bool
+	FillPortfolio   bool
+	FillCompetitors bool
+	StartDate       string
+	EndDate         string
+	TotalLimit      int
+}
+
+func (WSHEventDataRequest) messageName() string { return "req_wsh_event_data" }
+
+type CancelWSHEventData struct {
+	ReqID int
+}
+
+func (CancelWSHEventData) messageName() string { return "cancel_wsh_event_data" }
+
+type WSHMetaDataResponse struct {
+	ReqID    int
+	DataJSON string
+}
+
+func (WSHMetaDataResponse) messageName() string { return "wsh_meta_data" }
+
+type WSHEventDataResponse struct {
+	ReqID    int
+	DataJSON string
+}
+
+func (WSHEventDataResponse) messageName() string { return "wsh_event_data" }
+
+// Display Groups (OUT 67, 68, 69, 70 / IN 67, 68)
+
+type QueryDisplayGroupsRequest struct {
+	ReqID int
+}
+
+func (QueryDisplayGroupsRequest) messageName() string { return "query_display_groups" }
+
+type SubscribeToGroupEventsRequest struct {
+	ReqID   int
+	GroupID int
+}
+
+func (SubscribeToGroupEventsRequest) messageName() string { return "subscribe_to_group_events" }
+
+type UpdateDisplayGroupRequest struct {
+	ReqID        int
+	ContractInfo string
+}
+
+func (UpdateDisplayGroupRequest) messageName() string { return "update_display_group" }
+
+type UnsubscribeFromGroupEventsRequest struct {
+	ReqID int
+}
+
+func (UnsubscribeFromGroupEventsRequest) messageName() string { return "unsubscribe_from_group_events" }
+
+type DisplayGroupList struct {
+	ReqID  int
+	Groups string
+}
+
+func (DisplayGroupList) messageName() string { return "display_group_list" }
+
+type DisplayGroupUpdated struct {
+	ReqID        int
+	ContractInfo string
+}
+
+func (DisplayGroupUpdated) messageName() string { return "display_group_updated" }
+
+// PlaceOrder (OUT 3 / IN 3,5) — order management
+
+// PlaceOrderRequest encodes a new or modified order (outbound msg_id=3).
+// At server_version >= 145 there is no version field. All fields are strings
+// on the wire; UNSET float/int values are encoded as empty string "".
+type PlaceOrderRequest struct {
+	OrderID  int64
+	Contract Contract // 14 wire fields: conId through secId
+
+	// Core order fields
+	Action        string // "BUY", "SELL", "SSHORT"
+	TotalQuantity string // decimal string
+	OrderType     string // "MKT", "LMT", "STP", "STP LMT", "TRAIL", etc.
+	LmtPrice      string // empty = UNSET
+	AuxPrice      string // empty = UNSET
+
+	// Extended order fields
+	TIF           string // "DAY", "GTC", "IOC", "GTD", "OPG", "FOK", "DTC"
+	OcaGroup      string
+	Account       string
+	OpenClose     string
+	Origin        string // "0" = customer
+	OrderRef      string
+	Transmit      string // "0" or "1"
+	ParentID      string // "0" = no parent
+	BlockOrder    string
+	SweepToFill   string
+	DisplaySize   string
+	TriggerMethod string
+	OutsideRTH    string
+	Hidden        string
+
+	// FA fields
+	FAGroup      string
+	FAMethod     string
+	FAPercentage string
+	ModelCode    string
+
+	// Short sale
+	ShortSaleSlot      string
+	DesignatedLocation string
+	ExemptCode         string // "-1" default
+
+	// Order type extensions
+	DiscretionaryAmt              string
+	GoodAfterTime                 string
+	GoodTillDate                  string
+	OcaType                       string
+	Rule80A                       string
+	SettlingFirm                  string
+	AllOrNone                     string
+	MinQty                        string // empty = UNSET
+	PercentOffset                 string // empty = UNSET
+	AuctionStrategy               string
+	StartingPrice                 string // empty = UNSET
+	StockRefPrice                 string // empty = UNSET
+	Delta                         string // empty = UNSET
+	StockRangeLower               string // empty = UNSET
+	StockRangeUpper               string // empty = UNSET
+	OverridePercentageConstraints string
+
+	// Volatility
+	Volatility            string // empty = UNSET
+	VolatilityType        string // empty = UNSET
+	DeltaNeutralOrderType string
+	DeltaNeutralAuxPrice  string // empty = UNSET
+	ContinuousUpdate      string
+	ReferencePriceType    string // empty = UNSET
+
+	// Trailing
+	TrailStopPrice  string // empty = UNSET
+	TrailingPercent string // empty = UNSET
+
+	// Scale
+	ScaleInitLevelSize  string // empty = UNSET
+	ScaleSubsLevelSize  string // empty = UNSET
+	ScalePriceIncrement string // empty = UNSET
+	ScaleTable          string
+	ActiveStartTime     string
+	ActiveStopTime      string
+
+	// Hedge
+	HedgeType  string
+	HedgeParam string
+
+	// Misc
+	OptOutSmartRouting          string
+	ClearingAccount             string
+	ClearingIntent              string
+	NotHeld                     string
+	DeltaNeutralContractPresent string // "0" or "1"
+	AlgoStrategy                string
+	AlgoID                      string
+	WhatIf                      string
+	OrderMiscOptions            string
+	Solicited                   string
+	RandomizeSize               string
+	RandomizePrice              string
+
+	// Conditions
+	ConditionsCount string // "0" = none
+
+	// Adjusted order type
+	AdjustedOrderType      string
+	TriggerPrice           string // empty = UNSET
+	LmtPriceOffset         string // empty = UNSET
+	AdjustedStopPrice      string // empty = UNSET
+	AdjustedStopLimitPrice string // empty = UNSET
+	AdjustedTrailingAmount string // empty = UNSET
+	AdjustableTrailingUnit string
+
+	// Ext operator + soft dollar
+	ExtOperator     string
+	SoftDollarName  string
+	SoftDollarValue string
+
+	// Cash, MIFID, flags
+	CashQty                     string // empty = UNSET
+	Mifid2DecisionMaker         string
+	Mifid2DecisionAlgo          string
+	Mifid2ExecutionTrader       string
+	Mifid2ExecutionAlgo         string
+	DontUseAutoPriceForHedge    string
+	IsOmsContainer              string
+	DiscretionaryUpToLimitPrice string
+	UsePriceMgmtAlgo            string // empty = UNSET
+	Duration                    string // empty = UNSET
+	PostToAts                   string // empty = UNSET
+	AutoCancelParent            string
+	AdvancedErrorOverride       string
+	ManualOrderTime             string
+	CustomerAccount             string
+	ProfessionalCustomer        string
+	IncludeOvernight            string
+	ManualOrderIndicator        string // empty = UNSET
+	ImbalanceOnly               string
+}
+
+func (PlaceOrderRequest) messageName() string { return "place_order" }
+
+// CancelOrderRequest cancels an order (outbound msg_id=4).
+// At server_version >= 169, no version field is sent.
+type CancelOrderRequest struct {
+	OrderID               int64
+	ManualOrderCancelTime string
+}
+
+func (CancelOrderRequest) messageName() string { return "cancel_order" }
+
+// GlobalCancelRequest cancels all open orders (outbound msg_id=58).
+type GlobalCancelRequest struct{}
+
+func (GlobalCancelRequest) messageName() string { return "global_cancel" }
+
+// Market depth (OUT 10, cancel OUT 11 / IN 12, 13)
+
+type MarketDepthRequest struct {
+	ReqID        int
+	Contract     Contract
+	NumRows      int
+	IsSmartDepth bool
+}
+
+func (MarketDepthRequest) messageName() string { return "req_mkt_depth" }
+
+type CancelMarketDepth struct {
+	ReqID int
+}
+
+func (CancelMarketDepth) messageName() string { return "cancel_mkt_depth" }
+
+type MarketDepthUpdate struct {
+	ReqID     int
+	Position  int
+	Operation int // 0=insert, 1=update, 2=delete
+	Side      int // 0=ask, 1=bid
+	Price     string
+	Size      string
+}
+
+func (MarketDepthUpdate) messageName() string { return "market_depth" }
+
+type MarketDepthL2Update struct {
+	ReqID        int
+	Position     int
+	MarketMaker  string
+	Operation    int
+	Side         int
+	Price        string
+	Size         string
+	IsSmartDepth bool
+}
+
+func (MarketDepthL2Update) messageName() string { return "market_depth_l2" }
+
+// FundamentalData (OUT 52, cancel OUT 53 / IN 51)
+
+type FundamentalDataRequest struct {
+	ReqID      int
+	Contract   Contract
+	ReportType string
+}
+
+func (FundamentalDataRequest) messageName() string { return "req_fundamental_data" }
+
+type CancelFundamentalData struct {
+	ReqID int
+}
+
+func (CancelFundamentalData) messageName() string { return "cancel_fundamental_data" }
+
+type FundamentalDataResponse struct {
+	ReqID int
+	Data  string
+}
+
+func (FundamentalDataResponse) messageName() string { return "fundamental_data" }
+
+// ExerciseOptions (OUT 21)
+
+type ExerciseOptionsRequest struct {
+	ReqID            int
+	Contract         Contract
+	ExerciseAction   int
+	ExerciseQuantity int
+	Account          string
+	Override         int
+}
+
+func (ExerciseOptionsRequest) messageName() string { return "exercise_options" }
 
 // Historical data update (IN 108) — streaming bar for keepUpToDate
 

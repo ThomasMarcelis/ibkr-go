@@ -5,30 +5,19 @@
 [![Go Version](https://img.shields.io/github/go-mod-go-version/ThomasMarcelis/ibkr-go)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A Go client for Interactive Brokers that works the way Go works. Call a
-method, get a typed result. Subscribe, range over events. No callback
-interfaces to implement, no global state, no dependencies outside the
-standard library.
+Go client for the Interactive Brokers TWS/Gateway socket protocol.
+Call a method, get a typed result. Subscribe, range over a channel.
+Zero dependencies. MIT license.
 
 ## Why ibkr-go
 
-The official Interactive Brokers client uses an `EWrapper`/`EClient`
-callback pattern inherited from Java. Most Go libraries port that
-pattern directly. That means you implement a large callback interface,
-wire up a client object, fire off requests, and then correlate responses
-yourself across scattered handler methods using request IDs.
-
-ibkr-go takes a different approach. You call a method and get back a
-typed result, like any other Go API. Streaming data comes through
-subscriptions that give you separate channels for business events and
-lifecycle state. The session tells you when it reconnects, what was
-lost, and lets your code decide what to do about it.
-
-The library has zero external dependencies. There is nothing to audit
-and no transitive version conflicts. Financial values use an exact
-`Decimal` type instead of `float64`, so you don't accumulate rounding
-errors on money. And the built-in replay harness means your CI runs
-deterministically without needing a live broker connection.
+- **Full TWS API surface** — accounts, positions, market data, historical data, order management, market depth, options, news, scanners, FA configuration, and more. Not a partial port.
+- **Idiomatic Go** — typed methods and generic subscriptions. No callback interfaces, no request ID correlation, no global state.
+- **Tested against real traffic** — 82 replay transcripts captured from a live IB Gateway, fuzz-tested wire protocol, deterministic CI without broker credentials.
+- **Zero dependencies** — standard library only. Nothing to audit, no transitive version conflicts.
+- **Exact financial types** — `Decimal` for all prices and money. No `float64` rounding errors.
+- **Observable session lifecycle** — typed reconnect states (`Gap`, `Resumed`), explicit subscription lifecycle (`SnapshotComplete`, `Closed`), connection-loss detection you can act on.
+- **Built from first principles** — codec designed from the IBKR wire protocol specification and live captures, not ported from the official Java/Python clients.
 
 ## Install
 
@@ -37,6 +26,8 @@ go get github.com/ThomasMarcelis/ibkr-go@latest
 ```
 
 Requires Go 1.26+. No external dependencies.
+
+Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/ibkr).
 
 ## Quick Start
 
@@ -99,138 +90,27 @@ for {
 
 ## How It Compares
 
-Several Go libraries exist for Interactive Brokers. They each solve
-real problems. Here is how ibkr-go differs and why those differences
-matter in practice.
-
-| | ibkr-go | Typical IBKR Go library |
-|---|---------|-------------------------|
-| **Using the API** | Call a method, get a typed result. Subscribe, range over a channel. | Implement a callback interface. Correlate request IDs across handler methods. |
-| **Dependencies** | None — stdlib only. Nothing to audit, no version conflicts. | 2-4 external packages (logging, decimal, protobuf). |
-| **When the connection drops** | Session state is observable. Your code decides what to do with explicit reconnect and resume policies. | Reconnect manually. Hope your callbacks still make sense. |
-| **Subscription lifecycle** | Typed states: `SnapshotComplete`, `Gap`, `Resumed`. You always know where you are in the data stream. | Callbacks fire or stop. Figuring out "did the snapshot finish?" is on you. |
-| **Money and prices** | Exact `Decimal` type. No `float64` rounding on financial values. | `float64` or third-party fixed-point library. |
-| **Testing without a broker** | Built-in deterministic replay harness. CI runs without credentials, contributors can test immediately. | Requires a live TWS or IB Gateway for every test run. |
-| **Order writes** | Not yet — v1 covers the full read-only surface. v2 targets full order management. | Available in some libraries. |
-
-### Per-library breakdown
+Several Go libraries exist for Interactive Brokers. Here is how they differ.
 
 | | ibkr-go | [scmhub/ibapi](https://github.com/scmhub/ibapi) | [hadrianl/ibapi](https://github.com/hadrianl/ibapi) | [gofinance/ib](https://github.com/gofinance/ib) |
 |---|---------|--------------|----------------|--------------|
-| API | Typed methods + generic subscriptions | EWrapper/EClient | EWrapper/IbClient | Channel engine |
-| Dependencies | 0 | zerolog, robaho/fixed, protobuf | zap | 0 |
-| Protocol | Built from first principles | Port of official client | Port of API 9.80 | Custom (2014) |
-| Orders | Read-only (v1) | Yes | Yes | Partial |
-| Status | Active | Active (2025) | Dormant (2021) | Dormant (2021) |
-| License | MIT | MIT | MIT | LGPL-3.0 |
-
-## API Overview
-
-### Session
-
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `DialContext` | `*Client` | Connect and bootstrap a ready session |
-| `Close` | `error` | Shut down the session |
-| `Session` | `SessionSnapshot` | Current session state, managed accounts, server version |
-| `SessionEvents` | `<-chan SessionEvent` | Observable session state changes |
-
-### Account and Portfolio
-
-| Method | Returns |
-|--------|---------|
-| `AccountSummary` / `SubscribeAccountSummary` | `[]AccountValue` / `*Subscription[AccountSummaryUpdate]` |
-| `PositionsSnapshot` / `SubscribePositions` | `[]Position` / `*Subscription[PositionUpdate]` |
-| `AccountUpdatesSnapshot` / `SubscribeAccountUpdates` | `[]AccountUpdate` / `*Subscription[AccountUpdate]` |
-| `SubscribeAccountUpdatesMulti` | `*Subscription[AccountUpdateMultiValue]` |
-| `SubscribePositionsMulti` | `*Subscription[PositionMulti]` |
-| `SubscribePnL` / `SubscribePnLSingle` | `*Subscription[PnLUpdate]` / `*Subscription[PnLSingleUpdate]` |
-| `FamilyCodes` | `[]FamilyCode` |
-| `CompletedOrders` | `[]CompletedOrderResult` |
-
-### Market Data
-
-| Method | Returns |
-|--------|---------|
-| `QuoteSnapshot` / `SubscribeQuotes` | `Quote` / `*Subscription[QuoteUpdate]` |
-| `SubscribeRealTimeBars` | `*Subscription[Bar]` |
-| `SubscribeTickByTick` | `*Subscription[TickByTickData]` |
-| `SubscribeHistoricalBars` | `*Subscription[Bar]` |
-| `SetMarketDataType` | `error` |
-
-### Contract and Reference
-
-| Method | Returns |
-|--------|---------|
-| `ContractDetails` | `[]ContractDetails` |
-| `QualifyContract` | `QualifiedContract` |
-| `MatchingSymbols` | `[]MatchingSymbol` |
-| `MarketRule` | `MarketRuleResult` |
-| `SecDefOptParams` | `[]SecDefOptParams` |
-| `SmartComponents` | `[]SmartComponent` |
-| `MktDepthExchanges` | `[]DepthExchange` |
-
-### Historical Data
-
-| Method | Returns |
-|--------|---------|
-| `HistoricalBars` | `[]Bar` |
-| `HeadTimestamp` | `time.Time` |
-| `HistogramData` | `[]HistogramEntry` |
-| `HistoricalTicks` | `HistoricalTicksResult` |
-
-### Options
-
-| Method | Returns |
-|--------|---------|
-| `CalcImpliedVolatility` | `OptionComputation` |
-| `CalcOptionPrice` | `OptionComputation` |
-
-### News
-
-| Method | Returns |
-|--------|---------|
-| `NewsProviders` | `[]NewsProvider` |
-| `NewsArticle` | `NewsArticleResult` |
-| `HistoricalNews` | `[]HistoricalNewsItemResult` |
-| `SubscribeNewsBulletins` | `*Subscription[NewsBulletin]` |
-
-### Scanner
-
-| Method | Returns |
-|--------|---------|
-| `ScannerParameters` | `string` (XML) |
-| `SubscribeScannerResults` | `*Subscription[[]ScannerResult]` |
-
-### Orders and Executions (observation)
-
-| Method | Returns |
-|--------|---------|
-| `OpenOrdersSnapshot` / `SubscribeOpenOrders` | `[]OpenOrder` / `*Subscription[OpenOrderUpdate]` |
-| `Executions` / `SubscribeExecutions` | `[]ExecutionUpdate` / `*Subscription[ExecutionUpdate]` |
-
-## v1 Coverage
-
-| Area | Status |
-|------|--------|
-| Bootstrap and session | landed |
-| Account and portfolio | landed |
-| Contract and reference data | landed |
-| Market data | landed |
-| Historical data extensions | landed |
-| Option calculations | landed |
-| News | landed |
-| Scanner | landed |
-| Order and execution observation | landed |
-
-See [`docs/message-coverage.md`](docs/message-coverage.md) for the full
-message matrix.
+| **API pattern** | Typed methods + channel subscriptions | EWrapper/EClient callbacks | IbWrapper callbacks | Channel engine |
+| **API coverage** | Full TWS surface | Full (ported from official Python) | TWS API 9.80 subset | Partial (2014-era) |
+| **Order management** | OrderHandle with lifecycle tracking | Yes | Yes | Partial |
+| **Reconnect handling** | Observable state machine (Gap/Resumed) | Manual | Manual | Manual |
+| **Test strategy** | 82 live-capture replays, fuzz, deterministic CI | Live broker required | Live broker required | Live broker required |
+| **Price type** | Exact Decimal | robaho/fixed | float64 | float64 |
+| **Dependencies** | 0 | 3 (zerolog, fixed, protobuf) | 1 (zap) | 0 |
+| **Go version** | 1.26 (generics, iterators) | 1.21+ | 1.16+ | 1.x |
+| **License** | MIT | MIT | MIT | LGPL-3.0 |
+| **Maintained** | Active (2026) | Active (2025) | Dormant (2021) | Dormant (2021) |
 
 ## Roadmap
 
-v2 targets the complete Interactive Brokers API, including full order
-management — placement, modification, and cancellation. See
-[`docs/roadmap.md`](docs/roadmap.md) for the full plan.
+ibkr-go covers the complete Interactive Brokers TWS/Gateway socket protocol.
+Ongoing work targets continuous maintenance against new TWS/Gateway versions,
+expanded test coverage, and API ergonomics. See
+[`docs/roadmap.md`](docs/roadmap.md) for details.
 
 ## Development
 
@@ -249,9 +129,10 @@ checks on every push.
 
 - [`docs/architecture.md`](docs/architecture.md) — layer design and runtime model
 - [`docs/session-contract.md`](docs/session-contract.md) — public API contract
+- [`docs/api-overview.md`](docs/api-overview.md) — full method reference
 - [`docs/message-coverage.md`](docs/message-coverage.md) — protocol message matrix
 - [`docs/transcripts.md`](docs/transcripts.md) — test transcript format
-- [`docs/roadmap.md`](docs/roadmap.md) — v1 scope and v2 direction
+- [`docs/roadmap.md`](docs/roadmap.md) — project direction
 - [`docs/anti-patterns.md`](docs/anti-patterns.md) — design philosophy
 
 ## Contributing

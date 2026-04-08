@@ -238,3 +238,67 @@ func TestEmptyResultSets(t *testing.T) {
 		t.Fatalf("CompletedOrders() len = %d, want 0", len(completed))
 	}
 }
+
+func TestWSHMetaDataError10xxx(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "wsh_meta_data_error.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.WSHMetaData(ctx)
+	if err == nil {
+		t.Fatal("WSHMetaData() error = nil, want API error 10276")
+	}
+
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok {
+		t.Fatalf("error type = %T, want *ibkr.APIError", err)
+	}
+	if apiErr.Code != 10276 {
+		t.Fatalf("APIError.Code = %d, want 10276", apiErr.Code)
+	}
+}
+
+func TestMarketDepthError10xxx(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "market_depth_error.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sub, err := client.SubscribeMarketDepth(ctx, ibkr.MarketDepthRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		NumRows:      5,
+		IsSmartDepth: true,
+	}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+	if err != nil {
+		t.Fatalf("SubscribeMarketDepth() error = %v", err)
+	}
+
+	closed := waitForStateKind(t, sub.State(), ibkr.SubscriptionClosed)
+
+	apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+	if !ok {
+		t.Fatalf("closed.Err type = %T, want *ibkr.APIError", closed.Err)
+	}
+	if apiErr.Code != 10092 {
+		t.Fatalf("APIError.Code = %d, want 10092", apiErr.Code)
+	}
+
+	waitErr := sub.Wait()
+	if waitErr == nil {
+		t.Fatal("sub.Wait() error = nil, want API error")
+	}
+}
