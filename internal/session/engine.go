@@ -654,6 +654,12 @@ func (e *Engine) SubscribeQuotes(ctx context.Context, req QuoteSubscriptionReque
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				// 10167: delayed market data warning — the subscription
+				// stays open and will receive delayed ticks.
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpQuotes, m))
 			},
@@ -773,6 +779,10 @@ func (e *Engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				sub.emit(bar)
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpRealTimeBars, m))
 			},
@@ -2211,6 +2221,10 @@ func (e *Engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpTickByTick, m))
 			},
@@ -2399,6 +2413,10 @@ func (e *Engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
+				if m.Code == 10167 {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpHistoricalBarsStream, m))
 			},
@@ -3970,9 +3988,15 @@ func (e *Engine) handleAPIError(msg codec.APIError) {
 	}
 
 	// 10xxx: market-data warnings such as 10167 "displaying delayed data".
-	// The reqID references the subscription that will receive degraded data,
-	// but the subscription must stay open -- this is not a terminal error.
+	// Route to keyed handler when one exists (the handler decides whether
+	// the code is terminal); otherwise emit as a session-level event.
 	if msg.Code >= 10000 && msg.Code < 20000 {
+		if msg.ReqID > 0 {
+			if route, ok := e.keyed[msg.ReqID]; ok && route.handleAPIErr != nil {
+				route.handleAPIErr(msg, e)
+				return
+			}
+		}
 		e.emitEvent(msg.Code, msg.Message)
 		return
 	}
