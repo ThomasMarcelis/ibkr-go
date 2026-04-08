@@ -59,7 +59,7 @@ func TestStressSlowConsumerClose(t *testing.T) {
 	sb.WriteString("server next_valid_id {\"order_id\":1}\n")
 	sb.WriteString("client req_quote {\"req_id\":\"$req1\"}\n")
 	for i := 0; i < 200; i++ {
-		sb.WriteString(fmt.Sprintf("server tick_price {\"req_id\":\"$req1\",\"field\":1,\"price\":\"%d.00\"}\n", 100+i))
+		fmt.Fprintf(&sb, "server tick_price {\"req_id\":\"$req1\",\"field\":1,\"price\":\"%d.00\"}\n", 100+i)
 	}
 	sb.WriteString("sleep 2s\n")
 	sb.WriteString("disconnect\n")
@@ -103,7 +103,7 @@ func TestStressSlowConsumerDropOldest(t *testing.T) {
 	sb.WriteString("server next_valid_id {\"order_id\":1}\n")
 	sb.WriteString("client req_quote {\"req_id\":\"$req1\"}\n")
 	for i := 0; i < 50; i++ {
-		sb.WriteString(fmt.Sprintf("server tick_price {\"req_id\":\"$req1\",\"field\":1,\"price\":\"%d.00\"}\n", 100+i))
+		fmt.Fprintf(&sb, "server tick_price {\"req_id\":\"$req1\",\"field\":1,\"price\":\"%d.00\"}\n", 100+i)
 	}
 	sb.WriteString("sleep 500ms\n")
 	sb.WriteString("client cancel_quote {\"req_id\":\"$req1\"}\n")
@@ -172,9 +172,9 @@ func TestStressConcurrentOneshots(t *testing.T) {
 	for i := 0; i < n; i++ {
 		reqVar := fmt.Sprintf("$req%d", i+1)
 		symbol := fmt.Sprintf("SYM%d", i)
-		sb.WriteString(fmt.Sprintf("client req_contract_details {\"req_id\":\"%s\"}\n", reqVar))
-		sb.WriteString(fmt.Sprintf("server contract_details {\"req_id\":\"%s\",\"contract\":{\"symbol\":\"%s\",\"sec_type\":\"STK\",\"exchange\":\"SMART\",\"currency\":\"USD\"},\"long_name\":\"%s Corp\"}\n", reqVar, symbol, symbol))
-		sb.WriteString(fmt.Sprintf("server contract_details_end {\"req_id\":\"%s\"}\n", reqVar))
+		fmt.Fprintf(&sb, "client req_contract_details {\"req_id\":\"%s\"}\n", reqVar)
+		fmt.Fprintf(&sb, "server contract_details {\"req_id\":\"%s\",\"contract\":{\"symbol\":\"%s\",\"sec_type\":\"STK\",\"exchange\":\"SMART\",\"currency\":\"USD\"},\"long_name\":\"%s Corp\"}\n", reqVar, symbol, symbol)
+		fmt.Fprintf(&sb, "server contract_details_end {\"req_id\":\"%s\"}\n", reqVar)
 	}
 	sb.WriteString("disconnect\n")
 
@@ -244,20 +244,20 @@ func TestStressConcurrentPlaceOrders(t *testing.T) {
 
 	for i := 0; i < n; i++ {
 		oid := 100 + i
-		sb.WriteString(fmt.Sprintf("client place_order {\"order_id\":\"%d\"}\n", oid))
+		fmt.Fprintf(&sb, "client place_order {\"order_id\":\"%d\"}\n", oid)
 	}
 	sb.WriteString("sleep 100ms\n")
 	// Server responds to all in order.
 	for i := 0; i < n; i++ {
 		oid := 100 + i
-		sb.WriteString(fmt.Sprintf("server open_order {\"order_id\":%d,\"status\":\"PreSubmitted\",\"contract\":{\"symbol\":\"AAPL\",\"sec_type\":\"STK\",\"exchange\":\"SMART\",\"currency\":\"USD\"},\"action\":\"BUY\",\"order_type\":\"LMT\",\"quantity\":\"1\",\"lmt_price\":\"50.00\"}\n", oid))
-		sb.WriteString(fmt.Sprintf("server order_status {\"order_id\":%d,\"status\":\"PreSubmitted\",\"filled\":\"0\",\"remaining\":\"1\",\"avg_fill_price\":\"0\",\"perm_id\":%d,\"parent_id\":0,\"last_fill_price\":\"0\",\"client_id\":0,\"why_held\":\"\",\"mkt_cap_price\":\"\"}\n", oid, 1000+oid))
+		fmt.Fprintf(&sb, "server open_order {\"order_id\":%d,\"status\":\"PreSubmitted\",\"contract\":{\"symbol\":\"AAPL\",\"sec_type\":\"STK\",\"exchange\":\"SMART\",\"currency\":\"USD\"},\"action\":\"BUY\",\"order_type\":\"LMT\",\"quantity\":\"1\",\"lmt_price\":\"50.00\"}\n", oid)
+		fmt.Fprintf(&sb, "server order_status {\"order_id\":%d,\"status\":\"PreSubmitted\",\"filled\":\"0\",\"remaining\":\"1\",\"avg_fill_price\":\"0\",\"perm_id\":%d,\"parent_id\":0,\"last_fill_price\":\"0\",\"client_id\":0,\"why_held\":\"\",\"mkt_cap_price\":\"\"}\n", oid, 1000+oid)
 	}
 	sb.WriteString("sleep 200ms\n")
 	// Then cancel all.
 	for i := 0; i < n; i++ {
 		oid := 100 + i
-		sb.WriteString(fmt.Sprintf("server order_status {\"order_id\":%d,\"status\":\"Cancelled\",\"filled\":\"0\",\"remaining\":\"0\",\"avg_fill_price\":\"0\",\"perm_id\":%d,\"parent_id\":0,\"last_fill_price\":\"0\",\"client_id\":0,\"why_held\":\"\",\"mkt_cap_price\":\"\"}\n", oid, 1000+oid))
+		fmt.Fprintf(&sb, "server order_status {\"order_id\":%d,\"status\":\"Cancelled\",\"filled\":\"0\",\"remaining\":\"0\",\"avg_fill_price\":\"0\",\"perm_id\":%d,\"parent_id\":0,\"last_fill_price\":\"0\",\"client_id\":0,\"why_held\":\"\",\"mkt_cap_price\":\"\"}\n", oid, 1000+oid)
 	}
 	sb.WriteString("disconnect\n")
 
@@ -343,10 +343,10 @@ func TestStressRapidSubscriptionCycling(t *testing.T) {
 
 	for i := 0; i < cycles; i++ {
 		reqVar := fmt.Sprintf("$req%d", i+1)
-		sb.WriteString(fmt.Sprintf("client req_account_summary {\"req_id\":\"%s\"}\n", reqVar))
-		sb.WriteString(fmt.Sprintf("server account_summary {\"req_id\":\"%s\",\"account\":\"DU9000001\",\"tag\":\"NetLiquidation\",\"value\":\"100000.00\",\"currency\":\"USD\"}\n", reqVar))
-		sb.WriteString(fmt.Sprintf("server account_summary_end {\"req_id\":\"%s\"}\n", reqVar))
-		sb.WriteString(fmt.Sprintf("client cancel_account_summary {\"req_id\":\"%s\"}\n", reqVar))
+		fmt.Fprintf(&sb, "client req_account_summary {\"req_id\":\"%s\"}\n", reqVar)
+		fmt.Fprintf(&sb, "server account_summary {\"req_id\":\"%s\",\"account\":\"DU9000001\",\"tag\":\"NetLiquidation\",\"value\":\"100000.00\",\"currency\":\"USD\"}\n", reqVar)
+		fmt.Fprintf(&sb, "server account_summary_end {\"req_id\":\"%s\"}\n", reqVar)
+		fmt.Fprintf(&sb, "client cancel_account_summary {\"req_id\":\"%s\"}\n", reqVar)
 	}
 	sb.WriteString("disconnect\n")
 
@@ -408,8 +408,8 @@ func TestStressHighThroughputMarketDepth(t *testing.T) {
 		// Alternate between insert (0) and update (1) operations.
 		op := i % 2
 		side := i % 2 // 0=ask, 1=bid
-		sb.WriteString(fmt.Sprintf("server market_depth {\"req_id\":\"$req1\",\"position\":%d,\"operation\":%d,\"side\":%d,\"price\":\"%d.50\",\"size\":\"%d\"}\n",
-			i%10, op, side, 200+i%50, 100+i))
+		fmt.Fprintf(&sb, "server market_depth {\"req_id\":\"$req1\",\"position\":%d,\"operation\":%d,\"side\":%d,\"price\":\"%d.50\",\"size\":\"%d\"}\n",
+			i%10, op, side, 200+i%50, 100+i)
 	}
 	sb.WriteString("sleep 500ms\n")
 	sb.WriteString("client cancel_market_depth {\"req_id\":\"$req1\"}\n")

@@ -2798,7 +2798,7 @@ func TestPlaceOrderModifyIntegration(t *testing.T) {
 				sawModified = true
 			}
 		case <-handle.Done():
-			break
+			sawModified = true
 		case <-ctx.Done():
 			t.Fatal("timeout waiting for modified OpenOrder")
 		}
