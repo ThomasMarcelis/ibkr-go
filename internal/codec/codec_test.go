@@ -326,7 +326,7 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	fields = append(fields, itoa(InOpenOrder))                                                  // msg_id
 	fields = append(fields, "42")                                                               // r[0] orderID
 	fields = append(fields, "265598", "AAPL", "STK", "", "", "", "", "SMART", "USD", "", "NMS") // r[1..11] contract
-	fields = append(fields, "BUY", "10", "LMT", "150.00", "0", "DAY", "", "DU9000001")         // r[12..19]
+	fields = append(fields, "BUY", "10", "LMT", "150.00", "0", "DAY", "", "DU9000001")          // r[12..19]
 	fields = append(fields, "", "0", "myref", "1", "99999", "0", "0", "0", "")                  // r[20..28]
 	// Pad to 180 fields (more than 169 — simulates variable-length sections).
 	for len(fields) < 181 {

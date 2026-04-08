@@ -183,8 +183,8 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 			}}, nil
 		}
 
-		r.Skip(62)                      // r[29..90]: FA params, order details, vol params, combos, scale, algo, etc.
-		status := r.ReadString()        // r[91]
+		r.Skip(62)               // r[29..90]: FA params, order details, vol params, combos, scale, algo, etc.
+		status := r.ReadString() // r[91]
 		// OrderState section: margin fields and commission.
 		initMarginBefore := r.ReadString()     // r[92]
 		maintMarginBefore := r.ReadString()    // r[93]
