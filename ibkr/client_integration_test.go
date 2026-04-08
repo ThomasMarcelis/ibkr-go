@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -2624,6 +2625,248 @@ func waitForStateKind(t *testing.T, ch <-chan ibkr.SubscriptionStateEvent, want 
 		state := waitForEvent(t, ch)
 		if state.Kind == want {
 			return state
+		}
+	}
+}
+
+func TestSoftDollarTiersIntegration(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "soft_dollar_tiers.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	tiers, err := client.SoftDollarTiers(ctx)
+	if err != nil {
+		t.Fatalf("SoftDollarTiers() error = %v", err)
+	}
+	if tiers == nil {
+		t.Fatal("SoftDollarTiers() = nil, want non-nil empty slice")
+	}
+	if len(tiers) != 0 {
+		t.Fatalf("SoftDollarTiers() len = %d, want 0", len(tiers))
+	}
+}
+
+func TestQueryDisplayGroupsIntegration(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "display_groups.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	groups, err := client.QueryDisplayGroups(ctx)
+	if err != nil {
+		t.Fatalf("QueryDisplayGroups() error = %v", err)
+	}
+	if groups != "1|2|3|4|5|6|7" {
+		t.Fatalf("QueryDisplayGroups() = %q, want %q", groups, "1|2|3|4|5|6|7")
+	}
+}
+
+func TestFundamentalDataIntegration(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "fundamental_data.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	data, err := client.FundamentalData(ctx, ibkr.FundamentalDataRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		ReportType: "ReportSnapshot",
+	})
+	if err != nil {
+		t.Fatalf("FundamentalData() error = %v", err)
+	}
+	if data == "" {
+		t.Fatal("FundamentalData() returned empty string")
+	}
+	if !strings.Contains(data, "AAPL") {
+		t.Fatalf("FundamentalData() does not contain AAPL: %s", data[:min(len(data), 200)])
+	}
+}
+
+func TestSubscribeDisplayGroupIntegration(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "display_group_subscribe.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.SubscribeDisplayGroup(ctx, 1)
+	if err != nil {
+		t.Fatalf("SubscribeDisplayGroup() error = %v", err)
+	}
+
+	waitForStateKind(t, handle.State(), ibkr.SubscriptionStarted)
+
+	// Read initial "none" update.
+	initial := waitForEvent(t, handle.Events())
+	if initial.ContractInfo != "none" {
+		t.Fatalf("initial ContractInfo = %q, want %q", initial.ContractInfo, "none")
+	}
+
+	// Update to AAPL.
+	if err := handle.Update(ctx, "265598"); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	updated := waitForEvent(t, handle.Events())
+	if updated.ContractInfo != "265598@SMART" {
+		t.Fatalf("updated ContractInfo = %q, want %q", updated.ContractInfo, "265598@SMART")
+	}
+
+	handle.Close()
+}
+
+func TestPlaceOrderModifyIntegration(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "place_order_modify.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  "STK",
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: "LMT",
+			Quantity:  ibkr.MustParseDecimal("1"),
+			LmtPrice:  ibkr.MustParseDecimal("50"),
+			TIF:       ibkr.TIFDay,
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	// Wait for initial PreSubmitted.
+	var sawInitial bool
+	for !sawInitial {
+		select {
+		case evt := <-handle.Events():
+			if evt.Status != nil && evt.Status.Status == "PreSubmitted" {
+				sawInitial = true
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for initial PreSubmitted")
+		}
+	}
+
+	// Modify to $51.
+	if err := handle.Modify(ctx, ibkr.Order{
+		Action:    ibkr.Buy,
+		OrderType: "LMT",
+		Quantity:  ibkr.MustParseDecimal("1"),
+		LmtPrice:  ibkr.MustParseDecimal("51"),
+		TIF:       ibkr.TIFDay,
+	}); err != nil {
+		t.Fatalf("Modify: %v", err)
+	}
+
+	// Wait for modified OpenOrder with $51.
+	var sawModified bool
+	for !sawModified {
+		select {
+		case evt := <-handle.Events():
+			if evt.OpenOrder != nil && evt.OpenOrder.LmtPrice.String() == "51" {
+				sawModified = true
+			}
+		case <-handle.Done():
+			break
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for modified OpenOrder")
+		}
+	}
+
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+
+	select {
+	case <-handle.Done():
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for Cancelled")
+	}
+}
+
+func TestGlobalCancelIntegration(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "global_cancel.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	var handles []*ibkr.OrderHandle
+	for i := 0; i < 2; i++ {
+		h, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
+			Contract: ibkr.Contract{
+				Symbol:   "AAPL",
+				SecType:  "STK",
+				Exchange: "SMART",
+				Currency: "USD",
+			},
+			Order: ibkr.Order{
+				Action:    ibkr.Buy,
+				OrderType: "LMT",
+				Quantity:  ibkr.MustParseDecimal("1"),
+				LmtPrice:  ibkr.MustParseDecimal("50"),
+				TIF:       ibkr.TIFDay,
+			},
+		})
+		if err != nil {
+			t.Fatalf("PlaceOrder[%d]: %v", i, err)
+		}
+		handles = append(handles, h)
+	}
+
+	// Wait for initial status on both.
+	for i, h := range handles {
+		select {
+		case <-h.Events():
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for handle[%d] initial event", i)
+		}
+	}
+
+	if err := client.GlobalCancel(ctx); err != nil {
+		t.Fatalf("GlobalCancel: %v", err)
+	}
+
+	// Wait for all handles to finish.
+	for i, h := range handles {
+		select {
+		case <-h.Done():
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for handle[%d] done", i)
 		}
 	}
 }
