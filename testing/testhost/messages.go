@@ -235,7 +235,8 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "historical_ticks_bid_ask":
 		entries := asCodecEntries(resolve(body["ticks"]), func(m map[string]any) codec.HistoricalTickBidAskEntry {
 			return codec.HistoricalTickBidAskEntry{
-				Time: asString(m["time"]), BidPrice: asString(m["bid_price"]), AskPrice: asString(m["ask_price"]),
+				TickAttrib: asInt(m["tick_attrib"]),
+				Time:       asString(m["time"]), BidPrice: asString(m["bid_price"]), AskPrice: asString(m["ask_price"]),
 				BidSize: asString(m["bid_size"]), AskSize: asString(m["ask_size"]),
 			}
 		})
@@ -243,7 +244,8 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "historical_ticks_last":
 		entries := asCodecEntries(resolve(body["ticks"]), func(m map[string]any) codec.HistoricalTickLastEntry {
 			return codec.HistoricalTickLastEntry{
-				Time: asString(m["time"]), Price: asString(m["price"]), Size: asString(m["size"]),
+				TickAttrib: asInt(m["tick_attrib"]),
+				Time:       asString(m["time"]), Price: asString(m["price"]), Size: asString(m["size"]),
 				Exchange: asString(m["exchange"]), SpecialConditions: asString(m["special_conditions"]),
 			}
 		})
@@ -374,6 +376,8 @@ func asInt(value any) int {
 
 func asString(value any) string {
 	switch v := value.(type) {
+	case nil:
+		return ""
 	case string:
 		return v
 	default:

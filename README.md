@@ -17,23 +17,20 @@ feature rather than an afterthought.
 
 ## Why ibkr-go
 
-- **A Go-shaped API** — one-shots return typed results. Streams are typed
+- **A Go-shaped API**: one-shots return typed results. Streams are typed
   subscriptions with `Events()`, `State()`, `Done()`, and `Wait()`. No
   `EWrapper` / `EClient` callback surface as the primary interface.
-- **Full TWS/Gateway coverage** — accounts, positions, quotes, historical
+- **Full TWS/Gateway coverage**: accounts, positions, quotes, historical
   data, executions, order management, market depth, scanners, news, FA
   configuration, WSH, display groups, and more.
-- **Protocol work backed by evidence** — replay scenarios derived from live IB
+- **Protocol work backed by evidence**: replay scenarios derived from live IB
   Gateway traffic, wire and codec fuzzing, stress tests, and deterministic CI.
-- **Reconnects are explicit** — session transitions and subscription lifecycle
+- **Reconnects are explicit**: session transitions and subscription lifecycle
   events such as `Gap`, `Resumed`, `SnapshotComplete`, and `Closed` are part of
   the contract.
-- **Exact financial values** — `Decimal` is used for prices, quantities, and
+- **Exact financial values**: `Decimal` is used for prices, quantities, and
   money throughout the API.
-- **Standard library only** — zero external dependencies.
-- **Implemented directly against the protocol** — built from the IBKR wire
-  protocol, official docs, official client-library source, and live captures,
-  not as a thin port of the official callback clients.
+- **Standard library only**: zero external dependencies.
 
 ## Install
 
@@ -48,16 +45,14 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
 ## Quick Start
 
 The mental model is simple: call a method for a snapshot, subscribe for a
-stream. These snippets assume TWS or IB Gateway is available on
-`127.0.0.1:7497` and that you imported
-`github.com/ThomasMarcelis/ibkr-go/ibkr`.
+stream.
 
 ### Connect and query contract details
 
 ```go
 client, err := ibkr.DialContext(ctx,
     ibkr.WithHost("127.0.0.1"),
-    ibkr.WithPort(7497),
+    ibkr.WithPort(4001),
 )
 if err != nil {
     return err
@@ -111,21 +106,15 @@ for {
 
 ## Testing and Verification
 
-ibkr-go is being built as a protocol library you can keep trusting even when CI
-does not have broker credentials.
+ibkr-go is being built with a test suite that is an asset ensuring correctness
 
 - `90` checked-in replay transcripts under
   [`testdata/transcripts`](testdata/transcripts)
 - `18` fuzz targets covering wire framing and codec round-trips
 - Deterministic CI for routine verification, without broker credentials
 - Separate live-gated tests for local verification against TWS or IB Gateway
-- Production codec reused by `testing/testhost`, so replay exercises the same
-  wire paths as production code
 
-The goal is not just broad coverage. The goal is a library whose protocol
-behavior can be frozen, replayed, stressed, and extended without guessing. For
-more on that approach, see [`docs/transcripts.md`](docs/transcripts.md) and
-[`docs/anti-patterns.md`](docs/anti-patterns.md).
+The goal is a library whose protocol behavior can be frozen, replayed, stressed, and extended without guessing. For more on that approach, see [`docs/transcripts.md`](docs/transcripts.md) and [`docs/anti-patterns.md`](docs/anti-patterns.md).
 
 ## Compared with the usual Go IBKR shape
 

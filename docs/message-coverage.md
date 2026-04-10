@@ -110,18 +110,18 @@ server version and managed-account bootstrap fields are known.
 
 ## Historical Data Extensions
 
-| Direction | Msg ID | Name | Status |
-|-----------|--------|------|--------|
-| out | 87 | reqHeadTimestamp | landed |
-| out | 90 | cancelHeadTimestamp | landed |
-| in | 88 | HeadTimestamp | landed |
-| out | 88 | reqHistogramData | landed |
-| out | 89 | cancelHistogramData | landed |
-| in | 89 | HistogramData | landed |
-| out | 96 | reqHistoricalTicks | landed |
-| in | 96 | HistoricalTicks | landed |
-| in | 97 | HistoricalTicksBidAsk | landed |
-| in | 98 | HistoricalTicksLast | landed |
+| Direction | Msg ID | Name | Status | Notes |
+|-----------|--------|------|--------|-------|
+| out | 87 | reqHeadTimestamp | landed | |
+| out | 90 | cancelHeadTimestamp | landed | |
+| in | 88 | HeadTimestamp | landed | |
+| out | 88 | reqHistogramData | landed | |
+| out | 89 | cancelHistogramData | landed | |
+| in | 89 | HistogramData | landed | |
+| out | 96 | reqHistoricalTicks | landed | |
+| in | 96 | HistoricalTicks | landed | |
+| in | 97 | HistoricalTicksBidAsk | landed | tickAttribBidAsk skipped |
+| in | 98 | HistoricalTicksLast | landed | tickAttribLast skipped |
 
 ## Option Calculations
 
@@ -135,34 +135,43 @@ server version and managed-account bootstrap fields are known.
 
 ## Order Management
 
-| Direction | Msg ID | Name | Status |
-|-----------|--------|------|--------|
-| out | 3 | PlaceOrder | landed |
-| out | 4 | CancelOrder | landed |
-| out | 58 | reqGlobalCancel | landed |
-| in | 5 | OpenOrder | landed |
-| in | 3 | OrderStatus | landed |
+| Direction | Msg ID | Name | Status | Notes |
+|-----------|--------|------|--------|-------|
+| out | 3 | PlaceOrder | landed | BAG combo legs, algo params, and grounded order conditions encoded; delta-neutral/scale extensions remain deferred |
+| out | 4 | CancelOrder | landed | |
+| out | 58 | reqGlobalCancel | landed | |
+| in | 5 | OpenOrder | landed | Simple 169-field orders fully parse; grounded non-simple combo/algo/conditional sections are decoded |
+| in | 3 | OrderStatus | landed | Full parse, authoritative fill data for all order types |
 
 OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
 singleton open-orders observer.
 
+OpenOrder uses a dual path:
+- 169-field simple orders stay on the capture-grounded fixed-layout decoder.
+- Expanded non-simple orders use a sequential decoder for grounded combo,
+  algo, and condition sections. Rare delta-neutral, scale, and other
+  ungrounded branches still fall back to the safe partial parse.
+
+See [v1.2 story](stories/v1.2-variable-length-orders.md) and the deferred
+[v1.3 story](stories/v1.3-full-order-wire-surface.md).
+
 ## Order and Execution Observation
 
-| Direction | Msg ID | Name | Status |
-|-----------|--------|------|--------|
-| out | 5 | ReqOpenOrders | landed |
-| out | 15 | ReqAutoOpenOrders | landed |
-| out | 16 | ReqAllOpenOrders | landed |
-| in | 5 | OpenOrder | landed |
-| in | 53 | OpenOrderEnd | landed |
-| in | 3 | OrderStatus | landed |
-| out | 7 | ExecutionsRequest | landed |
-| in | 11 | ExecutionDetail | landed |
-| in | 55 | ExecutionsEnd | landed |
-| in | 59 | CommissionReport | landed |
-| out | 99 | reqCompletedOrders | landed |
-| in | 101 | CompletedOrder | landed |
-| in | 102 | CompletedOrdersEnd | landed |
+| Direction | Msg ID | Name | Status | Notes |
+|-----------|--------|------|--------|-------|
+| out | 5 | ReqOpenOrders | landed | |
+| out | 15 | ReqAutoOpenOrders | landed | |
+| out | 16 | ReqAllOpenOrders | landed | |
+| in | 5 | OpenOrder | landed | See Order Management notes |
+| in | 53 | OpenOrderEnd | landed | |
+| in | 3 | OrderStatus | landed | |
+| out | 7 | ExecutionsRequest | landed | |
+| in | 11 | ExecutionDetail | landed | |
+| in | 55 | ExecutionsEnd | landed | |
+| in | 59 | CommissionReport | landed | |
+| out | 99 | reqCompletedOrders | landed | |
+| in | 101 | CompletedOrder | landed | Simplified: advanced order detail sections still skipped |
+| in | 102 | CompletedOrdersEnd | landed | |
 
 ## News
 

@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
@@ -385,6 +386,133 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	if oo.ParentID != "" {
 		t.Errorf("ParentID = %q, want empty (partial parse)", oo.ParentID)
 	}
+}
+
+func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
+	t.Parallel()
+
+	payload, err := Encode(OpenOrder{
+		OrderID: 42,
+		Contract: Contract{
+			ConID: 265598, Symbol: "AAPL", SecType: "STK",
+			Strike: "0", Exchange: "SMART", Currency: "USD",
+			LocalSymbol: "AAPL", TradingClass: "NMS",
+		},
+		Account:             "DU9000001",
+		Action:              "BUY",
+		Quantity:            "1",
+		OrderType:           "LMT",
+		LmtPrice:            "150.00",
+		AuxPrice:            "0",
+		TIF:                 "DAY",
+		Origin:              "0",
+		ClientID:            "1",
+		PermID:              "12345",
+		OutsideRTH:          "0",
+		Hidden:              "0",
+		DiscretionAmt:       "0",
+		Status:              "PreSubmitted",
+		ComboLegs:           []ComboLeg{{ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}, {ConID: 2, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}},
+		OrderComboLegPrices: []string{"1.25", "2.50"},
+		SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
+		AlgoStrategy:        "Adaptive",
+		AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
+		Conditions:          []OrderCondition{{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "175.0", TriggerMethod: 4}},
+		ConditionsIgnoreRTH: "1",
+		Filled:              "0",
+		Remaining:           "1",
+		ParentID:            "0",
+	})
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v", err)
+	}
+	oo, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+	if got := len(oo.ComboLegs); got != 2 {
+		t.Fatalf("ComboLegs len = %d, want 2", got)
+	}
+	if oo.ComboLegs[0].ConID != 1 || oo.ComboLegs[1].Action != "SELL" {
+		t.Fatalf("decoded combo legs = %#v", oo.ComboLegs)
+	}
+	if !slices.Equal(oo.OrderComboLegPrices, []string{"1.25", "2.50"}) {
+		t.Fatalf("OrderComboLegPrices = %#v", oo.OrderComboLegPrices)
+	}
+	if len(oo.SmartComboRouting) != 1 || oo.SmartComboRouting[0].Tag != "NonGuaranteed" {
+		t.Fatalf("SmartComboRouting = %#v", oo.SmartComboRouting)
+	}
+	if oo.AlgoStrategy != "Adaptive" || len(oo.AlgoParams) != 1 || oo.AlgoParams[0].Value != "Normal" {
+		t.Fatalf("algo decode = strategy %q params %#v", oo.AlgoStrategy, oo.AlgoParams)
+	}
+	if len(oo.Conditions) != 1 {
+		t.Fatalf("Conditions len = %d, want 1", len(oo.Conditions))
+	}
+	if cond := oo.Conditions[0]; cond.Type != 1 || cond.Operator != 2 || cond.ConID != 265598 || cond.TriggerMethod != 4 {
+		t.Fatalf("Condition = %#v", cond)
+	}
+	if oo.ConditionsIgnoreRTH != "1" {
+		t.Fatalf("ConditionsIgnoreRTH = %q, want 1", oo.ConditionsIgnoreRTH)
+	}
+	if oo.Status != "PreSubmitted" || oo.Filled != "0" || oo.Remaining != "1" {
+		t.Fatalf("status block = status %q filled %q remaining %q", oo.Status, oo.Filled, oo.Remaining)
+	}
+}
+
+func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
+	t.Parallel()
+
+	payload, err := Encode(PlaceOrderRequest{
+		OrderID: 77,
+		Contract: Contract{
+			ConID: 9001, Symbol: "BAG-TEST", SecType: "BAG", Exchange: "SMART", Currency: "USD",
+		},
+		Action:                  "BUY",
+		TotalQuantity:           "1",
+		OrderType:               "LMT",
+		LmtPrice:                "3.50",
+		TIF:                     "DAY",
+		Account:                 "DU9000001",
+		Origin:                  "0",
+		Transmit:                "1",
+		ParentID:                "0",
+		OutsideRTH:              "0",
+		ComboLegs:               []ComboLeg{{ConID: 101, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}, {ConID: 102, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}},
+		OrderComboLegPrices:     []string{"1.10", "2.40"},
+		SmartComboRoutingParams: []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
+		AlgoStrategy:            "Adaptive",
+		AlgoParams:              []TagValue{{Tag: "adaptivePriority", Value: "Patient"}},
+		Solicited:               "0",
+		RandomizeSize:           "0",
+		RandomizePrice:          "0",
+		Conditions:              []OrderCondition{{Type: 3, Conjunction: "a", Operator: 2, Value: "20260409 10:00:00 US/Eastern"}},
+		ConditionsIgnoreRTH:     "1",
+		ConditionsCancelOrder:   "0",
+	})
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+	assertSubsequence(t, fields, []string{"2", "101", "1", "BUY", "SMART", "0", "0", "", "-1", "102", "1", "SELL", "SMART", "0", "0", "", "-1", "2", "1.10", "2.40", "1", "NonGuaranteed", "1"})
+	assertSubsequence(t, fields, []string{"Adaptive", "1", "adaptivePriority", "Patient"})
+	assertSubsequence(t, fields, []string{"0", "0", "1", "3", "a", "1", "20260409 10:00:00 US/Eastern", "1", "0"})
+}
+
+func assertSubsequence(t *testing.T, fields, want []string) {
+	t.Helper()
+	for i := 0; i+len(want) <= len(fields); i++ {
+		if slices.Equal(fields[i:i+len(want)], want) {
+			return
+		}
+	}
+	t.Fatalf("wire fields do not contain subsequence %#v", want)
 }
 
 func TestDecodeServerInfo(t *testing.T) {

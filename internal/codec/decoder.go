@@ -9,10 +9,21 @@ import (
 type fieldReader struct {
 	fields []string
 	pos    int
+	err    error
 }
 
 func newFieldReader(fields []string) *fieldReader {
 	return &fieldReader{fields: fields}
+}
+
+func (r *fieldReader) setErr(err error) {
+	if err != nil && r.err == nil {
+		r.err = err
+	}
+}
+
+func (r *fieldReader) Err() error {
+	return r.err
 }
 
 func (r *fieldReader) ReadInt() (int, error) {
@@ -22,7 +33,9 @@ func (r *fieldReader) ReadInt() (int, error) {
 	}
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	return v, nil
 }
@@ -34,7 +47,9 @@ func (r *fieldReader) ReadInt64() (int64, error) {
 	}
 	v, err := strconv.ParseInt(s, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("codec: field %d: parse int64 %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse int64 %q: %w", r.pos-1, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	return v, nil
 }
@@ -46,7 +61,9 @@ func (r *fieldReader) ReadFloat() (float64, error) {
 	}
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return 0, fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	return v, nil
 }
@@ -59,7 +76,9 @@ func (r *fieldReader) ReadMaxFloat() (float64, error) {
 	}
 	v, err := strconv.ParseFloat(s, 64)
 	if err != nil {
-		return 0, fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	return v, nil
 }
@@ -72,7 +91,9 @@ func (r *fieldReader) ReadMaxInt() (int, error) {
 	}
 	v, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	return v, nil
 }
@@ -95,7 +116,9 @@ func (r *fieldReader) ReadBool() (bool, error) {
 	case "0", "false", "":
 		return false, nil
 	default:
-		return false, fmt.Errorf("codec: field %d: parse bool %q", r.pos-1, s)
+		parseErr := fmt.Errorf("codec: field %d: parse bool %q", r.pos-1, s)
+		r.setErr(parseErr)
+		return false, parseErr
 	}
 }
 
@@ -130,18 +153,48 @@ func (r *fieldReader) Pos() int {
 
 func (r *fieldReader) ReadCount(label string) (int, error) {
 	if r.pos >= len(r.fields) {
-		return 0, fmt.Errorf("codec: field %d: missing %s", r.pos, label)
+		parseErr := fmt.Errorf("codec: field %d: missing %s", r.pos, label)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	s := r.ReadString()
 	if s == "" {
-		return 0, fmt.Errorf("codec: field %d: empty %s", r.pos-1, label)
+		parseErr := fmt.Errorf("codec: field %d: empty %s", r.pos-1, label)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	count, err := strconv.Atoi(s)
 	if err != nil {
-		return 0, fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	if count < 0 {
-		return 0, fmt.Errorf("codec: field %d: negative %s %d", r.pos-1, label, count)
+		parseErr := fmt.Errorf("codec: field %d: negative %s %d", r.pos-1, label, count)
+		r.setErr(parseErr)
+		return 0, parseErr
+	}
+	return count, nil
+}
+
+func (r *fieldReader) ReadOptionalCount(label string) (int, error) {
+	if r.pos >= len(r.fields) {
+		return 0, nil
+	}
+	s := r.ReadString()
+	if s == "" {
+		return 0, nil
+	}
+	count, err := strconv.Atoi(s)
+	if err != nil {
+		parseErr := fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, s, err)
+		r.setErr(parseErr)
+		return 0, parseErr
+	}
+	if count < 0 {
+		parseErr := fmt.Errorf("codec: field %d: negative %s %d", r.pos-1, label, count)
+		r.setErr(parseErr)
+		return 0, parseErr
 	}
 	return count, nil
 }

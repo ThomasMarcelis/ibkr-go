@@ -81,3 +81,33 @@ func TestConnCloseCompletes(t *testing.T) {
 		t.Fatalf("Wait() error = %v", err)
 	}
 }
+
+func TestConnSendDoesNotBlockOnPacedWriter(t *testing.T) {
+	t.Parallel()
+
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	conn := New(clientConn, nil, 1)
+	defer conn.Close()
+
+	payload := wire.EncodeFields([]string{"hello", "1", "7"})
+	if err := conn.Send(context.Background(), payload); err != nil {
+		t.Fatalf("first Send() error = %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- conn.Send(context.Background(), payload)
+	}()
+
+	select {
+	case err := <-errCh:
+		if err != nil {
+			t.Fatalf("second Send() error = %v", err)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("second Send() blocked behind paced writer")
+	}
+}

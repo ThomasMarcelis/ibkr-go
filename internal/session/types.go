@@ -161,6 +161,34 @@ type Contract struct {
 	PrimaryExchange string
 }
 
+type ComboLeg struct {
+	ConID              int
+	Ratio              int
+	Action             string
+	Exchange           string
+	OpenClose          string
+	ShortSaleSlot      int
+	DesignatedLocation string
+	ExemptCode         int
+}
+
+type TagValue struct {
+	Tag   string
+	Value string
+}
+
+type OrderCondition struct {
+	Type          int
+	Conjunction   string
+	ConID         int
+	Exchange      string
+	Operator      int
+	Value         string
+	TriggerMethod int
+	SecType       string
+	Symbol        string
+}
+
 type ContractDetailsRequest struct {
 	Contract Contract
 }
@@ -294,19 +322,31 @@ type OpenOrder struct {
 	Filled    Decimal
 	Remaining Decimal
 
-	LmtPrice      Decimal
-	AuxPrice      Decimal
-	TIF           string
-	OcaGroup      string
-	OpenClose     string
-	Origin        int
-	OrderRef      string
-	ClientID      int
-	PermID        int64
-	OutsideRTH    bool
-	Hidden        bool
-	GoodAfterTime string
-	ParentID      int64
+	LmtPrice              Decimal
+	AuxPrice              Decimal
+	TIF                   string
+	OcaGroup              string
+	OpenClose             string
+	Origin                int
+	OrderRef              string
+	ClientID              int
+	PermID                int64
+	OutsideRTH            bool
+	Hidden                bool
+	GoodAfterTime         string
+	ParentID              int64
+	ComboLegs             []ComboLeg
+	OrderComboLegPrices   []string
+	SmartComboRouting     []TagValue
+	AlgoStrategy          string
+	AlgoParams            []TagValue
+	Conditions            []OrderCondition
+	ConditionsIgnoreRTH   bool
+	ConditionsCancelOrder bool
+	Commission            Decimal
+	MinCommission         Decimal
+	MaxCommission         Decimal
+	CommissionCurrency    string
 }
 
 type OpenOrderUpdate struct {
@@ -364,21 +404,29 @@ type OrderEvent struct {
 }
 
 type Order struct {
-	OrderID       int64 // 0 = auto-allocate
-	Action        OrderAction
-	OrderType     string // "MKT", "LMT", "STP", etc.
-	Quantity      Decimal
-	LmtPrice      Decimal
-	AuxPrice      Decimal
-	TIF           TimeInForce
-	Account       string
-	Transmit      *bool // nil = true (default)
-	ParentID      int64 // 0 = no parent
-	OcaGroup      string
-	OutsideRTH    bool
-	OrderRef      string
-	GoodAfterTime string
-	GoodTillDate  string
+	OrderID                 int64 // 0 = auto-allocate
+	Action                  OrderAction
+	OrderType               string // "MKT", "LMT", "STP", etc.
+	Quantity                Decimal
+	LmtPrice                Decimal
+	AuxPrice                Decimal
+	TIF                     TimeInForce
+	Account                 string
+	Transmit                *bool // nil = true (default)
+	ParentID                int64 // 0 = no parent
+	OcaGroup                string
+	OutsideRTH              bool
+	OrderRef                string
+	GoodAfterTime           string
+	GoodTillDate            string
+	ComboLegs               []ComboLeg
+	OrderComboLegPrices     []string
+	SmartComboRoutingParams []TagValue
+	AlgoStrategy            string
+	AlgoParams              []TagValue
+	Conditions              []OrderCondition
+	ConditionsIgnoreRTH     bool
+	ConditionsCancelOrder   bool
 }
 
 type PlaceOrderRequest struct {
@@ -392,7 +440,6 @@ type PlaceOrderRequest struct {
 type OrderHandle struct {
 	orderID int64
 	events  chan OrderEvent
-	state   chan SubscriptionStateEvent
 	done    chan struct{}
 
 	closeOnce sync.Once
@@ -401,20 +448,22 @@ type OrderHandle struct {
 
 	cancelFn func(context.Context) error        // set by engine, sends CancelOrder
 	modifyFn func(context.Context, Order) error // set by engine, sends PlaceOrder with same ID
+
+	stateRelay *relay[SubscriptionStateEvent]
 }
 
 func newOrderHandle(orderID int64) *OrderHandle {
 	return &OrderHandle{
-		orderID: orderID,
-		events:  make(chan OrderEvent, 64),
-		state:   make(chan SubscriptionStateEvent, 8),
-		done:    make(chan struct{}),
+		orderID:    orderID,
+		events:     make(chan OrderEvent, 64),
+		done:       make(chan struct{}),
+		stateRelay: newRelay[SubscriptionStateEvent](8),
 	}
 }
 
 func (h *OrderHandle) OrderID() int64                       { return h.orderID }
 func (h *OrderHandle) Events() <-chan OrderEvent            { return h.events }
-func (h *OrderHandle) State() <-chan SubscriptionStateEvent { return h.state }
+func (h *OrderHandle) State() <-chan SubscriptionStateEvent { return h.stateRelay.Chan() }
 func (h *OrderHandle) Done() <-chan struct{}                { return h.done }
 
 func (h *OrderHandle) Wait() error {
@@ -428,9 +477,9 @@ func (h *OrderHandle) Wait() error {
 // Events() and State() channels are closed.
 func (h *OrderHandle) Close() error {
 	h.closeOnce.Do(func() {
+		h.stateRelay.Close()
 		close(h.done)
 		close(h.events)
-		close(h.state)
 	})
 	return nil
 }
@@ -516,10 +565,7 @@ func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
 	if evt.At.IsZero() {
 		evt.At = time.Now().UTC()
 	}
-	select {
-	case h.state <- evt:
-	case <-h.done:
-	}
+	h.stateRelay.Emit(evt)
 }
 
 func (h *OrderHandle) emitOrderError(err error) {
@@ -531,9 +577,9 @@ func (h *OrderHandle) closeWithErr(err error) {
 		h.errMu.Lock()
 		h.err = err
 		h.errMu.Unlock()
+		h.stateRelay.Close()
 		close(h.done)
 		close(h.events)
-		close(h.state)
 	})
 }
 
@@ -770,14 +816,16 @@ type HistoricalTick struct {
 }
 
 type HistoricalTickBidAsk struct {
-	Time     time.Time
-	BidPrice Decimal
-	AskPrice Decimal
-	BidSize  Decimal
-	AskSize  Decimal
+	TickAttrib int
+	Time       time.Time
+	BidPrice   Decimal
+	AskPrice   Decimal
+	BidSize    Decimal
+	AskSize    Decimal
 }
 
 type HistoricalTickLast struct {
+	TickAttrib        int
 	Time              time.Time
 	Price             Decimal
 	Size              Decimal

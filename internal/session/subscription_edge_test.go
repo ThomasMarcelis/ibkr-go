@@ -150,24 +150,33 @@ func TestSubscriptionStateChannelFull(t *testing.T) {
 
 	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
-	// State channel has buffer 8. Emit 12 events.
 	for i := 0; i < 12; i++ {
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted})
 	}
+	sub.closeWithErr(nil)
 
-	// Read up to 8 buffered events.
 	count := 0
-	for {
+	seenClosed := false
+	timeout := time.After(time.Second)
+	for !seenClosed {
 		select {
-		case <-sub.State():
-			count++
-		default:
-			goto done
+		case evt, ok := <-sub.State():
+			if !ok {
+				seenClosed = true
+				break
+			}
+			if evt.Kind == SubscriptionStarted {
+				count++
+			}
+			if evt.Kind == SubscriptionClosed {
+				seenClosed = true
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for state relay to drain")
 		}
 	}
-done:
-	if count != 8 {
-		t.Errorf("read %d state events, want 8 (buffer capacity)", count)
+	if count != 12 {
+		t.Errorf("read %d state events, want 12", count)
 	}
 }
 

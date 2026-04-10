@@ -73,8 +73,14 @@ func Encode(msg Message) ([]byte, error) {
 
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
 // Returns []Message because historical data packs multiple bars into one frame.
-func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
+func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 	r := newFieldReader(fields[1:]) // skip msg_id
+	defer func() {
+		if err == nil && r.Err() != nil {
+			err = r.Err()
+			msgs = nil
+		}
+	}()
 	switch msgID {
 
 	case InTickPrice: // [1, version, reqID, tickType, price, size, attrMask]
@@ -121,34 +127,6 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
 
 	case InOpenOrder:
-		// v200 wire layout verified against live IB Gateway captures (server_version 200).
-		// 170 total fields (including msg_id). After msg_id: 169 fields at r[0]-r[168].
-		// The message has a fixed positional layout for simple orders (no combos,
-		// no algo params). Conditional variable-length sections (comboLegs, algo
-		// params, conditions) all have count=0 in the common case.
-		//
-		// Key anchor positions:
-		//   r[0]      orderID
-		//   r[1..11]  contract (11-field server→client block)
-		//   r[12..18] action, totalQty, orderType, lmtPrice, auxPrice, tif, ocaGroup
-		//   r[19]     account
-		//   r[20..28] openClose, origin, orderRef, clientId, permId,
-		//             outsideRth, hidden, discretionaryAmt, goodAfterTime
-		//   r[29..90] 62 order detail fields (FA, model, rule80A, vol params, etc.)
-		//   r[91]     OrderState.status
-		//   r[92..100] initMarginBefore..equityWithLoanAfter (9 margin fields)
-		//   r[101..105] commission..warningText (5 fields, may include empty prefix)
-		//   r[106..159] remaining OrderState and post-status fields
-		//   r[160..168] trailing order-status block (filled, remaining, + 7 more)
-
-		// Fields r[0..28] are reliably positioned for all order types. Fields
-		// after r[28] include variable-length combo/algo/conditions sections
-		// whose presence shifts all downstream positions. The static skip counts
-		// (Skip(62) and Skip(54)) are valid only when these sections are empty
-		// (simple orders). For non-simple orders (combo, algo, conditional), we
-		// return a partial parse with only the safe pre-variable fields.
-		const simpleOrderFieldCount = 169
-
 		orderID, _ := r.ReadInt64()     // r[0]
 		contract := readWireContract(r) // r[1..11]
 		action := r.ReadString()        // r[12]
@@ -169,9 +147,38 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		discretionAmt := r.ReadString() // r[27]
 		goodAfterTime := r.ReadString() // r[28]
 
-		if r.Len() != simpleOrderFieldCount {
-			// Non-simple order (combo legs, algo params, or conditions present).
-			// Return a partial parse with only the reliably-positioned fields.
+		partial := OpenOrder{
+			OrderID: orderID, Contract: contract,
+			Action: action, Quantity: quantity, OrderType: orderType,
+			LmtPrice: lmtPrice, AuxPrice: auxPrice, TIF: tif,
+			OcaGroup: ocaGroup, Account: account,
+			OpenClose: openClose, Origin: origin, OrderRef: orderRef,
+			ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
+			Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
+		}
+
+		if r.Len() == 169 {
+			r.Skip(62)
+			status := r.ReadString()
+			initMarginBefore := r.ReadString()
+			maintMarginBefore := r.ReadString()
+			equityWithLoanBefore := r.ReadString()
+			initMarginChange := r.ReadString()
+			maintMarginChange := r.ReadString()
+			equityWithLoanChange := r.ReadString()
+			initMarginAfter := r.ReadString()
+			maintMarginAfter := r.ReadString()
+			equityWithLoanAfter := r.ReadString()
+			commission := r.ReadString()
+			minCommission := r.ReadString()
+			maxCommission := r.ReadString()
+			commissionCurrency := r.ReadString()
+			warningText := r.ReadString()
+			r.Skip(54)
+			filled := r.ReadString()
+			remaining := r.ReadString()
+			r.Skip(2)
+			parentID := r.ReadString()
 			return []Message{OpenOrder{
 				OrderID: orderID, Contract: contract,
 				Action: action, Quantity: quantity, OrderType: orderType,
@@ -180,32 +187,231 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 				OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 				ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 				Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
+				Status:               status,
+				InitMarginBefore:     initMarginBefore,
+				MaintMarginBefore:    maintMarginBefore,
+				EquityWithLoanBefore: equityWithLoanBefore,
+				InitMarginChange:     initMarginChange,
+				MaintMarginChange:    maintMarginChange,
+				EquityWithLoanChange: equityWithLoanChange,
+				InitMarginAfter:      initMarginAfter,
+				MaintMarginAfter:     maintMarginAfter,
+				EquityWithLoanAfter:  equityWithLoanAfter,
+				Commission:           commission,
+				MinCommission:        minCommission,
+				MaxCommission:        maxCommission,
+				CommissionCurrency:   commissionCurrency,
+				WarningText:          warningText,
+				Filled:               filled,
+				Remaining:            remaining,
+				ParentID:             parentID,
 			}}, nil
 		}
 
-		r.Skip(62)               // r[29..90]: FA params, order details, vol params, combos, scale, algo, etc.
-		status := r.ReadString() // r[91]
-		// OrderState section: margin fields and commission.
-		initMarginBefore := r.ReadString()     // r[92]
-		maintMarginBefore := r.ReadString()    // r[93]
-		equityWithLoanBefore := r.ReadString() // r[94]
-		initMarginChange := r.ReadString()     // r[95]
-		maintMarginChange := r.ReadString()    // r[96]
-		equityWithLoanChange := r.ReadString() // r[97]
-		initMarginAfter := r.ReadString()      // r[98]
-		maintMarginAfter := r.ReadString()     // r[99]
-		equityWithLoanAfter := r.ReadString()  // r[100]
-		commission := r.ReadString()           // r[101]
-		minCommission := r.ReadString()        // r[102]
-		maxCommission := r.ReadString()        // r[103]
-		commissionCurrency := r.ReadString()   // r[104]
-		warningText := r.ReadString()          // r[105]
-		r.Skip(54)                             // r[106..159]: remaining state/post-status fields
-		filled := r.ReadString()               // r[160]
-		remaining := r.ReadString()            // r[161]
-		r.Skip(2)                              // r[162..163]: lastFillPrice, permId
-		parentID := r.ReadString()             // r[164]
-		// r[165..168]: lastLiquidity, whyHeld, mktCapPrice, trailing
+		// Shared pre-status order fields in the observed server->client layout.
+		r.ReadString() // deprecated sharesAllocation
+		r.ReadString() // FAGroup
+		r.ReadString() // FAMethod
+		r.ReadString() // FAPercentage
+		r.ReadString() // ModelCode
+		r.ReadString() // GoodTillDate
+		r.ReadString() // Rule80A
+		r.ReadString() // PercentOffset
+		r.ReadString() // SettlingFirm
+		r.ReadString() // ShortSaleSlot
+		r.ReadString() // DesignatedLocation
+		r.ReadString() // ExemptCode
+		r.ReadString() // AuctionStrategy
+		r.ReadString() // StartingPrice
+		r.ReadString() // StockRefPrice
+		r.ReadString() // Delta
+		r.ReadString() // StockRangeLower
+		r.ReadString() // StockRangeUpper
+		r.ReadString() // DisplaySize
+		r.ReadString() // BlockOrder
+		r.ReadString() // SweepToFill
+		r.ReadString() // AllOrNone
+		r.ReadString() // MinQty
+		r.ReadString() // OcaType
+		r.ReadString() // deprecated ETradeOnly
+		r.ReadString() // deprecated FirmQuoteOnly
+		r.ReadString() // deprecated NBBOPriceCap
+		r.ReadString() // ParentID (pre-status)
+		r.ReadString() // TriggerMethod
+
+		r.ReadString() // Volatility
+		r.ReadString() // VolatilityType
+		deltaNeutralOrderType := r.ReadString()
+		r.ReadString() // DeltaNeutralAuxPrice
+		if deltaNeutralOrderType != "" {
+			return []Message{partial}, nil
+		}
+		r.ReadString() // ContinuousUpdate
+		r.ReadString() // ReferencePriceType
+		r.ReadString() // TrailStopPrice
+		r.ReadString() // TrailingPercent
+		r.ReadString() // BasisPoints
+		r.ReadString() // BasisPointsType
+		r.ReadString() // ComboLegsDescrip
+
+		comboLegsCount, err := r.ReadOptionalCount("open order combo legs")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("open order combo legs", comboLegsCount, 8, 0); err != nil {
+			return nil, err
+		}
+		comboLegs := make([]ComboLeg, comboLegsCount)
+		for i := range comboLegs {
+			comboLegs[i] = ComboLeg{
+				ConID:              mustReadInt(r),
+				Ratio:              mustReadInt(r),
+				Action:             r.ReadString(),
+				Exchange:           r.ReadString(),
+				OpenClose:          r.ReadString(),
+				ShortSaleSlot:      r.ReadString(),
+				DesignatedLocation: r.ReadString(),
+				ExemptCode:         r.ReadString(),
+			}
+		}
+
+		orderComboLegsCount, err := r.ReadOptionalCount("open order combo leg prices")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("open order combo leg prices", orderComboLegsCount, 1, 0); err != nil {
+			return nil, err
+		}
+		orderComboLegPrices := make([]string, orderComboLegsCount)
+		for i := range orderComboLegPrices {
+			orderComboLegPrices[i] = r.ReadString()
+		}
+
+		smartComboRoutingParamsCount, err := r.ReadOptionalCount("open order smart combo routing params")
+		if err != nil {
+			return nil, err
+		}
+		smartComboRouting, err := readTagValuePairs(r, "open order smart combo routing params", smartComboRoutingParamsCount)
+		if err != nil {
+			return nil, err
+		}
+
+		r.ReadString() // ScaleInitLevelSize
+		r.ReadString() // ScaleSubsLevelSize
+		scalePriceIncrement := r.ReadString()
+		if isPositiveWireNumber(scalePriceIncrement) {
+			return []Message{partial}, nil
+		}
+		r.ReadString() // ScaleTable
+		r.ReadString() // ActiveStartTime
+		r.ReadString() // ActiveStopTime
+		hedgeType := r.ReadString()
+		if hedgeType != "" {
+			r.ReadString() // HedgeParam
+		}
+		r.ReadString() // OptOutSmartRouting
+		r.ReadString() // ClearingAccount
+		r.ReadString() // ClearingIntent
+		r.ReadString() // NotHeld
+		deltaNeutralContractPresent := r.ReadString()
+		if deltaNeutralContractPresent == "1" {
+			return []Message{partial}, nil
+		}
+		algoStrategy := r.ReadString()
+		var algoParams []TagValue
+		if algoStrategy != "" {
+			algoParamsCount, err := r.ReadCount("open order algo params")
+			if err != nil {
+				return nil, err
+			}
+			algoParams, err = readTagValuePairs(r, "open order algo params", algoParamsCount)
+			if err != nil {
+				return nil, err
+			}
+		}
+		r.ReadString() // Solicited
+		r.ReadString() // WhatIf
+
+		status := r.ReadString()
+		initMarginBefore := r.ReadString()
+		maintMarginBefore := r.ReadString()
+		equityWithLoanBefore := r.ReadString()
+		initMarginChange := r.ReadString()
+		maintMarginChange := r.ReadString()
+		equityWithLoanChange := r.ReadString()
+		initMarginAfter := r.ReadString()
+		maintMarginAfter := r.ReadString()
+		equityWithLoanAfter := r.ReadString()
+		commission := r.ReadString()
+		minCommission := r.ReadString()
+		maxCommission := r.ReadString()
+		commissionCurrency := r.ReadString()
+		r.ReadString() // MarginCurrency
+		r.ReadString() // InitMarginBeforeOutsideRTH
+		r.ReadString() // MaintMarginBeforeOutsideRTH
+		r.ReadString() // EquityWithLoanBeforeOutsideRTH
+		r.ReadString() // InitMarginChangeOutsideRTH
+		r.ReadString() // MaintMarginChangeOutsideRTH
+		r.ReadString() // EquityWithLoanChangeOutsideRTH
+		r.ReadString() // InitMarginAfterOutsideRTH
+		r.ReadString() // MaintMarginAfterOutsideRTH
+		r.ReadString() // EquityWithLoanAfterOutsideRTH
+		r.ReadString() // SuggestedSize
+		r.ReadString() // RejectReason
+		orderAllocationsCount, err := r.ReadOptionalCount("open order allocations")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 8, 0); err != nil {
+			return nil, err
+		}
+		for range orderAllocationsCount {
+			r.ReadString() // Account
+			r.ReadString() // Position
+			r.ReadString() // PositionDesired
+			r.ReadString() // PositionAfter
+			r.ReadString() // DesiredAllocQty
+			r.ReadString() // AllowedAllocQty
+			r.ReadString() // IsMonetary
+			r.ReadString() // reserved
+		}
+		warningText := r.ReadString()
+
+		// Post-status advanced-order fields needed to reach conditional blocks.
+		r.ReadString() // RandomizeSize
+		r.ReadString() // RandomizePrice
+		if orderType == "PEG BENCH" {
+			for range 5 {
+				r.ReadString()
+			}
+		}
+
+		conditionsCount, err := r.ReadOptionalCount("open order conditions")
+		if err != nil {
+			return nil, err
+		}
+		conditions := make([]OrderCondition, conditionsCount)
+		for i := range conditions {
+			conditionType, err := r.ReadInt()
+			if err != nil {
+				return nil, err
+			}
+			conditions[i], err = readOrderCondition(r, conditionType)
+			if err != nil {
+				return nil, err
+			}
+		}
+		conditionsIgnoreRTH := ""
+		conditionsCancelOrder := ""
+		if conditionsCount > 0 {
+			conditionsIgnoreRTH = btoa(mustReadBool(r))
+			conditionsCancelOrder = btoa(mustReadBool(r))
+		}
+
+		filled := fieldFromEnd(r.fields, 9)
+		remaining := fieldFromEnd(r.fields, 8)
+		parentID := fieldFromEnd(r.fields, 5)
+
 		return []Message{OpenOrder{
 			OrderID: orderID, Contract: contract,
 			Action: action, Quantity: quantity, OrderType: orderType,
@@ -214,17 +420,32 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 			OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 			ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 			Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
-			Status:           status,
-			InitMarginBefore: initMarginBefore, MaintMarginBefore: maintMarginBefore,
-			EquityWithLoanBefore: equityWithLoanBefore,
-			InitMarginChange:     initMarginChange, MaintMarginChange: maintMarginChange,
-			EquityWithLoanChange: equityWithLoanChange,
-			InitMarginAfter:      initMarginAfter, MaintMarginAfter: maintMarginAfter,
-			EquityWithLoanAfter: equityWithLoanAfter,
-			Commission:          commission, MinCommission: minCommission,
-			MaxCommission: maxCommission, CommissionCurrency: commissionCurrency,
-			WarningText: warningText,
-			Filled:      filled, Remaining: remaining, ParentID: parentID,
+			ComboLegs:             comboLegs,
+			OrderComboLegPrices:   orderComboLegPrices,
+			SmartComboRouting:     smartComboRouting,
+			AlgoStrategy:          algoStrategy,
+			AlgoParams:            algoParams,
+			Conditions:            conditions,
+			ConditionsIgnoreRTH:   conditionsIgnoreRTH,
+			ConditionsCancelOrder: conditionsCancelOrder,
+			Status:                status,
+			InitMarginBefore:      initMarginBefore,
+			MaintMarginBefore:     maintMarginBefore,
+			EquityWithLoanBefore:  equityWithLoanBefore,
+			InitMarginChange:      initMarginChange,
+			MaintMarginChange:     maintMarginChange,
+			EquityWithLoanChange:  equityWithLoanChange,
+			InitMarginAfter:       initMarginAfter,
+			MaintMarginAfter:      maintMarginAfter,
+			EquityWithLoanAfter:   equityWithLoanAfter,
+			Commission:            commission,
+			MinCommission:         minCommission,
+			MaxCommission:         maxCommission,
+			CommissionCurrency:    commissionCurrency,
+			WarningText:           warningText,
+			Filled:                filled,
+			Remaining:             remaining,
+			ParentID:              parentID,
 		}}, nil
 
 	case InNextValidID: // [9, version, orderID]
@@ -840,12 +1061,12 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		ticks := make([]HistoricalTickBidAskEntry, count)
 		for i := range ticks {
 			timeStr := r.ReadString()
-			r.Skip(1) // tickAttribBidAsk
+			tickAttrib, _ := r.ReadInt()
 			bidPrice := r.ReadString()
 			askPrice := r.ReadString()
 			bidSize := r.ReadString()
 			askSize := r.ReadString()
-			ticks[i] = HistoricalTickBidAskEntry{Time: timeStr, BidPrice: bidPrice, AskPrice: askPrice, BidSize: bidSize, AskSize: askSize}
+			ticks[i] = HistoricalTickBidAskEntry{Time: timeStr, TickAttrib: tickAttrib, BidPrice: bidPrice, AskPrice: askPrice, BidSize: bidSize, AskSize: askSize}
 		}
 		done, _ := r.ReadBool()
 		return []Message{HistoricalTicksBidAskResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
@@ -862,12 +1083,12 @@ func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
 		ticks := make([]HistoricalTickLastEntry, count)
 		for i := range ticks {
 			timeStr := r.ReadString()
-			r.Skip(1) // tickAttribLast
+			tickAttrib, _ := r.ReadInt()
 			price := r.ReadString()
 			size := r.ReadString()
 			exchange := r.ReadString()
 			specialConditions := r.ReadString()
-			ticks[i] = HistoricalTickLastEntry{Time: timeStr, Price: price, Size: size, Exchange: exchange, SpecialConditions: specialConditions}
+			ticks[i] = HistoricalTickLastEntry{Time: timeStr, TickAttrib: tickAttrib, Price: price, Size: size, Exchange: exchange, SpecialConditions: specialConditions}
 		}
 		done, _ := r.ReadBool()
 		return []Message{HistoricalTicksLastResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
@@ -1399,7 +1620,24 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.TriggerMethod)
 		w.WriteString(m.OutsideRTH)
 		w.WriteString(m.Hidden)
-		// [BAG combo legs would go here - skipped for non-BAG]
+		if m.Contract.SecType == "BAG" || len(m.ComboLegs) > 0 || len(m.OrderComboLegPrices) > 0 || len(m.SmartComboRoutingParams) > 0 {
+			w.WriteInt(len(m.ComboLegs))
+			for _, leg := range m.ComboLegs {
+				w.WriteInt(leg.ConID)
+				w.WriteInt(leg.Ratio)
+				w.WriteString(leg.Action)
+				w.WriteString(leg.Exchange)
+				w.WriteString(leg.OpenClose)
+				w.WriteString(leg.ShortSaleSlot)
+				w.WriteString(leg.DesignatedLocation)
+				w.WriteString(leg.ExemptCode)
+			}
+			w.WriteInt(len(m.OrderComboLegPrices))
+			for _, price := range m.OrderComboLegPrices {
+				w.WriteString(price)
+			}
+			writeTagValuePairs(&w, m.SmartComboRoutingParams)
+		}
 		// Deprecated + FA + model
 		w.WriteString("") // deprecated sharesAllocation
 		w.WriteString(m.DiscretionaryAmt)
@@ -1436,7 +1674,7 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.VolatilityType)
 		w.WriteString(m.DeltaNeutralOrderType)
 		w.WriteString(m.DeltaNeutralAuxPrice)
-		// [deltaNeutralOrderType="" => skip extended delta neutral fields]
+		// grounded v1.2 leaves delta-neutral extension fields deferred
 		w.WriteString(m.ContinuousUpdate)
 		w.WriteString(m.ReferencePriceType)
 		// Trailing
@@ -1446,7 +1684,7 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.ScaleInitLevelSize)
 		w.WriteString(m.ScaleSubsLevelSize)
 		w.WriteString(m.ScalePriceIncrement)
-		// [scalePriceIncrement empty/unset => skip scale3 extended]
+		// grounded v1.2 leaves scale extension fields deferred
 		w.WriteString(m.ScaleTable)
 		w.WriteString(m.ActiveStartTime)
 		w.WriteString(m.ActiveStopTime)
@@ -1461,9 +1699,11 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.ClearingIntent)
 		w.WriteString(m.NotHeld)
 		w.WriteString(m.DeltaNeutralContractPresent)
-		// [DeltaNeutralContractPresent="0" => skip DNC fields]
+		// grounded v1.2 leaves delta-neutral contract fields deferred
 		w.WriteString(m.AlgoStrategy)
-		// [AlgoStrategy="" => skip algo params]
+		if m.AlgoStrategy != "" {
+			writeTagValuePairs(&w, m.AlgoParams)
+		}
 		w.WriteString(m.AlgoID)
 		w.WriteString(m.WhatIf)
 		w.WriteString(m.OrderMiscOptions)
@@ -1471,8 +1711,14 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.RandomizeSize)
 		w.WriteString(m.RandomizePrice)
 		// [OrderType != "PEG BENCH" => skip peg bench fields]
-		w.WriteString(m.ConditionsCount)
-		// [ConditionsCount="0" => skip condition details]
+		w.WriteInt(len(m.Conditions))
+		for _, cond := range m.Conditions {
+			writeOrderCondition(&w, cond)
+		}
+		if len(m.Conditions) > 0 {
+			w.WriteString(m.ConditionsIgnoreRTH)
+			w.WriteString(m.ConditionsCancelOrder)
+		}
 		w.WriteString(m.AdjustedOrderType)
 		w.WriteString(m.TriggerPrice)
 		w.WriteString(m.LmtPriceOffset)
@@ -1609,59 +1855,179 @@ func encodeFields(msg Message) ([]string, error) {
 		return []string{itoa(InRealTimeBars), "3", itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count}, nil
 
 	case OpenOrder:
-		// Encode in the v200 wire layout. The decoder reads fields at fixed
-		// positions verified against live captures, so the encoder must pad
-		// intermediate fields to keep positions aligned. Total: msg_id + 169 fields.
 		w := fieldWriter{}
 		w.WriteInt(InOpenOrder)
-		w.WriteInt64(m.OrderID)           // r[0]
-		writeWireContract(&w, m.Contract) // r[1..11]
-		w.WriteString(m.Action)           // r[12]
-		w.WriteString(m.Quantity)         // r[13]
-		w.WriteString(m.OrderType)        // r[14]
-		w.WriteString(m.LmtPrice)         // r[15]
-		w.WriteString(m.AuxPrice)         // r[16]
-		w.WriteString(m.TIF)              // r[17]
-		w.WriteString(m.OcaGroup)         // r[18]
-		w.WriteString(m.Account)          // r[19]
-		w.WriteString(m.OpenClose)        // r[20]
-		w.WriteString(m.Origin)           // r[21]
-		w.WriteString(m.OrderRef)         // r[22]
-		w.WriteString(m.ClientID)         // r[23]
-		w.WriteString(m.PermID)           // r[24]
-		w.WriteString(m.OutsideRTH)       // r[25]
-		w.WriteString(m.Hidden)           // r[26]
-		w.WriteString(m.DiscretionAmt)    // r[27]
-		w.WriteString(m.GoodAfterTime)    // r[28]
-		for range 62 {                    // r[29..90] order detail padding
-			w.WriteString("")
+		w.WriteInt64(m.OrderID)
+		writeObservedWireContract(&w, m.Contract)
+		w.WriteString(m.Action)
+		w.WriteString(m.Quantity)
+		w.WriteString(m.OrderType)
+		w.WriteString(m.LmtPrice)
+		w.WriteString(m.AuxPrice)
+		w.WriteString(m.TIF)
+		w.WriteString(m.OcaGroup)
+		w.WriteString(m.Account)
+		w.WriteString(m.OpenClose)
+		w.WriteString(m.Origin)
+		w.WriteString(m.OrderRef)
+		w.WriteString(m.ClientID)
+		w.WriteString(m.PermID)
+		w.WriteString(m.OutsideRTH)
+		w.WriteString(m.Hidden)
+		w.WriteString(m.DiscretionAmt)
+		w.WriteString(m.GoodAfterTime)
+		w.WriteString("") // deprecated sharesAllocation
+		w.WriteString("") // FAGroup
+		w.WriteString("") // FAMethod
+		w.WriteString("") // FAPercentage
+		w.WriteString("") // ModelCode
+		w.WriteString("") // GoodTillDate
+		w.WriteString("") // Rule80A
+		w.WriteString("") // PercentOffset
+		w.WriteString("") // SettlingFirm
+		w.WriteString("") // ShortSaleSlot
+		w.WriteString("") // DesignatedLocation
+		w.WriteString("") // ExemptCode
+		w.WriteString("") // AuctionStrategy
+		w.WriteString("") // StartingPrice
+		w.WriteString("") // StockRefPrice
+		w.WriteString("") // Delta
+		w.WriteString("") // StockRangeLower
+		w.WriteString("") // StockRangeUpper
+		w.WriteString("") // DisplaySize
+		w.WriteString("") // BlockOrder
+		w.WriteString("") // SweepToFill
+		w.WriteString("") // AllOrNone
+		w.WriteString("") // MinQty
+		w.WriteString("") // OcaType
+		w.WriteString("") // deprecated ETradeOnly
+		w.WriteString("") // deprecated FirmQuoteOnly
+		w.WriteString("") // deprecated NBBOPriceCap
+		w.WriteString(m.ParentID)
+		w.WriteString("") // TriggerMethod
+		w.WriteString("") // Volatility
+		w.WriteString("") // VolatilityType
+		w.WriteString("") // DeltaNeutralOrderType
+		w.WriteString("") // DeltaNeutralAuxPrice
+		w.WriteString("") // ContinuousUpdate
+		w.WriteString("") // ReferencePriceType
+		w.WriteString("") // TrailStopPrice
+		w.WriteString("") // TrailingPercent
+		w.WriteString("") // BasisPoints
+		w.WriteString("") // BasisPointsType
+		w.WriteString("") // ComboLegsDescrip
+		w.WriteInt(len(m.ComboLegs))
+		for _, leg := range m.ComboLegs {
+			w.WriteInt(leg.ConID)
+			w.WriteInt(leg.Ratio)
+			w.WriteString(leg.Action)
+			w.WriteString(leg.Exchange)
+			w.WriteString(leg.OpenClose)
+			w.WriteString(leg.ShortSaleSlot)
+			w.WriteString(leg.DesignatedLocation)
+			w.WriteString(leg.ExemptCode)
 		}
-		w.WriteString(m.Status)               // r[91]
-		w.WriteString(m.InitMarginBefore)     // r[92]
-		w.WriteString(m.MaintMarginBefore)    // r[93]
-		w.WriteString(m.EquityWithLoanBefore) // r[94]
-		w.WriteString(m.InitMarginChange)     // r[95]
-		w.WriteString(m.MaintMarginChange)    // r[96]
-		w.WriteString(m.EquityWithLoanChange) // r[97]
-		w.WriteString(m.InitMarginAfter)      // r[98]
-		w.WriteString(m.MaintMarginAfter)     // r[99]
-		w.WriteString(m.EquityWithLoanAfter)  // r[100]
-		w.WriteString(m.Commission)           // r[101]
-		w.WriteString(m.MinCommission)        // r[102]
-		w.WriteString(m.MaxCommission)        // r[103]
-		w.WriteString(m.CommissionCurrency)   // r[104]
-		w.WriteString(m.WarningText)          // r[105]
-		for range 54 {                        // r[106..159] post-commission padding
-			w.WriteString("")
+		w.WriteInt(len(m.OrderComboLegPrices))
+		for _, price := range m.OrderComboLegPrices {
+			w.WriteString(price)
 		}
-		w.WriteString(m.Filled)    // r[160]
-		w.WriteString(m.Remaining) // r[161]
-		w.WriteString("")          // r[162]: lastFillPrice
-		w.WriteString("")          // r[163]: permId
-		w.WriteString(m.ParentID)  // r[164]
-		for range 4 {              // r[165..168] trailing status padding
-			w.WriteString("")
+		writeTagValuePairs(&w, m.SmartComboRouting)
+		w.WriteString("") // ScaleInitLevelSize
+		w.WriteString("") // ScaleSubsLevelSize
+		w.WriteString("") // ScalePriceIncrement
+		w.WriteString("") // ScaleTable
+		w.WriteString("") // ActiveStartTime
+		w.WriteString("") // ActiveStopTime
+		w.WriteString("") // HedgeType
+		w.WriteString("") // OptOutSmartRouting
+		w.WriteString("") // ClearingAccount
+		w.WriteString("") // ClearingIntent
+		w.WriteString("") // NotHeld
+		w.WriteString("0")
+		w.WriteString(m.AlgoStrategy)
+		if m.AlgoStrategy != "" {
+			writeTagValuePairs(&w, m.AlgoParams)
 		}
+		w.WriteString("") // Solicited
+		w.WriteString("") // WhatIf
+		w.WriteString(m.Status)
+		w.WriteString(m.InitMarginBefore)
+		w.WriteString(m.MaintMarginBefore)
+		w.WriteString(m.EquityWithLoanBefore)
+		w.WriteString(m.InitMarginChange)
+		w.WriteString(m.MaintMarginChange)
+		w.WriteString(m.EquityWithLoanChange)
+		w.WriteString(m.InitMarginAfter)
+		w.WriteString(m.MaintMarginAfter)
+		w.WriteString(m.EquityWithLoanAfter)
+		w.WriteString(m.Commission)
+		w.WriteString(m.MinCommission)
+		w.WriteString(m.MaxCommission)
+		w.WriteString(m.CommissionCurrency)
+		w.WriteString("") // MarginCurrency
+		w.WriteString("") // InitMarginBeforeOutsideRTH
+		w.WriteString("") // MaintMarginBeforeOutsideRTH
+		w.WriteString("") // EquityWithLoanBeforeOutsideRTH
+		w.WriteString("") // InitMarginChangeOutsideRTH
+		w.WriteString("") // MaintMarginChangeOutsideRTH
+		w.WriteString("") // EquityWithLoanChangeOutsideRTH
+		w.WriteString("") // InitMarginAfterOutsideRTH
+		w.WriteString("") // MaintMarginAfterOutsideRTH
+		w.WriteString("") // EquityWithLoanAfterOutsideRTH
+		w.WriteString("") // SuggestedSize
+		w.WriteString("") // RejectReason
+		w.WriteInt(0)     // OrderAllocationsCount
+		w.WriteString(m.WarningText)
+		w.WriteString("") // RandomizeSize
+		w.WriteString("") // RandomizePrice
+		w.WriteInt(len(m.Conditions))
+		for _, cond := range m.Conditions {
+			writeOrderCondition(&w, cond)
+		}
+		if len(m.Conditions) > 0 {
+			w.WriteString(m.ConditionsIgnoreRTH)
+			w.WriteString(m.ConditionsCancelOrder)
+		}
+		w.WriteString("") // AdjustedOrderType
+		w.WriteString("") // TriggerPrice
+		w.WriteString("") // LmtPriceOffset
+		w.WriteString("") // AdjustedStopPrice
+		w.WriteString("") // AdjustedStopLimitPrice
+		w.WriteString("") // AdjustedTrailingAmount
+		w.WriteString("") // AdjustableTrailingUnit
+		w.WriteString("") // SoftDollarName
+		w.WriteString("") // SoftDollarValue
+		w.WriteString("") // SoftDollarDisplayName
+		w.WriteString("") // CashQty
+		w.WriteString("") // DontUseAutoPriceForHedge
+		w.WriteString("") // IsOmsContainer
+		w.WriteString("") // DiscretionaryUpToLimitPrice
+		w.WriteString("") // UsePriceMgmtAlgo
+		w.WriteString("") // Duration
+		w.WriteString("") // PostToAts
+		w.WriteString("") // AutoCancelParent
+		w.WriteString("") // MinTradeQty
+		w.WriteString("") // MinCompeteSize
+		w.WriteString("") // CompeteAgainstBestOffset
+		w.WriteString("") // MidOffsetAtWhole
+		w.WriteString("") // MidOffsetAtHalf
+		w.WriteString("") // CustomerAccount
+		w.WriteString("") // ProfessionalCustomer
+		w.WriteString("") // BondAccruedInterest
+		w.WriteString("") // IncludeOvernight
+		w.WriteString("") // ExtOperator
+		w.WriteString("") // ManualOrderIndicator
+		w.WriteString("") // Submitter
+		w.WriteString("") // ImbalanceOnly
+		w.WriteString(m.Filled)
+		w.WriteString(m.Remaining)
+		w.WriteString("") // lastFillPrice
+		w.WriteString("") // permId
+		w.WriteString(m.ParentID)
+		w.WriteString("") // lastLiquidity
+		w.WriteString("") // whyHeld
+		w.WriteString("") // mktCapPrice
+		w.WriteString("") // trailing
 		return w.Fields(), nil
 
 	case OrderStatus:
@@ -1999,7 +2365,7 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(len(m.Ticks))
 		for _, t := range m.Ticks {
 			w.WriteString(t.Time)
-			w.WriteInt(0) // tickAttribBidAsk
+			w.WriteInt(t.TickAttrib)
 			w.WriteString(t.BidPrice)
 			w.WriteString(t.AskPrice)
 			w.WriteString(t.BidSize)
@@ -2015,7 +2381,7 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(len(m.Ticks))
 		for _, t := range m.Ticks {
 			w.WriteString(t.Time)
-			w.WriteInt(0) // tickAttribLast
+			w.WriteInt(t.TickAttrib)
 			w.WriteString(t.Price)
 			w.WriteString(t.Size)
 			w.WriteString(t.Exchange)
@@ -2185,4 +2551,167 @@ func btoa(v bool) string {
 		return "1"
 	}
 	return "0"
+}
+
+func isPositiveWireNumber(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	return err == nil && v > 0
+}
+
+func fieldFromEnd(fields []string, offset int) string {
+	if offset <= 0 || offset > len(fields) {
+		return ""
+	}
+	return fields[len(fields)-offset]
+}
+
+func mustReadInt(r *fieldReader) int {
+	v, _ := r.ReadInt()
+	return v
+}
+
+func mustReadBool(r *fieldReader) bool {
+	v, _ := r.ReadBool()
+	return v
+}
+
+func readTagValuePairs(r *fieldReader, label string, count int) ([]TagValue, error) {
+	if err := r.RequireFixedEntryFields(label, count, 2, 0); err != nil {
+		return nil, err
+	}
+	values := make([]TagValue, count)
+	for i := range values {
+		values[i] = TagValue{Tag: r.ReadString(), Value: r.ReadString()}
+	}
+	return values, nil
+}
+
+func writeTagValuePairs(w *fieldWriter, values []TagValue) {
+	w.WriteInt(len(values))
+	for _, value := range values {
+		w.WriteString(value.Tag)
+		w.WriteString(value.Value)
+	}
+}
+
+func readOrderCondition(r *fieldReader, conditionType int) (OrderCondition, error) {
+	cond := OrderCondition{Type: conditionType}
+	switch conditionType {
+	case 1: // Price
+		cond.Conjunction = r.ReadString()
+		if more, err := r.ReadBool(); err != nil {
+			return OrderCondition{}, err
+		} else if more {
+			cond.Operator = 2
+		} else {
+			cond.Operator = 1
+		}
+		cond.ConID, _ = r.ReadInt()
+		cond.Exchange = r.ReadString()
+		cond.Value = r.ReadString()
+		cond.TriggerMethod, _ = r.ReadInt()
+	case 3: // Time
+		cond.Conjunction = r.ReadString()
+		if more, err := r.ReadBool(); err != nil {
+			return OrderCondition{}, err
+		} else if more {
+			cond.Operator = 2
+		} else {
+			cond.Operator = 1
+		}
+		cond.Value = r.ReadString()
+	case 4: // Margin
+		cond.Conjunction = r.ReadString()
+		if more, err := r.ReadBool(); err != nil {
+			return OrderCondition{}, err
+		} else if more {
+			cond.Operator = 2
+		} else {
+			cond.Operator = 1
+		}
+		cond.Value = r.ReadString()
+	case 5: // Execution
+		cond.Conjunction = r.ReadString()
+		cond.SecType = r.ReadString()
+		cond.Exchange = r.ReadString()
+		cond.Symbol = r.ReadString()
+	case 6: // Volume
+		cond.Conjunction = r.ReadString()
+		if more, err := r.ReadBool(); err != nil {
+			return OrderCondition{}, err
+		} else if more {
+			cond.Operator = 2
+		} else {
+			cond.Operator = 1
+		}
+		cond.ConID, _ = r.ReadInt()
+		cond.Exchange = r.ReadString()
+		cond.Value = r.ReadString()
+	case 7: // Percent change
+		cond.Conjunction = r.ReadString()
+		if more, err := r.ReadBool(); err != nil {
+			return OrderCondition{}, err
+		} else if more {
+			cond.Operator = 2
+		} else {
+			cond.Operator = 1
+		}
+		cond.ConID, _ = r.ReadInt()
+		cond.Exchange = r.ReadString()
+		cond.Value = r.ReadString()
+	default:
+		return OrderCondition{}, fmt.Errorf("codec: unsupported order condition type %d", conditionType)
+	}
+	return cond, nil
+}
+
+func writeOrderCondition(w *fieldWriter, cond OrderCondition) {
+	w.WriteInt(cond.Type)
+	if cond.Conjunction == "o" {
+		w.WriteString("o")
+	} else {
+		w.WriteString("a")
+	}
+	isMore := cond.Operator == 2
+	switch cond.Type {
+	case 1:
+		w.WriteBool(isMore)
+		w.WriteInt(cond.ConID)
+		w.WriteString(cond.Exchange)
+		w.WriteString(cond.Value)
+		w.WriteInt(cond.TriggerMethod)
+	case 3, 4:
+		w.WriteBool(isMore)
+		w.WriteString(cond.Value)
+	case 5:
+		w.WriteString(cond.SecType)
+		w.WriteString(cond.Exchange)
+		w.WriteString(cond.Symbol)
+	case 6, 7:
+		w.WriteBool(isMore)
+		w.WriteInt(cond.ConID)
+		w.WriteString(cond.Exchange)
+		w.WriteString(cond.Value)
+	}
+}
+
+func writeObservedWireContract(w *fieldWriter, c Contract) {
+	w.WriteInt(c.ConID)
+	w.WriteString(c.Symbol)
+	w.WriteString(c.SecType)
+	w.WriteString(c.Expiry)
+	if c.Strike == "" {
+		w.WriteString("0")
+	} else {
+		w.WriteString(c.Strike)
+	}
+	w.WriteString(c.Right)
+	w.WriteString(c.Multiplier)
+	w.WriteString(c.Exchange)
+	w.WriteString(c.Currency)
+	w.WriteString(c.LocalSymbol)
+	w.WriteString(c.TradingClass)
 }

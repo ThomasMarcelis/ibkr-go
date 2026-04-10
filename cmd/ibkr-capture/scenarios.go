@@ -1030,6 +1030,73 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 5*time.Second, logFrame, nil)
 		},
 	},
+	"place_order_algo_adaptive_aapl": {
+		name:        "place_order_algo_adaptive_aapl",
+		description: "PLACE_ORDER LMT buy 1 AAPL with Adaptive algo, observe open-order wire",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{
+				Action:        "BUY",
+				TotalQuantity: "1",
+				OrderType:     "LMT",
+				LmtPrice:      "50.00",
+				TIF:           "DAY",
+				Account:       acct,
+				Transmit:      true,
+				AlgoStrategy:  "Adaptive",
+				AlgoParams:    []tagValueSpec{{Tag: "adaptivePriority", Value: "Normal"}},
+			}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 4*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_price_condition_aapl": {
+		name:        "place_order_price_condition_aapl",
+		description: "PLACE_ORDER LMT buy 1 AAPL with a high price condition so it stays inactive",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{
+				Action:        "BUY",
+				TotalQuantity: "1",
+				OrderType:     "LMT",
+				LmtPrice:      "50.00",
+				TIF:           "DAY",
+				Account:       acct,
+				Transmit:      true,
+				Conditions: []orderConditionSpec{{
+					Type:          1,
+					Conjunction:   "a",
+					Operator:      2,
+					ConID:         265598,
+					Exchange:      "SMART",
+					Value:         "9999.00",
+					TriggerMethod: 4,
+				}},
+				ConditionsIgnoreRTH:   false,
+				ConditionsCancelOrder: false,
+			}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 4*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
 
 	// --- Market depth ---
 

@@ -79,6 +79,15 @@ type (
 	// an ambiguous contract to a single match.
 	Contract = session.Contract
 
+	// ComboLeg describes one leg of a combo order or observed combo structure.
+	ComboLeg = session.ComboLeg
+
+	// TagValue carries IBKR tag/value parameter pairs for algo and routing options.
+	TagValue = session.TagValue
+
+	// OrderCondition describes one server-side order condition.
+	OrderCondition = session.OrderCondition
+
 	// ContractDetailsRequest holds parameters for [Client.ContractDetails].
 	ContractDetailsRequest = session.ContractDetailsRequest
 

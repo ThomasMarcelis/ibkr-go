@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -26,10 +28,10 @@ type sessionInfo struct {
 // once NEXT_VALID_ID has been observed.
 func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error) {
 	// Step 1: write "API\0" raw, followed by a length-prefixed version range.
-	if _, err := conn.Write([]byte("API\x00")); err != nil {
+	if err := transport.WriteRaw(conn, codec.EncodeHandshakePrefix()); err != nil {
 		return nil, fmt.Errorf("write api marker: %w", err)
 	}
-	version := fmt.Appendf(nil, "v%d..%d", minVer, maxVer)
+	version := codec.EncodeVersionRange(minVer, maxVer)
 	if err := wire.WriteFrame(conn, version); err != nil {
 		return nil, fmt.Errorf("write version frame: %w", err)
 	}
@@ -43,24 +45,20 @@ func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error
 	if err != nil {
 		return nil, fmt.Errorf("read server info frame: %w", err)
 	}
-	fields, err := wire.ParseFields(payload)
+	serverInfo, err := codec.DecodeServerInfo(payload)
 	if err != nil {
 		return nil, fmt.Errorf("parse server info: %w", err)
 	}
-	if len(fields) < 2 {
-		return nil, fmt.Errorf("server info has %d fields, want 2: %v", len(fields), fields)
-	}
-	serverVersion, err := strconv.Atoi(fields[0])
-	if err != nil {
-		return nil, fmt.Errorf("parse server_version %q: %w", fields[0], err)
-	}
 	info := &sessionInfo{
-		ServerVersion:  serverVersion,
-		ConnectionTime: fields[1],
+		ServerVersion:  serverInfo.ServerVersion,
+		ConnectionTime: serverInfo.ConnectionTime,
 	}
 
 	// Step 3: send START_API. Layout: [msg_id=71, version=2, client_id, optional_capabilities=""].
-	startAPI := wire.EncodeFields([]string{"71", "2", strconv.Itoa(clientID), ""})
+	startAPI, err := codec.Encode(codec.StartAPI{ClientID: clientID})
+	if err != nil {
+		return nil, fmt.Errorf("encode START_API: %w", err)
+	}
 	if err := wire.WriteFrame(conn, startAPI); err != nil {
 		return nil, fmt.Errorf("write START_API: %w", err)
 	}
@@ -76,29 +74,29 @@ func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error
 		if err != nil {
 			return nil, fmt.Errorf("read bootstrap frame: %w", err)
 		}
-		fields, err := wire.ParseFields(payload)
+		msgs, err := codec.DecodeBatch(payload)
 		if err != nil {
 			return nil, fmt.Errorf("parse bootstrap frame: %w", err)
 		}
-		if len(fields) == 0 {
-			continue
-		}
-		msgID, _ := strconv.Atoi(fields[0])
-		switch msgID {
-		case 15: // MANAGED_ACCTS: [15, version, accounts]
-			if len(fields) >= 3 {
-				info.ManagedAccounts = fields[2]
+		for _, msg := range msgs {
+			switch m := msg.(type) {
+			case codec.ManagedAccounts:
+				info.ManagedAccounts = ""
+				if len(m.Accounts) > 0 {
+					for i, account := range m.Accounts {
+						if i > 0 {
+							info.ManagedAccounts += ","
+						}
+						info.ManagedAccounts += account
+					}
+				}
+			case codec.NextValidID:
+				info.NextValidID = m.OrderID
+			case codec.APIError:
+				log.Printf("bootstrap err_msg: reqId=%d code=%d msg=%s", m.ReqID, m.Code, m.Message)
+			default:
+				log.Printf("bootstrap frame: %T", msg)
 			}
-		case 9: // NEXT_VALID_ID: [9, version, order_id]
-			if len(fields) >= 3 {
-				info.NextValidID, _ = strconv.ParseInt(fields[2], 10, 64)
-			}
-		case 4: // ERR_MSG (informational) — log and continue
-			if len(fields) >= 4 {
-				log.Printf("bootstrap err_msg: reqId=%s code=%s msg=%s", fields[1], fields[2], fields[3])
-			}
-		default:
-			log.Printf("bootstrap frame: msg_id=%d fields=%v", msgID, fields)
 		}
 	}
 	if err := conn.SetReadDeadline(time.Time{}); err != nil {

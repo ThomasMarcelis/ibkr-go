@@ -1444,6 +1444,9 @@ func TestHistoricalTicksBidAsk(t *testing.T) {
 	if result.BidAsk[0].AskPrice.String() != "170.6" {
 		t.Fatalf("ask price = %s, want 170.6", result.BidAsk[0].AskPrice.String())
 	}
+	if result.BidAsk[0].TickAttrib != 1 {
+		t.Fatalf("tick attrib = %d, want 1", result.BidAsk[0].TickAttrib)
+	}
 }
 
 func TestHistoricalTicksTrades(t *testing.T) {
@@ -1479,6 +1482,9 @@ func TestHistoricalTicksTrades(t *testing.T) {
 	}
 	if result.Last[0].Exchange != "ARCA" {
 		t.Fatalf("exchange = %q, want ARCA", result.Last[0].Exchange)
+	}
+	if result.Last[0].TickAttrib != 2 {
+		t.Fatalf("tick attrib = %d, want 2", result.Last[0].TickAttrib)
 	}
 }
 
