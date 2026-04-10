@@ -55,12 +55,14 @@ func startBootstrapPeer(t *testing.T, frames ...[]byte) (net.Conn, func()) {
 
 	serverConn, clientConn := net.Pipe()
 	errCh := make(chan error, 1)
+	stop := make(chan struct{})
 
 	go func() {
-		errCh <- serveBootstrapPeer(serverConn, frames)
+		errCh <- serveBootstrapPeer(serverConn, stop, frames)
 	}()
 
 	cleanup := func() {
+		close(stop)
 		_ = clientConn.Close()
 		if err := <-errCh; err != nil {
 			t.Fatalf("bootstrap peer error = %v", err)
@@ -69,7 +71,7 @@ func startBootstrapPeer(t *testing.T, frames ...[]byte) (net.Conn, func()) {
 	return clientConn, cleanup
 }
 
-func serveBootstrapPeer(conn net.Conn, frames [][]byte) error {
+func serveBootstrapPeer(conn net.Conn, stop <-chan struct{}, frames [][]byte) error {
 	defer conn.Close()
 
 	prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
@@ -93,5 +95,6 @@ func serveBootstrapPeer(conn net.Conn, frames [][]byte) error {
 			return err
 		}
 	}
+	<-stop
 	return nil
 }
