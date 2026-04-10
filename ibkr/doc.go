@@ -18,16 +18,25 @@
 //	defer client.Close()
 //
 // Once DialContext returns, [Client.Session] provides the negotiated server
-// version, managed accounts, and connection sequence number.
+// version, managed accounts, and connection sequence number. [Client.SessionEvents]
+// is a bounded observational channel: if unread, older queued session events
+// may be dropped in favor of the latest one.
 //
 // # One-Shot Requests
 //
 // Most query methods follow a simple call-and-return pattern. Pass a context
-// for cancellation and a typed request struct; get back typed results:
+// for cancellation and a typed request; get back typed results:
 //
-//	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-//	    Contract: ibkr.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+//	details, err := client.QualifyContract(ctx, ibkr.Contract{
+//	    Symbol:   "AAPL",
+//	    SecType:  ibkr.SecTypeStock,
+//	    Exchange: "SMART",
+//	    Currency: "USD",
 //	})
+//	if err != nil {
+//	    return err
+//	}
+//	fmt.Println(details.LongName, details.MinTick)
 //
 // One-shots block until the server sends all result messages and the protocol
 // completion marker. They return [*APIError] when the server rejects the request.
@@ -42,6 +51,10 @@
 //     [SubscriptionSnapshotComplete], [SubscriptionGap], [SubscriptionResumed],
 //     [SubscriptionClosed])
 //   - Done() closes when the subscription terminates
+//
+// State() is a bounded observational channel. If the caller stops draining it,
+// older queued lifecycle events may be dropped in favor of the latest one.
+// [SubscriptionClosed] is still guaranteed before the channel closes.
 //
 // The typical read loop:
 //
@@ -71,7 +84,9 @@
 // its full lifecycle. The handle follows the same Events/State/Done pattern as
 // subscriptions. OrderEvent is a union: exactly one of OpenOrder, Status,
 // Execution, or Commission is non-nil per event. The handle auto-closes when
-// the order reaches a terminal state (Filled, Cancelled, Inactive).
+// the order reaches a terminal state (Filled, Cancelled, Inactive). Its State()
+// channel is also bounded and observational: if unread, older queued lifecycle
+// events may be dropped in favor of the latest one.
 //
 // [OrderHandle.Close] detaches the handle without cancelling the order.
 // [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a

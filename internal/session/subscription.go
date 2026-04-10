@@ -7,7 +7,7 @@ import (
 
 type Subscription[T any] struct {
 	events         chan T
-	state          chan SubscriptionStateEvent
+	state          *observer[SubscriptionStateEvent]
 	done           chan struct{}
 	cancelFn       func()
 	cancelOnce     sync.Once
@@ -25,7 +25,7 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 	}
 	return &Subscription[T]{
 		events:   make(chan T, cfg.buffer),
-		state:    make(chan SubscriptionStateEvent, 8),
+		state:    newObserver[SubscriptionStateEvent](8),
 		done:     make(chan struct{}),
 		cancelFn: cancelFn,
 		cfg:      cfg,
@@ -34,7 +34,7 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 
 func (s *Subscription[T]) Events() <-chan T { return s.events }
 
-func (s *Subscription[T]) State() <-chan SubscriptionStateEvent { return s.state }
+func (s *Subscription[T]) State() <-chan SubscriptionStateEvent { return s.state.Chan() }
 
 func (s *Subscription[T]) Done() <-chan struct{} { return s.done }
 
@@ -100,23 +100,7 @@ func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
 		s.snapshotClosed = true
 		s.stateMu.Unlock()
 	}
-	if evt.Kind == SubscriptionClosed {
-		for {
-			select {
-			case s.state <- evt:
-				return
-			default:
-			}
-			select {
-			case <-s.state:
-			default:
-			}
-		}
-	}
-	select {
-	case s.state <- evt:
-	default:
-	}
+	s.state.EmitLatest(evt)
 }
 
 func (s *Subscription[T]) fail(err error) {
@@ -137,6 +121,6 @@ func (s *Subscription[T]) closeWithErr(err error) {
 		s.emitState(SubscriptionStateEvent{Kind: SubscriptionClosed, Err: err})
 		close(s.done)
 		close(s.events)
-		close(s.state)
+		s.state.Close()
 	})
 }

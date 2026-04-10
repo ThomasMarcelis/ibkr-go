@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Changed (breaking)
+
+- **Flattened contract metadata surface.** `ContractDetails` now embeds
+  `Contract`, so callers read `details.Symbol`, `details.ConID`,
+  `details.LongName` at one level. `ContractDetailsRequest`,
+  `QualifiedContract`, and `MatchingSymbolsRequest` single-field wrappers are
+  deleted. `Client.ContractDetails(ctx, Contract)`,
+  `Client.QualifyContract(ctx, Contract) (ContractDetails, error)`, and
+  `Client.MatchingSymbols(ctx, string)` all take bare values instead of
+  wrappers.
+- **Typed `SecType` and `Right`.** `Contract.SecType` is now
+  `SecType` (a `string`-backed enum) with constants `SecTypeStock`,
+  `SecTypeOption`, `SecTypeFuture`, `SecTypeFutureOption`, `SecTypeIndex`,
+  `SecTypeForex`, `SecTypeCombo`, `SecTypeBond`, `SecTypeBill`, `SecTypeCFD`,
+  `SecTypeWarrant`, `SecTypeStructured`, `SecTypeForward`, `SecTypeCommodity`,
+  `SecTypeFund`, `SecTypeFixed`, `SecTypeSecLending`, `SecTypeNews`,
+  `SecTypeBasket`, `SecTypeInterCmdty`, `SecTypeInterCmdtyS`,
+  `SecTypeContFuture`, `SecTypeCrypto`. `Contract.Right` is now `Right` with
+  `RightCall` / `RightPut`. Same typed field on `OrderCondition`,
+  `DepthExchange`, `MatchingSymbol`, and `SecDefOptParamsRequest`. Wire format
+  is unchanged.
+- **Lifecycle channels explicitly observational.** `SessionEvents()`,
+  `Subscription.State()`, and `OrderHandle.State()` are now documented and
+  implemented as bounded observational channels that favor the latest queued
+  state when unread. `Subscription.State()` still guarantees the terminal
+  `SubscriptionClosed` event. `WithEventBuffer` now rejects values `< 1`
+  during `DialContext`.
+
 ### Added
 
 - **Order management**: PlaceOrder, CancelOrder, GlobalCancel with OrderHandle

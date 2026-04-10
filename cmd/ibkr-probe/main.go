@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -243,7 +244,7 @@ func bootstrapVariants(minVersion, maxVersion int) []probeVariant {
 }
 
 func buildBootstrapPayload(minVersion, maxVersion int, extra []byte, terminator string, lengthPrefix bool) ([]byte, error) {
-	payload := []byte("API\x00")
+	payload := codec.EncodeHandshakePrefix()
 	versionChunk, err := buildBootstrapVersionChunk(minVersion, maxVersion, extra, terminator)
 	if err != nil {
 		return nil, err
@@ -259,7 +260,7 @@ func buildBootstrapPayload(minVersion, maxVersion int, extra []byte, terminator 
 }
 
 func buildBootstrapVersionChunk(minVersion, maxVersion int, extra []byte, terminator string) ([]byte, error) {
-	payload := []byte(fmt.Sprintf("v%d..%d", minVersion, maxVersion))
+	payload := codec.EncodeVersionRange(minVersion, maxVersion)
 	payload = append(payload, extra...)
 
 	switch terminator {

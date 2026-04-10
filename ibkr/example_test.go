@@ -43,19 +43,17 @@ server contract_details_end {"req_id":"$req1"}
 	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stop()
 
-	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  "STK",
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	details, err := client.ContractDetails(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	fmt.Println(details[0].Contract.Symbol, details[0].MinTick)
+	fmt.Println(details[0].Symbol, details[0].MinTick)
 	// Output:
 	// AAPL 0.01
 }
@@ -79,7 +77,7 @@ server tick_price {"req_id":"$req1","field":2,"price":"189.15"}
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -116,7 +114,7 @@ server historical_bars_end {"req_id":"$req1","start":"2026-04-05T10:00:00Z","end
 	bars, err := client.HistoricalBars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -224,7 +222,7 @@ sleep 100ms
 		Contract: ibkr.Contract{
 			ConID:    265598,
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -264,9 +262,9 @@ server contract_details_end {"req_id":"$req1"}
 	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stop()
 
-	qualified, err := client.QualifyContract(ctx, ibkr.Contract{
+	details, err := client.QualifyContract(ctx, ibkr.Contract{
 		Symbol:   "AAPL",
-		SecType:  "STK",
+		SecType:  ibkr.SecTypeStock,
 		Exchange: "SMART",
 		Currency: "USD",
 	})
@@ -274,7 +272,7 @@ server contract_details_end {"req_id":"$req1"}
 		panic(err)
 	}
 
-	fmt.Println(qualified.ContractDetails.Contract.ConID, qualified.ContractDetails.LongName)
+	fmt.Println(details.ConID, details.LongName)
 	// Output:
 	// 265598 APPLE INC
 }
@@ -298,7 +296,7 @@ server realtime_bar {"req_id":"$req1","time":"2026-04-05T12:00:05Z","open":"189.
 	sub, err := client.SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},

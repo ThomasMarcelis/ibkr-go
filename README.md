@@ -2,22 +2,35 @@
 
 [![CI](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go)
-[![Go Version](https://img.shields.io/github/go-mod-go-version/ThomasMarcelis/ibkr-go)](https://go.dev/)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go)
+[![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-Go client for the Interactive Brokers TWS/Gateway socket protocol.
-Call a method, get a typed result. Subscribe, range over a channel.
-Zero dependencies. MIT license.
+ibkr-go is an idiomatic Go client for the Interactive Brokers TWS and IB
+Gateway socket protocol. It gives you typed request/response methods for
+snapshots, typed subscriptions for streams, and explicit lifecycle events for
+reconnects and shutdown.
+
+The library targets the full TWS/Gateway socket API surface, keeps the public
+API small and Go-shaped, and treats protocol verification as a first-class
+feature rather than an afterthought.
 
 ## Why ibkr-go
 
-- **Full TWS API surface** — accounts, positions, market data, historical data, order management, market depth, options, news, scanners, FA configuration, and more. Not a partial port.
-- **Idiomatic Go** — typed methods and generic subscriptions. No callback interfaces, no request ID correlation, no global state.
-- **Tested against real traffic** — 82 replay transcripts captured from a live IB Gateway, fuzz-tested wire protocol, deterministic CI without broker credentials.
-- **Zero dependencies** — standard library only. Nothing to audit, no transitive version conflicts.
-- **Exact financial types** — `Decimal` for all prices and money. No `float64` rounding errors.
-- **Observable session lifecycle** — typed reconnect states (`Gap`, `Resumed`), explicit subscription lifecycle (`SnapshotComplete`, `Closed`), connection-loss detection you can act on.
-- **Built from first principles** — codec designed from the IBKR wire protocol specification and live captures, not ported from the official Java/Python clients.
+- **A Go-shaped API**: one-shots return typed results. Streams are typed
+  subscriptions with `Events()`, `State()`, `Done()`, and `Wait()`. No
+  `EWrapper` / `EClient` callback surface as the primary interface.
+- **Full TWS/Gateway coverage**: accounts, positions, quotes, historical
+  data, executions, order management, market depth, scanners, news, FA
+  configuration, WSH, display groups, and more.
+- **Protocol work backed by evidence**: replay scenarios derived from live IB
+  Gateway traffic, wire and codec fuzzing, stress tests, and deterministic CI.
+- **Reconnects are explicit**: session transitions and subscription lifecycle
+  events such as `Gap`, `Resumed`, `SnapshotComplete`, and `Closed` are part of
+  the contract.
+- **Exact financial values**: `Decimal` is used for prices, quantities, and
+  money throughout the API.
+- **Standard library only**: zero external dependencies.
 
 ## Install
 
@@ -25,36 +38,37 @@ Zero dependencies. MIT license.
 go get github.com/ThomasMarcelis/ibkr-go@latest
 ```
 
-Requires Go 1.26+. No external dependencies.
+Requires Go 1.26+. Standard library only.
 
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/ibkr).
 
 ## Quick Start
+
+The mental model is simple: call a method for a snapshot, subscribe for a
+stream.
 
 ### Connect and query contract details
 
 ```go
 client, err := ibkr.DialContext(ctx,
     ibkr.WithHost("127.0.0.1"),
-    ibkr.WithPort(7497),
+    ibkr.WithPort(4001),
 )
 if err != nil {
     return err
 }
 defer client.Close()
 
-details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-    Contract: ibkr.Contract{
-        Symbol:   "AAPL",
-        SecType:  "STK",
-        Exchange: "SMART",
-        Currency: "USD",
-    },
+details, err := client.QualifyContract(ctx, ibkr.Contract{
+    Symbol:   "AAPL",
+    SecType:  ibkr.SecTypeStock,
+    Exchange: "SMART",
+    Currency: "USD",
 })
 if err != nil {
     return err
 }
-fmt.Println(details[0].LongName, details[0].MinTick)
+fmt.Println(details.LongName, details.MinTick)
 ```
 
 ### Stream live quotes
@@ -63,7 +77,7 @@ fmt.Println(details[0].LongName, details[0].MinTick)
 sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
     Contract: ibkr.Contract{
         Symbol:   "AAPL",
-        SecType:  "STK",
+        SecType:  ibkr.SecTypeStock,
         Exchange: "SMART",
         Currency: "USD",
     },
@@ -88,29 +102,42 @@ for {
 `Events()` carries market data. `State()` carries lifecycle —
 `SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix.
 
-## How It Compares
+## Testing and Verification
 
-Several Go libraries exist for Interactive Brokers. Here is how they differ.
+ibkr-go is being built with a test suite that is an asset ensuring correctness
 
-| | ibkr-go | [scmhub/ibapi](https://github.com/scmhub/ibapi) | [hadrianl/ibapi](https://github.com/hadrianl/ibapi) | [gofinance/ib](https://github.com/gofinance/ib) |
-|---|---------|--------------|----------------|--------------|
-| **API pattern** | Typed methods + channel subscriptions | EWrapper/EClient callbacks | IbWrapper callbacks | Channel engine |
-| **API coverage** | Full TWS surface | Full (ported from official Python) | TWS API 9.80 subset | Partial (2014-era) |
-| **Order management** | OrderHandle with lifecycle tracking | Yes | Yes | Partial |
-| **Reconnect handling** | Observable state machine (Gap/Resumed) | Manual | Manual | Manual |
-| **Test strategy** | 82 live-capture replays, fuzz, deterministic CI | Live broker required | Live broker required | Live broker required |
-| **Price type** | Exact Decimal | robaho/fixed | float64 | float64 |
-| **Dependencies** | 0 | 3 (zerolog, fixed, protobuf) | 1 (zap) | 0 |
-| **Go version** | 1.26 (generics, iterators) | 1.21+ | 1.16+ | 1.x |
-| **License** | MIT | MIT | MIT | LGPL-3.0 |
-| **Maintained** | Active (2026) | Active (2025) | Dormant (2021) | Dormant (2021) |
+- `90` checked-in replay transcripts under
+  [`testdata/transcripts`](testdata/transcripts)
+- `18` fuzz targets covering wire framing and codec round-trips
+- Deterministic CI for routine verification, without broker credentials
+- Separate live-gated tests for local verification against TWS or IB Gateway
 
-## Roadmap
+The goal is a library whose protocol behavior can be frozen, replayed, stressed, and extended without guessing. For more on that approach, see [`docs/transcripts.md`](docs/transcripts.md) and [`docs/anti-patterns.md`](docs/anti-patterns.md).
 
-ibkr-go covers the complete Interactive Brokers TWS/Gateway socket protocol.
-Ongoing work targets continuous maintenance against new TWS/Gateway versions,
-expanded test coverage, and API ergonomics. See
-[`docs/roadmap.md`](docs/roadmap.md) for details.
+## Compared with the usual Go IBKR shape
+
+Most Go IBKR libraries either mirror the official `EWrapper` / `EClient`
+callback model or stay close to it. That is a reasonable fit if you want a
+familiar port of the official clients.
+
+ibkr-go takes a different route:
+
+- The primary interface is typed request methods and typed subscriptions
+- Reconnect boundaries are explicit instead of hidden behind callbacks
+- Protocol work is designed to be tested in deterministic CI, not only against
+  a live broker
+- The implementation owns the protocol and state machine directly instead of
+  wrapping the official clients
+
+## Status
+
+ibkr-go currently covers the Interactive Brokers TWS/Gateway socket protocol
+end to end. Ongoing work focuses on keeping pace with new Gateway versions,
+expanding replay coverage, and tightening API ergonomics.
+
+This repository is not targeting Flex, the Client Portal Web API, or an
+`EWrapper` / `EClient` compatibility bridge. See
+[`docs/roadmap.md`](docs/roadmap.md) for the full charter.
 
 ## Development
 

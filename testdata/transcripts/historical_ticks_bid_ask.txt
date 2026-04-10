@@ -2,5 +2,5 @@ handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
 server managed_accounts {"accounts":["DU12345"]}
 server next_valid_id {"order_id":1001}
 client req_historical_ticks {"req_id":"$req1"}
-server historical_ticks_bid_ask {"req_id":"$req1","ticks":[{"time":"1712345678","bid_price":"170.40","ask_price":"170.60","bid_size":"500","ask_size":"300"}],"done":true}
+server historical_ticks_bid_ask {"req_id":"$req1","ticks":[{"time":"1712345678","tick_attrib":1,"bid_price":"170.40","ask_price":"170.60","bid_size":"500","ask_size":"300"}],"done":true}
 disconnect

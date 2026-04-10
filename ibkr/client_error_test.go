@@ -19,13 +19,11 @@ func TestAPIErrorOnOneShot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "ZZZZNONE",
-			SecType:  "STK",
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	_, err := client.ContractDetails(ctx, ibkr.Contract{
+		Symbol:   "ZZZZNONE",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
 	})
 	if err == nil {
 		t.Fatal("ContractDetails() error = nil, want API error")
@@ -53,7 +51,7 @@ func TestAPIErrorOnSubscription(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -99,7 +97,7 @@ func TestDisconnectDuringOneShot(t *testing.T) {
 	_, err := client.HistoricalBars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -147,7 +145,7 @@ func TestMarketDataWarningDoesNotCloseSubscription(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -190,13 +188,11 @@ func TestFarmStatusCodesAreInformational(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  "STK",
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	details, err := client.ContractDetails(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
 	})
 	if err != nil {
 		t.Fatalf("ContractDetails() error = %v", err)
@@ -276,7 +272,7 @@ func TestMarketDepthError10xxx(t *testing.T) {
 	sub, err := client.SubscribeMarketDepth(ctx, ibkr.MarketDepthRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},

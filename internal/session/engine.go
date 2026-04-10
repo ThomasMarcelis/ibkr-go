@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -21,7 +22,7 @@ type Engine struct {
 	transportErr chan error
 	ready        chan error
 	done         chan struct{}
-	events       chan Event
+	events       *observer[Event]
 
 	waitMu  sync.Mutex
 	waitErr error
@@ -85,6 +86,10 @@ type orderRoute struct {
 	gapped  bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
+type parsedOpenOrder struct {
+	order OpenOrder
+}
+
 func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 	cfg := defaultConfig()
 	for _, opt := range opts {
@@ -92,6 +97,9 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 	}
 	if cfg.clientID < 0 {
 		return nil, fmt.Errorf("ibkr: client id must be >= 0")
+	}
+	if cfg.eventBuffer < 1 {
+		return nil, fmt.Errorf("ibkr: event buffer must be >= 1")
 	}
 
 	e := &Engine{
@@ -101,7 +109,7 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 		transportErr: make(chan error, 8),
 		ready:        make(chan error, 1),
 		done:         make(chan struct{}),
-		events:       make(chan Event, cfg.eventBuffer),
+		events:       newObserver[Event](cfg.eventBuffer),
 		keyed:        make(map[int]*route),
 		singletons:   make(map[string]*route),
 		orders:       make(map[int64]*orderRoute),
@@ -112,7 +120,6 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 			State: StateDisconnected,
 		},
 	}
-
 	go e.run()
 	e.enqueue(func() {
 		e.startConnect(ctx)
@@ -158,10 +165,10 @@ func (e *Engine) Session() Snapshot {
 }
 
 func (e *Engine) SessionEvents() <-chan Event {
-	return e.events
+	return e.events.Chan()
 }
 
-func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest) ([]ContractDetails, error) {
+func (e *Engine) ContractDetails(ctx context.Context, contract Contract) ([]ContractDetails, error) {
 	type result struct {
 		values []ContractDetails
 		err    error
@@ -183,7 +190,13 @@ func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.ContractDetails:
-					values = append(values, fromCodecContractDetails(m))
+					detail, err := fromCodecContractDetails(m)
+					if err != nil {
+						delete(e.keyed, reqID)
+						resp <- result{err: err}
+						return
+					}
+					values = append(values, detail)
 				case codec.ContractDetailsEnd:
 					delete(e.keyed, reqID)
 					resp <- result{values: values}
@@ -204,7 +217,7 @@ func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest
 		}
 		if err := e.send(codec.ContractDetailsRequest{
 			ReqID:    reqID,
-			Contract: toCodecContract(req.Contract),
+			Contract: toCodecContract(contract),
 		}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
@@ -220,18 +233,18 @@ func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest
 	return out.values, out.err
 }
 
-func (e *Engine) QualifyContract(ctx context.Context, contract Contract) (QualifiedContract, error) {
-	details, err := e.ContractDetails(ctx, ContractDetailsRequest{Contract: contract})
+func (e *Engine) QualifyContract(ctx context.Context, contract Contract) (ContractDetails, error) {
+	details, err := e.ContractDetails(ctx, contract)
 	if err != nil {
-		return QualifiedContract{}, err
+		return ContractDetails{}, err
 	}
 	switch len(details) {
 	case 0:
-		return QualifiedContract{}, ErrNoMatch
+		return ContractDetails{}, ErrNoMatch
 	case 1:
-		return QualifiedContract{ContractDetails: details[0]}, nil
+		return details[0], nil
 	default:
-		return QualifiedContract{}, ErrAmbiguousContract
+		return ContractDetails{}, ErrAmbiguousContract
 	}
 }
 
@@ -1011,8 +1024,8 @@ func (e *Engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			request:      codec.OpenOrdersRequest{Scope: string(scope)},
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
-				case codec.OpenOrder:
-					sub.emit(OpenOrderUpdate{Order: fromCodecOpenOrder(m)})
+				case parsedOpenOrder:
+					sub.emit(OpenOrderUpdate{Order: m.order})
 				case codec.OpenOrderEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
@@ -1240,7 +1253,7 @@ func (e *Engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 					exchanges := make([]DepthExchange, len(m.Exchanges))
 					for i, x := range m.Exchanges {
 						exchanges[i] = DepthExchange{
-							Exchange: x.Exchange, SecType: x.SecType,
+							Exchange: x.Exchange, SecType: SecType(x.SecType),
 							ListingExch: x.ListingExch, ServiceDataType: x.ServiceDataType,
 							AggGroup: x.AggGroup,
 						}
@@ -1428,7 +1441,7 @@ func (e *Engine) UserInfo(ctx context.Context) (string, error) {
 	return out.whiteBrandingID, out.err
 }
 
-func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest) ([]MatchingSymbol, error) {
+func (e *Engine) MatchingSymbols(ctx context.Context, pattern string) ([]MatchingSymbol, error) {
 	type result struct {
 		symbols []MatchingSymbol
 		err     error
@@ -1454,7 +1467,7 @@ func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest
 						derivTypes := make([]string, len(s.DerivativeSecTypes))
 						copy(derivTypes, s.DerivativeSecTypes)
 						symbols[i] = MatchingSymbol{
-							ConID: s.ConID, Symbol: s.Symbol, SecType: s.SecType,
+							ConID: s.ConID, Symbol: s.Symbol, SecType: SecType(s.SecType),
 							PrimaryExchange: s.PrimaryExchange, Currency: s.Currency,
 							DerivativeSecTypes: derivTypes,
 						}
@@ -1475,7 +1488,7 @@ func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: req.Pattern}); err != nil {
+		if err := e.send(codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
@@ -1583,8 +1596,18 @@ func (e *Engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 					delete(eng.singletons, singletonMarketRule)
 					increments := make([]PriceIncrement, len(m.Increments))
 					for i, inc := range m.Increments {
-						lowEdge, _ := ParseDecimal(inc.LowEdge)
-						increment, _ := ParseDecimal(inc.Increment)
+						lowEdge, err := parseRequiredDecimal(inc.LowEdge, "market rule low edge")
+						if err != nil {
+							delete(eng.singletons, singletonMarketRule)
+							resp <- result{err: err}
+							return
+						}
+						increment, err := parseRequiredDecimal(inc.Increment, "market rule increment")
+						if err != nil {
+							delete(eng.singletons, singletonMarketRule)
+							resp <- result{err: err}
+							return
+						}
 						increments[i] = PriceIncrement{
 							LowEdge:   lowEdge,
 							Increment: increment,
@@ -1644,9 +1667,24 @@ func (e *Engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 			handle: func(msg any, eng *Engine) {
 				switch m := msg.(type) {
 				case codec.CompletedOrder:
-					qty, _ := ParseDecimal(m.Quantity)
-					filled, _ := ParseDecimal(m.Filled)
-					remaining, _ := ParseDecimal(m.Remaining)
+					qty, err := parseRequiredDecimal(m.Quantity, "completed order quantity")
+					if err != nil {
+						delete(eng.singletons, singletonCompletedOrders)
+						resp <- result{err: err}
+						return
+					}
+					filled, err := parseRequiredDecimal(m.Filled, "completed order filled")
+					if err != nil {
+						delete(eng.singletons, singletonCompletedOrders)
+						resp <- result{err: err}
+						return
+					}
+					remaining, err := parseRequiredDecimal(m.Remaining, "completed order remaining")
+					if err != nil {
+						delete(eng.singletons, singletonCompletedOrders)
+						resp <- result{err: err}
+						return
+					}
 					collected = append(collected, CompletedOrderResult{
 						Contract:  fromCodecContract(m.Contract),
 						Action:    m.Action,
@@ -1745,12 +1783,42 @@ func (e *Engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 						Key: m.Key, Value: m.Value, Currency: m.Currency, Account: m.Account,
 					}})
 				case codec.UpdatePortfolio:
-					position, _ := ParseDecimal(m.Position)
-					marketPrice, _ := ParseDecimal(m.MarketPrice)
-					marketValue, _ := ParseDecimal(m.MarketValue)
-					avgCost, _ := ParseDecimal(m.AvgCost)
-					unrealizedPNL, _ := ParseDecimal(m.UnrealizedPNL)
-					realizedPNL, _ := ParseDecimal(m.RealizedPNL)
+					position, err := parseOptionalDecimal(m.Position, "account updates position")
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
+					marketPrice, err := parseOptionalDecimal(m.MarketPrice, "account updates market price")
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
+					marketValue, err := parseOptionalDecimal(m.MarketValue, "account updates market value")
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
+					avgCost, err := parseOptionalDecimal(m.AvgCost, "account updates average cost")
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
+					unrealizedPNL, err := parseOptionalDecimal(m.UnrealizedPNL, "account updates unrealized pnl")
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
+					realizedPNL, err := parseOptionalDecimal(m.RealizedPNL, "account updates realized pnl")
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
 					sub.emit(AccountUpdate{Portfolio: &PortfolioUpdate{
 						Account:       m.Account,
 						Contract:      fromCodecContract(m.Contract),
@@ -1945,8 +2013,18 @@ func (e *Engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
 				case codec.PositionMulti:
-					position, _ := ParseDecimal(m.Position)
-					avgCost, _ := ParseDecimal(m.AvgCost)
+					position, err := parseRequiredDecimal(m.Position, "positions multi position")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					avgCost, err := parseRequiredDecimal(m.AvgCost, "positions multi average cost")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 					sub.emit(PositionMulti{
 						Account: m.Account, ModelCode: m.ModelCode,
 						Contract: fromCodecContract(m.Contract),
@@ -2032,9 +2110,24 @@ func (e *Engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			request:      codec.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
 			handle: func(msg any, e *Engine) {
 				if m, ok := msg.(codec.PnLValue); ok {
-					daily, _ := ParseDecimal(m.DailyPnL)
-					unrealized, _ := ParseDecimal(m.UnrealizedPnL)
-					realized, _ := ParseDecimal(m.RealizedPnL)
+					daily, err := parseOptionalDecimal(m.DailyPnL, "pnl daily")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl unrealized")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl realized")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 					sub.emit(PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
 				}
 			},
@@ -2114,11 +2207,36 @@ func (e *Engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			request:      codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID},
 			handle: func(msg any, e *Engine) {
 				if m, ok := msg.(codec.PnLSingleValue); ok {
-					pos, _ := ParseDecimal(m.Position)
-					daily, _ := ParseDecimal(m.DailyPnL)
-					unrealized, _ := ParseDecimal(m.UnrealizedPnL)
-					realized, _ := ParseDecimal(m.RealizedPnL)
-					value, _ := ParseDecimal(m.Value)
+					pos, err := parseOptionalDecimal(m.Position, "pnl single position")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					daily, err := parseOptionalDecimal(m.DailyPnL, "pnl single daily")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl single unrealized")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl single realized")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					value, err := parseOptionalDecimal(m.Value, "pnl single value")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 					sub.emit(PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
 				}
 			},
@@ -2201,21 +2319,61 @@ func (e *Engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			},
 			handle: func(msg any, e *Engine) {
 				if m, ok := msg.(codec.TickByTickData); ok {
-					ts, _ := parseTickByTickTime(m.Time)
+					ts, err := parseTickByTickTime(m.Time)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 					tick := TickByTickData{Time: ts, TickType: m.TickType}
 					switch m.TickType {
 					case 1, 2:
-						tick.Price, _ = ParseDecimal(m.Price)
-						tick.Size, _ = ParseDecimal(m.Size)
+						tick.Price, err = parseOptionalDecimal(m.Price, "tick by tick price")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
+						tick.Size, err = parseOptionalDecimal(m.Size, "tick by tick size")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
 						tick.Exchange = m.Exchange
 						tick.SpecialConditions = m.SpecialConditions
 					case 3:
-						tick.BidPrice, _ = ParseDecimal(m.BidPrice)
-						tick.AskPrice, _ = ParseDecimal(m.AskPrice)
-						tick.BidSize, _ = ParseDecimal(m.BidSize)
-						tick.AskSize, _ = ParseDecimal(m.AskSize)
+						tick.BidPrice, err = parseOptionalDecimal(m.BidPrice, "tick by tick bid price")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
+						tick.AskPrice, err = parseOptionalDecimal(m.AskPrice, "tick by tick ask price")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
+						tick.BidSize, err = parseOptionalDecimal(m.BidSize, "tick by tick bid size")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
+						tick.AskSize, err = parseOptionalDecimal(m.AskSize, "tick by tick ask size")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
 					case 4:
-						tick.MidPoint, _ = ParseDecimal(m.MidPoint)
+						tick.MidPoint, err = parseOptionalDecimal(m.MidPoint, "tick by tick midpoint")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
 					}
 					sub.emit(tick)
 				}
@@ -2472,7 +2630,13 @@ func (e *Engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 				case codec.SecDefOptParamsResponse:
 					strikes := make([]Decimal, len(m.Strikes))
 					for i, s := range m.Strikes {
-						strikes[i], _ = ParseDecimal(s)
+						strike, err := parseRequiredDecimal(s, "sec def opt params strike")
+						if err != nil {
+							delete(e.keyed, reqID)
+							resp <- result{err: err}
+							return
+						}
+						strikes[i] = strike
 					}
 					values = append(values, SecDefOptParams{
 						Exchange:        m.Exchange,
@@ -2504,7 +2668,7 @@ func (e *Engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 			ReqID:             reqID,
 			UnderlyingSymbol:  req.UnderlyingSymbol,
 			FutFopExchange:    req.FutFopExchange,
-			UnderlyingSecType: req.UnderlyingSecType,
+			UnderlyingSecType: string(req.UnderlyingSecType),
 			UnderlyingConID:   req.UnderlyingConID,
 		}); err != nil {
 			delete(e.keyed, reqID)
@@ -2598,7 +2762,12 @@ func (e *Engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 				switch m := msg.(type) {
 				case codec.TickOptionComputation:
 					delete(e.keyed, reqID)
-					resp <- result{value: fromCodecOptionComputation(m)}
+					value, err := fromCodecOptionComputation(m)
+					if err != nil {
+						resp <- result{err: err}
+						return
+					}
+					resp <- result{value: value}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
@@ -2658,7 +2827,12 @@ func (e *Engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 				switch m := msg.(type) {
 				case codec.TickOptionComputation:
 					delete(e.keyed, reqID)
-					resp <- result{value: fromCodecOptionComputation(m)}
+					value, err := fromCodecOptionComputation(m)
+					if err != nil {
+						resp <- result{err: err}
+						return
+					}
+					resp <- result{value: value}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *Engine) {
@@ -2720,8 +2894,20 @@ func (e *Engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 					delete(e.keyed, reqID)
 					entries := make([]HistogramEntry, len(m.Entries))
 					for i, entry := range m.Entries {
-						entries[i].Price, _ = ParseDecimal(entry.Price)
-						entries[i].Size, _ = ParseDecimal(entry.Size)
+						price, err := parseRequiredDecimal(entry.Price, "histogram price")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							resp <- result{err: err}
+							return
+						}
+						size, err := parseRequiredDecimal(entry.Size, "histogram size")
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							resp <- result{err: err}
+							return
+						}
+						entries[i].Price = price
+						entries[i].Size = size
 					}
 					resp <- result{entries: entries}
 				}
@@ -2791,8 +2977,16 @@ func (e *Engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 							return
 						}
 						ticks[i].Time = parsedTime
-						ticks[i].Price, _ = ParseDecimal(t.Price)
-						ticks[i].Size, _ = ParseDecimal(t.Size)
+						ticks[i].Price, err = parseRequiredDecimal(t.Price, "historical midpoint tick price")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
+						ticks[i].Size, err = parseRequiredDecimal(t.Size, "historical midpoint tick size")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
 					}
 					resp <- result{value: HistoricalTicksResult{Ticks: ticks}}
 				case codec.HistoricalTicksBidAskResponse:
@@ -2804,11 +2998,28 @@ func (e *Engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 							resp <- result{err: err}
 							return
 						}
+						ticks[i].TickAttrib = t.TickAttrib
 						ticks[i].Time = parsedTime
-						ticks[i].BidPrice, _ = ParseDecimal(t.BidPrice)
-						ticks[i].AskPrice, _ = ParseDecimal(t.AskPrice)
-						ticks[i].BidSize, _ = ParseDecimal(t.BidSize)
-						ticks[i].AskSize, _ = ParseDecimal(t.AskSize)
+						ticks[i].BidPrice, err = parseRequiredDecimal(t.BidPrice, "historical bid price")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
+						ticks[i].AskPrice, err = parseRequiredDecimal(t.AskPrice, "historical ask price")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
+						ticks[i].BidSize, err = parseRequiredDecimal(t.BidSize, "historical bid size")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
+						ticks[i].AskSize, err = parseRequiredDecimal(t.AskSize, "historical ask size")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
 					}
 					resp <- result{value: HistoricalTicksResult{BidAsk: ticks}}
 				case codec.HistoricalTicksLastResponse:
@@ -2820,9 +3031,18 @@ func (e *Engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 							resp <- result{err: err}
 							return
 						}
+						ticks[i].TickAttrib = t.TickAttrib
 						ticks[i].Time = parsedTime
-						ticks[i].Price, _ = ParseDecimal(t.Price)
-						ticks[i].Size, _ = ParseDecimal(t.Size)
+						ticks[i].Price, err = parseRequiredDecimal(t.Price, "historical trade tick price")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
+						ticks[i].Size, err = parseRequiredDecimal(t.Size, "historical trade tick size")
+						if err != nil {
+							resp <- result{err: err}
+							return
+						}
 						ticks[i].Exchange = t.Exchange
 						ticks[i].SpecialConditions = t.SpecialConditions
 					}
@@ -3455,20 +3675,44 @@ func (e *Engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo
 	})
 }
 
-func fromCodecOptionComputation(m codec.TickOptionComputation) OptionComputation {
-	iv, _ := ParseDecimal(m.ImpliedVol)
-	delta, _ := ParseDecimal(m.Delta)
-	optPrice, _ := ParseDecimal(m.OptPrice)
-	pvDiv, _ := ParseDecimal(m.PvDividend)
-	gamma, _ := ParseDecimal(m.Gamma)
-	vega, _ := ParseDecimal(m.Vega)
-	theta, _ := ParseDecimal(m.Theta)
-	undPrice, _ := ParseDecimal(m.UndPrice)
+func fromCodecOptionComputation(m codec.TickOptionComputation) (OptionComputation, error) {
+	iv, err := parseOptionalDecimal(m.ImpliedVol, "option computation implied vol")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	delta, err := parseOptionalDecimal(m.Delta, "option computation delta")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	optPrice, err := parseOptionalDecimal(m.OptPrice, "option computation option price")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	pvDiv, err := parseOptionalDecimal(m.PvDividend, "option computation pv dividend")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	gamma, err := parseOptionalDecimal(m.Gamma, "option computation gamma")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	vega, err := parseOptionalDecimal(m.Vega, "option computation vega")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	theta, err := parseOptionalDecimal(m.Theta, "option computation theta")
+	if err != nil {
+		return OptionComputation{}, err
+	}
+	undPrice, err := parseOptionalDecimal(m.UndPrice, "option computation underlying price")
+	if err != nil {
+		return OptionComputation{}, err
+	}
 	return OptionComputation{
 		ImpliedVol: iv, Delta: delta, OptPrice: optPrice,
 		PvDividend: pvDiv, Gamma: gamma, Vega: vega,
 		Theta: theta, UndPrice: undPrice,
-	}
+	}, nil
 }
 
 // PlaceOrder submits a new order and returns an OrderHandle that tracks its
@@ -3645,58 +3889,6 @@ func (e *Engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 			Override:         override,
 		})
 	})
-}
-
-func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
-	return codec.PlaceOrderRequest{
-		OrderID:  orderID,
-		Contract: toCodecContract(req.Contract),
-
-		Action:        string(req.Order.Action),
-		TotalQuantity: decimalOrEmpty(req.Order.Quantity),
-		OrderType:     req.Order.OrderType,
-		LmtPrice:      decimalOrEmpty(req.Order.LmtPrice),
-		AuxPrice:      decimalOrEmpty(req.Order.AuxPrice),
-
-		TIF:        string(req.Order.TIF),
-		OcaGroup:   req.Order.OcaGroup,
-		Account:    req.Order.Account,
-		Origin:     "0",
-		OrderRef:   req.Order.OrderRef,
-		Transmit:   optBoolToString(req.Order.Transmit, "1"),
-		ParentID:   strconv.FormatInt(req.Order.ParentID, 10),
-		OutsideRTH: boolToString(req.Order.OutsideRTH),
-
-		ExemptCode:                  "-1",
-		GoodAfterTime:               req.Order.GoodAfterTime,
-		GoodTillDate:                req.Order.GoodTillDate,
-		ConditionsCount:             "0",
-		DeltaNeutralContractPresent: "0",
-	}
-}
-
-func decimalOrEmpty(d Decimal) string {
-	if d == (Decimal{}) {
-		return ""
-	}
-	return d.String()
-}
-
-func boolToString(b bool) string {
-	if b {
-		return "1"
-	}
-	return "0"
-}
-
-func optBoolToString(b *bool, dflt string) string {
-	if b == nil {
-		return dflt
-	}
-	if *b {
-		return "1"
-	}
-	return "0"
 }
 
 func (e *Engine) run() {
@@ -3894,24 +4086,9 @@ func (e *Engine) handleIncoming(msg any) {
 			route.handle(msg, e)
 		}
 	case codec.OpenOrder:
-		// Dual dispatch: per-order route first, then singleton observer.
-		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
-			or.handle.emitOrder(fromCodecOpenOrder(msg))
-		}
-		if route, ok := e.singletons[singletonOpenOrders]; ok {
-			route.handle(msg, e)
-		}
+		e.dispatchObservedOpenOrder(msg)
 	case codec.OrderStatus:
-		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
-			status := fromCodecOrderStatus(msg)
-			or.handle.emitStatus(status)
-			if IsTerminalOrderStatus(status.Status) {
-				or.closed = true
-			}
-		}
-		if route, ok := e.singletons[singletonOpenOrders]; ok {
-			route.handle(msg, e)
-		}
+		e.dispatchObservedOrderStatus(msg)
 	case codec.OpenOrderEnd:
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			route.handle(msg, e)
@@ -4037,6 +4214,7 @@ func (e *Engine) handleTransportLoss(err error) {
 	if err == nil && e.transport == nil {
 		return
 	}
+	err = normalizeTransportErr(err)
 	e.transport = nil
 	e.executions.reset()
 	if e.cfg.reconnect == ReconnectOff {
@@ -4166,7 +4344,7 @@ func (e *Engine) closeEngine(err error) {
 	e.waitErr = err
 	e.waitMu.Unlock()
 	close(e.done)
-	close(e.events)
+	e.events.Close()
 }
 
 func (e *Engine) reportReady(err error) {
@@ -4184,8 +4362,7 @@ func (e *Engine) setState(next State, code int, message string, err error) {
 	connSeq := e.snapshot.ConnectionSeq
 	e.snapshotMu.Unlock()
 
-	select {
-	case e.events <- Event{
+	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
 		State:         next,
 		Previous:      prev,
@@ -4193,9 +4370,7 @@ func (e *Engine) setState(next State, code int, message string, err error) {
 		Code:          code,
 		Message:       message,
 		Err:           err,
-	}:
-	default:
-	}
+	})
 }
 
 // emitEvent publishes an informational session event (e.g. farm-status
@@ -4205,17 +4380,14 @@ func (e *Engine) emitEvent(code int, message string) {
 	state := e.snapshot.State
 	connSeq := e.snapshot.ConnectionSeq
 	e.snapshotMu.RUnlock()
-	select {
-	case e.events <- Event{
+	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
 		State:         state,
 		Previous:      state,
 		ConnectionSeq: connSeq,
 		Code:          code,
 		Message:       message,
-	}:
-	default:
-	}
+	})
 }
 
 func (e *Engine) updateSnapshot(update func(*Snapshot)) {
@@ -4232,7 +4404,18 @@ func (e *Engine) send(msg codec.Message) error {
 	if err != nil {
 		return err
 	}
-	return e.transport.Send(context.Background(), payload)
+	err = e.transport.Send(context.Background(), payload)
+	if errors.Is(err, transport.ErrSendQueueFull) {
+		return ErrInterrupted
+	}
+	return err
+}
+
+func normalizeTransportErr(err error) error {
+	if errors.Is(err, transport.ErrSendQueueFull) {
+		return ErrInterrupted
+	}
+	return err
 }
 
 func (e *Engine) allocReqID() int {
@@ -4318,6 +4501,53 @@ func (e *Engine) emitResumed() {
 			or.gapped = false
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
 		}
+	}
+}
+
+func (e *Engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
+	orderRoute, orderObserved := e.orders[msg.OrderID]
+	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
+	if (!orderObserved || orderRoute.closed) && !singletonObserved {
+		return
+	}
+
+	order, err := fromCodecOpenOrder(msg)
+	if err != nil {
+		if orderObserved && !orderRoute.closed {
+			orderRoute.closed = true
+			orderRoute.handle.emitOrderError(err)
+		}
+		if singletonObserved {
+			delete(e.singletons, singletonOpenOrders)
+			singletonRoute.close(err)
+		}
+		return
+	}
+
+	if orderObserved && !orderRoute.closed {
+		orderRoute.handle.emitOrder(order)
+	}
+	if singletonObserved {
+		singletonRoute.handle(parsedOpenOrder{order: order}, e)
+	}
+}
+
+func (e *Engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
+	orderRoute, ok := e.orders[msg.OrderID]
+	if !ok || orderRoute.closed {
+		return
+	}
+
+	status, err := fromCodecOrderStatus(msg)
+	if err != nil {
+		orderRoute.closed = true
+		orderRoute.handle.emitOrderError(err)
+		return
+	}
+
+	orderRoute.handle.emitStatus(status)
+	if IsTerminalOrderStatus(status.Status) {
+		orderRoute.closed = true
 	}
 }
 
@@ -4495,72 +4725,14 @@ func messageReqID(msg any) (int, bool) {
 	}
 }
 
-func bindContext[T any](ctx context.Context, sub *Subscription[T]) {
-	go func() {
-		select {
-		case <-ctx.Done():
-			_ = sub.Close()
-		case <-sub.Done():
-		}
-	}()
-}
-
-func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) U) ([]U, error) {
-	values := make([]U, 0, 8)
-	for {
-		select {
-		case item, ok := <-sub.Events():
-			if !ok {
-				if sub.snapshotComplete() {
-					return values, nil
-				}
-				return values, sub.Wait()
-			}
-			values = append(values, mapFn(item))
-		case state, ok := <-sub.State():
-			if !ok {
-				if sub.snapshotComplete() {
-					return drainSnapshotEvents(values, sub, mapFn), nil
-				}
-				return values, sub.Wait()
-			}
-			switch state.Kind {
-			case SubscriptionSnapshotComplete:
-				return drainSnapshotEvents(values, sub, mapFn), nil
-			case SubscriptionClosed:
-				if sub.snapshotComplete() {
-					return drainSnapshotEvents(values, sub, mapFn), nil
-				}
-				return values, state.Err
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}
-}
-
-func drainSnapshotEvents[T any, U any](values []U, sub *Subscription[T], mapFn func(T) U) []U {
-	for {
-		select {
-		case item, ok := <-sub.Events():
-			if !ok {
-				return values
-			}
-			values = append(values, mapFn(item))
-		default:
-			return values
-		}
-	}
-}
-
 func toCodecContract(c Contract) codec.Contract {
 	return codec.Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
-		SecType:         c.SecType,
+		SecType:         string(c.SecType),
 		Expiry:          c.Expiry,
 		Strike:          c.Strike,
-		Right:           c.Right,
+		Right:           string(c.Right),
 		Multiplier:      c.Multiplier,
 		Exchange:        c.Exchange,
 		Currency:        c.Currency,
@@ -4574,10 +4746,10 @@ func fromCodecContract(c codec.Contract) Contract {
 	return Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
-		SecType:         c.SecType,
+		SecType:         SecType(c.SecType),
 		Expiry:          c.Expiry,
 		Strike:          c.Strike,
-		Right:           c.Right,
+		Right:           Right(c.Right),
 		Multiplier:      c.Multiplier,
 		Exchange:        c.Exchange,
 		Currency:        c.Currency,
@@ -4587,15 +4759,18 @@ func fromCodecContract(c codec.Contract) Contract {
 	}
 }
 
-func fromCodecContractDetails(m codec.ContractDetails) ContractDetails {
-	minTick, _ := ParseDecimal(m.MinTick)
+func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) {
+	minTick, err := parseOptionalDecimal(m.MinTick, "contract details min tick")
+	if err != nil {
+		return ContractDetails{}, err
+	}
 	return ContractDetails{
 		Contract:   fromCodecContract(m.Contract),
 		MarketName: m.MarketName,
 		LongName:   m.LongName,
 		MinTick:    minTick,
 		TimeZoneID: m.TimeZoneID,
-	}
+	}, nil
 }
 
 func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
@@ -4603,28 +4778,34 @@ func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
 	if err != nil {
 		return Bar{}, err
 	}
-	open, err := ParseDecimal(m.Open)
+	open, err := parseRequiredDecimal(m.Open, "bar open")
 	if err != nil {
 		return Bar{}, err
 	}
-	high, err := ParseDecimal(m.High)
+	high, err := parseRequiredDecimal(m.High, "bar high")
 	if err != nil {
 		return Bar{}, err
 	}
-	low, err := ParseDecimal(m.Low)
+	low, err := parseRequiredDecimal(m.Low, "bar low")
 	if err != nil {
 		return Bar{}, err
 	}
-	closeValue, err := ParseDecimal(m.Close)
+	closeValue, err := parseRequiredDecimal(m.Close, "bar close")
 	if err != nil {
 		return Bar{}, err
 	}
-	volume, err := ParseDecimal(m.Volume)
+	volume, err := parseRequiredDecimal(m.Volume, "bar volume")
 	if err != nil {
 		return Bar{}, err
 	}
-	wap, _ := ParseDecimal(m.WAP)
-	count, _ := strconv.Atoi(m.Count)
+	wap, err := parseOptionalDecimal(m.WAP, "bar wap")
+	if err != nil {
+		return Bar{}, err
+	}
+	count, err := parseOptionalInt(m.Count, "bar count")
+	if err != nil {
+		return Bar{}, err
+	}
 	return Bar{Time: ts, Open: open, High: high, Low: low, Close: closeValue, Volume: volume, WAP: wap, Count: count}, nil
 }
 
@@ -4745,54 +4926,134 @@ func fromCodecPosition(m codec.Position) (Position, error) {
 	}, nil
 }
 
-func fromCodecOpenOrder(m codec.OpenOrder) OpenOrder {
-	// Lenient decimal parsing: the v200 OpenOrder message has ~170 fields
-	// and skip counts may not be exact for all order types. Parse what we
-	// can; zero values are acceptable for read-only observation.
-	quantity, _ := ParseDecimal(m.Quantity)
-	filled, _ := ParseDecimal(m.Filled)
-	remaining, _ := ParseDecimal(m.Remaining)
-	lmtPrice, _ := ParseDecimal(m.LmtPrice)
-	auxPrice, _ := ParseDecimal(m.AuxPrice)
-	origin, _ := strconv.Atoi(m.Origin)
-	clientID, _ := strconv.Atoi(m.ClientID)
-	permID, _ := strconv.ParseInt(m.PermID, 10, 64)
-	parentID, _ := strconv.ParseInt(m.ParentID, 10, 64)
-	return OpenOrder{
-		OrderID:       m.OrderID,
-		Account:       m.Account,
-		Contract:      fromCodecContract(m.Contract),
-		Action:        m.Action,
-		OrderType:     m.OrderType,
-		Status:        m.Status,
-		Quantity:      quantity,
-		Filled:        filled,
-		Remaining:     remaining,
-		LmtPrice:      lmtPrice,
-		AuxPrice:      auxPrice,
-		TIF:           m.TIF,
-		OcaGroup:      m.OcaGroup,
-		OpenClose:     m.OpenClose,
-		Origin:        origin,
-		OrderRef:      m.OrderRef,
-		ClientID:      clientID,
-		PermID:        permID,
-		OutsideRTH:    m.OutsideRTH == "1",
-		Hidden:        m.Hidden == "1",
-		GoodAfterTime: m.GoodAfterTime,
-		ParentID:      parentID,
+func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
+	quantity, err := parseOptionalDecimal(m.Quantity, "open order quantity")
+	if err != nil {
+		return OpenOrder{}, err
 	}
+	filled, err := parseOptionalDecimal(m.Filled, "open order filled")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	remaining, err := parseOptionalDecimal(m.Remaining, "open order remaining")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	lmtPrice, err := parseOptionalDecimal(m.LmtPrice, "open order limit price")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	auxPrice, err := parseOptionalDecimal(m.AuxPrice, "open order aux price")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	commission, err := parseOptionalDecimal(m.Commission, "open order commission")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	minCommission, err := parseOptionalDecimal(m.MinCommission, "open order min commission")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	maxCommission, err := parseOptionalDecimal(m.MaxCommission, "open order max commission")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	origin, err := parseOptionalInt(m.Origin, "open order origin")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	clientID, err := parseOptionalInt(m.ClientID, "open order client id")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	permID, err := parseOptionalInt64(m.PermID, "open order perm id")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	parentID, err := parseOptionalInt64(m.ParentID, "open order parent id")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	outsideRTH, err := parseOptionalBoolString(m.OutsideRTH, "open order outside rth")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	hidden, err := parseOptionalBoolString(m.Hidden, "open order hidden")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	return OpenOrder{
+		OrderID:               m.OrderID,
+		Account:               m.Account,
+		Contract:              fromCodecContract(m.Contract),
+		Action:                m.Action,
+		OrderType:             m.OrderType,
+		Status:                m.Status,
+		Quantity:              quantity,
+		Filled:                filled,
+		Remaining:             remaining,
+		LmtPrice:              lmtPrice,
+		AuxPrice:              auxPrice,
+		TIF:                   m.TIF,
+		OcaGroup:              m.OcaGroup,
+		OpenClose:             m.OpenClose,
+		Origin:                origin,
+		OrderRef:              m.OrderRef,
+		ClientID:              clientID,
+		PermID:                permID,
+		OutsideRTH:            outsideRTH,
+		Hidden:                hidden,
+		GoodAfterTime:         m.GoodAfterTime,
+		ParentID:              parentID,
+		ComboLegs:             comboLegsFromCodec(m.ComboLegs),
+		OrderComboLegPrices:   append([]string(nil), m.OrderComboLegPrices...),
+		SmartComboRouting:     tagValuesFromCodec(m.SmartComboRouting),
+		AlgoStrategy:          m.AlgoStrategy,
+		AlgoParams:            tagValuesFromCodec(m.AlgoParams),
+		Conditions:            orderConditionsFromCodec(m.Conditions),
+		ConditionsIgnoreRTH:   m.ConditionsIgnoreRTH == "1",
+		ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
+		Commission:            commission,
+		MinCommission:         minCommission,
+		MaxCommission:         maxCommission,
+		CommissionCurrency:    m.CommissionCurrency,
+	}, nil
 }
 
-func fromCodecOrderStatus(m codec.OrderStatus) OrderStatusUpdate {
-	filled, _ := ParseDecimal(m.Filled)
-	remaining, _ := ParseDecimal(m.Remaining)
-	avgFillPrice, _ := ParseDecimal(m.AvgFillPrice)
-	lastFillPrice, _ := ParseDecimal(m.LastFillPrice)
-	mktCapPrice, _ := ParseDecimal(m.MktCapPrice)
-	permID, _ := strconv.ParseInt(m.PermID, 10, 64)
-	parentID, _ := strconv.ParseInt(m.ParentID, 10, 64)
-	clientID, _ := strconv.Atoi(m.ClientID)
+func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
+	filled, err := parseOptionalDecimal(m.Filled, "order status filled")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	remaining, err := parseOptionalDecimal(m.Remaining, "order status remaining")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	avgFillPrice, err := parseOptionalDecimal(m.AvgFillPrice, "order status average fill price")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	lastFillPrice, err := parseOptionalDecimal(m.LastFillPrice, "order status last fill price")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	mktCapPrice, err := parseOptionalDecimal(m.MktCapPrice, "order status market cap price")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	permID, err := parseOptionalInt64(m.PermID, "order status perm id")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	parentID, err := parseOptionalInt64(m.ParentID, "order status parent id")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
+	clientID, err := parseOptionalInt(m.ClientID, "order status client id")
+	if err != nil {
+		return OrderStatusUpdate{}, err
+	}
 	return OrderStatusUpdate{
 		OrderID:       m.OrderID,
 		Status:        m.Status,
@@ -4805,15 +5066,15 @@ func fromCodecOrderStatus(m codec.OrderStatus) OrderStatusUpdate {
 		ClientID:      clientID,
 		WhyHeld:       m.WhyHeld,
 		MktCapPrice:   mktCapPrice,
-	}
+	}, nil
 }
 
 func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
-	shares, err := ParseDecimal(m.Shares)
+	shares, err := parseRequiredDecimal(m.Shares, "execution shares")
 	if err != nil {
 		return ExecutionUpdate{}, err
 	}
-	price, err := ParseDecimal(m.Price)
+	price, err := parseRequiredDecimal(m.Price, "execution price")
 	if err != nil {
 		return ExecutionUpdate{}, err
 	}
@@ -4836,11 +5097,11 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 }
 
 func fromCodecCommission(m codec.CommissionReport) (CommissionReport, error) {
-	commission, err := ParseDecimal(m.Commission)
+	commission, err := parseRequiredDecimal(m.Commission, "commission amount")
 	if err != nil {
 		return CommissionReport{}, err
 	}
-	realized, err := ParseDecimal(m.RealizedPNL)
+	realized, err := parseRequiredDecimal(m.RealizedPNL, "commission realized pnl")
 	if err != nil {
 		return CommissionReport{}, err
 	}
@@ -4853,36 +5114,60 @@ func fromCodecCommission(m codec.CommissionReport) (CommissionReport, error) {
 }
 
 func applyTickPrice(quote *Quote, field int, raw string) (QuoteFields, error) {
-	value, err := ParseDecimal(raw)
-	if err != nil {
-		return 0, err
-	}
 	switch field {
 	case 1, 66: // bid
+		value, err := parseRequiredDecimal(raw, "quote bid")
+		if err != nil {
+			return 0, err
+		}
 		quote.Bid = value
 		quote.Available |= QuoteFieldBid
 		return QuoteFieldBid, nil
 	case 2, 67: // ask
+		value, err := parseRequiredDecimal(raw, "quote ask")
+		if err != nil {
+			return 0, err
+		}
 		quote.Ask = value
 		quote.Available |= QuoteFieldAsk
 		return QuoteFieldAsk, nil
 	case 4, 68: // last
+		value, err := parseRequiredDecimal(raw, "quote last")
+		if err != nil {
+			return 0, err
+		}
 		quote.Last = value
 		quote.Available |= QuoteFieldLast
 		return QuoteFieldLast, nil
 	case 6, 72: // high
+		value, err := parseRequiredDecimal(raw, "quote high")
+		if err != nil {
+			return 0, err
+		}
 		quote.High = value
 		quote.Available |= QuoteFieldHigh
 		return QuoteFieldHigh, nil
 	case 7, 73: // low
+		value, err := parseRequiredDecimal(raw, "quote low")
+		if err != nil {
+			return 0, err
+		}
 		quote.Low = value
 		quote.Available |= QuoteFieldLow
 		return QuoteFieldLow, nil
 	case 9, 75: // close
+		value, err := parseRequiredDecimal(raw, "quote close")
+		if err != nil {
+			return 0, err
+		}
 		quote.Close = value
 		quote.Available |= QuoteFieldClose
 		return QuoteFieldClose, nil
 	case 14, 76: // open
+		value, err := parseRequiredDecimal(raw, "quote open")
+		if err != nil {
+			return 0, err
+		}
 		quote.Open = value
 		quote.Available |= QuoteFieldOpen
 		return QuoteFieldOpen, nil
@@ -4892,20 +5177,28 @@ func applyTickPrice(quote *Quote, field int, raw string) (QuoteFields, error) {
 }
 
 func applyTickSize(quote *Quote, field int, raw string) (QuoteFields, error) {
-	value, err := ParseDecimal(raw)
-	if err != nil {
-		return 0, err
-	}
 	switch field {
 	case 0, 69: // bid_size
+		value, err := parseRequiredDecimal(raw, "quote bid size")
+		if err != nil {
+			return 0, err
+		}
 		quote.BidSize = value
 		quote.Available |= QuoteFieldBidSize
 		return QuoteFieldBidSize, nil
 	case 3, 70: // ask_size
+		value, err := parseRequiredDecimal(raw, "quote ask size")
+		if err != nil {
+			return 0, err
+		}
 		quote.AskSize = value
 		quote.Available |= QuoteFieldAskSize
 		return QuoteFieldAskSize, nil
 	case 5, 71: // last_size
+		value, err := parseRequiredDecimal(raw, "quote last size")
+		if err != nil {
+			return 0, err
+		}
 		quote.LastSize = value
 		quote.Available |= QuoteFieldLastSize
 		return QuoteFieldLastSize, nil

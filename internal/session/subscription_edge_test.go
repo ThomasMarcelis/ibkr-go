@@ -150,24 +150,39 @@ func TestSubscriptionStateChannelFull(t *testing.T) {
 
 	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
-	// State channel has buffer 8. Emit 12 events.
 	for i := 0; i < 12; i++ {
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted})
+		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: uint64(i + 1)})
 	}
+	sub.closeWithErr(nil)
 
-	// Read up to 8 buffered events.
-	count := 0
-	for {
+	var seqs []uint64
+	seenClosed := false
+	timeout := time.After(time.Second)
+	for !seenClosed {
 		select {
-		case <-sub.State():
-			count++
-		default:
-			goto done
+		case evt, ok := <-sub.State():
+			if !ok {
+				seenClosed = true
+				break
+			}
+			if evt.Kind == SubscriptionStarted {
+				seqs = append(seqs, evt.ConnectionSeq)
+			}
+			if evt.Kind == SubscriptionClosed {
+				seenClosed = true
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for state channel to drain")
 		}
 	}
-done:
-	if count != 8 {
-		t.Errorf("read %d state events, want 8 (buffer capacity)", count)
+	if len(seqs) != 7 {
+		t.Fatalf("read %d state events, want 7 (one buffered state replaced by Closed)", len(seqs))
+	}
+	for i, seq := range seqs {
+		want := uint64(i + 6)
+		if seq != want {
+			t.Fatalf("seqs[%d] = %d, want %d (keep latest 7 before Closed)", i, seq, want)
+		}
 	}
 }
 

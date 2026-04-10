@@ -26,6 +26,10 @@ The test suite is this library's primary asset. It is grown deliberately. Every 
 
 Tests are organised in layers: invariants, state transitions, behavioral scenarios, stress and edge cases. Routine CI stays deterministic, but protocol-adjacent development is grounded in the local live TWS or IB Gateway when available. The `testing/testhost` package and checked-in fixtures are replay tools for live-derived behavior, not a source of truth for invented protocol semantics.
 
+Wire framing and codec round-trips are also fuzzed. The intent is not just to
+have broad coverage, but to keep the protocol surface diagnosable and safe to
+extend without a live broker in CI.
+
 ## Reference policy
 
 Protocol-adjacent work should be grounded in the local live TWS or IB Gateway when available, plus official IBKR docs, official IBKR client-library source, captured traffic, and other IBKR library implementations where useful. The merged implementation must still follow `ibkr-go`'s typed public API and package philosophy rather than mirroring the official public surface mechanically.

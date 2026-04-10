@@ -258,6 +258,34 @@ type CancelOpenOrders struct{}
 
 func (CancelOpenOrders) messageName() string { return "cancel_open_orders" }
 
+type ComboLeg struct {
+	ConID              int
+	Ratio              int
+	Action             string
+	Exchange           string
+	OpenClose          string
+	ShortSaleSlot      string
+	DesignatedLocation string
+	ExemptCode         string
+}
+
+type TagValue struct {
+	Tag   string
+	Value string
+}
+
+type OrderCondition struct {
+	Type          int
+	Conjunction   string
+	ConID         int
+	Exchange      string
+	Operator      int
+	Value         string
+	TriggerMethod int
+	SecType       string
+	Symbol        string
+}
+
 type OpenOrder struct {
 	OrderID  int64
 	Contract Contract
@@ -273,15 +301,23 @@ type OpenOrder struct {
 	Account   string
 
 	// Order detail fields (r[20]-r[28]).
-	OpenClose     string
-	Origin        string
-	OrderRef      string
-	ClientID      string
-	PermID        string
-	OutsideRTH    string
-	Hidden        string
-	DiscretionAmt string
-	GoodAfterTime string
+	OpenClose             string
+	Origin                string
+	OrderRef              string
+	ClientID              string
+	PermID                string
+	OutsideRTH            string
+	Hidden                string
+	DiscretionAmt         string
+	GoodAfterTime         string
+	ComboLegs             []ComboLeg
+	OrderComboLegPrices   []string
+	SmartComboRouting     []TagValue
+	AlgoStrategy          string
+	AlgoParams            []TagValue
+	Conditions            []OrderCondition
+	ConditionsIgnoreRTH   string
+	ConditionsCancelOrder string
 
 	// Status at wire position r[91].
 	Status string
@@ -940,11 +976,12 @@ type HistoricalTicksResponse struct {
 func (HistoricalTicksResponse) messageName() string { return "historical_ticks" }
 
 type HistoricalTickBidAskEntry struct {
-	Time     string
-	BidPrice string
-	AskPrice string
-	BidSize  string
-	AskSize  string
+	TickAttrib int
+	Time       string
+	BidPrice   string
+	AskPrice   string
+	BidSize    string
+	AskSize    string
 }
 
 type HistoricalTicksBidAskResponse struct {
@@ -956,6 +993,7 @@ type HistoricalTicksBidAskResponse struct {
 func (HistoricalTicksBidAskResponse) messageName() string { return "historical_ticks_bid_ask" }
 
 type HistoricalTickLastEntry struct {
+	TickAttrib        int
 	Time              string
 	Price             string
 	Size              string
@@ -1204,20 +1242,23 @@ type PlaceOrderRequest struct {
 	AuxPrice      string // empty = UNSET
 
 	// Extended order fields
-	TIF           string // "DAY", "GTC", "IOC", "GTD", "OPG", "FOK", "DTC"
-	OcaGroup      string
-	Account       string
-	OpenClose     string
-	Origin        string // "0" = customer
-	OrderRef      string
-	Transmit      string // "0" or "1"
-	ParentID      string // "0" = no parent
-	BlockOrder    string
-	SweepToFill   string
-	DisplaySize   string
-	TriggerMethod string
-	OutsideRTH    string
-	Hidden        string
+	TIF                     string // "DAY", "GTC", "IOC", "GTD", "OPG", "FOK", "DTC"
+	OcaGroup                string
+	Account                 string
+	OpenClose               string
+	Origin                  string // "0" = customer
+	OrderRef                string
+	Transmit                string // "0" or "1"
+	ParentID                string // "0" = no parent
+	BlockOrder              string
+	SweepToFill             string
+	DisplaySize             string
+	TriggerMethod           string
+	OutsideRTH              string
+	Hidden                  string
+	ComboLegs               []ComboLeg
+	OrderComboLegPrices     []string
+	SmartComboRoutingParams []TagValue
 
 	// FA fields
 	FAGroup      string
@@ -1279,6 +1320,7 @@ type PlaceOrderRequest struct {
 	NotHeld                     string
 	DeltaNeutralContractPresent string // "0" or "1"
 	AlgoStrategy                string
+	AlgoParams                  []TagValue
 	AlgoID                      string
 	WhatIf                      string
 	OrderMiscOptions            string
@@ -1287,7 +1329,9 @@ type PlaceOrderRequest struct {
 	RandomizePrice              string
 
 	// Conditions
-	ConditionsCount string // "0" = none
+	Conditions            []OrderCondition
+	ConditionsIgnoreRTH   string
+	ConditionsCancelOrder string
 
 	// Adjusted order type
 	AdjustedOrderType      string

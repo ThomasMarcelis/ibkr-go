@@ -61,10 +61,11 @@ and streaming, commission reports.
 
 PlaceOrder (msg 3), CancelOrder (msg 4), GlobalCancel (msg 58). OrderHandle
 tracks lifecycle with Events(), State(), Done(), Wait(), Close(), Cancel(),
-and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder and
-OrderStatus messages are dual-dispatched to both per-order handles and the
-singleton open-orders observer. OrderHandle survives disconnects (Gap/Resumed)
-and auto-closes on terminal status (Filled, Cancelled, Inactive).
+and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder
+messages are dual-dispatched to both per-order handles and the singleton
+open-orders observer; OrderStatus remains part of the per-order handle
+contract. OrderHandle survives disconnects (Gap/Resumed) and auto-closes on
+terminal status (Filled, Cancelled, Inactive).
 
 ### Market depth (Level 2)
 
@@ -98,6 +99,49 @@ inbound 68), UpdateDisplayGroup (msg 69). TWS window integration.
 ### Cross-cutting
 
 reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
+
+## Known limitations (v1.1)
+
+The following protocol areas are decoded and routed but still keep a
+deliberate grounded boundary instead of exposing the full rare-order wire
+surface:
+
+- **OpenOrder (inbound 5):** Simple 169-field orders parse on the fixed
+  capture-grounded path. Expanded combo/algo/conditional orders parse on the
+  grounded sequential path. Rare delta-neutral, scale, and other ungrounded
+  branches still fall back to the safe partial parse.
+
+- **CompletedOrder (inbound 101):** Extracts the public completed-order fields
+  only. Advanced order detail sections remain simplified.
+
+- **PlaceOrder (outbound 3):** BAG combo legs, algo parameters, and grounded
+  order conditions are encoded. Delta-neutral and scale extensions remain
+  deferred.
+
+- **Historical tick attributes:** The tickAttribBidAsk and tickAttribLast
+  bitmask fields in historical tick responses (inbound 97, 98) are decoded
+  and exposed.
+
+## v1.2 scope
+
+Grounded advanced-order support is landed.
+See [`docs/stories/v1.2-variable-length-orders.md`](stories/v1.2-variable-length-orders.md).
+
+- OpenOrder sequential decode for grounded combo, algo, and condition sections.
+- BAG (combo) order placement encoding.
+- Algorithmic order parameter encoding.
+- Grounded order condition encoding plus observation.
+- Historical tick attribute decoding.
+
+## v1.3 scope
+
+Full deferred order wire surface.
+See [`docs/stories/v1.3-full-order-wire-surface.md`](stories/v1.3-full-order-wire-surface.md).
+
+- Delta-neutral order extensions.
+- Scale order extensions.
+- Remaining ungrounded OpenOrder branches.
+- CompletedOrder full detail extraction.
 
 ## Ongoing
 

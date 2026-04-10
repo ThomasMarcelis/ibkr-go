@@ -36,13 +36,21 @@ type Conn struct {
 	logger    *slog.Logger
 	sendRate  int
 	incoming  chan []byte
-	outgoing  chan []byte
 	done      chan struct{}
 	closeOnce sync.Once
 	waitOnce  sync.Once
 	waitErr   error
 	waitErrMu sync.Mutex
+
+	queueMu        sync.Mutex
+	queueCond      *sync.Cond
+	outgoing       [][]byte
+	outgoingClosed bool
 }
+
+const outgoingQueueCap = 256
+
+var ErrSendQueueFull = errors.New("transport: outbound queue full")
 
 func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 	if logger == nil {
@@ -53,9 +61,9 @@ func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 		logger:   logger,
 		sendRate: sendRate,
 		incoming: make(chan []byte, 64),
-		outgoing: make(chan []byte, 64),
 		done:     make(chan struct{}),
 	}
+	c.queueCond = sync.NewCond(&c.queueMu)
 	go c.readLoop()
 	go c.writeLoop()
 	return c
@@ -70,19 +78,38 @@ func (c *Conn) Done() <-chan struct{} {
 }
 
 func (c *Conn) Send(ctx context.Context, payload []byte) error {
+	copyPayload := append([]byte(nil), payload...)
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-c.done:
 		return c.Wait()
-	case c.outgoing <- payload:
-		return nil
+	default:
 	}
+
+	c.queueMu.Lock()
+	if c.outgoingClosed {
+		c.queueMu.Unlock()
+		return c.Wait()
+	}
+	if len(c.outgoing) >= outgoingQueueCap {
+		c.queueMu.Unlock()
+		c.finish(ErrSendQueueFull)
+		return ErrSendQueueFull
+	}
+	c.outgoing = append(c.outgoing, copyPayload)
+	c.queueCond.Signal()
+	c.queueMu.Unlock()
+	return nil
 }
 
 func (c *Conn) Close() error {
 	c.closeOnce.Do(func() {
-		close(c.outgoing)
+		c.queueMu.Lock()
+		c.outgoingClosed = true
+		c.queueCond.Broadcast()
+		c.queueMu.Unlock()
 		_ = c.conn.Close()
 	})
 	return nil
@@ -120,7 +147,21 @@ func (c *Conn) writeLoop() {
 		ticker = t.C
 	}
 
-	for payload := range c.outgoing {
+	for {
+		c.queueMu.Lock()
+		for len(c.outgoing) == 0 && !c.outgoingClosed {
+			c.queueCond.Wait()
+		}
+		if len(c.outgoing) == 0 && c.outgoingClosed {
+			c.queueMu.Unlock()
+			c.finish(nil)
+			return
+		}
+		payload := c.outgoing[0]
+		c.outgoing[0] = nil
+		c.outgoing = c.outgoing[1:]
+		c.queueMu.Unlock()
+
 		if ticker != nil {
 			select {
 			case <-c.done:
@@ -133,11 +174,15 @@ func (c *Conn) writeLoop() {
 			return
 		}
 	}
-	c.finish(nil)
 }
 
 func (c *Conn) finish(err error) {
 	c.waitOnce.Do(func() {
+		c.queueMu.Lock()
+		c.outgoingClosed = true
+		c.queueCond.Broadcast()
+		c.queueMu.Unlock()
+
 		c.waitErrMu.Lock()
 		defer c.waitErrMu.Unlock()
 		if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {

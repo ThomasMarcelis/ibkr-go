@@ -8,7 +8,11 @@ Current state:
 
 - `testing/testhost` uses the production codec in both directions; transcript
   message names map to real IBKR integer message IDs
-- 25+ checked-in scenarios are grounded in live server_version 200 captures
+- checked-in transcripts cover both live-grounded scenarios and synthetic
+  fault-injection cases for disconnects, partial frames, lifecycle edges, and
+  other protocol failures
+- live-grounded behavior is captured from IB Gateway `server_version 200` and
+  frozen into replay artifacts
 - raw capture logs record per-leg connect/disconnect events plus TCP chunks;
   normalized replay artifacts reconstruct framed payloads from those chunks
 
@@ -81,8 +85,9 @@ The live capture tooling separates raw evidence from replay semantics:
 
 ## Next Transcript Work
 
-- grow scenario coverage for the expanded v1 message types (account updates,
-  PnL, tick-by-tick, option calculations, news, scanner)
 - grow scenario coverage for reconnect, pacing, and version-gated branches
+- grow scenario coverage for order-management edge cases and more complex order
+  shapes
+- broaden live capture coverage beyond `server_version 200`
 - use the recorder and normalization tooling to derive new scenarios from
   contributor-owned Gateway or TWS sessions

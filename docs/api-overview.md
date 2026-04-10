@@ -47,7 +47,7 @@ lifecycle semantics, error taxonomy, and type guarantees — see
 | Method | Returns |
 |--------|---------|
 | `ContractDetails` | `[]ContractDetails` |
-| `QualifyContract` | `QualifiedContract` |
+| `QualifyContract` | `ContractDetails` |
 | `MatchingSymbols` | `[]MatchingSymbol` |
 | `MarketRule` | `MarketRuleResult` |
 | `SecDefOptParams` | `[]SecDefOptParams` |

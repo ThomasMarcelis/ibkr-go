@@ -2,13 +2,103 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/ibkr"
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
+
+type recordingDialer struct {
+	called bool
+}
+
+func (d *recordingDialer) DialContext(context.Context, string, string) (net.Conn, error) {
+	d.called = true
+	return nil, errors.New("unexpected dial")
+}
+
+type pipeDialer struct {
+	conn net.Conn
+}
+
+func (d *pipeDialer) DialContext(context.Context, string, string) (net.Conn, error) {
+	if d.conn == nil {
+		return nil, errors.New("unexpected dial")
+	}
+	conn := d.conn
+	d.conn = nil
+	return conn, nil
+}
+
+type stalledGateway struct {
+	dialer *pipeDialer
+	stop   chan struct{}
+	errCh  chan error
+}
+
+func newStalledGateway(t *testing.T) *stalledGateway {
+	t.Helper()
+
+	serverConn, clientConn := net.Pipe()
+	gateway := &stalledGateway{
+		dialer: &pipeDialer{conn: clientConn},
+		stop:   make(chan struct{}),
+		errCh:  make(chan error, 1),
+	}
+
+	go func() {
+		gateway.errCh <- serveStalledGateway(serverConn, gateway.stop)
+	}()
+
+	return gateway
+}
+
+func serveStalledGateway(conn net.Conn, stop <-chan struct{}) error {
+	defer conn.Close()
+
+	prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+	if _, err := io.ReadFull(conn, prefix); err != nil {
+		return fmt.Errorf("read handshake prefix: %w", err)
+	}
+	if string(prefix) != string(codec.EncodeHandshakePrefix()) {
+		return fmt.Errorf("handshake prefix = %q, want %q", string(prefix), string(codec.EncodeHandshakePrefix()))
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read version range: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"200", "2026-04-10T12:00:00Z"})); err != nil {
+		return fmt.Errorf("write server info: %w", err)
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read START_API: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"15", "1", "DU12345"})); err != nil {
+		return fmt.Errorf("write managed accounts: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"9", "1", "1001"})); err != nil {
+		return fmt.Errorf("write next valid id: %w", err)
+	}
+
+	<-stop
+	return nil
+}
+
+func (g *stalledGateway) Close(t *testing.T) {
+	t.Helper()
+
+	close(g.stop)
+	if err := <-g.errCh; err != nil {
+		t.Fatalf("stalled gateway error = %v", err)
+	}
+}
 
 // TestBootstrapNoManagedAccounts verifies that DialContext fails with a timeout
 // when the server sends next_valid_id but never sends managed_accounts.
@@ -39,6 +129,39 @@ func TestBootstrapNoManagedAccounts(t *testing.T) {
 	}
 	// Script is still sleeping; do not waitHost.
 	_ = host.Close()
+}
+
+func TestDialContextRejectsInvalidEventBuffer(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		size int
+	}{
+		{name: "zero", size: 0},
+		{name: "negative", size: -1},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dialer := &recordingDialer{}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			_, err := ibkr.DialContext(ctx,
+				ibkr.WithDialer(dialer),
+				ibkr.WithEventBuffer(tc.size),
+			)
+			if err == nil {
+				t.Fatal("DialContext() error = nil, want event buffer validation error")
+			}
+			if !strings.Contains(err.Error(), "event buffer must be >= 1") {
+				t.Fatalf("DialContext() error = %v, want event buffer validation error", err)
+			}
+			if dialer.called {
+				t.Fatal("DialContext() called dialer before validating event buffer")
+			}
+		})
+	}
 }
 
 // TestBootstrapNoNextValidID verifies that DialContext fails with a timeout
@@ -127,19 +250,82 @@ func TestContextCancelDuringOneShot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 
-	_, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  "STK",
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	_, err := client.ContractDetails(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
 	})
 	if err == nil {
 		t.Fatal("expected error from ContractDetails, got nil")
 	}
 	// The host script is still sleeping; close the listener to unblock it.
 	_ = host.Close()
+}
+
+func TestTransportQueueSaturationReturnsInterrupted(t *testing.T) {
+	t.Parallel()
+
+	gateway := newStalledGateway(t)
+	defer gateway.Close(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithDialer(gateway.dialer),
+		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
+		ibkr.WithSendRate(0),
+	)
+	if err != nil {
+		t.Fatalf("DialContext() error = %v", err)
+	}
+	defer client.Close()
+
+	reqCtx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelReq()
+
+	reqErrCh := make(chan error, 1)
+	go func() {
+		_, err := client.ContractDetails(reqCtx, ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		})
+		reqErrCh <- err
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+
+	interrupted := false
+	for i := 0; i < 512; i++ {
+		err := client.SetMarketDataType(1)
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, ibkr.ErrInterrupted) {
+			t.Fatalf("SetMarketDataType() error = %v, want %v", err, ibkr.ErrInterrupted)
+		}
+		interrupted = true
+		break
+	}
+	if !interrupted {
+		t.Fatal("SetMarketDataType() never hit queue saturation")
+	}
+
+	select {
+	case err := <-reqErrCh:
+		if !errors.Is(err, ibkr.ErrInterrupted) {
+			t.Fatalf("ContractDetails() error = %v, want %v", err, ibkr.ErrInterrupted)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("ContractDetails() did not return after queue saturation")
+	}
+
+	if err := client.Wait(); !errors.Is(err, ibkr.ErrInterrupted) {
+		t.Fatalf("Wait() error = %v, want %v", err, ibkr.ErrInterrupted)
+	}
 }
 
 // TestSubscriptionCloseImmediatelyAfterCreate verifies that closing a
@@ -279,13 +465,11 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		d, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-			Contract: ibkr.Contract{
-				Symbol:   "AAPL",
-				SecType:  "STK",
-				Exchange: "SMART",
-				Currency: "USD",
-			},
+		d, err := client.ContractDetails(ctx, ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
 		})
 		results[0] = result{details: d, err: err}
 	}()
@@ -293,13 +477,11 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 		defer wg.Done()
 		// Small delay so AAPL request is queued first, matching transcript.
 		time.Sleep(50 * time.Millisecond)
-		d, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-			Contract: ibkr.Contract{
-				Symbol:   "MSFT",
-				SecType:  "STK",
-				Exchange: "SMART",
-				Currency: "USD",
-			},
+		d, err := client.ContractDetails(ctx, ibkr.Contract{
+			Symbol:   "MSFT",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
 		})
 		results[1] = result{details: d, err: err}
 	}()
@@ -311,8 +493,8 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 	if len(results[0].details) != 1 {
 		t.Fatalf("AAPL details len = %d, want 1", len(results[0].details))
 	}
-	if results[0].details[0].Contract.Symbol != "AAPL" {
-		t.Fatalf("AAPL symbol = %q, want AAPL", results[0].details[0].Contract.Symbol)
+	if results[0].details[0].Symbol != "AAPL" {
+		t.Fatalf("AAPL symbol = %q, want AAPL", results[0].details[0].Symbol)
 	}
 
 	if results[1].err != nil {
@@ -321,8 +503,8 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 	if len(results[1].details) != 1 {
 		t.Fatalf("MSFT details len = %d, want 1", len(results[1].details))
 	}
-	if results[1].details[0].Contract.Symbol != "MSFT" {
-		t.Fatalf("MSFT symbol = %q, want MSFT", results[1].details[0].Contract.Symbol)
+	if results[1].details[0].Symbol != "MSFT" {
+		t.Fatalf("MSFT symbol = %q, want MSFT", results[1].details[0].Symbol)
 	}
 }
 

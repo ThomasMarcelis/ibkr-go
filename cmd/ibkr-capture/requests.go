@@ -5,20 +5,56 @@ import (
 	"strconv"
 )
 
+type comboLegSpec struct {
+	ConID              int
+	Ratio              int
+	Action             string
+	Exchange           string
+	OpenClose          string
+	ShortSaleSlot      string
+	DesignatedLocation string
+	ExemptCode         string
+}
+
+type tagValueSpec struct {
+	Tag   string
+	Value string
+}
+
+type orderConditionSpec struct {
+	Type          int
+	Conjunction   string
+	Operator      int
+	ConID         int
+	Exchange      string
+	Value         string
+	TriggerMethod int
+	SecType       string
+	Symbol        string
+}
+
 // orderSpec holds the order fields needed by the capture tool.
 type orderSpec struct {
-	Action        string // "BUY", "SELL"
-	TotalQuantity string // "1", "100", etc.
-	OrderType     string // "MKT", "LMT", "STP", "STP LMT"
-	LmtPrice      string // empty for MKT
-	AuxPrice      string // stop price for STP, empty for LMT/MKT
-	TIF           string // "DAY", "GTC"
-	Account       string
-	Transmit      bool
-	ParentID      int64 // 0 = no parent
-	OcaGroup      string
-	OutsideRTH    bool
-	OrderRef      string
+	Action                  string // "BUY", "SELL"
+	TotalQuantity           string // "1", "100", etc.
+	OrderType               string // "MKT", "LMT", "STP", "STP LMT"
+	LmtPrice                string // empty for MKT
+	AuxPrice                string // stop price for STP, empty for LMT/MKT
+	TIF                     string // "DAY", "GTC"
+	Account                 string
+	Transmit                bool
+	ParentID                int64 // 0 = no parent
+	OcaGroup                string
+	OutsideRTH              bool
+	OrderRef                string
+	ComboLegs               []comboLegSpec
+	OrderComboLegPrices     []string
+	SmartComboRoutingParams []tagValueSpec
+	AlgoStrategy            string
+	AlgoParams              []tagValueSpec
+	Conditions              []orderConditionSpec
+	ConditionsIgnoreRTH     bool
+	ConditionsCancelOrder   bool
 }
 
 // contractSpec is a minimal contract shape for request building. Any field
@@ -644,7 +680,27 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 		boolField(o.OutsideRTH),
 		"0", // hidden
 	)
-	// BAG combo legs omitted (non-BAG).
+	if c.SecType == "BAG" || len(o.ComboLegs) > 0 || len(o.OrderComboLegPrices) > 0 || len(o.SmartComboRoutingParams) > 0 {
+		fields = append(fields, strconv.Itoa(len(o.ComboLegs)))
+		for _, leg := range o.ComboLegs {
+			fields = append(fields,
+				strconv.Itoa(leg.ConID),
+				strconv.Itoa(leg.Ratio),
+				leg.Action,
+				leg.Exchange,
+				leg.OpenClose,
+				leg.ShortSaleSlot,
+				leg.DesignatedLocation,
+				leg.ExemptCode,
+			)
+		}
+		fields = append(fields, strconv.Itoa(len(o.OrderComboLegPrices)))
+		fields = append(fields, o.OrderComboLegPrices...)
+		fields = append(fields, strconv.Itoa(len(o.SmartComboRoutingParams)))
+		for _, value := range o.SmartComboRoutingParams {
+			fields = append(fields, value.Tag, value.Value)
+		}
+	}
 	// Deprecated + FA + model.
 	fields = append(fields,
 		"",  // deprecated sharesAllocation
@@ -719,9 +775,15 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 		"0", // notHeld
 		"0", // deltaNeutralContractPresent
 	)
-	// Algo: empty algoStrategy => no algo params.
+	// Algo.
+	fields = append(fields, o.AlgoStrategy)
+	if o.AlgoStrategy != "" {
+		fields = append(fields, strconv.Itoa(len(o.AlgoParams)))
+		for _, value := range o.AlgoParams {
+			fields = append(fields, value.Tag, value.Value)
+		}
+	}
 	fields = append(fields,
-		"",  // algoStrategy
 		"",  // algoID
 		"0", // whatIf
 		"",  // orderMiscOptions
@@ -730,9 +792,28 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 		"0", // randomizePrice
 	)
 	// PEG BENCH fields skipped (orderType != "PEG BENCH").
-	fields = append(fields,
-		"0", // conditionsCount
-	)
+	fields = append(fields, strconv.Itoa(len(o.Conditions)))
+	for _, cond := range o.Conditions {
+		fields = append(fields, strconv.Itoa(cond.Type))
+		if cond.Conjunction == "o" {
+			fields = append(fields, "o")
+		} else {
+			fields = append(fields, "a")
+		}
+		switch cond.Type {
+		case 1:
+			fields = append(fields, boolField(cond.Operator == 2), strconv.Itoa(cond.ConID), cond.Exchange, cond.Value, strconv.Itoa(cond.TriggerMethod))
+		case 3, 4:
+			fields = append(fields, boolField(cond.Operator == 2), cond.Value)
+		case 5:
+			fields = append(fields, cond.SecType, cond.Exchange, cond.Symbol)
+		case 6, 7:
+			fields = append(fields, boolField(cond.Operator == 2), strconv.Itoa(cond.ConID), cond.Exchange, cond.Value)
+		}
+	}
+	if len(o.Conditions) > 0 {
+		fields = append(fields, boolField(o.ConditionsIgnoreRTH), boolField(o.ConditionsCancelOrder))
+	}
 	// Adjusted order type fields.
 	fields = append(fields,
 		"", // adjustedOrderType

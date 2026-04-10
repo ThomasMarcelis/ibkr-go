@@ -356,7 +356,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			name: "HistoricalTicksBidAskResponse",
 			msg: HistoricalTicksBidAskResponse{
 				ReqID: 1,
-				Ticks: []HistoricalTickBidAskEntry{{Time: "1712345678", BidPrice: "150.00", AskPrice: "150.05", BidSize: "100", AskSize: "200"}},
+				Ticks: []HistoricalTickBidAskEntry{{Time: "1712345678", TickAttrib: 1, BidPrice: "150.00", AskPrice: "150.05", BidSize: "100", AskSize: "200"}},
 				Done:  true,
 			},
 		},
@@ -364,7 +364,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			name: "HistoricalTicksLastResponse",
 			msg: HistoricalTicksLastResponse{
 				ReqID: 1,
-				Ticks: []HistoricalTickLastEntry{{Time: "1712345678", Price: "150.00", Size: "100", Exchange: "ARCA", SpecialConditions: ""}},
+				Ticks: []HistoricalTickLastEntry{{Time: "1712345678", TickAttrib: 2, Price: "150.00", Size: "100", Exchange: "ARCA", SpecialConditions: ""}},
 				Done:  true,
 			},
 		},
