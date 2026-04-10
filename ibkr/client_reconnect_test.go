@@ -23,7 +23,7 @@ func TestReconnectLastPriceSurvivesTransportLoss(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -92,7 +92,7 @@ func TestReconnectOneShotInterrupted(t *testing.T) {
 	_, err := client.HistoricalBars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -121,7 +121,7 @@ func TestReconnectPolicyOff(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -173,7 +173,7 @@ func TestSingleGapOn1100ThenTransportLoss(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -223,7 +223,7 @@ func TestGapEventWithout1101(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -282,7 +282,7 @@ func TestDegradedToReadyVia1102(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},

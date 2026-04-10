@@ -1332,7 +1332,6 @@ type PlaceOrderRequest struct {
 	Conditions            []OrderCondition
 	ConditionsIgnoreRTH   string
 	ConditionsCancelOrder string
-	ConditionsCount       string // legacy internal field; ignored on encode
 
 	// Adjusted order type
 	AdjustedOrderType      string

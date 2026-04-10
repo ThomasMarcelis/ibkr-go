@@ -407,10 +407,49 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			conditionsIgnoreRTH = btoa(mustReadBool(r))
 			conditionsCancelOrder = btoa(mustReadBool(r))
 		}
-
-		filled := fieldFromEnd(r.fields, 9)
-		remaining := fieldFromEnd(r.fields, 8)
-		parentID := fieldFromEnd(r.fields, 5)
+		if r.Remaining() != 40 {
+			return []Message{partial}, nil
+		}
+		r.ReadString() // AdjustedOrderType
+		r.ReadString() // TriggerPrice
+		r.ReadString() // LmtPriceOffset
+		r.ReadString() // AdjustedStopPrice
+		r.ReadString() // AdjustedStopLimitPrice
+		r.ReadString() // AdjustedTrailingAmount
+		r.ReadString() // AdjustableTrailingUnit
+		r.ReadString() // SoftDollarName
+		r.ReadString() // SoftDollarValue
+		r.ReadString() // SoftDollarDisplayName
+		r.ReadString() // CashQty
+		r.ReadString() // DontUseAutoPriceForHedge
+		r.ReadString() // IsOmsContainer
+		r.ReadString() // DiscretionaryUpToLimitPrice
+		r.ReadString() // UsePriceMgmtAlgo
+		r.ReadString() // Duration
+		r.ReadString() // PostToAts
+		r.ReadString() // AutoCancelParent
+		r.ReadString() // MinTradeQty
+		r.ReadString() // MinCompeteSize
+		r.ReadString() // CompeteAgainstBestOffset
+		r.ReadString() // MidOffsetAtWhole
+		r.ReadString() // MidOffsetAtHalf
+		r.ReadString() // CustomerAccount
+		r.ReadString() // ProfessionalCustomer
+		r.ReadString() // BondAccruedInterest
+		r.ReadString() // IncludeOvernight
+		r.ReadString() // ExtOperator
+		r.ReadString() // ManualOrderIndicator
+		r.ReadString() // Submitter
+		r.ReadString() // ImbalanceOnly
+		filled := r.ReadString()
+		remaining := r.ReadString()
+		r.ReadString() // lastFillPrice
+		r.ReadString() // permId
+		parentID := r.ReadString()
+		r.ReadString() // lastLiquidity
+		r.ReadString() // whyHeld
+		r.ReadString() // mktCapPrice
+		r.ReadString() // trailing
 
 		return []Message{OpenOrder{
 			OrderID: orderID, Contract: contract,
@@ -1713,7 +1752,9 @@ func encodeFields(msg Message) ([]string, error) {
 		// [OrderType != "PEG BENCH" => skip peg bench fields]
 		w.WriteInt(len(m.Conditions))
 		for _, cond := range m.Conditions {
-			writeOrderCondition(&w, cond)
+			if err := writeOrderCondition(&w, cond); err != nil {
+				return nil, err
+			}
 		}
 		if len(m.Conditions) > 0 {
 			w.WriteString(m.ConditionsIgnoreRTH)
@@ -1982,7 +2023,9 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString("") // RandomizePrice
 		w.WriteInt(len(m.Conditions))
 		for _, cond := range m.Conditions {
-			writeOrderCondition(&w, cond)
+			if err := writeOrderCondition(&w, cond); err != nil {
+				return nil, err
+			}
 		}
 		if len(m.Conditions) > 0 {
 			w.WriteString(m.ConditionsIgnoreRTH)
@@ -2561,13 +2604,6 @@ func isPositiveWireNumber(raw string) bool {
 	return err == nil && v > 0
 }
 
-func fieldFromEnd(fields []string, offset int) string {
-	if offset <= 0 || offset > len(fields) {
-		return ""
-	}
-	return fields[len(fields)-offset]
-}
-
 func mustReadInt(r *fieldReader) int {
 	v, _ := r.ReadInt()
 	return v
@@ -2668,7 +2704,7 @@ func readOrderCondition(r *fieldReader, conditionType int) (OrderCondition, erro
 	return cond, nil
 }
 
-func writeOrderCondition(w *fieldWriter, cond OrderCondition) {
+func writeOrderCondition(w *fieldWriter, cond OrderCondition) error {
 	w.WriteInt(cond.Type)
 	if cond.Conjunction == "o" {
 		w.WriteString("o")
@@ -2695,7 +2731,10 @@ func writeOrderCondition(w *fieldWriter, cond OrderCondition) {
 		w.WriteInt(cond.ConID)
 		w.WriteString(cond.Exchange)
 		w.WriteString(cond.Value)
+	default:
+		return fmt.Errorf("codec: unsupported order condition type %d", cond.Type)
 	}
+	return nil
 }
 
 func writeObservedWireContract(w *fieldWriter, c Contract) {

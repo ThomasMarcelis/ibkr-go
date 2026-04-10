@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -21,6 +22,7 @@ type Engine struct {
 	transportErr chan error
 	ready        chan error
 	done         chan struct{}
+	events       *observer[Event]
 
 	waitMu  sync.Mutex
 	waitErr error
@@ -40,8 +42,6 @@ type Engine struct {
 
 	bootstrap bootstrapState
 	closed    bool
-
-	eventRelay *relay[Event]
 }
 
 type bootstrapState struct {
@@ -86,6 +86,10 @@ type orderRoute struct {
 	gapped  bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
+type parsedOpenOrder struct {
+	order OpenOrder
+}
+
 func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 	cfg := defaultConfig()
 	for _, opt := range opts {
@@ -93,6 +97,9 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 	}
 	if cfg.clientID < 0 {
 		return nil, fmt.Errorf("ibkr: client id must be >= 0")
+	}
+	if cfg.eventBuffer < 1 {
+		return nil, fmt.Errorf("ibkr: event buffer must be >= 1")
 	}
 
 	e := &Engine{
@@ -102,6 +109,7 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 		transportErr: make(chan error, 8),
 		ready:        make(chan error, 1),
 		done:         make(chan struct{}),
+		events:       newObserver[Event](cfg.eventBuffer),
 		keyed:        make(map[int]*route),
 		singletons:   make(map[string]*route),
 		orders:       make(map[int64]*orderRoute),
@@ -112,8 +120,6 @@ func DialContext(ctx context.Context, opts ...Option) (*Engine, error) {
 			State: StateDisconnected,
 		},
 	}
-	e.eventRelay = newRelay[Event](cfg.eventBuffer)
-
 	go e.run()
 	e.enqueue(func() {
 		e.startConnect(ctx)
@@ -159,10 +165,10 @@ func (e *Engine) Session() Snapshot {
 }
 
 func (e *Engine) SessionEvents() <-chan Event {
-	return e.eventRelay.Chan()
+	return e.events.Chan()
 }
 
-func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest) ([]ContractDetails, error) {
+func (e *Engine) ContractDetails(ctx context.Context, contract Contract) ([]ContractDetails, error) {
 	type result struct {
 		values []ContractDetails
 		err    error
@@ -211,7 +217,7 @@ func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest
 		}
 		if err := e.send(codec.ContractDetailsRequest{
 			ReqID:    reqID,
-			Contract: toCodecContract(req.Contract),
+			Contract: toCodecContract(contract),
 		}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
@@ -227,18 +233,18 @@ func (e *Engine) ContractDetails(ctx context.Context, req ContractDetailsRequest
 	return out.values, out.err
 }
 
-func (e *Engine) QualifyContract(ctx context.Context, contract Contract) (QualifiedContract, error) {
-	details, err := e.ContractDetails(ctx, ContractDetailsRequest{Contract: contract})
+func (e *Engine) QualifyContract(ctx context.Context, contract Contract) (ContractDetails, error) {
+	details, err := e.ContractDetails(ctx, contract)
 	if err != nil {
-		return QualifiedContract{}, err
+		return ContractDetails{}, err
 	}
 	switch len(details) {
 	case 0:
-		return QualifiedContract{}, ErrNoMatch
+		return ContractDetails{}, ErrNoMatch
 	case 1:
-		return QualifiedContract{ContractDetails: details[0]}, nil
+		return details[0], nil
 	default:
-		return QualifiedContract{}, ErrAmbiguousContract
+		return ContractDetails{}, ErrAmbiguousContract
 	}
 }
 
@@ -1018,14 +1024,8 @@ func (e *Engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			request:      codec.OpenOrdersRequest{Scope: string(scope)},
 			handle: func(msg any, e *Engine) {
 				switch m := msg.(type) {
-				case codec.OpenOrder:
-					order, err := fromCodecOpenOrder(m)
-					if err != nil {
-						delete(e.singletons, singletonOpenOrders)
-						sub.closeWithErr(err)
-						return
-					}
-					sub.emit(OpenOrderUpdate{Order: order})
+				case parsedOpenOrder:
+					sub.emit(OpenOrderUpdate{Order: m.order})
 				case codec.OpenOrderEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
@@ -1253,7 +1253,7 @@ func (e *Engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 					exchanges := make([]DepthExchange, len(m.Exchanges))
 					for i, x := range m.Exchanges {
 						exchanges[i] = DepthExchange{
-							Exchange: x.Exchange, SecType: x.SecType,
+							Exchange: x.Exchange, SecType: SecType(x.SecType),
 							ListingExch: x.ListingExch, ServiceDataType: x.ServiceDataType,
 							AggGroup: x.AggGroup,
 						}
@@ -1441,7 +1441,7 @@ func (e *Engine) UserInfo(ctx context.Context) (string, error) {
 	return out.whiteBrandingID, out.err
 }
 
-func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest) ([]MatchingSymbol, error) {
+func (e *Engine) MatchingSymbols(ctx context.Context, pattern string) ([]MatchingSymbol, error) {
 	type result struct {
 		symbols []MatchingSymbol
 		err     error
@@ -1467,7 +1467,7 @@ func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest
 						derivTypes := make([]string, len(s.DerivativeSecTypes))
 						copy(derivTypes, s.DerivativeSecTypes)
 						symbols[i] = MatchingSymbol{
-							ConID: s.ConID, Symbol: s.Symbol, SecType: s.SecType,
+							ConID: s.ConID, Symbol: s.Symbol, SecType: SecType(s.SecType),
 							PrimaryExchange: s.PrimaryExchange, Currency: s.Currency,
 							DerivativeSecTypes: derivTypes,
 						}
@@ -1488,7 +1488,7 @@ func (e *Engine) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: req.Pattern}); err != nil {
+		if err := e.send(codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
@@ -2668,7 +2668,7 @@ func (e *Engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 			ReqID:             reqID,
 			UnderlyingSymbol:  req.UnderlyingSymbol,
 			FutFopExchange:    req.FutFopExchange,
-			UnderlyingSecType: req.UnderlyingSecType,
+			UnderlyingSecType: string(req.UnderlyingSecType),
 			UnderlyingConID:   req.UnderlyingConID,
 		}); err != nil {
 			delete(e.keyed, reqID)
@@ -4086,33 +4086,9 @@ func (e *Engine) handleIncoming(msg any) {
 			route.handle(msg, e)
 		}
 	case codec.OpenOrder:
-		order, err := fromCodecOpenOrder(msg)
-		if err != nil {
-			e.closeEngine(err)
-			return
-		}
-		// Dual dispatch: per-order route first, then singleton observer.
-		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
-			or.handle.emitOrder(order)
-		}
-		if route, ok := e.singletons[singletonOpenOrders]; ok {
-			route.handle(msg, e)
-		}
+		e.dispatchObservedOpenOrder(msg)
 	case codec.OrderStatus:
-		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
-			status, err := fromCodecOrderStatus(msg)
-			if err != nil {
-				e.closeEngine(err)
-				return
-			}
-			or.handle.emitStatus(status)
-			if IsTerminalOrderStatus(status.Status) {
-				or.closed = true
-			}
-		}
-		if route, ok := e.singletons[singletonOpenOrders]; ok {
-			route.handle(msg, e)
-		}
+		e.dispatchObservedOrderStatus(msg)
 	case codec.OpenOrderEnd:
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			route.handle(msg, e)
@@ -4238,6 +4214,7 @@ func (e *Engine) handleTransportLoss(err error) {
 	if err == nil && e.transport == nil {
 		return
 	}
+	err = normalizeTransportErr(err)
 	e.transport = nil
 	e.executions.reset()
 	if e.cfg.reconnect == ReconnectOff {
@@ -4367,7 +4344,7 @@ func (e *Engine) closeEngine(err error) {
 	e.waitErr = err
 	e.waitMu.Unlock()
 	close(e.done)
-	e.eventRelay.Close()
+	e.events.Close()
 }
 
 func (e *Engine) reportReady(err error) {
@@ -4385,7 +4362,7 @@ func (e *Engine) setState(next State, code int, message string, err error) {
 	connSeq := e.snapshot.ConnectionSeq
 	e.snapshotMu.Unlock()
 
-	e.eventRelay.Emit(Event{
+	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
 		State:         next,
 		Previous:      prev,
@@ -4403,7 +4380,7 @@ func (e *Engine) emitEvent(code int, message string) {
 	state := e.snapshot.State
 	connSeq := e.snapshot.ConnectionSeq
 	e.snapshotMu.RUnlock()
-	e.eventRelay.Emit(Event{
+	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
 		State:         state,
 		Previous:      state,
@@ -4427,7 +4404,18 @@ func (e *Engine) send(msg codec.Message) error {
 	if err != nil {
 		return err
 	}
-	return e.transport.Send(context.Background(), payload)
+	err = e.transport.Send(context.Background(), payload)
+	if errors.Is(err, transport.ErrSendQueueFull) {
+		return ErrInterrupted
+	}
+	return err
+}
+
+func normalizeTransportErr(err error) error {
+	if errors.Is(err, transport.ErrSendQueueFull) {
+		return ErrInterrupted
+	}
+	return err
 }
 
 func (e *Engine) allocReqID() int {
@@ -4513,6 +4501,53 @@ func (e *Engine) emitResumed() {
 			or.gapped = false
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
 		}
+	}
+}
+
+func (e *Engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
+	orderRoute, orderObserved := e.orders[msg.OrderID]
+	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
+	if (!orderObserved || orderRoute.closed) && !singletonObserved {
+		return
+	}
+
+	order, err := fromCodecOpenOrder(msg)
+	if err != nil {
+		if orderObserved && !orderRoute.closed {
+			orderRoute.closed = true
+			orderRoute.handle.emitOrderError(err)
+		}
+		if singletonObserved {
+			delete(e.singletons, singletonOpenOrders)
+			singletonRoute.close(err)
+		}
+		return
+	}
+
+	if orderObserved && !orderRoute.closed {
+		orderRoute.handle.emitOrder(order)
+	}
+	if singletonObserved {
+		singletonRoute.handle(parsedOpenOrder{order: order}, e)
+	}
+}
+
+func (e *Engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
+	orderRoute, ok := e.orders[msg.OrderID]
+	if !ok || orderRoute.closed {
+		return
+	}
+
+	status, err := fromCodecOrderStatus(msg)
+	if err != nil {
+		orderRoute.closed = true
+		orderRoute.handle.emitOrderError(err)
+		return
+	}
+
+	orderRoute.handle.emitStatus(status)
+	if IsTerminalOrderStatus(status.Status) {
+		orderRoute.closed = true
 	}
 }
 
@@ -4694,10 +4729,10 @@ func toCodecContract(c Contract) codec.Contract {
 	return codec.Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
-		SecType:         c.SecType,
+		SecType:         string(c.SecType),
 		Expiry:          c.Expiry,
 		Strike:          c.Strike,
-		Right:           c.Right,
+		Right:           string(c.Right),
 		Multiplier:      c.Multiplier,
 		Exchange:        c.Exchange,
 		Currency:        c.Currency,
@@ -4711,10 +4746,10 @@ func fromCodecContract(c codec.Contract) Contract {
 	return Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
-		SecType:         c.SecType,
+		SecType:         SecType(c.SecType),
 		Expiry:          c.Expiry,
 		Strike:          c.Strike,
-		Right:           c.Right,
+		Right:           Right(c.Right),
 		Multiplier:      c.Multiplier,
 		Exchange:        c.Exchange,
 		Currency:        c.Currency,

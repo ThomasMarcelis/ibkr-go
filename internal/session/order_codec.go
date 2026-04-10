@@ -109,7 +109,7 @@ func orderConditionsToCodec(values []OrderCondition) []codec.OrderCondition {
 			Operator:      value.Operator,
 			Value:         value.Value,
 			TriggerMethod: value.TriggerMethod,
-			SecType:       value.SecType,
+			SecType:       string(value.SecType),
 			Symbol:        value.Symbol,
 		}
 	}
@@ -163,7 +163,7 @@ func orderConditionsFromCodec(values []codec.OrderCondition) []OrderCondition {
 			Operator:      value.Operator,
 			Value:         value.Value,
 			TriggerMethod: value.TriggerMethod,
-			SecType:       value.SecType,
+			SecType:       SecType(value.SecType),
 			Symbol:        value.Symbol,
 		}
 	}

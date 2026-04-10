@@ -54,13 +54,11 @@ func TestContractDetails(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  "STK",
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	details, err := client.ContractDetails(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
 	})
 	if err != nil {
 		t.Fatalf("ContractDetails() error = %v", err)
@@ -86,7 +84,7 @@ func TestHistoricalBars(t *testing.T) {
 	bars, err := client.HistoricalBars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -329,7 +327,7 @@ func TestQuoteSnapshot(t *testing.T) {
 	quote, err := client.QuoteSnapshot(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -358,7 +356,7 @@ func TestQuoteSnapshotWithGenericTicks(t *testing.T) {
 	quote, err := client.QuoteSnapshot(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -407,7 +405,7 @@ func TestQuoteSnapshotRejectsGenericTicks(t *testing.T) {
 	_, err := client.QuoteSnapshot(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -431,7 +429,7 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -489,7 +487,7 @@ func TestSubscribeQuotesResumeAutoResendsAfter1101(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -544,7 +542,7 @@ func TestSubscribeQuotesResumeAutoResumesWithoutResendAfter1102(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -905,7 +903,7 @@ func TestSubscribeRealTimeBarsResumeAutoReconnectsAfterTransportLoss(t *testing.
 	sub, err := client.SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -962,7 +960,7 @@ func TestSubscribeQuotesResumeNeverRequiresManualResumeOnDisconnect(t *testing.T
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1026,7 +1024,7 @@ func TestMktDepthExchanges(t *testing.T) {
 	if exchanges[0].Exchange != "ARCA" {
 		t.Fatalf("exchange = %q, want ARCA", exchanges[0].Exchange)
 	}
-	if exchanges[0].SecType != "STK" {
+	if exchanges[0].SecType != ibkr.SecTypeStock {
 		t.Fatalf("sec_type = %q, want STK", exchanges[0].SecType)
 	}
 	if exchanges[0].AggGroup != 4 {
@@ -1110,7 +1108,7 @@ func TestMatchingSymbols(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	symbols, err := client.MatchingSymbols(ctx, ibkr.MatchingSymbolsRequest{Pattern: "AAPL"})
+	symbols, err := client.MatchingSymbols(ctx, "AAPL")
 	if err != nil {
 		t.Fatalf("MatchingSymbols() error = %v", err)
 	}
@@ -1144,7 +1142,7 @@ func TestHeadTimestamp(t *testing.T) {
 	ts, err := client.HeadTimestamp(ctx, ibkr.HeadTimestampRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1227,7 +1225,7 @@ func TestSecDefOptParams(t *testing.T) {
 
 	params, err := client.SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
 		UnderlyingSymbol:  "AAPL",
-		UnderlyingSecType: "STK",
+		UnderlyingSecType: ibkr.SecTypeStock,
 		UnderlyingConID:   265598,
 	})
 	if err != nil {
@@ -1291,7 +1289,7 @@ func TestCalcImpliedVolatility(t *testing.T) {
 	result, err := client.CalcImpliedVolatility(ctx, ibkr.CalcImpliedVolatilityRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "OPT",
+			SecType:  ibkr.SecTypeOption,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1322,7 +1320,7 @@ func TestCalcOptionPrice(t *testing.T) {
 	result, err := client.CalcOptionPrice(ctx, ibkr.CalcOptionPriceRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "OPT",
+			SecType:  ibkr.SecTypeOption,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1353,7 +1351,7 @@ func TestHistogramData(t *testing.T) {
 	entries, err := client.HistogramData(ctx, ibkr.HistogramDataRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1387,7 +1385,7 @@ func TestHistoricalTicksMidpoint(t *testing.T) {
 	result, err := client.HistoricalTicks(ctx, ibkr.HistoricalTicksRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1423,7 +1421,7 @@ func TestHistoricalTicksBidAsk(t *testing.T) {
 	result, err := client.HistoricalTicks(ctx, ibkr.HistoricalTicksRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1462,7 +1460,7 @@ func TestHistoricalTicksTrades(t *testing.T) {
 	result, err := client.HistoricalTicks(ctx, ibkr.HistoricalTicksRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1603,7 +1601,7 @@ func TestPlaceOrderLimit(t *testing.T) {
 		Contract: ibkr.Contract{
 			ConID:    265598,
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1688,7 +1686,7 @@ func TestPlaceOrderWithExecution(t *testing.T) {
 		Contract: ibkr.Contract{
 			ConID:    265598,
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1776,7 +1774,7 @@ func TestCancelOrder(t *testing.T) {
 		Contract: ibkr.Contract{
 			ConID:    265598,
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -1977,7 +1975,7 @@ func TestQuoteSnapshotDelayedData(t *testing.T) {
 	quote, err := client.QuoteSnapshot(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -2053,13 +2051,11 @@ func TestGroundedContractDetailsAAPL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  "STK",
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	details, err := client.ContractDetails(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
 	})
 	if err != nil {
 		t.Fatalf("ContractDetails() error = %v", err)
@@ -2068,26 +2064,26 @@ func TestGroundedContractDetailsAAPL(t *testing.T) {
 		t.Fatalf("details len = %d, want 1", len(details))
 	}
 	d := details[0]
-	if d.Contract.Symbol != "AAPL" {
-		t.Errorf("Symbol = %q, want AAPL", d.Contract.Symbol)
+	if d.Symbol != "AAPL" {
+		t.Errorf("Symbol = %q, want AAPL", d.Symbol)
 	}
-	if d.Contract.SecType != "STK" {
-		t.Errorf("SecType = %q, want STK", d.Contract.SecType)
+	if d.SecType != ibkr.SecTypeStock {
+		t.Errorf("SecType = %q, want STK", d.SecType)
 	}
-	if d.Contract.Exchange != "SMART" {
-		t.Errorf("Exchange = %q, want SMART", d.Contract.Exchange)
+	if d.Exchange != "SMART" {
+		t.Errorf("Exchange = %q, want SMART", d.Exchange)
 	}
-	if d.Contract.Currency != "USD" {
-		t.Errorf("Currency = %q, want USD", d.Contract.Currency)
+	if d.Currency != "USD" {
+		t.Errorf("Currency = %q, want USD", d.Currency)
 	}
-	if d.Contract.PrimaryExchange != "NASDAQ" {
-		t.Errorf("PrimaryExchange = %q, want NASDAQ", d.Contract.PrimaryExchange)
+	if d.PrimaryExchange != "NASDAQ" {
+		t.Errorf("PrimaryExchange = %q, want NASDAQ", d.PrimaryExchange)
 	}
-	if d.Contract.ConID != 265598 {
-		t.Errorf("ConID = %d, want 265598", d.Contract.ConID)
+	if d.ConID != 265598 {
+		t.Errorf("ConID = %d, want 265598", d.ConID)
 	}
-	if d.Contract.TradingClass != "NMS" {
-		t.Errorf("TradingClass = %q, want NMS", d.Contract.TradingClass)
+	if d.TradingClass != "NMS" {
+		t.Errorf("TradingClass = %q, want NMS", d.TradingClass)
 	}
 	if d.MarketName != "NMS" {
 		t.Errorf("MarketName = %q, want NMS", d.MarketName)
@@ -2165,7 +2161,7 @@ func TestGroundedHistoricalBars(t *testing.T) {
 	bars, err := client.HistoricalBars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -2260,7 +2256,7 @@ func TestGroundedPositions(t *testing.T) {
 	if amzn.AvgCost.String() != "200.25" {
 		t.Errorf("AMZN avgCost = %s, want 200.25", amzn.AvgCost.String())
 	}
-	if amzn.Contract.SecType != "STK" {
+	if amzn.Contract.SecType != ibkr.SecTypeStock {
 		t.Errorf("AMZN secType = %q, want STK", amzn.Contract.SecType)
 	}
 	if amzn.Contract.Currency != "USD" {
@@ -2286,7 +2282,7 @@ func TestGroundedPositions(t *testing.T) {
 	if yw == nil {
 		t.Fatal("YW position not found")
 	}
-	if yw.Contract.SecType != "FUT" {
+	if yw.Contract.SecType != ibkr.SecTypeFuture {
 		t.Errorf("YW secType = %q, want FUT", yw.Contract.SecType)
 	}
 	if yw.Contract.ConID != 715358256 {
@@ -2308,7 +2304,7 @@ func TestGroundedPositions(t *testing.T) {
 	if qqq == nil {
 		t.Fatal("QQQ position not found")
 	}
-	if qqq.Contract.SecType != "OPT" {
+	if qqq.Contract.SecType != ibkr.SecTypeOption {
 		t.Errorf("QQQ secType = %q, want OPT", qqq.Contract.SecType)
 	}
 	if qqq.Contract.ConID != 728937835 {
@@ -2320,7 +2316,7 @@ func TestGroundedPositions(t *testing.T) {
 	if qqq.Contract.Strike != "500.0" {
 		t.Errorf("QQQ strike = %q, want 500.0", qqq.Contract.Strike)
 	}
-	if qqq.Contract.Right != "P" {
+	if qqq.Contract.Right != ibkr.RightPut {
 		t.Errorf("QQQ right = %q, want P", qqq.Contract.Right)
 	}
 	if qqq.Contract.Multiplier != "100" {
@@ -2512,7 +2508,7 @@ func TestSubscribeTickByTick(t *testing.T) {
 	sub, err := client.SubscribeTickByTick(ctx, ibkr.TickByTickRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -2591,7 +2587,7 @@ func TestSubscribeHistoricalBars(t *testing.T) {
 	sub, err := client.SubscribeHistoricalBars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -2689,7 +2685,7 @@ func TestFundamentalDataIntegration(t *testing.T) {
 	data, err := client.FundamentalData(ctx, ibkr.FundamentalDataRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -2755,7 +2751,7 @@ func TestPlaceOrderModifyIntegration(t *testing.T) {
 	handle, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -2836,7 +2832,7 @@ func TestGlobalCancelIntegration(t *testing.T) {
 		h, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
 			Contract: ibkr.Contract{
 				Symbol:   "AAPL",
-				SecType:  "STK",
+				SecType:  ibkr.SecTypeStock,
 				Exchange: "SMART",
 				Currency: "USD",
 			},

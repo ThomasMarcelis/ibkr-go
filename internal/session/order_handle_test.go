@@ -1,25 +1,43 @@
 package session
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
-func TestOrderHandleStateRelayDoesNotDropQueuedEvents(t *testing.T) {
+func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
 	t.Parallel()
 
 	handle := newOrderHandle(7)
 	for i := 0; i < 12; i++ {
-		handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap})
+		handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: uint64(i + 1)})
 	}
 	if err := handle.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	count := 0
-	for evt := range handle.State() {
-		if evt.Kind == SubscriptionGap {
-			count++
+	var seqs []uint64
+	timeout := time.After(time.Second)
+	for {
+		select {
+		case evt, ok := <-handle.State():
+			if !ok {
+				if len(seqs) != 8 {
+					t.Fatalf("gap event count = %d, want 8", len(seqs))
+				}
+				for i, seq := range seqs {
+					want := uint64(i + 5)
+					if seq != want {
+						t.Fatalf("seqs[%d] = %d, want %d (keep latest 8)", i, seq, want)
+					}
+				}
+				return
+			}
+			if evt.Kind == SubscriptionGap {
+				seqs = append(seqs, evt.ConnectionSeq)
+			}
+		case <-timeout:
+			t.Fatal("State() channel did not close")
 		}
-	}
-	if count != 12 {
-		t.Fatalf("gap event count = %d, want 12", count)
 	}
 }

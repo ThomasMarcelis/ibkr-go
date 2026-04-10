@@ -46,13 +46,14 @@ pattern:
   placed order registers a route keyed by `orderID`. OpenOrder, OrderStatus,
   Execution, and CommissionReport messages dispatch to the matching order route.
 
-### Dual dispatch for OpenOrder and OrderStatus
+### Open-order and order-handle routing
 
-OpenOrder and OrderStatus messages are dispatched to both the per-order handle
-(if one exists in the orders table) and the singleton open-orders observer (if
-one is registered). This means a caller watching open orders via
-`SubscribeOpenOrders` sees all order updates, while a caller holding a specific
-`OrderHandle` sees only updates for that order. Neither blocks the other.
+OpenOrder messages are dispatched to both the per-order handle (if one exists
+in the orders table) and the singleton open-orders observer (if one is
+registered). `SubscribeOpenOrders` therefore observes open-order snapshots and
+updates through `OpenOrder`, including its embedded status fields. OrderStatus,
+execution, and commission messages are routed through `OrderHandle`, not the
+singleton open-orders observer.
 
 ## Order ID Management
 
@@ -67,7 +68,9 @@ order IDs manually.
 
 - **Events()** delivers `OrderEvent` values (union of OpenOrder, OrderStatus,
   Execution, CommissionReport — exactly one field non-nil per event).
-- **State()** delivers `SubscriptionStateEvent` values (Gap, Resumed).
+- **State()** delivers bounded observational `SubscriptionStateEvent` values
+  (Gap, Resumed). If unread, older queued lifecycle events may be dropped in
+  favor of the latest one.
 - **Terminal states.** When an OrderStatus arrives with status Filled,
   Cancelled, or Inactive, the handle auto-closes with `nil` error.
 - **Disconnect.** On session disconnect, active order handles receive a `Gap`
@@ -96,7 +99,9 @@ order IDs manually.
 - Managed accounts are bootstrap state on the session snapshot.
 - One-shots, subscriptions, and order handles are separate public contracts.
 - Subscriptions expose business events through `Events()` and lifecycle through
-  `State()`. OrderHandle follows the same shape with order-specific extensions.
+  `State()`. Lifecycle channels are observational rather than durable history:
+  the newest state is favored when buffers fill. OrderHandle follows the same
+  shape with order-specific extensions.
 
 These public contracts are intended to survive the remaining protocol work.
 

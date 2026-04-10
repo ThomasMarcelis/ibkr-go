@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
@@ -81,15 +82,7 @@ func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error
 		for _, msg := range msgs {
 			switch m := msg.(type) {
 			case codec.ManagedAccounts:
-				info.ManagedAccounts = ""
-				if len(m.Accounts) > 0 {
-					for i, account := range m.Accounts {
-						if i > 0 {
-							info.ManagedAccounts += ","
-						}
-						info.ManagedAccounts += account
-					}
-				}
+				info.ManagedAccounts = strings.Join(m.Accounts, ",")
 			case codec.NextValidID:
 				info.NextValidID = m.OrderID
 			case codec.APIError:

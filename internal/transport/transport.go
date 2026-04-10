@@ -48,6 +48,10 @@ type Conn struct {
 	outgoingClosed bool
 }
 
+const outgoingQueueCap = 256
+
+var ErrSendQueueFull = errors.New("transport: outbound queue full")
+
 func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -74,6 +78,8 @@ func (c *Conn) Done() <-chan struct{} {
 }
 
 func (c *Conn) Send(ctx context.Context, payload []byte) error {
+	copyPayload := append([]byte(nil), payload...)
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
@@ -82,12 +88,15 @@ func (c *Conn) Send(ctx context.Context, payload []byte) error {
 	default:
 	}
 
-	copyPayload := append([]byte(nil), payload...)
-
 	c.queueMu.Lock()
 	if c.outgoingClosed {
 		c.queueMu.Unlock()
 		return c.Wait()
+	}
+	if len(c.outgoing) >= outgoingQueueCap {
+		c.queueMu.Unlock()
+		c.finish(ErrSendQueueFull)
+		return ErrSendQueueFull
 	}
 	c.outgoing = append(c.outgoing, copyPayload)
 	c.queueCond.Signal()
@@ -152,12 +161,6 @@ func (c *Conn) writeLoop() {
 		c.outgoing[0] = nil
 		c.outgoing = c.outgoing[1:]
 		c.queueMu.Unlock()
-
-		select {
-		case <-c.done:
-			return
-		default:
-		}
 
 		if ticker != nil {
 			select {

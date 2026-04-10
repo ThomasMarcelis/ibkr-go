@@ -7,6 +7,7 @@ import (
 
 type Subscription[T any] struct {
 	events         chan T
+	state          *observer[SubscriptionStateEvent]
 	done           chan struct{}
 	cancelFn       func()
 	cancelOnce     sync.Once
@@ -16,7 +17,6 @@ type Subscription[T any] struct {
 	stateMu        sync.Mutex
 	snapshotClosed bool
 	cfg            subscriptionConfig
-	stateRelay     *relay[SubscriptionStateEvent]
 }
 
 func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscription[T] {
@@ -24,17 +24,17 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 		cfg.buffer = 1
 	}
 	return &Subscription[T]{
-		events:     make(chan T, cfg.buffer),
-		done:       make(chan struct{}),
-		cancelFn:   cancelFn,
-		cfg:        cfg,
-		stateRelay: newRelay[SubscriptionStateEvent](8),
+		events:   make(chan T, cfg.buffer),
+		state:    newObserver[SubscriptionStateEvent](8),
+		done:     make(chan struct{}),
+		cancelFn: cancelFn,
+		cfg:      cfg,
 	}
 }
 
 func (s *Subscription[T]) Events() <-chan T { return s.events }
 
-func (s *Subscription[T]) State() <-chan SubscriptionStateEvent { return s.stateRelay.Chan() }
+func (s *Subscription[T]) State() <-chan SubscriptionStateEvent { return s.state.Chan() }
 
 func (s *Subscription[T]) Done() <-chan struct{} { return s.done }
 
@@ -100,11 +100,7 @@ func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
 		s.snapshotClosed = true
 		s.stateMu.Unlock()
 	}
-	if evt.Kind == SubscriptionClosed {
-		s.stateRelay.Emit(evt)
-		return
-	}
-	s.stateRelay.Emit(evt)
+	s.state.EmitLatest(evt)
 }
 
 func (s *Subscription[T]) fail(err error) {
@@ -123,8 +119,8 @@ func (s *Subscription[T]) closeWithErr(err error) {
 		s.err = err
 		s.errMu.Unlock()
 		s.emitState(SubscriptionStateEvent{Kind: SubscriptionClosed, Err: err})
-		s.stateRelay.Close()
 		close(s.done)
 		close(s.events)
+		s.state.Close()
 	})
 }

@@ -146,13 +146,51 @@ type SubscriptionStateEvent struct {
 	Err           error
 }
 
+// SecType identifies the instrument class of a [Contract]. Values mirror the
+// IBKR TWS API Contract.secType vocabulary.
+type SecType string
+
+const (
+	SecTypeStock        SecType = "STK"     // Stock or ETF
+	SecTypeOption       SecType = "OPT"     // Option
+	SecTypeFuture       SecType = "FUT"     // Future
+	SecTypeContFuture   SecType = "CONTFUT" // Continuous future
+	SecTypeFutureOption SecType = "FOP"     // Option on a future
+	SecTypeIndex        SecType = "IND"     // Index
+	SecTypeForex        SecType = "CASH"    // Forex pair
+	SecTypeCombo        SecType = "BAG"     // Combo (multi-leg)
+	SecTypeBond         SecType = "BOND"    // Bond
+	SecTypeBill         SecType = "BILL"    // Treasury bill
+	SecTypeCFD          SecType = "CFD"     // Contract for difference
+	SecTypeWarrant      SecType = "WAR"     // Warrant
+	SecTypeStructured   SecType = "IOPT"    // Structured product / Dutch warrant
+	SecTypeForward      SecType = "FWD"     // Forward
+	SecTypeCommodity    SecType = "CMDTY"   // Commodity
+	SecTypeFund         SecType = "FUND"    // Mutual fund
+	SecTypeFixed        SecType = "FIXED"   // Fixed income
+	SecTypeSecLending   SecType = "SLB"     // Securities lending / borrowing
+	SecTypeNews         SecType = "NEWS"    // News feed
+	SecTypeBasket       SecType = "BSK"     // Basket
+	SecTypeInterCmdty   SecType = "ICU"     // Inter-commodity spread (unsigned)
+	SecTypeInterCmdtyS  SecType = "ICS"     // Inter-commodity spread (signed)
+	SecTypeCrypto       SecType = "CRYPTO"  // Cryptocurrency
+)
+
+// Right identifies option direction: [RightCall] or [RightPut].
+type Right string
+
+const (
+	RightCall Right = "C"
+	RightPut  Right = "P"
+)
+
 type Contract struct {
 	ConID           int
 	Symbol          string
-	SecType         string
+	SecType         SecType
 	Expiry          string
 	Strike          string
-	Right           string
+	Right           Right
 	Multiplier      string
 	Exchange        string
 	Currency        string
@@ -185,24 +223,16 @@ type OrderCondition struct {
 	Operator      int
 	Value         string
 	TriggerMethod int
-	SecType       string
+	SecType       SecType
 	Symbol        string
 }
 
-type ContractDetailsRequest struct {
-	Contract Contract
-}
-
 type ContractDetails struct {
-	Contract   Contract
+	Contract
 	MarketName string
 	LongName   string
 	MinTick    Decimal
 	TimeZoneID string
-}
-
-type QualifiedContract struct {
-	ContractDetails ContractDetails
 }
 
 type HistoricalBarsRequest struct {
@@ -440,6 +470,7 @@ type PlaceOrderRequest struct {
 type OrderHandle struct {
 	orderID int64
 	events  chan OrderEvent
+	state   *observer[SubscriptionStateEvent]
 	done    chan struct{}
 
 	closeOnce sync.Once
@@ -448,22 +479,20 @@ type OrderHandle struct {
 
 	cancelFn func(context.Context) error        // set by engine, sends CancelOrder
 	modifyFn func(context.Context, Order) error // set by engine, sends PlaceOrder with same ID
-
-	stateRelay *relay[SubscriptionStateEvent]
 }
 
 func newOrderHandle(orderID int64) *OrderHandle {
 	return &OrderHandle{
-		orderID:    orderID,
-		events:     make(chan OrderEvent, 64),
-		done:       make(chan struct{}),
-		stateRelay: newRelay[SubscriptionStateEvent](8),
+		orderID: orderID,
+		events:  make(chan OrderEvent, 64),
+		state:   newObserver[SubscriptionStateEvent](8),
+		done:    make(chan struct{}),
 	}
 }
 
 func (h *OrderHandle) OrderID() int64                       { return h.orderID }
 func (h *OrderHandle) Events() <-chan OrderEvent            { return h.events }
-func (h *OrderHandle) State() <-chan SubscriptionStateEvent { return h.stateRelay.Chan() }
+func (h *OrderHandle) State() <-chan SubscriptionStateEvent { return h.state.Chan() }
 func (h *OrderHandle) Done() <-chan struct{}                { return h.done }
 
 func (h *OrderHandle) Wait() error {
@@ -477,9 +506,9 @@ func (h *OrderHandle) Wait() error {
 // Events() and State() channels are closed.
 func (h *OrderHandle) Close() error {
 	h.closeOnce.Do(func() {
-		h.stateRelay.Close()
 		close(h.done)
 		close(h.events)
+		h.state.Close()
 	})
 	return nil
 }
@@ -565,7 +594,7 @@ func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
 	if evt.At.IsZero() {
 		evt.At = time.Now().UTC()
 	}
-	h.stateRelay.Emit(evt)
+	h.state.EmitLatest(evt)
 }
 
 func (h *OrderHandle) emitOrderError(err error) {
@@ -577,9 +606,9 @@ func (h *OrderHandle) closeWithErr(err error) {
 		h.errMu.Lock()
 		h.err = err
 		h.errMu.Unlock()
-		h.stateRelay.Close()
 		close(h.done)
 		close(h.events)
+		h.state.Close()
 	})
 }
 
@@ -590,7 +619,7 @@ type FamilyCode struct {
 
 type DepthExchange struct {
 	Exchange        string
-	SecType         string
+	SecType         SecType
 	ListingExch     string
 	ServiceDataType string
 	AggGroup        int
@@ -601,14 +630,10 @@ type NewsProvider struct {
 	Name string
 }
 
-type MatchingSymbolsRequest struct {
-	Pattern string
-}
-
 type MatchingSymbol struct {
 	ConID              int
 	Symbol             string
-	SecType            string
+	SecType            SecType
 	PrimaryExchange    string
 	Currency           string
 	DerivativeSecTypes []string
@@ -746,7 +771,7 @@ type NewsBulletin struct {
 type SecDefOptParamsRequest struct {
 	UnderlyingSymbol  string
 	FutFopExchange    string
-	UnderlyingSecType string
+	UnderlyingSecType SecType
 	UnderlyingConID   int
 }
 

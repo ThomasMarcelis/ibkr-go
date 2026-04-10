@@ -59,18 +59,16 @@ if err != nil {
 }
 defer client.Close()
 
-details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-    Contract: ibkr.Contract{
-        Symbol:   "AAPL",
-        SecType:  "STK",
-        Exchange: "SMART",
-        Currency: "USD",
-    },
+details, err := client.QualifyContract(ctx, ibkr.Contract{
+    Symbol:   "AAPL",
+    SecType:  ibkr.SecTypeStock,
+    Exchange: "SMART",
+    Currency: "USD",
 })
 if err != nil {
     return err
 }
-fmt.Println(details[0].LongName, details[0].MinTick)
+fmt.Println(details.LongName, details.MinTick)
 ```
 
 ### Stream live quotes
@@ -79,7 +77,7 @@ fmt.Println(details[0].LongName, details[0].MinTick)
 sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
     Contract: ibkr.Contract{
         Symbol:   "AAPL",
-        SecType:  "STK",
+        SecType:  ibkr.SecTypeStock,
         Exchange: "SMART",
         Currency: "USD",
     },

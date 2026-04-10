@@ -151,11 +151,11 @@ func TestSubscriptionStateChannelFull(t *testing.T) {
 	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
 	for i := 0; i < 12; i++ {
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted})
+		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: uint64(i + 1)})
 	}
 	sub.closeWithErr(nil)
 
-	count := 0
+	var seqs []uint64
 	seenClosed := false
 	timeout := time.After(time.Second)
 	for !seenClosed {
@@ -166,17 +166,23 @@ func TestSubscriptionStateChannelFull(t *testing.T) {
 				break
 			}
 			if evt.Kind == SubscriptionStarted {
-				count++
+				seqs = append(seqs, evt.ConnectionSeq)
 			}
 			if evt.Kind == SubscriptionClosed {
 				seenClosed = true
 			}
 		case <-timeout:
-			t.Fatal("timed out waiting for state relay to drain")
+			t.Fatal("timed out waiting for state channel to drain")
 		}
 	}
-	if count != 12 {
-		t.Errorf("read %d state events, want 12", count)
+	if len(seqs) != 7 {
+		t.Fatalf("read %d state events, want 7 (one buffered state replaced by Closed)", len(seqs))
+	}
+	for i, seq := range seqs {
+		want := uint64(i + 6)
+		if seq != want {
+			t.Fatalf("seqs[%d] = %d, want %d (keep latest 7 before Closed)", i, seq, want)
+		}
 	}
 }
 

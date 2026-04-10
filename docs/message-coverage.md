@@ -120,8 +120,8 @@ server version and managed-account bootstrap fields are known.
 | in | 89 | HistogramData | landed | |
 | out | 96 | reqHistoricalTicks | landed | |
 | in | 96 | HistoricalTicks | landed | |
-| in | 97 | HistoricalTicksBidAsk | landed | tickAttribBidAsk skipped |
-| in | 98 | HistoricalTicksLast | landed | tickAttribLast skipped |
+| in | 97 | HistoricalTicksBidAsk | landed | tickAttribBidAsk decoded and exposed |
+| in | 98 | HistoricalTicksLast | landed | tickAttribLast decoded and exposed |
 
 ## Option Calculations
 
@@ -143,8 +143,9 @@ server version and managed-account bootstrap fields are known.
 | in | 5 | OpenOrder | landed | Simple 169-field orders fully parse; grounded non-simple combo/algo/conditional sections are decoded |
 | in | 3 | OrderStatus | landed | Full parse, authoritative fill data for all order types |
 
-OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
-singleton open-orders observer.
+OpenOrder is dual-dispatched to per-order handles and the singleton open-orders
+observer. OrderStatus is routed to per-order handles; open-orders observers
+read status from the OpenOrder payload.
 
 OpenOrder uses a dual path:
 - 169-field simple orders stay on the capture-grounded fixed-layout decoder.

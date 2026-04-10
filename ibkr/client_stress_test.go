@@ -75,7 +75,7 @@ func TestStressSlowConsumerClose(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -120,7 +120,7 @@ func TestStressSlowConsumerDropOldest(t *testing.T) {
 	sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -195,13 +195,11 @@ func TestStressConcurrentOneshots(t *testing.T) {
 		go func(idx int) {
 			defer wg.Done()
 			sym := fmt.Sprintf("SYM%d", idx)
-			details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-				Contract: ibkr.Contract{
-					Symbol:   sym,
-					SecType:  "STK",
-					Exchange: "SMART",
-					Currency: "USD",
-				},
+			details, err := client.ContractDetails(ctx, ibkr.Contract{
+				Symbol:   sym,
+				SecType:  ibkr.SecTypeStock,
+				Exchange: "SMART",
+				Currency: "USD",
 			})
 			if err != nil {
 				errs[idx] = err
@@ -279,7 +277,7 @@ func TestStressConcurrentPlaceOrders(t *testing.T) {
 			h, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
 				Contract: ibkr.Contract{
 					Symbol:   "AAPL",
-					SecType:  "STK",
+					SecType:  ibkr.SecTypeStock,
 					Exchange: "SMART",
 					Currency: "USD",
 				},
@@ -425,7 +423,7 @@ func TestStressHighThroughputMarketDepth(t *testing.T) {
 	sub, err := client.SubscribeMarketDepth(ctx, ibkr.MarketDepthRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
@@ -489,7 +487,7 @@ disconnect
 	handle, err := client.PlaceOrder(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "STK",
+			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},

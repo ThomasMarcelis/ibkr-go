@@ -61,10 +61,11 @@ and streaming, commission reports.
 
 PlaceOrder (msg 3), CancelOrder (msg 4), GlobalCancel (msg 58). OrderHandle
 tracks lifecycle with Events(), State(), Done(), Wait(), Close(), Cancel(),
-and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder and
-OrderStatus messages are dual-dispatched to both per-order handles and the
-singleton open-orders observer. OrderHandle survives disconnects (Gap/Resumed)
-and auto-closes on terminal status (Filled, Cancelled, Inactive).
+and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder
+messages are dual-dispatched to both per-order handles and the singleton
+open-orders observer; OrderStatus remains part of the per-order handle
+contract. OrderHandle survives disconnects (Gap/Resumed) and auto-closes on
+terminal status (Filled, Cancelled, Inactive).
 
 ### Market depth (Level 2)
 

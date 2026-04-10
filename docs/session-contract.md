@@ -44,6 +44,10 @@ func (c *Client) SessionEvents() <-chan SessionEvent
 This contract is implemented in code and validated against live IB Gateway
 server_version 200.
 
+`SessionEvents()` is a bounded observational channel. If the caller stops
+draining it, older queued events may be dropped in favor of the latest session
+state transition.
+
 ## Subscriptions
 
 ```go
@@ -57,6 +61,9 @@ type Subscription[T any] struct {
 ```
 
 `Events()` carries business data only. `State()` carries lifecycle only.
+`State()` is a bounded observational channel: if the caller stops draining it,
+older queued lifecycle events may be dropped in favor of the latest one.
+`SubscriptionClosed` is still guaranteed before the channel closes.
 
 Lifecycle event kinds:
 
@@ -97,6 +104,8 @@ func (h *OrderHandle) Modify(ctx context.Context, order Order) error
 of `OpenOrder`, `Status`, `Execution`, or `Commission` is non-nil per event.
 
 `State()` delivers lifecycle events (Gap on disconnect, Resumed on reconnect).
+It is a bounded observational channel: if the caller stops draining it, older
+queued lifecycle events may be dropped in favor of the latest one.
 
 `Close()` detaches the handle from the engine. The order continues executing
 on the server; the caller simply stops receiving events. This is not a cancel.

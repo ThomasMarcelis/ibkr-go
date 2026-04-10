@@ -33,7 +33,9 @@ type (
 
 	// SessionEvent is delivered through [Client.SessionEvents] when the session
 	// state changes. It carries the new and previous state, a connection sequence
-	// number, and any associated error.
+	// number, and any associated error. SessionEvents is observational and
+	// bounded: if unread, older queued session events may be dropped in favor of
+	// the latest one.
 	SessionEvent = session.Event
 
 	// OpKind identifies an operation type. Used internally for rate limiting and
@@ -61,12 +63,15 @@ type (
 
 	// SubscriptionStateEvent is delivered through Subscription.State() when
 	// the subscription's lifecycle changes. It carries the transition kind,
-	// a connection sequence number, and any associated error.
+	// a connection sequence number, and any associated error. Subscription
+	// lifecycle state is observational and bounded: if unread, older queued
+	// events may be dropped in favor of the latest one.
 	SubscriptionStateEvent = session.SubscriptionStateEvent
 
 	// Subscription tracks a streaming data feed. Business events arrive on
 	// Events(), lifecycle transitions on State(), and Done() closes when the
-	// subscription terminates. Call Close to unsubscribe.
+	// subscription terminates. State() is bounded and observational. Call Close
+	// to unsubscribe.
 	Subscription[T any] = session.Subscription[T]
 
 	// Decimal is an exact decimal type for financial values. All prices,
@@ -79,6 +84,13 @@ type (
 	// an ambiguous contract to a single match.
 	Contract = session.Contract
 
+	// SecType identifies the instrument class of a [Contract]. Use the
+	// SecTypeXxx constants rather than bare strings.
+	SecType = session.SecType
+
+	// Right identifies option direction: [RightCall] or [RightPut].
+	Right = session.Right
+
 	// ComboLeg describes one leg of a combo order or observed combo structure.
 	ComboLeg = session.ComboLeg
 
@@ -88,16 +100,11 @@ type (
 	// OrderCondition describes one server-side order condition.
 	OrderCondition = session.OrderCondition
 
-	// ContractDetailsRequest holds parameters for [Client.ContractDetails].
-	ContractDetailsRequest = session.ContractDetailsRequest
-
 	// ContractDetails holds metadata for a single contract: market name, long
-	// name, minimum tick, time zone, and the resolved [Contract].
+	// name, minimum tick, and time zone. It embeds [Contract], so the resolved
+	// contract fields (Symbol, ConID, Exchange, …) are accessible directly on
+	// the ContractDetails value.
 	ContractDetails = session.ContractDetails
-
-	// QualifiedContract is the result of [Client.QualifyContract]. It wraps a
-	// fully resolved [ContractDetails] for a single unambiguous match.
-	QualifiedContract = session.QualifiedContract
 
 	// HistoricalBarsRequest holds parameters for [Client.HistoricalBars] and
 	// [Client.SubscribeHistoricalBars]: contract, time range, bar size, and
@@ -164,7 +171,8 @@ type (
 	OpenOrder = session.OpenOrder
 
 	// OpenOrderUpdate wraps an [OpenOrder] delivered through a streaming open
-	// orders subscription.
+	// orders subscription. Status changes are reflected through
+	// [OpenOrder.Status].
 	OpenOrderUpdate = session.OpenOrderUpdate
 
 	// ExecutionsRequest holds filters for [Client.Executions] and
@@ -194,10 +202,6 @@ type (
 
 	// NewsProvider identifies a news source returned by [Client.NewsProviders].
 	NewsProvider = session.NewsProvider
-
-	// MatchingSymbolsRequest holds parameters for [Client.MatchingSymbols]:
-	// a symbol search pattern.
-	MatchingSymbolsRequest = session.MatchingSymbolsRequest
 
 	// MatchingSymbol is a symbol search result returned by [Client.MatchingSymbols],
 	// containing the contract ID, symbol, security type, and available derivative types.
@@ -420,9 +424,10 @@ type (
 	OrderStatusUpdate = session.OrderStatusUpdate
 
 	// OrderHandle tracks a placed order's lifecycle. Events arrive via Events();
-	// lifecycle state changes (Gap, Resumed) arrive via State(). Close detaches
-	// the handle without cancelling the order. Cancel sends a cancel request.
-	// The handle auto-closes when the order reaches a terminal state.
+	// lifecycle state changes (Gap, Resumed) arrive via the bounded
+	// observational State() channel. Close detaches the handle without
+	// cancelling the order. Cancel sends a cancel request. The handle
+	// auto-closes when the order reaches a terminal state.
 	OrderHandle = session.OrderHandle
 )
 
@@ -533,6 +538,36 @@ const (
 	TIFOPG = session.TIFOPG // Market on open.
 	TIFFOK = session.TIFFOK // Fill or kill.
 	TIFDTC = session.TIFDTC // Day till cancelled.
+
+	// Security types for [Contract.SecType]. Values mirror the IBKR TWS API
+	// Contract.secType vocabulary.
+	SecTypeStock        = session.SecTypeStock        // Stock or ETF.
+	SecTypeOption       = session.SecTypeOption       // Option.
+	SecTypeFuture       = session.SecTypeFuture       // Future.
+	SecTypeContFuture   = session.SecTypeContFuture   // Continuous future.
+	SecTypeFutureOption = session.SecTypeFutureOption // Option on a future.
+	SecTypeIndex        = session.SecTypeIndex        // Index.
+	SecTypeForex        = session.SecTypeForex        // Forex pair.
+	SecTypeCombo        = session.SecTypeCombo        // Combo (multi-leg).
+	SecTypeBond         = session.SecTypeBond         // Bond.
+	SecTypeBill         = session.SecTypeBill         // Treasury bill.
+	SecTypeCFD          = session.SecTypeCFD          // Contract for difference.
+	SecTypeWarrant      = session.SecTypeWarrant      // Warrant.
+	SecTypeStructured   = session.SecTypeStructured   // Structured product / Dutch warrant.
+	SecTypeForward      = session.SecTypeForward      // Forward.
+	SecTypeCommodity    = session.SecTypeCommodity    // Commodity.
+	SecTypeFund         = session.SecTypeFund         // Mutual fund.
+	SecTypeFixed        = session.SecTypeFixed        // Fixed income.
+	SecTypeSecLending   = session.SecTypeSecLending   // Securities lending / borrowing.
+	SecTypeNews         = session.SecTypeNews         // News feed.
+	SecTypeBasket       = session.SecTypeBasket       // Basket.
+	SecTypeInterCmdty   = session.SecTypeInterCmdty   // Inter-commodity spread (unsigned).
+	SecTypeInterCmdtyS  = session.SecTypeInterCmdtyS  // Inter-commodity spread (signed).
+	SecTypeCrypto       = session.SecTypeCrypto       // Cryptocurrency.
+
+	// Option rights for [Contract.Right].
+	RightCall = session.RightCall // Call option.
+	RightPut  = session.RightPut  // Put option.
 )
 
 var (
@@ -605,7 +640,8 @@ var (
 	// WithSendRate sets the maximum outbound messages per second. Default: 50.
 	WithSendRate = session.WithSendRate
 
-	// WithEventBuffer sets the session event channel buffer size. Default: 64.
+	// WithEventBuffer sets the session event channel buffer size. Must be >= 1.
+	// Default: 64.
 	WithEventBuffer = session.WithEventBuffer
 
 	// WithSubscriptionBuffer sets the default event buffer size for new
@@ -673,21 +709,23 @@ func (c *Client) Wait() error { return c.engine.Wait() }
 // managed accounts, negotiated server version, and connection sequence number.
 func (c *Client) Session() SessionSnapshot { return c.engine.Session() }
 
-// SessionEvents returns a channel that delivers [SessionEvent] values when the
-// session state changes (Ready, Degraded, Reconnecting, Closed, etc.).
+// SessionEvents returns a bounded observational channel that delivers
+// [SessionEvent] values when the session state changes (Ready, Degraded,
+// Reconnecting, Closed, etc.). If unread, older queued events may be dropped
+// in favor of the latest one.
 func (c *Client) SessionEvents() <-chan SessionEvent { return c.engine.SessionEvents() }
 
 // ContractDetails queries IBKR for full contract metadata matching the given
-// request. Returns all matching contracts. Returns [*APIError] if the server
-// rejects the query.
-func (c *Client) ContractDetails(ctx context.Context, req ContractDetailsRequest) ([]ContractDetails, error) {
-	return c.engine.ContractDetails(ctx, req)
+// contract specification. Returns all matching contracts. Returns [*APIError]
+// if the server rejects the query.
+func (c *Client) ContractDetails(ctx context.Context, contract Contract) ([]ContractDetails, error) {
+	return c.engine.ContractDetails(ctx, contract)
 }
 
 // QualifyContract resolves an ambiguous [Contract] to a single match. Returns
 // [ErrNoMatch] if no contract matches or [ErrAmbiguousContract] if multiple
 // contracts match.
-func (c *Client) QualifyContract(ctx context.Context, contract Contract) (QualifiedContract, error) {
+func (c *Client) QualifyContract(ctx context.Context, contract Contract) (ContractDetails, error) {
 	return c.engine.QualifyContract(ctx, contract)
 }
 
@@ -758,7 +796,7 @@ func (c *Client) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 	return c.engine.OpenOrdersSnapshot(ctx, scope)
 }
 
-// SubscribeOpenOrders starts a streaming subscription for open order updates
+// SubscribeOpenOrders starts a streaming subscription for open-order updates
 // matching the given scope.
 func (c *Client) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
 	return c.engine.SubscribeOpenOrders(ctx, scope, opts...)
@@ -804,8 +842,8 @@ func (c *Client) UserInfo(ctx context.Context) (string, error) {
 
 // MatchingSymbols searches for contracts matching a symbol pattern. Returns
 // up to 16 results.
-func (c *Client) MatchingSymbols(ctx context.Context, req MatchingSymbolsRequest) ([]MatchingSymbol, error) {
-	return c.engine.MatchingSymbols(ctx, req)
+func (c *Client) MatchingSymbols(ctx context.Context, pattern string) ([]MatchingSymbol, error) {
+	return c.engine.MatchingSymbols(ctx, pattern)
 }
 
 // HeadTimestamp queries the earliest available data point for a contract.

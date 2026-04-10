@@ -12,7 +12,7 @@ import (
 
 var aaplContract = ibkr.Contract{
 	Symbol:   "AAPL",
-	SecType:  "STK",
+	SecType:  ibkr.SecTypeStock,
 	Exchange: "SMART",
 	Currency: "USD",
 }
@@ -39,9 +39,7 @@ func TestLiveContractDetailsAAPL(t *testing.T) {
 	ctx, cancelReq := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelReq()
 
-	details, err := client.ContractDetails(ctx, ibkr.ContractDetailsRequest{
-		Contract: aaplContract,
-	})
+	details, err := client.ContractDetails(ctx, aaplContract)
 	if err != nil {
 		t.Fatalf("ContractDetails() error = %v", err)
 	}
@@ -297,16 +295,16 @@ func TestLiveQualifyContractAAPL(t *testing.T) {
 	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelReq()
 
-	qualified, err := client.QualifyContract(ctx, aaplContract)
+	details, err := client.QualifyContract(ctx, aaplContract)
 	if err != nil {
 		t.Fatalf("QualifyContract() error = %v", err)
 	}
-	if qualified.ContractDetails.MinTick.IsZero() {
+	if details.MinTick.IsZero() {
 		t.Error("QualifyContract() returned zero MinTick")
 	}
 	t.Logf("QualifyContract: conID=%d, minTick=%s",
-		qualified.ContractDetails.Contract.ConID,
-		qualified.ContractDetails.MinTick.String())
+		details.ConID,
+		details.MinTick.String())
 }
 
 func TestLiveFundamentalData(t *testing.T) {
@@ -630,7 +628,7 @@ func TestLiveMatchingSymbols(t *testing.T) {
 	ctx, cancelReq := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancelReq()
 
-	matches, err := client.MatchingSymbols(ctx, ibkr.MatchingSymbolsRequest{Pattern: "AAPL"})
+	matches, err := client.MatchingSymbols(ctx, "AAPL")
 	if err != nil {
 		t.Fatalf("MatchingSymbols() error = %v", err)
 	}
@@ -701,12 +699,12 @@ func TestLiveCalcImpliedVolatility(t *testing.T) {
 	result, err := client.CalcImpliedVolatility(ctx, ibkr.CalcImpliedVolatilityRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "OPT",
+			SecType:  ibkr.SecTypeOption,
 			Exchange: "SMART",
 			Currency: "USD",
 			Expiry:   time.Now().AddDate(0, 1, 0).Format("20060102"),
 			Strike:   "200",
-			Right:    "C",
+			Right:    ibkr.RightCall,
 		},
 		OptionPrice: ibkr.MustParseDecimal("10"),
 		UnderPrice:  ibkr.MustParseDecimal("200"),
@@ -732,12 +730,12 @@ func TestLiveCalcOptionPrice(t *testing.T) {
 	result, err := client.CalcOptionPrice(ctx, ibkr.CalcOptionPriceRequest{
 		Contract: ibkr.Contract{
 			Symbol:   "AAPL",
-			SecType:  "OPT",
+			SecType:  ibkr.SecTypeOption,
 			Exchange: "SMART",
 			Currency: "USD",
 			Expiry:   time.Now().AddDate(0, 1, 0).Format("20060102"),
 			Strike:   "200",
-			Right:    "C",
+			Right:    ibkr.RightCall,
 		},
 		Volatility: ibkr.MustParseDecimal("0.3"),
 		UnderPrice: ibkr.MustParseDecimal("200"),
