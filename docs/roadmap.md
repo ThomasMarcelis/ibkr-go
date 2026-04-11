@@ -36,7 +36,8 @@ reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag.
 ### Historical data extensions
 
 reqHeadTimestamp (msg 87/90), reqHistogramData (msg 88/89),
-reqHistoricalTicks (msg 96).
+reqHistoricalTicks (msg 96), and historicalSchedule delivery (msg 106) through
+`History().Schedule`.
 
 ### Option calculations
 
@@ -54,13 +55,13 @@ reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23).
 
 ### Order and execution observation
 
-Open orders snapshot and streaming (all three scopes), executions snapshot
-and streaming, commission reports.
+Open orders snapshot and streaming (all three scopes), executions finite query,
+and commission reports.
 
 ### Order management
 
-PlaceOrder (msg 3), CancelOrder (msg 4), GlobalCancel (msg 58). OrderHandle
-tracks lifecycle with Events(), State(), Done(), Wait(), Close(), Cancel(),
+PlaceOrder (msg 3), CancelOrder (msg 4), reqGlobalCancel (msg 58). OrderHandle
+tracks lifecycle with Events(), Lifecycle(), Done(), Wait(), Close(), Cancel(),
 and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder
 messages are dual-dispatched to both per-order handles and the singleton
 open-orders observer; OrderStatus remains part of the per-order handle
@@ -69,8 +70,9 @@ terminal status (Filled, Cancelled, Inactive).
 
 ### Market depth (Level 2)
 
-SubscribeMarketDepth (msg 10/11, inbound 12/13) — full order book depth as a
-keyed subscription. Requires a paid L2 market data subscription.
+reqMktDepth (msg 10), cancelMktDepth (msg 11), inbound MarketDepth (12) /
+MarketDepthL2 (13) — full order book depth as a keyed subscription. Requires a
+paid L2 market data subscription.
 
 ### Fundamental data
 
@@ -83,18 +85,21 @@ ExerciseOptions (msg 21) — fire-and-forget option exercise request.
 
 ### FA configuration
 
-RequestFA, ReplaceFA (msg 18/19, inbound 16), SoftDollarTiers (msg 79,
-inbound 77). FA-only account configuration.
+RequestFA (msg 18), ReplaceFA (msg 19), inbound ReceiveFA (16),
+reqSoftDollarTiers (msg 79), inbound SoftDollarTiers (77). FA-only account
+configuration.
 
 ### WSH calendar
 
-WSHMetaData, WSHEventData (msg 100-103, inbound 105/106). Keyed one-shots
-returning JSON. Requires WSH subscription.
+reqWSHMetaData (msg 100), cancelWSHMetaData (msg 101), reqWSHEventData (msg
+102), cancelWSHEventData (msg 103), inbound WSHMetaData (104) / WSHEventData
+(105). Keyed one-shots returning JSON. Requires WSH subscription.
 
 ### Display groups
 
-QueryDisplayGroups (msg 67, inbound 67), SubscribeDisplayGroup (msg 68/70,
-inbound 68), UpdateDisplayGroup (msg 69). TWS window integration.
+queryDisplayGroups (msg 67, inbound 67), subscribeToGroupEvents (msg 68,
+inbound 68), updateDisplayGroup (msg 69), unsubscribeFromGroupEvents (msg 70).
+TWS window integration.
 
 ### Cross-cutting
 
@@ -153,10 +158,11 @@ See [`docs/stories/v1.3-full-order-wire-surface.md`](stories/v1.3-full-order-wir
 
 Root package is `ibkr`. Primary shapes are typed one-shot request methods and
 typed subscriptions, with explicit session info and explicit subscription
-lifecycle. Subscriptions expose `Events() <-chan T`, `State() <-chan
-SubscriptionStateEvent`, `Done() <-chan struct{}`, `Wait() error`, and
-`Close() error`. OrderHandle follows the same shape but adds `Cancel()`,
-`Modify()`, and `OrderID()`, and its `Close()` detaches without cancelling.
+lifecycle. Subscriptions expose `Events() <-chan T`, `Lifecycle() <-chan
+SubscriptionStateEvent`, `AwaitSnapshot(context.Context) error`,
+`Done() <-chan struct{}`, `Wait() error`, and `Close() error`. OrderHandle
+follows the same shape but adds `Cancel()`, `Modify()`, and `OrderID()`, and
+its `Close()` detaches without cancelling.
 
 ## Not planned
 

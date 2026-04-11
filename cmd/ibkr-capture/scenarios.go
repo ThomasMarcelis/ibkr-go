@@ -70,6 +70,14 @@ func nextReqID() int {
 	return scenarioReqIDCounter
 }
 
+func captureHistoricalTickTime(t time.Time) string {
+	return t.UTC().Format("20060102 15:04:05") + " UTC"
+}
+
+func captureHistoricalNewsTime(t time.Time) string {
+	return t.UTC().Format("2006-01-02 15:04:05") + " UTC"
+}
+
 var scenarios = map[string]scenario{
 	// --- Bootstrap-only scenarios ---
 
@@ -86,6 +94,26 @@ var scenarios = map[string]scenario{
 		description: "same as bootstrap but client_id=0 (required for REQ_ALL_OPEN_ORDERS scope)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"current_time": {
+		name:        "current_time",
+		description: "REQ_CURRENT_TIME, drain until CURRENT_TIME (msg_id=49)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqCurrentTime(conn); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(49))
+		},
+	},
+	"req_ids": {
+		name:        "req_ids",
+		description: "REQ_IDS numIds=1, drain until NEXT_VALID_ID (msg_id=9)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqIds(conn, 1); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(9))
 		},
 	},
 
@@ -296,6 +324,105 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 10*time.Second, logFrame, stop)
 		},
 	},
+	"historical_schedule_aapl": {
+		name:        "historical_schedule_aapl",
+		description: "REQ_HISTORICAL_DATA AAPL STK 1 M / 1 day / SCHEDULE",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "1 M", "1 day", "SCHEDULE", true); err != nil {
+				return err
+			}
+			// Stop on either an api_error or the historical_schedule callback
+			// (msg_id 106, InHistoricalSchedule in internal/codec/msgid.go)
+			// for our reqID. The 15 s deadline is a safety net only.
+			stop := func(msgID int, fields []string) bool {
+				if len(fields) < 2 || fields[1] != strconv.Itoa(reqID) {
+					return false
+				}
+				return msgID == 4 || msgID == 106
+			}
+			return readFrames(conn, 15*time.Second, logFrame, stop)
+		},
+	},
+
+	// --- Market data type control (MarketData().SetType) ---
+
+	"set_type_live": {
+		name:        "set_type_live",
+		description: "REQ_MARKET_DATA_TYPE=1 (live), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 1); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_frozen": {
+		name:        "set_type_frozen",
+		description: "REQ_MARKET_DATA_TYPE=2 (frozen), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 2); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_delayed": {
+		name:        "set_type_delayed",
+		description: "REQ_MARKET_DATA_TYPE=3 (delayed), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 3); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_delayed_frozen": {
+		name:        "set_type_delayed_frozen",
+		description: "REQ_MARKET_DATA_TYPE=4 (delayed-frozen), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 4); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_invalid": {
+		name:        "set_type_invalid",
+		description: "REQ_MARKET_DATA_TYPE=99 (invalid), drain for real IBKR API error",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 99); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(4))
+		},
+	},
+	"set_type_switch_while_streaming": {
+		name:        "set_type_switch_while_streaming",
+		description: "Start delayed quote stream, switch SetType to live mid-stream, drain, cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 3); err != nil {
+				return err
+			}
+			reqID := nextReqID()
+			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", false); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendReqMarketDataType(conn, 1); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelMktData(conn, reqID); err != nil {
+				return err
+			}
+			return readFrames(conn, 2*time.Second, logFrame, nil)
+		},
+	},
 
 	// --- Market data quotes ---
 
@@ -475,24 +602,24 @@ var scenarios = map[string]scenario{
 	},
 	"matching_symbols_aapl": {
 		name:        "matching_symbols_aapl",
-		description: "REQ_MATCHING_SYMBOLS pattern=AAPL, read SYMBOL_SAMPLES (msg 82)",
+		description: "REQ_MATCHING_SYMBOLS pattern=AAPL, read SYMBOL_SAMPLES (msg 79)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
 			if err := sendReqMatchingSymbols(conn, reqID, "AAPL"); err != nil {
 				return err
 			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(82, strconv.Itoa(reqID), 0))
+			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(79, strconv.Itoa(reqID), 0))
 		},
 	},
 	"matching_symbols_partial": {
 		name:        "matching_symbols_partial",
-		description: "REQ_MATCHING_SYMBOLS pattern=AA (partial), read SYMBOL_SAMPLES (msg 82)",
+		description: "REQ_MATCHING_SYMBOLS pattern=AA (partial), read SYMBOL_SAMPLES (msg 79)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
 			if err := sendReqMatchingSymbols(conn, reqID, "AA"); err != nil {
 				return err
 			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(82, strconv.Itoa(reqID), 0))
+			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(79, strconv.Itoa(reqID), 0))
 		},
 	},
 	"head_timestamp_aapl": {
@@ -539,7 +666,7 @@ var scenarios = map[string]scenario{
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
 			// Request last 100 trade ticks ending now.
-			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", time.Now().UTC().Format("20060102-15:04:05"), 100, "TRADES", true, false); err != nil {
+			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", captureHistoricalTickTime(time.Now()), 100, "TRADES", true, false); err != nil {
 				return err
 			}
 			// historicalTicksLast msg_id=98
@@ -554,7 +681,7 @@ var scenarios = map[string]scenario{
 		description: "REQ_HISTORICAL_TICKS AAPL/BID_ASK, read response (msg 97)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
-			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", time.Now().UTC().Format("20060102-15:04:05"), 100, "BID_ASK", true, false); err != nil {
+			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", captureHistoricalTickTime(time.Now()), 100, "BID_ASK", true, false); err != nil {
 				return err
 			}
 			stop := func(msgID int, fields []string) bool {
@@ -568,7 +695,7 @@ var scenarios = map[string]scenario{
 		description: "REQ_HISTORICAL_TICKS AAPL/MIDPOINT, read response (msg 96)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
-			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", time.Now().UTC().Format("20060102-15:04:05"), 100, "MIDPOINT", true, false); err != nil {
+			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", captureHistoricalTickTime(time.Now()), 100, "MIDPOINT", true, false); err != nil {
 				return err
 			}
 			stop := func(msgID int, fields []string) bool {
@@ -579,17 +706,56 @@ var scenarios = map[string]scenario{
 	},
 	"historical_news_aapl": {
 		name:        "historical_news_aapl",
-		description: "REQ_HISTORICAL_NEWS AAPL conId=265598, read responses (msg 87+80)",
+		description: "REQ_HISTORICAL_NEWS AAPL conId=265598, read responses (msg 86+87)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
 			if err := sendReqHistoricalNews(conn, reqID, 265598, "BRFG:BRFUPDN:DJNL", "", "", 10); err != nil {
 				return err
 			}
-			// HISTORICAL_NEWS_END msg_id=80
+			// HISTORICAL_NEWS_END msg_id=87
 			stop := func(msgID int, fields []string) bool {
-				return (msgID == 80 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
+				return (msgID == 87 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
 			}
 			return readFrames(conn, 15*time.Second, logFrame, stop)
+		},
+	},
+	"historical_ticks_aapl_timezone_window": {
+		name:        "historical_ticks_aapl_timezone_window",
+		description: "REQ_HISTORICAL_TICKS AAPL with explicit UTC start/end timezone windows for TRADES, BID_ASK, MIDPOINT",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			end := time.Now()
+			start := end.Add(-30 * time.Minute)
+			for _, what := range []string{"TRADES", "BID_ASK", "MIDPOINT"} {
+				reqID := nextReqID()
+				if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, captureHistoricalTickTime(start), captureHistoricalTickTime(end), 50, what, true, false); err != nil {
+					return err
+				}
+				reqIDStr := strconv.Itoa(reqID)
+				stop := func(msgID int, fields []string) bool {
+					return (msgID == 96 || msgID == 97 || msgID == 98 || msgID == 4) && len(fields) >= 2 && fields[1] == reqIDStr
+				}
+				if err := readFrames(conn, 20*time.Second, logFrame, stop); err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	},
+	"historical_news_aapl_timezone_window": {
+		name:        "historical_news_aapl_timezone_window",
+		description: "REQ_HISTORICAL_NEWS AAPL with explicit UTC start/end timezone window",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			end := time.Now()
+			start := end.AddDate(0, 0, -7)
+			if err := sendReqHistoricalNews(conn, reqID, 265598, "BRFG+BRFUPDN+DJNL", captureHistoricalNewsTime(start), captureHistoricalNewsTime(end), 20); err != nil {
+				return err
+			}
+			reqIDStr := strconv.Itoa(reqID)
+			stop := func(msgID int, fields []string) bool {
+				return (msgID == 87 || msgID == 4) && len(fields) >= 2 && fields[1] == reqIDStr
+			}
+			return readFrames(conn, 20*time.Second, logFrame, stop)
 		},
 	},
 
@@ -623,6 +789,33 @@ var scenarios = map[string]scenario{
 				return err
 			}
 			return readFrames(conn, 1*time.Second, logFrame, nil)
+		},
+	},
+	"quote_stream_multi_asset": {
+		name:        "quote_stream_multi_asset",
+		description: "concurrent delayed REQ_MKT_DATA streams for AAPL stock and EUR.USD cash, then cancel both",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 3); err != nil {
+				return err
+			}
+			reqAAPL := nextReqID()
+			reqEURUSD := nextReqID()
+			if err := sendReqMktData(conn, reqAAPL, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "100,101,104,106,233,236,258", false); err != nil {
+				return err
+			}
+			if err := sendReqMktData(conn, reqEURUSD, sess.ServerVersion, contractSpec{Symbol: "EUR", SecType: "CASH", Exchange: "IDEALPRO", Currency: "USD"}, "", false); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 20*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelMktData(conn, reqAAPL); err != nil {
+				return err
+			}
+			if err := sendCancelMktData(conn, reqEURUSD); err != nil {
+				return err
+			}
+			return readFrames(conn, 2*time.Second, logFrame, nil)
 		},
 	},
 
@@ -956,6 +1149,29 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 3*time.Second, logFrame, nil)
 		},
 	},
+	"place_order_direct_cancel": {
+		name:        "place_order_direct_cancel",
+		description: "PLACE_ORDER LMT buy 1 AAPL at $50, then cancel via Orders().Cancel(orderID)",
+		// Wire-identical to place_order_cancel. The scenario exists so the
+		// replay transcript and integration test can exercise the direct-by-ID
+		// public facade path, which is conceptually different from the
+		// OrderHandle.Cancel flow even though both emit OutCancelOrder=4.
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "50.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 2*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
 	"place_order_bracket_aapl": {
 		name:        "place_order_bracket_aapl",
 		description: "bracket order: MKT parent + LMT take-profit + STP stop-loss for AAPL",
@@ -1092,6 +1308,113 @@ var scenarios = map[string]scenario{
 				return err
 			}
 			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_oca_pair_aapl": {
+		name:        "place_order_oca_pair_aapl",
+		description: "place two far-from-market AAPL LMT orders in one OCA group, then GLOBAL_CANCEL",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			acct := sess.ManagedAccounts
+			aaplSTK := contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}
+			oca := "ibkr-go-live-oca-" + strconv.FormatInt(time.Now().Unix(), 10)
+			for i, side := range []string{"BUY", "SELL"} {
+				orderID := sess.NextValidID
+				sess.NextValidID++
+				price := "50.00"
+				if side == "SELL" {
+					price = "500.00"
+				}
+				if err := sendPlaceOrder(conn, orderID, aaplSTK, orderSpec{Action: side, TotalQuantity: "1", OrderType: "LMT", LmtPrice: price, TIF: "DAY", Account: acct, OcaGroup: oca, OrderRef: fmt.Sprintf("ibkr-go-oca-%d", i), Transmit: true}); err != nil {
+					return err
+				}
+			}
+			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendGlobalCancel(conn); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, nil)
+		},
+	},
+	"trading_split_round_trip_aapl": {
+		name:        "trading_split_round_trip_aapl",
+		description: "account baseline, split AAPL market buys, executions/completed orders, split sells, final account/position/PnL probes",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			acct := sess.ManagedAccounts
+			aaplSTK := contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}
+			accountReqID := nextReqID()
+			if err := sendReqAccountSummary(conn, accountReqID, "All", "NetLiquidation,TotalCashValue,BuyingPower,ExcessLiquidity"); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelAccountSummary(conn, accountReqID); err != nil {
+				return err
+			}
+			if err := sendReqPositions(conn); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(62)); err != nil {
+				return err
+			}
+
+			for i := 0; i < 2; i++ {
+				orderID := sess.NextValidID
+				sess.NextValidID++
+				if err := sendPlaceOrder(conn, orderID, aaplSTK, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "MKT", TIF: "DAY", Account: acct, OrderRef: fmt.Sprintf("ibkr-go-split-buy-%d", i), Transmit: true}); err != nil {
+					return err
+				}
+			}
+			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+
+			execReqID := nextReqID()
+			if err := sendReqExecutions(conn, execReqID); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(55, strconv.Itoa(execReqID), 1)); err != nil {
+				return err
+			}
+			if err := sendReqCompletedOrders(conn, true); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(102)); err != nil {
+				return err
+			}
+
+			for i := 0; i < 2; i++ {
+				orderID := sess.NextValidID
+				sess.NextValidID++
+				if err := sendPlaceOrder(conn, orderID, aaplSTK, orderSpec{Action: "SELL", TotalQuantity: "1", OrderType: "MKT", TIF: "DAY", Account: acct, OrderRef: fmt.Sprintf("ibkr-go-split-sell-%d", i), Transmit: true}); err != nil {
+					return err
+				}
+			}
+			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendReqPositions(conn); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(62)); err != nil {
+				return err
+			}
+			pnlReqID := nextReqID()
+			if err := sendReqPnL(conn, pnlReqID, acct, ""); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelPnL(conn, pnlReqID); err != nil {
+				return err
+			}
+			if err := sendGlobalCancel(conn); err != nil {
 				return err
 			}
 			return readFrames(conn, 3*time.Second, logFrame, nil)

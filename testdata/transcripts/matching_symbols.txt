@@ -2,5 +2,5 @@ handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
 server managed_accounts {"accounts":["DU12345"]}
 server next_valid_id {"order_id":1001}
 client req_matching_symbols {"req_id":"$req_id","pattern":"AAPL"}
-server matching_symbols {"req_id":"$req_id","symbols":[{"con_id":265598,"symbol":"AAPL","sec_type":"STK","primary_exchange":"NASDAQ","currency":"USD","derivative_sec_types":["OPT","WAR"]}]}
+server matching_symbols {"req_id":"$req_id","symbols":[{"con_id":265598,"symbol":"AAPL","sec_type":"STK","primary_exchange":"NASDAQ","currency":"USD","derivative_sec_types":["OPT","WAR"],"description":"APPLE INC","issuer_id":""}]}
 disconnect

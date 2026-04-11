@@ -25,6 +25,8 @@ func main() {
 	maxVer := flag.Int("max-version", 200, "handshake maximum version")
 	scenario := flag.String("scenario", "bootstrap", "scenario name (use -list to see all)")
 	listScenarios := flag.Bool("list", false, "list available scenarios and exit")
+	listJSON := flag.Bool("list-json", false, "list available scenarios as JSON and exit")
+	listBatch := flag.String("list-batch", "", "list scenario|client_id entries for a batch and exit")
 	dialTimeout := flag.Duration("dial-timeout", 5*time.Second, "tcp dial timeout")
 	flag.Parse()
 
@@ -39,6 +41,18 @@ func main() {
 		sort.Strings(names)
 		for _, n := range names {
 			fmt.Printf("  %-40s  %s\n", n, scenarios[n].description)
+		}
+		return
+	}
+	if *listJSON {
+		if err := writeCatalogJSON(os.Stdout); err != nil {
+			log.Fatalf("list-json: %v", err)
+		}
+		return
+	}
+	if *listBatch != "" {
+		if err := writeBatchList(os.Stdout, *listBatch); err != nil {
+			log.Fatalf("list-batch: %v", err)
 		}
 		return
 	}

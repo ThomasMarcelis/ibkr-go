@@ -1,0 +1,18 @@
+# LMT BUY 1 AAPL, cancelled via Orders().Cancel(ctx, orderID) direct-by-ID path.
+# Same wire bytes as cancel_order.txt (both emit OutCancelOrder=4), but the
+# integration test exercises the direct-by-ID public facade instead of
+# OrderHandle.Cancel, which proves both code paths reach the same wire
+# message. Grounded from captures/20260407T195717Z-place_order_cancel.
+handshake {"server_version":200,"connection_time":"20260406 12:00:00 US/Eastern"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":""}
+client place_order {"order_id":"1","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"150","tif":"DAY","account":"DU9000001"}
+sleep 100ms
+server open_order {"order_id":1,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"1","filled":"0","remaining":"1","lmt_price":"150.00","aux_price":"0","tif":"DAY","perm_id":"12345","client_id":"1","origin":"0"}
+server order_status {"order_id":1,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+client cancel_order {"order_id":"1"}
+sleep 500ms
+server order_status {"order_id":1,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+sleep 100ms
+disconnect

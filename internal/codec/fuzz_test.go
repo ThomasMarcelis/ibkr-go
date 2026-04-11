@@ -76,12 +76,14 @@ var allInboundMsgIDs = []int{
 	InSecDefOptParams,       // 75
 	InSecDefOptParamsEnd,    // 76
 	InFamilyCodes,           // 78
+	InSymbolSamples,         // 79
 	InMktDepthExchanges,     // 80
 	InTickReqParams,         // 81
-	InSymbolSamples,         // 82
+	InSmartComponents,       // 82
 	InNewsArticle,           // 83
 	InNewsProviders,         // 85
-	InHistoricalNews,        // 87
+	InHistoricalNews,        // 86
+	InHistoricalNewsEnd,     // 87
 	InHeadTimestamp,         // 88
 	InHistogramData,         // 89
 	InMarketRule,            // 92
@@ -99,8 +101,9 @@ var allInboundMsgIDs = []int{
 	InSoftDollarTiers,       // 77
 	InDisplayGroupList,      // 67
 	InDisplayGroupUpdated,   // 68
-	InWSHMetaData,           // 105
-	InWSHEventData,          // 106
+	InWSHMetaData,           // 104
+	InWSHEventData,          // 105
+	InHistoricalSchedule,    // 106
 }
 
 // FuzzDecodeBatch proves DecodeBatch never panics on arbitrary byte payloads.
@@ -477,12 +480,14 @@ func TestDecodeShortFields(t *testing.T) {
 		{"SecDefOptParams", InSecDefOptParams, 10},             // reqID, exchange, underConID, tradingClass, multiplier, marketRuleId, expirationCount, (expirations...), strikeCount, (strikes...)
 		{"SecDefOptParamsEnd", InSecDefOptParamsEnd, 1},        // reqID
 		{"FamilyCodes", InFamilyCodes, 5},                      // count, then pairs
-		{"MktDepthExchanges", InMktDepthExchanges, 10},         // count + entries(5 each) or HistoricalNewsEnd(2)
+		{"MktDepthExchanges", InMktDepthExchanges, 10},         // count + entries(5 each)
 		{"TickReqParams", InTickReqParams, 4},                  // reqID, minTick, bboExchange, snapshotPermissions
 		{"SymbolSamples", InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)
+		{"SmartComponents", InSmartComponents, 5},              // reqID, count, entries(bitNumber, exchangeName, exchangeLetter)
 		{"NewsArticle", InNewsArticle, 3},                      // reqID, articleType, articleText
 		{"NewsProviders", InNewsProviders, 5},                  // count, then pairs
 		{"HistoricalNews", InHistoricalNews, 5},                // reqID, time, providerCode, articleId, headline
+		{"HistoricalNewsEnd", InHistoricalNewsEnd, 2},          // reqID, hasMore
 		{"HeadTimestamp", InHeadTimestamp, 2},                  // reqID, headTimestamp
 		{"HistogramData", InHistogramData, 6},                  // reqID, count, then pairs
 		{"MarketRule", InMarketRule, 6},                        // marketRuleId, count, then pairs
@@ -495,6 +500,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"CompletedOrder", InCompletedOrder, 95},               // 11 contract + action + qty + orderType + 4 skip + 71 skip + status + 3 skip + filled + remaining
 		{"CompletedOrderEnd", InCompletedOrderEnd, 0},          // no fields after msg_id
 		{"UserInfo", InUserInfo, 2},                            // reqID, whiteBrandingId
+		{"HistoricalSchedule", InHistoricalSchedule, 5},        // reqID, start, end, timezone, session count
 		{"HistoricalDataUpdate", InHistoricalDataUpdate, 10},   // reqID, barCount, time, O, H, L, C, vol, wap, count
 	}
 
@@ -593,9 +599,9 @@ func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 		{"SecDefOptParams/negative_expiration_count", []string{"75", "1", "SMART", "0", "OPT", "100", "26", "-1"}},
 		{"SecDefOptParams/zero_counts", []string{"75", "1", "SMART", "0", "OPT", "100", "26", "0", "0"}},
 
-		// SymbolSamples: [82, reqID, count, ...] — count * 6 != remaining triggers SymbolSamples path
-		{"SymbolSamples/negative_count", []string{"82", "1", "-1"}},
-		{"SymbolSamples/zero_count", []string{"82", "1", "0"}},
+		// SymbolSamples: [79, reqID, count, ...]
+		{"SymbolSamples/negative_count", []string{"79", "1", "-1"}},
+		{"SymbolSamples/zero_count", []string{"79", "1", "0"}},
 	}
 
 	for _, tc := range countMsgs {
@@ -1074,9 +1080,7 @@ func TestDecodeTickByTickVariants(t *testing.T) {
 	}
 }
 
-// TestDecodeSharedMsgID80 exercises the disambiguation logic for msg_id 80,
-// which is shared between MktDepthExchanges and HistoricalNewsEnd.
-func TestDecodeSharedMsgID80(t *testing.T) {
+func TestDecodeHistoricalNewsEndAndMktDepthExchanges(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -1084,17 +1088,12 @@ func TestDecodeSharedMsgID80(t *testing.T) {
 		fields   []string
 		wantName string
 	}{
-		// Exactly 2 fields after msg_id -> HistoricalNewsEnd
-		{"HistoricalNewsEnd", []string{"80", "1", "1"}, "historical_news_end"},
-		{"HistoricalNewsEnd/false", []string{"80", "42", "0"}, "historical_news_end"},
+		{"HistoricalNewsEnd", []string{"87", "1", "1"}, "historical_news_end"},
+		{"HistoricalNewsEnd/false", []string{"87", "42", "0"}, "historical_news_end"},
 
-		// More than 2 fields after msg_id -> MktDepthExchanges with count=0
 		{"MktDepthExchanges/empty", []string{"80", "0", "0", "0", "0"}, "mkt_depth_exchanges"},
 
-		// 1 field after msg_id
 		{"OneField", []string{"80", "1"}, ""},
-
-		// 0 fields after msg_id
 		{"NoFields", []string{"80"}, ""},
 	}
 
@@ -1121,9 +1120,7 @@ func TestDecodeSharedMsgID80(t *testing.T) {
 	}
 }
 
-// TestDecodeSharedMsgID82 exercises the disambiguation logic for msg_id 82,
-// which is shared between SymbolSamples and SmartComponents.
-func TestDecodeSharedMsgID82(t *testing.T) {
+func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -1131,13 +1128,11 @@ func TestDecodeSharedMsgID82(t *testing.T) {
 		fields   []string
 		wantName string
 	}{
-		// SmartComponents: remaining == count*3
 		{"SmartComponents/1entry", []string{"82", "1", "1", "0", "ARCA", "P"}, "smart_components"},
 		{"SmartComponents/empty", []string{"82", "1", "0"}, "smart_components"},
 
-		// SymbolSamples: remaining != count*3
-		{"SymbolSamples/1entry", []string{"82", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0"}, "matching_symbols"},
-		{"SymbolSamples/empty", []string{"82", "1", "0", "extra"}, "matching_symbols"},
+		{"SymbolSamples/1entry", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0"}, "matching_symbols"},
+		{"SymbolSamples/empty", []string{"79", "1", "0"}, "matching_symbols"},
 
 		// Degenerate
 		{"NoCount", []string{"82", "1"}, ""},

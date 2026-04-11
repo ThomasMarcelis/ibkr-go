@@ -1,0 +1,9 @@
+# Grounded current time from live paper gateway (server_version 200).
+# Wire evidence: client sends [49, 1], server replies [49, 1, <epoch_seconds>].
+handshake {"server_version":200,"connection_time":"20260411 20:12:09 Central European Standard Time"}
+server managed_accounts {"accounts":["DUP770846"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775931128749"}
+client req_current_time {}
+server current_time {"time":"1775931128"}
+disconnect

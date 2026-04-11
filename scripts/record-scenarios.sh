@@ -1,50 +1,43 @@
 #!/bin/bash
 # Record capture scenarios through the ibkr-recorder proxy.
 # Usage: ./scripts/record-scenarios.sh [scenario...]
-# If no scenarios given, records all new v2 scenarios.
+# If no scenarios are given, records the catalog batch named by
+# IBKR_CAPTURE_BATCH, defaulting to new-v2. Explicit scenarios may be passed as
+# "name" or "name|client_id".
 
 UPSTREAM="${IBKR_UPSTREAM:-127.0.0.1:4002}"
 LISTEN="${IBKR_LISTEN:-127.0.0.1:4101}"
-LISTEN_HOST="${LISTEN%%:*}"
-LISTEN_PORT="${LISTEN##*:}"
 OUTDIR="${IBKR_CAPTURES:-captures}"
 RECORDER="${IBKR_RECORDER:-/tmp/ibkr-recorder}"
 CAPTURE="${IBKR_CAPTURE:-/tmp/ibkr-capture}"
+BATCH="${IBKR_CAPTURE_BATCH:-new-v2}"
 TMPLOG=$(mktemp)
 trap "rm -f $TMPLOG" EXIT
 
-ALL_SCENARIOS=(
-    soft_dollar_tiers
-    display_groups
-    display_group_subscribe
-    wsh_meta_data
-    wsh_event_data_aapl
-    request_fa
-    fundamental_data_aapl
-    qualify_contract_aapl_exact
-    qualify_contract_ambiguous
-    place_order_lmt_buy_aapl
-    place_order_cancel
-    place_order_modify
-    place_order_mkt_buy_aapl
-    place_order_mkt_sell_aapl
-    place_order_bracket_aapl
-    global_cancel
-    market_depth_aapl
-    market_depth_aapl_smart
-    place_order_option_buy
-)
-
 if [ $# -gt 0 ]; then
-    SCENARIOS=("$@")
+    SCENARIOS=()
+    for scenario in "$@"; do
+        if [[ "$scenario" == *"|"* ]]; then
+            SCENARIOS+=("$scenario")
+        else
+            SCENARIOS+=("$scenario|1")
+        fi
+    done
 else
-    SCENARIOS=("${ALL_SCENARIOS[@]}")
+    mapfile -t SCENARIOS < <("$CAPTURE" -list-batch "$BATCH")
+fi
+
+if [ ${#SCENARIOS[@]} -eq 0 ]; then
+    echo "no scenarios found for batch $BATCH"
+    exit 1
 fi
 
 mkdir -p "$OUTDIR"
 
-for scenario in "${SCENARIOS[@]}"; do
-    printf "recording %-40s " "$scenario"
+for entry in "${SCENARIOS[@]}"; do
+    scenario="${entry%|*}"
+    client_id="${entry#*|}"
+    printf "recording %-40s client_id=%-3s " "$scenario" "$client_id"
 
     # Start recorder in background, suppress all output
     "$RECORDER" \
@@ -52,21 +45,21 @@ for scenario in "${SCENARIOS[@]}"; do
         -listen "$LISTEN" \
         -out "$OUTDIR" \
         -scenario "$scenario" \
-        -client-id 1 \
+        -client-id "$client_id" \
+        -notes "batch=$BATCH client_id=$client_id" \
         >/dev/null 2>&1 &
     rpid=$!
 
-    # Wait for recorder to be listening (up to 3s)
-    for _i in $(seq 1 30); do
-        (echo >/dev/tcp/"${LISTEN_HOST}"/"${LISTEN_PORT}") 2>/dev/null && break
-        sleep 0.1
-    done
+    # Give recorder a moment to bind. Do not probe the TCP port here: the
+    # recorder is intentionally one-leg-per-scenario, so a readiness probe would
+    # consume the capture connection.
+    sleep 0.5
 
     # Run capture, write output to temp file
     "$CAPTURE" \
         -addr "$LISTEN" \
         -scenario "$scenario" \
-        -client-id 1 \
+        -client-id "$client_id" \
         >"$TMPLOG" 2>&1
     rc=$?
 
@@ -80,11 +73,7 @@ for scenario in "${SCENARIOS[@]}"; do
         echo "FAILED (rc=$rc, last: $last)"
     fi
 
-    # Wait for listen port to be released (up to 2s)
-    for _i in $(seq 1 20); do
-        (echo >/dev/tcp/"${LISTEN_HOST}"/"${LISTEN_PORT}") 2>/dev/null || break
-        sleep 0.1
-    done
+    sleep 0.5
 done
 
 echo ""

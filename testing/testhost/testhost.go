@@ -512,6 +512,14 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["optional_capabilities"] = fields[3]
 		}
 		return "start_api", body, nil
+	case 49: // OutReqCurrentTime: [49, 1]
+		return "req_current_time", map[string]any{}, nil
+	case 8: // OutReqIds: [8, 1, numIds]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["num_ids"] = fields[2]
+		}
+		return "req_ids", body, nil
 	case 9: // OutReqContractData: [9, 8, reqId, conId, symbol, secType, ...]
 		body := map[string]any{}
 		if len(fields) >= 3 {
@@ -870,6 +878,13 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		if len(fields) >= 2 {
 			body["req_id"] = fields[1]
 		}
+		if len(fields) >= 7 {
+			body["con_id"] = fields[2]
+			body["provider_codes"] = fields[3]
+			body["start_time"] = fields[4]
+			body["end_time"] = fields[5]
+			body["total_results"] = fields[6]
+		}
 		return "req_historical_news", body, nil
 	case 88: // OutReqHistogramData: [88, reqId, ...]
 		body := map[string]any{}
@@ -887,6 +902,21 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		body := map[string]any{}
 		if len(fields) >= 2 {
 			body["req_id"] = fields[1]
+		}
+		if len(fields) >= 21 {
+			body["contract"] = map[string]any{
+				"con_id":   fields[2],
+				"symbol":   fields[3],
+				"sec_type": fields[4],
+				"exchange": fields[9],
+				"currency": fields[11],
+			}
+			body["start_time"] = fields[15]
+			body["end_time"] = fields[16]
+			body["number_of_ticks"] = fields[17]
+			body["what_to_show"] = fields[18]
+			body["use_rth"] = fields[19] == "1"
+			body["ignore_size"] = fields[20] == "1"
 		}
 		return "req_historical_ticks", body, nil
 	case 12: // OutReqNewsBulletins: [12, 1, allMessages]

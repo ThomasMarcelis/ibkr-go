@@ -1,0 +1,9 @@
+# Grounded reqIds from live paper gateway (server_version 200).
+# Wire evidence: client sends [8, 1, numIds=1], server replies [9, 1, order_id].
+handshake {"server_version":200,"connection_time":"20260411 20:12:16 Central European Standard Time"}
+server managed_accounts {"accounts":["DUP770846"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775931136087"}
+client req_ids {"num_ids":"1"}
+server next_valid_id {"order_id":2}
+disconnect

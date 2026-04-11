@@ -16,7 +16,7 @@ import (
 
 func main() {
 	listenAddr := flag.String("listen", "127.0.0.1:4101", "local listen address")
-	upstreamAddr := flag.String("upstream", "127.0.0.1:4001", "upstream IB API address")
+	upstreamAddr := flag.String("upstream", "127.0.0.1:4002", "upstream IB API address")
 	outRoot := flag.String("out", "captures", "capture output root")
 	scenario := flag.String("scenario", "bootstrap", "scenario name")
 	notes := flag.String("notes", "", "freeform notes")

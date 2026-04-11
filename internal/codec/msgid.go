@@ -74,6 +74,8 @@ const (
 	OutCancelWSHMetaData           = 101
 	OutReqWSHEventData             = 102
 	OutCancelWSHEventData          = 103
+	OutReqIds                      = 8
+	OutReqCurrentTime              = 49
 )
 
 // Inbound message IDs (server → client)
@@ -118,14 +120,16 @@ const (
 	InAccountUpdateMulti    = 73
 	InAccountUpdateMultiEnd = 74
 	InFamilyCodes           = 78
+	InSymbolSamples         = 79
 	InMktDepthExchanges     = 80
 	InTickReqParams         = 81
-	InSymbolSamples         = 82
+	InSmartComponents       = 82
 	InSecDefOptParams       = 75
 	InSecDefOptParamsEnd    = 76
 	InNewsArticle           = 83
 	InNewsProviders         = 85
-	InHistoricalNews        = 87
+	InHistoricalNews        = 86
+	InHistoricalNewsEnd     = 87
 	InHistogramData         = 89
 	InHeadTimestamp         = 88
 	InMarketRule            = 92
@@ -143,6 +147,7 @@ const (
 	InSoftDollarTiers       = 77
 	InDisplayGroupList      = 67
 	InDisplayGroupUpdated   = 68
-	InWSHMetaData           = 105
-	InWSHEventData          = 106
+	InWSHMetaData           = 104
+	InWSHEventData          = 105
+	InHistoricalSchedule    = 106
 )

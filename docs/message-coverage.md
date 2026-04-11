@@ -29,7 +29,7 @@ server version and managed-account bootstrap fields are known.
 | in | 10 | ContractDetails | landed |
 | in | 52 | ContractDetailsEnd | landed |
 | out | 81 | reqMatchingSymbols | landed |
-| in | 82 | SymbolSamples | landed |
+| in | 79 | SymbolSamples | landed |
 | out | 91 | reqMarketRule | landed |
 | in | 92 | MarketRule | landed |
 | out | 78 | reqSecDefOptParams | landed |
@@ -122,6 +122,11 @@ server version and managed-account bootstrap fields are known.
 | in | 96 | HistoricalTicks | landed | |
 | in | 97 | HistoricalTicksBidAsk | landed | tickAttribBidAsk decoded and exposed |
 | in | 98 | HistoricalTicksLast | landed | tickAttribLast decoded and exposed |
+| in | 106 | HistoricalSchedule | landed | `whatToShow=SCHEDULE` response |
+
+Historical tick and historical news request windows are formatted with explicit
+time zone suffixes when callers provide non-zero `time.Time` values, so TWS does
+not reinterpret UTC instants in the login time zone.
 
 ## Option Calculations
 
@@ -186,8 +191,8 @@ See [v1.2 story](stories/v1.2-variable-length-orders.md) and the deferred
 | out | 84 | reqNewsArticle | landed |
 | in | 83 | NewsArticle | landed |
 | out | 86 | reqHistoricalNews | landed |
-| in | 87 | HistoricalNews | landed |
-| in | 80 | HistoricalNewsEnd | landed |
+| in | 86 | HistoricalNews | landed |
+| in | 87 | HistoricalNewsEnd | landed |
 
 ## Scanner
 
@@ -238,10 +243,10 @@ See [v1.2 story](stories/v1.2-variable-length-orders.md) and the deferred
 |-----------|--------|------|--------|
 | out | 100 | reqWSHMetaData | landed |
 | out | 101 | cancelWSHMetaData | landed |
-| in | 105 | WSHMetaData | landed |
+| in | 104 | WSHMetaData | landed |
 | out | 102 | reqWSHEventData | landed |
 | out | 103 | cancelWSHEventData | landed |
-| in | 106 | WSHEventData | landed |
+| in | 105 | WSHEventData | landed |
 
 ## Display Groups
 

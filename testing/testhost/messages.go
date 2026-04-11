@@ -133,6 +133,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 				ConID: asInt(m["con_id"]), Symbol: asString(m["symbol"]),
 				SecType: asString(m["sec_type"]), PrimaryExchange: asString(m["primary_exchange"]),
 				Currency: asString(m["currency"]), DerivativeSecTypes: asStrings(m["derivative_sec_types"]),
+				Description: asString(m["description"]), IssuerID: asString(m["issuer_id"]),
 			}
 		})
 		return codec.MatchingSymbols{ReqID: asInt(resolve(body["req_id"])), Symbols: entries}, nil
@@ -292,6 +293,21 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.WSHMetaDataResponse{ReqID: asInt(resolve(body["req_id"])), DataJSON: asString(resolve(body["data_json"]))}, nil
 	case "wsh_event_data":
 		return codec.WSHEventDataResponse{ReqID: asInt(resolve(body["req_id"])), DataJSON: asString(resolve(body["data_json"]))}, nil
+	case "historical_schedule":
+		sessions := asCodecEntries(resolve(body["sessions"]), func(m map[string]any) codec.HistoricalScheduleSession {
+			return codec.HistoricalScheduleSession{
+				StartDateTime: asString(m["start_date_time"]),
+				EndDateTime:   asString(m["end_date_time"]),
+				RefDate:       asString(m["ref_date"]),
+			}
+		})
+		return codec.HistoricalScheduleResponse{
+			ReqID:         asInt(resolve(body["req_id"])),
+			StartDateTime: asString(resolve(body["start_date_time"])),
+			EndDateTime:   asString(resolve(body["end_date_time"])),
+			TimeZone:      asString(resolve(body["time_zone"])),
+			Sessions:      sessions,
+		}, nil
 	case "display_group_list":
 		return codec.DisplayGroupList{ReqID: asInt(resolve(body["req_id"])), Groups: asString(resolve(body["groups"]))}, nil
 	case "display_group_updated":
