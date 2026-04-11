@@ -10,9 +10,8 @@ Gateway server_version 200.
 
 ## Layers
 
-- `ibkr/`: public typed facade
-- `internal/session/`: session engine, lifecycle, correlation, reconnect, and
-  subscription management
+- module root: public typed facade plus the unexported session engine,
+  lifecycle, correlation, reconnect, and subscription management
 - `internal/transport/`: socket dial, frame read/write loops, pacing
 - `internal/codec/`: typed message encode/decode
 - `internal/wire/`: frame and field framing
@@ -50,7 +49,7 @@ pattern:
 
 OpenOrder messages are dispatched to both the per-order handle (if one exists
 in the orders table) and the singleton open-orders observer (if one is
-registered). `SubscribeOpenOrders` therefore observes open-order snapshots and
+registered). `Orders().SubscribeOpen` therefore observes open-order snapshots and
 updates through `OpenOrder`, including its embedded status fields. OrderStatus,
 execution, and commission messages are routed through `OrderHandle`, not the
 singleton open-orders observer.
@@ -58,23 +57,23 @@ singleton open-orders observer.
 ## Order ID Management
 
 Order IDs are auto-allocated from `NextValidID`, which is received during
-bootstrap and tracked on `SessionSnapshot`. Each `PlaceOrder` call increments
+bootstrap and tracked on `Snapshot`. Each `Orders().Place` call increments
 the counter atomically within the actor goroutine. Callers never need to manage
 order IDs manually.
 
 ## OrderHandle Lifecycle
 
-`PlaceOrder` returns an `OrderHandle` that tracks a single order's lifecycle:
+`Orders().Place` returns an `OrderHandle` that tracks a single order's lifecycle:
 
 - **Events()** delivers `OrderEvent` values (union of OpenOrder, OrderStatus,
   Execution, CommissionReport — exactly one field non-nil per event).
-- **State()** delivers bounded observational `SubscriptionStateEvent` values
+- **Lifecycle()** delivers bounded observational `SubscriptionStateEvent` values
   (Gap, Resumed). If unread, older queued lifecycle events may be dropped in
   favor of the latest one.
 - **Terminal states.** When an OrderStatus arrives with status Filled,
   Cancelled, or Inactive, the handle auto-closes with `nil` error.
 - **Disconnect.** On session disconnect, active order handles receive a `Gap`
-  event via State(). On reconnect, they receive `Resumed`. Handles are not
+  event via Lifecycle(). On reconnect, they receive `Resumed`. Handles are not
   closed on disconnect — orders continue executing on the server.
 - **Close()** detaches the handle from the engine. The order continues
   executing on the server; the caller simply stops receiving events.
@@ -99,7 +98,7 @@ order IDs manually.
 - Managed accounts are bootstrap state on the session snapshot.
 - One-shots, subscriptions, and order handles are separate public contracts.
 - Subscriptions expose business events through `Events()` and lifecycle through
-  `State()`. Lifecycle channels are observational rather than durable history:
+  `Lifecycle()`. Lifecycle channels are observational rather than durable history:
   the newest state is favored when buffers fill. OrderHandle follows the same
   shape with order-specific extensions.
 

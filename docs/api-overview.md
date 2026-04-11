@@ -1,10 +1,9 @@
 # API Overview
 
-Complete reference of the public `ibkr` package surface. Every method
+Complete reference of the public root `ibkr` package surface. Every method
 listed here is verified against the current implementation.
 
-For the public API contract — session state machine, subscription
-lifecycle semantics, error taxonomy, and type guarantees — see
+For lifecycle semantics, error taxonomy, and type guarantees, see
 [`session-contract.md`](session-contract.md).
 
 ## Session
@@ -15,128 +14,95 @@ lifecycle semantics, error taxonomy, and type guarantees — see
 | `Close` | `error` | Shut down the session |
 | `Done` | `<-chan struct{}` | Closed when the session terminates |
 | `Wait` | `error` | Block until session terminates, return final error |
-| `Session` | `SessionSnapshot` | Current session state, managed accounts, server version |
-| `SessionEvents` | `<-chan SessionEvent` | Observable session state changes |
+| `Session` | `Snapshot` | Current session state, managed accounts, server version |
+| `SessionEvents` | `<-chan Event` | Observable session state changes |
+
+## Domain Accessors
+
+| Accessor | Domain |
+|----------|--------|
+| `Accounts()` | account, portfolio, positions, PnL, family codes |
+| `Contracts()` | contract details, qualification, reference data, fundamental XML |
+| `MarketData()` | quotes, real-time bars, tick-by-tick, market depth, market data type |
+| `History()` | historical bars, historical ticks, head timestamp, histogram |
+| `Orders()` | order placement, cancellation, open/completed orders, executions query |
+| `Options()` | option calculations and exercise |
+| `News()` | providers, articles, historical headlines, bulletins |
+| `Scanner()` | scanner parameters XML and scanner subscriptions |
+| `Advisors()` | FA configuration XML and soft-dollar tiers |
+| `WSH()` | Wall Street Horizon JSON metadata and event data |
+| `TWS()` | user info and display groups |
 
 ## Account and Portfolio
 
 | Method | Returns |
 |--------|---------|
-| `AccountSummary` / `SubscribeAccountSummary` | `[]AccountValue` / `*Subscription[AccountSummaryUpdate]` |
-| `PositionsSnapshot` / `SubscribePositions` | `[]Position` / `*Subscription[PositionUpdate]` |
-| `AccountUpdatesSnapshot` / `SubscribeAccountUpdates` | `[]AccountUpdate` / `*Subscription[AccountUpdate]` |
-| `AccountUpdatesMultiSnapshot` / `SubscribeAccountUpdatesMulti` | `[]AccountUpdateMultiValue` / `*Subscription[AccountUpdateMultiValue]` |
-| `PositionsMultiSnapshot` / `SubscribePositionsMulti` | `[]PositionMulti` / `*Subscription[PositionMulti]` |
-| `SubscribePnL` / `SubscribePnLSingle` | `*Subscription[PnLUpdate]` / `*Subscription[PnLSingleUpdate]` |
-| `FamilyCodes` | `[]FamilyCode` |
-| `CompletedOrders` | `[]CompletedOrderResult` |
+| `Accounts().Summary` / `SubscribeSummary` | `[]AccountValue` / `*Subscription[AccountSummaryUpdate]` |
+| `Accounts().Positions` / `SubscribePositions` | `[]Position` / `*Subscription[PositionUpdate]` |
+| `Accounts().Updates` / `SubscribeUpdates` | `[]AccountUpdate` / `*Subscription[AccountUpdate]` |
+| `Accounts().UpdatesMulti` / `SubscribeUpdatesMulti` | `[]AccountUpdateMultiValue` / `*Subscription[AccountUpdateMultiValue]` |
+| `Accounts().PositionsMulti` / `SubscribePositionsMulti` | `[]PositionMulti` / `*Subscription[PositionMulti]` |
+| `Accounts().SubscribePnL` / `SubscribePnLSingle` | `*Subscription[PnLUpdate]` / `*Subscription[PnLSingleUpdate]` |
+| `Accounts().FamilyCodes` | `[]FamilyCode` |
+
+## Contracts and Reference
+
+| Method | Returns |
+|--------|---------|
+| `Contracts().Details` | `[]ContractDetails` |
+| `Contracts().Qualify` | `ContractDetails` |
+| `Contracts().Search` | `[]MatchingSymbol` |
+| `Contracts().MarketRule` | `MarketRuleResult` |
+| `Contracts().SecDefOptParams` | `[]SecDefOptParams` |
+| `Contracts().SmartComponents` | `[]SmartComponent` |
+| `Contracts().DepthExchanges` | `[]DepthExchange` |
+| `Contracts().FundamentalData` | `XMLDocument` |
 
 ## Market Data
 
 | Method | Returns |
 |--------|---------|
-| `QuoteSnapshot` / `SubscribeQuotes` | `Quote` / `*Subscription[QuoteUpdate]` |
-| `SubscribeRealTimeBars` | `*Subscription[Bar]` |
-| `SubscribeTickByTick` | `*Subscription[TickByTickData]` |
-| `SubscribeHistoricalBars` | `*Subscription[Bar]` |
-| `SubscribeMarketDepth` | `*Subscription[DepthRow]` |
-| `SetMarketDataType` | `error` |
-
-## Contract and Reference
-
-| Method | Returns |
-|--------|---------|
-| `ContractDetails` | `[]ContractDetails` |
-| `QualifyContract` | `ContractDetails` |
-| `MatchingSymbols` | `[]MatchingSymbol` |
-| `MarketRule` | `MarketRuleResult` |
-| `SecDefOptParams` | `[]SecDefOptParams` |
-| `SmartComponents` | `[]SmartComponent` |
-| `MktDepthExchanges` | `[]DepthExchange` |
+| `MarketData().Quote` / `SubscribeQuotes` | `Quote` / `*Subscription[QuoteUpdate]` |
+| `MarketData().SubscribeRealTimeBars` | `*Subscription[Bar]` |
+| `MarketData().SubscribeTickByTick` | `*Subscription[TickByTickData]` |
+| `MarketData().SubscribeDepth` | `*Subscription[DepthRow]` |
+| `MarketData().SetType` | `error` |
 
 ## Historical Data
 
 | Method | Returns |
 |--------|---------|
-| `HistoricalBars` | `[]Bar` |
-| `HeadTimestamp` | `time.Time` |
-| `HistogramData` | `[]HistogramEntry` |
-| `HistoricalTicks` | `HistoricalTicksResult` |
+| `History().Bars` / `SubscribeBars` | `[]Bar` / `*Subscription[Bar]` |
+| `History().HeadTimestamp` | `time.Time` |
+| `History().Histogram` | `[]HistogramEntry` |
+| `History().Ticks` | `HistoricalTicksResult` |
 
-## Options
-
-| Method | Returns |
-|--------|---------|
-| `CalcImpliedVolatility` | `OptionComputation` |
-| `CalcOptionPrice` | `OptionComputation` |
-
-## News
+## Orders and Options
 
 | Method | Returns |
 |--------|---------|
-| `NewsProviders` | `[]NewsProvider` |
-| `NewsArticle` | `NewsArticleResult` |
-| `HistoricalNews` | `[]HistoricalNewsItemResult` |
-| `SubscribeNewsBulletins` | `*Subscription[NewsBulletin]` |
+| `Orders().Place` | `*OrderHandle` |
+| `Orders().Cancel` / `CancelAll` | `error` |
+| `Orders().Open` / `SubscribeOpen` | `[]OpenOrder` / `*Subscription[OpenOrderUpdate]` |
+| `Orders().Completed` | `[]CompletedOrderResult` |
+| `Orders().Executions` | `[]ExecutionUpdate` |
+| `Options().ImpliedVolatility` | `OptionComputation` |
+| `Options().Price` | `OptionComputation` |
+| `Options().Exercise` | `error` |
 
-## Scanner
-
-| Method | Returns |
-|--------|---------|
-| `ScannerParameters` | `string` (XML) |
-| `SubscribeScannerResults` | `*Subscription[[]ScannerResult]` |
-
-## Order Management
+## News, Scanner, Advisors, WSH, TWS
 
 | Method | Returns |
 |--------|---------|
-| `PlaceOrder` | `*OrderHandle` |
-| `CancelOrder` | `error` |
-| `GlobalCancel` | `error` |
-
-## Orders and Executions (observation)
-
-| Method | Returns |
-|--------|---------|
-| `OpenOrdersSnapshot` / `SubscribeOpenOrders` | `[]OpenOrder` / `*Subscription[OpenOrderUpdate]` |
-| `Executions` / `SubscribeExecutions` | `[]ExecutionUpdate` / `*Subscription[ExecutionUpdate]` |
-
-## Fundamental Data
-
-| Method | Returns |
-|--------|---------|
-| `FundamentalData` | `string` (XML) |
-
-## Exercise Options
-
-| Method | Returns |
-|--------|---------|
-| `ExerciseOptions` | `error` |
-
-## FA Configuration
-
-| Method | Returns |
-|--------|---------|
-| `RequestFA` | `string` (XML) |
-| `ReplaceFA` | `error` |
-| `SoftDollarTiers` | `[]SoftDollarTier` |
-
-## WSH Calendar
-
-| Method | Returns |
-|--------|---------|
-| `WSHMetaData` | `string` (JSON) |
-| `WSHEventData` | `string` (JSON) |
-
-## Display Groups
-
-| Method | Returns |
-|--------|---------|
-| `QueryDisplayGroups` | `string` |
-| `SubscribeDisplayGroup` | `*DisplayGroupHandle` |
-
-## Other
-
-| Method | Returns |
-|--------|---------|
-| `UserInfo` | `string` |
+| `News().Providers` | `[]NewsProvider` |
+| `News().Article` | `NewsArticle` |
+| `News().Historical` | `[]HistoricalNewsItem` |
+| `News().SubscribeBulletins` | `*Subscription[NewsBulletin]` |
+| `Scanner().Parameters` | `XMLDocument` |
+| `Scanner().SubscribeResults` | `*Subscription[[]ScannerResult]` |
+| `Advisors().Config` / `ReplaceConfig` | `XMLDocument` / `error` |
+| `Advisors().SoftDollarTiers` | `[]SoftDollarTier` |
+| `WSH().MetaData` / `EventData` | `JSONDocument` |
+| `TWS().UserInfo` | `string` |
+| `TWS().DisplayGroups` | `[]DisplayGroupID` |
+| `TWS().SubscribeDisplayGroup` | `*DisplayGroupHandle` |

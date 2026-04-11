@@ -11,14 +11,14 @@ Gateway socket protocol. It gives you typed request/response methods for
 snapshots, typed subscriptions for streams, and explicit lifecycle events for
 reconnects and shutdown.
 
-The library targets the full TWS/Gateway socket API surface, keeps the public
-API small and Go-shaped, and treats protocol verification as a first-class
-feature rather than an afterthought.
+The library targets the full TWS/Gateway socket API surface and keeps the
+public API small and Go-shaped.
 
 ## Why ibkr-go
 
 - **A Go-shaped API**: one-shots return typed results. Streams are typed
-  subscriptions with `Events()`, `State()`, `Done()`, and `Wait()`. No
+  subscriptions with `Events()`, `Lifecycle()`, `AwaitSnapshot()`, `Done()`,
+  and `Wait()`. No
   `EWrapper` / `EClient` callback surface as the primary interface.
 - **Full TWS/Gateway coverage**: accounts, positions, quotes, historical
   data, executions, order management, market depth, scanners, news, FA
@@ -40,7 +40,7 @@ go get github.com/ThomasMarcelis/ibkr-go@latest
 
 Requires Go 1.26+. Standard library only.
 
-Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/ibkr).
+Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go).
 
 ## Quick Start
 
@@ -59,7 +59,7 @@ if err != nil {
 }
 defer client.Close()
 
-details, err := client.QualifyContract(ctx, ibkr.Contract{
+details, err := client.Contracts().Qualify(ctx, ibkr.Contract{
     Symbol:   "AAPL",
     SecType:  ibkr.SecTypeStock,
     Exchange: "SMART",
@@ -74,7 +74,7 @@ fmt.Println(details.LongName, details.MinTick)
 ### Stream live quotes
 
 ```go
-sub, err := client.SubscribeQuotes(ctx, ibkr.QuoteSubscriptionRequest{
+sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Contract{
         Symbol:   "AAPL",
         SecType:  ibkr.SecTypeStock,
@@ -91,7 +91,7 @@ for {
     select {
     case update := <-sub.Events():
         fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
-    case state := <-sub.State():
+    case state := <-sub.Lifecycle():
         fmt.Println("lifecycle:", state.Kind)
     case <-sub.Done():
         return sub.Wait()
@@ -99,12 +99,12 @@ for {
 }
 ```
 
-`Events()` carries market data. `State()` carries lifecycle —
+`Events()` carries market data. `Lifecycle()` carries lifecycle —
 `SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix.
 
 ## Testing and Verification
 
-ibkr-go is being built with a test suite that is an asset ensuring correctness
+Every protocol behavior this library claims has a test pinning it down.
 
 - `90` checked-in replay transcripts under
   [`testdata/transcripts`](testdata/transcripts)

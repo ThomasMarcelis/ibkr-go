@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/ibkr"
+	"github.com/ThomasMarcelis/ibkr-go"
 )
 
 const (
