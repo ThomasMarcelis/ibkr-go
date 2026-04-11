@@ -62,6 +62,14 @@ func Decode(payload []byte) (Message, error) {
 	return msgs[0], nil
 }
 
+func isWireInt(value string) bool {
+	if value == "" {
+		return false
+	}
+	_, err := strconv.Atoi(value)
+	return err == nil
+}
+
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
 func Encode(msg Message) ([]byte, error) {
 	fields, err := encodeFields(msg)
@@ -803,14 +811,7 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		}
 		return []Message{FamilyCodes{Codes: entries}}, nil
 
-	case InMktDepthExchanges: // msg_id 80 is shared: MktDepthExchanges or HistoricalNewsEnd
-		// Disambiguate: HistoricalNewsEnd has exactly 2 fields after msg_id [reqID, hasMore].
-		// MktDepthExchanges has [count, repeated(5 fields)] = 1 + 5*count fields.
-		if r.Remaining() == 2 {
-			reqID, _ := r.ReadInt()
-			hasMore, _ := r.ReadBool()
-			return []Message{HistoricalNewsEnd{ReqID: reqID, HasMore: hasMore}}, nil
-		}
+	case InMktDepthExchanges:
 		// MktDepthExchanges: [80, count, repeated(exchange, secType, listingExch, serviceDataType, aggGroup)] — no version
 		count, err := r.ReadCount("depth exchange count")
 		if err != nil {
@@ -849,27 +850,11 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		}
 		return []Message{NewsProviders{Providers: entries}}, nil
 
-	case InSymbolSamples: // msg_id 82 is shared: SymbolSamples or SmartComponents
-		// SmartComponents entries are exactly 3 fields each (bitNumber, exchangeName, exchangeLetter).
-		// SymbolSamples entries are 6+ fields each (conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...).
-		// Disambiguate by checking if remaining fields after [reqID, count] == count * 3.
+	case InSymbolSamples: // [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)]
 		reqID, _ := r.ReadInt()
 		count, err := r.ReadCount("sample count")
 		if err != nil {
 			return nil, err
-		}
-		if r.Remaining() == count*3 {
-			if err := r.RequireFixedEntryFields("smart components", count, 3, 0); err != nil {
-				return nil, err
-			}
-			components := make([]SmartComponentEntry, count)
-			for i := range components {
-				bitNumber, _ := r.ReadInt()
-				exchangeName := r.ReadString()
-				exchangeLetter := r.ReadString()
-				components[i] = SmartComponentEntry{BitNumber: bitNumber, ExchangeName: exchangeName, ExchangeLetter: exchangeLetter}
-			}
-			return []Message{SmartComponentsResponse{ReqID: reqID, Components: components}}, nil
 		}
 		if count > r.Remaining()/6 {
 			return nil, fmt.Errorf("codec: symbol samples: count %d exceeds minimum available fields %d", count, r.Remaining())
@@ -886,21 +871,51 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			for j := range derivTypes {
 				derivTypes[j] = r.ReadString()
 			}
+			description := ""
+			issuerID := ""
+			if r.Remaining() >= 2 && !isWireInt(r.fields[r.pos]) {
+				description = r.ReadString()
+				issuerID = r.ReadString()
+			}
 			symbols[i] = SymbolSample{
 				ConID: conID, Symbol: symbol, SecType: secType,
 				PrimaryExchange: primaryExch, Currency: currency,
 				DerivativeSecTypes: derivTypes,
+				Description:        description, IssuerID: issuerID,
 			}
 		}
 		return []Message{MatchingSymbols{ReqID: reqID, Symbols: symbols}}, nil
 
-	case InHistoricalNews: // [87, reqID, time, providerCode, articleId, headline] — no version
+	case InSmartComponents: // [82, reqID, count, repeated(bitNumber, exchangeName, exchangeLetter)]
+		reqID, _ := r.ReadInt()
+		count, err := r.ReadCount("smart component count")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("smart components", count, 3, 0); err != nil {
+			return nil, err
+		}
+		components := make([]SmartComponentEntry, count)
+		for i := range components {
+			bitNumber, _ := r.ReadInt()
+			exchangeName := r.ReadString()
+			exchangeLetter := r.ReadString()
+			components[i] = SmartComponentEntry{BitNumber: bitNumber, ExchangeName: exchangeName, ExchangeLetter: exchangeLetter}
+		}
+		return []Message{SmartComponentsResponse{ReqID: reqID, Components: components}}, nil
+
+	case InHistoricalNews: // [86, reqID, time, providerCode, articleId, headline] — no version
 		reqID, _ := r.ReadInt()
 		timeStr := r.ReadString()
 		providerCode := r.ReadString()
 		articleID := r.ReadString()
 		headline := r.ReadString()
 		return []Message{HistoricalNewsItem{ReqID: reqID, Time: timeStr, ProviderCode: providerCode, ArticleID: articleID, Headline: headline}}, nil
+
+	case InHistoricalNewsEnd: // [87, reqID, hasMore]
+		reqID, _ := r.ReadInt()
+		hasMore, _ := r.ReadBool()
+		return []Message{HistoricalNewsEnd{ReqID: reqID, HasMore: hasMore}}, nil
 
 	case InHeadTimestamp: // [88, reqId, headTimestamp] — no version
 		reqID, _ := r.ReadInt()
@@ -2171,6 +2186,8 @@ func encodeFields(msg Message) ([]string, error) {
 			for _, dt := range s.DerivativeSecTypes {
 				w.WriteString(dt)
 			}
+			w.WriteString(s.Description)
+			w.WriteString(s.IssuerID)
 		}
 		return w.Fields(), nil
 
@@ -2360,7 +2377,7 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case SmartComponentsResponse:
 		w := fieldWriter{}
-		w.WriteInt(InSymbolSamples) // msg_id 82 shared with SymbolSamples
+		w.WriteInt(InSmartComponents)
 		w.WriteInt(m.ReqID)
 		w.WriteInt(len(m.Components))
 		for _, c := range m.Components {
@@ -2441,7 +2458,7 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case HistoricalNewsEnd:
 		w := fieldWriter{}
-		w.WriteInt(InMktDepthExchanges) // msg_id 80 shared with MktDepthExchanges
+		w.WriteInt(InHistoricalNewsEnd)
 		w.WriteInt(m.ReqID)
 		w.WriteBool(m.HasMore)
 		return w.Fields(), nil

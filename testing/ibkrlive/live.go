@@ -6,6 +6,8 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,10 +15,16 @@ import (
 )
 
 const (
-	envLive     = "IBKR_LIVE"
-	envAddr     = "IBKR_LIVE_ADDR"
-	envClientID = "IBKR_LIVE_CLIENT_ID"
+	envLive        = "IBKR_LIVE"
+	envLiveTrading = "IBKR_LIVE_TRADING"
+	envAddr        = "IBKR_LIVE_ADDR"
+	envClientID    = "IBKR_LIVE_CLIENT_ID"
+
+	defaultAddr = "127.0.0.1:4002"
 )
+
+var generatedClientID atomic.Int64
+var liveSessionMu sync.Mutex
 
 type Config struct {
 	Addr     string
@@ -29,10 +37,14 @@ func Enabled() bool {
 	return os.Getenv(envLive) != ""
 }
 
+func TradingEnabled() bool {
+	return os.Getenv(envLiveTrading) != ""
+}
+
 func Load() (Config, error) {
 	addr := os.Getenv(envAddr)
 	if addr == "" {
-		addr = "127.0.0.1:4001"
+		addr = defaultAddr
 	}
 	host, portText, err := net.SplitHostPort(addr)
 	if err != nil {
@@ -69,6 +81,14 @@ func Require(t testing.TB) Config {
 	return cfg
 }
 
+func RequireTrading(t testing.TB) {
+	t.Helper()
+	Require(t)
+	if !TradingEnabled() {
+		t.Skipf("set %s=1 to enable paper-trading live tests", envLiveTrading)
+	}
+}
+
 func Options(cfg Config, extra ...ibkr.Option) []ibkr.Option {
 	opts := []ibkr.Option{
 		ibkr.WithHost(cfg.Host),
@@ -82,11 +102,28 @@ func Options(cfg Config, extra ...ibkr.Option) []ibkr.Option {
 func DialContext(t testing.TB, timeout time.Duration, extra ...ibkr.Option) (*ibkr.Client, context.Context, context.CancelFunc) {
 	t.Helper()
 	cfg := Require(t)
+	if os.Getenv(envClientID) == "" {
+		cfg.ClientID = int(generatedClientID.Add(1))
+	}
+
+	liveSessionMu.Lock()
+	locked := true
+	unlock := func() {
+		if locked {
+			locked = false
+			liveSessionMu.Unlock()
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	client, err := ibkr.DialContext(ctx, Options(cfg, extra...)...)
 	if err != nil {
 		cancel()
+		unlock()
 		t.Fatalf("DialContext() error = %v", err)
 	}
-	return client, ctx, cancel
+	return client, ctx, func() {
+		cancel()
+		unlock()
+	}
 }

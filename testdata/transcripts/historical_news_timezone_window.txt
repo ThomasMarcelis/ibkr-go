@@ -1,0 +1,7 @@
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_historical_news {"req_id":"$req1","con_id":"265598","provider_codes":"BRFG+DJNL","start_time":"2026-04-01 10:00:00 Europe/Amsterdam","end_time":"2026-04-05 11:30:00 Europe/Amsterdam","total_results":"5"}
+server historical_news {"req_id":"$req1","time":"2026-03-23 13:25:15.0","provider_code":"BRFG","article_id":"BRFG$12345","headline":"AAPL Q1 Earnings Preview"}
+server historical_news_end {"req_id":"$req1","has_more":false}
+disconnect

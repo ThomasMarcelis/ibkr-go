@@ -525,6 +525,8 @@ type SymbolSample struct {
 	PrimaryExchange    string
 	Currency           string
 	DerivativeSecTypes []string
+	Description        string
+	IssuerID           string
 }
 
 type MatchingSymbols struct {

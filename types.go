@@ -754,6 +754,8 @@ type MatchingSymbol struct {
 	PrimaryExchange    string
 	Currency           string
 	DerivativeSecTypes []string
+	Description        string
+	IssuerID           string
 }
 
 type HeadTimestampRequest struct {

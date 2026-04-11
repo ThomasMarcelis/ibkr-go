@@ -12,14 +12,14 @@ func TestLoadDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.Addr != "127.0.0.1:4001" {
-		t.Fatalf("Addr = %q, want %q", cfg.Addr, "127.0.0.1:4001")
+	if cfg.Addr != defaultAddr {
+		t.Fatalf("Addr = %q, want %q", cfg.Addr, defaultAddr)
 	}
 	if cfg.Host != "127.0.0.1" {
 		t.Fatalf("Host = %q, want %q", cfg.Host, "127.0.0.1")
 	}
-	if cfg.Port != 4001 {
-		t.Fatalf("Port = %d, want 4001", cfg.Port)
+	if cfg.Port != 4002 {
+		t.Fatalf("Port = %d, want 4002", cfg.Port)
 	}
 	if cfg.ClientID != 1 {
 		t.Fatalf("ClientID = %d, want 1", cfg.ClientID)
@@ -50,5 +50,16 @@ func TestEnabled(t *testing.T) {
 	t.Setenv(envLive, "1")
 	if !Enabled() {
 		t.Fatal("Enabled() = false, want true")
+	}
+}
+
+func TestTradingEnabled(t *testing.T) {
+	t.Setenv(envLiveTrading, "")
+	if TradingEnabled() {
+		t.Fatal("TradingEnabled() = true, want false")
+	}
+	t.Setenv(envLiveTrading, "1")
+	if !TradingEnabled() {
+		t.Fatal("TradingEnabled() = false, want true")
 	}
 }

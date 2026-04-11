@@ -109,22 +109,31 @@ func formatProviderCodes(values []NewsProviderCode) string {
 }
 
 // IBKR historical tick examples use "yyyyMMdd HH:mm:ss" with an optional
-// timezone; without one TWS uses the login timezone. Formatter tests freeze
-// this helper's current UTC-without-suffix encoding.
+// timezone; without one TWS uses the login timezone. Always send an explicit
+// zone so time.Time values keep their absolute instant across login zones.
 func formatHistoricalTickTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.UTC().Format("20060102 15:04:05")
+	return formatTimeWithZone(t, "20060102 15:04:05")
 }
 
-// IBKR historical news documents "yyyy-MM-dd HH:mm:ss"; formatter tests freeze
-// this helper's current UTC-without-suffix encoding.
+// IBKR historical news documents "yyyy-MM-dd HH:mm:ss". Use the same explicit
+// zone policy as historical ticks so a non-UTC login zone cannot shift windows.
 func formatHistoricalNewsTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return t.UTC().Format("2006-01-02 15:04:05")
+	return formatTimeWithZone(t, "2006-01-02 15:04:05")
+}
+
+func formatTimeWithZone(t time.Time, layout string) string {
+	zone := t.Location().String()
+	if zone == "" || zone == "Local" {
+		t = t.UTC()
+		zone = "UTC"
+	}
+	return t.Format(layout) + " " + zone
 }
 
 func formatWSHDate(t time.Time) string {

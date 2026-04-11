@@ -79,6 +79,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   explicit error rather than silently ignoring the caller-supplied ID. Zero
   remains accepted for the ergonomic "construct a fresh `Order` without
   threading the ID" case.
+- **Historical tick/news windows now include explicit time zones.** The
+  `time.Time` request APIs no longer emit UTC wall-clock strings without a
+  zone suffix, which TWS can reinterpret in the login timezone.
+- **Matching-symbol responses now decode the live `SymbolSamples` frame.** Live
+  Gateway sends symbol samples as inbound message `79` and includes
+  description/issuer fields after derivative security types; the codec now
+  consumes those fields and exposes them on `MatchingSymbol`.
+- **Historical-news live frame IDs are corrected.** Live Gateway sends
+  historical news items as inbound message `86` and the end marker as `87`.
+- **Historical-news timestamps now parse live date strings.** Gateway responses
+  may use `yyyy-MM-dd HH:mm:ss.s` instead of epoch milliseconds.
 
 ### Changed
 
@@ -90,6 +101,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - Default logger uses `io.Discard` directly instead of a local replacement.
 - Internal `engine.SubscribeExecutions` renamed to lowercase
   `engine.subscribeExecutions` to match its effective visibility.
+- Live verification defaults now target the paper Gateway port `4002`, with
+  `IBKR_LIVE_TRADING=1` required for order-placing live tests.
 
 ## v1.0.0
 

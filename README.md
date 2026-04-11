@@ -106,11 +106,13 @@ for {
 
 Every protocol behavior this library claims has a test pinning it down.
 
-- `90` checked-in replay transcripts under
+- `92` checked-in replay transcripts under
   [`testdata/transcripts`](testdata/transcripts)
 - `18` fuzz targets covering wire framing and codec round-trips
 - Deterministic CI for routine verification, without broker credentials
-- Separate live-gated tests for local verification against TWS or IB Gateway
+- Separate live-gated tests for local verification against TWS or IB Gateway.
+  The paper Gateway default is `127.0.0.1:4002`; override with
+  `IBKR_LIVE_ADDR` when needed.
 
 The goal is a library whose protocol behavior can be frozen, replayed, stressed, and extended without guessing. For more on that approach, see [`docs/transcripts.md`](docs/transcripts.md) and [`docs/anti-patterns.md`](docs/anti-patterns.md).
 
@@ -151,6 +153,16 @@ go test ./...
 
 All five must pass before opening a pull request. CI runs the same
 checks on every push.
+
+Local live verification is opt-in:
+
+```bash
+IBKR_LIVE=1 IBKR_LIVE_ADDR=127.0.0.1:4002 go test ./... -run '^TestLive' -count=1
+IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_ADDR=127.0.0.1:4002 go test ./... -run '^TestLive(PlaceOrder|GlobalCancel|Trading)' -count=1
+```
+
+`IBKR_LIVE_TRADING=1` permits paper-account order placement and marketable
+test orders. Read-only live smoke tests do not require it.
 
 ## Documentation
 

@@ -30,9 +30,14 @@ ALL_SCENARIOS=(
     place_order_mkt_sell_aapl
     place_order_bracket_aapl
     global_cancel
+    place_order_oca_pair_aapl
+    trading_split_round_trip_aapl
     market_depth_aapl
     market_depth_aapl_smart
     place_order_option_buy
+    quote_stream_multi_asset
+    historical_ticks_aapl_timezone_window
+    historical_news_aapl_timezone_window
 )
 
 if [ $# -gt 0 ]; then

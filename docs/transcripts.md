@@ -83,11 +83,35 @@ The live capture tooling separates raw evidence from replay semantics:
 - TCP chunk boundaries are not replay semantics and must never be treated as
   message boundaries
 
+## Live Capture Runbook
+
+The current paper Gateway target is `127.0.0.1:4002`. Capture through the
+recorder proxy so raw evidence and normalized replay artifacts stay linked:
+
+```bash
+go build -o /tmp/ibkr-recorder ./cmd/ibkr-recorder
+go build -o /tmp/ibkr-capture ./cmd/ibkr-capture
+go build -o /tmp/ibkr-normalize ./cmd/ibkr-normalize
+IBKR_UPSTREAM=127.0.0.1:4002 ./scripts/record-scenarios.sh quote_stream_multi_asset historical_ticks_aapl_timezone_window
+./scripts/verify-captures.sh captures/<capture-dir>
+```
+
+Raw capture directories remain local evidence because they may contain
+account-specific details. When promoting behavior into CI, check in a curated
+transcript under `testdata/transcripts` plus a public test that asserts the
+behavior at the library API boundary. Record the raw capture directory name,
+server version, scenario, and `events.jsonl` hash in the PR or accompanying
+notes so the replay can be traced back to live evidence without committing raw
+account data.
+
 ## Next Transcript Work
 
 - grow scenario coverage for reconnect, pacing, and version-gated branches
 - grow scenario coverage for order-management edge cases and more complex order
   shapes
+- prefer complex live scenarios over one-request smoke captures when adding
+  new coverage, especially for order, execution, account, PnL, historical
+  window, and multi-subscription behavior
 - broaden live capture coverage beyond `server_version 200`
 - use the recorder and normalization tooling to derive new scenarios from
   contributor-owned Gateway or TWS sessions

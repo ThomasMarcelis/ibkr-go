@@ -78,6 +78,61 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDecodeLiveSymbolSamplesFrameShape(t *testing.T) {
+	t.Parallel()
+
+	payload := wire.EncodeFields([]string{
+		"79", "1001", "2",
+		"265598", "AAPL", "STK", "NASDAQ", "USD", "5", "CFD", "OPT", "IOPT", "WAR", "BAG", "APPLE INC", "",
+		"38708077", "AAPL", "STK", "MEXI", "MXN", "0", "APPLE INC", "",
+	})
+
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("messages len = %d, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(MatchingSymbols)
+	if !ok {
+		t.Fatalf("message type = %T, want MatchingSymbols", msgs[0])
+	}
+	if len(m.Symbols) != 2 {
+		t.Fatalf("symbols len = %d, want 2", len(m.Symbols))
+	}
+	if m.Symbols[0].Description != "APPLE INC" || m.Symbols[0].IssuerID != "" {
+		t.Fatalf("first symbol metadata = %#v", m.Symbols[0])
+	}
+	if !slices.Equal(m.Symbols[0].DerivativeSecTypes, []string{"CFD", "OPT", "IOPT", "WAR", "BAG"}) {
+		t.Fatalf("derivative types = %#v", m.Symbols[0].DerivativeSecTypes)
+	}
+}
+
+func TestDecodeLiveHistoricalNewsFrameIDs(t *testing.T) {
+	t.Parallel()
+
+	itemPayload := wire.EncodeFields([]string{
+		"86", "1001", "2026-03-23 13:25:15.0", "BRFUPDN", "BRFUPDN$1deaeefd", "headline",
+	})
+	msgs, err := DecodeBatch(itemPayload)
+	if err != nil {
+		t.Fatalf("DecodeBatch(item) error = %v", err)
+	}
+	if item, ok := msgs[0].(HistoricalNewsItem); !ok || item.ReqID != 1001 || item.ArticleID != "BRFUPDN$1deaeefd" {
+		t.Fatalf("historical news item decode = %#v", msgs[0])
+	}
+
+	endPayload := wire.EncodeFields([]string{"87", "1001", "1"})
+	msgs, err = DecodeBatch(endPayload)
+	if err != nil {
+		t.Fatalf("DecodeBatch(end) error = %v", err)
+	}
+	if end, ok := msgs[0].(HistoricalNewsEnd); !ok || end.ReqID != 1001 || !end.HasMore {
+		t.Fatalf("historical news end decode = %#v", msgs[0])
+	}
+}
+
 func TestDecodeByMsgID(t *testing.T) {
 	t.Parallel()
 

@@ -1486,6 +1486,8 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 							ConID: s.ConID, Symbol: s.Symbol, SecType: SecType(s.SecType),
 							PrimaryExchange: s.PrimaryExchange, Currency: s.Currency,
 							DerivativeSecTypes: derivTypes,
+							Description:        s.Description,
+							IssuerID:           s.IssuerID,
 						}
 					}
 					resp <- result{symbols: symbols}
@@ -3175,7 +3177,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalNewsItem:
-					timestamp, err := parseEpochMilliseconds(m.Time)
+					timestamp, err := parseHistoricalNewsTime(m.Time)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						resp <- result{err: err}
@@ -4948,6 +4950,21 @@ func parseEpochMilliseconds(raw string) (time.Time, error) {
 		return time.Time{}, fmt.Errorf("ibkr: parse epoch milliseconds %q", raw)
 	}
 	return time.UnixMilli(epoch).UTC(), nil
+}
+
+func parseHistoricalNewsTime(raw string) (time.Time, error) {
+	if ts, err := parseEpochMilliseconds(raw); err == nil {
+		return ts, nil
+	}
+	for _, layout := range []string{
+		"2006-01-02 15:04:05.0",
+		"2006-01-02 15:04:05",
+	} {
+		if ts, err := time.ParseInLocation(layout, raw, time.UTC); err == nil {
+			return ts.UTC(), nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("ibkr: parse historical news time %q", raw)
 }
 
 func parseHeadTimestamp(raw string) (time.Time, error) {

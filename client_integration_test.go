@@ -1129,6 +1129,9 @@ func TestMatchingSymbols(t *testing.T) {
 	if len(symbols[0].DerivativeSecTypes) != 2 {
 		t.Fatalf("derivative_sec_types len = %d, want 2", len(symbols[0].DerivativeSecTypes))
 	}
+	if symbols[0].Description != "APPLE INC" {
+		t.Fatalf("description = %q, want APPLE INC", symbols[0].Description)
+	}
 }
 
 func TestHeadTimestamp(t *testing.T) {
@@ -1491,6 +1494,43 @@ func TestHistoricalTicksTrades(t *testing.T) {
 	}
 }
 
+func TestHistoricalTicksPreserveExplicitTimeZone(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "historical_ticks_timezone_window.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	start := time.Date(2026, 4, 5, 8, 0, 0, 0, newYork)
+	end := time.Date(2026, 4, 5, 9, 0, 0, 0, newYork)
+
+	result, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		StartTime:     start,
+		EndTime:       end,
+		NumberOfTicks: 25,
+		WhatToShow:    ibkr.ShowTrades,
+		UseRTH:        true,
+	})
+	if err != nil {
+		t.Fatalf("HistoricalTicks() error = %v", err)
+	}
+	if len(result.Last) != 1 {
+		t.Fatalf("last ticks len = %d, want 1", len(result.Last))
+	}
+}
+
 func TestNewsArticle(t *testing.T) {
 	t.Parallel()
 
@@ -1552,6 +1592,37 @@ func TestHistoricalNews(t *testing.T) {
 	}
 	if !items[1].Time.Equal(time.UnixMilli(1775379600000).UTC()) {
 		t.Fatalf("second time = %s, want %s", items[1].Time.Format(time.RFC3339), time.UnixMilli(1775379600000).UTC().Format(time.RFC3339))
+	}
+}
+
+func TestHistoricalNewsPreserveExplicitTimeZone(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "historical_news_timezone_window.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	amsterdam, err := time.LoadLocation("Europe/Amsterdam")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	start := time.Date(2026, 4, 1, 10, 0, 0, 0, amsterdam)
+	end := time.Date(2026, 4, 5, 11, 30, 0, 0, amsterdam)
+
+	items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
+		ConID:         265598,
+		ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "DJNL"},
+		StartTime:     start,
+		EndTime:       end,
+		TotalResults:  5,
+	})
+	if err != nil {
+		t.Fatalf("HistoricalNews() error = %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items len = %d, want 1", len(items))
 	}
 }
 

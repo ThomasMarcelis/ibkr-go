@@ -133,6 +133,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 				ConID: asInt(m["con_id"]), Symbol: asString(m["symbol"]),
 				SecType: asString(m["sec_type"]), PrimaryExchange: asString(m["primary_exchange"]),
 				Currency: asString(m["currency"]), DerivativeSecTypes: asStrings(m["derivative_sec_types"]),
+				Description: asString(m["description"]), IssuerID: asString(m["issuer_id"]),
 			}
 		})
 		return codec.MatchingSymbols{ReqID: asInt(resolve(body["req_id"])), Symbols: entries}, nil

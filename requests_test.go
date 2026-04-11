@@ -62,8 +62,17 @@ func TestFormatHistoricalTickTime(t *testing.T) {
 	}
 
 	timestamp := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
-	if got := formatHistoricalTickTime(timestamp); got != "20260405 12:00:00" {
-		t.Fatalf("formatHistoricalTickTime() = %q, want %q", got, "20260405 12:00:00")
+	if got := formatHistoricalTickTime(timestamp); got != "20260405 12:00:00 UTC" {
+		t.Fatalf("formatHistoricalTickTime() = %q, want %q", got, "20260405 12:00:00 UTC")
+	}
+
+	newYork, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	timestamp = time.Date(2026, 4, 5, 8, 0, 0, 0, newYork)
+	if got := formatHistoricalTickTime(timestamp); got != "20260405 08:00:00 America/New_York" {
+		t.Fatalf("formatHistoricalTickTime() = %q, want %q", got, "20260405 08:00:00 America/New_York")
 	}
 }
 
@@ -75,8 +84,17 @@ func TestFormatHistoricalNewsTime(t *testing.T) {
 	}
 
 	timestamp := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
-	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 12:00:00" {
-		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 12:00:00")
+	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 12:00:00 UTC" {
+		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 12:00:00 UTC")
+	}
+
+	amsterdam, err := time.LoadLocation("Europe/Amsterdam")
+	if err != nil {
+		t.Fatalf("LoadLocation() error = %v", err)
+	}
+	timestamp = time.Date(2026, 4, 5, 14, 0, 0, 0, amsterdam)
+	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 14:00:00 Europe/Amsterdam" {
+		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 14:00:00 Europe/Amsterdam")
 	}
 }
 

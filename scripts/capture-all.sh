@@ -5,11 +5,11 @@
 # Usage: ./scripts/capture-all.sh
 #
 # Requirements:
-#  - IB Gateway / TWS running on 127.0.0.1:4001
+#  - IB Gateway / TWS running on 127.0.0.1:4002
 #  - ./ibkr-capture and ./ibkr-recorder built at repo root (go build ./cmd/...)
 #
 # Notes:
-#  - The recorder listens on 127.0.0.1:4101 and proxies to :4001.
+#  - The recorder listens on 127.0.0.1:4101 and proxies to :4002.
 #  - Between scenarios we sleep 3s and wait for the accept queue to drain so
 #    we don't overrun the gateway (which happened once during early probing).
 #  - The open_orders_all scenario uses client-id 0 (required for the scope).
@@ -20,8 +20,8 @@ set -euo pipefail
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-UPSTREAM="127.0.0.1:4001"
-LISTEN="127.0.0.1:4101"
+UPSTREAM="${IBKR_UPSTREAM:-127.0.0.1:4002}"
+LISTEN="${IBKR_LISTEN:-127.0.0.1:4101}"
 
 SCENARIOS=(
   "bootstrap|1"
@@ -42,10 +42,15 @@ SCENARIOS=(
   "quote_snapshot_aapl|1"
   "quote_stream_aapl|1"
   "quote_stream_genericticks|1"
+  "quote_stream_multi_asset|1"
   "realtime_bars_aapl|1"
   "open_orders_empty|1"
   "open_orders_all|0"
   "executions_snapshot|1"
+  "historical_ticks_aapl_timezone_window|1"
+  "historical_news_aapl_timezone_window|1"
+  "place_order_oca_pair_aapl|1"
+  "trading_split_round_trip_aapl|1"
 )
 
 run_scenario() {
