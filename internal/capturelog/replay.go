@@ -147,6 +147,9 @@ func NormalizeEvents(events []Event) ([]ReplayEvent, error) {
 
 			key := streamKey{leg: leg, direction: event.Direction}
 			buffers[key] = append(buffers[key], data...)
+			if key.direction == "client" && bytes.HasPrefix(buffers[key], []byte("API\x00")) {
+				buffers[key] = buffers[key][4:]
+			}
 			for {
 				payload, consumed, err := extractFrame(buffers[key])
 				if err != nil {

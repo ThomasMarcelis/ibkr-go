@@ -36,12 +36,8 @@ reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag.
 ### Historical data extensions
 
 reqHeadTimestamp (msg 87/90), reqHistogramData (msg 88/89),
-reqHistoricalTicks (msg 96).
-
-`ShowSchedule` is exposed as historical what-to-show vocabulary, but
-historicalSchedule delivery is not yet claimed as implemented. It still needs
-live Gateway/TWS capture, codec support, and replay coverage before being
-treated as supported historical schedule data.
+reqHistoricalTicks (msg 96), and historicalSchedule delivery (msg 106) through
+`History().Schedule`.
 
 ### Option calculations
 
@@ -96,8 +92,8 @@ configuration.
 ### WSH calendar
 
 reqWSHMetaData (msg 100), cancelWSHMetaData (msg 101), reqWSHEventData (msg
-102), cancelWSHEventData (msg 103), inbound WSHMetaData (105) / WSHEventData
-(106). Keyed one-shots returning JSON. Requires WSH subscription.
+102), cancelWSHEventData (msg 103), inbound WSHMetaData (104) / WSHEventData
+(105). Keyed one-shots returning JSON. Requires WSH subscription.
 
 ### Display groups
 

@@ -96,6 +96,26 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 3*time.Second, logFrame, nil)
 		},
 	},
+	"current_time": {
+		name:        "current_time",
+		description: "REQ_CURRENT_TIME, drain until CURRENT_TIME (msg_id=49)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqCurrentTime(conn); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(49))
+		},
+	},
+	"req_ids": {
+		name:        "req_ids",
+		description: "REQ_IDS numIds=1, drain until NEXT_VALID_ID (msg_id=9)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqIds(conn, 1); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(9))
+		},
+	},
 
 	// --- Contract details ---
 
@@ -302,6 +322,105 @@ var scenarios = map[string]scenario{
 				return false
 			}
 			return readFrames(conn, 10*time.Second, logFrame, stop)
+		},
+	},
+	"historical_schedule_aapl": {
+		name:        "historical_schedule_aapl",
+		description: "REQ_HISTORICAL_DATA AAPL STK 1 M / 1 day / SCHEDULE",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "1 M", "1 day", "SCHEDULE", true); err != nil {
+				return err
+			}
+			// Stop on either an api_error or the historical_schedule callback
+			// (msg_id 106, InHistoricalSchedule in internal/codec/msgid.go)
+			// for our reqID. The 15 s deadline is a safety net only.
+			stop := func(msgID int, fields []string) bool {
+				if len(fields) < 2 || fields[1] != strconv.Itoa(reqID) {
+					return false
+				}
+				return msgID == 4 || msgID == 106
+			}
+			return readFrames(conn, 15*time.Second, logFrame, stop)
+		},
+	},
+
+	// --- Market data type control (MarketData().SetType) ---
+
+	"set_type_live": {
+		name:        "set_type_live",
+		description: "REQ_MARKET_DATA_TYPE=1 (live), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 1); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_frozen": {
+		name:        "set_type_frozen",
+		description: "REQ_MARKET_DATA_TYPE=2 (frozen), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 2); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_delayed": {
+		name:        "set_type_delayed",
+		description: "REQ_MARKET_DATA_TYPE=3 (delayed), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 3); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_delayed_frozen": {
+		name:        "set_type_delayed_frozen",
+		description: "REQ_MARKET_DATA_TYPE=4 (delayed-frozen), drain for marketDataType push",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 4); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"set_type_invalid": {
+		name:        "set_type_invalid",
+		description: "REQ_MARKET_DATA_TYPE=99 (invalid), drain for real IBKR API error",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 99); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(4))
+		},
+	},
+	"set_type_switch_while_streaming": {
+		name:        "set_type_switch_while_streaming",
+		description: "Start delayed quote stream, switch SetType to live mid-stream, drain, cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 3); err != nil {
+				return err
+			}
+			reqID := nextReqID()
+			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", false); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendReqMarketDataType(conn, 1); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelMktData(conn, reqID); err != nil {
+				return err
+			}
+			return readFrames(conn, 2*time.Second, logFrame, nil)
 		},
 	},
 
@@ -1014,6 +1133,29 @@ var scenarios = map[string]scenario{
 	"place_order_cancel": {
 		name:        "place_order_cancel",
 		description: "PLACE_ORDER LMT buy 1 AAPL at $50, then cancel",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			orderID := sess.NextValidID
+			sess.NextValidID++
+			acct := sess.ManagedAccounts
+			if err := sendPlaceOrder(conn, orderID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, orderSpec{Action: "BUY", TotalQuantity: "1", OrderType: "LMT", LmtPrice: "50.00", TIF: "DAY", Account: acct, Transmit: true}); err != nil {
+				return err
+			}
+			if err := readFrames(conn, 2*time.Second, logFrame, nil); err != nil {
+				return err
+			}
+			if err := sendCancelOrder(conn, orderID); err != nil {
+				return err
+			}
+			return readFrames(conn, 3*time.Second, logFrame, nil)
+		},
+	},
+	"place_order_direct_cancel": {
+		name:        "place_order_direct_cancel",
+		description: "PLACE_ORDER LMT buy 1 AAPL at $50, then cancel via Orders().Cancel(orderID)",
+		// Wire-identical to place_order_cancel. The scenario exists so the
+		// replay transcript and integration test can exercise the direct-by-ID
+		// public facade path, which is conceptually different from the
+		// OrderHandle.Cancel flow even though both emit OutCancelOrder=4.
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
 			sess.NextValidID++

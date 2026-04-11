@@ -106,6 +106,104 @@ func TestHistoricalBars(t *testing.T) {
 	}
 }
 
+func TestCurrentTime(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "current_time.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ts, err := client.CurrentTime(ctx)
+	if err != nil {
+		t.Fatalf("CurrentTime() error = %v", err)
+	}
+	// 1775931128 epoch seconds = 2026-04-11 18:12:08 UTC (transcript header
+	// shows 20:12:09 CEST). Grounded evidence in current_time.txt.
+	want := time.Unix(1775931128, 0).UTC()
+	if !ts.Equal(want) {
+		t.Errorf("CurrentTime() = %v, want %v", ts, want)
+	}
+}
+
+func TestHistoricalSchedule(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "historical_schedule_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Duration: ibkr.Months(1),
+		BarSize:  ibkr.Bar1Day,
+		UseRTH:   true,
+	})
+	if err != nil {
+		t.Fatalf("History().Schedule() error = %v", err)
+	}
+	if schedule.TimeZone != "US/Eastern" {
+		t.Errorf("TimeZone = %q, want US/Eastern", schedule.TimeZone)
+	}
+	if schedule.StartDateTime != "20260312-09:30:00" {
+		t.Errorf("StartDateTime = %q, want 20260312-09:30:00", schedule.StartDateTime)
+	}
+	if schedule.EndDateTime != "20260410-16:00:00" {
+		t.Errorf("EndDateTime = %q, want 20260410-16:00:00", schedule.EndDateTime)
+	}
+	if len(schedule.Sessions) != 21 {
+		t.Fatalf("Sessions = %d, want 21", len(schedule.Sessions))
+	}
+	first := schedule.Sessions[0]
+	if first.RefDate != "20260312" || first.StartDateTime != "20260312-09:30:00" {
+		t.Errorf("first session = %+v, want 20260312-09:30:00 / 20260312", first)
+	}
+	last := schedule.Sessions[20]
+	if last.RefDate != "20260410" || last.EndDateTime != "20260410-16:00:00" {
+		t.Errorf("last session = %+v, want 20260410-09:30:00 / 20260410", last)
+	}
+}
+
+func TestHistoricalBarsWithScheduleRejects(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "handshake.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Duration:   ibkr.Months(1),
+		BarSize:    ibkr.Bar1Day,
+		WhatToShow: ibkr.ShowSchedule,
+		UseRTH:     true,
+	})
+	if err == nil {
+		t.Fatal("History().Bars() with SCHEDULE: expected error, got nil")
+	}
+	if !strings.Contains(err.Error(), "SCHEDULE") {
+		t.Errorf("error = %v, want message mentioning SCHEDULE", err)
+	}
+}
+
 func TestAccountSummary(t *testing.T) {
 	t.Parallel()
 
@@ -1922,6 +2020,87 @@ cancelDone:
 	case <-handle.Done():
 	default:
 		t.Fatal("handle not done after Cancelled")
+	}
+
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
+}
+
+func TestDirectCancelOrder(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "direct_cancel_order.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: "LMT",
+			Quantity:  ibkr.MustParseDecimal("1"),
+			LmtPrice:  ibkr.MustParseDecimal("150"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	// Wait for PreSubmitted before sending the direct-by-ID cancel.
+	preSubmitted := waitForEvent(t, handle.Events())
+	for preSubmitted.Status == nil || preSubmitted.Status.Status != "PreSubmitted" {
+		preSubmitted = waitForEvent(t, handle.Events())
+	}
+
+	// Direct-by-ID cancel path: skip OrderHandle.Cancel and call the
+	// top-level facade with the handle's order ID. This proves Orders().Cancel
+	// reaches the same wire message without holding the handle.
+	if err := client.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+		t.Fatalf("Orders().Cancel(%d): %v", handle.OrderID(), err)
+	}
+
+	sawCancelled := false
+	for {
+		select {
+		case evt := <-handle.Events():
+			if evt.Status != nil && evt.Status.Status == "Cancelled" {
+				sawCancelled = true
+				goto directCancelDone
+			}
+		case <-handle.Done():
+			for {
+				select {
+				case evt, ok := <-handle.Events():
+					if !ok {
+						goto directCancelDone
+					}
+					if evt.Status != nil && evt.Status.Status == "Cancelled" {
+						sawCancelled = true
+					}
+				default:
+					goto directCancelDone
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for direct-by-ID cancel")
+		}
+	}
+directCancelDone:
+
+	if !sawCancelled {
+		t.Fatal("never received Cancelled status event after direct-by-ID cancel")
 	}
 
 	if err := handle.Wait(); err != nil {

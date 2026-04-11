@@ -124,6 +124,21 @@ func boolField(b bool) string {
 	return "0"
 }
 
+// --- Session-level one-shots ---
+//
+//	reqCurrentTime:  [49, version=1]
+//	reqIds:          [8, version=1, numIds]
+func sendReqCurrentTime(conn net.Conn) error {
+	return sendMessage(conn, []string{"49", "1"})
+}
+
+func sendReqIds(conn net.Conn, numIDs int) error {
+	if numIDs <= 0 {
+		numIDs = 1
+	}
+	return sendMessage(conn, []string{"8", "1", strconv.Itoa(numIDs)})
+}
+
 // --- Contract details (msg_id=9) ---
 //
 // Layout on server v200 (trading_class and issuer_id gates active):

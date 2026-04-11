@@ -28,6 +28,14 @@ func (c *Client) Wait() error                 { return c.engine.Wait() }
 func (c *Client) Session() Snapshot           { return c.engine.Session() }
 func (c *Client) SessionEvents() <-chan Event { return c.engine.SessionEvents() }
 
+// CurrentTime asks the Gateway for the server's current wall-clock time. The
+// request is a one-shot keyed only by session singleton; only one request
+// may be in flight at a time. The returned time is the parsed server time
+// (UTC) as reported by IBKR's reqCurrentTime / currentTime callback pair.
+func (c *Client) CurrentTime(ctx context.Context) (time.Time, error) {
+	return c.engine.CurrentTime(ctx)
+}
+
 func (c *Client) Accounts() AccountsClient   { return AccountsClient{engine: c.engine} }
 func (c *Client) Contracts() ContractsClient { return ContractsClient{engine: c.engine} }
 func (c *Client) MarketData() MarketDataClient {
@@ -149,6 +157,14 @@ func (c HistoryClient) Histogram(ctx context.Context, req HistogramDataRequest) 
 }
 func (c HistoryClient) Ticks(ctx context.Context, req HistoricalTicksRequest) (HistoricalTicksResult, error) {
 	return c.engine.HistoricalTicks(ctx, req)
+}
+
+// Schedule returns the trading session schedule that would cover the bars a
+// matching [HistoricalBarsRequest] with whatToShow=SCHEDULE would produce.
+// The Gateway reuses REQ_HISTORICAL_DATA (msg_id 20) for this request and
+// replies with a distinct historicalSchedule callback (msg_id 106).
+func (c HistoryClient) Schedule(ctx context.Context, req HistoricalScheduleRequest) (HistoricalSchedule, error) {
+	return c.engine.HistoricalSchedule(ctx, req)
 }
 
 type OrdersClient struct{ engine *engine }

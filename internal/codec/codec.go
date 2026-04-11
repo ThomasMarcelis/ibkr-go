@@ -1201,15 +1201,43 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		}
 		return []Message{SoftDollarTiersResponse{ReqID: reqID, Tiers: tiers}}, nil
 
-	case InWSHMetaData: // [105, reqId, dataJson]
+	case InWSHMetaData: // [104, reqId, dataJson]
 		reqID, _ := r.ReadInt()
 		dataJSON := r.ReadString()
 		return []Message{WSHMetaDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
 
-	case InWSHEventData: // [106, reqId, dataJson]
+	case InWSHEventData: // [105, reqId, dataJson]
 		reqID, _ := r.ReadInt()
 		dataJSON := r.ReadString()
 		return []Message{WSHEventDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
+
+	case InHistoricalSchedule: // [106, reqId, startDateTime, endDateTime, timeZone, sessionCount, (startDateTime,endDateTime,refDate)*count]
+		reqID, _ := r.ReadInt()
+		startDateTime := r.ReadString()
+		endDateTime := r.ReadString()
+		timeZone := r.ReadString()
+		sessionCount, err := r.ReadCount("historical schedule session count")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("historical schedule", sessionCount, 3, 0); err != nil {
+			return nil, err
+		}
+		sessions := make([]HistoricalScheduleSession, sessionCount)
+		for i := 0; i < sessionCount; i++ {
+			sessions[i] = HistoricalScheduleSession{
+				StartDateTime: r.ReadString(),
+				EndDateTime:   r.ReadString(),
+				RefDate:       r.ReadString(),
+			}
+		}
+		return []Message{HistoricalScheduleResponse{
+			ReqID:         reqID,
+			StartDateTime: startDateTime,
+			EndDateTime:   endDateTime,
+			TimeZone:      timeZone,
+			Sessions:      sessions,
+		}}, nil
 
 	case InDisplayGroupList: // [67, version, reqId, groups]
 		r.Skip(1) // version
@@ -1233,6 +1261,16 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case StartAPI:
 		return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
+
+	case CurrentTimeRequest:
+		return []string{itoa(OutReqCurrentTime), "1"}, nil
+
+	case ReqIDsRequest:
+		numIDs := m.NumIDs
+		if numIDs <= 0 {
+			numIDs = 1
+		}
+		return []string{itoa(OutReqIds), "1", itoa(numIDs)}, nil
 
 	case ContractDetailsRequest:
 		w := fieldWriter{}
@@ -2514,6 +2552,21 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case WSHEventDataResponse:
 		return []string{itoa(InWSHEventData), itoa(m.ReqID), m.DataJSON}, nil
+
+	case HistoricalScheduleResponse:
+		w := fieldWriter{}
+		w.WriteInt(InHistoricalSchedule)
+		w.WriteInt(m.ReqID)
+		w.WriteString(m.StartDateTime)
+		w.WriteString(m.EndDateTime)
+		w.WriteString(m.TimeZone)
+		w.WriteInt(len(m.Sessions))
+		for _, s := range m.Sessions {
+			w.WriteString(s.StartDateTime)
+			w.WriteString(s.EndDateTime)
+			w.WriteString(s.RefDate)
+		}
+		return w.Fields(), nil
 
 	case DisplayGroupList:
 		return []string{itoa(InDisplayGroupList), "1", itoa(m.ReqID), m.Groups}, nil

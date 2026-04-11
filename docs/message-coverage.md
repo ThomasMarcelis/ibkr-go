@@ -122,6 +122,7 @@ server version and managed-account bootstrap fields are known.
 | in | 96 | HistoricalTicks | landed | |
 | in | 97 | HistoricalTicksBidAsk | landed | tickAttribBidAsk decoded and exposed |
 | in | 98 | HistoricalTicksLast | landed | tickAttribLast decoded and exposed |
+| in | 106 | HistoricalSchedule | landed | `whatToShow=SCHEDULE` response |
 
 Historical tick and historical news request windows are formatted with explicit
 time zone suffixes when callers provide non-zero `time.Time` values, so TWS does
@@ -242,10 +243,10 @@ See [v1.2 story](stories/v1.2-variable-length-orders.md) and the deferred
 |-----------|--------|------|--------|
 | out | 100 | reqWSHMetaData | landed |
 | out | 101 | cancelWSHMetaData | landed |
-| in | 105 | WSHMetaData | landed |
+| in | 104 | WSHMetaData | landed |
 | out | 102 | reqWSHEventData | landed |
 | out | 103 | cancelWSHEventData | landed |
-| in | 106 | WSHEventData | landed |
+| in | 105 | WSHEventData | landed |
 
 ## Display Groups
 

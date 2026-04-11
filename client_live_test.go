@@ -137,6 +137,65 @@ func TestLiveHistoricalBars(t *testing.T) {
 	}
 }
 
+func TestLiveCurrentTime(t *testing.T) {
+	t.Parallel()
+
+	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelReq()
+
+	ts, err := client.CurrentTime(ctx)
+	if err != nil {
+		t.Fatalf("CurrentTime() error = %v", err)
+	}
+	if ts.IsZero() {
+		t.Fatal("CurrentTime() returned zero time")
+	}
+	// Sanity check: server time should be within 5 minutes of local now.
+	if delta := time.Since(ts); delta > 5*time.Minute || delta < -5*time.Minute {
+		t.Errorf("CurrentTime() drift = %v, want < 5 minutes", delta)
+	}
+}
+
+func TestLiveHistoricalSchedule(t *testing.T) {
+	t.Parallel()
+
+	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelReq()
+
+	schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
+		Contract: aaplContract,
+		Duration: ibkr.Months(1),
+		BarSize:  ibkr.Bar1Day,
+		UseRTH:   true,
+	})
+	if err != nil {
+		if isLiveHistoricalSessionError(err) {
+			t.Logf("HistoricalSchedule() returned: %v (current Gateway historical data session constraint)", err)
+			return
+		}
+		t.Fatalf("HistoricalSchedule() error = %v", err)
+	}
+	if schedule.TimeZone == "" {
+		t.Error("HistoricalSchedule returned empty TimeZone")
+	}
+	if len(schedule.Sessions) == 0 {
+		t.Fatal("HistoricalSchedule() returned 0 sessions, want >= 1")
+	}
+	for i, s := range schedule.Sessions {
+		if s.StartDateTime == "" || s.EndDateTime == "" || s.RefDate == "" {
+			t.Errorf("session[%d] has empty field(s): %+v", i, s)
+		}
+	}
+}
+
 func TestLiveQuoteSnapshot(t *testing.T) {
 	t.Parallel()
 

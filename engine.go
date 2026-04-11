@@ -69,6 +69,7 @@ const (
 	singletonAccountUpdates    = "account_updates"
 	singletonNewsBulletins     = "news_bulletins"
 	singletonFA                = "fa"
+	singletonCurrentTime       = "current_time"
 )
 
 type route struct {
@@ -318,6 +319,76 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 		return nil, err
 	}
 	return out.values, out.err
+}
+
+func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleRequest) (HistoricalSchedule, error) {
+	type result struct {
+		value HistoricalSchedule
+		err   error
+	}
+
+	resp := make(chan result, 1)
+	var reqID int
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+
+		reqID = e.allocReqID()
+		request, err := buildHistoricalScheduleRequest(reqID, req)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		e.keyed[reqID] = &route{
+			opKind: OpHistoricalSchedule,
+			handle: func(msg any, e *engine) {
+				switch m := msg.(type) {
+				case codec.HistoricalScheduleResponse:
+					delete(e.keyed, reqID)
+					sessions := make([]HistoricalScheduleSession, len(m.Sessions))
+					for i, s := range m.Sessions {
+						sessions[i] = HistoricalScheduleSession{
+							StartDateTime: s.StartDateTime,
+							EndDateTime:   s.EndDateTime,
+							RefDate:       s.RefDate,
+						}
+					}
+					resp <- result{value: HistoricalSchedule{
+						StartDateTime: m.StartDateTime,
+						EndDateTime:   m.EndDateTime,
+						TimeZone:      m.TimeZone,
+						Sessions:      sessions,
+					}}
+				}
+			},
+			handleAPIErr: func(m codec.APIError, e *engine) {
+				delete(e.keyed, reqID)
+				resp <- result{err: e.apiErr(OpHistoricalSchedule, m)}
+			},
+			onDisconnect: func(e *engine, err error) bool {
+				delete(e.keyed, reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(request); err != nil {
+			delete(e.keyed, reqID)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+	})
+	if err != nil {
+		return HistoricalSchedule{}, err
+	}
+	return out.value, out.err
 }
 
 func (e *engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) ([]AccountValue, error) {
@@ -1241,6 +1312,65 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 		return nil, err
 	}
 	return out.codes, out.err
+}
+
+func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
+	type result struct {
+		ts  time.Time
+		err error
+	}
+	resp := make(chan result, 1)
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		if _, exists := e.singletons[singletonCurrentTime]; exists {
+			resp <- result{err: fmt.Errorf("ibkr: current time request already in progress")}
+			return
+		}
+
+		// No handleAPIErr: req_current_time carries no reqID, so the engine
+		// cannot route an APIError to this singleton. ctx cancellation and
+		// onDisconnect are the only failure paths.
+		e.singletons[singletonCurrentTime] = &route{
+			opKind: OpCurrentTime,
+			handle: func(msg any, eng *engine) {
+				m, ok := msg.(codec.CurrentTime)
+				if !ok {
+					return
+				}
+				delete(eng.singletons, singletonCurrentTime)
+				ts, parseErr := parseEpochSeconds(m.Time)
+				if parseErr != nil {
+					resp <- result{err: fmt.Errorf("ibkr: current time: %w", parseErr)}
+					return
+				}
+				resp <- result{ts: ts}
+			},
+			onDisconnect: func(eng *engine, err error) bool {
+				delete(eng.singletons, singletonCurrentTime)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.send(codec.CurrentTimeRequest{}); err != nil {
+			delete(e.singletons, singletonCurrentTime)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { delete(e.singletons, singletonCurrentTime) })
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return out.ts, out.err
 }
 
 func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error) {
@@ -4085,10 +4215,18 @@ func (e *engine) handleIncoming(msg any) {
 		e.maybeReady()
 		return
 	case codec.CurrentTime:
-		if ts, err := time.Parse(time.RFC3339, m.Time); err == nil {
+		// CurrentTime responses arrive without a reqID. Parse the server's
+		// epoch-seconds string, update the session snapshot, and route to a
+		// registered singleton one-shot if one exists. The route handler
+		// re-parses via the same helper so the snapshot and the caller
+		// response cannot disagree.
+		if ts, err := parseEpochSeconds(m.Time); err == nil {
 			e.updateSnapshot(func(s *Snapshot) {
 				s.CurrentTime = ts
 			})
+		}
+		if route, ok := e.singletons[singletonCurrentTime]; ok {
+			route.handle(m, e)
 		}
 		return
 	case codec.APIError:
@@ -4730,6 +4868,8 @@ func messageReqID(msg any) (int, bool) {
 	case codec.TickByTickData:
 		return m.ReqID, true
 	case codec.HistoricalDataUpdate:
+		return m.ReqID, true
+	case codec.HistoricalScheduleResponse:
 		return m.ReqID, true
 	case codec.SecDefOptParamsResponse:
 		return m.ReqID, true

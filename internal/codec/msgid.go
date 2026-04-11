@@ -74,6 +74,8 @@ const (
 	OutCancelWSHMetaData           = 101
 	OutReqWSHEventData             = 102
 	OutCancelWSHEventData          = 103
+	OutReqIds                      = 8
+	OutReqCurrentTime              = 49
 )
 
 // Inbound message IDs (server → client)
@@ -145,6 +147,7 @@ const (
 	InSoftDollarTiers       = 77
 	InDisplayGroupList      = 67
 	InDisplayGroupUpdated   = 68
-	InWSHMetaData           = 105
-	InWSHEventData          = 106
+	InWSHMetaData           = 104
+	InWSHEventData          = 105
+	InHistoricalSchedule    = 106
 )

@@ -34,6 +34,13 @@ var validHistoricalBarSizes = map[BarSize]struct{}{
 }
 
 func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (codec.HistoricalBarsRequest, error) {
+	if req.WhatToShow == ShowSchedule {
+		// whatToShow=SCHEDULE has its own return shape (historicalSchedule,
+		// msg_id 106) and does not produce Bar values. Callers should use
+		// History().Schedule instead of History().Bars so they get the
+		// correct typed response.
+		return codec.HistoricalBarsRequest{}, errors.New("ibkr: History().Bars does not support whatToShow=SCHEDULE; use History().Schedule instead")
+	}
 	duration, err := formatHistoricalDuration(req.Duration)
 	if err != nil {
 		return codec.HistoricalBarsRequest{}, err
@@ -49,6 +56,30 @@ func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (codec.His
 		Duration:    duration,
 		BarSize:     barSize,
 		WhatToShow:  string(req.WhatToShow),
+		UseRTH:      req.UseRTH,
+	}, nil
+}
+
+// buildHistoricalScheduleRequest constructs the outbound wire request for a
+// HistoricalSchedule one-shot. It reuses codec.HistoricalBarsRequest under the
+// hood because REQ_HISTORICAL_DATA (msg_id 20) is the same outbound message;
+// the inbound path is a separate InHistoricalSchedule decoder.
+func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (codec.HistoricalBarsRequest, error) {
+	duration, err := formatHistoricalDuration(req.Duration)
+	if err != nil {
+		return codec.HistoricalBarsRequest{}, err
+	}
+	barSize, err := formatHistoricalBarSize(req.BarSize)
+	if err != nil {
+		return codec.HistoricalBarsRequest{}, err
+	}
+	return codec.HistoricalBarsRequest{
+		ReqID:       reqID,
+		Contract:    toCodecContract(req.Contract),
+		EndDateTime: formatHistoricalEndTime(req.EndTime),
+		Duration:    duration,
+		BarSize:     barSize,
+		WhatToShow:  string(ShowSchedule),
 		UseRTH:      req.UseRTH,
 	}, nil
 }

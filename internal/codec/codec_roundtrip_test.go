@@ -466,6 +466,19 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  WSHEventDataResponse{ReqID: 1, DataJSON: "{\"events\":[]}"},
 		},
 		{
+			name: "HistoricalScheduleResponse",
+			msg: HistoricalScheduleResponse{
+				ReqID:         1,
+				StartDateTime: "20260312-09:30:00",
+				EndDateTime:   "20260410-16:00:00",
+				TimeZone:      "US/Eastern",
+				Sessions: []HistoricalScheduleSession{
+					{StartDateTime: "20260312-09:30:00", EndDateTime: "20260312-16:00:00", RefDate: "20260312"},
+					{StartDateTime: "20260313-09:30:00", EndDateTime: "20260313-16:00:00", RefDate: "20260313"},
+				},
+			},
+		},
+		{
 			name: "DisplayGroupList",
 			msg:  DisplayGroupList{ReqID: 1, Groups: "1|2|3"},
 		},

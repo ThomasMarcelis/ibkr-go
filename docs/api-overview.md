@@ -16,6 +16,7 @@ For lifecycle semantics, error taxonomy, and type guarantees, see
 | `Wait` | `error` | Block until session terminates, return final error |
 | `Session` | `Snapshot` | Current session state, managed accounts, server version |
 | `SessionEvents` | `<-chan Event` | Observable session state changes |
+| `CurrentTime` | `time.Time` | Gateway server wall-clock time |
 
 ## Domain Accessors
 
@@ -24,7 +25,7 @@ For lifecycle semantics, error taxonomy, and type guarantees, see
 | `Accounts()` | account, portfolio, positions, PnL, family codes |
 | `Contracts()` | contract details, qualification, reference data, fundamental XML |
 | `MarketData()` | quotes, real-time bars, tick-by-tick, market depth, market data type |
-| `History()` | historical bars, historical ticks, head timestamp, histogram |
+| `History()` | historical bars, schedule, historical ticks, head timestamp, histogram |
 | `Orders()` | order placement, cancellation, open/completed orders, executions query |
 | `Options()` | option calculations and exercise |
 | `News()` | providers, articles, historical headlines, bulletins |
@@ -76,6 +77,7 @@ For lifecycle semantics, error taxonomy, and type guarantees, see
 | `History().HeadTimestamp` | `time.Time` |
 | `History().Histogram` | `[]HistogramEntry` |
 | `History().Ticks` | `HistoricalTicksResult` |
+| `History().Schedule` | `HistoricalSchedule` |
 
 ## Orders and Options
 

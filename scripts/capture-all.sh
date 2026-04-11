@@ -6,7 +6,8 @@
 #
 # Requirements:
 #  - IB Gateway / TWS running on 127.0.0.1:4002
-#  - ./ibkr-capture and ./ibkr-recorder built at repo root (go build ./cmd/...)
+#  - ./ibkr-capture and ./ibkr-recorder built at repo root (or IBKR_CAPTURE /
+#    IBKR_RECORDER pointing at binaries)
 #
 # Notes:
 #  - The recorder listens on 127.0.0.1:4101 and proxies to :4002.
@@ -22,36 +23,15 @@ cd "$REPO_DIR"
 
 UPSTREAM="${IBKR_UPSTREAM:-127.0.0.1:4002}"
 LISTEN="${IBKR_LISTEN:-127.0.0.1:4101}"
+BATCH="${IBKR_CAPTURE_BATCH:-all}"
+CAPTURE_BIN="${IBKR_CAPTURE:-./ibkr-capture}"
+RECORDER_BIN="${IBKR_RECORDER:-./ibkr-recorder}"
 
-SCENARIOS=(
-  "bootstrap|1"
-  "bootstrap_client_id_0|0"
-  "contract_details_aapl_stk|1"
-  "contract_details_aapl_opt|1"
-  "contract_details_eurusd_cash|1"
-  "contract_details_es_fut|1"
-  "contract_details_not_found|1"
-  "account_summary_snapshot|1"
-  "account_summary_stream|1"
-  "account_summary_two_subs|1"
-  "positions_snapshot|1"
-  "historical_bars_1d_1h|1"
-  "historical_bars_30d_1day|1"
-  "historical_bars_bidask|1"
-  "historical_bars_error|1"
-  "quote_snapshot_aapl|1"
-  "quote_stream_aapl|1"
-  "quote_stream_genericticks|1"
-  "quote_stream_multi_asset|1"
-  "realtime_bars_aapl|1"
-  "open_orders_empty|1"
-  "open_orders_all|0"
-  "executions_snapshot|1"
-  "historical_ticks_aapl_timezone_window|1"
-  "historical_news_aapl_timezone_window|1"
-  "place_order_oca_pair_aapl|1"
-  "trading_split_round_trip_aapl|1"
-)
+mapfile -t SCENARIOS < <("$CAPTURE_BIN" -list-batch "$BATCH")
+if [[ ${#SCENARIOS[@]} -eq 0 ]]; then
+  echo "no scenarios found for batch $BATCH"
+  exit 1
+fi
 
 run_scenario() {
   local scenario="$1"
@@ -59,20 +39,20 @@ run_scenario() {
 
   echo "=== [$(date +%H:%M:%S)] scenario: $scenario (client_id=$client_id) ==="
 
-  ./ibkr-recorder \
+  "$RECORDER_BIN" \
     -listen "$LISTEN" \
     -upstream "$UPSTREAM" \
     -scenario "$scenario" \
     -out captures \
     -client-id "$client_id" \
-    -notes "automated capture run, client_id=$client_id" \
+    -notes "automated capture run, batch=$BATCH, client_id=$client_id" \
     > "/tmp/ibkr-recorder-${scenario}.log" 2>&1 &
   local recorder_pid=$!
 
   # Give recorder 500ms to bind.
   sleep 0.5
 
-  if ! ./ibkr-capture \
+  if ! "$CAPTURE_BIN" \
         -addr "$LISTEN" \
         -client-id "$client_id" \
         -scenario "$scenario"; then

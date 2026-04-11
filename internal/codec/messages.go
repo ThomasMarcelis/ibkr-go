@@ -55,6 +55,22 @@ type CurrentTime struct {
 
 func (CurrentTime) messageName() string { return "current_time" }
 
+// CurrentTimeRequest is the outbound reqCurrentTime message (OUT 49). The
+// server responds asynchronously with a CurrentTime frame using the same
+// numeric msg_id.
+type CurrentTimeRequest struct{}
+
+func (CurrentTimeRequest) messageName() string { return "req_current_time" }
+
+// ReqIDsRequest is the outbound reqIds message (OUT 8). The server responds
+// with a NextValidID frame (msg_id 9) carrying the next available order ID.
+// NumIDs is a legacy parameter kept at 1 in the official EClient.
+type ReqIDsRequest struct {
+	NumIDs int
+}
+
+func (ReqIDsRequest) messageName() string { return "req_ids" }
+
 type APIError struct {
 	ReqID                   int
 	Code                    int
@@ -1184,6 +1200,32 @@ type WSHEventDataResponse struct {
 }
 
 func (WSHEventDataResponse) messageName() string { return "wsh_event_data" }
+
+// HistoricalScheduleResponse is the decoded inbound response to a
+// REQ_HISTORICAL_DATA request with whatToShow=SCHEDULE. Each session entry
+// describes one contiguous trading window inside the requested duration.
+// Live evidence: server_version 200 emits msg_id 106 with 5 header fields
+// (reqID, startDateTime, endDateTime, timeZone, sessionCount) followed by
+// 3 fields per session.
+type HistoricalScheduleResponse struct {
+	ReqID         int
+	StartDateTime string
+	EndDateTime   string
+	TimeZone      string
+	Sessions      []HistoricalScheduleSession
+}
+
+func (HistoricalScheduleResponse) messageName() string { return "historical_schedule" }
+
+// HistoricalScheduleSession describes one trading session entry inside a
+// HistoricalScheduleResponse. IBKR emits three string fields per session:
+// StartDateTime, EndDateTime, and RefDate (the calendar date the session
+// belongs to, useful when a session crosses midnight).
+type HistoricalScheduleSession struct {
+	StartDateTime string
+	EndDateTime   string
+	RefDate       string
+}
 
 // Display Groups (OUT 67, 68, 69, 70 / IN 67, 68)
 

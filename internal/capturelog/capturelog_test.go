@@ -183,6 +183,44 @@ func TestNormalizeEventsRejectsTruncatedFrameOnDisconnect(t *testing.T) {
 	}
 }
 
+func TestNormalizeEventsSkipsClientHandshakePrefix(t *testing.T) {
+	t.Parallel()
+
+	versionFrame := mustFrame(t, []byte("v100..200"))
+	startFrame := mustFrame(t, wire.EncodeFields([]string{"71", "2", "1", ""}))
+	serverFrame := mustFrame(t, wire.EncodeFields([]string{"200", "20260405 23:49:26 Central European Standard Time"}))
+
+	events := []Event{
+		{Kind: EventConnect, Leg: 1},
+		{Kind: EventChunk, Leg: 1, Direction: "client", Length: 4 + len(versionFrame), Data: encodeBase64(append([]byte("API\x00"), versionFrame...))},
+		{Kind: EventChunk, Leg: 1, Direction: "server", Length: len(serverFrame), Data: encodeBase64(serverFrame)},
+		{Kind: EventChunk, Leg: 1, Direction: "client", Length: len(startFrame), Data: encodeBase64(startFrame)},
+		{Kind: EventDisconnect, Leg: 1},
+	}
+
+	replayEvents, err := NormalizeEvents(events)
+	if err != nil {
+		t.Fatalf("NormalizeEvents() error = %v", err)
+	}
+	if len(replayEvents) != 5 {
+		t.Fatalf("replayEvents len = %d, want 5", len(replayEvents))
+	}
+	gotVersion, err := base64Decoded(replayEvents[1].Data)
+	if err != nil {
+		t.Fatalf("base64Decoded(version) error = %v", err)
+	}
+	if string(gotVersion) != "v100..200" {
+		t.Fatalf("version payload = %q, want v100..200", string(gotVersion))
+	}
+	gotStart, err := base64Decoded(replayEvents[3].Data)
+	if err != nil {
+		t.Fatalf("base64Decoded(start) error = %v", err)
+	}
+	if !bytes.Equal(gotStart, wire.EncodeFields([]string{"71", "2", "1", ""})) {
+		t.Fatalf("start payload = %x, want START_API frame", gotStart)
+	}
+}
+
 func mustFrame(t *testing.T, payload []byte) []byte {
 	t.Helper()
 

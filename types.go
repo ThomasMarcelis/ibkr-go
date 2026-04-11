@@ -69,6 +69,8 @@ const (
 	OpPlaceOrder           OpKind = "place_order"
 	OpCancelOrder          OpKind = "cancel_order"
 	OpGlobalCancel         OpKind = "global_cancel"
+	OpHistoricalSchedule   OpKind = "historical_schedule"
+	OpCurrentTime          OpKind = "current_time"
 )
 
 type OrderAction string
@@ -345,6 +347,39 @@ type Bar struct {
 	Volume Decimal
 	WAP    Decimal
 	Count  int
+}
+
+// HistoricalScheduleRequest asks the Gateway to return the session schedule
+// that would cover a bar request for the given contract and duration. The
+// request reuses REQ_HISTORICAL_DATA under the hood with whatToShow=SCHEDULE,
+// so Duration and BarSize behave the same as for [History.Bars]. UseRTH is
+// respected by the Gateway but the schedule response already encodes the
+// regular-hours boundaries per session.
+type HistoricalScheduleRequest struct {
+	Contract Contract
+	EndTime  time.Time
+	Duration HistoricalDuration
+	BarSize  BarSize
+	UseRTH   bool
+}
+
+// HistoricalSchedule is the result of [History.Schedule]. StartDateTime,
+// EndDateTime, and TimeZone describe the overall window returned by the
+// Gateway; Sessions lists the contiguous trading windows inside it.
+type HistoricalSchedule struct {
+	StartDateTime string
+	EndDateTime   string
+	TimeZone      string
+	Sessions      []HistoricalScheduleSession
+}
+
+// HistoricalScheduleSession describes a single trading session returned as
+// part of a [HistoricalSchedule]. RefDate is the calendar date the session
+// belongs to, which is useful when a session crosses midnight.
+type HistoricalScheduleSession struct {
+	StartDateTime string
+	EndDateTime   string
+	RefDate       string
 }
 
 type AccountSummaryRequest struct {

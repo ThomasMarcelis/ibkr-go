@@ -581,3 +581,71 @@ func TestCaptureEncode_OpenOrdersRequest(t *testing.T) {
 		t.Errorf("Encode(OpenOrdersRequest{all}) = %q, want %q", got, want)
 	}
 }
+
+func TestCaptureDecode_HistoricalSchedule(t *testing.T) {
+	t.Parallel()
+	// captures/20260411T175212Z-historical_schedule_aapl, server_version 200.
+	// events.jsonl sha256 prefix: 1b207a57180e6197
+	// AAPL STK / 1 M / 1 day / SCHEDULE. Response shape:
+	//   [106, reqId, startDateTime, endDateTime, timeZone, sessionCount,
+	//    (sessionStart, sessionEnd, refDate)*count]
+	// Live emitted 21 sessions covering 2026-03-12 through 2026-04-10.
+	payload := []byte(
+		"106\x001001\x0020260312-09:30:00\x0020260410-16:00:00\x00US/Eastern\x0021\x00" +
+			"20260312-09:30:00\x0020260312-16:00:00\x0020260312\x00" +
+			"20260313-09:30:00\x0020260313-16:00:00\x0020260313\x00" +
+			"20260316-09:30:00\x0020260316-16:00:00\x0020260316\x00" +
+			"20260317-09:30:00\x0020260317-16:00:00\x0020260317\x00" +
+			"20260318-09:30:00\x0020260318-16:00:00\x0020260318\x00" +
+			"20260319-09:30:00\x0020260319-16:00:00\x0020260319\x00" +
+			"20260320-09:30:00\x0020260320-16:00:00\x0020260320\x00" +
+			"20260323-09:30:00\x0020260323-16:00:00\x0020260323\x00" +
+			"20260324-09:30:00\x0020260324-16:00:00\x0020260324\x00" +
+			"20260325-09:30:00\x0020260325-16:00:00\x0020260325\x00" +
+			"20260326-09:30:00\x0020260326-16:00:00\x0020260326\x00" +
+			"20260327-09:30:00\x0020260327-16:00:00\x0020260327\x00" +
+			"20260330-09:30:00\x0020260330-16:00:00\x0020260330\x00" +
+			"20260331-09:30:00\x0020260331-16:00:00\x0020260331\x00" +
+			"20260401-09:30:00\x0020260401-16:00:00\x0020260401\x00" +
+			"20260402-09:30:00\x0020260402-16:00:00\x0020260402\x00" +
+			"20260406-09:30:00\x0020260406-16:00:00\x0020260406\x00" +
+			"20260407-09:30:00\x0020260407-16:00:00\x0020260407\x00" +
+			"20260408-09:30:00\x0020260408-16:00:00\x0020260408\x00" +
+			"20260409-09:30:00\x0020260409-16:00:00\x0020260409\x00" +
+			"20260410-09:30:00\x0020260410-16:00:00\x0020260410\x00")
+
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(HistoricalScheduleResponse)
+	if !ok {
+		t.Fatalf("type = %T, want HistoricalScheduleResponse", msgs[0])
+	}
+	if m.ReqID != 1001 {
+		t.Errorf("ReqID = %d, want 1001", m.ReqID)
+	}
+	if m.StartDateTime != "20260312-09:30:00" {
+		t.Errorf("StartDateTime = %q, want 20260312-09:30:00", m.StartDateTime)
+	}
+	if m.EndDateTime != "20260410-16:00:00" {
+		t.Errorf("EndDateTime = %q, want 20260410-16:00:00", m.EndDateTime)
+	}
+	if m.TimeZone != "US/Eastern" {
+		t.Errorf("TimeZone = %q, want US/Eastern", m.TimeZone)
+	}
+	if len(m.Sessions) != 21 {
+		t.Fatalf("Sessions = %d, want 21", len(m.Sessions))
+	}
+	first := m.Sessions[0]
+	if first.StartDateTime != "20260312-09:30:00" || first.EndDateTime != "20260312-16:00:00" || first.RefDate != "20260312" {
+		t.Errorf("Sessions[0] = %+v, want 20260312-09:30:00 / 20260312-16:00:00 / 20260312", first)
+	}
+	last := m.Sessions[20]
+	if last.StartDateTime != "20260410-09:30:00" || last.EndDateTime != "20260410-16:00:00" || last.RefDate != "20260410" {
+		t.Errorf("Sessions[20] = %+v, want 20260410-09:30:00 / 20260410-16:00:00 / 20260410", last)
+	}
+}

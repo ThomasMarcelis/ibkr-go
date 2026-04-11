@@ -106,6 +106,10 @@ account data.
 
 ## Next Transcript Work
 
+- use [`live-coverage-matrix.md`](live-coverage-matrix.md) as the target matrix
+  for exhaustive live capture coverage and promotion status
+- use [`ibkr-api-inventory.md`](ibkr-api-inventory.md) as the official/repo
+  inventory that keeps the matrix from drifting away from IBKR's API surface
 - grow scenario coverage for reconnect, pacing, and version-gated branches
 - grow scenario coverage for order-management edge cases and more complex order
   shapes

@@ -18,6 +18,7 @@ func (c *Client) Done() <-chan struct{}
 func (c *Client) Wait() error
 func (c *Client) Session() Snapshot
 func (c *Client) SessionEvents() <-chan Event
+func (c *Client) CurrentTime(ctx context.Context) (time.Time, error)
 ```
 
 Session states are `Disconnected`, `Connecting`, `Handshaking`, `Ready`,

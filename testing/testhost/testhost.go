@@ -512,6 +512,14 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["optional_capabilities"] = fields[3]
 		}
 		return "start_api", body, nil
+	case 49: // OutReqCurrentTime: [49, 1]
+		return "req_current_time", map[string]any{}, nil
+	case 8: // OutReqIds: [8, 1, numIds]
+		body := map[string]any{}
+		if len(fields) >= 3 {
+			body["num_ids"] = fields[2]
+		}
+		return "req_ids", body, nil
 	case 9: // OutReqContractData: [9, 8, reqId, conId, symbol, secType, ...]
 		body := map[string]any{}
 		if len(fields) >= 3 {

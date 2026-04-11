@@ -101,8 +101,9 @@ var allInboundMsgIDs = []int{
 	InSoftDollarTiers,       // 77
 	InDisplayGroupList,      // 67
 	InDisplayGroupUpdated,   // 68
-	InWSHMetaData,           // 105
-	InWSHEventData,          // 106
+	InWSHMetaData,           // 104
+	InWSHEventData,          // 105
+	InHistoricalSchedule,    // 106
 }
 
 // FuzzDecodeBatch proves DecodeBatch never panics on arbitrary byte payloads.
@@ -499,6 +500,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"CompletedOrder", InCompletedOrder, 95},               // 11 contract + action + qty + orderType + 4 skip + 71 skip + status + 3 skip + filled + remaining
 		{"CompletedOrderEnd", InCompletedOrderEnd, 0},          // no fields after msg_id
 		{"UserInfo", InUserInfo, 2},                            // reqID, whiteBrandingId
+		{"HistoricalSchedule", InHistoricalSchedule, 5},        // reqID, start, end, timezone, session count
 		{"HistoricalDataUpdate", InHistoricalDataUpdate, 10},   // reqID, barCount, time, O, H, L, C, vol, wap, count
 	}
 
