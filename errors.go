@@ -57,3 +57,27 @@ type APIError struct {
 func (e *APIError) Error() string {
 	return fmt.Sprintf("ibkr: api %s code=%d conn=%d: %s", e.OpKind, e.Code, e.ConnectionSeq, e.Message)
 }
+
+// IsRetryable reports whether err represents a transient client/session
+// condition that a caller may retry. IBKR API errors are server-side request
+// rejections and are not retryable by default.
+func IsRetryable(err error) bool {
+	return isRetryableError(err)
+}
+
+func isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := errors.AsType[*APIError](err); ok {
+		return false
+	}
+	return errors.Is(err, ErrInterrupted) || errors.Is(err, ErrResumeRequired)
+}
+
+func retryableSubscriptionState(evt SubscriptionStateEvent) bool {
+	if evt.Kind == SubscriptionGap {
+		return true
+	}
+	return evt.Kind == SubscriptionClosed && isRetryableError(evt.Err)
+}

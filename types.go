@@ -179,6 +179,7 @@ type SubscriptionStateEvent struct {
 	Kind          SubscriptionStateKind
 	ConnectionSeq uint64
 	Err           error
+	Retryable     bool
 }
 
 type XMLDocument []byte
@@ -758,6 +759,7 @@ func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
 	if h.isDone() {
 		return
 	}
+	evt.Retryable = retryableSubscriptionState(evt)
 	if evt.At.IsZero() {
 		evt.At = time.Now().UTC()
 	}

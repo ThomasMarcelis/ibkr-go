@@ -100,10 +100,15 @@ defer sub.Close()
 
 for {
     select {
-    case update := <-sub.Events():
+    case update, ok := <-sub.Events():
+        if !ok {
+            return sub.Wait()
+        }
         fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
-    case state := <-sub.Lifecycle():
-        fmt.Println("lifecycle:", state.Kind)
+    case state, ok := <-sub.Lifecycle():
+        if ok {
+            fmt.Println("lifecycle:", state.Kind, "retryable:", state.Retryable)
+        }
     case <-sub.Done():
         return sub.Wait()
     }
@@ -111,7 +116,9 @@ for {
 ```
 
 `Events()` carries market data. `Lifecycle()` carries session boundaries —
-`SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix.
+`SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix. When a stream
+ends, call `Wait()` and use `ibkr.IsRetryable(err)` or `state.Retryable` to
+distinguish reconnectable gaps from terminal IBKR API rejections.
 
 ### Fetch historical bars
 

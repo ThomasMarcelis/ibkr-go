@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## v1.4.3
+
+### Added
+
+- **Subscription lifecycle events now classify retryability.** `SubscriptionGap`
+  and `SubscriptionClosed` include a `Retryable` flag, and `IsRetryable(err)`
+  lets consumers classify the final `sub.Wait()` error after an `Events()`
+  channel closes.
+
+### Fixed
+
+- **Real-time bars API rejections are now distinguishable from reconnect gaps.**
+  Live Gateway can accept `reqRealTimeBars` and then asynchronously reject it
+  with a request-scoped API error. The subscription still closes with the
+  `*APIError`, but lifecycle state and `IsRetryable` now mark that terminal
+  rejection as non-retryable so consumers do not start reconnect storms.
+
 ## v1.4.2
 
 ### Fixed

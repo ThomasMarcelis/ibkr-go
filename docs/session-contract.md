@@ -52,7 +52,9 @@ type Subscription[T any] struct {
 `Events()` carries business data only. `Lifecycle()` carries lifecycle only and
 is bounded/observational: if unread, older queued lifecycle events may be
 dropped in favor of the latest one. `SubscriptionClosed` is still guaranteed
-before the lifecycle channel closes.
+before the lifecycle channel closes. `SubscriptionGap` and `SubscriptionClosed`
+events include `Retryable`; callers that read only `Events()` should inspect
+`sub.Wait()` with `IsRetryable(err)` after the channel closes.
 
 `AwaitSnapshot(ctx)` is durable for snapshot-style subscriptions. It returns
 `nil` once `SnapshotComplete` has occurred, even if the lifecycle event was
@@ -66,6 +68,12 @@ Lifecycle event kinds:
 - `Gap`
 - `Resumed`
 - `Closed`
+
+Retryability:
+
+- transport/session gaps are retryable
+- `ErrInterrupted` and `ErrResumeRequired` closes are retryable
+- `*APIError` closes are terminal request rejections and are not retryable
 
 Default subscription behavior:
 
@@ -129,6 +137,7 @@ Public error taxonomy:
 - `*ConnectError`
 - `*ProtocolError`
 - `*APIError`
+- `IsRetryable(err)`
 - `ErrNotReady`
 - `ErrInterrupted`
 - `ErrResumeRequired`

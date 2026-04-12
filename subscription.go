@@ -135,6 +135,7 @@ func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
 		return
 	default:
 	}
+	evt.Retryable = retryableSubscriptionState(evt)
 	if evt.At.IsZero() {
 		evt.At = time.Now().UTC()
 	}

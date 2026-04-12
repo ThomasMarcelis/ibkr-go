@@ -67,17 +67,24 @@
 //
 //	for {
 //	    select {
-//	    case update := <-sub.Events():
+//	    case update, ok := <-sub.Events():
+//	        if !ok {
+//	            return sub.Wait()
+//	        }
 //	        // handle business data
-//	    case state := <-sub.Lifecycle():
-//	        // handle lifecycle (SnapshotComplete, Gap, Resumed, etc.)
+//	    case state, ok := <-sub.Lifecycle():
+//	        if ok {
+//	            // handle lifecycle (SnapshotComplete, Gap, Resumed, etc.)
+//	        }
 //	    case <-sub.Done():
 //	        return sub.Wait()
 //	    }
 //	}
 //
 // Call Close to unsubscribe. Wait blocks until termination and returns the
-// final error, if any.
+// final error, if any. SubscriptionClosed and Gap lifecycle events include a
+// Retryable flag. API errors are terminal request rejections; use [IsRetryable]
+// on the final error when a consumer loop only observes Events().
 //
 // # Order Management
 //
@@ -115,6 +122,7 @@
 //
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
 // [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].
+// [IsRetryable] classifies final subscription errors for retry/backoff policy.
 //
 // # Financial Types
 //

@@ -599,6 +599,9 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
+	if !gap.Retryable {
+		t.Fatal("gap.Retryable = false, want true")
+	}
 
 	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
 	if resumed.ConnectionSeq != 2 {
@@ -1090,6 +1093,9 @@ func TestSubscribeRealTimeBarsResumeAutoReconnectsAfterTransportLoss(t *testing.
 	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
+	}
+	if !gap.Retryable {
+		t.Fatal("gap.Retryable = false, want true")
 	}
 
 	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)

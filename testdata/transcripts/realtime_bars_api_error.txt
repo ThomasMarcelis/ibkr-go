@@ -1,0 +1,18 @@
+# Live-derived from local IB Gateway 127.0.0.1:4002.
+# Scenario: issue 8 real-time-bars request-scoped API error, server_version=200.
+# Raw evidence kept local:
+# /tmp/ibkr-go-issue-8-captures/20260412T212310Z-realtime_bars_api_error
+# events.jsonl sha256 prefix: fb799bbd0db35430
+#
+# Gateway accepted reqRealTimeBars for AAPL STK SMART/USD, then rejected the
+# request asynchronously with a request-scoped APIError. The subscription must
+# close with a non-retryable APIError rather than looking like a reconnect gap.
+handshake {"server_version":200,"connection_time":"20260412 23:23:15 Central European Standard Time"}
+server managed_accounts {"accounts":["DUP770846"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1776028995218"}
+server api_error {"req_id":-1,"code":2107,"message":"HMDS data farm connection is inactive but should be available upon demand.ushmds","advanced_order_reject_json":"","error_time_ms":"1776028995218"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1776028995218"}
+client req_realtime_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"what_to_show":"TRADES","use_rth":true}
+server api_error {"req_id":"$req1","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776028995389"}
+disconnect

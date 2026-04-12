@@ -69,6 +69,9 @@ func TestAPIErrorOnSubscription(t *testing.T) {
 	if apiErr.Code != 354 {
 		t.Fatalf("APIError.Code = %d, want 354", apiErr.Code)
 	}
+	if closed.Retryable {
+		t.Fatal("closed.Retryable = true, want false for API error")
+	}
 
 	waitErr := sub.Wait()
 	if waitErr == nil {
@@ -80,6 +83,74 @@ func TestAPIErrorOnSubscription(t *testing.T) {
 	}
 	if waitAPIErr.Code != 354 {
 		t.Fatalf("sub.Wait() APIError.Code = %d, want 354", waitAPIErr.Code)
+	}
+	if ibkr.IsRetryable(waitErr) {
+		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API error")
+	}
+}
+
+func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "realtime_bars_api_error.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sub, err := client.MarketData().SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		WhatToShow: ibkr.ShowTrades,
+		UseRTH:     true,
+	})
+	if err != nil {
+		t.Fatalf("SubscribeRealTimeBars() error = %v", err)
+	}
+
+	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	if started.Retryable {
+		t.Fatal("started.Retryable = true, want false")
+	}
+
+	closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
+	if closed.Retryable {
+		t.Fatal("closed.Retryable = true, want false for API rejection")
+	}
+	apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+	if !ok {
+		t.Fatalf("closed.Err type = %T, want *ibkr.APIError", closed.Err)
+	}
+	if apiErr.Code != 10089 {
+		t.Fatalf("APIError.Code = %d, want 10089", apiErr.Code)
+	}
+
+	waitErr := sub.Wait()
+	if waitErr == nil {
+		t.Fatal("sub.Wait() error = nil, want API error")
+	}
+	select {
+	case _, ok := <-sub.Events():
+		if ok {
+			t.Fatal("Events() produced a bar after API rejection")
+		}
+	default:
+		t.Fatal("Events() still open after sub.Wait()")
+	}
+	if ibkr.IsRetryable(waitErr) {
+		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API rejection")
+	}
+	waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
+	if !ok {
+		t.Fatalf("sub.Wait() error type = %T, want *ibkr.APIError", waitErr)
+	}
+	if waitAPIErr.Code != 10089 {
+		t.Fatalf("sub.Wait() APIError.Code = %d, want 10089", waitAPIErr.Code)
 	}
 }
 
@@ -292,9 +363,15 @@ func TestMarketDepthError10xxx(t *testing.T) {
 	if apiErr.Code != 10092 {
 		t.Fatalf("APIError.Code = %d, want 10092", apiErr.Code)
 	}
+	if closed.Retryable {
+		t.Fatal("closed.Retryable = true, want false for API error")
+	}
 
 	waitErr := sub.Wait()
 	if waitErr == nil {
 		t.Fatal("sub.Wait() error = nil, want API error")
+	}
+	if ibkr.IsRetryable(waitErr) {
+		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API error")
 	}
 }

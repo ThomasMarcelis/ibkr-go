@@ -144,6 +144,64 @@ func TestSubscriptionStateEventDelivery(t *testing.T) {
 	})
 }
 
+func TestSubscriptionStateRetryableClassification(t *testing.T) {
+	t.Parallel()
+
+	apiErr := &APIError{OpKind: OpRealTimeBars, Code: 420, Message: "Invalid Real-time Query"}
+	tests := []struct {
+		name      string
+		evt       SubscriptionStateEvent
+		retryable bool
+	}{
+		{
+			name:      "gap",
+			evt:       SubscriptionStateEvent{Kind: SubscriptionGap},
+			retryable: true,
+		},
+		{
+			name:      "closed interrupted",
+			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: ErrInterrupted},
+			retryable: true,
+		},
+		{
+			name:      "closed resume required",
+			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: ErrResumeRequired},
+			retryable: true,
+		},
+		{
+			name:      "closed api error",
+			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: apiErr},
+			retryable: false,
+		},
+		{
+			name:      "closed slow consumer",
+			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: ErrSlowConsumer},
+			retryable: false,
+		},
+		{
+			name:      "closed clean",
+			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed},
+			retryable: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+			sub.emitState(tt.evt)
+			got := <-sub.Lifecycle()
+			if got.Retryable != tt.retryable {
+				t.Fatalf("Retryable = %v, want %v", got.Retryable, tt.retryable)
+			}
+			if retryable := IsRetryable(tt.evt.Err); retryable != tt.retryable && tt.evt.Kind == SubscriptionClosed {
+				t.Fatalf("IsRetryable(%v) = %v, want %v", tt.evt.Err, retryable, tt.retryable)
+			}
+		})
+	}
+}
+
 func TestSubscriptionStateChannelFull(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
