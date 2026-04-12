@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	account := client.Session().ManagedAccounts[0]
 
@@ -79,7 +79,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer pnl.Close()
+	defer func() { _ = pnl.Close() }()
 
 	fmt.Println("\n=== streaming P&L (30s) ===")
 	timeout := time.After(30 * time.Second)

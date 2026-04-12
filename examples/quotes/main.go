@@ -41,7 +41,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	// Request delayed data so the example works without a live market data
 	// subscription. Remove this line if you have real-time entitlements.
@@ -60,7 +60,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer sub.Close()
+	defer func() { _ = sub.Close() }()
 
 	timeout := time.After(10 * time.Second)
 	for {
