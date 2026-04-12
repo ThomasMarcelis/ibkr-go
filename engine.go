@@ -12,6 +12,7 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/shopspring/decimal"
 )
 
 type engine struct {
@@ -38,7 +39,9 @@ type engine struct {
 	executions  executionCorrelator
 	execToOrder map[string]int64 // execID → orderID for commission routing to order handles
 
-	nextReqID int
+	nextReqID                int
+	nextHistoricalRequest    time.Time
+	recentHistoricalRequests map[string]time.Time
 
 	bootstrap bootstrapState
 	closed    bool
@@ -54,7 +57,11 @@ type bootstrapState struct {
 const (
 	minServerVersion = 100
 	maxServerVersion = 200
-	reconnectBackoff = 100 * time.Millisecond
+	reconnectBackoff = time.Second
+	bootstrapTimeout = 5 * time.Second
+
+	historicalRequestSpacing   = 2 * time.Second
+	historicalIdenticalSpacing = 15 * time.Second
 )
 
 const (
@@ -110,19 +117,20 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 	}
 
 	e := &engine{
-		cfg:          cfg,
-		cmds:         make(chan func(), 256),
-		incoming:     make(chan any, 256),
-		transportErr: make(chan error, 8),
-		ready:        make(chan error, 1),
-		done:         make(chan struct{}),
-		events:       newObserver[Event](cfg.eventBuffer),
-		keyed:        make(map[int]*route),
-		singletons:   make(map[string]*route),
-		orders:       make(map[int64]*orderRoute),
-		executions:   newExecutionCorrelator(),
-		execToOrder:  make(map[string]int64),
-		nextReqID:    1,
+		cfg:                      cfg,
+		cmds:                     make(chan func(), 256),
+		incoming:                 make(chan any, 256),
+		transportErr:             make(chan error, 8),
+		ready:                    make(chan error, 1),
+		done:                     make(chan struct{}),
+		events:                   newObserver[Event](cfg.eventBuffer),
+		keyed:                    make(map[int]*route),
+		singletons:               make(map[string]*route),
+		orders:                   make(map[int64]*orderRoute),
+		executions:               newExecutionCorrelator(),
+		execToOrder:              make(map[string]int64),
+		recentHistoricalRequests: make(map[string]time.Time),
+		nextReqID:                1,
 		snapshot: Snapshot{
 			State: StateDisconnected,
 		},
@@ -222,7 +230,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.ContractDetailsRequest{
+		if err := e.sendContext(ctx, codec.ContractDetailsRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(contract),
 		}); err != nil {
@@ -263,7 +271,7 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 
 	resp := make(chan result, 1)
 	var reqID int
-	enqueueOneShotSetup(ctx, e, func() {
+	enqueueHistoricalSetup(ctx, e, historicalBarsPacingKey(req), nil, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
 			return
@@ -306,7 +314,7 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(request); err != nil {
+		if err := e.sendContext(ctx, request); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -329,7 +337,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 
 	resp := make(chan result, 1)
 	var reqID int
-	enqueueOneShotSetup(ctx, e, func() {
+	enqueueHistoricalSetup(ctx, e, historicalSchedulePacingKey(req), nil, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
 			return
@@ -376,7 +384,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(request); err != nil {
+		if err := e.sendContext(ctx, request); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -481,7 +489,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 			},
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -580,7 +588,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			},
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(codec.PositionsRequest{}); err != nil {
+		if err := e.sendContext(ctx, codec.PositionsRequest{}); err != nil {
 			delete(e.singletons, singletonPositions)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -607,11 +615,11 @@ func (e *engine) SetMarketDataType(ctx context.Context, dataType MarketDataType)
 	if dataType < MarketDataLive || dataType > MarketDataDelayedFrozen {
 		return fmt.Errorf("invalid market data type %d: must be 1 (live), 2 (frozen), 3 (delayed), or 4 (delayed-frozen)", dataType)
 	}
-	return awaitFireAndForget(ctx, e, func() error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.send(codec.ReqMarketDataType{DataType: int(dataType)})
+		return e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(dataType)})
 	})
 }
 
@@ -796,7 +804,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			},
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -912,7 +920,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -1031,7 +1039,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -1125,7 +1133,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		}
 
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
+		if err := e.sendContext(ctx, codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
 			delete(e.singletons, singletonOpenOrders)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -1237,7 +1245,7 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -1299,7 +1307,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.FamilyCodesRequest{}); err != nil {
+		if err := e.sendContext(ctx, codec.FamilyCodesRequest{}); err != nil {
 			delete(e.singletons, singletonFamilyCodes)
 			resp <- result{err: err}
 		}
@@ -1358,7 +1366,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.CurrentTimeRequest{}); err != nil {
+		if err := e.sendContext(ctx, codec.CurrentTimeRequest{}); err != nil {
 			delete(e.singletons, singletonCurrentTime)
 			resp <- result{err: err}
 		}
@@ -1416,7 +1424,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.MktDepthExchangesRequest{}); err != nil {
+		if err := e.sendContext(ctx, codec.MktDepthExchangesRequest{}); err != nil {
 			delete(e.singletons, singletonMktDepthExchanges)
 			resp <- result{err: err}
 		}
@@ -1470,7 +1478,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.NewsProvidersRequest{}); err != nil {
+		if err := e.sendContext(ctx, codec.NewsProvidersRequest{}); err != nil {
 			delete(e.singletons, singletonNewsProviders)
 			resp <- result{err: err}
 		}
@@ -1520,7 +1528,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.ScannerParametersRequest{}); err != nil {
+		if err := e.sendContext(ctx, codec.ScannerParametersRequest{}); err != nil {
 			delete(e.singletons, singletonScannerParameters)
 			resp <- result{err: err}
 		}
@@ -1572,7 +1580,7 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.UserInfoRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, codec.UserInfoRequest{ReqID: reqID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
@@ -1636,7 +1644,7 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
+		if err := e.sendContext(ctx, codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
@@ -1694,7 +1702,7 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.HeadTimestampRequest{
+		if err := e.sendContext(ctx, codec.HeadTimestampRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
 			WhatToShow: string(req.WhatToShow),
@@ -1776,7 +1784,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.MarketRuleRequest{MarketRuleID: marketRuleID}); err != nil {
+		if err := e.sendContext(ctx, codec.MarketRuleRequest{MarketRuleID: marketRuleID}); err != nil {
 			delete(e.singletons, singletonMarketRule)
 			resp <- result{err: err}
 		}
@@ -1856,7 +1864,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.CompletedOrdersRequest{APIOnly: apiOnly}); err != nil {
+		if err := e.sendContext(ctx, codec.CompletedOrdersRequest{APIOnly: apiOnly}); err != nil {
 			delete(e.singletons, singletonCompletedOrders)
 			resp <- result{err: err}
 		}
@@ -1992,7 +2000,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(codec.AccountUpdatesRequest{Subscribe: true, Account: account}); err != nil {
+		if err := e.sendContext(ctx, codec.AccountUpdatesRequest{Subscribe: true, Account: account}); err != nil {
 			delete(e.singletons, singletonAccountUpdates)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2088,7 +2096,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2197,7 +2205,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2294,7 +2302,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2403,7 +2411,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2545,7 +2553,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2624,7 +2632,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(codec.NewsBulletinsRequest{AllMessages: allMessages}); err != nil {
+		if err := e.sendContext(ctx, codec.NewsBulletinsRequest{AllMessages: allMessages}); err != nil {
 			delete(e.singletons, singletonNewsBulletins)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2657,7 +2665,9 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 	}
 	resp := make(chan result, 1)
 
-	enqueueSubscriptionSetup(ctx, e, resp, func() {
+	enqueueHistoricalSetup(ctx, e, historicalBarsPacingKey(req), func() {
+		resp <- result{}
+	}, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
 			return
@@ -2738,7 +2748,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(codecReq); err != nil {
+		if err := e.sendContext(ctx, codecReq); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2780,7 +2790,7 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.SecDefOptParamsResponse:
-					strikes := make([]Decimal, len(m.Strikes))
+					strikes := make([]decimal.Decimal, len(m.Strikes))
 					for i, s := range m.Strikes {
 						strike, err := parseRequiredDecimal(s, "sec def opt params strike")
 						if err != nil {
@@ -2816,7 +2826,7 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.SecDefOptParamsRequest{
+		if err := e.sendContext(ctx, codec.SecDefOptParamsRequest{
 			ReqID:             reqID,
 			UnderlyingSymbol:  req.UnderlyingSymbol,
 			FutFopExchange:    req.FutFopExchange,
@@ -2880,7 +2890,7 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.SmartComponentsRequest{ReqID: reqID, BBOExchange: bboExchange}); err != nil {
+		if err := e.sendContext(ctx, codec.SmartComponentsRequest{ReqID: reqID, BBOExchange: bboExchange}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -2935,7 +2945,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.CalcImpliedVolatilityRequest{
+		if err := e.sendContext(ctx, codec.CalcImpliedVolatilityRequest{
 			ReqID:       reqID,
 			Contract:    toCodecContract(req.Contract),
 			OptionPrice: req.OptionPrice.String(),
@@ -3000,7 +3010,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.CalcOptionPriceRequest{
+		if err := e.sendContext(ctx, codec.CalcOptionPriceRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
 			Volatility: req.Volatility.String(),
@@ -3077,7 +3087,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.HistogramDataRequest{
+		if err := e.sendContext(ctx, codec.HistogramDataRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(req.Contract),
 			UseRTH:   req.UseRTH,
@@ -3214,7 +3224,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.HistoricalTicksRequest{
+		if err := e.sendContext(ctx, codec.HistoricalTicksRequest{
 			ReqID:         reqID,
 			Contract:      toCodecContract(req.Contract),
 			StartDateTime: formatHistoricalTickTime(req.StartTime),
@@ -3273,7 +3283,7 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.NewsArticleRequest{ReqID: reqID, ProviderCode: string(req.ProviderCode), ArticleID: req.ArticleID}); err != nil {
+		if err := e.sendContext(ctx, codec.NewsArticleRequest{ReqID: reqID, ProviderCode: string(req.ProviderCode), ArticleID: req.ArticleID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3335,7 +3345,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.HistoricalNewsRequest{
+		if err := e.sendContext(ctx, codec.HistoricalNewsRequest{
 			ReqID: reqID, ConID: req.ConID, ProviderCodes: formatProviderCodes(req.ProviderCodes),
 			StartDate: formatHistoricalNewsTime(req.StartTime), EndDate: formatHistoricalNewsTime(req.EndTime), TotalResults: req.TotalResults,
 		}); err != nil {
@@ -3427,7 +3437,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -3487,7 +3497,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.RequestFA{FADataType: int(faDataType)}); err != nil {
+		if err := e.sendContext(ctx, codec.RequestFA{FADataType: int(faDataType)}); err != nil {
 			delete(e.singletons, singletonFA)
 			resp <- result{err: err}
 		}
@@ -3503,11 +3513,11 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 }
 
 func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml string) error {
-	return awaitFireAndForget(ctx, e, func() error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.send(codec.ReplaceFA{FADataType: int(faDataType), XML: xml})
+		return e.sendContext(ctx, codec.ReplaceFA{FADataType: int(faDataType), XML: xml})
 	})
 }
 
@@ -3550,7 +3560,7 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, codec.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3602,7 +3612,7 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.WSHMetaDataRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, codec.WSHMetaDataRequest{ReqID: reqID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3652,7 +3662,7 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.WSHEventDataRequest{
+		if err := e.sendContext(ctx, codec.WSHEventDataRequest{
 			ReqID:           reqID,
 			ConID:           req.ConID,
 			Filter:          string(req.Filter),
@@ -3714,7 +3724,7 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, codec.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3786,7 +3796,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.send(e.keyed[reqID].request); err != nil {
+		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -3819,11 +3829,11 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 }
 
 func (e *engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
-	return awaitFireAndForget(ctx, e, func() error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.send(codec.UpdateDisplayGroupRequest{ReqID: reqID, ContractInfo: contractInfo})
+		return e.sendContext(ctx, codec.UpdateDisplayGroupRequest{ReqID: reqID, ContractInfo: contractInfo})
 	})
 }
 
@@ -3894,7 +3904,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 					ch <- ErrNotReady
 					return
 				}
-				ch <- e.send(codec.CancelOrderRequest{OrderID: orderID})
+				ch <- e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
 			})
 			select {
 			case err := <-ch:
@@ -3907,11 +3917,11 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		}
 
 		handle.modifyFn = func(ctx context.Context, order Order) error {
-			return awaitFireAndForget(ctx, e, func() error {
+			return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 				if !e.isReady() {
 					return ErrNotReady
 				}
-				return e.send(toCodecPlaceOrder(orderID, PlaceOrderRequest{
+				return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
 					Contract: req.Contract,
 					Order:    order,
 				}))
@@ -3929,7 +3939,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 
 		e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
 
-		if err := e.send(toCodecPlaceOrder(orderID, req)); err != nil {
+		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, req)); err != nil {
 			delete(e.orders, orderID)
 			handle.closeWithErr(err)
 			resp <- result{err: err}
@@ -3950,11 +3960,11 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 // fire-and-forget; the cancellation result arrives via the OrderHandle's
 // events channel as an OrderStatus with Status "Cancelled".
 func (e *engine) CancelOrder(ctx context.Context, orderID int64) error {
-	return awaitFireAndForget(ctx, e, func() error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.send(codec.CancelOrderRequest{OrderID: orderID})
+		return e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
 	})
 }
 
@@ -3962,11 +3972,11 @@ func (e *engine) CancelOrder(ctx context.Context, orderID int64) error {
 // fire-and-forget; individual cancellation results arrive via any active
 // OrderHandle events channels.
 func (e *engine) GlobalCancel(ctx context.Context) error {
-	return awaitFireAndForget(ctx, e, func() error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.send(codec.GlobalCancelRequest{})
+		return e.sendContext(ctx, codec.GlobalCancelRequest{})
 	})
 }
 
@@ -4006,7 +4016,7 @@ func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.send(codec.FundamentalDataRequest{
+		if err := e.sendContext(ctx, codec.FundamentalDataRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
 			ReportType: string(req.ReportType),
@@ -4032,7 +4042,7 @@ func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest
 }
 
 func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
-	return awaitFireAndForget(ctx, e, func() error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
@@ -4041,7 +4051,7 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 			override = 1
 		}
 		reqID := e.allocReqID()
-		return e.send(codec.ExerciseOptionsRequest{
+		return e.sendContext(ctx, codec.ExerciseOptionsRequest{
 			ReqID:            reqID,
 			Contract:         toCodecContract(req.Contract),
 			ExerciseAction:   int(req.ExerciseAction),
@@ -4062,6 +4072,19 @@ func (e *engine) run() {
 			default:
 			}
 			break
+		}
+
+		select {
+		case err := <-e.transportErr:
+			if len(e.incoming) > 0 {
+				go func(err error) {
+					e.transportErr <- err
+				}(err)
+				continue
+			}
+			e.handleTransportLoss(err)
+			continue
+		default:
 		}
 
 		select {
@@ -4172,6 +4195,7 @@ func (e *engine) startConnect(ctx context.Context) {
 	// 6. Start async transport — ManagedAccounts + NextValidID arrive on incoming channel
 	e.transport = transport.New(conn, e.cfg.logger, e.cfg.sendRate)
 	e.attachTransport(e.transport)
+	e.scheduleBootstrapTimeout(e.transport)
 	e.setState(StateHandshaking, 0, "", nil)
 }
 
@@ -4196,6 +4220,23 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 		<-decodedDone
 		e.transportErr <- tr.Wait()
 	}()
+}
+
+func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
+	time.AfterFunc(bootstrapTimeout, func() {
+		e.enqueue(func() {
+			if e.closed || e.transport != tr {
+				return
+			}
+			e.snapshotMu.RLock()
+			state := e.snapshot.State
+			e.snapshotMu.RUnlock()
+			if state != StateHandshaking {
+				return
+			}
+			_ = tr.Close()
+		})
+	})
 }
 
 func (e *engine) handleIncoming(msg any) {
@@ -4521,7 +4562,10 @@ func (e *engine) reportReady(err error) {
 		return
 	}
 	e.bootstrap.readyReported = true
-	e.ready <- err
+	select {
+	case e.ready <- err:
+	default:
+	}
 }
 
 func (e *engine) setState(next State, code int, message string, err error) {
@@ -4566,6 +4610,12 @@ func (e *engine) updateSnapshot(update func(*Snapshot)) {
 }
 
 func (e *engine) send(msg codec.Message) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	return e.sendContext(ctx, msg)
+}
+
+func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 	if e.transport == nil {
 		return ErrNotReady
 	}
@@ -4573,7 +4623,7 @@ func (e *engine) send(msg codec.Message) error {
 	if err != nil {
 		return err
 	}
-	err = e.transport.Send(context.Background(), payload)
+	err = e.transport.Send(ctx, payload)
 	if errors.Is(err, transport.ErrSendQueueFull) {
 		return ErrInterrupted
 	}
@@ -4616,6 +4666,9 @@ func (e *engine) connectionSeq() uint64 {
 }
 
 func (e *engine) isReady() bool {
+	if e.transport == nil {
+		return false
+	}
 	e.snapshotMu.RLock()
 	state := e.snapshot.State
 	e.snapshotMu.RUnlock()
@@ -5030,11 +5083,11 @@ func fromCodecRealtimeBar(m codec.RealTimeBar) (Bar, error) {
 }
 
 func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
-	price, err := ParseDecimal(m.Price)
+	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth price: %w", err)
 	}
-	size, err := ParseDecimal(m.Size)
+	size, err := decimal.NewFromString(m.Size)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth size: %w", err)
 	}
@@ -5048,11 +5101,11 @@ func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
 }
 
 func fromCodecMarketDepthL2(m codec.MarketDepthL2Update) (DepthRow, error) {
-	price, err := ParseDecimal(m.Price)
+	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 price: %w", err)
 	}
-	size, err := ParseDecimal(m.Size)
+	size, err := decimal.NewFromString(m.Size)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 size: %w", err)
 	}
@@ -5116,11 +5169,11 @@ func parseHeadTimestamp(raw string) (time.Time, error) {
 }
 
 func fromCodecPosition(m codec.Position) (Position, error) {
-	position, err := ParseDecimal(m.Position)
+	position, err := decimal.NewFromString(m.Position)
 	if err != nil {
 		return Position{}, err
 	}
-	avgCost, err := ParseDecimal(m.AvgCost)
+	avgCost, err := decimal.NewFromString(m.AvgCost)
 	if err != nil {
 		return Position{}, err
 	}
@@ -5201,7 +5254,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		Remaining:             remaining,
 		LmtPrice:              lmtPrice,
 		AuxPrice:              auxPrice,
-		TIF:                   m.TIF,
+		TIF:                   TimeInForce(m.TIF),
 		OcaGroup:              m.OcaGroup,
 		OpenClose:             m.OpenClose,
 		Origin:                origin,
@@ -5305,7 +5358,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 func fromCodecCommission(m codec.CommissionReport) (CommissionReport, error) {
 	// Commission and RealizedPNL are parsed as optional so that the Java
 	// reference encoding of "unset" — either an empty string or the literal
-	// Double.MAX_VALUE sentinel — decodes to a zero Decimal instead of an error.
+	// Double.MAX_VALUE sentinel — decodes to a zero decimal instead of an error.
 	// RealizedPNL in particular arrives unset for trades whose position is not
 	// yet closed.
 	commission, err := parseOptionalDecimal(m.Commission, "commission amount")

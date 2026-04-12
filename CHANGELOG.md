@@ -4,10 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## v1.4.0
 
 ### Changed (breaking)
 
+- **Replaced custom `Decimal` with `shopspring/decimal`.** All prices,
+  quantities, and money fields now use `decimal.Decimal` from
+  `github.com/shopspring/decimal`. Consumers get exact arithmetic (Add, Sub,
+  Mul, Div, Cmp) without float64 conversion. `ParseDecimal`,
+  `MustParseDecimal`, and `ErrInvalidDecimal` are removed; use
+  `decimal.NewFromString`, `decimal.RequireFromString`, or `decimal.NewFromInt`
+  instead. This is the library's first external dependency.
 - **Moved the public package to the module root.** Callers now import
   `github.com/ThomasMarcelis/ibkr-go`; the old `/ibkr` package is removed.
 - **Reshaped `Client` into lifecycle plus domain facades.** Root `Client`
@@ -57,15 +64,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **ParentID support** in OpenOrder for bracket and attached order tracking.
 - Comprehensive GoDoc comments on all public types, methods, constants, and
   variables.
+- **Runnable examples** in `examples/` for connect, quotes, historical bars,
+  portfolio, and order placement.
 - Additional Example functions for pkg.go.dev.
 - CHANGELOG.md.
 
 ### Fixed
 
+- **Persistent client sessions no longer degrade after the first one-shot
+  request.** The transport layer previously called `finish()` (tearing down
+  the connection) when the send queue was full. Now it returns
+  `ErrSendQueueFull` without side effects, so a transient backpressure spike
+  no longer permanently kills the session. Combined with context-aware sends,
+  bootstrap timeouts, ready-retry logic, and prioritized message draining,
+  long-lived clients can serve sequential and concurrent requests indefinitely.
+  (Fixes #5)
+- **Historical data request pacing prevents IBKR rate-limit disconnects.**
+  The engine now enforces a 2 s minimum spacing between any historical
+  requests and 15 s between identical requests, matching IBKR's documented
+  pacing rules. Requests that arrive too early are transparently deferred
+  rather than rejected.
 - **`CommissionReport` decoding no longer fails on unset fields.** Live TWS
   emits the Java `Double.MAX_VALUE` sentinel for `Commission` and `RealizedPNL`
   when the server has not yet computed those values. The receive path now
-  decodes both the sentinel and the empty-string form to a zero `Decimal`,
+  decodes both the sentinel and the empty-string form to a zero decimal,
   matching the existing open-order commission handling. Previously, a
   sentinel-valued commission either silently vanished on the order-handle
   dispatch path or tore down the executions subscription.
@@ -132,8 +154,8 @@ Initial release covering the full read-only TWS API surface.
   Executions, SubscribeExecutions.
 - **Typed subscriptions**: Generic Subscription[T] with Events/State/Done
   lifecycle separation.
-- **Exact Decimal type** for all prices and money.
+- **Exact decimal type** for all prices and money.
 - **Zero external dependencies**.
-- **82 replay transcripts** from live IB Gateway captures for deterministic CI.
+- **Replay transcripts** from live IB Gateway captures for deterministic CI.
 - **Fuzz testing** on wire protocol (frame parsing, field encoding, codec
   round-trips).

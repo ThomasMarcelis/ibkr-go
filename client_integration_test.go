@@ -12,6 +12,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go"
 	"github.com/ThomasMarcelis/ibkr-go/testing/testhost"
+	"github.com/shopspring/decimal"
 )
 
 func TestDialContextSessionSnapshot(t *testing.T) {
@@ -1396,8 +1397,8 @@ func TestCalcImpliedVolatility(t *testing.T) {
 			Exchange: "SMART",
 			Currency: "USD",
 		},
-		OptionPrice: ibkr.MustParseDecimal("5.25"),
-		UnderPrice:  ibkr.MustParseDecimal("170.50"),
+		OptionPrice: decimal.RequireFromString("5.25"),
+		UnderPrice:  decimal.RequireFromString("170.50"),
 	})
 	if err != nil {
 		t.Fatalf("CalcImpliedVolatility() error = %v", err)
@@ -1427,8 +1428,8 @@ func TestCalcOptionPrice(t *testing.T) {
 			Exchange: "SMART",
 			Currency: "USD",
 		},
-		Volatility: ibkr.MustParseDecimal("0.30"),
-		UnderPrice: ibkr.MustParseDecimal("175.00"),
+		Volatility: decimal.RequireFromString("0.30"),
+		UnderPrice: decimal.RequireFromString("175.00"),
 	})
 	if err != nil {
 		t.Fatalf("CalcOptionPrice() error = %v", err)
@@ -1783,9 +1784,9 @@ func TestPlaceOrderLimit(t *testing.T) {
 		},
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("150"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("150"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -1868,9 +1869,9 @@ func TestPlaceOrderWithExecution(t *testing.T) {
 		},
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("150"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("150"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -1956,9 +1957,9 @@ func TestCancelOrder(t *testing.T) {
 		},
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("150"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("150"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -2047,9 +2048,9 @@ func TestDirectCancelOrder(t *testing.T) {
 		},
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("150"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("150"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -3015,9 +3016,9 @@ func TestPlaceOrderModifyIntegration(t *testing.T) {
 		},
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("50"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
 			TIF:       ibkr.TIFDay,
 		},
 	})
@@ -3041,9 +3042,9 @@ func TestPlaceOrderModifyIntegration(t *testing.T) {
 	// Modify to $51.
 	if err := handle.Modify(ctx, ibkr.Order{
 		Action:    ibkr.Buy,
-		OrderType: "LMT",
-		Quantity:  ibkr.MustParseDecimal("1"),
-		LmtPrice:  ibkr.MustParseDecimal("51"),
+		OrderType: ibkr.OrderTypeLimit,
+		Quantity:  decimal.RequireFromString("1"),
+		LmtPrice:  decimal.RequireFromString("51"),
 		TIF:       ibkr.TIFDay,
 	}); err != nil {
 		t.Fatalf("Modify: %v", err)
@@ -3096,9 +3097,9 @@ func TestGlobalCancelIntegration(t *testing.T) {
 			},
 			Order: ibkr.Order{
 				Action:    ibkr.Buy,
-				OrderType: "LMT",
-				Quantity:  ibkr.MustParseDecimal("1"),
-				LmtPrice:  ibkr.MustParseDecimal("50"),
+				OrderType: ibkr.OrderTypeLimit,
+				Quantity:  decimal.RequireFromString("1"),
+				LmtPrice:  decimal.RequireFromString("50"),
 				TIF:       ibkr.TIFDay,
 			},
 		})

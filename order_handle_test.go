@@ -5,91 +5,88 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
+	"testing/synctest"
 )
 
 func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		handle := newOrderHandle(7)
+		for i := 0; i < 12; i++ {
+			handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: uint64(i + 1)})
+		}
+		if err := handle.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
 
-	handle := newOrderHandle(7)
-	for i := 0; i < 12; i++ {
-		handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: uint64(i + 1)})
-	}
-	if err := handle.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-
-	var seqs []uint64
-	timeout := time.After(time.Second)
-	for {
-		select {
-		case evt, ok := <-handle.Lifecycle():
-			if !ok {
-				if len(seqs) != 8 {
-					t.Fatalf("gap event count = %d, want 8", len(seqs))
-				}
-				for i, seq := range seqs {
-					want := uint64(i + 5)
-					if seq != want {
-						t.Fatalf("seqs[%d] = %d, want %d (keep latest 8)", i, seq, want)
-					}
-				}
-				return
-			}
+		var seqs []uint64
+		for evt := range handle.Lifecycle() {
 			if evt.Kind == SubscriptionGap {
 				seqs = append(seqs, evt.ConnectionSeq)
 			}
-		case <-timeout:
-			t.Fatal("Lifecycle() channel did not close")
 		}
-	}
+		if len(seqs) != 8 {
+			t.Fatalf("gap event count = %d, want 8", len(seqs))
+		}
+		for i, seq := range seqs {
+			want := uint64(i + 5)
+			if seq != want {
+				t.Fatalf("seqs[%d] = %d, want %d (keep latest 8)", i, seq, want)
+			}
+		}
+	})
 }
 
 func TestOrderHandleCloseSerializedWithEngineEmits(t *testing.T) {
-	e := newRunningEngineForOrderHandleTest(t)
-	handle := newOrderHandle(101)
-	bindOrderHandleForEngineTest(t, e, handle)
+	synctest.Test(t, func(t *testing.T) {
+		e := newRunningEngineForOrderHandleTest(t)
+		handle := newOrderHandle(101)
+		bindOrderHandleForEngineTest(t, e, handle)
 
-	for i := 0; i < 8; i++ {
-		enqueueOrderHandleEmit(e, handle)
-	}
-	if err := handle.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
-	for i := 0; i < 8; i++ {
-		enqueueOrderHandleEmit(e, handle)
-	}
+		for i := 0; i < 8; i++ {
+			enqueueOrderHandleEmit(e, handle)
+		}
+		if err := handle.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+		for i := 0; i < 8; i++ {
+			enqueueOrderHandleEmit(e, handle)
+		}
 
-	select {
-	case <-handle.Done():
-	case <-time.After(time.Second):
-		t.Fatal("OrderHandle.Done() did not close")
-	}
-	if err := handle.Wait(); err != nil {
-		t.Fatalf("Wait() error = %v, want nil", err)
-	}
+		synctest.Wait()
+		select {
+		case <-handle.Done():
+		default:
+			t.Fatal("OrderHandle.Done() did not close")
+		}
+		if err := handle.Wait(); err != nil {
+			t.Fatalf("Wait() error = %v, want nil", err)
+		}
+	})
 }
 
 func TestOrderHandleCloseWhenEventsBufferFull(t *testing.T) {
-	e := newRunningEngineForOrderHandleTest(t)
-	handle := newOrderHandle(102)
-	bindOrderHandleForEngineTest(t, e, handle)
+	synctest.Test(t, func(t *testing.T) {
+		e := newRunningEngineForOrderHandleTest(t)
+		handle := newOrderHandle(102)
+		bindOrderHandleForEngineTest(t, e, handle)
 
-	for i := 0; i < cap(handle.events)+1; i++ {
-		enqueueOrderHandleEmit(e, handle)
-	}
-	if err := handle.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+		for i := 0; i < cap(handle.events)+1; i++ {
+			enqueueOrderHandleEmit(e, handle)
+		}
+		if err := handle.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
 
-	select {
-	case <-handle.Done():
-	case <-time.After(time.Second):
-		t.Fatal("OrderHandle.Done() did not close after events buffer filled")
-	}
-	if err := handle.Wait(); !errors.Is(err, ErrSlowConsumer) {
-		t.Fatalf("Wait() error = %v, want ErrSlowConsumer", err)
-	}
+		synctest.Wait()
+		select {
+		case <-handle.Done():
+		default:
+			t.Fatal("OrderHandle.Done() did not close after events buffer filled")
+		}
+		if err := handle.Wait(); !errors.Is(err, ErrSlowConsumer) {
+			t.Fatalf("Wait() error = %v, want ErrSlowConsumer", err)
+		}
+	})
 }
 
 func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
@@ -118,9 +115,10 @@ func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 
 	t.Cleanup(func() {
 		_ = e.Close()
+		synctest.Wait()
 		select {
 		case <-e.Done():
-		case <-time.After(time.Second):
+		default:
 			t.Fatal("engine did not close")
 		}
 	})
@@ -146,9 +144,10 @@ func bindOrderHandleForEngineTest(t *testing.T, e *engine, handle *OrderHandle) 
 		close(done)
 	})
 
+	synctest.Wait()
 	select {
 	case <-done:
-	case <-time.After(time.Second):
+	default:
 		t.Fatal("order handle was not registered")
 	}
 }

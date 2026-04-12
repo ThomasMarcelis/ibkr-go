@@ -47,7 +47,11 @@ func DecodeBatch(payload []byte) ([]Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("codec: parse msg_id %q: %w", fields[0], err)
 	}
-	return decodeByMsgID(msgID, fields)
+	msgs, err := decodeByMsgID(msgID, fields)
+	if err != nil {
+		return nil, fmt.Errorf("codec: msg_id %d: %w", msgID, err)
+	}
+	return msgs, nil
 }
 
 // Decode decodes a framed payload into exactly one message.
@@ -590,7 +594,10 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		return []Message{ManagedAccounts{Accounts: accounts}}, nil
 
 	case InHistoricalData: // [17, reqID, barCount, time, O, H, L, C, vol, wap, count, ...]
-		reqID, _ := r.ReadInt()
+		reqID, err := r.ReadInt()
+		if err != nil {
+			return nil, err
+		}
 		barCount, err := r.ReadCount("bar count")
 		if err != nil {
 			return nil, err
@@ -1171,8 +1178,21 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		return []Message{tick}, nil
 
 	case InHistoricalDataUpdate: // [108, reqID, barCount, time, O, H, L, C, vol, wap, count]
-		reqID, _ := r.ReadInt()
-		barCount, _ := r.ReadInt()
+		if len(r.fields) == 2 && isWireInt(r.fields[0]) && r.fields[1] != "" && !isWireInt(r.fields[1]) {
+			reqID, _ := strconv.Atoi(r.fields[0])
+			return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
+		}
+		reqID, err := r.ReadInt()
+		if err != nil {
+			return nil, err
+		}
+		barCount, err := r.ReadCount("historical data update bar count")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("historical data update", 1, 8, 0); err != nil {
+			return nil, err
+		}
 		return []Message{HistoricalDataUpdate{
 			ReqID: reqID, BarCount: barCount,
 			Time: r.ReadString(), Open: r.ReadString(), High: r.ReadString(),

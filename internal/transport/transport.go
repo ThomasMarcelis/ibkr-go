@@ -78,6 +78,9 @@ func (c *Conn) Done() <-chan struct{} {
 }
 
 func (c *Conn) Send(ctx context.Context, payload []byte) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	copyPayload := append([]byte(nil), payload...)
 
 	select {
@@ -95,12 +98,12 @@ func (c *Conn) Send(ctx context.Context, payload []byte) error {
 	}
 	if len(c.outgoing) >= outgoingQueueCap {
 		c.queueMu.Unlock()
-		c.finish(ErrSendQueueFull)
 		return ErrSendQueueFull
 	}
 	c.outgoing = append(c.outgoing, copyPayload)
 	c.queueCond.Signal()
 	c.queueMu.Unlock()
+
 	return nil
 }
 

@@ -118,7 +118,8 @@
 //
 // # Financial Types
 //
-// All prices, quantities, and money values use [Decimal], an exact decimal type
-// that avoids the rounding errors inherent in float64 arithmetic. Parse strings
-// with [ParseDecimal]; use [MustParseDecimal] when the input is known-valid.
+// All prices, quantities, and money values use [github.com/shopspring/decimal.Decimal],
+// an exact decimal type that avoids the rounding errors inherent in float64
+// arithmetic. Construct values with decimal.NewFromString, decimal.NewFromInt,
+// or decimal.RequireFromString.
 package ibkr

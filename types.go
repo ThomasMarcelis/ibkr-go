@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 type State string
@@ -268,7 +270,7 @@ type ContractDetails struct {
 	Contract
 	MarketName string
 	LongName   string
-	MinTick    Decimal
+	MinTick    decimal.Decimal
 	TimeZoneID string
 }
 
@@ -340,12 +342,12 @@ type HistoricalBarsRequest struct {
 
 type Bar struct {
 	Time   time.Time
-	Open   Decimal
-	High   Decimal
-	Low    Decimal
-	Close  Decimal
-	Volume Decimal
-	WAP    Decimal
+	Open   decimal.Decimal
+	High   decimal.Decimal
+	Low    decimal.Decimal
+	Close  decimal.Decimal
+	Volume decimal.Decimal
+	WAP    decimal.Decimal
 	Count  int
 }
 
@@ -401,8 +403,8 @@ type AccountSummaryUpdate struct {
 type Position struct {
 	Account  string
 	Contract Contract
-	Position Decimal
-	AvgCost  Decimal
+	Position decimal.Decimal
+	AvgCost  decimal.Decimal
 }
 
 type PositionUpdate struct {
@@ -434,18 +436,33 @@ const (
 	MarketDataDelayedFrozen MarketDataType = 4
 )
 
+func (t MarketDataType) String() string {
+	switch t {
+	case MarketDataLive:
+		return "Live"
+	case MarketDataFrozen:
+		return "Frozen"
+	case MarketDataDelayed:
+		return "Delayed"
+	case MarketDataDelayedFrozen:
+		return "DelayedFrozen"
+	default:
+		return fmt.Sprintf("MarketDataType(%d)", t)
+	}
+}
+
 type Quote struct {
 	Available      QuoteFields
-	Bid            Decimal
-	Ask            Decimal
-	Last           Decimal
-	BidSize        Decimal
-	AskSize        Decimal
-	LastSize       Decimal
-	Open           Decimal
-	High           Decimal
-	Low            Decimal
-	Close          Decimal
+	Bid            decimal.Decimal
+	Ask            decimal.Decimal
+	Last           decimal.Decimal
+	BidSize        decimal.Decimal
+	AskSize        decimal.Decimal
+	LastSize       decimal.Decimal
+	Open           decimal.Decimal
+	High           decimal.Decimal
+	Low            decimal.Decimal
+	Close          decimal.Decimal
 	MarketDataType MarketDataType
 }
 
@@ -483,13 +500,13 @@ type OpenOrder struct {
 	Action    OrderAction
 	OrderType OrderType
 	Status    OrderStatus
-	Quantity  Decimal
-	Filled    Decimal
-	Remaining Decimal
+	Quantity  decimal.Decimal
+	Filled    decimal.Decimal
+	Remaining decimal.Decimal
 
-	LmtPrice              Decimal
-	AuxPrice              Decimal
-	TIF                   string
+	LmtPrice              decimal.Decimal
+	AuxPrice              decimal.Decimal
+	TIF                   TimeInForce
 	OcaGroup              string
 	OpenClose             string
 	Origin                int
@@ -508,9 +525,9 @@ type OpenOrder struct {
 	Conditions            []OrderCondition
 	ConditionsIgnoreRTH   bool
 	ConditionsCancelOrder bool
-	Commission            Decimal
-	MinCommission         Decimal
-	MaxCommission         Decimal
+	Commission            decimal.Decimal
+	MinCommission         decimal.Decimal
+	MaxCommission         decimal.Decimal
 	CommissionCurrency    string
 }
 
@@ -530,9 +547,9 @@ type ExecutionsRequest struct {
 // need to distinguish should correlate with order status or poll executions.
 type CommissionReport struct {
 	ExecID      string
-	Commission  Decimal
+	Commission  decimal.Decimal
 	Currency    string
-	RealizedPNL Decimal
+	RealizedPNL decimal.Decimal
 }
 
 type Execution struct {
@@ -541,8 +558,8 @@ type Execution struct {
 	Account string
 	Symbol  string
 	Side    string
-	Shares  Decimal
-	Price   Decimal
+	Shares  decimal.Decimal
+	Price   decimal.Decimal
 	Time    time.Time
 }
 
@@ -554,15 +571,15 @@ type ExecutionUpdate struct {
 type OrderStatusUpdate struct {
 	OrderID       int64
 	Status        OrderStatus
-	Filled        Decimal
-	Remaining     Decimal
-	AvgFillPrice  Decimal
+	Filled        decimal.Decimal
+	Remaining     decimal.Decimal
+	AvgFillPrice  decimal.Decimal
 	PermID        int64
 	ParentID      int64
-	LastFillPrice Decimal
+	LastFillPrice decimal.Decimal
 	ClientID      int
 	WhyHeld       string
-	MktCapPrice   Decimal
+	MktCapPrice   decimal.Decimal
 }
 
 // OrderEvent is a union event dispatched to per-order handles. Exactly one field is non-nil.
@@ -577,9 +594,9 @@ type Order struct {
 	OrderID                 int64 // 0 = auto-allocate
 	Action                  OrderAction
 	OrderType               OrderType
-	Quantity                Decimal
-	LmtPrice                Decimal
-	AuxPrice                Decimal
+	Quantity                decimal.Decimal
+	LmtPrice                decimal.Decimal
+	AuxPrice                decimal.Decimal
 	TIF                     TimeInForce
 	Account                 string
 	Transmit                *bool // nil = true (default)
@@ -800,8 +817,8 @@ type HeadTimestampRequest struct {
 }
 
 type PriceIncrement struct {
-	LowEdge   Decimal
-	Increment Decimal
+	LowEdge   decimal.Decimal
+	Increment decimal.Decimal
 }
 
 type MarketRuleResult struct {
@@ -814,9 +831,9 @@ type CompletedOrderResult struct {
 	Action    OrderAction
 	OrderType OrderType
 	Status    OrderStatus
-	Quantity  Decimal
-	Filled    Decimal
-	Remaining Decimal
+	Quantity  decimal.Decimal
+	Filled    decimal.Decimal
+	Remaining decimal.Decimal
 }
 
 type AccountUpdateValue struct {
@@ -829,12 +846,12 @@ type AccountUpdateValue struct {
 type PortfolioUpdate struct {
 	Account       string
 	Contract      Contract
-	Position      Decimal
-	MarketPrice   Decimal
-	MarketValue   Decimal
-	AvgCost       Decimal
-	UnrealizedPNL Decimal
-	RealizedPNL   Decimal
+	Position      decimal.Decimal
+	MarketPrice   decimal.Decimal
+	MarketValue   decimal.Decimal
+	AvgCost       decimal.Decimal
+	UnrealizedPNL decimal.Decimal
+	RealizedPNL   decimal.Decimal
 }
 
 // AccountUpdate is a union event from SubscribeAccountUpdates. Exactly one field is non-nil.
@@ -865,8 +882,8 @@ type PositionMulti struct {
 	Account   string
 	ModelCode string
 	Contract  Contract
-	Position  Decimal
-	AvgCost   Decimal
+	Position  decimal.Decimal
+	AvgCost   decimal.Decimal
 }
 
 type PnLRequest struct {
@@ -875,9 +892,9 @@ type PnLRequest struct {
 }
 
 type PnLUpdate struct {
-	DailyPnL      Decimal
-	UnrealizedPnL Decimal
-	RealizedPnL   Decimal
+	DailyPnL      decimal.Decimal
+	UnrealizedPnL decimal.Decimal
+	RealizedPnL   decimal.Decimal
 }
 
 type PnLSingleRequest struct {
@@ -887,11 +904,11 @@ type PnLSingleRequest struct {
 }
 
 type PnLSingleUpdate struct {
-	Position      Decimal
-	DailyPnL      Decimal
-	UnrealizedPnL Decimal
-	RealizedPnL   Decimal
-	Value         Decimal
+	Position      decimal.Decimal
+	DailyPnL      decimal.Decimal
+	UnrealizedPnL decimal.Decimal
+	RealizedPnL   decimal.Decimal
+	Value         decimal.Decimal
 }
 
 type TickByTickType string
@@ -913,15 +930,15 @@ type TickByTickRequest struct {
 type TickByTickData struct {
 	Time              time.Time
 	TickType          int
-	Price             Decimal
-	Size              Decimal
+	Price             decimal.Decimal
+	Size              decimal.Decimal
 	Exchange          string
 	SpecialConditions string
-	BidPrice          Decimal
-	AskPrice          Decimal
-	BidSize           Decimal
-	AskSize           Decimal
-	MidPoint          Decimal
+	BidPrice          decimal.Decimal
+	AskPrice          decimal.Decimal
+	BidSize           decimal.Decimal
+	AskSize           decimal.Decimal
+	MidPoint          decimal.Decimal
 }
 
 type NewsBulletin struct {
@@ -944,7 +961,7 @@ type SecDefOptParams struct {
 	TradingClass    string
 	Multiplier      string
 	Expirations     []string
-	Strikes         []Decimal
+	Strikes         []decimal.Decimal
 }
 
 type SmartComponent struct {
@@ -955,25 +972,25 @@ type SmartComponent struct {
 
 type CalcImpliedVolatilityRequest struct {
 	Contract    Contract
-	OptionPrice Decimal
-	UnderPrice  Decimal
+	OptionPrice decimal.Decimal
+	UnderPrice  decimal.Decimal
 }
 
 type CalcOptionPriceRequest struct {
 	Contract   Contract
-	Volatility Decimal
-	UnderPrice Decimal
+	Volatility decimal.Decimal
+	UnderPrice decimal.Decimal
 }
 
 type OptionComputation struct {
-	ImpliedVol Decimal
-	Delta      Decimal
-	OptPrice   Decimal
-	PvDividend Decimal
-	Gamma      Decimal
-	Vega       Decimal
-	Theta      Decimal
-	UndPrice   Decimal
+	ImpliedVol decimal.Decimal
+	Delta      decimal.Decimal
+	OptPrice   decimal.Decimal
+	PvDividend decimal.Decimal
+	Gamma      decimal.Decimal
+	Vega       decimal.Decimal
+	Theta      decimal.Decimal
+	UndPrice   decimal.Decimal
 }
 
 type HistogramDataRequest struct {
@@ -983,8 +1000,8 @@ type HistogramDataRequest struct {
 }
 
 type HistogramEntry struct {
-	Price Decimal
-	Size  Decimal
+	Price decimal.Decimal
+	Size  decimal.Decimal
 }
 
 type HistoricalTicksRequest struct {
@@ -999,24 +1016,24 @@ type HistoricalTicksRequest struct {
 
 type HistoricalTick struct {
 	Time  time.Time
-	Price Decimal
-	Size  Decimal
+	Price decimal.Decimal
+	Size  decimal.Decimal
 }
 
 type HistoricalTickBidAsk struct {
 	TickAttrib int
 	Time       time.Time
-	BidPrice   Decimal
-	AskPrice   Decimal
-	BidSize    Decimal
-	AskSize    Decimal
+	BidPrice   decimal.Decimal
+	AskPrice   decimal.Decimal
+	BidSize    decimal.Decimal
+	AskSize    decimal.Decimal
 }
 
 type HistoricalTickLast struct {
 	TickAttrib        int
 	Time              time.Time
-	Price             Decimal
-	Size              Decimal
+	Price             decimal.Decimal
+	Size              decimal.Decimal
 	Exchange          string
 	SpecialConditions string
 }
@@ -1088,6 +1105,19 @@ const (
 	DepthDelete DepthOperation = 2
 )
 
+func (o DepthOperation) String() string {
+	switch o {
+	case DepthInsert:
+		return "Insert"
+	case DepthUpdate:
+		return "Update"
+	case DepthDelete:
+		return "Delete"
+	default:
+		return fmt.Sprintf("DepthOperation(%d)", o)
+	}
+}
+
 type BookSide int
 
 const (
@@ -1095,13 +1125,24 @@ const (
 	BookBid BookSide = 1
 )
 
+func (s BookSide) String() string {
+	switch s {
+	case BookAsk:
+		return "Ask"
+	case BookBid:
+		return "Bid"
+	default:
+		return fmt.Sprintf("BookSide(%d)", s)
+	}
+}
+
 type DepthRow struct {
 	Position     int
 	MarketMaker  string // only populated for L2
 	Operation    DepthOperation
 	Side         BookSide
-	Price        Decimal
-	Size         Decimal
+	Price        decimal.Decimal
+	Size         decimal.Decimal
 	IsSmartDepth bool
 }
 
@@ -1128,6 +1169,17 @@ const (
 	Lapse    ExerciseAction = 2
 )
 
+func (a ExerciseAction) String() string {
+	switch a {
+	case Exercise:
+		return "Exercise"
+	case Lapse:
+		return "Lapse"
+	default:
+		return fmt.Sprintf("ExerciseAction(%d)", a)
+	}
+}
+
 type ExerciseOptionsRequest struct {
 	Contract         Contract
 	ExerciseAction   ExerciseAction
@@ -1149,6 +1201,19 @@ const (
 	FADataProfiles FADataType = 2
 	FADataAliases  FADataType = 3
 )
+
+func (t FADataType) String() string {
+	switch t {
+	case FADataGroups:
+		return "Groups"
+	case FADataProfiles:
+		return "Profiles"
+	case FADataAliases:
+		return "Aliases"
+	default:
+		return fmt.Sprintf("FADataType(%d)", t)
+	}
+}
 
 type WSHEventDataRequest struct {
 	ConID           int

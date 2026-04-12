@@ -13,6 +13,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go"
 	"github.com/ThomasMarcelis/ibkr-go/testing/testhost"
+	"github.com/shopspring/decimal"
 )
 
 func newInlineClient(t *testing.T, script string, opts ...ibkr.Option) (*ibkr.Client, *testhost.Host) {
@@ -282,9 +283,9 @@ func TestStressConcurrentPlaceOrders(t *testing.T) {
 				},
 				Order: ibkr.Order{
 					Action:    ibkr.Buy,
-					OrderType: "LMT",
-					Quantity:  ibkr.MustParseDecimal("1"),
-					LmtPrice:  ibkr.MustParseDecimal("50"),
+					OrderType: ibkr.OrderTypeLimit,
+					Quantity:  decimal.RequireFromString("1"),
+					LmtPrice:  decimal.RequireFromString("50"),
 					TIF:       ibkr.TIFDay,
 				},
 			})
@@ -492,9 +493,9 @@ disconnect
 		},
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("50"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
 			TIF:       ibkr.TIFDay,
 		},
 	})

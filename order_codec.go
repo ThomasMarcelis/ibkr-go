@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/shopspring/decimal"
 )
 
 func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
@@ -40,8 +41,8 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 	}
 }
 
-func decimalOrEmpty(d Decimal) string {
-	if d == (Decimal{}) {
+func decimalOrEmpty(d decimal.Decimal) string {
+	if d.IsZero() {
 		return ""
 	}
 	return d.String()

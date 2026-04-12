@@ -45,3 +45,4 @@ AGENTS.md
 .claude/
 .codex/
 .gemini/
+.playwright-mcp/

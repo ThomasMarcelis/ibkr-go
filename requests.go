@@ -84,6 +84,45 @@ func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (c
 	}, nil
 }
 
+func historicalBarsPacingKey(req HistoricalBarsRequest) string {
+	return strings.Join([]string{
+		historicalContractPacingKey(req.Contract),
+		formatHistoricalEndTime(req.EndTime),
+		string(req.Duration),
+		string(req.BarSize),
+		string(req.WhatToShow),
+		fmt.Sprintf("%t", req.UseRTH),
+	}, "\x00")
+}
+
+func historicalSchedulePacingKey(req HistoricalScheduleRequest) string {
+	return strings.Join([]string{
+		historicalContractPacingKey(req.Contract),
+		formatHistoricalEndTime(req.EndTime),
+		string(req.Duration),
+		string(req.BarSize),
+		string(ShowSchedule),
+		fmt.Sprintf("%t", req.UseRTH),
+	}, "\x00")
+}
+
+func historicalContractPacingKey(contract Contract) string {
+	return strings.Join([]string{
+		contract.Symbol,
+		string(contract.SecType),
+		contract.Expiry,
+		contract.Strike,
+		string(contract.Right),
+		contract.Multiplier,
+		contract.Exchange,
+		contract.PrimaryExchange,
+		contract.Currency,
+		contract.LocalSymbol,
+		contract.TradingClass,
+		fmt.Sprintf("%d", contract.ConID),
+	}, "\x00")
+}
+
 // IBKR documents UTC historical data times as "YYYYMMDD-hh:mm:ss";
 // existing replay fixtures freeze this compact UTC encoding.
 func formatHistoricalEndTime(t time.Time) string {

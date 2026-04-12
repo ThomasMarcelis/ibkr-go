@@ -1,6 +1,9 @@
 package ibkr
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 func enqueueContextSetup(ctx context.Context, e *engine, onCanceled func(), fn func()) {
 	e.enqueue(func() {
@@ -14,14 +17,60 @@ func enqueueContextSetup(ctx context.Context, e *engine, onCanceled func(), fn f
 	})
 }
 
+func enqueueReadySetup(ctx context.Context, e *engine, onCanceled func(), fn func()) {
+	enqueueContextSetup(ctx, e, onCanceled, func() {
+		if e.isReady() {
+			fn()
+			return
+		}
+		time.AfterFunc(reconnectBackoff, func() {
+			enqueueReadySetup(ctx, e, onCanceled, fn)
+		})
+	})
+}
+
+func enqueueHistoricalSetup(ctx context.Context, e *engine, key string, onCanceled func(), fn func()) {
+	enqueueReadySetup(ctx, e, onCanceled, func() {
+		now := time.Now()
+		if e.recentHistoricalRequests == nil {
+			e.recentHistoricalRequests = make(map[string]time.Time)
+		}
+		e.pruneHistoricalRequests(now)
+		readyAt := e.nextHistoricalRequest
+		if last, ok := e.recentHistoricalRequests[key]; ok {
+			if identicalReadyAt := last.Add(historicalIdenticalSpacing); identicalReadyAt.After(readyAt) {
+				readyAt = identicalReadyAt
+			}
+		}
+		if wait := readyAt.Sub(now); wait > 0 {
+			time.AfterFunc(wait, func() {
+				enqueueHistoricalSetup(ctx, e, key, onCanceled, fn)
+			})
+			return
+		}
+		e.nextHistoricalRequest = now.Add(historicalRequestSpacing)
+		e.recentHistoricalRequests[key] = now
+		fn()
+	})
+}
+
+func (e *engine) pruneHistoricalRequests(now time.Time) {
+	cutoff := now.Add(-historicalIdenticalSpacing)
+	for key, at := range e.recentHistoricalRequests {
+		if at.Before(cutoff) {
+			delete(e.recentHistoricalRequests, key)
+		}
+	}
+}
+
 // enqueueOneShotSetup drops one-shot setup work when the caller context has
 // already been canceled before the actor gets to it.
 func enqueueOneShotSetup(ctx context.Context, e *engine, fn func()) {
-	enqueueContextSetup(ctx, e, nil, fn)
+	enqueueReadySetup(ctx, e, nil, fn)
 }
 
 func enqueueSubscriptionSetup[T any](ctx context.Context, e *engine, resp chan<- T, fn func()) {
-	enqueueContextSetup(ctx, e, func() {
+	enqueueReadySetup(ctx, e, func() {
 		var zero T
 		resp <- zero
 	}, fn)
@@ -70,9 +119,13 @@ func awaitSubscriptionResponse[T any](ctx context.Context, e *engine, resp <-cha
 
 // awaitFireAndForget sends a fire-and-forget command through the actor and
 // waits for its result, respecting context cancellation and engine shutdown.
-func awaitFireAndForget(ctx context.Context, e *engine, fn func() error) error {
+func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context) error) error {
 	resp := make(chan error, 1)
-	e.enqueue(func() { resp <- fn() })
+	enqueueReadySetup(ctx, e, func() {
+		resp <- ctx.Err()
+	}, func() {
+		resp <- fn(ctx)
+	})
 	select {
 	case err := <-resp:
 		return err

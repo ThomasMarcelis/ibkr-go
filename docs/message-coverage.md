@@ -158,9 +158,6 @@ OpenOrder uses a dual path:
   algo, and condition sections. Rare delta-neutral, scale, and other
   ungrounded branches still fall back to the safe partial parse.
 
-See [v1.2 story](stories/v1.2-variable-length-orders.md) and the deferred
-[v1.3 story](stories/v1.3-full-order-wire-surface.md).
-
 ## Order and Execution Observation
 
 | Direction | Msg ID | Name | Status | Notes |

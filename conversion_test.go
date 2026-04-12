@@ -122,7 +122,7 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 // TestFromCodecCommissionAcceptsSentinelFields freezes the receive-path
 // contract for CommissionReport: live TWS emits the MAX_DOUBLE sentinel for
 // Commission and RealizedPNL when the server has not yet computed those
-// values, and the Go client must decode both forms to a zero Decimal instead
+// values, and the Go client must decode both forms to a zero decimal instead
 // of tearing down the executions subscription or silently dropping the report.
 func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 	t.Parallel()

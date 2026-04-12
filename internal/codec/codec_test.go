@@ -216,8 +216,12 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 		name   string
 		fields []string
 	}{
+		{"HistoricalData/bad_reqID", []string{"17", "bad", "0"}},
 		{"HistoricalData/missing_count", []string{"17", "1"}},
 		{"HistoricalData/empty_count", []string{"17", "1", ""}},
+		{"HistoricalDataUpdate/missing_count", []string{"108", "1"}},
+		{"HistoricalDataUpdate/empty_count", []string{"108", "1", ""}},
+		{"HistoricalDataUpdate/bad_count", []string{"108", "1", "bad", "t", "o", "h", "l", "c", "v", "w", "n"}},
 		{"ScannerData/missing_count", []string{"20", "3", "1"}},
 		{"ScannerData/empty_count", []string{"20", "3", "1", ""}},
 		{"FamilyCodes/missing_count", []string{"78"}},
@@ -236,6 +240,28 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 				t.Fatal("DecodeBatch() error = nil, want malformed count error")
 			}
 		})
+	}
+}
+
+func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
+	t.Parallel()
+
+	// Live Gateway v200 can send a trailing historical-data terminal frame
+	// after the packed bar payload. Its first payload field is the start
+	// timestamp rather than a bar count.
+	msgs, err := DecodeBatch(wire.EncodeFields([]string{"108", "1", "20260407 08:52:59 US/Eastern"}))
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("DecodeBatch() len = %d, want 1", len(msgs))
+	}
+	end, ok := msgs[0].(HistoricalBarsEnd)
+	if !ok {
+		t.Fatalf("message = %T, want HistoricalBarsEnd", msgs[0])
+	}
+	if end.ReqID != 1 {
+		t.Fatalf("HistoricalBarsEnd.ReqID = %d, want request id from terminal frame", end.ReqID)
 	}
 }
 

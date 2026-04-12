@@ -9,6 +9,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go"
 	"github.com/ThomasMarcelis/ibkr-go/testing/ibkrlive"
+	"github.com/shopspring/decimal"
 )
 
 var aaplContract = ibkr.Contract{
@@ -134,6 +135,64 @@ func TestLiveHistoricalBars(t *testing.T) {
 		if b.Time.IsZero() {
 			t.Errorf("bar[%d] has zero Time", i)
 		}
+	}
+}
+
+func TestLivePersistentClientSequentialRequests(t *testing.T) {
+	t.Parallel()
+
+	client, _, cancel := ibkrlive.DialContext(t, 45*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancelReq()
+
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("MarketData().SetType() error = %v", err)
+	}
+
+	first, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+		Contract:   aaplContract,
+		EndTime:    time.Now(),
+		Duration:   ibkr.Days(5),
+		BarSize:    ibkr.Bar1Day,
+		WhatToShow: ibkr.ShowTrades,
+		UseRTH:     true,
+	})
+	if err != nil {
+		if isLiveHistoricalSessionError(err) {
+			t.Skipf("HistoricalBars() returned: %v (current Gateway historical data session constraint)", err)
+		}
+		t.Fatalf("first HistoricalBars() error = %v", err)
+	}
+	if len(first) == 0 {
+		t.Fatal("first HistoricalBars() returned 0 bars")
+	}
+
+	second, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+		Contract:   aaplContract,
+		EndTime:    time.Now(),
+		Duration:   ibkr.Days(1),
+		BarSize:    ibkr.Bar1Hour,
+		WhatToShow: ibkr.ShowTrades,
+		UseRTH:     true,
+	})
+	if err != nil {
+		t.Fatalf("second HistoricalBars() error = %v", err)
+	}
+	if len(second) == 0 {
+		t.Fatal("second HistoricalBars() returned 0 bars")
+	}
+
+	if _, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: aaplContract}); err != nil {
+		t.Fatalf("Quote() after historical bars error = %v", err)
+	}
+	if _, err := client.Contracts().Details(ctx, aaplContract); err != nil {
+		t.Fatalf("ContractDetails() after historical bars error = %v", err)
+	}
+	if got := client.Session().State; got != ibkr.StateReady && got != ibkr.StateDegraded {
+		t.Fatalf("session state after sequential requests = %s, want usable session", got)
 	}
 }
 
@@ -512,9 +571,9 @@ func TestLivePlaceOrderLimitAndCancel(t *testing.T) {
 		Contract: aaplContract,
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("50"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
 			TIF:       ibkr.TIFDay,
 		},
 	})
@@ -582,9 +641,9 @@ func TestLiveGlobalCancel(t *testing.T) {
 			Contract: aaplContract,
 			Order: ibkr.Order{
 				Action:    ibkr.Buy,
-				OrderType: "LMT",
-				Quantity:  ibkr.MustParseDecimal("1"),
-				LmtPrice:  ibkr.MustParseDecimal("50"),
+				OrderType: ibkr.OrderTypeLimit,
+				Quantity:  decimal.RequireFromString("1"),
+				LmtPrice:  decimal.RequireFromString("50"),
 				TIF:       ibkr.TIFDay,
 			},
 		})
@@ -660,7 +719,7 @@ func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
 			Order: ibkr.Order{
 				Action:    ibkr.Buy,
 				OrderType: ibkr.OrderTypeMarket,
-				Quantity:  ibkr.MustParseDecimal("1"),
+				Quantity:  decimal.RequireFromString("1"),
 				TIF:       ibkr.TIFDay,
 				Account:   account,
 			},
@@ -697,7 +756,7 @@ func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
 			Order: ibkr.Order{
 				Action:    ibkr.Sell,
 				OrderType: ibkr.OrderTypeMarket,
-				Quantity:  ibkr.MustParseDecimal("1"),
+				Quantity:  decimal.RequireFromString("1"),
 				TIF:       ibkr.TIFDay,
 				Account:   account,
 			},
@@ -951,8 +1010,8 @@ func TestLiveCalcImpliedVolatility(t *testing.T) {
 			Strike:   "200",
 			Right:    ibkr.RightCall,
 		},
-		OptionPrice: ibkr.MustParseDecimal("10"),
-		UnderPrice:  ibkr.MustParseDecimal("200"),
+		OptionPrice: decimal.RequireFromString("10"),
+		UnderPrice:  decimal.RequireFromString("200"),
 	})
 	if err != nil {
 		// Option calc may fail if contract is not found or data unavailable.
@@ -982,8 +1041,8 @@ func TestLiveCalcOptionPrice(t *testing.T) {
 			Strike:   "200",
 			Right:    ibkr.RightCall,
 		},
-		Volatility: ibkr.MustParseDecimal("0.3"),
-		UnderPrice: ibkr.MustParseDecimal("200"),
+		Volatility: decimal.RequireFromString("0.3"),
+		UnderPrice: decimal.RequireFromString("200"),
 	})
 	if err != nil {
 		t.Logf("CalcOptionPrice() returned: %v (may be expected)", err)
@@ -1012,9 +1071,9 @@ func TestLivePlaceOrderModify(t *testing.T) {
 		Contract: aaplContract,
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("50"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
 			TIF:       ibkr.TIFDay,
 		},
 	})
@@ -1036,9 +1095,9 @@ func TestLivePlaceOrderModify(t *testing.T) {
 	// Modify to $51.
 	if err := handle.Modify(ctx, ibkr.Order{
 		Action:    ibkr.Buy,
-		OrderType: "LMT",
-		Quantity:  ibkr.MustParseDecimal("1"),
-		LmtPrice:  ibkr.MustParseDecimal("51"),
+		OrderType: ibkr.OrderTypeLimit,
+		Quantity:  decimal.RequireFromString("1"),
+		LmtPrice:  decimal.RequireFromString("51"),
 		TIF:       ibkr.TIFDay,
 	}); err != nil {
 		t.Fatalf("Modify: %v", err)
@@ -1094,17 +1153,15 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 		_ = client.Orders().CancelAll(cleanCtx)
 	}()
 
-	transmitFalse := false
-
 	// Parent: MKT BUY 1 AAPL (don't transmit yet).
 	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
 			Action:    ibkr.Buy,
-			OrderType: "MKT",
-			Quantity:  ibkr.MustParseDecimal("1"),
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
-			Transmit:  &transmitFalse,
+			Transmit:  new(false),
 		},
 	})
 	if err != nil {
@@ -1117,12 +1174,12 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 		Contract: aaplContract,
 		Order: ibkr.Order{
 			Action:    ibkr.Sell,
-			OrderType: "LMT",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			LmtPrice:  ibkr.MustParseDecimal("500"),
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("500"),
 			TIF:       ibkr.TIFGTC,
 			ParentID:  parent.OrderID(),
-			Transmit:  &transmitFalse,
+			Transmit:  new(false),
 		},
 	})
 	if err != nil {
@@ -1135,9 +1192,9 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 		Contract: aaplContract,
 		Order: ibkr.Order{
 			Action:    ibkr.Sell,
-			OrderType: "STP",
-			Quantity:  ibkr.MustParseDecimal("1"),
-			AuxPrice:  ibkr.MustParseDecimal("50"),
+			OrderType: ibkr.OrderTypeStop,
+			Quantity:  decimal.RequireFromString("1"),
+			AuxPrice:  decimal.RequireFromString("50"),
 			TIF:       ibkr.TIFGTC,
 			ParentID:  parent.OrderID(),
 		},

@@ -2,52 +2,44 @@ package ibkr
 
 import (
 	"testing"
-	"time"
+	"testing/synctest"
 )
 
 func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {
-	t.Parallel()
-
-	e := &engine{
-		events:      newObserver[Event](1),
-		ready:       make(chan error, 1),
-		done:        make(chan struct{}),
-		keyed:       make(map[int]*route),
-		singletons:  make(map[string]*route),
-		orders:      make(map[int64]*orderRoute),
-		execToOrder: make(map[string]int64),
-		snapshot: Snapshot{
-			State: StateConnecting,
-		},
-	}
-
-	for i := 0; i < 12; i++ {
-		e.setState(StateReady, i+1, "", nil)
-	}
-
-	done := make(chan struct{})
-	go func() {
-		e.closeEngine(nil)
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		t.Fatal("closeEngine() blocked with unread session events")
-	}
-
-	timeout := time.After(time.Second)
-	for {
-		select {
-		case _, ok := <-e.SessionEvents():
-			if !ok {
-				return
-			}
-		case <-timeout:
-			t.Fatal("SessionEvents() did not close")
+	synctest.Test(t, func(t *testing.T) {
+		e := &engine{
+			events:      newObserver[Event](1),
+			ready:       make(chan error, 1),
+			done:        make(chan struct{}),
+			keyed:       make(map[int]*route),
+			singletons:  make(map[string]*route),
+			orders:      make(map[int64]*orderRoute),
+			execToOrder: make(map[string]int64),
+			snapshot: Snapshot{
+				State: StateConnecting,
+			},
 		}
-	}
+
+		for i := 0; i < 12; i++ {
+			e.setState(StateReady, i+1, "", nil)
+		}
+
+		done := make(chan struct{})
+		go func() {
+			e.closeEngine(nil)
+			close(done)
+		}()
+
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("closeEngine() blocked with unread session events")
+		}
+
+		for range e.SessionEvents() {
+		}
+	})
 }
 
 func TestSessionEventsDropOldestKeepsLatest(t *testing.T) {

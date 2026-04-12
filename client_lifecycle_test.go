@@ -263,7 +263,7 @@ func TestContextCancelDuringOneShot(t *testing.T) {
 	_ = host.Close()
 }
 
-func TestTransportQueueSaturationReturnsInterrupted(t *testing.T) {
+func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {
 	t.Parallel()
 
 	gateway := newStalledGateway(t)
@@ -282,7 +282,7 @@ func TestTransportQueueSaturationReturnsInterrupted(t *testing.T) {
 	}
 	defer client.Close()
 
-	reqCtx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
+	reqCtx, cancelReq := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancelReq()
 
 	reqErrCh := make(chan error, 1)
@@ -298,33 +298,46 @@ func TestTransportQueueSaturationReturnsInterrupted(t *testing.T) {
 
 	time.Sleep(50 * time.Millisecond)
 
-	interrupted := false
+	backpressured := false
 	for i := 0; i < 512; i++ {
-		err := client.MarketData().SetType(context.Background(), ibkr.MarketDataLive)
+		sendCtx, cancelSend := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		err := client.MarketData().SetType(sendCtx, ibkr.MarketDataLive)
+		cancelSend()
 		if err == nil {
 			continue
 		}
 		if !errors.Is(err, ibkr.ErrInterrupted) {
-			t.Fatalf("MarketData().SetType() error = %v, want %v", err, ibkr.ErrInterrupted)
+			t.Fatalf("MarketData().SetType() error = %v, want ErrInterrupted from local backpressure", err)
 		}
-		interrupted = true
+		backpressured = true
 		break
 	}
-	if !interrupted {
-		t.Fatal("MarketData().SetType() never hit queue saturation")
+	if !backpressured {
+		t.Fatal("MarketData().SetType() never hit transport backpressure")
 	}
 
 	select {
 	case err := <-reqErrCh:
-		if !errors.Is(err, ibkr.ErrInterrupted) {
-			t.Fatalf("ContractDetails() error = %v, want %v", err, ibkr.ErrInterrupted)
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("ContractDetails() error = %v, want its own context deadline", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("ContractDetails() did not return after queue saturation")
+		t.Fatal("ContractDetails() did not return after its context deadline")
 	}
 
-	if err := client.Wait(); !errors.Is(err, ibkr.ErrInterrupted) {
-		t.Fatalf("Wait() error = %v, want %v", err, ibkr.ErrInterrupted)
+	select {
+	case <-client.Done():
+		t.Fatalf("client closed after local backpressure; Wait() = %v", client.Wait())
+	default:
+	}
+
+	if err := client.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	select {
+	case <-client.Done():
+	case <-time.After(time.Second):
+		t.Fatal("client did not close promptly after local backpressure")
 	}
 }
 

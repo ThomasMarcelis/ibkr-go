@@ -82,7 +82,7 @@ func TestConnCloseCompletes(t *testing.T) {
 	}
 }
 
-func TestConnSendDoesNotBlockOnPacedWriter(t *testing.T) {
+func TestConnSendBackpressuresWithoutClosing(t *testing.T) {
 	t.Parallel()
 
 	serverConn, clientConn := net.Pipe()
@@ -100,14 +100,16 @@ func TestConnSendDoesNotBlockOnPacedWriter(t *testing.T) {
 			if !errors.Is(err, ErrSendQueueFull) {
 				t.Fatalf("Send() error = %v, want ErrSendQueueFull when queue fills", err)
 			}
-			if waitErr := conn.Wait(); !errors.Is(waitErr, ErrSendQueueFull) {
-				t.Fatalf("Wait() error = %v, want ErrSendQueueFull", waitErr)
+			select {
+			case <-conn.Done():
+				t.Fatalf("Conn closed after local backpressure; Wait() = %v", conn.Wait())
+			default:
 			}
 			return
 		}
 	}
 
-	t.Fatal("Send() never saturated despite unread peer")
+	t.Fatal("Send() never backpressured despite unread peer")
 }
 
 func TestConnSendCopiesPayload(t *testing.T) {

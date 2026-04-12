@@ -113,8 +113,14 @@ Inactive, the handle auto-closes with `nil` error.
   query, not a public subscription.
 - Reconnect boundaries are explicit through `Event` and
   `SubscriptionStateEvent`, never mixed into business event streams.
+- Calls submitted while the session is reconnecting wait for the next `Ready`
+  transition or for their context to end; callers do not need to add their own
+  client-wide mutex for bursty request sequences.
 - One-shots are interrupted by connection loss and are not replayed
   automatically.
+- Historical bars and schedules use internal endpoint admission so rapid
+  repeated requests respect Gateway pacing before they are written to the
+  socket.
 
 ## Errors and Types
 
@@ -133,7 +139,7 @@ Public error taxonomy:
 
 Numeric and payload types:
 
-- Decimal-like values use exact `Decimal`.
+- Decimal-like values use `decimal.Decimal` from `github.com/shopspring/decimal`.
 - Instants use `time.Time`.
 - Historical bar durations and bar sizes use `HistoricalDuration` and `BarSize`.
 - Raw external XML/JSON boundaries use `XMLDocument` and `JSONDocument`.

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/shopspring/decimal"
 )
 
 // maxDoubleSentinel is the literal string the TWS/IB Gateway reference Java
@@ -14,22 +16,22 @@ import (
 // receive path must accept both.
 const maxDoubleSentinel = "1.7976931348623157E308"
 
-func parseRequiredDecimal(raw string, field string) (Decimal, error) {
-	value, err := ParseDecimal(raw)
+func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
+	value, err := decimal.NewFromString(raw)
 	if err != nil {
-		return Decimal{}, fmt.Errorf("ibkr: %s: %w", field, err)
+		return decimal.Decimal{}, fmt.Errorf("ibkr: %s: %w", field, err)
 	}
 	return value, nil
 }
 
-func parseOptionalDecimal(raw string, field string) (Decimal, error) {
+func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) {
-		return Decimal{}, nil
+		return decimal.Decimal{}, nil
 	}
-	value, err := ParseDecimal(trimmed)
+	value, err := decimal.NewFromString(trimmed)
 	if err != nil {
-		return Decimal{}, fmt.Errorf("ibkr: %s: %w", field, err)
+		return decimal.Decimal{}, fmt.Errorf("ibkr: %s: %w", field, err)
 	}
 	return value, nil
 }

@@ -8,7 +8,8 @@
 
 An idiomatic Go client for the Interactive Brokers TWS and IB Gateway socket
 protocol. Typed methods for snapshots. Typed subscriptions for streams. Full
-order management with lifecycle tracking. Zero external dependencies.
+order management with lifecycle tracking. Exact decimal arithmetic for all
+financial values.
 
 ```go
 client, _ := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4002))
@@ -33,7 +34,7 @@ for update := range sub.Events() {
 go get github.com/ThomasMarcelis/ibkr-go@latest
 ```
 
-Requires Go 1.26+. Standard library only — zero external dependencies.
+Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
 
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go).
 
@@ -48,8 +49,8 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
 - **Reconnects are explicit.** Session transitions and subscription lifecycle
   events — `Gap`, `Resumed`, `SnapshotComplete`, `Closed` — are part of the
   contract, not hidden behind callbacks.
-- **Exact financial values.** `Decimal` for prices, quantities, and money
-  throughout the API.
+- **Exact financial values.** [`decimal.Decimal`](https://github.com/shopspring/decimal)
+  for prices, quantities, and money throughout the API — no float64 rounding.
 - **Protocol work backed by evidence.** Replay scenarios derived from live IB
   Gateway traffic, wire and codec fuzzing, and deterministic CI.
 
@@ -154,8 +155,8 @@ handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
     Order: ibkr.Order{
         Action:    ibkr.Buy,
         OrderType: ibkr.OrderTypeLimit,
-        Quantity:  ibkr.MustParseDecimal("1"),
-        LmtPrice:  ibkr.MustParseDecimal("150.00"),
+        Quantity:  decimal.NewFromInt(1),
+        LmtPrice:  decimal.RequireFromString("150.00"),
         TIF:       ibkr.TIFDay,
     },
 })
@@ -230,6 +231,22 @@ One-shots return `(T, error)` or `([]T, error)`. Subscriptions return
 Order placement returns `*OrderHandle` with the same channel pattern plus
 `Cancel()` and `Modify()`.
 
+## Examples
+
+The [`examples/`](examples/) directory contains standalone programs you can run
+against a local paper IB Gateway:
+
+```bash
+IBKR_ADDR=127.0.0.1:4002 go run ./examples/connect       # session info
+IBKR_ADDR=127.0.0.1:4002 go run ./examples/quotes         # live quote stream
+IBKR_ADDR=127.0.0.1:4002 go run ./examples/historical     # historical bars
+IBKR_ADDR=127.0.0.1:4002 go run ./examples/portfolio      # account + positions + P&L stream
+IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=1 go run ./examples/order  # place, observe, cancel
+```
+
+Each example demonstrates real error handling, context cancellation, and
+graceful shutdown.
+
 ## Testing and Verification
 
 Every protocol behavior this library claims has a test pinning it down.
@@ -282,13 +299,15 @@ test orders. Read-only live smoke tests do not require it.
 
 ## Documentation
 
-- [`docs/architecture.md`](docs/architecture.md) — layer design and runtime model
 - [`docs/session-contract.md`](docs/session-contract.md) — public API contract
-- [`docs/api-overview.md`](docs/api-overview.md) — full method reference
-- [`docs/message-coverage.md`](docs/message-coverage.md) — protocol message matrix
-- [`docs/transcripts.md`](docs/transcripts.md) — test transcript format
-- [`docs/roadmap.md`](docs/roadmap.md) — project direction
 - [`docs/anti-patterns.md`](docs/anti-patterns.md) — design philosophy
+
+For contributors and maintainers:
+
+- [`docs/architecture.md`](docs/architecture.md) — internal layer design
+- [`docs/transcripts.md`](docs/transcripts.md) — test transcript format
+- [`docs/message-coverage.md`](docs/message-coverage.md) — protocol message matrix
+- [`docs/roadmap.md`](docs/roadmap.md) — project direction
 
 ## Contributing
 

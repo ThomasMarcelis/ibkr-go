@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -86,32 +87,33 @@ func TestSubscriptionSlowConsumerDropOldest(t *testing.T) {
 }
 
 func TestSubscriptionWaitBlocksUntilClose(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		done := make(chan error, 1)
+		go func() {
+			done <- sub.Wait()
+		}()
 
-	done := make(chan error, 1)
-	go func() {
-		done <- sub.Wait()
-	}()
-
-	select {
-	case <-done:
-		t.Fatal("Wait() returned before close")
-	case <-time.After(100 * time.Millisecond):
-		// expected: still blocking
-	}
-
-	sub.closeWithErr(nil)
-
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Errorf("Wait() = %v, want nil", err)
+		synctest.Wait()
+		select {
+		case <-done:
+			t.Fatal("Wait() returned before close")
+		default:
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Wait() did not return after close")
-	}
+
+		sub.closeWithErr(nil)
+
+		synctest.Wait()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("Wait() = %v, want nil", err)
+			}
+		default:
+			t.Fatal("Wait() did not return after close")
+		}
+	})
 }
 
 func TestSubscriptionWaitReturnsError(t *testing.T) {
@@ -127,64 +129,46 @@ func TestSubscriptionWaitReturnsError(t *testing.T) {
 }
 
 func TestSubscriptionStateEventDelivery(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
 
-	sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
-
-	select {
-	case evt := <-sub.Lifecycle():
+		evt := <-sub.Lifecycle()
 		if evt.Kind != SubscriptionSnapshotComplete {
 			t.Errorf("Lifecycle() event Kind = %q, want %q", evt.Kind, SubscriptionSnapshotComplete)
 		}
 		if evt.At.IsZero() {
 			t.Error("Lifecycle() event At is zero, expected auto-filled timestamp")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("Lifecycle() channel timed out")
-	}
+	})
 }
 
 func TestSubscriptionStateChannelFull(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		for i := 0; i < 12; i++ {
+			sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: uint64(i + 1)})
+		}
+		sub.closeWithErr(nil)
 
-	for i := 0; i < 12; i++ {
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: uint64(i + 1)})
-	}
-	sub.closeWithErr(nil)
-
-	var seqs []uint64
-	seenClosed := false
-	timeout := time.After(time.Second)
-	for !seenClosed {
-		select {
-		case evt, ok := <-sub.Lifecycle():
-			if !ok {
-				seenClosed = true
-				break
-			}
+		var seqs []uint64
+		for evt := range sub.Lifecycle() {
 			if evt.Kind == SubscriptionStarted {
 				seqs = append(seqs, evt.ConnectionSeq)
 			}
-			if evt.Kind == SubscriptionClosed {
-				seenClosed = true
+		}
+		if len(seqs) != 7 {
+			t.Fatalf("read %d state events, want 7 (one buffered state replaced by Closed)", len(seqs))
+		}
+		for i, seq := range seqs {
+			want := uint64(i + 6)
+			if seq != want {
+				t.Fatalf("seqs[%d] = %d, want %d (keep latest 7 before Closed)", i, seq, want)
 			}
-		case <-timeout:
-			t.Fatal("timed out waiting for state channel to drain")
 		}
-	}
-	if len(seqs) != 7 {
-		t.Fatalf("read %d state events, want 7 (one buffered state replaced by Closed)", len(seqs))
-	}
-	for i, seq := range seqs {
-		want := uint64(i + 6)
-		if seq != want {
-			t.Fatalf("seqs[%d] = %d, want %d (keep latest 7 before Closed)", i, seq, want)
-		}
-	}
+	})
 }
 
 func TestSubscriptionClosedEventSurvivesFullStateBuffer(t *testing.T) {
@@ -233,25 +217,23 @@ func TestSubscriptionSnapshotCompleteFlag(t *testing.T) {
 }
 
 func TestSubscriptionDoneClosedOnClose(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		select {
+		case <-sub.Done():
+			t.Fatal("Done() closed before subscription closed")
+		default:
+		}
 
-	select {
-	case <-sub.Done():
-		t.Fatal("Done() closed before subscription closed")
-	default:
-		// expected: not yet closed
-	}
+		sub.closeWithErr(nil)
 
-	sub.closeWithErr(nil)
-
-	select {
-	case <-sub.Done():
-		// expected: closed
-	case <-time.After(time.Second):
-		t.Fatal("Done() not closed after closeWithErr")
-	}
+		select {
+		case <-sub.Done():
+		default:
+			t.Fatal("Done() not closed after closeWithErr")
+		}
+	})
 }
 
 func TestSubscriptionEventsClosedOnClose(t *testing.T) {
@@ -316,29 +298,28 @@ func TestAwaitSnapshotReturnsNilWhenSnapshotComplete(t *testing.T) {
 // flow where SnapshotComplete and closeWithErr(nil) race; the select may wake
 // on either done channel, both must yield nil.
 func TestAwaitSnapshotReturnsNilWhenCompleteThenClose(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		for i := 0; i < 50; i++ {
+			sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+			sub.expectSnapshot()
 
-	for i := 0; i < 50; i++ {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
-		sub.expectSnapshot()
+			done := make(chan error, 1)
+			go func() { done <- sub.AwaitSnapshot(context.Background()) }()
 
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-		done := make(chan error, 1)
-		go func() { done <- sub.AwaitSnapshot(ctx) }()
+			sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
+			sub.closeWithErr(nil)
 
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
-		sub.closeWithErr(nil)
-
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("iter %d: AwaitSnapshot() = %v, want nil", i, err)
+			synctest.Wait()
+			select {
+			case err := <-done:
+				if err != nil {
+					t.Errorf("iter %d: AwaitSnapshot() = %v, want nil", i, err)
+				}
+			default:
+				t.Fatalf("iter %d: AwaitSnapshot() did not return", i)
 			}
-		case <-time.After(time.Second):
-			t.Fatalf("iter %d: AwaitSnapshot() did not return", i)
 		}
-		cancel()
-	}
+	})
 }
 
 // TestAwaitSnapshotReturnsErrInterruptedOnCleanCancel verifies the W2 fix:
@@ -346,28 +327,27 @@ func TestAwaitSnapshotReturnsNilWhenCompleteThenClose(t *testing.T) {
 // SnapshotComplete — the cancel-path scenario for every expectSnapshot flow —
 // AwaitSnapshot must surface ErrInterrupted, not silently report success.
 func TestAwaitSnapshotReturnsErrInterruptedOnCleanCancel(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub.expectSnapshot()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
-	sub.expectSnapshot()
+		done := make(chan error, 1)
+		go func() { done <- sub.AwaitSnapshot(context.Background()) }()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- sub.AwaitSnapshot(ctx) }()
+		// Wait for the goroutine to enter the select in AwaitSnapshot.
+		synctest.Wait()
+		sub.closeWithErr(nil)
 
-	// Race-free wait: give the goroutine time to enter the select.
-	time.Sleep(20 * time.Millisecond)
-	sub.closeWithErr(nil)
-
-	select {
-	case err := <-done:
-		if !errors.Is(err, ErrInterrupted) {
-			t.Errorf("AwaitSnapshot() = %v, want ErrInterrupted", err)
+		synctest.Wait()
+		select {
+		case err := <-done:
+			if !errors.Is(err, ErrInterrupted) {
+				t.Errorf("AwaitSnapshot() = %v, want ErrInterrupted", err)
+			}
+		default:
+			t.Fatal("AwaitSnapshot() did not return after closeWithErr")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("AwaitSnapshot() did not return after closeWithErr")
-	}
+	})
 }
 
 // TestAwaitSnapshotReturnsCloseErrorOnErrorClose freezes the error path:
@@ -375,28 +355,27 @@ func TestAwaitSnapshotReturnsErrInterruptedOnCleanCancel(t *testing.T) {
 // reaches, AwaitSnapshot surfaces the underlying error rather than
 // ErrInterrupted.
 func TestAwaitSnapshotReturnsCloseErrorOnErrorClose(t *testing.T) {
-	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub.expectSnapshot()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
-	sub.expectSnapshot()
+		want := errors.New("api error 162")
+		done := make(chan error, 1)
+		go func() { done <- sub.AwaitSnapshot(context.Background()) }()
 
-	want := errors.New("api error 162")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-	done := make(chan error, 1)
-	go func() { done <- sub.AwaitSnapshot(ctx) }()
+		synctest.Wait()
+		sub.closeWithErr(want)
 
-	time.Sleep(20 * time.Millisecond)
-	sub.closeWithErr(want)
-
-	select {
-	case err := <-done:
-		if !errors.Is(err, want) {
-			t.Errorf("AwaitSnapshot() = %v, want %v", err, want)
+		synctest.Wait()
+		select {
+		case err := <-done:
+			if !errors.Is(err, want) {
+				t.Errorf("AwaitSnapshot() = %v, want %v", err, want)
+			}
+		default:
+			t.Fatal("AwaitSnapshot() did not return after closeWithErr")
 		}
-	case <-time.After(time.Second):
-		t.Fatal("AwaitSnapshot() did not return after closeWithErr")
-	}
+	})
 }
 
 // TestAwaitSnapshotReturnsErrNoSnapshotWithoutExpectation freezes the contract

@@ -89,6 +89,8 @@ order IDs manually.
   silence or timeouts.
 - Global pacing belongs in the write path. Endpoint-specific admission limits
   belong at the session layer.
+- Public request setup waits for a usable session. Reconnect backoff and
+  endpoint pacing are internal engine concerns, bounded by the caller context.
 - Managed accounts, negotiated server version, and next valid id are bootstrap
   state, not ordinary request/response calls.
 
