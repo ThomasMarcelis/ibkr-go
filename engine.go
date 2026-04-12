@@ -1829,13 +1829,13 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 						resp <- result{err: err}
 						return
 					}
-					filled, err := parseRequiredDecimal(m.Filled, "completed order filled")
+					filled, err := parseOptionalDecimal(m.Filled, "completed order filled")
 					if err != nil {
 						delete(eng.singletons, singletonCompletedOrders)
 						resp <- result{err: err}
 						return
 					}
-					remaining, err := parseRequiredDecimal(m.Remaining, "completed order remaining")
+					remaining, err := parseOptionalDecimal(m.Remaining, "completed order remaining")
 					if err != nil {
 						delete(eng.singletons, singletonCompletedOrders)
 						resp <- result{err: err}

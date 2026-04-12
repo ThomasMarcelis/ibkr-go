@@ -1,0 +1,15 @@
+# Live-derived from local IB Gateway 127.0.0.1:4002.
+# Scenario: executions_snapshot, server_version=200.
+# Raw evidence kept local:
+# /tmp/ibkr-go-issue-6-7-captures/20260412T183938Z-executions_snapshot
+# events.jsonl sha256 prefix: ebfbbca30c20af97
+#
+# The live response to reqExecutions contained no ExecutionDataEnd (msg 55).
+# This fixture keeps the connection open long enough for the caller's context
+# deadline to be the only completion signal.
+handshake {"server_version":200,"connection_time":"20260412 18:39:38 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_executions {"req_id":"$req1","account":"","symbol":""}
+sleep 200ms
+disconnect

@@ -911,6 +911,22 @@ func TestExecutionsCompletesOnSnapshotEnd(t *testing.T) {
 	}
 }
 
+func TestExecutionsMissingEndReturnsContextDeadline(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "executions_missing_end_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Executions() error = %v, want context deadline exceeded", err)
+	}
+}
+
 func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
 	t.Parallel()
 
@@ -1360,6 +1376,41 @@ func TestCompletedOrders(t *testing.T) {
 	}
 	if orders[0].Quantity.String() != "100" {
 		t.Fatalf("quantity = %s, want 100", orders[0].Quantity.String())
+	}
+}
+
+func TestCompletedOrdersCancelledSystemLive(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "completed_orders_cancelled_system_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	orders, err := client.Orders().Completed(ctx, true)
+	if err != nil {
+		t.Fatalf("CompletedOrders() error = %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("orders len = %d, want 1", len(orders))
+	}
+	order := orders[0]
+	if order.Contract.Symbol != "AAPL" {
+		t.Fatalf("symbol = %q, want AAPL", order.Contract.Symbol)
+	}
+	if order.Status != ibkr.OrderStatus("Cancelled") {
+		t.Fatalf("status = %q, want Cancelled", order.Status)
+	}
+	if order.Quantity.String() != "1" {
+		t.Fatalf("quantity = %s, want 1", order.Quantity.String())
+	}
+	if !order.Filled.IsZero() {
+		t.Fatalf("filled = %s, want zero for non-filled completed order", order.Filled.String())
+	}
+	if !order.Remaining.IsZero() {
+		t.Fatalf("remaining = %s, want zero for absent completed-order remaining", order.Remaining.String())
 	}
 }
 

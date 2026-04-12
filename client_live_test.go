@@ -298,6 +298,23 @@ func TestLiveOpenOrders(t *testing.T) {
 	t.Logf("OpenOrdersSnapshot: %d orders", len(orders))
 }
 
+func TestLiveCompletedOrders(t *testing.T) {
+	t.Parallel()
+
+	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelReq()
+
+	orders, err := client.Orders().Completed(ctx, true)
+	if err != nil {
+		t.Fatalf("CompletedOrders() error = %v", err)
+	}
+	t.Logf("CompletedOrders: %d orders", len(orders))
+}
+
 func TestLiveExecutions(t *testing.T) {
 	t.Parallel()
 

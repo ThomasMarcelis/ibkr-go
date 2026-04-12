@@ -43,6 +43,7 @@ CLAUDE.md
 GEMINI.md
 AGENTS.md
 .claude/
+.codex
 .codex/
 .gemini/
 .playwright-mcp/

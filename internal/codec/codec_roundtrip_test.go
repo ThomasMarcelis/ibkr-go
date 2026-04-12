@@ -429,9 +429,8 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		},
 		{
 			// CompletedOrder: the encoder writes the contract directly
-			// (matching readWireContract), then pads order detail fields.
-			// The decoder uses Skip(4) + Skip(71) to reach status, then
-			// Skip(3) to reach filled/remaining. Strike "0" default applies.
+			// (matching readWireContract), then pads the live v200 completed-order
+			// layout. The wire has a filled quantity but no remaining quantity.
 			name: "CompletedOrder",
 			msg: CompletedOrder{
 				Contract: Contract{
@@ -439,7 +438,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 					Strike: "0", Exchange: "SMART", Currency: "USD",
 				},
 				Action: "BUY", OrderType: "LMT", Status: "Filled",
-				Quantity: "100", Filled: "100", Remaining: "0",
+				Quantity: "100", Filled: "100",
 			},
 		},
 		{

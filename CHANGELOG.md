@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## v1.4.2
+
+### Fixed
+
+- **Completed-order decoding now follows the live Gateway field layout.** Live
+  IB Gateway can send `OrderState.CompletedStatus` values such as
+  `Cancelled by System:\n` in completed-order message `101`; the decoder no
+  longer exposes that status text as `Filled` or attempts to parse it as a
+  decimal. `Orders().Completed` now treats absent completed-order filled and
+  remaining quantities as zero.
+- **Execution snapshots without `ExecutionDataEnd` are frozen as
+  context-driven.** Live Gateway can omit message `55` for empty execution
+  snapshots. `Orders().Executions` continues to respect caller context
+  cancellation/deadlines, and the live-derived regression now covers that
+  behavior.
+
 ## v1.4.1
 
 ### Fixed

@@ -1,0 +1,17 @@
+# Live-derived from local IB Gateway 127.0.0.1:4002.
+# Scenario: completed_orders, server_version=200.
+# Raw evidence kept local:
+# /tmp/ibkr-go-issue-6-7-captures/20260412T183937Z-completed_orders
+# events.jsonl sha256 prefix: 889d6f7f0ea2308d
+#
+# The msg 101 payload below is the captured AAPL completed-order frame with
+# account/order identifiers sanitized. It preserves the live server layout where
+# CompletedStatus is "Cancelled by System:\n"; this field must not be decoded as
+# filled quantity.
+handshake {"server_version":200,"connection_time":"20260412 18:39:37 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_completed_orders {"api_only":true}
+raw server AAABvjEwMQAyNjU1OTgAQUFQTABTVEsAADAAPwAAU01BUlQAVVNEAEFBUEwATk1TAFNFTEwAMQBMTVQANTAwLjAAMC4wAEdUQwAxMDAxAERVMTIzNDUAADAAADEwMDIAMAAwADAAAAAAAAAAMAAAADAAAC0xAAAAAAAAMjE0NzQ4MzY0NwAwADAAADMAMAAAMABOb25lAAAwADAAMAAAMAAwAAAAADAAMAAwADIxNDc0ODM2NDcAMjE0NzQ4MzY0NwAAAABJQgAwADAAADAAQ2FuY2VsbGVkADAAMAAwADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAwADEAMAAyMDI2MDkzMCAyMjowMDowMCBDZW50cmFsIEV1cm9wZWFuIFN0YW5kYXJkIFRpbWUAMAAyMTQ3NDgzNjQ3ADAATm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXIAMAAwADEwMDEAMjAyNjA0MTEgMjI6MTg6NTMgVVMvRWFzdGVybgBDYW5jZWxsZWQgYnkgU3lzdGVtOgoAAAAAAAAAMAAA
+raw server AAAABDEwMgA=
+disconnect

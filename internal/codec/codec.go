@@ -81,6 +81,114 @@ func isHistoricalRangeBoundary(value string) bool {
 	return strings.Contains(value, " ") && strings.Contains(value, "/")
 }
 
+func skipCompletedOrderPreStatus(r *fieldReader) error {
+	r.Skip(13) // lmtPrice through goodAfterTime
+	r.Skip(3)  // FAGroup, FAMethod, FAPercentage
+	r.Skip(5)  // modelCode, goodTillDate, rule80A, percentOffset, settlingFirm
+	r.Skip(3)  // short-sale slot/location/exempt code
+	r.Skip(3)  // BOX starting price, stock ref price, delta
+	r.Skip(2)  // stock range lower/upper
+	r.Skip(5)  // displaySize, sweepToFill, allOrNone, minQty, ocaType
+	r.Skip(1)  // triggerMethod
+
+	r.Skip(2) // volatility, volatilityType
+	deltaNeutralOrderType := r.ReadString()
+	r.Skip(1) // deltaNeutralAuxPrice
+	if deltaNeutralOrderType != "" && !strings.EqualFold(deltaNeutralOrderType, "None") {
+		r.Skip(1) // deltaNeutralConId
+		r.Skip(3) // delta-neutral short-sale fields
+	}
+	r.Skip(2) // continuousUpdate, referencePriceType
+	r.Skip(2) // trailStopPrice, trailingPercent
+
+	r.Skip(1) // comboLegsDescrip
+	comboLegsCount, err := r.ReadOptionalCount("completed order combo legs")
+	if err != nil {
+		return err
+	}
+	if err := r.RequireFixedEntryFields("completed order combo legs", comboLegsCount, 8, 0); err != nil {
+		return err
+	}
+	r.Skip(comboLegsCount * 8)
+
+	orderComboLegsCount, err := r.ReadOptionalCount("completed order combo leg prices")
+	if err != nil {
+		return err
+	}
+	if err := r.RequireFixedEntryFields("completed order combo leg prices", orderComboLegsCount, 1, 0); err != nil {
+		return err
+	}
+	r.Skip(orderComboLegsCount)
+
+	smartComboRoutingParamsCount, err := r.ReadOptionalCount("completed order smart combo routing params")
+	if err != nil {
+		return err
+	}
+	if err := r.RequireFixedEntryFields("completed order smart combo routing params", smartComboRoutingParamsCount, 2, 0); err != nil {
+		return err
+	}
+	r.Skip(smartComboRoutingParamsCount * 2)
+
+	r.Skip(2) // scaleInitLevelSize, scaleSubsLevelSize
+	scalePriceIncrement := r.ReadString()
+	if isPositiveWireNumber(scalePriceIncrement) {
+		r.Skip(7)
+	}
+	r.Skip(3) // scaleTable, activeStartTime, activeStopTime
+
+	hedgeType := r.ReadString()
+	if hedgeType != "" {
+		r.Skip(1)
+	}
+	r.Skip(1) // optOutSmartRouting
+	r.Skip(2) // clearingAccount, clearingIntent
+	r.Skip(1) // notHeld
+
+	if r.ReadString() == "1" { // delta-neutral contract present
+		r.Skip(3)
+	}
+	algoStrategy := r.ReadString()
+	if algoStrategy != "" {
+		algoParamsCount, err := r.ReadCount("completed order algo params")
+		if err != nil {
+			return err
+		}
+		if err := r.RequireFixedEntryFields("completed order algo params", algoParamsCount, 2, 0); err != nil {
+			return err
+		}
+		r.Skip(algoParamsCount * 2)
+	}
+
+	r.Skip(1) // solicited
+	return nil
+}
+
+func skipCompletedOrderPostStatusPrefix(r *fieldReader, orderType string) error {
+	r.Skip(2) // randomizeSize, randomizePrice
+	if orderType == "PEG BENCH" {
+		r.Skip(5)
+	}
+	conditionsCount, err := r.ReadOptionalCount("completed order conditions")
+	if err != nil {
+		return err
+	}
+	if conditionsCount > 0 {
+		for range conditionsCount {
+			conditionType, err := r.ReadInt()
+			if err != nil {
+				return err
+			}
+			if _, err := readOrderCondition(r, conditionType); err != nil {
+				return err
+			}
+		}
+		r.Skip(2) // conditionsIgnoreRTH, conditionsCancelOrder
+	}
+	r.Skip(2) // stop price, limit price offset
+	r.Skip(4) // cashQty, dontUseAutoPriceForHedge, isOmsContainer, autoCancelDate
+	return nil
+}
+
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
 func Encode(msg Message) ([]byte, error) {
 	fields, err := encodeFields(msg)
@@ -967,19 +1075,30 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		return []Message{MarketRule{MarketRuleID: marketRuleID, Increments: increments}}, nil
 
 	case InCompletedOrder: // [101, contract(11-field), action, totalQty, orderType, ...]
-		// Simplified decoder: reads just the key fields from the v200 wire layout.
-		// The full CompletedOrder message has ~80 fields; we extract the
-		// contract block, action, quantity, order type, status, filled, remaining.
+		// CompletedOrder uses the broad server->client order layout, then
+		// appends completed-time/status fields. Decode only the public fields
+		// we expose, but keep the skips aligned with live server_version 200
+		// captures so CompletedStatus is never mistaken for filled quantity.
 		contract := readWireContract(r)
 		action := r.ReadString()
 		quantity := r.ReadString()
 		orderType := r.ReadString()
-		r.Skip(4)  // lmtPrice, auxPrice, tif, ocaGroup
-		r.Skip(71) // order detail fields to OrderState
+		if err := skipCompletedOrderPreStatus(r); err != nil {
+			return nil, err
+		}
 		status := r.ReadString()
-		r.Skip(3) // completedTime, completedStatus, and misc
+		if err := skipCompletedOrderPostStatusPrefix(r, orderType); err != nil {
+			return nil, err
+		}
 		filled := r.ReadString()
-		remaining := r.ReadString()
+		r.Skip(7)      // refFuturesConId through completedTime
+		r.ReadString() // completedStatus
+		remaining := ""
+		if r.Remaining() == 1 {
+			// Older synthetic fixtures encoded a remaining field after filled.
+			// Keep accepting that shape while live v200 completed orders omit it.
+			remaining = r.ReadString()
+		}
 		return []Message{CompletedOrder{
 			Contract: contract, Action: action, OrderType: orderType,
 			Status: status, Quantity: quantity, Filled: filled, Remaining: remaining,
@@ -2277,12 +2396,11 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case CompletedOrder:
 		// Simplified encoder for testhost: server->client contract format
-		// (conID, symbol, secType, expiry, strike, right, multiplier, exchange,
-		// currency, localSymbol, tradingClass) padded to match the decoder's
-		// Skip(4) + Skip(71) + status + Skip(3) pattern.
+		// followed by the live completed-order v200 field order. Most fields are
+		// intentionally empty because public tests only assert the public fields
+		// this package currently exposes.
 		w := fieldWriter{}
 		w.WriteInt(InCompletedOrder)
-		// Server->client 11-field contract block
 		w.WriteInt(m.Contract.ConID)
 		w.WriteString(m.Contract.Symbol)
 		w.WriteString(m.Contract.SecType)
@@ -2301,18 +2419,68 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Action)
 		w.WriteString(m.Quantity)
 		w.WriteString(m.OrderType)
-		for range 4 { // lmtPrice, auxPrice, tif, ocaGroup
+		for range 13 { // lmtPrice through goodAfterTime
 			w.WriteString("")
 		}
-		for range 71 { // order detail fields to OrderState
+		for range 3 { // FAGroup, FAMethod, FAPercentage
 			w.WriteString("")
 		}
+		for range 5 { // modelCode through settlingFirm
+			w.WriteString("")
+		}
+		for range 3 { // short-sale params
+			w.WriteString("")
+		}
+		for range 3 { // BOX order params
+			w.WriteString("")
+		}
+		for range 2 { // peg-to-stock/vol order params
+			w.WriteString("")
+		}
+		for range 5 { // displaySize through ocaType
+			w.WriteString("")
+		}
+		w.WriteString("") // triggerMethod
+		for range 6 {     // vol order params
+			w.WriteString("")
+		}
+		for range 2 { // trailStopPrice, trailingPercent
+			w.WriteString("")
+		}
+		w.WriteString("") // comboLegsDescrip
+		w.WriteString("0")
+		w.WriteString("0")
+		w.WriteString("0")
+		for range 6 { // scale params plus table/start/stop
+			w.WriteString("")
+		}
+		w.WriteString("")  // hedgeType
+		w.WriteString("")  // optOutSmartRouting
+		w.WriteString("")  // clearingAccount
+		w.WriteString("")  // clearingIntent
+		w.WriteString("")  // notHeld
+		w.WriteString("0") // deltaNeutralContract present
+		w.WriteString("")  // algoStrategy
+		w.WriteString("")  // solicited
 		w.WriteString(m.Status)
-		for range 3 { // completedTime, completedStatus, misc
+		for range 2 { // randomizeSize, randomizePrice
+			w.WriteString("")
+		}
+		w.WriteString("0") // conditions count
+		for range 2 {      // stop price, limit price offset
+			w.WriteString("")
+		}
+		for range 4 { // cashQty through autoCancelDate
 			w.WriteString("")
 		}
 		w.WriteString(m.Filled)
-		w.WriteString(m.Remaining)
+		for range 7 { // refFuturesConId through completedTime
+			w.WriteString("")
+		}
+		w.WriteString("") // completedStatus
+		for range 8 {     // post-completed-status optional fields
+			w.WriteString("")
+		}
 		return w.Fields(), nil
 
 	case CompletedOrderEnd:
