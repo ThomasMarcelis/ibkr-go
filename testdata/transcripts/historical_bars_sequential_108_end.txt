@@ -1,0 +1,13 @@
+handshake {"server_version":200,"connection_time":"20260412 12:00:00 CET"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_historical_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"end_time":"20260412-12:00:00","duration":"5 D","bar_size":"1 day","what_to_show":"TRADES","use_rth":true}
+server historical_bar {"req_id":"$req1","time":"20260409","open":"259.00","high":"261.12","low":"256.07","close":"260.49","volume":"13580739","wap":"258.986","count":"69012"}
+server historical_bar {"req_id":"$req1","time":"20260410","open":"259.96","high":"262.19","low":"259.02","close":"260.48","volume":"14391533","wap":"260.397","count":"80621"}
+server historical_bars_range_end {"req_id":"$req1","start":"20260407 10:23:05 US/Eastern","end":"20260412 10:23:05 US/Eastern"}
+client req_historical_bars {"req_id":"$req2","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"end_time":"20260412-12:00:00","duration":"1 D","bar_size":"1 hour","what_to_show":"TRADES","use_rth":true}
+server historical_bar {"req_id":"$req2","time":"20260410 09:30:00 US/Eastern","open":"259.96","high":"260.50","low":"259.02","close":"260.10","volume":"1000","wap":"260.00","count":"20"}
+server historical_bar {"req_id":"$req2","time":"20260410 10:00:00 US/Eastern","open":"260.10","high":"262.19","low":"260.01","close":"260.48","volume":"1500","wap":"260.75","count":"25"}
+server historical_bars_range_end {"req_id":"$req2","start":"20260410 09:30:00 US/Eastern","end":"20260410 10:00:00 US/Eastern"}
+sleep 1s
+disconnect

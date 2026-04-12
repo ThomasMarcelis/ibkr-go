@@ -107,6 +107,52 @@ func TestHistoricalBars(t *testing.T) {
 	}
 }
 
+func TestPersistentClientSequentialHistoricalBarsWith108End(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "historical_bars_sequential_108_end.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	req := ibkr.HistoricalBarsRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		EndTime:    time.Date(2026, 4, 12, 12, 0, 0, 0, time.UTC),
+		Duration:   ibkr.Days(5),
+		BarSize:    ibkr.Bar1Day,
+		WhatToShow: ibkr.ShowTrades,
+		UseRTH:     true,
+	}
+
+	first, err := client.History().Bars(ctx, req)
+	if err != nil {
+		t.Fatalf("first HistoricalBars() error = %v", err)
+	}
+	if len(first) != 2 {
+		t.Fatalf("first bars len = %d, want 2", len(first))
+	}
+
+	req.Duration = ibkr.Days(1)
+	req.BarSize = ibkr.Bar1Hour
+	second, err := client.History().Bars(ctx, req)
+	if err != nil {
+		t.Fatalf("second HistoricalBars() error = %v", err)
+	}
+	if len(second) != 2 {
+		t.Fatalf("second bars len = %d, want 2", len(second))
+	}
+	if got := client.Session().State; got != ibkr.StateReady && got != ibkr.StateDegraded {
+		t.Fatalf("session state after sequential historical bars = %s, want usable session", got)
+	}
+}
+
 func TestCurrentTime(t *testing.T) {
 	t.Parallel()
 

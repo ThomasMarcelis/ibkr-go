@@ -74,6 +74,13 @@ func isWireInt(value string) bool {
 	return err == nil
 }
 
+func isHistoricalRangeBoundary(value string) bool {
+	if value == "" || isWireInt(value) {
+		return false
+	}
+	return strings.Contains(value, " ") && strings.Contains(value, "/")
+}
+
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
 func Encode(msg Message) ([]byte, error) {
 	fields, err := encodeFields(msg)
@@ -1177,8 +1184,13 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		}
 		return []Message{tick}, nil
 
-	case InHistoricalDataUpdate: // [108, reqID, barCount, time, O, H, L, C, vol, wap, count]
-		if len(r.fields) == 2 && isWireInt(r.fields[0]) && r.fields[1] != "" && !isWireInt(r.fields[1]) {
+	case InHistoricalDataUpdate:
+		// Live Gateway v200 sends two distinct msg_id 108 shapes:
+		//   [108, reqID, barCount, time, O, H, L, C, vol, wap, count]
+		//   [108, reqID, startDateTime, endDateTime]
+		// Older captures also show [108, reqID, startDateTime]. The range
+		// shapes are terminal markers for the preceding historical data batch.
+		if (len(r.fields) == 2 || len(r.fields) == 3) && isWireInt(r.fields[0]) && isHistoricalRangeBoundary(r.fields[1]) {
 			reqID, _ := strconv.Atoi(r.fields[0])
 			return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
 		}

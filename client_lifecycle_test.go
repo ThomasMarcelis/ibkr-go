@@ -44,6 +44,11 @@ type stalledGateway struct {
 	errCh  chan error
 }
 
+type protocolErrorGateway struct {
+	dialer *pipeDialer
+	errCh  chan error
+}
+
 func newStalledGateway(t *testing.T) *stalledGateway {
 	t.Helper()
 
@@ -56,6 +61,22 @@ func newStalledGateway(t *testing.T) *stalledGateway {
 
 	go func() {
 		gateway.errCh <- serveStalledGateway(serverConn, gateway.stop)
+	}()
+
+	return gateway
+}
+
+func newProtocolErrorGateway(t *testing.T) *protocolErrorGateway {
+	t.Helper()
+
+	serverConn, clientConn := net.Pipe()
+	gateway := &protocolErrorGateway{
+		dialer: &pipeDialer{conn: clientConn},
+		errCh:  make(chan error, 1),
+	}
+
+	go func() {
+		gateway.errCh <- serveProtocolErrorGateway(serverConn)
 	}()
 
 	return gateway
@@ -91,12 +112,68 @@ func serveStalledGateway(conn net.Conn, stop <-chan struct{}) error {
 	return nil
 }
 
+func serveProtocolErrorGateway(conn net.Conn) error {
+	defer conn.Close()
+
+	prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+	if _, err := io.ReadFull(conn, prefix); err != nil {
+		return fmt.Errorf("read handshake prefix: %w", err)
+	}
+	if string(prefix) != string(codec.EncodeHandshakePrefix()) {
+		return fmt.Errorf("handshake prefix = %q, want %q", string(prefix), string(codec.EncodeHandshakePrefix()))
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read version range: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"200", "2026-04-12T12:00:00Z"})); err != nil {
+		return fmt.Errorf("write server info: %w", err)
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read START_API: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"15", "1", "DU12345"})); err != nil {
+		return fmt.Errorf("write managed accounts: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"9", "1", "1001"})); err != nil {
+		return fmt.Errorf("write next valid id: %w", err)
+	}
+
+	time.Sleep(20 * time.Millisecond)
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"17", "1", "bad"})); err != nil {
+		return fmt.Errorf("write malformed frame: %w", err)
+	}
+
+	buf := make([]byte, 1)
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, net.ErrClosed) {
+			return nil
+		}
+		return fmt.Errorf("set read deadline: %w", err)
+	}
+	_, err := conn.Read(buf)
+	if err == nil {
+		return fmt.Errorf("server read succeeded after protocol error; want client-side close")
+	}
+	if ne, ok := err.(net.Error); ok && ne.Timeout() {
+		return fmt.Errorf("client did not close transport after protocol error")
+	}
+	return nil
+}
+
 func (g *stalledGateway) Close(t *testing.T) {
 	t.Helper()
 
 	close(g.stop)
 	if err := <-g.errCh; err != nil {
 		t.Fatalf("stalled gateway error = %v", err)
+	}
+}
+
+func (g *protocolErrorGateway) Wait(t *testing.T) {
+	t.Helper()
+
+	if err := <-g.errCh; err != nil {
+		t.Fatalf("protocol error gateway error = %v", err)
 	}
 }
 
@@ -261,6 +338,40 @@ func TestContextCancelDuringOneShot(t *testing.T) {
 	}
 	// The host script is still sleeping; close the listener to unblock it.
 	_ = host.Close()
+}
+
+func TestProtocolErrorClosesTransport(t *testing.T) {
+	t.Parallel()
+
+	gateway := newProtocolErrorGateway(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithDialer(gateway.dialer),
+		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
+	)
+	if err != nil {
+		t.Fatalf("DialContext() error = %v", err)
+	}
+
+	select {
+	case <-client.Done():
+	case <-time.After(2 * time.Second):
+		_ = client.Close()
+		t.Fatal("client did not close after protocol error")
+	}
+
+	waitErr := client.Wait()
+	protocolErr, ok := errors.AsType[*ibkr.ProtocolError](waitErr)
+	if !ok {
+		t.Fatalf("client.Wait() error = %v, want *ProtocolError", waitErr)
+	}
+	if protocolErr.Direction != "inbound" {
+		t.Fatalf("ProtocolError.Direction = %q, want inbound", protocolErr.Direction)
+	}
+	gateway.Wait(t)
 }
 
 func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {

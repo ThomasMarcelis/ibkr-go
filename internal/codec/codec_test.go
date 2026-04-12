@@ -249,19 +249,52 @@ func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
 	// Live Gateway v200 can send a trailing historical-data terminal frame
 	// after the packed bar payload. Its first payload field is the start
 	// timestamp rather than a bar count.
-	msgs, err := DecodeBatch(wire.EncodeFields([]string{"108", "1", "20260407 08:52:59 US/Eastern"}))
+	tests := [][]string{
+		{"108", "1", "20260407 08:52:59 US/Eastern"},
+		{"108", "1", "20260407 10:23:05 US/Eastern", "20260412 10:23:05 US/Eastern"},
+	}
+	for _, fields := range tests {
+		fields := fields
+		t.Run(fields[len(fields)-1], func(t *testing.T) {
+			t.Parallel()
+
+			msgs, err := DecodeBatch(wire.EncodeFields(fields))
+			if err != nil {
+				t.Fatalf("DecodeBatch() error = %v", err)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("DecodeBatch() len = %d, want 1", len(msgs))
+			}
+			end, ok := msgs[0].(HistoricalBarsEnd)
+			if !ok {
+				t.Fatalf("message = %T, want HistoricalBarsEnd", msgs[0])
+			}
+			if end.ReqID != 1 {
+				t.Fatalf("HistoricalBarsEnd.ReqID = %d, want request id from terminal frame", end.ReqID)
+			}
+		})
+	}
+}
+
+func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
+	t.Parallel()
+
+	msgs, err := DecodeBatch(wire.EncodeFields([]string{
+		"108", "42", "1",
+		"20260412 10:30:00 US/Eastern", "100.00", "101.00", "99.50", "100.50", "1500", "100.25", "37",
+	}))
 	if err != nil {
 		t.Fatalf("DecodeBatch() error = %v", err)
 	}
 	if len(msgs) != 1 {
 		t.Fatalf("DecodeBatch() len = %d, want 1", len(msgs))
 	}
-	end, ok := msgs[0].(HistoricalBarsEnd)
+	update, ok := msgs[0].(HistoricalDataUpdate)
 	if !ok {
-		t.Fatalf("message = %T, want HistoricalBarsEnd", msgs[0])
+		t.Fatalf("message = %T, want HistoricalDataUpdate", msgs[0])
 	}
-	if end.ReqID != 1 {
-		t.Fatalf("HistoricalBarsEnd.ReqID = %d, want request id from terminal frame", end.ReqID)
+	if update.ReqID != 42 || update.BarCount != 1 || update.Close != "100.50" {
+		t.Fatalf("HistoricalDataUpdate = %#v", update)
 	}
 }
 

@@ -230,6 +230,18 @@ func (h *Host) run() {
 				continue
 			}
 
+			if cur.name == "historical_bars_range_end" {
+				reqID := asString(resolveBindings(cur.body["req_id"], bindings))
+				start := asString(resolveBindings(cur.body["start"], bindings))
+				end := asString(resolveBindings(cur.body["end"], bindings))
+				payload := wire.EncodeFields([]string{"108", reqID, start, end})
+				if err := wire.WriteFrame(conn, payload); err != nil {
+					h.finish(err)
+					return
+				}
+				continue
+			}
+
 			msg, err := buildMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)

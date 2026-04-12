@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## v1.4.1
+
+### Fixed
+
+- **Historical bars no longer poison persistent client sessions.** Live IB
+  Gateway can send `msg_id 108` as a historical-data range terminator after a
+  packed one-shot historical bars response. The codec now decodes both observed
+  terminal shapes (`reqID,start` and `reqID,start,end`) as
+  `HistoricalBarsEnd` while preserving numeric `HistoricalDataUpdate` bars for
+  keep-up-to-date streams.
+- **Fatal inbound decoder errors now close the transport socket.** Protocol
+  errors still terminate the session, but the underlying connection is closed
+  immediately so IB Gateway releases the client ID before reconnect attempts.
+
 ## v1.4.0
 
 ### Changed (breaking)

@@ -4206,6 +4206,7 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 		for payload := range tr.Incoming() {
 			msgs, err := codec.DecodeBatch(payload)
 			if err != nil {
+				_ = tr.Close()
 				e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}
 				return
 			}
