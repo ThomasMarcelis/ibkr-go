@@ -105,7 +105,7 @@ handled through dimensions rather than duplicate rows:
 
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
-| ORD-001 | Basic order placement | `Orders().Place`, official `placeOrder`, `openOrder`, `orderStatus` | `place_order_lmt_buy_aapl`, `place_order_mkt_buy_aapl`, `place_order_mkt_sell_aapl`, `api_order_fill_aapl`, `api_order_rest_cancel_aapl`, `api_order_relative_cancel_aapl`, `api_order_stop_cancel_aapl`, `api_order_trailing_cancel_aapl`, `api_order_rejects_aapl`, `api_order_type_matrix_aapl`, `api_delayed_success_modify_aapl`, `api_future_campaign_mes`, `place_order_limit.txt`, `place_order_fill_with_execution.txt`, `place_order_modify_to_market_late_execution.txt`, `place_order_invalid_type_live_error.txt` | candidate | MKT, LMT, STP, STP LMT, TRAIL, TRAIL LIMIT, MIT, LIT, MOC/LOC where allowed, DAY/GTC, marketable/far-from-market |
+| ORD-001 | Basic order placement | `Orders().Place`, official `placeOrder`, `openOrder`, `orderStatus` | `place_order_lmt_buy_aapl`, `place_order_mkt_buy_aapl`, `place_order_mkt_sell_aapl`, `api_order_fill_aapl`, `api_order_rest_cancel_aapl`, `api_order_relative_cancel_aapl`, `api_order_stop_cancel_aapl`, `api_order_trailing_cancel_aapl`, `api_order_rejects_aapl`, `api_order_type_matrix_aapl`, `api_delayed_success_modify_aapl`, `api_future_campaign_mes`, `api_forex_lifecycle_eurusd`, `api_ioc_fok_aapl`, `api_ioc_fok_aapl.txt`, `place_order_limit.txt`, `place_order_fill_with_execution.txt`, `place_order_modify_to_market_late_execution.txt`, `place_order_invalid_type_live_error.txt` | candidate | MKT, LMT, STP, STP LMT, TRAIL, TRAIL LIMIT, MIT, LIT, MTL, REL, MOC, LOC, MOO, LOO, PEG families, DAY/GTC/IOC/FOK, marketable/far-from-market |
 | ORD-002 | Direct and handle cancel | `Orders().Cancel`, `OrderHandle.Cancel`, official `cancelOrder` | `place_order_cancel`, `place_order_direct_cancel`, `cancel_order.txt`, `direct_cancel_order.txt` | promoted | direct cancel by ID and handle cancel both frozen; cancel unknown order, manual cancel time, terminal status remain target variants |
 | ORD-003 | Modify | `OrderHandle.Modify`, official modify by re-sending `placeOrder` | `place_order_modify`, `place_order_modify.txt` | promoted | price, quantity, TIF, forbidden side/contract changes, mismatched order ID rejection |
 | ORD-004 | Global cancel | `Orders().CancelAll`, official `reqGlobalCancel` | `global_cancel`, `global_cancel.txt` | promoted | no orders, many orders, mixed basic/bracket/OCA/conditional, post-cancel open-orders check |
@@ -113,7 +113,7 @@ handled through dimensions rather than duplicate rows:
 | ORD-006 | Completed orders | `Orders().Completed`, official `reqCompletedOrders`, `completedOrder`, `completedOrdersEnd` | `completed_orders`, `completed_orders.txt` | candidate | apiOnly true/false, full detail extraction, advanced order details, empty history |
 | ORD-007 | Executions and commissions | `Orders().Executions`, official `reqExecutions`, `execDetails`, `commissionReport` | `executions_snapshot`, `executions.txt`, `executions_correlated.txt`, `executions_overlapping.txt`, `trading_split_round_trip_aapl` | promoted | filters by account/client/symbol/secType/exchange/side/time, commission before/after exec, sentinel values |
 | ORD-008 | Order handle lifecycle | `OrderHandle.Events`, `OrderHandle.Lifecycle`, `OrderHandle.Done`, `OrderHandle.Wait`, `OrderHandle.Close` | order replay and live tests | candidate | handle detach without cancel, terminal auto-close, reconnect Gap/Resumed, slow consumer |
-| ORD-009 | End-to-end trading campaign | account, orders, executions, completed orders, PnL, positions | `trading_split_round_trip_aapl`, `api_algorithmic_campaign_aapl` | candidate | split buys/sells, concurrent observers, cleanup, final account/position/PnL/open-order reconciliation |
+| ORD-009 | End-to-end trading campaign | account, orders, executions, completed orders, PnL, positions | `trading_split_round_trip_aapl`, `api_algorithmic_campaign_aapl`, `api_scale_in_campaign_aapl`, `api_stress_rapid_fire_aapl` | candidate | split buys/sells, concurrent observers, cleanup, final account/position/PnL/open-order reconciliation |
 
 ## Advanced Orders
 
@@ -121,14 +121,14 @@ handled through dimensions rather than duplicate rows:
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | AORD-001 | Brackets and attached orders | `Orders().Place`, official bracket/attached order behavior | `place_order_bracket_aapl`, `api_bracket_trigger_aapl` | candidate | parent transmit false, take-profit, stop-loss, activation after parent, cleanup |
 | AORD-002 | OCA | official OCA group/order type | `place_order_oca_pair_aapl`, `api_oca_trigger_aapl` | candidate | one fills and cancels peer, far-from-market cleanup, mixed buy/sell |
-| AORD-003 | IB algos | official IB algos and TagValue params | `place_order_algo_adaptive_aapl` | candidate | Adaptive normal/urgent/patient, invalid param, open-order round trip |
+| AORD-003 | IB algos | official IB algos and TagValue params | `place_order_algo_adaptive_aapl`, `api_algorithmic_campaign_aapl` | candidate | Adaptive normal/urgent/patient, invalid param, open-order round trip |
 | AORD-004 | Order conditions | official price/time/margin/execution/volume/percent-change conditions | `place_order_price_condition_aapl`, `api_conditions_matrix_aapl` | candidate | every condition family, and/or conjunction, ignoreRTH, cancelOrder |
 | AORD-005 | Combo/BAG | official combo legs, combo prices, smart combo routing params | `api_combo_option_vertical_aapl` | candidate | STK combo, option vertical, ratio legs, per-leg price, execution/open/completed observation |
 | AORD-006 | Hedge orders | official hedging | none | target | delta, beta, FX hedge, pair hedge where supported, invalid hedge |
 | AORD-007 | Delta-neutral extensions | official delta-neutral order/contract fields | none | deferred | live grounding before removing partial OpenOrder fallback |
 | AORD-008 | Scale orders | official scale fields | none | deferred | scale init/subs size, increment, table, active times, open-order decode |
-| AORD-009 | Pegged and adjusted order families | official PEG BENCH, PEG BEST, PEG MID, adjusted stop/trailing fields | none | deferred | live captures for each specialized branch |
-| AORD-010 | Regulatory/allocation order fields | official FA allocation, MiFID, manual order time, soft-dollar, advancedErrorOverride, IBKRATS | none | target | accepted and rejected variants; completed/open order detail |
+| AORD-009 | Pegged and adjusted order families | official PEG BENCH, PEG BEST, PEG MID, adjusted stop/trailing fields | `api_order_type_matrix_aapl` | candidate | live accepted/rejected captures for each specialized branch |
+| AORD-010 | Regulatory/allocation order fields | official FA allocation, MiFID, manual order time, soft-dollar, advancedErrorOverride, IBKRATS | `api_whatif_margin_aapl` | candidate | accepted and rejected variants; completed/open order detail |
 
 ## Options
 
@@ -188,7 +188,9 @@ one primary matrix row above.
 | `api_combo_option_vertical_aapl` | AORD-005 |
 | `api_conditions_matrix_aapl` | AORD-004 |
 | `api_delayed_success_modify_aapl` | ORD-001 |
+| `api_forex_lifecycle_eurusd` | ORD-001 |
 | `api_future_campaign_mes` | ORD-001 |
+| `api_ioc_fok_aapl` | ORD-001 |
 | `api_oca_trigger_aapl` | AORD-002 |
 | `api_order_fill_aapl` | ORD-001 |
 | `api_order_rejects_aapl` | ORD-001 |
@@ -198,6 +200,9 @@ one primary matrix row above.
 | `api_order_trailing_cancel_aapl` | ORD-001 |
 | `api_option_campaign_aapl` | OPT-003 |
 | `api_order_type_matrix_aapl` | ORD-001 |
+| `api_scale_in_campaign_aapl` | ORD-009 |
+| `api_stress_rapid_fire_aapl` | ORD-009 |
+| `api_whatif_margin_aapl` | AORD-010 |
 | `bootstrap` | SESS-001 |
 | `bootstrap_client_id_0` | SESS-001 |
 | `completed_orders` | ORD-006 |

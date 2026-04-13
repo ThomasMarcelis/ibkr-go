@@ -125,3 +125,31 @@ func TestReplayBatches(t *testing.T) {
 		}
 	}
 }
+
+func TestOrderTypeMatrixCoversPublicOrderTypes(t *testing.T) {
+	t.Parallel()
+
+	entry := scenarioMetadataByName["api_order_type_matrix_aapl"]
+	text := strings.Join(entry.ExpectedOutcomes, " ")
+	for _, orderType := range []string{
+		"MKT",
+		"LMT",
+		"STP",
+		"STP LMT",
+		"MOC",
+		"LOC",
+		"MOO",
+		"LOO",
+		"TRAIL",
+		"TRAIL LIMIT",
+		"MIT",
+		"LIT",
+		"MTL",
+		"REL",
+		"PEG",
+	} {
+		if !strings.Contains(text, orderType) {
+			t.Fatalf("api_order_type_matrix_aapl expected outcomes missing %q", orderType)
+		}
+	}
+}

@@ -21,6 +21,9 @@ func main() {
 	scenario := flag.String("scenario", "bootstrap", "scenario name")
 	notes := flag.String("notes", "", "freeform notes")
 	clientID := flag.Int("client-id", 1, "client id used by the probe/client")
+	maxLegs := flag.Int("max-legs", 1, "maximum client connection legs to record before exiting")
+	idleTimeout := flag.Duration("idle-timeout", 3*time.Second, "time to wait for another leg after a connection closes")
+	captureTimeout := flag.Duration("timeout", 30*time.Minute, "maximum recorder lifetime")
 	flag.Parse()
 
 	session, err := capturelog.Create(*outRoot, capturelog.Meta{
@@ -48,15 +51,29 @@ func main() {
 		log.Fatal("listen: expected TCP listener")
 	}
 
-	captureDeadline := time.Now().Add(30 * time.Minute)
+	if *maxLegs <= 0 {
+		*maxLegs = 1
+	}
+
+	captureDeadline := time.Now().Add(*captureTimeout)
 	acceptedLegs := 0
-	for time.Now().Before(captureDeadline) {
-		if err := tcpListener.SetDeadline(time.Now().Add(500 * time.Millisecond)); err != nil {
+	for acceptedLegs < *maxLegs && time.Now().Before(captureDeadline) {
+		wait := 500 * time.Millisecond
+		if acceptedLegs > 0 {
+			wait = *idleTimeout
+		}
+		if deadline := time.Until(captureDeadline); deadline < wait {
+			wait = deadline
+		}
+		if err := tcpListener.SetDeadline(time.Now().Add(wait)); err != nil {
 			log.Fatalf("set accept deadline: %v", err)
 		}
 		clientConn, err := tcpListener.Accept()
 		if err != nil {
 			if ne, ok := err.(net.Error); ok && ne.Timeout() {
+				if acceptedLegs > 0 {
+					break
+				}
 				continue
 			}
 			log.Fatalf("accept: %v", err)
@@ -68,7 +85,6 @@ func main() {
 			fmt.Fprintln(os.Stderr, proxyErr)
 			os.Exit(1)
 		}
-		break // one recorder instance per scenario; exit after first leg
 	}
 
 	if acceptedLegs == 0 {

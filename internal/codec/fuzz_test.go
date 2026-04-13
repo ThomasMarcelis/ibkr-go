@@ -450,7 +450,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"UpdateAccountTime", InUpdateAccountTime, 2},          // version, timestamp
 		{"NextValidID", InNextValidID, 2},                      // version, orderID
 		{"ContractData", InContractData, 26},                   // reqID, symbol, secType, expiry, skip, strike, right, exchange, currency, localSymbol, marketName, tradingClass, conID, minTick, 5 skip, longName, primaryExchange, 4 skip, timeZoneID
-		{"ExecutionData", InExecutionData, 19},                 // reqID, 2 skip, symbol, 8 skip, execID, time, account, 1 skip, side, shares, price
+		{"ExecutionData", InExecutionData, 20},                 // reqID, 2 skip, symbol, 9 skip, execID, time, account, 1 skip, side, shares, price
 		{"NewsBulletins", InNewsBulletins, 5},                  // version, msgId, msgType, headline, source
 		{"ManagedAccounts", InManagedAccounts, 2},              // version, accountsList
 		{"HistoricalData", InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end

@@ -58,29 +58,51 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.RealTimeBar{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"]))}, nil
 	case "open_order":
 		return codec.OpenOrder{
-			OrderID:       int64(asInt(resolve(body["order_id"]))),
-			Account:       asString(resolve(body["account"])),
-			Contract:      asContract(resolve(body["contract"])),
-			Action:        asString(resolve(body["action"])),
-			OrderType:     asString(resolve(body["order_type"])),
-			Status:        asString(resolve(body["status"])),
-			Quantity:      asString(resolve(body["quantity"])),
-			Filled:        asString(resolve(body["filled"])),
-			Remaining:     asString(resolve(body["remaining"])),
-			LmtPrice:      asString(resolve(body["lmt_price"])),
-			AuxPrice:      asString(resolve(body["aux_price"])),
-			TIF:           asString(resolve(body["tif"])),
-			OcaGroup:      asString(resolve(body["oca_group"])),
-			OpenClose:     asString(resolve(body["open_close"])),
-			Origin:        asString(resolve(body["origin"])),
-			OrderRef:      asString(resolve(body["order_ref"])),
-			ClientID:      asString(resolve(body["client_id"])),
-			PermID:        asString(resolve(body["perm_id"])),
-			OutsideRTH:    asString(resolve(body["outside_rth"])),
-			Hidden:        asString(resolve(body["hidden"])),
-			DiscretionAmt: asString(resolve(body["discretion_amt"])),
-			GoodAfterTime: asString(resolve(body["good_after_time"])),
-			ParentID:      asString(resolve(body["parent_id"])),
+			OrderID:               int64(asInt(resolve(body["order_id"]))),
+			Account:               asString(resolve(body["account"])),
+			Contract:              asContract(resolve(body["contract"])),
+			Action:                asString(resolve(body["action"])),
+			OrderType:             asString(resolve(body["order_type"])),
+			Status:                asString(resolve(body["status"])),
+			Quantity:              asString(resolve(body["quantity"])),
+			Filled:                asString(resolve(body["filled"])),
+			Remaining:             asString(resolve(body["remaining"])),
+			LmtPrice:              asString(resolve(body["lmt_price"])),
+			AuxPrice:              asString(resolve(body["aux_price"])),
+			TIF:                   asString(resolve(body["tif"])),
+			OcaGroup:              asString(resolve(body["oca_group"])),
+			OpenClose:             asString(resolve(body["open_close"])),
+			Origin:                asString(resolve(body["origin"])),
+			OrderRef:              asString(resolve(body["order_ref"])),
+			ClientID:              asString(resolve(body["client_id"])),
+			PermID:                asString(resolve(body["perm_id"])),
+			OutsideRTH:            asString(resolve(body["outside_rth"])),
+			Hidden:                asString(resolve(body["hidden"])),
+			DiscretionAmt:         asString(resolve(body["discretion_amt"])),
+			GoodAfterTime:         asString(resolve(body["good_after_time"])),
+			ParentID:              asString(resolve(body["parent_id"])),
+			ComboLegs:             asCodecComboLegs(resolve(body["combo_legs"])),
+			OrderComboLegPrices:   asStrings(resolve(body["order_combo_leg_prices"])),
+			SmartComboRouting:     asCodecTagValues(resolve(body["smart_combo_routing"])),
+			AlgoStrategy:          asString(resolve(body["algo_strategy"])),
+			AlgoParams:            asCodecTagValues(resolve(body["algo_params"])),
+			Conditions:            asCodecOrderConditions(resolve(body["conditions"])),
+			ConditionsIgnoreRTH:   asString(resolve(body["conditions_ignore_rth"])),
+			ConditionsCancelOrder: asString(resolve(body["conditions_cancel_order"])),
+			InitMarginBefore:      asString(resolve(body["init_margin_before"])),
+			MaintMarginBefore:     asString(resolve(body["maint_margin_before"])),
+			EquityWithLoanBefore:  asString(resolve(body["equity_with_loan_before"])),
+			InitMarginChange:      asString(resolve(body["init_margin_change"])),
+			MaintMarginChange:     asString(resolve(body["maint_margin_change"])),
+			EquityWithLoanChange:  asString(resolve(body["equity_with_loan_change"])),
+			InitMarginAfter:       asString(resolve(body["init_margin_after"])),
+			MaintMarginAfter:      asString(resolve(body["maint_margin_after"])),
+			EquityWithLoanAfter:   asString(resolve(body["equity_with_loan_after"])),
+			Commission:            asString(resolve(body["commission"])),
+			MinCommission:         asString(resolve(body["min_commission"])),
+			MaxCommission:         asString(resolve(body["max_commission"])),
+			CommissionCurrency:    asString(resolve(body["commission_currency"])),
+			WarningText:           asString(resolve(body["warning_text"])),
 		}, nil
 	case "open_order_end":
 		return codec.OpenOrderEnd{}, nil
@@ -438,6 +460,43 @@ func asCodecEntries[T any](value any, mapFn func(map[string]any) T) []T {
 		}
 	}
 	return out
+}
+
+func asCodecComboLegs(value any) []codec.ComboLeg {
+	return asCodecEntries(value, func(m map[string]any) codec.ComboLeg {
+		return codec.ComboLeg{
+			ConID:              asInt(m["con_id"]),
+			Ratio:              asInt(m["ratio"]),
+			Action:             asString(m["action"]),
+			Exchange:           asString(m["exchange"]),
+			OpenClose:          asString(m["open_close"]),
+			ShortSaleSlot:      asString(m["short_sale_slot"]),
+			DesignatedLocation: asString(m["designated_location"]),
+			ExemptCode:         asString(m["exempt_code"]),
+		}
+	})
+}
+
+func asCodecTagValues(value any) []codec.TagValue {
+	return asCodecEntries(value, func(m map[string]any) codec.TagValue {
+		return codec.TagValue{Tag: asString(m["tag"]), Value: asString(m["value"])}
+	})
+}
+
+func asCodecOrderConditions(value any) []codec.OrderCondition {
+	return asCodecEntries(value, func(m map[string]any) codec.OrderCondition {
+		return codec.OrderCondition{
+			Type:          asInt(m["type"]),
+			Conjunction:   asString(m["conjunction"]),
+			ConID:         asInt(m["con_id"]),
+			Exchange:      asString(m["exchange"]),
+			Operator:      asInt(m["operator"]),
+			Value:         asString(m["value"]),
+			TriggerMethod: asInt(m["trigger_method"]),
+			SecType:       asString(m["sec_type"]),
+			Symbol:        asString(m["symbol"]),
+		}
+	})
 }
 
 func asContract(value any) codec.Contract {

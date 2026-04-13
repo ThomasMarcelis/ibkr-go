@@ -2040,6 +2040,87 @@ done:
 	}
 }
 
+func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "place_order_fill_native_execution_time.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	var sawFilled bool
+	var execution *ibkr.Execution
+	var commission *ibkr.CommissionReport
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				goto done
+			}
+			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+				sawFilled = true
+			}
+			if evt.Execution != nil {
+				execution = evt.Execution
+			}
+			if evt.Commission != nil {
+				commission = evt.Commission
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for native execution-time order events")
+		}
+	}
+
+done:
+	if !sawFilled {
+		t.Fatal("never received Filled status")
+	}
+	if execution == nil {
+		t.Fatal("never received Execution event")
+	}
+	if execution.ExecID != "0000e0d5.69dd7411.01.01" {
+		t.Fatalf("Execution.ExecID = %q", execution.ExecID)
+	}
+	wantTime := time.Date(2026, 4, 13, 19, 27, 4, 0, time.UTC)
+	if !execution.Time.Equal(wantTime) {
+		t.Fatalf("Execution.Time = %s, want %s", execution.Time.Format(time.RFC3339), wantTime.Format(time.RFC3339))
+	}
+	if execution.Price.String() != "257.95" {
+		t.Fatalf("Execution.Price = %s, want 257.95", execution.Price.String())
+	}
+	if commission == nil {
+		t.Fatal("never received Commission event")
+	}
+	if commission.ExecID != execution.ExecID {
+		t.Fatalf("Commission.ExecID = %q, want %q", commission.ExecID, execution.ExecID)
+	}
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
+}
+
 func TestCancelOrder(t *testing.T) {
 	t.Parallel()
 
@@ -3334,6 +3415,137 @@ func TestPlaceOrderInvalidTypeLiveError(t *testing.T) {
 	if !strings.Contains(err.Error(), "code=321") || !strings.Contains(err.Error(), "Invalid order type") {
 		t.Fatalf("handle.Wait() error = %v, want code=321 invalid order type", err)
 	}
+}
+
+func TestAPIIOCFOKAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_ioc_fok_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	ioc, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("309.6"),
+			TIF:       ibkr.TIFIOC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("IOC PlaceOrder: %v", err)
+	}
+	iocStatuses := waitOrderStatuses(t, ctx, ioc)
+	if !hasOrderStatus(iocStatuses, ibkr.OrderStatusPendingCancel) {
+		t.Fatalf("IOC statuses = %v, want PendingCancel from live capture", iocStatuses)
+	}
+	if !hasOrderStatus(iocStatuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("IOC statuses = %v, want Cancelled from live capture", iocStatuses)
+	}
+
+	fokMarketable, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("309.6"),
+			TIF:       ibkr.TIFFOK,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("FOK marketable PlaceOrder: %v", err)
+	}
+	fokMarketableStatuses := waitOrderStatuses(t, ctx, fokMarketable)
+	if !hasOrderStatus(fokMarketableStatuses, ibkr.OrderStatusInactive) {
+		t.Fatalf("FOK marketable statuses = %v, want Inactive from live capture", fokMarketableStatuses)
+	}
+
+	fokFar, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("12.9"),
+			TIF:       ibkr.TIFFOK,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("FOK far PlaceOrder: %v", err)
+	}
+	fokFarStatuses := waitOrderStatuses(t, ctx, fokFar)
+	if !hasOrderStatus(fokFarStatuses, ibkr.OrderStatusInactive) {
+		t.Fatalf("FOK far statuses = %v, want Inactive from live capture", fokFarStatuses)
+	}
+}
+
+func waitOrderStatuses(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) []ibkr.OrderStatus {
+	t.Helper()
+
+	var statuses []ibkr.OrderStatus
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				return statuses
+			}
+			if evt.Status != nil {
+				statuses = append(statuses, evt.Status.Status)
+			}
+		case <-handle.Done():
+			for {
+				select {
+				case evt, ok := <-handle.Events():
+					if !ok {
+						return statuses
+					}
+					if evt.Status != nil {
+						statuses = append(statuses, evt.Status.Status)
+					}
+				default:
+					return statuses
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for order terminal status")
+		}
+	}
+}
+
+func hasOrderStatus(statuses []ibkr.OrderStatus, want ibkr.OrderStatus) bool {
+	for _, status := range statuses {
+		if status == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestGlobalCancelIntegration(t *testing.T) {

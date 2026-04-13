@@ -28,7 +28,7 @@ const (
 func TestLiveIssue9GatewayDailyRestartAutoReconnects(t *testing.T) {
 	requireLiveRestart(t)
 
-	client, cancel := dialLiveIssueClient(t, 15*time.Second,
+	client, cancel := dialLiveIssueClient(t,
 		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto),
 		ibkr.WithTCPKeepAlive(30*time.Second))
 	defer cancel()
@@ -125,7 +125,7 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 func TestLiveIssue12GatewayIdleSessionDetectsRestart(t *testing.T) {
 	requireLiveRestart(t)
 
-	client, cancel := dialLiveIssueClient(t, 15*time.Second,
+	client, cancel := dialLiveIssueClient(t,
 		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto),
 		ibkr.WithTCPKeepAlive(30*time.Second))
 	defer cancel()
@@ -168,7 +168,7 @@ func TestLiveIssue12IdleSessionRecoversAfterRealGatewayProxyOutage(t *testing.T)
 }
 
 func TestLiveIssue13SubscriptionErrAfterClose(t *testing.T) {
-	client, cancel := dialLiveIssueClient(t, 15*time.Second)
+	client, cancel := dialLiveIssueClient(t)
 	defer cancel()
 	defer closeLiveIssueClient(t, client)
 
@@ -202,7 +202,7 @@ func TestLiveIssue13SubscriptionErrAfterClose(t *testing.T) {
 }
 
 func TestLiveIssue11HistoricalRequestValidationErrorsAreTyped(t *testing.T) {
-	client, cancel := dialLiveIssueClient(t, 15*time.Second)
+	client, cancel := dialLiveIssueClient(t)
 	defer cancel()
 	defer closeLiveIssueClient(t, client)
 
@@ -250,10 +250,10 @@ func requireLiveRestart(t *testing.T) {
 	}
 }
 
-func dialLiveIssueClient(t *testing.T, timeout time.Duration, extra ...ibkr.Option) (*ibkr.Client, context.CancelFunc) {
+func dialLiveIssueClient(t *testing.T, extra ...ibkr.Option) (*ibkr.Client, context.CancelFunc) {
 	t.Helper()
 	cfg := ibkrlive.Require(t)
-	return dialLiveIssueClientConfig(t, cfg, timeout, extra...)
+	return dialLiveIssueClientConfig(t, cfg, 15*time.Second, extra...)
 }
 
 func dialLiveIssueClientAt(t *testing.T, timeout time.Duration, addr string, extra ...ibkr.Option) *ibkr.Client {

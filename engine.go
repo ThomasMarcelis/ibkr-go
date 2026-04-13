@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -5426,7 +5427,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 	if err != nil {
 		return ExecutionUpdate{}, err
 	}
-	ts, err := time.Parse(time.RFC3339, m.Time)
+	ts, err := parseExecutionTime(m.Time)
 	if err != nil {
 		return ExecutionUpdate{}, err
 	}
@@ -5442,6 +5443,33 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 			Time:    ts,
 		},
 	}, nil
+}
+
+// parseExecutionTime handles both the Gateway's native execution time format
+// ("20260413 13:35:50 US/Eastern") and RFC3339 (from test transcripts).
+func parseExecutionTime(raw string) (time.Time, error) {
+	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
+		return ts, nil
+	}
+	// IBKR native: "YYYYMMDD HH:MM:SS TZ_NAME" where TZ_NAME is an IANA zone
+	// like "US/Eastern", "US/Central", "Europe/London", etc.
+	if idx := strings.LastIndex(raw, " "); idx > 0 && idx > 16 {
+		dtPart := raw[:idx]
+		tzPart := raw[idx+1:]
+		loc, err := time.LoadLocation(tzPart)
+		if err == nil {
+			if ts, err := time.ParseInLocation("20060102 15:04:05", dtPart, loc); err == nil {
+				return ts.UTC(), nil
+			}
+		}
+	}
+	// Fallback: parse without timezone.
+	if len(raw) >= 17 {
+		if ts, err := time.Parse("20060102 15:04:05", raw[:17]); err == nil {
+			return ts, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("ibkr: parse execution time %q", raw)
 }
 
 func fromCodecCommission(m codec.CommissionReport) (CommissionReport, error) {

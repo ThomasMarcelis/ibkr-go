@@ -59,6 +59,10 @@ events include `Retryable`; callers that read only `Events()` should inspect
 `Err()` does not wait for `Done()` and returns nil until a terminal close reason
 is known.
 
+`Events()` closes before `Done()`. Consumers that need every buffered business
+event must drain `Events()` until it closes, then call `Wait()`. `Done()` is for
+completion coordination and must not replace event draining.
+
 `AwaitSnapshot(ctx)` is durable for snapshot-style subscriptions. It returns
 `nil` once `SnapshotComplete` has occurred, even if the lifecycle event was
 dropped from the bounded channel. It returns `ErrNoSnapshot` for streams with no
@@ -111,6 +115,10 @@ per event.
 bounded and observational. `Close()` detaches the handle without cancelling the
 server-side order. `Cancel(ctx)` sends a cancel request. `Modify(ctx, order)`
 sends a modified order with the same OrderID.
+
+`Events()` closes before `Done()`. Consumers that need every order event,
+including late `Execution` or `Commission` callbacks after a terminal status,
+must drain `Events()` until it closes, then call `Wait()`.
 
 Terminal states: when an OrderStatus arrives with status Filled, Cancelled, or
 Inactive, the handle auto-closes with `nil` error.

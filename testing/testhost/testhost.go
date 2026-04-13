@@ -943,27 +943,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		// right, multiplier, exchange, primaryExchange, currency, localSymbol,
 		// tradingClass, secIdType, secId, action, totalQty, orderType, lmtPrice,
 		// auxPrice, tif, ocaGroup, account, ...]
-		body := map[string]any{}
-		if len(fields) >= 2 {
-			body["order_id"] = fields[1]
-		}
-		if len(fields) >= 24 {
-			body["contract"] = map[string]any{
-				"con_id":   fields[2],
-				"symbol":   fields[3],
-				"sec_type": fields[4],
-				"exchange": fields[9],
-				"currency": fields[11],
-			}
-			body["action"] = fields[16]
-			body["total_quantity"] = fields[17]
-			body["order_type"] = fields[18]
-			body["lmt_price"] = fields[19]
-			body["aux_price"] = fields[20]
-			body["tif"] = fields[21]
-			body["account"] = fields[23]
-		}
-		return "place_order", body, nil
+		return "place_order", decodePlaceOrderClientBody(fields), nil
 	case 4: // OutCancelOrder: [4, orderID, manualOrderCancelTime]
 		body := map[string]any{}
 		if len(fields) >= 2 {
@@ -1129,6 +1109,238 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 	default:
 		return "", nil, fmt.Errorf("testhost: unsupported client msg_id %d", msgID)
 	}
+}
+
+func decodePlaceOrderClientBody(fields []string) map[string]any {
+	body := map[string]any{}
+	if len(fields) >= 2 {
+		body["order_id"] = fields[1]
+	}
+	if len(fields) < 24 {
+		return body
+	}
+
+	secType := safeField(fields, 4)
+	body["contract"] = map[string]any{
+		"con_id":           fields[2],
+		"symbol":           fields[3],
+		"sec_type":         secType,
+		"expiry":           safeField(fields, 5),
+		"strike":           safeField(fields, 6),
+		"right":            safeField(fields, 7),
+		"multiplier":       safeField(fields, 8),
+		"exchange":         safeField(fields, 9),
+		"primary_exchange": safeField(fields, 10),
+		"currency":         safeField(fields, 11),
+		"local_symbol":     safeField(fields, 12),
+		"trading_class":    safeField(fields, 13),
+	}
+	body["action"] = fields[16]
+	body["total_quantity"] = fields[17]
+	body["order_type"] = fields[18]
+	body["lmt_price"] = fields[19]
+	body["aux_price"] = fields[20]
+	body["tif"] = fields[21]
+	body["oca_group"] = fields[22]
+	body["account"] = fields[23]
+	body["open_close"] = safeField(fields, 24)
+	body["origin"] = safeField(fields, 25)
+	body["order_ref"] = safeField(fields, 26)
+	body["transmit"] = safeField(fields, 27) == "1"
+	body["parent_id"] = safeField(fields, 28)
+	body["display_size"] = safeField(fields, 31)
+	body["trigger_method"] = safeField(fields, 32)
+	body["outside_rth"] = safeField(fields, 33) == "1"
+	body["hidden"] = safeField(fields, 34) == "1"
+
+	cursor := 35
+	if secType == "BAG" {
+		body["combo_legs"] = decodeComboLegClientFields(fields, &cursor)
+		body["order_combo_leg_prices"] = decodeStringListClientFields(fields, &cursor)
+		body["smart_combo_routing_params"] = decodeTagValueClientFields(fields, &cursor)
+	}
+
+	_ = readClientField(fields, &cursor) // deprecated sharesAllocation
+	body["discretionary_amt"] = readClientField(fields, &cursor)
+	body["good_after_time"] = readClientField(fields, &cursor)
+	body["good_till_date"] = readClientField(fields, &cursor)
+	body["fa_group"] = readClientField(fields, &cursor)
+	body["fa_method"] = readClientField(fields, &cursor)
+	body["fa_percentage"] = readClientField(fields, &cursor)
+	body["model_code"] = readClientField(fields, &cursor)
+	body["short_sale_slot"] = readClientField(fields, &cursor)
+	body["designated_location"] = readClientField(fields, &cursor)
+	body["exempt_code"] = readClientField(fields, &cursor)
+	body["oca_type"] = readClientField(fields, &cursor)
+	body["rule80a"] = readClientField(fields, &cursor)
+	body["settling_firm"] = readClientField(fields, &cursor)
+	body["all_or_none"] = readClientField(fields, &cursor)
+	body["min_qty"] = readClientField(fields, &cursor)
+	body["percent_offset"] = readClientField(fields, &cursor)
+	cursor += 3 // deprecated eTradeOnly, firmQuoteOnly, nbboPriceCap
+	body["auction_strategy"] = readClientField(fields, &cursor)
+	body["starting_price"] = readClientField(fields, &cursor)
+	body["stock_ref_price"] = readClientField(fields, &cursor)
+	body["delta"] = readClientField(fields, &cursor)
+	body["stock_range_lower"] = readClientField(fields, &cursor)
+	body["stock_range_upper"] = readClientField(fields, &cursor)
+	body["override_percentage_constraints"] = readClientField(fields, &cursor)
+	body["volatility"] = readClientField(fields, &cursor)
+	body["volatility_type"] = readClientField(fields, &cursor)
+	body["delta_neutral_order_type"] = readClientField(fields, &cursor)
+	body["delta_neutral_aux_price"] = readClientField(fields, &cursor)
+	body["continuous_update"] = readClientField(fields, &cursor)
+	body["reference_price_type"] = readClientField(fields, &cursor)
+	body["trail_stop_price"] = readClientField(fields, &cursor)
+	body["trailing_percent"] = readClientField(fields, &cursor)
+	body["scale_init_level_size"] = readClientField(fields, &cursor)
+	body["scale_subs_level_size"] = readClientField(fields, &cursor)
+	body["scale_price_increment"] = readClientField(fields, &cursor)
+	body["scale_table"] = readClientField(fields, &cursor)
+	body["active_start_time"] = readClientField(fields, &cursor)
+	body["active_stop_time"] = readClientField(fields, &cursor)
+	body["hedge_type"] = readClientField(fields, &cursor)
+	if body["hedge_type"] != "" {
+		body["hedge_param"] = readClientField(fields, &cursor)
+	}
+	body["opt_out_smart_routing"] = readClientField(fields, &cursor)
+	body["clearing_account"] = readClientField(fields, &cursor)
+	body["clearing_intent"] = readClientField(fields, &cursor)
+	body["not_held"] = readClientField(fields, &cursor)
+	body["delta_neutral_contract_present"] = readClientField(fields, &cursor)
+	body["algo_strategy"] = readClientField(fields, &cursor)
+	if body["algo_strategy"] != "" {
+		body["algo_params"] = decodeTagValueClientFields(fields, &cursor)
+	}
+	body["algo_id"] = readClientField(fields, &cursor)
+	body["what_if"] = readClientField(fields, &cursor) == "1"
+	body["order_misc_options"] = readClientField(fields, &cursor)
+	body["solicited"] = readClientField(fields, &cursor)
+	body["randomize_size"] = readClientField(fields, &cursor)
+	body["randomize_price"] = readClientField(fields, &cursor)
+	body["conditions"] = decodeOrderConditionClientFields(fields, &cursor)
+	if conditions, ok := body["conditions"].([]any); ok && len(conditions) > 0 {
+		body["conditions_ignore_rth"] = readClientField(fields, &cursor) == "1"
+		body["conditions_cancel_order"] = readClientField(fields, &cursor) == "1"
+	}
+	body["adjusted_order_type"] = readClientField(fields, &cursor)
+	body["trigger_price"] = readClientField(fields, &cursor)
+	body["lmt_price_offset"] = readClientField(fields, &cursor)
+	body["adjusted_stop_price"] = readClientField(fields, &cursor)
+	body["adjusted_stop_limit_price"] = readClientField(fields, &cursor)
+	body["adjusted_trailing_amount"] = readClientField(fields, &cursor)
+	body["adjustable_trailing_unit"] = readClientField(fields, &cursor)
+	body["ext_operator"] = readClientField(fields, &cursor)
+	body["soft_dollar_name"] = readClientField(fields, &cursor)
+	body["soft_dollar_value"] = readClientField(fields, &cursor)
+	body["cash_qty"] = readClientField(fields, &cursor)
+	body["mifid2_decision_maker"] = readClientField(fields, &cursor)
+	body["mifid2_decision_algo"] = readClientField(fields, &cursor)
+	body["mifid2_execution_trader"] = readClientField(fields, &cursor)
+	body["mifid2_execution_algo"] = readClientField(fields, &cursor)
+	body["dont_use_auto_price_for_hedge"] = readClientField(fields, &cursor)
+	body["is_oms_container"] = readClientField(fields, &cursor)
+	body["discretionary_up_to_limit_price"] = readClientField(fields, &cursor)
+	body["use_price_mgmt_algo"] = readClientField(fields, &cursor)
+	body["duration"] = readClientField(fields, &cursor)
+	body["post_to_ats"] = readClientField(fields, &cursor)
+	body["auto_cancel_parent"] = readClientField(fields, &cursor)
+	body["advanced_error_override"] = readClientField(fields, &cursor)
+	body["manual_order_time"] = readClientField(fields, &cursor)
+	body["customer_account"] = readClientField(fields, &cursor)
+	body["professional_customer"] = readClientField(fields, &cursor)
+	body["include_overnight"] = readClientField(fields, &cursor)
+	body["manual_order_indicator"] = readClientField(fields, &cursor)
+	body["imbalance_only"] = readClientField(fields, &cursor)
+	return body
+}
+
+func decodeComboLegClientFields(fields []string, cursor *int) []any {
+	count := readClientCount(fields, cursor)
+	legs := make([]any, 0, count)
+	for range count {
+		legs = append(legs, map[string]any{
+			"con_id":              readClientField(fields, cursor),
+			"ratio":               readClientField(fields, cursor),
+			"action":              readClientField(fields, cursor),
+			"exchange":            readClientField(fields, cursor),
+			"open_close":          readClientField(fields, cursor),
+			"short_sale_slot":     readClientField(fields, cursor),
+			"designated_location": readClientField(fields, cursor),
+			"exempt_code":         readClientField(fields, cursor),
+		})
+	}
+	return legs
+}
+
+func decodeStringListClientFields(fields []string, cursor *int) []any {
+	count := readClientCount(fields, cursor)
+	values := make([]any, 0, count)
+	for range count {
+		values = append(values, readClientField(fields, cursor))
+	}
+	return values
+}
+
+func decodeTagValueClientFields(fields []string, cursor *int) []any {
+	count := readClientCount(fields, cursor)
+	values := make([]any, 0, count)
+	for range count {
+		values = append(values, map[string]any{
+			"tag":   readClientField(fields, cursor),
+			"value": readClientField(fields, cursor),
+		})
+	}
+	return values
+}
+
+func decodeOrderConditionClientFields(fields []string, cursor *int) []any {
+	count := readClientCount(fields, cursor)
+	conditions := make([]any, 0, count)
+	for range count {
+		conditionType := readClientField(fields, cursor)
+		condition := map[string]any{
+			"type":        conditionType,
+			"conjunction": readClientField(fields, cursor),
+		}
+		switch conditionType {
+		case "1":
+			condition["operator"] = readClientBool(fields, cursor)
+			condition["con_id"] = readClientField(fields, cursor)
+			condition["exchange"] = readClientField(fields, cursor)
+			condition["value"] = readClientField(fields, cursor)
+			condition["trigger_method"] = readClientField(fields, cursor)
+		case "3", "4":
+			condition["operator"] = readClientBool(fields, cursor)
+			condition["value"] = readClientField(fields, cursor)
+		case "5":
+			condition["sec_type"] = readClientField(fields, cursor)
+			condition["exchange"] = readClientField(fields, cursor)
+			condition["symbol"] = readClientField(fields, cursor)
+		case "6", "7":
+			condition["operator"] = readClientBool(fields, cursor)
+			condition["con_id"] = readClientField(fields, cursor)
+			condition["exchange"] = readClientField(fields, cursor)
+			condition["value"] = readClientField(fields, cursor)
+		}
+		conditions = append(conditions, condition)
+	}
+	return conditions
+}
+
+func readClientField(fields []string, cursor *int) string {
+	value := safeField(fields, *cursor)
+	*cursor = *cursor + 1
+	return value
+}
+
+func readClientCount(fields []string, cursor *int) int {
+	value, _ := strconv.Atoi(readClientField(fields, cursor))
+	return value
+}
+
+func readClientBool(fields []string, cursor *int) bool {
+	return readClientField(fields, cursor) == "1"
 }
 
 func safeField(fields []string, idx int) string {

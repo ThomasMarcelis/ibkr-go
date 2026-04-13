@@ -1695,4 +1695,29 @@ var scenarios = map[string]scenario{
 		description: "public API campaign with concurrent market/account/order observers and multi-step trading",
 		runAPI:      runAPIAlgorithmicCampaignAAPL,
 	},
+	"api_forex_lifecycle_eurusd": {
+		name:        "api_forex_lifecycle_eurusd",
+		description: "public API campaign for EUR.USD forex rest/modify/cancel lifecycle",
+		runAPI:      runAPIForexLifecycleEURUSD,
+	},
+	"api_whatif_margin_aapl": {
+		name:        "api_whatif_margin_aapl",
+		description: "public API campaign for WhatIf margin/commission preview on AAPL",
+		runAPI:      runAPIWhatIfMarginAAPL,
+	},
+	"api_stress_rapid_fire_aapl": {
+		name:        "api_stress_rapid_fire_aapl",
+		description: "public API campaign for rapid-fire 10 orders plus global cancel",
+		runAPI:      runAPIStressRapidFireAAPL,
+	},
+	"api_scale_in_campaign_aapl": {
+		name:        "api_scale_in_campaign_aapl",
+		description: "public API campaign for scale-in buy strategy with protective stop-loss and flatten",
+		runAPI:      runAPIScaleInCampaignAAPL,
+	},
+	"api_ioc_fok_aapl": {
+		name:        "api_ioc_fok_aapl",
+		description: "public API campaign for IOC and FOK fill/reject paths",
+		runAPI:      runAPIIOCFOKAAPL,
+	},
 }

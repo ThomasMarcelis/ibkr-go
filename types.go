@@ -812,9 +812,12 @@ func (h *OrderHandle) closeWithErr(err error) {
 		h.errMu.Lock()
 		h.err = err
 		h.errMu.Unlock()
-		close(h.done)
+		// Close events before done so Done reports completion only after the
+		// engine has stopped publishing business events. Consumers that need
+		// every buffered event should range Events(), then call Wait().
 		close(h.events)
 		h.state.Close()
+		close(h.done)
 	})
 }
 

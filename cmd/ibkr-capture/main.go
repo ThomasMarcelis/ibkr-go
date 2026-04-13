@@ -27,6 +27,7 @@ func main() {
 	listScenarios := flag.Bool("list", false, "list available scenarios and exit")
 	listJSON := flag.Bool("list-json", false, "list available scenarios as JSON and exit")
 	listBatch := flag.String("list-batch", "", "list scenario|client_id entries for a batch and exit")
+	driverEvents := flag.String("driver-events", os.Getenv("IBKR_DRIVER_EVENTS"), "optional JSONL path for public API driver events")
 	dialTimeout := flag.Duration("dial-timeout", 5*time.Second, "tcp dial timeout")
 	flag.Parse()
 
@@ -66,6 +67,16 @@ func main() {
 	defer cancel()
 
 	if sc.runAPI != nil {
+		recorder, err := newAPIDriverRecorder(*driverEvents, *scenario)
+		if err != nil {
+			log.Fatalf("driver-events: %v", err)
+		}
+		apiDriver = recorder
+		defer func() {
+			if err := recorder.Close(); err != nil {
+				log.Printf("close driver events: %v", err)
+			}
+		}()
 		if err := sc.runAPI(ctx, *addr, *clientID); err != nil {
 			log.Fatalf("scenario %q: %v", *scenario, err)
 		}

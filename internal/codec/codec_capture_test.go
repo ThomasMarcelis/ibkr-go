@@ -143,6 +143,47 @@ func TestCaptureDecode_ContractDetails(t *testing.T) {
 	}
 }
 
+func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
+	t.Parallel()
+	// captures/20260413T192703Z-place_order_mkt_buy_aapl, server_version=200,
+	// events.jsonl sha256 prefix 301b075b217cbd99. The contract block includes
+	// currency between exchange and localSymbol; dropping that field misaligns
+	// execID/time/side.
+	payload := []byte("11\x00-1\x001\x00265598\x00AAPL\x00STK\x00\x000.0\x00\x00\x00IEX\x00USD\x00AAPL\x00NMS\x000000e0d5.69dd7411.01.01\x0020260413 15:27:04 US/Eastern\x00DUP770846\x00IEX\x00BOT\x001\x00257.95\x00389211034\x0094\x000\x001\x00257.95\x00\x00\x00\x00\x002\x000\x00\x00")
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(ExecutionDetail)
+	if !ok {
+		t.Fatalf("type = %T, want ExecutionDetail", msgs[0])
+	}
+	if m.OrderID != 1 {
+		t.Errorf("OrderID = %d, want 1", m.OrderID)
+	}
+	if m.ExecID != "0000e0d5.69dd7411.01.01" {
+		t.Errorf("ExecID = %q", m.ExecID)
+	}
+	if m.Time != "20260413 15:27:04 US/Eastern" {
+		t.Errorf("Time = %q", m.Time)
+	}
+	if m.Account != "DUP770846" {
+		t.Errorf("Account = %q", m.Account)
+	}
+	if m.Side != "BOT" {
+		t.Errorf("Side = %q", m.Side)
+	}
+	if m.Shares != "1" {
+		t.Errorf("Shares = %q", m.Shares)
+	}
+	if m.Price != "257.95" {
+		t.Errorf("Price = %q", m.Price)
+	}
+}
+
 func TestCaptureDecode_ContractDetailsEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214938Z-contract_details_aapl_stk, line 11

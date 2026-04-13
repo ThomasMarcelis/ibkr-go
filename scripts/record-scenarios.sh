@@ -11,8 +11,10 @@ OUTDIR="${IBKR_CAPTURES:-captures}"
 RECORDER="${IBKR_RECORDER:-/tmp/ibkr-recorder}"
 CAPTURE="${IBKR_CAPTURE:-/tmp/ibkr-capture}"
 BATCH="${IBKR_CAPTURE_BATCH:-new-v2}"
+RECORDER_MAX_LEGS="${IBKR_RECORDER_MAX_LEGS:-1}"
 TMPLOG=$(mktemp)
-trap "rm -f $TMPLOG" EXIT
+TMPEVENTS=$(mktemp)
+trap "rm -f $TMPLOG $TMPEVENTS" EXIT
 
 if [ $# -gt 0 ]; then
     SCENARIOS=()
@@ -46,6 +48,7 @@ for entry in "${SCENARIOS[@]}"; do
         -out "$OUTDIR" \
         -scenario "$scenario" \
         -client-id "$client_id" \
+        -max-legs "$RECORDER_MAX_LEGS" \
         -notes "batch=$BATCH client_id=$client_id" \
         >/dev/null 2>&1 &
     rpid=$!
@@ -56,10 +59,12 @@ for entry in "${SCENARIOS[@]}"; do
     sleep 0.5
 
     # Run capture, write output to temp file
+    : > "$TMPEVENTS"
     "$CAPTURE" \
         -addr "$LISTEN" \
         -scenario "$scenario" \
         -client-id "$client_id" \
+        -driver-events "$TMPEVENTS" \
         >"$TMPLOG" 2>&1
     rc=$?
 
@@ -69,6 +74,9 @@ for entry in "${SCENARIOS[@]}"; do
     latest_dir=$(ls -dt "$OUTDIR"/20*-"$scenario" 2>/dev/null | head -1)
     if [ -n "$latest_dir" ]; then
         cp "$TMPLOG" "$latest_dir/driver.log"
+        if [ -s "$TMPEVENTS" ]; then
+            cp "$TMPEVENTS" "$latest_dir/driver_events.jsonl"
+        fi
     fi
 
     last=$(tail -1 "$TMPLOG")
