@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **Subscriptions expose close errors without waiting on termination.**
+  `Subscription.Err()` returns the currently recorded terminal close reason, so
+  adapters can inspect retryability after `Done()` fires without calling `Wait()`.
+- **Historical request vocabularies are publicly validatable.** `BarSize`,
+  `HistoricalDuration`, and `WhatToShow` now expose `Valid()` methods, and
+  caller-side historical request failures return `*ValidationError`.
+- **TCP keepalive is explicitly configured for Gateway/TWS sockets.**
+  Connections default to 30-second TCP keepalive; non-positive
+  `WithTCPKeepAlive` values opt out.
+
+### Fixed
+
+- **Automatic reconnect now keeps retrying after failed redials.** Transient
+  Gateway downtime keeps the session in `Reconnecting` and retries with capped
+  exponential backoff instead of closing the client after one failed attempt.
+
 ## v1.4.3
 
 ### Added

@@ -286,7 +286,13 @@ const (
 	ShowHistoricalVolatility    WhatToShow = "HISTORICAL_VOLATILITY"
 	ShowOptionImpliedVolatility WhatToShow = "OPTION_IMPLIED_VOLATILITY"
 	ShowAdjustedLast            WhatToShow = "ADJUSTED_LAST"
+	ShowFeeRate                 WhatToShow = "FEE_RATE"
+	ShowYieldBid                WhatToShow = "YIELD_BID"
+	ShowYieldAsk                WhatToShow = "YIELD_ASK"
+	ShowYieldBidAsk             WhatToShow = "YIELD_BID_ASK"
+	ShowYieldLast               WhatToShow = "YIELD_LAST"
 	ShowSchedule                WhatToShow = "SCHEDULE"
+	ShowAggTrades               WhatToShow = "AGGTRADES"
 )
 
 type HistoricalDuration string

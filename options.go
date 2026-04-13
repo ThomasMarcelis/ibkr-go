@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
@@ -19,6 +20,7 @@ type config struct {
 	dialer              transport.Dialer
 	logger              *slog.Logger
 	reconnect           ReconnectPolicy
+	tcpKeepAlive        time.Duration
 	sendRate            int
 	eventBuffer         int
 	subscriptionBuffer  int
@@ -40,6 +42,7 @@ func defaultConfig() config {
 		dialer:              &net.Dialer{},
 		logger:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		reconnect:           ReconnectAuto,
+		tcpKeepAlive:        30 * time.Second,
 		sendRate:            50,
 		eventBuffer:         64,
 		subscriptionBuffer:  64,
@@ -91,6 +94,15 @@ func WithLogger(logger *slog.Logger) Option {
 func WithReconnectPolicy(policy ReconnectPolicy) Option {
 	return func(cfg *config) {
 		cfg.reconnect = policy
+	}
+}
+
+// WithTCPKeepAlive configures OS TCP keepalive for Gateway/TWS connections.
+// A positive duration enables keepalive with that period. A non-positive duration
+// disables keepalive after dialing.
+func WithTCPKeepAlive(period time.Duration) Option {
+	return func(cfg *config) {
+		cfg.tcpKeepAlive = period
 	}
 }
 

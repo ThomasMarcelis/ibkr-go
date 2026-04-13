@@ -128,6 +128,22 @@ func TestSubscriptionWaitReturnsError(t *testing.T) {
 	}
 }
 
+func TestSubscriptionErrReturnsCloseErrorWithoutBlocking(t *testing.T) {
+	t.Parallel()
+
+	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	if err := sub.Err(); err != nil {
+		t.Fatalf("Err() before close = %v, want nil", err)
+	}
+
+	want := errors.New("test error")
+	sub.closeWithErr(want)
+
+	if got := sub.Err(); !errors.Is(got, want) {
+		t.Fatalf("Err() after close = %v, want %v", got, want)
+	}
+}
+
 func TestSubscriptionStateEventDelivery(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})

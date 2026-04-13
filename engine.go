@@ -45,6 +45,8 @@ type engine struct {
 
 	bootstrap bootstrapState
 	closed    bool
+
+	reconnectAttempt int
 }
 
 type bootstrapState struct {
@@ -57,8 +59,10 @@ type bootstrapState struct {
 const (
 	minServerVersion = 100
 	maxServerVersion = 200
-	reconnectBackoff = time.Second
 	bootstrapTimeout = 5 * time.Second
+
+	reconnectBackoff    = time.Second
+	reconnectBackoffMax = 16 * time.Second
 
 	historicalRequestSpacing   = 2 * time.Second
 	historicalIdenticalSpacing = 15 * time.Second
@@ -137,7 +141,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 	}
 	go e.run()
 	e.enqueue(func() {
-		e.startConnect(ctx)
+		e.startConnect(ctx, false)
 	})
 
 	select {
@@ -264,6 +268,10 @@ func (e *engine) QualifyContract(ctx context.Context, contract Contract) (Contra
 }
 
 func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) ([]Bar, error) {
+	if err := validateHistoricalBarsRequest(req); err != nil {
+		return nil, err
+	}
+
 	type result struct {
 		values []Bar
 		err    error
@@ -330,6 +338,10 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 }
 
 func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleRequest) (HistoricalSchedule, error) {
+	if err := validateHistoricalScheduleRequest(req); err != nil {
+		return HistoricalSchedule{}, err
+	}
+
 	type result struct {
 		value HistoricalSchedule
 		err   error
@@ -2659,6 +2671,10 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 // returning initial bars as events, SnapshotComplete on the initial batch end,
 // then streaming bar updates via IN 108.
 func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBarsRequest, opts ...SubscriptionOption) (*Subscription[Bar], error) {
+	if err := validateHistoricalBarsStreamRequest(req); err != nil {
+		return nil, err
+	}
+
 	type result struct {
 		sub *Subscription[Bar]
 		err error
@@ -4116,17 +4132,25 @@ func (e *engine) enqueue(fn func()) {
 	}
 }
 
-func (e *engine) startConnect(ctx context.Context) {
+func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	if e.closed {
 		return
 	}
 	e.bootstrap = bootstrapState{}
-	e.setState(StateConnecting, 0, "", nil)
+	if reconnect {
+		e.setState(StateReconnecting, 0, "reconnect attempt", nil)
+	} else {
+		e.setState(StateConnecting, 0, "", nil)
+	}
 
 	conn, err := e.cfg.dialer.DialContext(ctx, "tcp", net.JoinHostPort(e.cfg.host, strconv.Itoa(e.cfg.port)))
 	if err != nil {
-		e.reportReady(&ConnectError{Op: "dial", Err: err})
-		e.closeEngine(&ConnectError{Op: "dial", Err: err})
+		e.connectFailed("dial", err, reconnect)
+		return
+	}
+	if err := configureTCPKeepAlive(conn, e.cfg.tcpKeepAlive); err != nil {
+		_ = conn.Close()
+		e.connectFailed("keepalive", err, reconnect)
 		return
 	}
 
@@ -4136,16 +4160,14 @@ func (e *engine) startConnect(ctx context.Context) {
 	// 1. Send API prefix (raw bytes, not framed)
 	if err := transport.WriteRaw(conn, codec.EncodeHandshakePrefix()); err != nil {
 		conn.Close()
-		e.reportReady(&ConnectError{Op: "handshake", Err: err})
-		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		e.connectFailed("handshake", err, reconnect)
 		return
 	}
 
 	// 2. Send version range (framed)
 	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, maxServerVersion)); err != nil {
 		conn.Close()
-		e.reportReady(&ConnectError{Op: "handshake", Err: err})
-		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		e.connectFailed("handshake", err, reconnect)
 		return
 	}
 
@@ -4153,20 +4175,20 @@ func (e *engine) startConnect(ctx context.Context) {
 	serverPayload, err := transport.ReadOneFrame(conn, deadline)
 	if err != nil {
 		conn.Close()
-		e.reportReady(&ConnectError{Op: "handshake", Err: err})
-		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		e.connectFailed("handshake", err, reconnect)
 		return
 	}
 	info, err := codec.DecodeServerInfo(serverPayload)
 	if err != nil {
 		conn.Close()
-		e.reportReady(&ConnectError{Op: "handshake", Err: err})
-		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		e.connectFailed("handshake", err, reconnect)
 		return
 	}
 
 	// 4. Version check
 	if info.ServerVersion < minServerVersion {
+		// A server-version mismatch is a protocol capability failure, not a
+		// transient reconnect failure. Terminate even during reconnect.
 		conn.Close()
 		e.reportReady(ErrUnsupportedServerVersion)
 		e.closeEngine(ErrUnsupportedServerVersion)
@@ -4181,14 +4203,12 @@ func (e *engine) startConnect(ctx context.Context) {
 	startPayload, err := codec.Encode(codec.StartAPI{ClientID: e.cfg.clientID})
 	if err != nil {
 		conn.Close()
-		e.reportReady(&ConnectError{Op: "handshake", Err: err})
-		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		e.connectFailed("handshake", err, reconnect)
 		return
 	}
 	if err := wire.WriteFrame(conn, startPayload); err != nil {
 		conn.Close()
-		e.reportReady(&ConnectError{Op: "handshake", Err: err})
-		e.closeEngine(&ConnectError{Op: "handshake", Err: err})
+		e.connectFailed("handshake", err, reconnect)
 		return
 	}
 
@@ -4197,6 +4217,31 @@ func (e *engine) startConnect(ctx context.Context) {
 	e.attachTransport(e.transport)
 	e.scheduleBootstrapTimeout(e.transport)
 	e.setState(StateHandshaking, 0, "", nil)
+}
+
+func (e *engine) connectFailed(op string, err error, reconnect bool) {
+	connectErr := &ConnectError{Op: op, Err: err}
+	if !reconnect {
+		e.reportReady(connectErr)
+		e.closeEngine(connectErr)
+		return
+	}
+	e.setState(StateReconnecting, 0, "reconnect failed", connectErr)
+	e.scheduleReconnect()
+}
+
+func configureTCPKeepAlive(conn net.Conn, period time.Duration) error {
+	tcpConn, ok := conn.(*net.TCPConn)
+	if !ok {
+		return nil
+	}
+	if period <= 0 {
+		return tcpConn.SetKeepAlive(false)
+	}
+	if err := tcpConn.SetKeepAlive(true); err != nil {
+		return err
+	}
+	return tcpConn.SetKeepAlivePeriod(period)
 }
 
 func (e *engine) attachTransport(tr *transport.Conn) {
@@ -4410,6 +4455,8 @@ func (e *engine) maybeReady() {
 	if !e.bootstrap.serverInfo || !e.bootstrap.managed || !e.bootstrap.nextValidID {
 		return
 	}
+	// Completed bootstrap is the success boundary for reconnect backoff.
+	e.reconnectAttempt = 0
 	e.updateSnapshot(func(s *Snapshot) {
 		s.ConnectionSeq++
 	})
@@ -4422,7 +4469,7 @@ func (e *engine) handleTransportLoss(err error) {
 	if e.closed {
 		return
 	}
-	if err == nil && e.transport == nil {
+	if e.transport == nil {
 		return
 	}
 	err = normalizeTransportErr(err)
@@ -4438,17 +4485,36 @@ func (e *engine) handleTransportLoss(err error) {
 	}
 	e.setState(StateReconnecting, 0, "transport lost", err)
 	e.disconnectRoutes(err)
+	e.scheduleReconnect()
+}
 
-	time.AfterFunc(reconnectBackoff, func() {
+func (e *engine) scheduleReconnect() {
+	delay := reconnectDelay(e.reconnectAttempt)
+	e.reconnectAttempt++
+	time.AfterFunc(delay, func() {
 		e.enqueue(func() {
-			if e.closed {
+			if e.closed || e.transport != nil || e.cfg.reconnect == ReconnectOff {
 				return
 			}
 			dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			e.startConnect(dialCtx)
+			e.startConnect(dialCtx, true)
 		})
 	})
+}
+
+func reconnectDelay(attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	delay := reconnectBackoff
+	for i := 0; i < attempt; i++ {
+		delay *= 2
+		if delay >= reconnectBackoffMax {
+			return reconnectBackoffMax
+		}
+	}
+	return delay
 }
 
 func (e *engine) disconnectRoutes(err error) {

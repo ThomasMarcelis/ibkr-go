@@ -82,7 +82,8 @@
 //	}
 //
 // Call Close to unsubscribe. Wait blocks until termination and returns the
-// final error, if any. SubscriptionClosed and Gap lifecycle events include a
+// final error, if any. Err returns the currently recorded terminal error without
+// waiting for Done. SubscriptionClosed and Gap lifecycle events include a
 // Retryable flag. API errors are terminal request rejections; use [IsRetryable]
 // on the final error when a consumer loop only observes Events().
 //
@@ -114,11 +115,12 @@
 //
 // # Errors
 //
-// Three structured error types cover the main failure modes:
+// Four structured error types cover the main failure modes:
 //
 //   - [*ConnectError] — connection or handshake failure
 //   - [*ProtocolError] — wire protocol violation
 //   - [*APIError] — server-side rejection (error code + message)
+//   - [*ValidationError] — caller-side request validation failure
 //
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
 // [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].

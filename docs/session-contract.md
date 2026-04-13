@@ -44,6 +44,7 @@ type Subscription[T any] struct {
     Lifecycle() <-chan SubscriptionStateEvent
     AwaitSnapshot(ctx context.Context) error
     Done() <-chan struct{}
+    Err() error
     Wait() error
     Close() error
 }
@@ -54,7 +55,9 @@ is bounded/observational: if unread, older queued lifecycle events may be
 dropped in favor of the latest one. `SubscriptionClosed` is still guaranteed
 before the lifecycle channel closes. `SubscriptionGap` and `SubscriptionClosed`
 events include `Retryable`; callers that read only `Events()` should inspect
-`sub.Wait()` with `IsRetryable(err)` after the channel closes.
+`sub.Err()` or `sub.Wait()` with `IsRetryable(err)` after the channel closes.
+`Err()` does not wait for `Done()` and returns nil until a terminal close reason
+is known.
 
 `AwaitSnapshot(ctx)` is durable for snapshot-style subscriptions. It returns
 `nil` once `SnapshotComplete` has occurred, even if the lifecycle event was

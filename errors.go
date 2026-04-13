@@ -58,6 +58,19 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("ibkr: api %s code=%d conn=%d: %s", e.OpKind, e.Code, e.ConnectionSeq, e.Message)
 }
 
+type ValidationError struct {
+	Field   string
+	Value   string
+	Message string
+}
+
+func (e *ValidationError) Error() string {
+	if e.Value == "" {
+		return fmt.Sprintf("ibkr: invalid %s: %s", e.Field, e.Message)
+	}
+	return fmt.Sprintf("ibkr: invalid %s %q: %s", e.Field, e.Value, e.Message)
+}
+
 // IsRetryable reports whether err represents a transient client/session
 // condition that a caller may retry. IBKR API errors are server-side request
 // rejections and are not retryable by default.

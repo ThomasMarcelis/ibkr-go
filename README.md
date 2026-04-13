@@ -117,8 +117,9 @@ for {
 
 `Events()` carries market data. `Lifecycle()` carries session boundaries —
 `SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix. When a stream
-ends, call `Wait()` and use `ibkr.IsRetryable(err)` or `state.Retryable` to
-distinguish reconnectable gaps from terminal IBKR API rejections.
+ends, use `sub.Err()` or `Wait()` with `ibkr.IsRetryable(err)`, or inspect
+`state.Retryable`, to distinguish reconnectable gaps from terminal IBKR API
+rejections.
 
 ### Fetch historical bars
 

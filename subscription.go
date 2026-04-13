@@ -88,6 +88,14 @@ func (s *Subscription[T]) Wait() error {
 	return s.err
 }
 
+// Err returns the currently recorded terminal error without waiting for Done.
+// It returns nil until the subscription has closed with an error.
+func (s *Subscription[T]) Err() error {
+	s.errMu.Lock()
+	defer s.errMu.Unlock()
+	return s.err
+}
+
 func (s *Subscription[T]) Close() error {
 	s.cancelOnce.Do(func() {
 		if s.cancelFn != nil {
