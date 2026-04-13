@@ -1,0 +1,20 @@
+# Grounded by live API capture captures/20260413T164549Z-api_delayed_success_modify_aapl.
+# server_version=200, events.jsonl sha256 prefix: 9a33ce0f2b3fd3a6.
+# Live Gateway sent terminal Filled status before the execution and commission
+# callbacks, so OrderHandle keeps a short terminal drain window.
+handshake {"server_version":200,"connection_time":"20260413 18:45:49 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":13}
+client place_order {"order_id":"13","action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"12.89","tif":"DAY","account":"DU9000001"}
+sleep 100ms
+server open_order {"order_id":13,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"Submitted","quantity":"1","filled":"0","remaining":"1","lmt_price":"12.89","aux_price":"0","tif":"DAY","perm_id":"389210940","client_id":"1","origin":"0"}
+server order_status {"order_id":13,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"389210940","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+client place_order {"order_id":"13","action":"BUY","total_quantity":"1","order_type":"MKT","lmt_price":"","tif":"DAY","account":"DU9000001"}
+sleep 100ms
+server open_order {"order_id":13,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","status":"Submitted","quantity":"1","filled":"0","remaining":"1","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"389210940","client_id":"1","origin":"0"}
+server order_status {"order_id":13,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"257.90","perm_id":"389210940","parent_id":"0","last_fill_price":"257.90","client_id":"1","why_held":"","mkt_cap_price":"0"}
+sleep 100ms
+server execution_detail {"req_id":-1,"order_id":13,"exec_id":"late-exec-13","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"257.90","time":"2026-04-13T16:46:00Z"}
+server commission_report {"exec_id":"late-exec-13","commission":"1.00","currency":"USD","realized_pnl":"0"}
+sleep 1s
+disconnect

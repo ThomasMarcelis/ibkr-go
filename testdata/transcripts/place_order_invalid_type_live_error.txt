@@ -1,0 +1,9 @@
+# Grounded by live API capture captures/20260413T174003Z-api_order_rejects_aapl.
+# server_version=200, events.jsonl sha256 prefix: ab9d0d0479d9dce3.
+handshake {"server_version":200,"connection_time":"20260413 19:40:04 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":40}
+client place_order {"order_id":"40","action":"BUY","total_quantity":"1","order_type":"FEELINGS","lmt_price":"10","tif":"DAY","account":"DU9000001"}
+server api_error {"req_id":40,"code":321,"message":"Error validating request.-'bF' : cause - Invalid order type was entered","advanced_order_reject_json":"","error_time_ms":""}
+sleep 100ms
+disconnect

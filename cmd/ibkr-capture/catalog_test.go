@@ -21,6 +21,9 @@ func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
 		if entry.Domain == "" {
 			t.Errorf("%s missing domain", entry.Name)
 		}
+		if entry.Driver != driverWire && entry.Driver != driverAPI {
+			t.Errorf("%s driver = %q, want %q or %q", entry.Name, entry.Driver, driverWire, driverAPI)
+		}
 		if len(entry.PublicAPI) == 0 {
 			t.Errorf("%s missing public API", entry.Name)
 		}
@@ -79,6 +82,46 @@ func TestWriteBatchList(t *testing.T) {
 		}
 		if _, ok := scenarios[parts[0]]; !ok {
 			t.Fatalf("batch line references unknown scenario %q", parts[0])
+		}
+	}
+}
+
+func TestReplayBatches(t *testing.T) {
+	t.Parallel()
+
+	entries, err := catalogEntries()
+	if err != nil {
+		t.Fatalf("catalogEntries() error = %v", err)
+	}
+
+	var all bytes.Buffer
+	if err := writeBatchList(&all, batchReplayAll); err != nil {
+		t.Fatalf("writeBatchList(replay-all) error = %v", err)
+	}
+	allLines := strings.Split(strings.TrimSpace(all.String()), "\n")
+	if len(allLines) != len(entries) {
+		t.Fatalf("replay-all entries = %d, want every scenario %d", len(allLines), len(entries))
+	}
+
+	var defaults bytes.Buffer
+	if err := writeBatchList(&defaults, batchReplayDefault); err != nil {
+		t.Fatalf("writeBatchList(replay-default) error = %v", err)
+	}
+	defaultList := strings.Split(strings.TrimSpace(defaults.String()), "\n")
+	defaultsByName := map[string]bool{}
+	for _, line := range defaultList {
+		parts := strings.Split(line, "|")
+		if len(parts) != 2 {
+			t.Fatalf("default replay line %q should be name|client_id", line)
+		}
+		defaultsByName[parts[0]] = true
+	}
+	if !defaultsByName["api_order_type_matrix_aapl"] {
+		t.Fatal("replay-default missing curated API order matrix scenario")
+	}
+	for _, entry := range entries {
+		if entry.DefaultReplay && !defaultsByName[entry.Name] {
+			t.Fatalf("replay-default missing promoted scenario %q", entry.Name)
 		}
 	}
 }

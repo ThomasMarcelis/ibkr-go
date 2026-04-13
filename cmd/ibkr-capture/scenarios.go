@@ -15,6 +15,7 @@ type scenario struct {
 	name        string
 	description string
 	run         func(ctx context.Context, conn net.Conn, sess *sessionInfo) error
+	runAPI      func(ctx context.Context, addr string, clientID int) error
 }
 
 // logFrame is the default per-frame logger used by readFrames. It prints a
@@ -1618,5 +1619,80 @@ var scenarios = map[string]scenario{
 			}
 			return readFrames(conn, 10*time.Second, logFrame, stop)
 		},
+	},
+	"api_order_type_matrix_aapl": {
+		name:        "api_order_type_matrix_aapl",
+		description: "public API campaign for AAPL order type breadth: fills, rests, rejects, modifies, and cancels",
+		runAPI:      runAPIOrderTypeMatrixAAPL,
+	},
+	"api_order_fill_aapl": {
+		name:        "api_order_fill_aapl",
+		description: "public API campaign for AAPL fill paths: MKT, MTL, and delayed modify-to-market",
+		runAPI:      runAPIOrderFillAAPL,
+	},
+	"api_order_rest_cancel_aapl": {
+		name:        "api_order_rest_cancel_aapl",
+		description: "public API campaign for AAPL resting order types and cancel/reject behavior",
+		runAPI:      runAPIOrderRestCancelAAPL,
+	},
+	"api_order_relative_cancel_aapl": {
+		name:        "api_order_relative_cancel_aapl",
+		description: "public API campaign for AAPL relative order behavior",
+		runAPI:      runAPIOrderRelativeCancelAAPL,
+	},
+	"api_order_trailing_cancel_aapl": {
+		name:        "api_order_trailing_cancel_aapl",
+		description: "public API campaign for AAPL trailing and trailing-limit behavior",
+		runAPI:      runAPIOrderTrailingCancelAAPL,
+	},
+	"api_order_stop_cancel_aapl": {
+		name:        "api_order_stop_cancel_aapl",
+		description: "public API campaign for AAPL stop and stop-limit rest/cancel behavior",
+		runAPI:      runAPIOrderStopCancelAAPL,
+	},
+	"api_order_rejects_aapl": {
+		name:        "api_order_rejects_aapl",
+		description: "public API campaign for AAPL order rejection and unknown cancel behavior",
+		runAPI:      runAPIOrderRejectsAAPL,
+	},
+	"api_delayed_success_modify_aapl": {
+		name:        "api_delayed_success_modify_aapl",
+		description: "public API campaign where a resting AAPL limit order succeeds later through OrderHandle.Modify",
+		runAPI:      runAPIDelayedSuccessModifyAAPL,
+	},
+	"api_bracket_trigger_aapl": {
+		name:        "api_bracket_trigger_aapl",
+		description: "public API campaign for bracket parent/child activation and take-profit-trigger sibling cancellation",
+		runAPI:      runAPIBracketTriggerAAPL,
+	},
+	"api_oca_trigger_aapl": {
+		name:        "api_oca_trigger_aapl",
+		description: "public API campaign for OCA fill/cancel behavior",
+		runAPI:      runAPIOCATriggerAAPL,
+	},
+	"api_conditions_matrix_aapl": {
+		name:        "api_conditions_matrix_aapl",
+		description: "public API campaign for IBKR order condition families",
+		runAPI:      runAPIConditionsMatrixAAPL,
+	},
+	"api_option_campaign_aapl": {
+		name:        "api_option_campaign_aapl",
+		description: "public API campaign for live-qualified AAPL option data, order, execution, and exercise/lapse responses",
+		runAPI:      runAPIOptionCampaignAAPL,
+	},
+	"api_future_campaign_mes": {
+		name:        "api_future_campaign_mes",
+		description: "public API campaign for live-qualified MES futures order behavior",
+		runAPI:      runAPIFutureCampaignMES,
+	},
+	"api_combo_option_vertical_aapl": {
+		name:        "api_combo_option_vertical_aapl",
+		description: "public API campaign for live-qualified AAPL option vertical BAG order behavior",
+		runAPI:      runAPIComboOptionVerticalAAPL,
+	},
+	"api_algorithmic_campaign_aapl": {
+		name:        "api_algorithmic_campaign_aapl",
+		description: "public API campaign with concurrent market/account/order observers and multi-step trading",
+		runAPI:      runAPIAlgorithmicCampaignAAPL,
 	},
 }

@@ -98,10 +98,11 @@ type route struct {
 }
 
 type orderRoute struct {
-	orderID int64
-	handle  *OrderHandle
-	closed  bool
-	gapped  bool // true after Gap emitted, reset on Resumed; prevents double emission
+	orderID          int64
+	handle           *OrderHandle
+	closed           bool
+	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
+	terminalCloseSeq uint64
 }
 
 type parsedOpenOrder struct {
@@ -4609,7 +4610,11 @@ func (e *engine) closeEngine(err error) {
 	for id, or := range e.orders {
 		if !or.closed {
 			or.closed = true
-			or.handle.closeWithErr(err)
+			orderErr := err
+			if or.terminalCloseSeq > 0 {
+				orderErr = nil
+			}
+			or.handle.closeWithErr(orderErr)
 		}
 		delete(e.orders, id)
 	}
@@ -4841,8 +4846,25 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 		return
 	}
 	if IsTerminalOrderStatus(status.Status) {
-		orderRoute.closed = true
+		e.scheduleTerminalOrderClose(msg.OrderID, orderRoute)
 	}
+}
+
+const orderTerminalDrainWindow = 750 * time.Millisecond
+
+func (e *engine) scheduleTerminalOrderClose(orderID int64, route *orderRoute) {
+	route.terminalCloseSeq++
+	seq := route.terminalCloseSeq
+	time.AfterFunc(orderTerminalDrainWindow, func() {
+		e.enqueue(func() {
+			current, ok := e.orders[orderID]
+			if !ok || current.closed || current.terminalCloseSeq != seq {
+				return
+			}
+			current.closed = true
+			current.handle.closeWithErr(nil)
+		})
+	})
 }
 
 func (e *engine) activeAccountSummarySubscriptions() int {

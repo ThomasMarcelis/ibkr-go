@@ -96,13 +96,29 @@ IBKR_UPSTREAM=127.0.0.1:4002 ./scripts/record-scenarios.sh quote_stream_multi_as
 ./scripts/verify-captures.sh captures/<capture-dir>
 ```
 
+Complex trading scenarios whose names start with `api_` are still recorded
+through the same proxy, but the capture driver uses the public `ibkr.Client`
+facade instead of hand-written wire calls. The raw `events.jsonl` remains the
+protocol evidence; `driver.log` beside the capture records the public-API order
+lifecycle that produced the traffic.
+
+Useful scenario batches:
+
+```bash
+IBKR_CAPTURE_BATCH=trading-basic ./scripts/record-scenarios.sh
+IBKR_CAPTURE_BATCH=trading-advanced ./scripts/record-scenarios.sh
+IBKR_CAPTURE_BATCH=trading-campaigns ./scripts/record-scenarios.sh
+IBKR_CAPTURE_BATCH=trading-all ./scripts/record-scenarios.sh
+```
+
 Raw capture directories remain local evidence because they may contain
 account-specific details. When promoting behavior into CI, check in a curated
 transcript under `testdata/transcripts` plus a public test that asserts the
 behavior at the library API boundary. Record the raw capture directory name,
 server version, scenario, and `events.jsonl` hash in the PR or accompanying
 notes so the replay can be traced back to live evidence without committing raw
-account data.
+account data. Default replay tests should stay curated; exhaustive replay runs
+use the `replay-all` catalog batch or an explicit test flag/env in the caller.
 
 ## Next Transcript Work
 

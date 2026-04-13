@@ -66,6 +66,11 @@ for entry in "${SCENARIOS[@]}"; do
     # Wait for recorder to finish
     wait "$rpid" 2>/dev/null
 
+    latest_dir=$(ls -dt "$OUTDIR"/20*-"$scenario" 2>/dev/null | head -1)
+    if [ -n "$latest_dir" ]; then
+        cp "$TMPLOG" "$latest_dir/driver.log"
+    fi
+
     last=$(tail -1 "$TMPLOG")
     if [ $rc -eq 0 ] && echo "$last" | grep -q "complete"; then
         echo "ok"

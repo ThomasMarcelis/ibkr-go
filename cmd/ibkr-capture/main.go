@@ -65,6 +65,14 @@ func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
+	if sc.runAPI != nil {
+		if err := sc.runAPI(ctx, *addr, *clientID); err != nil {
+			log.Fatalf("scenario %q: %v", *scenario, err)
+		}
+		log.Printf("scenario %q complete", *scenario)
+		return
+	}
+
 	conn, err := net.DialTimeout("tcp", *addr, *dialTimeout)
 	if err != nil {
 		log.Fatalf("dial %s: %v", *addr, err)

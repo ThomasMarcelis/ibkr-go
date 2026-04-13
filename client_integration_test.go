@@ -2119,11 +2119,10 @@ cancelDone:
 		t.Fatal("never received Cancelled status event")
 	}
 
-	// Handle should be done after terminal status.
 	select {
 	case <-handle.Done():
-	default:
-		t.Fatal("handle not done after Cancelled")
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for handle to close after Cancelled")
 	}
 
 	if err := handle.Wait(); err != nil {
@@ -2205,6 +2204,12 @@ directCancelDone:
 
 	if !sawCancelled {
 		t.Fatal("never received Cancelled status event after direct-by-ID cancel")
+	}
+
+	select {
+	case <-handle.Done():
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for handle to close after direct-by-ID cancel")
 	}
 
 	if err := handle.Wait(); err != nil {
@@ -3176,6 +3181,158 @@ func TestPlaceOrderModifyIntegration(t *testing.T) {
 	case <-handle.Done():
 	case <-ctx.Done():
 		t.Fatal("timeout waiting for Cancelled")
+	}
+}
+
+func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "place_order_modify_to_market_late_execution.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("12.89"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	var sawSubmitted bool
+	for !sawSubmitted {
+		select {
+		case evt := <-handle.Events():
+			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusSubmitted {
+				sawSubmitted = true
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for Submitted")
+		}
+	}
+
+	if err := handle.Modify(ctx, ibkr.Order{
+		Action:    ibkr.Buy,
+		OrderType: ibkr.OrderTypeMarket,
+		Quantity:  decimal.RequireFromString("1"),
+		TIF:       ibkr.TIFDay,
+		Account:   "DU9000001",
+	}); err != nil {
+		t.Fatalf("Modify: %v", err)
+	}
+
+	var sawFilled, sawExecution, sawCommission bool
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				goto done
+			}
+			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+				sawFilled = true
+			}
+			if evt.Execution != nil {
+				sawExecution = true
+				if evt.Execution.ExecID != "late-exec-13" {
+					t.Fatalf("execution execID = %q, want late-exec-13", evt.Execution.ExecID)
+				}
+			}
+			if evt.Commission != nil {
+				sawCommission = true
+			}
+		case <-handle.Done():
+			for {
+				select {
+				case evt, ok := <-handle.Events():
+					if !ok {
+						goto done
+					}
+					if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+						sawFilled = true
+					}
+					if evt.Execution != nil {
+						sawExecution = true
+					}
+					if evt.Commission != nil {
+						sawCommission = true
+					}
+				default:
+					goto done
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for terminal order events")
+		}
+	}
+
+done:
+	if !sawFilled {
+		t.Fatal("never received Filled status")
+	}
+	if !sawExecution {
+		t.Fatal("never received late execution after Filled")
+	}
+	if !sawCommission {
+		t.Fatal("never received late commission after Filled")
+	}
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
+}
+
+func TestPlaceOrderInvalidTypeLiveError(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "place_order_invalid_type_live_error.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderType("FEELINGS"),
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("10"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	err = handle.Wait()
+	if err == nil {
+		t.Fatal("handle.Wait() error = nil, want live invalid order type API error")
+	}
+	if !strings.Contains(err.Error(), "code=321") || !strings.Contains(err.Error(), "Invalid order type") {
+		t.Fatalf("handle.Wait() error = %v, want code=321 invalid order type", err)
 	}
 }
 

@@ -55,17 +55,27 @@ run_scenario() {
   if ! "$CAPTURE_BIN" \
         -addr "$LISTEN" \
         -client-id "$client_id" \
-        -scenario "$scenario"; then
+        -scenario "$scenario" \
+        > "/tmp/ibkr-capture-${scenario}.log" 2>&1; then
+    tail -40 "/tmp/ibkr-capture-${scenario}.log" || true
     echo "!!! scenario $scenario FAILED; killing recorder"
     kill "$recorder_pid" 2>/dev/null || true
     wait "$recorder_pid" 2>/dev/null || true
     return 1
   fi
 
+  cat "/tmp/ibkr-capture-${scenario}.log"
+
   # Give recorder a moment to flush final chunks before killing it.
   sleep 0.5
   kill "$recorder_pid" 2>/dev/null || true
   wait "$recorder_pid" 2>/dev/null || true
+
+  local latest_dir
+  latest_dir=$(ls -dt captures/20*-"$scenario" 2>/dev/null | head -1)
+  if [[ -n "$latest_dir" ]]; then
+    cp "/tmp/ibkr-capture-${scenario}.log" "$latest_dir/driver.log"
+  fi
 
   # Let gateway accept queue drain between scenarios.
   sleep 2
