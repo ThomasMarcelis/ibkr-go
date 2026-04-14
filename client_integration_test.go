@@ -2298,6 +2298,73 @@ directCancelDone:
 	}
 }
 
+// Regression: cancel_order at server_version >= 192 requires extOperator and
+// manualOrderIndicator fields (CME_TAGGING_FIELDS). Missing fields caused the
+// gateway to silently drop the cancel. This test uses the full
+// PreSubmitted → Submitted → PendingCancel → Cancelled lifecycle grounded from
+// live paper Gateway sv=200 on 2026-04-14.
+func TestAPIOrderRestCancelAAPL(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_order_rest_cancel_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock,
+			Exchange: "SMART", Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action: ibkr.Buy, OrderType: ibkr.OrderTypeLimit,
+			Quantity: decimal.RequireFromString("1"),
+			LmtPrice: decimal.RequireFromString("10"),
+			TIF:      ibkr.TIFDay, Account: "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	// Consume events until Submitted.
+	for {
+		evt := waitForEvent(t, handle.Events())
+		if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusSubmitted {
+			break
+		}
+	}
+
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+
+	// Drain until Cancelled; a following code 202 cancellation notice must not
+	// convert a successful terminal status into handle error.
+	var sawPendingCancel, sawCancelled bool
+	for evt := range handle.Events() {
+		if evt.Status != nil {
+			switch evt.Status.Status {
+			case ibkr.OrderStatusPendingCancel:
+				sawPendingCancel = true
+			case ibkr.OrderStatusCancelled:
+				sawCancelled = true
+			}
+		}
+	}
+	if !sawPendingCancel {
+		t.Error("expected PendingCancel status before Cancelled")
+	}
+	if !sawCancelled {
+		t.Fatal("never received Cancelled status")
+	}
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v, want nil after cancellation notice", err)
+	}
+}
+
 func newClient(t *testing.T, script string, opts ...ibkr.Option) (*ibkr.Client, *testhost.Host) {
 	t.Helper()
 

@@ -777,7 +777,7 @@ func (h *OrderHandle) emitOrder(o OpenOrder) bool {
 // state. Live Gateway can still deliver execution or commission callbacks just
 // after a terminal status, so the engine owns the final handle close.
 func IsTerminalOrderStatus(status OrderStatus) bool {
-	return status == OrderStatusFilled || status == OrderStatusCancelled || status == OrderStatusInactive
+	return status == OrderStatusFilled || status == OrderStatusCancelled || status == OrderStatusApiCancelled || status == OrderStatusInactive
 }
 
 func (h *OrderHandle) emitStatus(s OrderStatusUpdate) bool {

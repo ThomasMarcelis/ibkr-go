@@ -120,6 +120,27 @@ func TestOrderHandleEventsDrainAfterClose(t *testing.T) {
 	}
 }
 
+func TestIsTerminalOrderStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		status OrderStatus
+		want   bool
+	}{
+		{OrderStatusFilled, true},
+		{OrderStatusCancelled, true},
+		{OrderStatusApiCancelled, true},
+		{OrderStatusInactive, true},
+		{OrderStatusPendingCancel, false},
+		{OrderStatusSubmitted, false},
+	}
+	for _, tt := range tests {
+		if got := IsTerminalOrderStatus(tt.status); got != tt.want {
+			t.Fatalf("IsTerminalOrderStatus(%s) = %v, want %v", tt.status, got, tt.want)
+		}
+	}
+}
+
 func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 	t.Helper()
 

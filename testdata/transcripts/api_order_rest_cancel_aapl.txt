@@ -1,0 +1,22 @@
+# AAPL LMT rest/cancel lifecycle via public API Orders().Place + OrderHandle.Cancel.
+# Grounded by live paper Gateway behavior on 2026-04-14, server_version 200,
+# captures/20260414T183626Z-api_order_rest_cancel_aapl. Cancel fix: extOperator
+# and manualOrderIndicator fields added to CancelOrderRequest (CME_TAGGING_FIELDS
+# sv >= 192). Account and perm IDs sanitized.
+handshake {"server_version":200,"connection_time":"20260414 20:36:26 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+
+client place_order {"order_id":"1","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"10","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":1,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"10.00","aux_price":"0","tif":"DAY","perm_id":"12345","client_id":"1","origin":"0"}
+server order_status {"order_id":1,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":1,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"10.00","aux_price":"0","tif":"DAY","perm_id":"12345","client_id":"1","origin":"0"}
+server order_status {"order_id":1,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client cancel_order {"field_count":"5","order_id":"1","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":1,"status":"PendingCancel","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server order_status {"order_id":1,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":1,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776191801000"}
+
+sleep 100ms
+disconnect

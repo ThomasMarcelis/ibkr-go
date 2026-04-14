@@ -58,7 +58,9 @@ type bootstrapState struct {
 }
 
 const (
-	minServerVersion = 100
+	// The codec currently targets the live-validated server_version 200 wire
+	// layout. Broader support requires version-aware outbound encoding.
+	minServerVersion = 200
 	maxServerVersion = 200
 	bootstrapTimeout = 5 * time.Second
 
@@ -4447,6 +4449,10 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// Order-specific API errors: the reqID field carries the orderID
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
+			if isOrderCancellationNotice(msg) {
+				e.emitEvent(msg.Code, msg.Message)
+				return
+			}
 			or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
 			return
 		}
@@ -4755,6 +4761,10 @@ func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
 		OpKind:        opKind,
 		ConnectionSeq: e.connectionSeq(),
 	}
+}
+
+func isOrderCancellationNotice(msg codec.APIError) bool {
+	return msg.Code == 202
 }
 
 func (e *engine) emitGap() {

@@ -6,7 +6,9 @@ not expose an `EWrapper` / `EClient` callback surface as its primary model.
 The library covers the full free read-only TWS API surface plus order
 management, market depth, fundamental data, and option exercise. Public
 contracts, codec, and replay fixtures are validated against live IB
-Gateway server_version 200.
+Gateway server_version 200. The current session handshake requires that
+server version; broader version support belongs behind explicit version-aware
+codec paths.
 
 ## Layers
 
@@ -71,7 +73,8 @@ order IDs manually.
   (Gap, Resumed). If unread, older queued lifecycle events may be dropped in
   favor of the latest one.
 - **Terminal states.** When an OrderStatus arrives with status Filled,
-  Cancelled, or Inactive, the handle auto-closes with `nil` error.
+  Cancelled, ApiCancelled, or Inactive, the handle auto-closes with `nil`
+  error.
 - **Disconnect.** On session disconnect, active order handles receive a `Gap`
   event via Lifecycle(). On reconnect, they receive `Resumed`. Handles are not
   closed on disconnect — orders continue executing on the server.

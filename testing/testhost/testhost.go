@@ -944,14 +944,22 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		// tradingClass, secIdType, secId, action, totalQty, orderType, lmtPrice,
 		// auxPrice, tif, ocaGroup, account, ...]
 		return "place_order", decodePlaceOrderClientBody(fields), nil
-	case 4: // OutCancelOrder: [4, orderID, manualOrderCancelTime]
-		body := map[string]any{}
-		if len(fields) >= 2 {
-			body["order_id"] = fields[1]
+	case 4: // OutCancelOrder: [4, orderID, manualOrderCancelTime, extOperator, manualOrderIndicator]
+		body := map[string]any{
+			"field_count":              strconv.Itoa(len(fields)),
+			"order_id":                 safeField(fields, 1),
+			"manual_order_cancel_time": safeField(fields, 2),
+			"ext_operator":             safeField(fields, 3),
+			"manual_order_indicator":   safeField(fields, 4),
 		}
 		return "cancel_order", body, nil
-	case 58: // OutReqGlobalCancel: [58, 1]
-		return "global_cancel", map[string]any{}, nil
+	case 58: // OutReqGlobalCancel: [58, extOperator, manualOrderIndicator]
+		body := map[string]any{
+			"field_count":            strconv.Itoa(len(fields)),
+			"ext_operator":           safeField(fields, 1),
+			"manual_order_indicator": safeField(fields, 2),
+		}
+		return "global_cancel", body, nil
 	case 10: // OutReqMktDepth: [10, version=5, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, numRows, isSmartDepth, mktDepthOptions]
 		body := map[string]any{}
 		// fields[1] = version (5)

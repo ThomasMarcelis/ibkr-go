@@ -7,6 +7,8 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
+The current codec targets the live-validated `server_version 200` layout;
+older server versions are rejected during handshake.
 
 ```go
 type Client struct{ /* opaque */ }
@@ -120,8 +122,8 @@ sends a modified order with the same OrderID.
 including late `Execution` or `Commission` callbacks after a terminal status,
 must drain `Events()` until it closes, then call `Wait()`.
 
-Terminal states: when an OrderStatus arrives with status Filled, Cancelled, or
-Inactive, the handle auto-closes with `nil` error.
+Terminal states: when an OrderStatus arrives with status Filled, Cancelled,
+ApiCancelled, or Inactive, the handle auto-closes with `nil` error.
 
 ## Completion and Reconnect
 

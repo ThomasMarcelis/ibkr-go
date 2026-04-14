@@ -2002,10 +2002,12 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(OutCancelOrder)
 		w.WriteInt64(m.OrderID)
 		w.WriteString(m.ManualOrderCancelTime)
+		w.WriteString(m.ExtOperator)
+		w.WriteString(m.ManualOrderIndicator)
 		return w.Fields(), nil
 
 	case GlobalCancelRequest:
-		return []string{itoa(OutReqGlobalCancel), "1"}, nil
+		return []string{itoa(OutReqGlobalCancel), m.ExtOperator, m.ManualOrderIndicator}, nil
 
 	// Server -> client (testhost)
 
