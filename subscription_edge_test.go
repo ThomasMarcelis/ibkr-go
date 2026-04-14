@@ -325,6 +325,31 @@ func TestSubscriptionEventsClosedOnClose(t *testing.T) {
 	}
 }
 
+func TestSubscriptionEventsDrainAfterClose(t *testing.T) {
+	t.Parallel()
+
+	sub := newSubscription[int](subscriptionConfig{buffer: 2, slowConsumer: SlowConsumerClose}, func() {})
+	if !sub.emit(1) {
+		t.Fatal("first emit returned false, want true")
+	}
+	if !sub.emit(2) {
+		t.Fatal("second emit returned false, want true")
+	}
+
+	sub.closeWithErr(nil)
+
+	var got []int
+	for value := range sub.Events() {
+		got = append(got, value)
+	}
+	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Fatalf("drained events = %v, want [1 2]", got)
+	}
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("Wait() = %v, want nil", err)
+	}
+}
+
 func TestSubscriptionCancelFnCalledOnce(t *testing.T) {
 	t.Parallel()
 

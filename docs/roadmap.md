@@ -66,7 +66,7 @@ and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder
 messages are dual-dispatched to both per-order handles and the singleton
 open-orders observer; OrderStatus remains part of the per-order handle
 contract. OrderHandle survives disconnects (Gap/Resumed) and auto-closes on
-terminal status (Filled, Cancelled, Inactive).
+terminal status (Filled, Cancelled, ApiCancelled, Inactive).
 
 ### Market depth (Level 2)
 

@@ -1416,16 +1416,25 @@ type PlaceOrderRequest struct {
 func (PlaceOrderRequest) messageName() string { return "place_order" }
 
 // CancelOrderRequest cancels an order (outbound msg_id=4).
-// At server_version >= 169, no version field is sent.
+// At server_version >= 169 (MANUAL_ORDER_TIME), no version field is sent and
+// manualOrderCancelTime is included. At server_version >= 192
+// (CME_TAGGING_FIELDS), extOperator and manualOrderIndicator are appended.
 type CancelOrderRequest struct {
 	OrderID               int64
 	ManualOrderCancelTime string
+	ExtOperator           string
+	ManualOrderIndicator  string // empty = UNSET
 }
 
 func (CancelOrderRequest) messageName() string { return "cancel_order" }
 
 // GlobalCancelRequest cancels all open orders (outbound msg_id=58).
-type GlobalCancelRequest struct{}
+// At server_version >= 192 (CME_TAGGING_FIELDS), extOperator and
+// manualOrderIndicator are sent instead of the legacy version field.
+type GlobalCancelRequest struct {
+	ExtOperator          string
+	ManualOrderIndicator string // empty = UNSET
+}
 
 func (GlobalCancelRequest) messageName() string { return "global_cancel" }
 

@@ -65,19 +65,21 @@
 //	}
 //	defer sub.Close()
 //
-//	for {
+//	events := sub.Events()
+//	lifecycle := sub.Lifecycle()
+//	for events != nil {
 //	    select {
-//	    case update, ok := <-sub.Events():
+//	    case update, ok := <-events:
 //	        if !ok {
 //	            return sub.Wait()
 //	        }
 //	        // handle business data
-//	    case state, ok := <-sub.Lifecycle():
-//	        if ok {
-//	            // handle lifecycle (SnapshotComplete, Gap, Resumed, etc.)
+//	    case state, ok := <-lifecycle:
+//	        if !ok {
+//	            lifecycle = nil
+//	            continue
 //	        }
-//	    case <-sub.Done():
-//	        return sub.Wait()
+//	        // handle lifecycle (SnapshotComplete, Gap, Resumed, etc.)
 //	    }
 //	}
 //
@@ -86,6 +88,8 @@
 // waiting for Done. SubscriptionClosed and Gap lifecycle events include a
 // Retryable flag. API errors are terminal request rejections; use [IsRetryable]
 // on the final error when a consumer loop only observes Events().
+// Done is useful for coordinating other goroutines, but consumers that need
+// every business event should drain Events until it closes, then call Wait.
 //
 // # Order Management
 //

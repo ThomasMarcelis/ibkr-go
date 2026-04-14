@@ -661,13 +661,13 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		}}, nil
 
 	case InExecutionData: // [11, reqID, orderId, conID, symbol, secType, expiry, strike,
-		//   right, multiplier, exchange, localSymbol, tradingClass,
+		//   right, multiplier, exchange, currency, localSymbol, tradingClass,
 		//   execID, time, account, exchange(exec), side, shares, price, ...]
 		reqID, _ := r.ReadInt()
 		orderID, _ := r.ReadInt64()
 		r.Skip(1) // conID
 		symbol := r.ReadString()
-		r.Skip(8) // secType, expiry, strike, right, multiplier, exchange, localSymbol, tradingClass
+		r.Skip(9) // secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass
 		execID := r.ReadString()
 		execTime := r.ReadString()
 		account := r.ReadString()
@@ -2002,10 +2002,12 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(OutCancelOrder)
 		w.WriteInt64(m.OrderID)
 		w.WriteString(m.ManualOrderCancelTime)
+		w.WriteString(m.ExtOperator)
+		w.WriteString(m.ManualOrderIndicator)
 		return w.Fields(), nil
 
 	case GlobalCancelRequest:
-		return []string{itoa(OutReqGlobalCancel), "1"}, nil
+		return []string{itoa(OutReqGlobalCancel), m.ExtOperator, m.ManualOrderIndicator}, nil
 
 	// Server -> client (testhost)
 
@@ -2300,7 +2302,7 @@ func encodeFields(msg Message) ([]string, error) {
 		return []string{
 			itoa(InExecutionData), itoa(m.ReqID),
 			i64toa(m.OrderID), "0",
-			m.Symbol, "", "", "", "", "", "", "", "",
+			m.Symbol, "", "", "", "", "", "", "", "", "",
 			m.ExecID, m.Time, m.Account,
 			"",
 			m.Side, m.Shares, m.Price,

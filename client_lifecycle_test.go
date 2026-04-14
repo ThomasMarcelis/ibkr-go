@@ -49,6 +49,11 @@ type protocolErrorGateway struct {
 	errCh  chan error
 }
 
+type unsupportedVersionGateway struct {
+	dialer *pipeDialer
+	errCh  chan error
+}
+
 func newStalledGateway(t *testing.T) *stalledGateway {
 	t.Helper()
 
@@ -77,6 +82,22 @@ func newProtocolErrorGateway(t *testing.T) *protocolErrorGateway {
 
 	go func() {
 		gateway.errCh <- serveProtocolErrorGateway(serverConn)
+	}()
+
+	return gateway
+}
+
+func newUnsupportedVersionGateway(t *testing.T, serverVersion string) *unsupportedVersionGateway {
+	t.Helper()
+
+	serverConn, clientConn := net.Pipe()
+	gateway := &unsupportedVersionGateway{
+		dialer: &pipeDialer{conn: clientConn},
+		errCh:  make(chan error, 1),
+	}
+
+	go func() {
+		gateway.errCh <- serveUnsupportedVersionGateway(serverConn, serverVersion)
 	}()
 
 	return gateway
@@ -160,6 +181,29 @@ func serveProtocolErrorGateway(conn net.Conn) error {
 	return nil
 }
 
+func serveUnsupportedVersionGateway(conn net.Conn, serverVersion string) error {
+	defer conn.Close()
+
+	prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+	if _, err := io.ReadFull(conn, prefix); err != nil {
+		return fmt.Errorf("read handshake prefix: %w", err)
+	}
+	if string(prefix) != string(codec.EncodeHandshakePrefix()) {
+		return fmt.Errorf("handshake prefix = %q, want %q", string(prefix), string(codec.EncodeHandshakePrefix()))
+	}
+	versionRange, err := wire.ReadFrame(conn)
+	if err != nil {
+		return fmt.Errorf("read version range: %w", err)
+	}
+	if string(versionRange) != "v200..200" {
+		return fmt.Errorf("version range = %q, want v200..200", string(versionRange))
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{serverVersion, "2026-04-14T12:00:00Z"})); err != nil {
+		return fmt.Errorf("write server info: %w", err)
+	}
+	return nil
+}
+
 func (g *stalledGateway) Close(t *testing.T) {
 	t.Helper()
 
@@ -174,6 +218,14 @@ func (g *protocolErrorGateway) Wait(t *testing.T) {
 
 	if err := <-g.errCh; err != nil {
 		t.Fatalf("protocol error gateway error = %v", err)
+	}
+}
+
+func (g *unsupportedVersionGateway) Wait(t *testing.T) {
+	t.Helper()
+
+	if err := <-g.errCh; err != nil {
+		t.Fatalf("unsupported version gateway error = %v", err)
 	}
 }
 
@@ -239,6 +291,24 @@ func TestDialContextRejectsInvalidEventBuffer(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDialContextRejectsServerVersionBelow200(t *testing.T) {
+	t.Parallel()
+
+	gateway := newUnsupportedVersionGateway(t, "199")
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := ibkr.DialContext(ctx,
+		ibkr.WithDialer(gateway.dialer),
+		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
+	)
+	if !errors.Is(err, ibkr.ErrUnsupportedServerVersion) {
+		t.Fatalf("DialContext() error = %v, want ErrUnsupportedServerVersion", err)
+	}
+	gateway.Wait(t)
 }
 
 // TestBootstrapNoNextValidID verifies that DialContext fails with a timeout

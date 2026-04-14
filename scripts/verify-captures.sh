@@ -42,6 +42,7 @@ capture_dir = sys.argv[1]
 name = os.path.basename(capture_dir)
 events_path = os.path.join(capture_dir, "events.jsonl")
 replay_path = os.path.join(capture_dir, "replay", "frames.jsonl")
+driver_events_path = os.path.join(capture_dir, "driver_events.jsonl")
 
 with open(events_path, "rb") as f:
     events_bytes = f.read()
@@ -138,6 +139,10 @@ if errors:
     shown = "; ".join(f"req={req} code={code} msg={msg[:80]}" for req, code, msg in errors[:8])
     suffix = "" if len(errors) <= 8 else f"; ... +{len(errors) - 8} more"
     print(f"    api_errors: {shown}{suffix}")
+if os.path.exists(driver_events_path):
+    with open(driver_events_path, "rb") as f:
+        driver_count = sum(1 for line in f if line.strip())
+    print(f"    driver_events: {driver_count}")
 PY
 }
 

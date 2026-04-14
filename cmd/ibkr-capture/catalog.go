@@ -9,14 +9,17 @@ import (
 
 type scenarioMetadata struct {
 	Domain           string   `json:"domain"`
+	Driver           string   `json:"driver"`
 	PublicAPI        []string `json:"public_api"`
 	MessageIDs       []int    `json:"message_ids"`
 	RiskClass        string   `json:"risk_class"`
+	Assets           []string `json:"assets,omitempty"`
 	Requirements     []string `json:"requirements,omitempty"`
 	ExpectedOutcomes []string `json:"expected_outcomes"`
 	DefaultClientID  int      `json:"default_client_id"`
 	Batches          []string `json:"batches"`
 	PromotionStatus  string   `json:"promotion_status"`
+	DefaultReplay    bool     `json:"default_replay"`
 }
 
 type scenarioCatalogEntry struct {
@@ -30,6 +33,16 @@ const (
 	batchReadOnly = "read-only"
 	batchTrading  = "trading"
 	batchNewV2    = "new-v2"
+
+	batchTradingBasic     = "trading-basic"
+	batchTradingAdvanced  = "trading-advanced"
+	batchTradingCampaigns = "trading-campaigns"
+	batchTradingAll       = "trading-all"
+	batchReplayDefault    = "replay-default"
+	batchReplayAll        = "replay-all"
+
+	driverWire = "wire"
+	driverAPI  = "api"
 )
 
 var scenarioMetadataByName = map[string]scenarioMetadata{
@@ -120,11 +133,33 @@ var scenarioMetadataByName = map[string]scenarioMetadata{
 	"request_fa":                            meta("advisors", []string{"Advisors().Config"}, []int{18, 16}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"FA XML or non-FA error"}, 1, "promoted", batchNewV2, batchReadOnly),
 	"qualify_contract_aapl_exact":           meta("contracts", []string{"Contracts().Qualify"}, []int{9, 10, 52}, "read_only", nil, []string{"single qualified contract"}, 1, "promoted", batchNewV2, batchReadOnly),
 	"qualify_contract_ambiguous":            meta("contracts", []string{"Contracts().Qualify", "Contracts().Details"}, []int{9, 10, 52, 4}, "read_only", nil, []string{"ambiguous contract results or real ambiguity error"}, 1, "candidate", batchNewV2, batchReadOnly),
+
+	"api_order_fill_aapl":             apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT, MTL, and delayed modify-to-market fill paths with flattening"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_order_rest_cancel_aapl":      apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"far LMT rest/cancel path"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_order_relative_cancel_aapl":  apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"REL rest/cancel behavior isolated because Gateway can reconnect during relative order validation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_order_trailing_cancel_aapl":  apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"TRAIL and TRAIL LIMIT behavior isolated because Gateway can reconnect during trailing validation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_order_stop_cancel_aapl":      apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"STP and STP LMT rest/cancel behavior isolated because Gateway can reconnect during stop validation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_order_rejects_aapl":          apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "Orders().Cancel"}, []int{1, 2, 3, 4, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"invalid order type, price band, invalid contract, and unknown cancel real Gateway errors"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_order_type_matrix_aapl":      apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families accepted, rejected, filled, modified, or cancelled with real order lifecycle"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_delayed_success_modify_aapl": apiMeta("orders", []string{"Orders().Place", "OrderHandle.Modify", "Orders().Executions", "Accounts().Positions"}, []int{3, 4, 5, 11, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"resting limit order later becomes marketable through modify and is observed through the original handle"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_bracket_trigger_aapl":        apiMeta("orders", []string{"Orders().Place", "OrderHandle.Modify", "Orders().Open", "Orders().Executions", "Orders().CancelAll"}, []int{3, 4, 5, 11, 16, 53, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"bracket parent fills, take-profit is forced marketable, sibling stop-loss cancellation is observed"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_oca_trigger_aapl":            apiMeta("orders", []string{"Orders().Place", "Orders().Open", "Orders().Executions", "Orders().CancelAll"}, []int{3, 4, 5, 11, 16, 53, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"marketable OCA peer fills and cancels resting sibling"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayDefault, batchReplayAll),
+	"api_conditions_matrix_aapl":      apiMeta("orders", []string{"Orders().Place", "OrderHandle.Cancel", "Orders().CancelAll"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"price/time/margin/execution/volume/percent-change condition families accepted or rejected with real Gateway response"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_option_campaign_aapl":        apiMeta("options", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "MarketData().Quote", "Options().Price", "Options().Exercise", "Orders().Place", "Orders().Executions", "Orders().Completed"}, []int{1, 2, 3, 5, 11, 21, 55, 59, 75, 76, 99, 101, 102}, "paper_trigger", []string{"paper_trading", "market_hours", "option_permissions"}, []string{"live-qualified AAPL option quote/calculation/order/exercise-or-real-reject campaign"}, 1, "candidate", []string{"OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+	"api_future_campaign_mes":         apiMeta("orders", []string{"Contracts().Details", "MarketData().Quote", "Orders().Place", "Orders().Executions", "Accounts().Positions", "Orders().CancelAll"}, []int{1, 2, 3, 5, 10, 11, 52, 57, 58, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours", "future_permissions"}, []string{"live-qualified MES future order/modify/round-trip or real permission rejection"}, 1, "candidate", []string{"FUT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+	"api_combo_option_vertical_aapl":  apiMeta("orders", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "Orders().Place", "Orders().Open", "Orders().CancelAll"}, []int{3, 4, 5, 16, 53, 58, 75, 76}, "paper_order", []string{"paper_trading", "option_permissions"}, []string{"live-qualified AAPL option BAG vertical accepted/cancelled or real combo rejection"}, 1, "candidate", []string{"BAG", "OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+	"api_algorithmic_campaign_aapl":   apiMeta("orders", []string{"Accounts().Summary", "Accounts().SubscribeUpdates", "Accounts().SubscribePnL", "Accounts().Positions", "MarketData().SubscribeQuotes", "Orders().SubscribeOpen", "Orders().Place", "OrderHandle.Modify", "Orders().Executions", "Orders().Completed", "Orders().CancelAll"}, []int{1, 2, 3, 5, 6, 7, 8, 11, 16, 53, 54, 58, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_destructive", []string{"paper_trading", "market_hours"}, []string{"multi-subscription algorithmic campaign with split fills, resting modifies, reconciliation, and cleanup"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+	"api_forex_lifecycle_eurusd":      apiMeta("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading", "forex_hours"}, []string{"EUR.USD rest/modify/cancel lifecycle"}, 1, "candidate", []string{"CASH"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_whatif_margin_aapl":          apiMeta("orders", []string{"Orders().Place"}, []int{3, 5}, "paper_order", []string{"paper_trading"}, []string{"WhatIf margin/commission preview without execution"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_stress_rapid_fire_aapl":      apiMeta("orders", []string{"Orders().Place", "Orders().CancelAll"}, []int{3, 4, 5, 58}, "paper_order", []string{"paper_trading"}, []string{"10 rapid-fire far LMT orders plus global cancel"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+	"api_scale_in_campaign_aapl":      apiMeta("orders", []string{"MarketData().Quote", "Orders().Place", "OrderHandle.Cancel", "Orders().Executions", "Accounts().Positions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"scale-in 2x MKT buy, protective stop-loss, flatten, execution query"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+	"api_ioc_fok_aapl":                apiMeta("orders", []string{"MarketData().Quote", "Orders().Place", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"IOC marketable cancel and FOK invalid/inactive paths"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayAll),
 }
 
 func meta(domain string, publicAPI []string, messageIDs []int, riskClass string, requirements []string, expected []string, defaultClientID int, promotionStatus string, batches ...string) scenarioMetadata {
 	return scenarioMetadata{
 		Domain:           domain,
+		Driver:           driverWire,
 		PublicAPI:        publicAPI,
 		MessageIDs:       messageIDs,
 		RiskClass:        riskClass,
@@ -133,7 +168,15 @@ func meta(domain string, publicAPI []string, messageIDs []int, riskClass string,
 		DefaultClientID:  defaultClientID,
 		Batches:          append([]string{batchAll}, batches...),
 		PromotionStatus:  promotionStatus,
+		DefaultReplay:    promotionStatus == "promoted",
 	}
+}
+
+func apiMeta(domain string, publicAPI []string, messageIDs []int, riskClass string, requirements []string, expected []string, defaultClientID int, promotionStatus string, assets []string, batches ...string) scenarioMetadata {
+	md := meta(domain, publicAPI, messageIDs, riskClass, requirements, expected, defaultClientID, promotionStatus, batches...)
+	md.Driver = driverAPI
+	md.Assets = append([]string(nil), assets...)
+	return md
 }
 
 func catalogEntries() ([]scenarioCatalogEntry, error) {
@@ -178,7 +221,7 @@ func writeBatchList(w io.Writer, batch string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !entry.inBatch(batch) {
+		if !entry.inBatch(batch) && !entry.inReplayDefaultBatch(batch) {
 			continue
 		}
 		if _, err := fmt.Fprintf(w, "%s|%d\n", entry.Name, entry.DefaultClientID); err != nil {
@@ -189,10 +232,17 @@ func writeBatchList(w io.Writer, batch string) error {
 }
 
 func (e scenarioCatalogEntry) inBatch(batch string) bool {
+	if batch == batchReplayAll {
+		return true
+	}
 	for _, candidate := range e.Batches {
 		if candidate == batch {
 			return true
 		}
 	}
 	return false
+}
+
+func (e scenarioCatalogEntry) inReplayDefaultBatch(batch string) bool {
+	return batch == batchReplayDefault && e.DefaultReplay
 }

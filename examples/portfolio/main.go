@@ -85,14 +85,15 @@ func main() {
 	timeout := time.After(30 * time.Second)
 	for {
 		select {
-		case update := <-pnl.Events():
+		case update, ok := <-pnl.Events():
+			if !ok {
+				if err := pnl.Wait(); err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
 			fmt.Printf("  daily=%s unrealized=%s realized=%s\n",
 				update.DailyPnL, update.UnrealizedPnL, update.RealizedPnL)
-		case <-pnl.Done():
-			if err := pnl.Wait(); err != nil {
-				log.Fatal(err)
-			}
-			return
 		case <-timeout:
 			fmt.Println("done")
 			return

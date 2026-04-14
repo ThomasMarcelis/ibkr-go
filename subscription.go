@@ -178,8 +178,11 @@ func (s *Subscription[T]) closeWithErr(err error) {
 		s.err = err
 		s.errMu.Unlock()
 		s.emitState(SubscriptionStateEvent{Kind: SubscriptionClosed, Err: err})
-		close(s.done)
+		// Close events before done so Done reports completion only after the
+		// engine has stopped publishing business events. Consumers that need
+		// every buffered event should range Events(), then call Wait().
 		close(s.events)
 		s.state.Close()
+		close(s.done)
 	})
 }

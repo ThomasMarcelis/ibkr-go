@@ -94,9 +94,16 @@ const (
 	OrderTypeMarketOnOpen    OrderType = "MOO"
 	OrderTypeLimitOnOpen     OrderType = "LOO"
 	OrderTypeTrailingStop    OrderType = "TRAIL"
+	OrderTypeTrailingLimit   OrderType = "TRAIL LIMIT"
+	OrderTypeMarketIfTouched OrderType = "MIT"
+	OrderTypeLimitIfTouched  OrderType = "LIT"
+	OrderTypeMarketToLimit   OrderType = "MTL"
 	OrderTypeRelative        OrderType = "REL"
 	OrderTypePeggedToMarket  OrderType = "PEG MKT"
 	OrderTypePeggedToPrimary OrderType = "PEG PRI"
+	OrderTypePeggedToMid     OrderType = "PEG MID"
+	OrderTypePeggedToBest    OrderType = "PEG BEST"
+	OrderTypePeggedBenchmark OrderType = "PEG BENCH"
 )
 
 type OrderStatus string
@@ -598,29 +605,58 @@ type OrderEvent struct {
 }
 
 type Order struct {
-	OrderID                 int64 // 0 = auto-allocate
-	Action                  OrderAction
-	OrderType               OrderType
-	Quantity                decimal.Decimal
-	LmtPrice                decimal.Decimal
-	AuxPrice                decimal.Decimal
-	TIF                     TimeInForce
-	Account                 string
-	Transmit                *bool // nil = true (default)
-	ParentID                int64 // 0 = no parent
-	OcaGroup                string
-	OutsideRTH              bool
-	OrderRef                string
-	GoodAfterTime           string
-	GoodTillDate            string
-	ComboLegs               []ComboLeg
-	OrderComboLegPrices     []string
-	SmartComboRoutingParams []TagValue
-	AlgoStrategy            string
-	AlgoParams              []TagValue
-	Conditions              []OrderCondition
-	ConditionsIgnoreRTH     bool
-	ConditionsCancelOrder   bool
+	OrderID                  int64 // 0 = auto-allocate
+	Action                   OrderAction
+	OrderType                OrderType
+	Quantity                 decimal.Decimal
+	LmtPrice                 decimal.Decimal
+	AuxPrice                 decimal.Decimal
+	TIF                      TimeInForce
+	Account                  string
+	Transmit                 *bool // nil = true (default)
+	ParentID                 int64 // 0 = no parent
+	OcaGroup                 string
+	OcaType                  int
+	OutsideRTH               bool
+	TriggerMethod            int
+	DisplaySize              int
+	OrderRef                 string
+	GoodAfterTime            string
+	GoodTillDate             string
+	AllOrNone                *bool
+	MinQty                   decimal.Decimal
+	PercentOffset            decimal.Decimal
+	TrailStopPrice           decimal.Decimal
+	TrailingPercent          decimal.Decimal
+	ScaleInitLevelSize       int
+	ScaleSubsLevelSize       int
+	ScalePriceIncrement      decimal.Decimal
+	ScaleTable               string
+	ActiveStartTime          string
+	ActiveStopTime           string
+	HedgeType                string
+	HedgeParam               string
+	ComboLegs                []ComboLeg
+	OrderComboLegPrices      []string
+	SmartComboRoutingParams  []TagValue
+	AlgoStrategy             string
+	AlgoParams               []TagValue
+	WhatIf                   *bool
+	Conditions               []OrderCondition
+	ConditionsIgnoreRTH      bool
+	ConditionsCancelOrder    bool
+	AdjustedOrderType        OrderType
+	TriggerPrice             decimal.Decimal
+	LmtPriceOffset           decimal.Decimal
+	AdjustedStopPrice        decimal.Decimal
+	AdjustedStopLimitPrice   decimal.Decimal
+	AdjustedTrailingAmount   decimal.Decimal
+	AdjustableTrailingUnit   int
+	CashQty                  decimal.Decimal
+	DontUseAutoPriceForHedge *bool
+	UsePriceMgmtAlgo         *bool
+	AdvancedErrorOverride    string
+	ManualOrderTime          string
 }
 
 type PlaceOrderRequest struct {
@@ -737,20 +773,15 @@ func (h *OrderHandle) emitOrder(o OpenOrder) bool {
 	return h.emitEvent(OrderEvent{OpenOrder: &o})
 }
 
-// IsTerminalOrderStatus reports whether a status represents a final
-// order state after which no further updates are expected.
+// IsTerminalOrderStatus reports whether a status represents a final order
+// state. Live Gateway can still deliver execution or commission callbacks just
+// after a terminal status, so the engine owns the final handle close.
 func IsTerminalOrderStatus(status OrderStatus) bool {
-	return status == OrderStatusFilled || status == OrderStatusCancelled || status == OrderStatusInactive
+	return status == OrderStatusFilled || status == OrderStatusCancelled || status == OrderStatusApiCancelled || status == OrderStatusInactive
 }
 
 func (h *OrderHandle) emitStatus(s OrderStatusUpdate) bool {
-	if !h.emitEvent(OrderEvent{Status: &s}) {
-		return false
-	}
-	if IsTerminalOrderStatus(s.Status) {
-		h.closeWithErr(nil)
-	}
-	return true
+	return h.emitEvent(OrderEvent{Status: &s})
 }
 
 func (h *OrderHandle) emitExecution(exec Execution) bool {
@@ -781,9 +812,12 @@ func (h *OrderHandle) closeWithErr(err error) {
 		h.errMu.Lock()
 		h.err = err
 		h.errMu.Unlock()
-		close(h.done)
+		// Close events before done so Done reports completion only after the
+		// engine has stopped publishing business events. Consumers that need
+		// every buffered event should range Events(), then call Wait().
 		close(h.events)
 		h.state.Close()
+		close(h.done)
 	})
 }
 

@@ -77,44 +77,35 @@ func main() {
 
 	fmt.Println("placed order", handle.OrderID())
 
-	// Read events until we see the order acknowledged, then cancel.
+	// Read events until the handle closes, then inspect Wait for the final error.
 	cancelled := false
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				fmt.Println("events channel closed")
-				goto done
-			}
-			switch {
-			case evt.Status != nil:
-				fmt.Printf("status: %s  filled=%s remaining=%s\n",
-					evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
+	for evt := range handle.Events() {
+		switch {
+		case evt.Status != nil:
+			fmt.Printf("status: %s  filled=%s remaining=%s\n",
+				evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
 
-				// Cancel once the order is live on the server.
-				if !cancelled && !ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-					fmt.Println("cancelling order...")
-					if err := handle.Cancel(ctx); err != nil {
-						log.Fatal(err)
-					}
-					cancelled = true
+			// Cancel once the order is live on the server.
+			if !cancelled && !ibkr.IsTerminalOrderStatus(evt.Status.Status) {
+				fmt.Println("cancelling order...")
+				if err := handle.Cancel(ctx); err != nil {
+					log.Fatal(err)
 				}
-			case evt.OpenOrder != nil:
-				fmt.Printf("open order: %s %s %s @ %s\n",
-					evt.OpenOrder.Action, evt.OpenOrder.Quantity,
-					evt.OpenOrder.OrderType, evt.OpenOrder.LmtPrice)
-			case evt.Execution != nil:
-				fmt.Printf("execution: %s shares @ %s\n",
-					evt.Execution.Shares, evt.Execution.Price)
-			case evt.Commission != nil:
-				fmt.Printf("commission: %s %s\n",
-					evt.Commission.Commission, evt.Commission.Currency)
+				cancelled = true
 			}
-		case <-handle.Done():
-			goto done
+		case evt.OpenOrder != nil:
+			fmt.Printf("open order: %s %s %s @ %s\n",
+				evt.OpenOrder.Action, evt.OpenOrder.Quantity,
+				evt.OpenOrder.OrderType, evt.OpenOrder.LmtPrice)
+		case evt.Execution != nil:
+			fmt.Printf("execution: %s shares @ %s\n",
+				evt.Execution.Shares, evt.Execution.Price)
+		case evt.Commission != nil:
+			fmt.Printf("commission: %s %s\n",
+				evt.Commission.Commission, evt.Commission.Currency)
 		}
 	}
-done:
+
 	err = handle.Wait()
 	if err != nil {
 		fmt.Println("order error:", err)

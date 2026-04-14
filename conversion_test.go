@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"testing"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 )
@@ -35,6 +36,74 @@ func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) 
 	})
 	if err == nil {
 		t.Fatal("fromCodecOrderStatus() error = nil, want malformed filled rejection")
+	}
+}
+
+// TestFromCodecExecutionAcceptsNativeGatewayTime freezes the live Gateway
+// execution timestamp shape observed in ExecutionDetail msg_id=11:
+// "YYYYMMDD HH:MM:SS US/Eastern", not RFC3339.
+func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
+	t.Parallel()
+
+	update, err := fromCodecExecution(codec.ExecutionDetail{
+		OrderID: 42,
+		ExecID:  "0000e0d5.69dd4c37.01.01",
+		Account: "DU12345",
+		Symbol:  "AAPL",
+		Side:    "BOT",
+		Shares:  "1",
+		Price:   "257.69",
+		Time:    "20260413 13:35:50 US/Eastern",
+	})
+	if err != nil {
+		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
+	}
+	if update.Execution == nil {
+		t.Fatal("Execution = nil, want decoded execution")
+	}
+	want := time.Date(2026, 4, 13, 17, 35, 50, 0, time.UTC)
+	if !update.Execution.Time.Equal(want) {
+		t.Fatalf("Execution.Time = %s, want %s", update.Execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
+
+func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
+	t.Parallel()
+
+	update, err := fromCodecExecution(codec.ExecutionDetail{
+		OrderID: 42,
+		ExecID:  "exec-1",
+		Account: "DU12345",
+		Symbol:  "AAPL",
+		Side:    "BOT",
+		Shares:  "10",
+		Price:   "189.11",
+		Time:    "2026-04-05T12:01:00Z",
+	})
+	if err != nil {
+		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
+	}
+	want := time.Date(2026, 4, 5, 12, 1, 0, 0, time.UTC)
+	if !update.Execution.Time.Equal(want) {
+		t.Fatalf("Execution.Time = %s, want %s", update.Execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
+	}
+}
+
+func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
+	t.Parallel()
+
+	_, err := fromCodecExecution(codec.ExecutionDetail{
+		OrderID: 42,
+		ExecID:  "exec-bad-time",
+		Account: "DU12345",
+		Symbol:  "AAPL",
+		Side:    "BOT",
+		Shares:  "1",
+		Price:   "150",
+		Time:    "not-a-timestamp",
+	})
+	if err == nil {
+		t.Fatal("fromCodecExecution() error = nil, want malformed execution time rejection")
 	}
 }
 

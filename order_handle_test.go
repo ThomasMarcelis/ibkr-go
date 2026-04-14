@@ -89,6 +89,58 @@ func TestOrderHandleCloseWhenEventsBufferFull(t *testing.T) {
 	})
 }
 
+func TestOrderHandleEventsDrainAfterClose(t *testing.T) {
+	t.Parallel()
+
+	handle := newOrderHandle(103)
+	if !handle.emitStatus(OrderStatusUpdate{OrderID: 103, Status: OrderStatusSubmitted}) {
+		t.Fatal("emitStatus returned false, want true")
+	}
+	if !handle.emitExecution(Execution{OrderID: 103, ExecID: "exec-103"}) {
+		t.Fatal("emitExecution returned false, want true")
+	}
+
+	handle.closeWithErr(nil)
+
+	var events []OrderEvent
+	for evt := range handle.Events() {
+		events = append(events, evt)
+	}
+	if len(events) != 2 {
+		t.Fatalf("drained %d events after close, want 2", len(events))
+	}
+	if events[0].Status == nil || events[0].Status.Status != OrderStatusSubmitted {
+		t.Fatalf("first event = %#v, want Submitted status", events[0])
+	}
+	if events[1].Execution == nil || events[1].Execution.ExecID != "exec-103" {
+		t.Fatalf("second event = %#v, want execution exec-103", events[1])
+	}
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("Wait() = %v, want nil", err)
+	}
+}
+
+func TestIsTerminalOrderStatus(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		status OrderStatus
+		want   bool
+	}{
+		{OrderStatusFilled, true},
+		{OrderStatusCancelled, true},
+		{OrderStatusApiCancelled, true},
+		{OrderStatusInactive, true},
+		{OrderStatusPendingCancel, false},
+		{OrderStatusSubmitted, false},
+	}
+	for _, tt := range tests {
+		if got := IsTerminalOrderStatus(tt.status); got != tt.want {
+			t.Fatalf("IsTerminalOrderStatus(%s) = %v, want %v", tt.status, got, tt.want)
+		}
+	}
+}
+
 func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 	t.Helper()
 

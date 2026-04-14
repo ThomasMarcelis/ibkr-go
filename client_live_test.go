@@ -847,12 +847,13 @@ func waitLiveOrderFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 	t.Helper()
 
 	deadline := time.After(30 * time.Second)
+	filled := false
 	sawExecution := false
 	for {
 		select {
 		case evt, ok := <-handle.Events():
 			if !ok {
-				return false, sawExecution
+				return filled, sawExecution
 			}
 			if evt.OpenOrder != nil {
 				t.Logf("%s open order: orderID=%d status=%s", label, evt.OpenOrder.OrderID, evt.OpenOrder.Status)
@@ -867,17 +868,29 @@ func waitLiveOrderFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 			if evt.Status != nil {
 				t.Logf("%s status: %s filled=%s remaining=%s", label, evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
 				if evt.Status.Status == ibkr.OrderStatusFilled {
-					return true, sawExecution
+					filled = true
 				}
 				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-					return false, sawExecution
+					filled = filled || evt.Status.Status == ibkr.OrderStatusFilled
 				}
 			}
 		case <-handle.Done():
-			return false, sawExecution
+			for evt := range handle.Events() {
+				if evt.Execution != nil {
+					sawExecution = true
+					t.Logf("%s execution: execID=%s side=%s shares=%s price=%s", label, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price)
+				}
+				if evt.Commission != nil {
+					t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.Commission.ExecID, evt.Commission.Commission, evt.Commission.Currency, evt.Commission.RealizedPNL)
+				}
+				if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+					filled = true
+				}
+			}
+			return filled, sawExecution
 		case <-deadline:
 			_ = handle.Cancel(ctx)
-			return false, sawExecution
+			return filled, sawExecution
 		case <-ctx.Done():
 			t.Fatalf("%s: context done waiting for order fill: %v", label, ctx.Err())
 		}

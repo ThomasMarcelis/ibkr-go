@@ -98,19 +98,21 @@ if err != nil {
 }
 defer sub.Close()
 
-for {
+events := sub.Events()
+lifecycle := sub.Lifecycle()
+for events != nil {
     select {
-    case update, ok := <-sub.Events():
+    case update, ok := <-events:
         if !ok {
             return sub.Wait()
         }
         fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
-    case state, ok := <-sub.Lifecycle():
-        if ok {
-            fmt.Println("lifecycle:", state.Kind, "retryable:", state.Retryable)
+    case state, ok := <-lifecycle:
+        if !ok {
+            lifecycle = nil
+            continue
         }
-    case <-sub.Done():
-        return sub.Wait()
+        fmt.Println("lifecycle:", state.Kind, "retryable:", state.Retryable)
     }
 }
 ```
@@ -119,7 +121,9 @@ for {
 `SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix. When a stream
 ends, use `sub.Err()` or `Wait()` with `ibkr.IsRetryable(err)`, or inspect
 `state.Retryable`, to distinguish reconnectable gaps from terminal IBKR API
-rejections.
+rejections. Drain `Events()` until it closes when final buffered data matters;
+use `Done()` for coordinating other goroutines, not as a replacement for event
+draining.
 
 ### Fetch historical bars
 

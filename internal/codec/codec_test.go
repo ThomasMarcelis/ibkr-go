@@ -710,3 +710,123 @@ func TestEncodeCancelHistoricalData(t *testing.T) {
 		t.Fatalf("reqID = %q, want 42", fields[2])
 	}
 }
+
+// Regression: cancel_order at server_version >= 192 (CME_TAGGING_FIELDS)
+// requires extOperator and manualOrderIndicator. Missing fields caused the
+// gateway to silently drop the cancel — discovered via live IB Gateway
+// server_version 200 where handle.Cancel never received confirmation.
+func TestEncodeCancelOrderRequest(t *testing.T) {
+	t.Parallel()
+
+	payload, err := Encode(CancelOrderRequest{OrderID: 42})
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+
+	// Wire format: [4, orderID, manualOrderCancelTime, extOperator, manualOrderIndicator]
+	if len(fields) != 5 {
+		t.Fatalf("field count = %d, want 5; fields = %v", len(fields), fields)
+	}
+	if fields[0] != "4" {
+		t.Fatalf("msg_id = %q, want 4", fields[0])
+	}
+	if fields[1] != "42" {
+		t.Fatalf("orderID = %q, want 42", fields[1])
+	}
+	if fields[2] != "" {
+		t.Fatalf("manualOrderCancelTime = %q, want empty", fields[2])
+	}
+	if fields[3] != "" {
+		t.Fatalf("extOperator = %q, want empty", fields[3])
+	}
+	if fields[4] != "" {
+		t.Fatalf("manualOrderIndicator = %q, want empty", fields[4])
+	}
+}
+
+func TestEncodeCancelOrderRequestRegulatoryFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name                string
+		request             CancelOrderRequest
+		wantExtOperator     string
+		wantManualIndicator string
+	}{
+		{
+			name: "ext operator",
+			request: CancelOrderRequest{
+				OrderID:     99,
+				ExtOperator: "IB",
+			},
+			wantExtOperator: "IB",
+		},
+		{
+			name: "automated manual order indicator",
+			request: CancelOrderRequest{
+				OrderID:              100,
+				ManualOrderIndicator: "0",
+			},
+			wantManualIndicator: "0",
+		},
+		{
+			name: "manual order indicator",
+			request: CancelOrderRequest{
+				OrderID:              101,
+				ManualOrderIndicator: "1",
+			},
+			wantManualIndicator: "1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			payload, err := Encode(tt.request)
+			if err != nil {
+				t.Fatalf("Encode() error = %v", err)
+			}
+			fields, err := wire.ParseFields(payload)
+			if err != nil {
+				t.Fatalf("ParseFields() error = %v", err)
+			}
+			if len(fields) != 5 {
+				t.Fatalf("field count = %d, want 5", len(fields))
+			}
+			if fields[3] != tt.wantExtOperator {
+				t.Fatalf("extOperator = %q, want %q", fields[3], tt.wantExtOperator)
+			}
+			if fields[4] != tt.wantManualIndicator {
+				t.Fatalf("manualOrderIndicator = %q, want %q", fields[4], tt.wantManualIndicator)
+			}
+		})
+	}
+}
+
+func TestEncodeGlobalCancelRequest(t *testing.T) {
+	t.Parallel()
+
+	payload, err := Encode(GlobalCancelRequest{})
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+	if len(fields) != 3 {
+		t.Fatalf("field count = %d, want 3; fields = %v", len(fields), fields)
+	}
+	if fields[0] != "58" {
+		t.Fatalf("msg_id = %q, want 58", fields[0])
+	}
+	if fields[1] != "" {
+		t.Fatalf("extOperator = %q, want empty", fields[1])
+	}
+	if fields[2] != "" {
+		t.Fatalf("manualOrderIndicator = %q, want empty", fields[2])
+	}
+}

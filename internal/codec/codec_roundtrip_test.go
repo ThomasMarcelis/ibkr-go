@@ -171,7 +171,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		},
 		{
 			// ExecutionDetail: the encoder writes conID as "0" and pads
-			// secType..tradingClass with empty strings. The decoder skips
+			// secType..tradingClass, including currency, with empty strings. The decoder skips
 			// those fields. The Symbol field is read at a specific position
 			// before the skipped block. All extracted fields roundtrip.
 			name: "ExecutionDetail",

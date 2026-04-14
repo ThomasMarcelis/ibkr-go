@@ -63,18 +63,25 @@ func main() {
 	defer func() { _ = sub.Close() }()
 
 	timeout := time.After(10 * time.Second)
-	for {
+	events := sub.Events()
+	lifecycle := sub.Lifecycle()
+	for events != nil {
 		select {
-		case update := <-sub.Events():
+		case update, ok := <-events:
+			if !ok {
+				if err := sub.Wait(); err != nil {
+					log.Fatal(err)
+				}
+				return
+			}
 			fmt.Printf("bid=%-10s ask=%-10s last=%-10s\n",
 				update.Snapshot.Bid, update.Snapshot.Ask, update.Snapshot.Last)
-		case state := <-sub.Lifecycle():
-			fmt.Println("lifecycle:", state.Kind)
-		case <-sub.Done():
-			if err := sub.Wait(); err != nil {
-				log.Fatal(err)
+		case state, ok := <-lifecycle:
+			if !ok {
+				lifecycle = nil
+				continue
 			}
-			return
+			fmt.Println("lifecycle:", state.Kind)
 		case <-timeout:
 			fmt.Println("done")
 			return

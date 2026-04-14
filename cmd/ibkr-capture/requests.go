@@ -871,16 +871,19 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 
 // --- Cancel order (msg_id=4) ---
 //
-//	[4, orderID, manualOrderCancelTime]
+//	[4, orderID, manualOrderCancelTime, extOperator, manualOrderIndicator]
+//
+// At server_version >= 192 (CME_TAGGING_FIELDS), extOperator and
+// manualOrderIndicator are required. Empty manualOrderIndicator means "not set".
 func sendCancelOrder(conn net.Conn, orderID int64) error {
-	return sendMessage(conn, []string{"4", strconv.FormatInt(orderID, 10), ""})
+	return sendMessage(conn, []string{"4", strconv.FormatInt(orderID, 10), "", "", ""})
 }
 
 // --- Global cancel (msg_id=58) ---
 //
-//	[58, 1]
+//	[58, extOperator, manualOrderIndicator]
 func sendGlobalCancel(conn net.Conn) error {
-	return sendMessage(conn, []string{"58", "1"})
+	return sendMessage(conn, []string{"58", "", ""})
 }
 
 // --- Market depth (msg_id=10) / cancel (msg_id=11) ---
