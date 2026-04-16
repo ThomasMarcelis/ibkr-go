@@ -1675,6 +1675,66 @@ var scenarios = map[string]scenario{
 		description: "public API campaign for IBKR order condition families",
 		runAPI:      runAPIConditionsMatrixAAPL,
 	},
+	"api_tif_attribute_matrix_aapl": {
+		name:        "api_tif_attribute_matrix_aapl",
+		description: "public API campaign for TIF values and advanced AAPL order attributes",
+		runAPI:      runAPITIFAttributeMatrixAAPL,
+	},
+	"api_security_type_probe_matrix": {
+		name:        "api_security_type_probe_matrix",
+		description: "public API probe matrix for real Gateway contract-details behavior across security types",
+		runAPI:      runAPISecurityTypeProbeMatrix,
+	},
+	"api_market_data_completeness_aapl": {
+		name:        "api_market_data_completeness_aapl",
+		description: "public API campaign for market-data type, generic tick, real-time bar, and tick-by-tick variants",
+		runAPI:      runAPIMarketDataCompletenessAAPL,
+	},
+	"api_historical_matrix_aapl": {
+		name:        "api_historical_matrix_aapl",
+		description: "public API campaign for historical bar-size and whatToShow variants",
+		runAPI:      runAPIHistoricalMatrixAAPL,
+	},
+	"api_news_article_aapl": {
+		name:        "api_news_article_aapl",
+		description: "public API campaign that requests a real news article ID from historical news, then fetches the article",
+		runAPI:      runAPINewsArticleAAPL,
+	},
+	"api_fundamental_reports_aapl": {
+		name:        "api_fundamental_reports_aapl",
+		description: "public API probe for every fundamental report type on AAPL",
+		runAPI:      runAPIFundamentalReportsAAPL,
+	},
+	"api_wsh_variants_aapl": {
+		name:        "api_wsh_variants_aapl",
+		description: "public API probe for WSH metadata and event-data filter variants",
+		runAPI:      runAPIWSHVariantsAAPL,
+	},
+	"api_algo_variants_aapl": {
+		name:        "api_algo_variants_aapl",
+		description: "public API campaign for available IBKR algorithmic strategy variants",
+		runAPI:      runAPIAlgoVariantsAAPL,
+	},
+	"api_pairs_trading_aapl_msft": {
+		name:        "api_pairs_trading_aapl_msft",
+		description: "public API campaign for paired AAPL/MSFT market orders and cleanup",
+		runAPI:      runAPIPairsTradingAAPLMSFT,
+	},
+	"api_dollar_cost_averaging_aapl": {
+		name:        "api_dollar_cost_averaging_aapl",
+		description: "public API campaign for repeated AAPL buys and post-campaign flattening",
+		runAPI:      runAPIDollarCostAveragingAAPL,
+	},
+	"api_stop_loss_management_aapl": {
+		name:        "api_stop_loss_management_aapl",
+		description: "public API campaign for placing, moving, cancelling, and flattening a protective stop",
+		runAPI:      runAPIStopLossManagementAAPL,
+	},
+	"api_bracket_trailing_stop_aapl": {
+		name:        "api_bracket_trailing_stop_aapl",
+		description: "public API campaign for bracket order sequencing with a trailing stop child",
+		runAPI:      runAPIBracketTrailingStopAAPL,
+	},
 	"api_option_campaign_aapl": {
 		name:        "api_option_campaign_aapl",
 		description: "public API campaign for live-qualified AAPL option data, order, execution, and exercise/lapse responses",
@@ -1694,6 +1754,36 @@ var scenarios = map[string]scenario{
 		name:        "api_algorithmic_campaign_aapl",
 		description: "public API campaign with concurrent market/account/order observers and multi-step trading",
 		runAPI:      runAPIAlgorithmicCampaignAAPL,
+	},
+	"api_completed_orders_variants_aapl": {
+		name:        "api_completed_orders_variants_aapl",
+		description: "public API campaign for completed-orders apiOnly true/false variants after a live paper fill",
+		runAPI:      runAPICompletedOrdersVariantsAAPL,
+	},
+	"api_transmit_false_then_transmit_aapl": {
+		name:        "api_transmit_false_then_transmit_aapl",
+		description: "public API campaign for staging Transmit=false then modifying to transmit and cancel",
+		runAPI:      runAPITransmitFalseThenTransmitAAPL,
+	},
+	"api_duplicate_quote_subscriptions_aapl": {
+		name:        "api_duplicate_quote_subscriptions_aapl",
+		description: "public API probe for two same-contract quote subscriptions on one client",
+		runAPI:      runAPIDuplicateQuoteSubscriptionsAAPL,
+	},
+	"api_reconnect_active_order_aapl": {
+		name:        "api_reconnect_active_order_aapl",
+		description: "public API campaign for reconnecting with a live resting order and cancelling it after reconnect",
+		runAPI:      runAPIReconnectActiveOrderAAPL,
+	},
+	"api_client_id0_order_observation_aapl": {
+		name:        "api_client_id0_order_observation_aapl",
+		description: "public API campaign for client ID 0 observing and cancelling another client's resting order",
+		runAPI:      runAPIClientID0OrderObservationAAPL,
+	},
+	"api_cross_client_cancel_aapl": {
+		name:        "api_cross_client_cancel_aapl",
+		description: "public API campaign for placing from one client ID and cancelling from another client ID",
+		runAPI:      runAPICrossClientCancelAAPL,
 	},
 	"api_forex_lifecycle_eurusd": {
 		name:        "api_forex_lifecycle_eurusd",

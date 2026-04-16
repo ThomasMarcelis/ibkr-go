@@ -17,6 +17,8 @@ var (
 	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")
 )
 
+// ConnectError wraps a failure during the connection phase (dial, TLS
+// negotiation, or protocol handshake).
 type ConnectError struct {
 	Op  string
 	Err error
@@ -30,6 +32,8 @@ func (e *ConnectError) Unwrap() error {
 	return e.Err
 }
 
+// ProtocolError wraps a framing or encoding error encountered while reading
+// or writing TWS API messages on the wire.
 type ProtocolError struct {
 	Direction string
 	Message   string
@@ -47,6 +51,9 @@ func (e *ProtocolError) Unwrap() error {
 	return e.Err
 }
 
+// APIError is an error code returned by TWS or IB Gateway in response to a
+// specific request. Code carries the IBKR error/warning code and Message is
+// the human-readable text sent by the server.
 type APIError struct {
 	Code          int
 	Message       string
@@ -58,6 +65,8 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("ibkr: api %s code=%d conn=%d: %s", e.OpKind, e.Code, e.ConnectionSeq, e.Message)
 }
 
+// ValidationError is a client-side input validation failure caught before
+// the request is sent to the Gateway.
 type ValidationError struct {
 	Field   string
 	Value   string

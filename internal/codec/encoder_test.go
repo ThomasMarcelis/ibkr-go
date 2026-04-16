@@ -215,3 +215,26 @@ func TestFieldWriterFieldsEmpty(t *testing.T) {
 		t.Errorf("Fields() on empty writer = %v, want nil", got)
 	}
 }
+
+func TestEncodeExecutionsRequestServer200Layout(t *testing.T) {
+	t.Parallel()
+
+	fields, err := encodeFields(ExecutionsRequest{
+		ReqID:   3,
+		Account: "DUP770846",
+		Symbol:  "AAPL",
+	})
+	if err != nil {
+		t.Fatalf("encodeFields(ExecutionsRequest) error = %v", err)
+	}
+
+	want := []string{"7", "3", "3", "0", "DUP770846", "", "AAPL", "", "", "", "2147483647", "0"}
+	if len(fields) != len(want) {
+		t.Fatalf("fields len = %d, want %d: %v", len(fields), len(want), fields)
+	}
+	for i := range want {
+		if fields[i] != want[i] {
+			t.Fatalf("fields[%d] = %q, want %q; fields=%v", i, fields[i], want[i], fields)
+		}
+	}
+}

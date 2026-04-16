@@ -1,0 +1,28 @@
+# Grounded by live API capture captures/20260415T162840Z-api_client_id0_order_observation_aapl.
+# server_version=200, events.jsonl sha256 prefix: 5ff9cdc0f6f9b500.
+# Account and perm identifiers are sanitized; the two connection legs preserve
+# the live paper Gateway behavior observed on 2026-04-15: client ID 0 can see
+# another client's live GTC order through the all-open-orders scope and cancel it.
+handshake {"server_version":200,"connection_time":"20260415 18:28:40 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":295}
+
+client place_order {"order_id":"295","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"10","order_type":"LMT","lmt_price":"13.27","tif":"GTC","account":"DU9000001"}
+server open_order {"order_id":295,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"10","filled":"0","remaining":"0","lmt_price":"13.27","aux_price":"0","tif":"GTC","perm_id":"1426086046","client_id":"1","origin":"0"}
+server order_status {"order_id":295,"status":"Submitted","filled":"0","remaining":"10","avg_fill_price":"0","perm_id":"1426086046","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+disconnect
+
+handshake {"server_version":200,"connection_time":"20260415 18:28:51 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":13}
+
+client req_open_orders {"scope":"all"}
+server open_order {"order_id":295,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"10","filled":"0","remaining":"0","lmt_price":"13.27","aux_price":"0","tif":"GTC","perm_id":"1426086046","client_id":"1","origin":"0"}
+server open_order_end {}
+
+client cancel_order {"field_count":"5","order_id":"295","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":295,"status":"Cancelled","filled":"0","remaining":"10","avg_fill_price":"0","perm_id":"1426086046","parent_id":"0","last_fill_price":"0","client_id":"0","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":295,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776270534000"}
+
+sleep 100ms
+disconnect

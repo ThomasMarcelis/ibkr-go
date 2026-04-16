@@ -81,86 +81,47 @@ func isHistoricalRangeBoundary(value string) bool {
 	return strings.Contains(value, " ") && strings.Contains(value, "/")
 }
 
-func skipCompletedOrderPreStatus(r *fieldReader) error {
-	r.Skip(13) // lmtPrice through goodAfterTime
-	r.Skip(3)  // FAGroup, FAMethod, FAPercentage
-	r.Skip(5)  // modelCode, goodTillDate, rule80A, percentOffset, settlingFirm
-	r.Skip(3)  // short-sale slot/location/exempt code
-	r.Skip(3)  // BOX starting price, stock ref price, delta
-	r.Skip(2)  // stock range lower/upper
-	r.Skip(5)  // displaySize, sweepToFill, allOrNone, minQty, ocaType
-	r.Skip(1)  // triggerMethod
+func completedOrderTail(fields []string, statusIndex int, orderType string) (string, bool) {
+	r := newFieldReader(fields[statusIndex+1:])
+	if err := skipCompletedOrderPostStatusPrefix(r, orderType); err != nil {
+		return "", false
+	}
+	filled := r.ReadString()
+	if r.Err() != nil || !isNonNegativeWireNumber(filled) {
+		return "", false
+	}
+	if r.Remaining() < 8 {
+		return "", false
+	}
+	r.Skip(7)      // refFuturesConId through completedTime
+	r.ReadString() // completedStatus
+	if r.Err() != nil || r.Remaining() > 8 {
+		return "", false
+	}
+	return filled, true
+}
 
-	r.Skip(2) // volatility, volatilityType
-	deltaNeutralOrderType := r.ReadString()
-	r.Skip(1) // deltaNeutralAuxPrice
-	if deltaNeutralOrderType != "" && !strings.EqualFold(deltaNeutralOrderType, "None") {
-		r.Skip(1) // deltaNeutralConId
-		r.Skip(3) // delta-neutral short-sale fields
-	}
-	r.Skip(2) // continuousUpdate, referencePriceType
-	r.Skip(2) // trailStopPrice, trailingPercent
-
-	r.Skip(1) // comboLegsDescrip
-	comboLegsCount, err := r.ReadOptionalCount("completed order combo legs")
-	if err != nil {
-		return err
-	}
-	if err := r.RequireFixedEntryFields("completed order combo legs", comboLegsCount, 8, 0); err != nil {
-		return err
-	}
-	r.Skip(comboLegsCount * 8)
-
-	orderComboLegsCount, err := r.ReadOptionalCount("completed order combo leg prices")
-	if err != nil {
-		return err
-	}
-	if err := r.RequireFixedEntryFields("completed order combo leg prices", orderComboLegsCount, 1, 0); err != nil {
-		return err
-	}
-	r.Skip(orderComboLegsCount)
-
-	smartComboRoutingParamsCount, err := r.ReadOptionalCount("completed order smart combo routing params")
-	if err != nil {
-		return err
-	}
-	if err := r.RequireFixedEntryFields("completed order smart combo routing params", smartComboRoutingParamsCount, 2, 0); err != nil {
-		return err
-	}
-	r.Skip(smartComboRoutingParamsCount * 2)
-
-	r.Skip(2) // scaleInitLevelSize, scaleSubsLevelSize
-	scalePriceIncrement := r.ReadString()
-	if isPositiveWireNumber(scalePriceIncrement) {
-		r.Skip(7)
-	}
-	r.Skip(3) // scaleTable, activeStartTime, activeStopTime
-
-	hedgeType := r.ReadString()
-	if hedgeType != "" {
-		r.Skip(1)
-	}
-	r.Skip(1) // optOutSmartRouting
-	r.Skip(2) // clearingAccount, clearingIntent
-	r.Skip(1) // notHeld
-
-	if r.ReadString() == "1" { // delta-neutral contract present
-		r.Skip(3)
-	}
-	algoStrategy := r.ReadString()
-	if algoStrategy != "" {
-		algoParamsCount, err := r.ReadCount("completed order algo params")
-		if err != nil {
-			return err
+func completedOrderStatusTail(fields []string, orderType string) (string, string, error) {
+	for i := 15; i < len(fields); i++ {
+		if !isOrderStatusField(fields[i]) {
+			continue
 		}
-		if err := r.RequireFixedEntryFields("completed order algo params", algoParamsCount, 2, 0); err != nil {
-			return err
+		filled, ok := completedOrderTail(fields, i, orderType)
+		if ok {
+			return fields[i], filled, nil
 		}
-		r.Skip(algoParamsCount * 2)
 	}
+	return "", "", fmt.Errorf("codec: completed order status tail not found")
+}
 
-	r.Skip(1) // solicited
-	return nil
+func isOrderStatusField(value string) bool {
+	switch value {
+	case "PendingSubmit", "PendingCancel", "PreSubmitted", "Submitted",
+		"ApiPending", "ApiCancelled", "Cancelled", "Filled", "Inactive":
+		return true
+	default:
+		return false
+	}
 }
 
 func skipCompletedOrderPostStatusPrefix(r *fieldReader, orderType string) error {
@@ -1075,33 +1036,21 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		return []Message{MarketRule{MarketRuleID: marketRuleID, Increments: increments}}, nil
 
 	case InCompletedOrder: // [101, contract(11-field), action, totalQty, orderType, ...]
-		// CompletedOrder uses the broad server->client order layout, then
-		// appends completed-time/status fields. Decode only the public fields
-		// we expose, but keep the skips aligned with live server_version 200
-		// captures so CompletedStatus is never mistaken for filled quantity.
+		// CompletedOrder uses the broad server->client order layout, with many
+		// advanced order sections whose presence varies by order type and algo.
+		// Decode only the public fields we expose, and anchor the tail on the
+		// live status field instead of inventing a full advanced-order parser.
 		contract := readWireContract(r)
 		action := r.ReadString()
 		quantity := r.ReadString()
 		orderType := r.ReadString()
-		if err := skipCompletedOrderPreStatus(r); err != nil {
+		status, filled, err := completedOrderStatusTail(fields, orderType)
+		if err != nil {
 			return nil, err
-		}
-		status := r.ReadString()
-		if err := skipCompletedOrderPostStatusPrefix(r, orderType); err != nil {
-			return nil, err
-		}
-		filled := r.ReadString()
-		r.Skip(7)      // refFuturesConId through completedTime
-		r.ReadString() // completedStatus
-		remaining := ""
-		if r.Remaining() == 1 {
-			// Older synthetic fixtures encoded a remaining field after filled.
-			// Keep accepting that shape while live v200 completed orders omit it.
-			remaining = r.ReadString()
 		}
 		return []Message{CompletedOrder{
 			Contract: contract, Action: action, OrderType: orderType,
-			Status: status, Quantity: quantity, Filled: filled, Remaining: remaining,
+			Status: status, Quantity: quantity, Filled: filled,
 		}}, nil
 
 	case InCompletedOrderEnd: // [102]
@@ -1588,9 +1537,11 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteString(m.Account)
 		w.WriteString("") // time
 		w.WriteString(m.Symbol)
-		w.WriteString("") // secType
-		w.WriteString("") // exchange
-		w.WriteString("") // side
+		w.WriteString("")      // secType
+		w.WriteString("")      // exchange
+		w.WriteString("")      // side
+		w.WriteInt(2147483647) // lastNDays unset
+		w.WriteInt(0)          // specificDates count
 		return w.Fields(), nil
 
 	case FamilyCodesRequest:
@@ -2874,6 +2825,14 @@ func isPositiveWireNumber(raw string) bool {
 	}
 	v, err := strconv.ParseFloat(raw, 64)
 	return err == nil && v > 0
+}
+
+func isNonNegativeWireNumber(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	v, err := strconv.ParseFloat(raw, 64)
+	return err == nil && v >= 0
 }
 
 func mustReadInt(r *fieldReader) int {

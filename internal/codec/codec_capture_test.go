@@ -184,6 +184,213 @@ func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
 	}
 }
 
+func TestCaptureDecode_CompletedOrderTrailLimitLive(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260415T162637Z-api_completed_orders_variants_aapl,
+	// server_version=200, events.jsonl sha256 prefix 6415ad97b4c9f33e.
+	// This live TRAIL LIMIT completed-order shape includes a decimal field
+	// before the completed-order tail; treating every advanced section as a
+	// count field interrupts the completed-orders request.
+	fields := []string{
+		"101",
+		"265598",
+		"AAPL",
+		"STK",
+		"",
+		"0",
+		"?",
+		"",
+		"SMART",
+		"USD",
+		"AAPL",
+		"NMS",
+		"BUY",
+		"1",
+		"TRAIL LIMIT",
+		"2000.05",
+		"1.0",
+		"DAY",
+		"",
+		"DU9000001",
+		"",
+		"0",
+		"",
+		"1426085924",
+		"0",
+		"0",
+		"0",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"0",
+		"",
+		"-1",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"2147483647",
+		"0",
+		"0",
+		"",
+		"3",
+		"0",
+		"",
+		"0",
+		"None",
+		"",
+		"0",
+		"0",
+		"0",
+		"",
+		"0",
+		"0",
+		"2000.0",
+		"",
+		"",
+		"0",
+		"0",
+		"0",
+		"2147483647",
+		"2147483647",
+		"",
+		"",
+		"",
+		"IB",
+		"0",
+		"0",
+		"",
+		"0",
+		"Cancelled",
+		"0",
+		"0",
+		"0",
+		"2000.0",
+		"0.05",
+		"0",
+		"1",
+		"0",
+		"",
+		"0",
+		"2147483647",
+		"0",
+		"Not an insider or substantial shareholder",
+		"0",
+		"0",
+		"9223372036854775807",
+		"20260415 11:00:11 US/Eastern",
+		"Cancelled by Trader",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"",
+		"0",
+		"paper-user",
+	}
+	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(CompletedOrder)
+	if !ok {
+		t.Fatalf("type = %T, want CompletedOrder", msgs[0])
+	}
+	if m.Contract.Symbol != "AAPL" {
+		t.Errorf("Symbol = %q, want AAPL", m.Contract.Symbol)
+	}
+	if m.OrderType != "TRAIL LIMIT" {
+		t.Errorf("OrderType = %q, want TRAIL LIMIT", m.OrderType)
+	}
+	if m.Status != "Cancelled" {
+		t.Errorf("Status = %q, want Cancelled", m.Status)
+	}
+	if m.Quantity != "1" {
+		t.Errorf("Quantity = %q, want 1", m.Quantity)
+	}
+	if m.Filled != "0" {
+		t.Errorf("Filled = %q, want 0", m.Filled)
+	}
+}
+
+func TestCaptureDecode_CompletedOrderIgnoresEarlyStatusLikeField(t *testing.T) {
+	t.Parallel()
+
+	fields := completedOrderFields("LMT", "Cancelled", "0")
+	fields[19] = "Filled" // account slot; status-like noise before the real order-state status.
+	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m := msgs[0].(CompletedOrder)
+	if m.Status != "Cancelled" {
+		t.Fatalf("Status = %q, want real tail status Cancelled", m.Status)
+	}
+	if m.Filled != "0" {
+		t.Fatalf("Filled = %q, want 0", m.Filled)
+	}
+}
+
+func TestCaptureDecode_CompletedOrderPostStatusVariableFields(t *testing.T) {
+	t.Parallel()
+
+	fields := completedOrderFields("PEG BENCH", "Submitted", "4")
+	statusIndex := 15
+	fields = append(append([]string(nil), fields[:statusIndex+1]...), []string{
+		"0", "0", // randomizeSize, randomizePrice
+		"", "", "", "", "", // PEG BENCH fields
+		"1", "3", "a", "1", "20260415 16:00:00 UTC", // one time condition
+		"0", "0", // conditionsIgnoreRTH, conditionsCancelOrder
+		"", "", "", "0", "0", "", // stop/limit offset and cash/OMS/auto-cancel fields
+		"4",
+		"0", "0", "", "0", "0", "0", "20260415 16:00:01 UTC",
+		"Filled",
+		"", "", "", "", "", "", "0", "tester",
+	}...)
+
+	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m := msgs[0].(CompletedOrder)
+	if m.OrderType != "PEG BENCH" {
+		t.Fatalf("OrderType = %q, want PEG BENCH", m.OrderType)
+	}
+	if m.Status != "Submitted" {
+		t.Fatalf("Status = %q, want Submitted", m.Status)
+	}
+	if m.Filled != "4" {
+		t.Fatalf("Filled = %q, want 4", m.Filled)
+	}
+}
+
+func completedOrderFields(orderType string, status string, filled string) []string {
+	fields := []string{
+		"101",
+		"265598", "AAPL", "STK", "", "0", "", "", "SMART", "USD", "AAPL", "NMS",
+		"BUY", "5", orderType,
+		status,
+		"0", "0", "0", "", "", "", "", "", "",
+		filled,
+		"0", "0", "", "0", "0", "0", "20260415 16:00:01 UTC",
+		"Filled",
+		"", "", "", "", "", "", "0", "tester",
+	}
+	return fields
+}
+
 func TestCaptureDecode_ContractDetailsEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214938Z-contract_details_aapl_stk, line 11

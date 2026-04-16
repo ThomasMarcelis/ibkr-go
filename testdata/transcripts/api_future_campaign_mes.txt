@@ -1,0 +1,23 @@
+# Grounded by live API capture captures/20260415T162047Z-api_future_campaign_mes.
+# server_version=200, events.jsonl sha256 prefix: 77d0b1b6a8c2d760.
+# Account, perm, and execution identifiers are sanitized. The capture qualified
+# MESM6 and completed a paper futures buy/flatten round trip.
+handshake {"server_version":200,"connection_time":"20260415 18:20:48 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":289}
+
+client place_order {"order_id":"289","contract":{"con_id":"770561194","symbol":"MES","sec_type":"FUT","exchange":"CME","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"MKT","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":289,"account":"DU9000001","contract":{"con_id":770561194,"symbol":"MES","sec_type":"FUT","expiry":"20260618","exchange":"CME","currency":"USD","local_symbol":"MESM6","trading_class":"MES"},"action":"BUY","order_type":"MKT","quantity":"1","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"1426086040","client_id":"1","origin":"0"}
+server order_status {"order_id":289,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"1426086040","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":289,"exec_id":"0000e1a7.69e23a2f.01.01","account":"DU9000001","symbol":"MES","side":"BOT","shares":"1","price":"7039.5","time":"2026-04-15T16:20:50Z"}
+server order_status {"order_id":289,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"7039.5","perm_id":"1426086040","parent_id":"0","last_fill_price":"7039.5","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"0000e1a7.69e23a2f.01.01","commission":"0.62","currency":"USD","realized_pnl":"0"}
+
+client place_order {"order_id":"290","contract":{"con_id":"770561194","symbol":"MES","sec_type":"FUT","exchange":"CME","currency":"USD"},"action":"SELL","total_quantity":"1","order_type":"MKT","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":290,"account":"DU9000001","contract":{"con_id":770561194,"symbol":"MES","sec_type":"FUT","expiry":"20260618","exchange":"CME","currency":"USD","local_symbol":"MESM6","trading_class":"MES"},"action":"SELL","order_type":"MKT","quantity":"1","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"1426086041","client_id":"1","origin":"0"}
+server order_status {"order_id":290,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"1426086041","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":290,"exec_id":"0000e1a7.69e23a30.01.01","account":"DU9000001","symbol":"MES","side":"SLD","shares":"1","price":"7039.25","time":"2026-04-15T16:20:50Z"}
+server order_status {"order_id":290,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"7039.25","perm_id":"1426086041","parent_id":"0","last_fill_price":"7039.25","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"0000e1a7.69e23a30.01.01","commission":"0.62","currency":"USD","realized_pnl":"-2.49"}
+
+disconnect

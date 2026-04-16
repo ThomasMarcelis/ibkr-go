@@ -265,13 +265,14 @@ func sendReqAllOpenOrders(conn net.Conn) error {
 // --- Executions (msg_id=7) ---
 //
 //	[7, version=3, reqId, filter.clientId, filter.acctCode, filter.time,
-//	 filter.symbol, filter.secType, filter.exchange, filter.side]
+//	 filter.symbol, filter.secType, filter.exchange, filter.side,
+//	 filter.lastNDays, filter.specificDatesCount]
 //
 // filter.clientId is an int on the wire; sending "0" matches the ibapi
 // ExecutionFilter default and means "no filter". Empty string fails int
 // parsing on the server and causes the request to be silently dropped.
 func sendReqExecutions(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"7", "3", strconv.Itoa(reqID), "0", "", "", "", "", "", ""})
+	return sendMessage(conn, []string{"7", "3", strconv.Itoa(reqID), "0", "", "", "", "", "", "", "2147483647", "0"})
 }
 
 // --- Market data type (msg_id=59) ---

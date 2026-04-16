@@ -1,0 +1,30 @@
+# Grounded by live API capture captures/20260415T150535Z-api_tif_attribute_matrix_aapl.
+# server_version=200, events.jsonl sha256 prefix: e6601dcc2abfd001.
+# Account, perm, and execution identifiers are sanitized; the GTC cancel and
+# trailing-percent fill sequence preserves live paper Gateway behavior observed
+# on 2026-04-15.
+handshake {"server_version":200,"connection_time":"20260415 17:05:52 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":246}
+
+client place_order {"order_id":"246","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"10","tif":"GTC","account":"DU9000001"}
+server open_order {"order_id":246,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"10.00","aux_price":"0","tif":"GTC","perm_id":"142600","client_id":"1","origin":"0"}
+server order_status {"order_id":246,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"142600","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":246,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"10.00","aux_price":"0","tif":"GTC","perm_id":"142600","client_id":"1","origin":"0"}
+server order_status {"order_id":246,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"142600","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+client cancel_order {"field_count":"5","order_id":"246","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":246,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"142600","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":246,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776265604000"}
+
+client place_order {"order_id":"247","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"1","order_type":"TRAIL","tif":"DAY","account":"DU9000001","trailing_percent":"1.5"}
+server open_order {"order_id":247,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"TRAIL","quantity":"1","filled":"0","remaining":"0","lmt_price":"2000.03","aux_price":"0","tif":"DAY","perm_id":"142601","client_id":"1","origin":"0"}
+server order_status {"order_id":247,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"142601","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"trigger","mkt_cap_price":"0"}
+server open_order {"order_id":247,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"TRAIL","quantity":"1","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"142601","client_id":"1","origin":"0"}
+server order_status {"order_id":247,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"142601","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":247,"exec_id":"0000dc8f.6a313731.01.01","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"1","price":"263.88","time":"2026-04-15T15:07:09Z"}
+server open_order {"order_id":247,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"TRAIL","quantity":"1","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"142601","client_id":"1","origin":"0"}
+server order_status {"order_id":247,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"263.88","perm_id":"142601","parent_id":"0","last_fill_price":"263.88","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"0000dc8f.6a313731.01.01","commission":"1","currency":"USD","realized_pnl":"0"}
+
+sleep 100ms
+disconnect

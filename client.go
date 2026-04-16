@@ -36,19 +36,38 @@ func (c *Client) CurrentTime(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTime(ctx)
 }
 
-func (c *Client) Accounts() AccountsClient   { return AccountsClient{engine: c.engine} }
+// Accounts returns the sub-client for account values, positions, and PnL.
+func (c *Client) Accounts() AccountsClient { return AccountsClient{engine: c.engine} }
+
+// Contracts returns the sub-client for contract search, qualification, and details.
 func (c *Client) Contracts() ContractsClient { return ContractsClient{engine: c.engine} }
-func (c *Client) MarketData() MarketDataClient {
-	return MarketDataClient{engine: c.engine}
-}
-func (c *Client) History() HistoryClient   { return HistoryClient{engine: c.engine} }
-func (c *Client) Orders() OrdersClient     { return OrdersClient{engine: c.engine} }
-func (c *Client) Options() OptionsClient   { return OptionsClient{engine: c.engine} }
-func (c *Client) News() NewsClient         { return NewsClient{engine: c.engine} }
-func (c *Client) Scanner() ScannerClient   { return ScannerClient{engine: c.engine} }
+
+// MarketData returns the sub-client for live quotes, ticks, and market depth.
+func (c *Client) MarketData() MarketDataClient { return MarketDataClient{engine: c.engine} }
+
+// History returns the sub-client for historical bars, tick data, and schedules.
+func (c *Client) History() HistoryClient { return HistoryClient{engine: c.engine} }
+
+// Orders returns the sub-client for placing, cancelling, modifying, and observing orders.
+func (c *Client) Orders() OrdersClient { return OrdersClient{engine: c.engine} }
+
+// Options returns the sub-client for option chains and calculation.
+func (c *Client) Options() OptionsClient { return OptionsClient{engine: c.engine} }
+
+// News returns the sub-client for news providers, articles, and headlines.
+func (c *Client) News() NewsClient { return NewsClient{engine: c.engine} }
+
+// Scanner returns the sub-client for server-side market scanners.
+func (c *Client) Scanner() ScannerClient { return ScannerClient{engine: c.engine} }
+
+// Advisors returns the sub-client for Financial Advisor configuration (FA accounts).
 func (c *Client) Advisors() AdvisorsClient { return AdvisorsClient{engine: c.engine} }
-func (c *Client) WSH() WSHClient           { return WSHClient{engine: c.engine} }
-func (c *Client) TWS() TWSClient           { return TWSClient{engine: c.engine} }
+
+// WSH returns the sub-client for Wall Street Horizon calendar events.
+func (c *Client) WSH() WSHClient { return WSHClient{engine: c.engine} }
+
+// TWS returns the sub-client for display groups and TWS integration.
+func (c *Client) TWS() TWSClient { return TWSClient{engine: c.engine} }
 
 type AccountsClient struct{ engine *engine }
 

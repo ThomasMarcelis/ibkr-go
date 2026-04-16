@@ -660,7 +660,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			return "cancel_open_orders", map[string]any{}, nil
 		}
 		return "req_open_orders", map[string]any{"scope": "auto"}, nil
-	case 7: // OutReqExecutions: [7, 3, reqId, clientId, acct, time, symbol, secType, exchange, side]
+	case 7: // OutReqExecutions: [7, 3, reqId, clientId, acct, time, symbol, secType, exchange, side, lastNDays, datesCount]
 		body := map[string]any{}
 		if len(fields) >= 3 {
 			body["req_id"] = fields[2]

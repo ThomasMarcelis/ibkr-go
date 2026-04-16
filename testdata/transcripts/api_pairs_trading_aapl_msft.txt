@@ -1,0 +1,34 @@
+# Grounded by live API capture captures/20260415T161858Z-api_pairs_trading_aapl_msft.
+# server_version=200, events.jsonl sha256 prefix: 0dc806f7bb0868e8.
+# Account, perm, and execution identifiers are sanitized; paired entry, paired
+# flatten, symbols, quantities, statuses, and sides preserve live paper Gateway
+# behavior observed on 2026-04-15.
+handshake {"server_version":200,"connection_time":"20260415 18:18:59 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":278}
+
+client place_order {"order_id":"278","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"279","contract":{"con_id":"272093","symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":278,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"5","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"1426086007","client_id":"1","origin":"0"}
+server order_status {"order_id":278,"status":"PreSubmitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"1426086007","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":278,"exec_id":"0000e0d5.69e0429a.01.01","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"5","price":"265.46","time":"2026-04-15T16:19:00Z"}
+server order_status {"order_id":278,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"265.46","perm_id":"1426086007","parent_id":"0","last_fill_price":"265.46","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"0000e0d5.69e0429a.01.01","commission":"1","currency":"USD","realized_pnl":"0"}
+server open_order {"order_id":279,"account":"DU9000001","contract":{"con_id":272093,"symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"MSFT","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"5","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"1426086008","client_id":"1","origin":"0"}
+server order_status {"order_id":279,"status":"Submitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"1426086008","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":279,"exec_id":"0000dc8f.6a316661.01.01","account":"DU9000001","symbol":"MSFT","side":"SLD","shares":"5","price":"408.55","time":"2026-04-15T16:19:00Z"}
+server order_status {"order_id":279,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"408.55","perm_id":"1426086008","parent_id":"0","last_fill_price":"408.55","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client place_order {"order_id":"280","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":280,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"5","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"1426086009","client_id":"1","origin":"0"}
+server order_status {"order_id":280,"status":"Submitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"1426086009","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":280,"exec_id":"0000dc8f.6a316664.01.01","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"5","price":"265.46","time":"2026-04-15T16:19:01Z"}
+server order_status {"order_id":280,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"265.46","perm_id":"1426086009","parent_id":"0","last_fill_price":"265.46","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client place_order {"order_id":"281","contract":{"con_id":"272093","symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":281,"account":"DU9000001","contract":{"con_id":272093,"symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"MSFT","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"5","filled":"0","remaining":"0","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"1426086010","client_id":"1","origin":"0"}
+server order_status {"order_id":281,"status":"PreSubmitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"1426086010","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":281,"exec_id":"00025b45.69e2eb6b.01.01","account":"DU9000001","symbol":"MSFT","side":"BOT","shares":"5","price":"408.58","time":"2026-04-15T16:19:01Z"}
+server order_status {"order_id":281,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"408.58","perm_id":"1426086010","parent_id":"0","last_fill_price":"408.58","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+disconnect

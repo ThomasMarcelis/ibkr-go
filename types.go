@@ -354,6 +354,8 @@ type HistoricalBarsRequest struct {
 	UseRTH     bool
 }
 
+// Bar is an OHLCV price bar for a single time interval, returned by
+// historical and real-time bar requests.
 type Bar struct {
 	Time   time.Time
 	Open   decimal.Decimal
@@ -465,6 +467,9 @@ func (t MarketDataType) String() string {
 	}
 }
 
+// Quote is a snapshot of the current market quote fields for a contract.
+// Available tracks which fields have been populated by the server; unpopulated
+// fields remain at their zero value.
 type Quote struct {
 	Available      QuoteFields
 	Bid            decimal.Decimal
@@ -566,6 +571,8 @@ type CommissionReport struct {
 	RealizedPNL decimal.Decimal
 }
 
+// Execution is a single trade execution report from the Gateway, carrying
+// the fill details for one leg of an order.
 type Execution struct {
 	OrderID int64
 	ExecID  string

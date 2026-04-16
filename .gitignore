@@ -38,6 +38,9 @@ coverage.html
 # Dependencies (only if vendoring is ever added)
 /vendor/
 
+# Private strategy docs (not for public repo)
+docs/private/
+
 # AI agent configuration (local development only)
 CLAUDE.md
 GEMINI.md

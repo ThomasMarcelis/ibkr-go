@@ -2369,6 +2369,13 @@ func newClient(t *testing.T, script string, opts ...ibkr.Option) (*ibkr.Client, 
 	t.Helper()
 
 	host := newHost(t, script)
+	client := dialHostClient(t, host, opts...)
+	return client, host
+}
+
+func dialHostClient(t *testing.T, host *testhost.Host, opts ...ibkr.Option) *ibkr.Client {
+	t.Helper()
+
 	addrHost, addrPort, err := net.SplitHostPort(host.Addr())
 	if err != nil {
 		t.Fatalf("SplitHostPort() error = %v", err)
@@ -2392,7 +2399,7 @@ func newClient(t *testing.T, script string, opts ...ibkr.Option) (*ibkr.Client, 
 	if err != nil {
 		t.Fatalf("DialContext() error = %v", err)
 	}
-	return client, host
+	return client
 }
 
 func newHost(t *testing.T, script string) *testhost.Host {
@@ -3570,6 +3577,813 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 	fokFarStatuses := waitOrderStatuses(t, ctx, fokFar)
 	if !hasOrderStatus(fokFarStatuses, ibkr.OrderStatusInactive) {
 		t.Fatalf("FOK far statuses = %v, want Inactive from live capture", fokFarStatuses)
+	}
+}
+
+func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_tif_attribute_matrix_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	gtc, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("10"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("GTC PlaceOrder: %v", err)
+	}
+	for {
+		evt := waitForEvent(t, gtc.Events())
+		if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusSubmitted {
+			break
+		}
+	}
+	if err := gtc.Cancel(ctx); err != nil {
+		t.Fatalf("GTC Cancel: %v", err)
+	}
+	gtcStatuses := waitOrderStatuses(t, ctx, gtc)
+	if !hasOrderStatus(gtcStatuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("GTC statuses = %v, want Cancelled from live capture", gtcStatuses)
+	}
+
+	trailing, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:          ibkr.Sell,
+			OrderType:       ibkr.OrderTypeTrailingStop,
+			Quantity:        decimal.RequireFromString("1"),
+			TIF:             ibkr.TIFDay,
+			Account:         "DU9000001",
+			TrailStopPrice:  decimal.RequireFromString("2000"),
+			TrailingPercent: decimal.RequireFromString("1.5"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("TrailingPercent PlaceOrder: %v", err)
+	}
+	var sawExecution, sawFilled bool
+	for {
+		select {
+		case evt, ok := <-trailing.Events():
+			if !ok {
+				goto trailingDone
+			}
+			if evt.Execution != nil {
+				sawExecution = true
+			}
+			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+				sawFilled = true
+			}
+		case <-trailing.Done():
+			for {
+				select {
+				case evt, ok := <-trailing.Events():
+					if !ok {
+						goto trailingDone
+					}
+					if evt.Execution != nil {
+						sawExecution = true
+					}
+					if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+						sawFilled = true
+					}
+				default:
+					goto trailingDone
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for trailing-percent live replay")
+		}
+	}
+
+trailingDone:
+	if !sawExecution {
+		t.Fatal("never received trailing-percent execution from live capture")
+	}
+	if !sawFilled {
+		t.Fatal("never received trailing-percent Filled status from live capture")
+	}
+	if err := trailing.Wait(); err != nil {
+		t.Fatalf("TrailingPercent Wait: %v", err)
+	}
+}
+
+func TestAPIStopLossManagementAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_stop_loss_management_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	buy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("entry PlaceOrder: %v", err)
+	}
+	buyFilled, buyExecution := waitOrderFillAndExecution(t, ctx, buy)
+	if !buyFilled || !buyExecution {
+		t.Fatalf("entry filled=%v execution=%v, want both true", buyFilled, buyExecution)
+	}
+
+	stopOrder := ibkr.Order{
+		Action:    ibkr.Sell,
+		OrderType: ibkr.OrderTypeStop,
+		Quantity:  decimal.RequireFromString("1"),
+		AuxPrice:  decimal.RequireFromString("13.13"),
+		TIF:       ibkr.TIFDay,
+		Account:   "DU9000001",
+	}
+	stop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: contract, Order: stopOrder})
+	if err != nil {
+		t.Fatalf("stop PlaceOrder: %v", err)
+	}
+	waitForOrderStatus(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
+
+	stopOrder.AuxPrice = decimal.RequireFromString("14.13")
+	if err := stop.Modify(ctx, stopOrder); err != nil {
+		t.Fatalf("stop Modify: %v", err)
+	}
+	waitForOrderStatus(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
+
+	if err := stop.Cancel(ctx); err != nil {
+		t.Fatalf("stop Cancel: %v", err)
+	}
+	stopStatuses := waitOrderStatuses(t, ctx, stop)
+	if !hasOrderStatus(stopStatuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("stop statuses = %v, want Cancelled from live capture", stopStatuses)
+	}
+
+	flatten, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("flatten PlaceOrder: %v", err)
+	}
+	flatFilled, flatExecution := waitOrderFillAndExecution(t, ctx, flatten)
+	if !flatFilled || !flatExecution {
+		t.Fatalf("flatten filled=%v execution=%v, want both true", flatFilled, flatExecution)
+	}
+}
+
+func TestAPIDollarCostAveragingAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_dollar_cost_averaging_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	for i := 0; i < 3; i++ {
+		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+			Contract: contract,
+			Order: ibkr.Order{
+				Action:    ibkr.Buy,
+				OrderType: ibkr.OrderTypeMarket,
+				Quantity:  decimal.RequireFromString("5"),
+				TIF:       ibkr.TIFDay,
+				Account:   "DU9000001",
+			},
+		})
+		if err != nil {
+			t.Fatalf("DCA buy[%d] PlaceOrder: %v", i, err)
+		}
+		filled, execution := waitOrderFillAndExecution(t, ctx, handle)
+		if !filled || !execution {
+			t.Fatalf("DCA buy[%d] filled=%v execution=%v, want both true", i, filled, execution)
+		}
+	}
+
+	flatten, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("15"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("DCA flatten PlaceOrder: %v", err)
+	}
+	filled, execution := waitOrderFillAndExecution(t, ctx, flatten)
+	if !filled || !execution {
+		t.Fatalf("DCA flatten filled=%v execution=%v, want both true", filled, execution)
+	}
+}
+
+func TestAPIPairsTradingAAPLMSFTReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_pairs_trading_aapl_msft.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	aapl := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+	msft := ibkr.Contract{
+		ConID:    272093,
+		Symbol:   "MSFT",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	aaplBuy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: aapl,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("AAPL pair entry PlaceOrder: %v", err)
+	}
+	msftSell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: msft,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("MSFT pair entry PlaceOrder: %v", err)
+	}
+	for _, entry := range []struct {
+		label  string
+		handle *ibkr.OrderHandle
+	}{
+		{label: "AAPL entry", handle: aaplBuy},
+		{label: "MSFT entry", handle: msftSell},
+	} {
+		filled, execution := waitOrderFillAndExecution(t, ctx, entry.handle)
+		if !filled || !execution {
+			t.Fatalf("%s filled=%v execution=%v, want both true", entry.label, filled, execution)
+		}
+	}
+
+	aaplSell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: aapl,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("AAPL pair flatten PlaceOrder: %v", err)
+	}
+	filled, execution := waitOrderFillAndExecution(t, ctx, aaplSell)
+	if !filled || !execution {
+		t.Fatalf("AAPL flatten filled=%v execution=%v, want both true", filled, execution)
+	}
+
+	msftBuy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: msft,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("MSFT pair flatten PlaceOrder: %v", err)
+	}
+	filled, execution = waitOrderFillAndExecution(t, ctx, msftBuy)
+	if !filled || !execution {
+		t.Fatalf("MSFT flatten filled=%v execution=%v, want both true", filled, execution)
+	}
+}
+
+func TestAPICompletedOrdersVariantsAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_completed_orders_variants_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	buy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("entry PlaceOrder: %v", err)
+	}
+	buyFilled, buyExecution := waitOrderFillAndExecution(t, ctx, buy)
+	if !buyFilled || !buyExecution {
+		t.Fatalf("entry filled=%v execution=%v, want both true", buyFilled, buyExecution)
+	}
+
+	sell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("flatten PlaceOrder: %v", err)
+	}
+	sellFilled, sellExecution := waitOrderFillAndExecution(t, ctx, sell)
+	if !sellFilled || !sellExecution {
+		t.Fatalf("flatten filled=%v execution=%v, want both true", sellFilled, sellExecution)
+	}
+
+	allCompleted, err := client.Orders().Completed(ctx, false)
+	if err != nil {
+		t.Fatalf("Completed(false): %v", err)
+	}
+	if len(allCompleted) != 1 {
+		t.Fatalf("Completed(false) len = %d, want 1", len(allCompleted))
+	}
+	if allCompleted[0].Contract.Symbol != "AAPL" || allCompleted[0].Status != ibkr.OrderStatusFilled {
+		t.Fatalf("Completed(false)[0] = %+v, want filled AAPL order", allCompleted[0])
+	}
+
+	apiCompleted, err := client.Orders().Completed(ctx, true)
+	if err != nil {
+		t.Fatalf("Completed(true): %v", err)
+	}
+	if len(apiCompleted) != 1 {
+		t.Fatalf("Completed(true) len = %d, want 1", len(apiCompleted))
+	}
+	if apiCompleted[0].Contract.Symbol != "AAPL" || apiCompleted[0].Status != ibkr.OrderStatusFilled {
+		t.Fatalf("Completed(true)[0] = %+v, want filled AAPL order", apiCompleted[0])
+	}
+}
+
+func TestAPIFutureCampaignMESReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_future_campaign_mes.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    770561194,
+		Symbol:   "MES",
+		SecType:  ibkr.SecTypeFuture,
+		Exchange: "CME",
+		Currency: "USD",
+	}
+
+	buy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("future buy PlaceOrder: %v", err)
+	}
+	buyFilled, buyExecution := waitOrderFillAndExecution(t, ctx, buy)
+	if !buyFilled || !buyExecution {
+		t.Fatalf("future buy filled=%v execution=%v, want both true", buyFilled, buyExecution)
+	}
+
+	sell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("future flatten PlaceOrder: %v", err)
+	}
+	sellFilled, sellExecution := waitOrderFillAndExecution(t, ctx, sell)
+	if !sellFilled || !sellExecution {
+		t.Fatalf("future flatten filled=%v execution=%v, want both true", sellFilled, sellExecution)
+	}
+}
+
+func TestAPIReconnectActiveOrderAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "api_reconnect_active_order_aapl.txt")
+	defer waitHost(t, host)
+
+	first := dialHostClient(t, host, ibkr.WithClientID(1))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := first.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("10"),
+			LmtPrice:  decimal.RequireFromString("13.27"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("first Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	if err := first.Close(); err != nil {
+		t.Fatalf("first Close: %v", err)
+	}
+
+	second := dialHostClient(t, host, ibkr.WithClientID(1))
+	defer second.Close()
+
+	orders, err := second.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
+	if err != nil {
+		t.Fatalf("second Open(client): %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("open orders len = %d, want 1", len(orders))
+	}
+	if orders[0].OrderID != handle.OrderID() || orders[0].TIF != ibkr.TIFGTC || orders[0].Quantity.String() != "10" {
+		t.Fatalf("open order = %+v, want reconnected GTC order %d qty 10", orders[0], handle.OrderID())
+	}
+	if err := second.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+		t.Fatalf("second Cancel: %v", err)
+	}
+	waitHost(t, host)
+}
+
+func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_order_handle_reconnect_cancel_aapl.txt",
+		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("10"),
+			LmtPrice:  decimal.RequireFromString("13.27"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+
+	gap := waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionGap)
+	if gap.ConnectionSeq != 1 {
+		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
+	}
+	resumed := waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionResumed)
+	if resumed.ConnectionSeq != 2 {
+		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
+	}
+
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel after reconnect: %v", err)
+	}
+	statuses := waitOrderStatuses(t, ctx, handle)
+	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("statuses = %v, want Cancelled after reconnect", statuses)
+	}
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
+}
+
+func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "api_client_id0_order_observation_aapl.txt")
+	defer waitHost(t, host)
+
+	placer := dialHostClient(t, host, ibkr.WithClientID(1))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("10"),
+			LmtPrice:  decimal.RequireFromString("13.27"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("placer Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	if err := placer.Close(); err != nil {
+		t.Fatalf("placer Close: %v", err)
+	}
+
+	observer := dialHostClient(t, host, ibkr.WithClientID(0))
+	defer observer.Close()
+
+	orders, err := observer.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
+	if err != nil {
+		t.Fatalf("client0 Open(all): %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("client0 open orders len = %d, want 1", len(orders))
+	}
+	if orders[0].OrderID != handle.OrderID() || orders[0].ClientID != 1 {
+		t.Fatalf("client0 open order = %+v, want original client order %d", orders[0], handle.OrderID())
+	}
+	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+		t.Fatalf("client0 Cancel: %v", err)
+	}
+	waitHost(t, host)
+}
+
+func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "api_cross_client_cancel_aapl.txt")
+	defer waitHost(t, host)
+
+	placer := dialHostClient(t, host, ibkr.WithClientID(1))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("10"),
+			LmtPrice:  decimal.RequireFromString("13.27"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("placer Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	if err := placer.Close(); err != nil {
+		t.Fatalf("placer Close: %v", err)
+	}
+
+	canceller := dialHostClient(t, host, ibkr.WithClientID(2))
+	defer canceller.Close()
+
+	orders, err := canceller.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
+	if err != nil {
+		t.Fatalf("client2 Open(all): %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("client2 open orders len = %d, want 1", len(orders))
+	}
+	if orders[0].OrderID != handle.OrderID() || orders[0].ClientID != 1 {
+		t.Fatalf("client2 open order = %+v, want original client order %d", orders[0], handle.OrderID())
+	}
+	if err := canceller.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+		t.Fatalf("client2 Cancel: %v", err)
+	}
+	waitHost(t, host)
+}
+
+func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_transmit_false_then_transmit_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	order := ibkr.Order{
+		Action:    ibkr.Buy,
+		OrderType: ibkr.OrderTypeLimit,
+		Quantity:  decimal.RequireFromString("10"),
+		LmtPrice:  decimal.RequireFromString("13.26"),
+		TIF:       ibkr.TIFDay,
+		Account:   "DU9000001",
+		Transmit:  new(false),
+	}
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: order,
+	})
+	if err != nil {
+		t.Fatalf("Transmit=false Place: %v", err)
+	}
+
+	order.Transmit = new(true)
+	if err := handle.Modify(ctx, order); err != nil {
+		t.Fatalf("Transmit=true Modify: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	statuses := waitOrderStatuses(t, ctx, handle)
+	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("statuses = %v, want Cancelled from live capture", statuses)
+	}
+}
+
+func waitForOrderStatus(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle, want ibkr.OrderStatus) {
+	t.Helper()
+
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				t.Fatalf("order events closed before status %s", want)
+			}
+			if evt.Status != nil && evt.Status.Status == want {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("timeout waiting for order status %s", want)
+		}
+	}
+}
+
+func waitOrderFillAndExecution(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) (bool, bool) {
+	t.Helper()
+
+	var filled bool
+	var execution bool
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				return filled, execution
+			}
+			if evt.Execution != nil {
+				execution = true
+			}
+			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+				filled = true
+			}
+		case <-handle.Done():
+			for {
+				select {
+				case evt, ok := <-handle.Events():
+					if !ok {
+						return filled, execution
+					}
+					if evt.Execution != nil {
+						execution = true
+					}
+					if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
+						filled = true
+					}
+				default:
+					return filled, execution
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for order fill")
+		}
 	}
 }
 

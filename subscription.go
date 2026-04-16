@@ -6,6 +6,13 @@ import (
 	"time"
 )
 
+// Subscription is a live stream of typed events from the Gateway. Business
+// events arrive on [Subscription.Events]; lifecycle state changes (gaps,
+// resumes, close) arrive on [Subscription.Lifecycle]. Call [Subscription.Close]
+// to cancel the server-side subscription and drain channels.
+// [Subscription.AwaitSnapshot] blocks until the initial snapshot boundary,
+// [Subscription.Wait] blocks until the subscription closes, and
+// [Subscription.Err] returns the terminal error without blocking.
 type Subscription[T any] struct {
 	events         chan T
 	state          *observer[SubscriptionStateEvent]

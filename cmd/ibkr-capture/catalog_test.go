@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/shopspring/decimal"
 )
 
 func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
@@ -126,6 +128,58 @@ func TestReplayBatches(t *testing.T) {
 	}
 }
 
+func TestExhaustiveBatchesArePopulated(t *testing.T) {
+	t.Parallel()
+
+	for _, batch := range []string{
+		batchExhaustiveReadOnly,
+		batchExhaustiveTrading,
+		batchExhaustiveMarketHours,
+		batchExhaustivePremarket,
+		batchExhaustivePermissionProbes,
+	} {
+		var buf bytes.Buffer
+		if err := writeBatchList(&buf, batch); err != nil {
+			t.Fatalf("writeBatchList(%s) error = %v", batch, err)
+		}
+		if strings.TrimSpace(buf.String()) == "" {
+			t.Fatalf("%s batch is empty", batch)
+		}
+	}
+}
+
+func TestExhaustivePlanScenariosAreCatalogued(t *testing.T) {
+	t.Parallel()
+
+	for _, name := range []string{
+		"api_tif_attribute_matrix_aapl",
+		"api_security_type_probe_matrix",
+		"api_market_data_completeness_aapl",
+		"api_historical_matrix_aapl",
+		"api_news_article_aapl",
+		"api_fundamental_reports_aapl",
+		"api_wsh_variants_aapl",
+		"api_algo_variants_aapl",
+		"api_completed_orders_variants_aapl",
+		"api_transmit_false_then_transmit_aapl",
+		"api_duplicate_quote_subscriptions_aapl",
+		"api_reconnect_active_order_aapl",
+		"api_client_id0_order_observation_aapl",
+		"api_cross_client_cancel_aapl",
+		"api_pairs_trading_aapl_msft",
+		"api_dollar_cost_averaging_aapl",
+		"api_stop_loss_management_aapl",
+		"api_bracket_trailing_stop_aapl",
+	} {
+		if _, ok := scenarios[name]; !ok {
+			t.Fatalf("scenario %q missing from executable scenario map", name)
+		}
+		if _, ok := scenarioMetadataByName[name]; !ok {
+			t.Fatalf("scenario %q missing catalog metadata", name)
+		}
+	}
+}
+
 func TestOrderTypeMatrixCoversPublicOrderTypes(t *testing.T) {
 	t.Parallel()
 
@@ -151,5 +205,39 @@ func TestOrderTypeMatrixCoversPublicOrderTypes(t *testing.T) {
 		if !strings.Contains(text, orderType) {
 			t.Fatalf("api_order_type_matrix_aapl expected outcomes missing %q", orderType)
 		}
+	}
+}
+
+func TestAggressivePaperSizingDefaults(t *testing.T) {
+	t.Parallel()
+
+	if got := apiStockOrderQuantity.String(); got != "100" {
+		t.Fatalf("apiStockOrderQuantity = %s, want 100", got)
+	}
+	if got := apiStockCampaignOrderQuantity.String(); got != "500" {
+		t.Fatalf("apiStockCampaignOrderQuantity = %s, want 500", got)
+	}
+	if got := apiOptionContractQuantity.String(); got != "5" {
+		t.Fatalf("apiOptionContractQuantity = %s, want 5", got)
+	}
+}
+
+func TestOrderObservationMergeAccumulatesExecutionQuantities(t *testing.T) {
+	t.Parallel()
+
+	first := orderObservation{executionQty: decimal.NewFromInt(200)}
+	first.refreshFilledQty()
+	second := orderObservation{executionQty: decimal.NewFromInt(150)}
+	second.refreshFilledQty()
+	first.Merge(second)
+	if got := first.filledQty.String(); got != "350" {
+		t.Fatalf("merged execution filledQty = %s, want 350", got)
+	}
+
+	status := orderObservation{statusQty: decimal.NewFromInt(500)}
+	status.refreshFilledQty()
+	first.Merge(status)
+	if got := first.filledQty.String(); got != "500" {
+		t.Fatalf("status filledQty = %s, want 500", got)
 	}
 }

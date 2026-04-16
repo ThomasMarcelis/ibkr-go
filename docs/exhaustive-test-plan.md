@@ -19,6 +19,13 @@ A capability is **complete** when all three layers exist:
 
 The goal is to reach this standard for every row below.
 
+Executable batches now map this plan to `cmd/ibkr-capture` runs:
+`exhaustive-read-only`, `exhaustive-trading`,
+`exhaustive-market-hours`, `exhaustive-premarket`, and
+`exhaustive-permission-probes`. These batches are generated from the scenario
+catalog so new live probes remain discoverable and replay promotion can follow
+the same capture pipeline.
+
 ## 1. Protocol Messages
 
 Every outbound and inbound message ID must have at least one live-grounded
@@ -169,10 +176,10 @@ basics are untested. MOO/LOO need pre-market timing.
 | TIF | Tested | Gap |
 |-----|--------|-----|
 | DAY | yes (default) | |
-| GTC | no | need rest + cancel + verify persists after session |
+| GTC | yes | live capture + replay promoted; reconnect persistence still needed |
 | IOC | yes | |
 | FOK | yes | |
-| GTD | no | need GoodTillDate field + verify expiry |
+| GTD | partial | live capture exists; expiry behavior replay still needed |
 | OPG | no | need pre-market run (MOO/LOO use this) |
 | DTC | no | niche; probe whether gateway accepts it |
 
@@ -276,20 +283,20 @@ Probe each: place → check for rejection or acceptance.
 | SecType | Constant | Live Test | Capture | Transcript | Blocker |
 |---------|----------|-----------|---------|------------|---------|
 | STK | SecTypeStock | yes | yes | yes | — |
-| OPT | SecTypeOption | blocked | blocked | no | OPRA data subscription |
-| FUT | SecTypeFuture | yes | yes | no | — |
-| FOP | SecTypeFutureOption | no | no | no | OPT permissions |
+| OPT | SecTypeOption | partial | yes | no | 2026-04-15 broad chain probe timed out; use narrower qualified option probe or OPRA |
+| FUT | SecTypeFuture | yes | yes | yes | MES futures buy/flatten replay promoted |
+| FOP | SecTypeFutureOption | partial | yes | no | 2026-04-15 broad probe timed out; qualify concrete FOP |
 | CASH | SecTypeForex | yes | yes | no | — |
 | BAG | SecTypeCombo | blocked | blocked | no | depends on OPT |
-| BOND | SecTypeBond | no | no | no | bond data subscription |
-| CFD | SecTypeCFD | no | no | no | CFD permissions |
-| WAR | SecTypeWarrant | no | no | no | non-US exchange access |
-| IND | SecTypeIndex | partial (quotes) | partial | partial | read-only (no orders) |
-| CRYPTO | SecTypeCrypto | no | no | no | crypto trading permissions |
-| FUND | SecTypeFund | no | no | no | fund trading permissions |
-| BILL | SecTypeBill | no | no | no | treasury access |
-| CMDTY | SecTypeCommodity | no | no | no | commodity permissions |
-| CONTFUT | SecTypeContFuture | no | no | no | continuous future data |
+| BOND | SecTypeBond | yes | yes | no | placeholder CUSIP returned real code 200; replace with concrete bond |
+| CFD | SecTypeCFD | yes | yes | no | order permissions still unknown |
+| WAR | SecTypeWarrant | partial | yes | no | 2026-04-15 probe timed out; needs concrete warrant |
+| IND | SecTypeIndex | yes | yes | partial | read-only (no orders) |
+| CRYPTO | SecTypeCrypto | yes | yes | no | order permissions still unknown |
+| FUND | SecTypeFund | yes | yes | no | mutual-fund order path still unknown |
+| BILL | SecTypeBill | yes | yes | no | placeholder returned real code 200; replace with concrete bill |
+| CMDTY | SecTypeCommodity | yes | yes | no | order/data permissions still unknown |
+| CONTFUT | SecTypeContFuture | yes | yes | no | read-only continuous future details |
 
 **Action per blocked type:** Attempt `Contracts().Details` to get the gateway's
 rejection. Freeze the error as a `blocked` transcript.
@@ -309,11 +316,11 @@ tests.
 | Modify resting to fill | live test | price modification → fill |
 | Cancel after fill (rejected) | live test | terminal state protection |
 | WhatIf margin preview | live test | no execution, commission data |
-| Reconnect with active orders | no | **critical gap** — handle survives disconnect |
+| Reconnect with active orders | replay promoted | `api_reconnect_active_order_aapl.txt` freezes live GTC visibility/cancel after reconnect; `api_order_handle_reconnect_cancel_aapl.txt` freezes original handle Gap/Resumed + cancel |
 | Reconnect with active subscriptions + orders | no | mixed lifecycle across reconnect |
-| Multi-client same account | no | client_id isolation |
-| Client ID 0 order observation | no | observes all clients' orders |
-| Place from client A, cancel from client B | no | cross-client cancel |
+| Multi-client same account | replay promoted | `api_cross_client_cancel_aapl.txt` freezes client ID 2 observing/cancelling client ID 1 order |
+| Client ID 0 order observation | replay promoted | `api_client_id0_order_observation_aapl.txt` freezes client ID 0 all-open-orders observation/cancel |
+| Place from client A, cancel from client B | replay promoted | `api_cross_client_cancel_aapl.txt` |
 | Order + quote + PnL concurrent | live test | multiplexed subscriptions + orders |
 | Rapid fire 10 orders + CancelAll | live test | throughput stress |
 | Concurrent modify + cancel race | live test | no panic/deadlock |
@@ -414,7 +421,7 @@ tests.
 | PnL: account-level | yes | |
 | PnL: single-position | yes | with open position |
 | Family codes | yes | multi-family account |
-| Completed orders: apiOnly filter | no | |
+| Completed orders: apiOnly filter | replay promoted | `api_completed_orders_variants_aapl` recaptured after the TRAIL LIMIT completed-order decode fix; apiOnly=false and apiOnly=true both reached `completedOrdersEnd` |
 | Completed orders: full details | no | deferred |
 
 ## 10. Error and Edge Case Coverage
@@ -458,8 +465,8 @@ tests.
 | Bootstrap missing managed_accounts | yes (transcript) | |
 | Concurrent one-shots | yes (transcript) | |
 | Reconnect multi-cycle | yes (transcript) | |
-| Reconnect with active order handle | no | **critical gap** |
-| Reconnect with open-orders observer | no | **critical gap** |
+| Reconnect with active order handle | replay promoted | GTC order survives reconnect; original in-memory handle emits Gap/Resumed and cancels after reconnect |
+| Reconnect with open-orders observer | partial | client/all open-orders after reconnect captured and replay promoted |
 | Server version negotiation edge | no | near-boundary version |
 
 ### 10.3 Library API edge cases
@@ -497,6 +504,12 @@ tests.
 - [ ] OrderRef echo verification
 - [ ] Adaptive Urgent and Patient variants
 
+Progress: `api_tif_attribute_matrix_aapl` was added and live-captured on
+2026-04-15 (`e6601dcc2abfd001`). `api_tif_attribute_matrix_aapl.txt` promotes
+the GTC rest/cancel and trailing-percent fill slices. Remaining Phase 2 work is
+focused replay promotion for the other accepted/rejected attributes and
+reconnect/expiry assertions.
+
 ### Phase 3: Condition type expansion
 
 - [ ] Time condition (fire after specific time)
@@ -524,6 +537,14 @@ tests.
 - [ ] Reconnect with active PnL subscription
 - [ ] Reconnect during order placement
 
+Progress: `api_reconnect_active_order_aapl` was live-captured on 2026-04-15
+(`9d72a4711c25c788`) and promoted as `api_reconnect_active_order_aapl.txt`.
+It freezes a real GTC order visible after reconnect and direct cancellation
+from the reconnected client. `api_order_handle_reconnect_cancel_aapl.txt`
+adds deterministic replay coverage for the original in-memory `OrderHandle`
+emitting Gap/Resumed and cancelling after reconnect, grounded in the same live
+capture.
+
 ### Phase 6: Advanced order features
 
 - [ ] Scale orders (init/subs/increment)
@@ -533,6 +554,14 @@ tests.
 - [ ] Volatility orders
 - [ ] TWAP/VWAP/ArrivalPx algos
 - [ ] FA allocation fields (needs FA account)
+
+Progress: `api_algo_variants_aapl` is now an executable live campaign for
+Adaptive Urgent/Patient, TWAP, VWAP, ArrivalPx, DarkIce, AccumDist, Inline,
+Close, PctVol, BalanceImpactRisk, MinImpact, and Jefferies-style AD variants.
+It was live-captured on 2026-04-15 (`1855e2554d7de3ae`): Adaptive Urgent,
+Adaptive Patient, VWAP, ArrivalPx, AccumDist, Close, and PctVol were accepted
+and cancelled; TWAP and several unavailable variants produced real Gateway
+rejections or no-status cleanup evidence.
 
 ### Phase 7: Market data completeness
 
@@ -554,20 +583,33 @@ tests.
 
 ### Phase 9: Protocol edge cases
 
-- [ ] Transmit=false then transmit (modify to transmit)
-- [ ] Two subscriptions same contract (singleton behavior)
-- [ ] Cross-client order observation (client_id=0)
+- [x] Transmit=false then transmit (modify to transmit)
+- [x] Two subscriptions same contract (singleton behavior)
+- [x] Cross-client order observation (client_id=0)
 - [ ] Server version boundary testing (sv=191 vs sv=192)
 - [ ] Bond contract details callback shape
 
+Progress: `api_transmit_false_then_transmit_aapl` was live-captured on
+2026-04-15 (`003abb59dfced542`) and replay-promoted. Duplicate quote
+subscriptions were live-captured the same day (`84f1e78a18616e0f`). Client ID 0
+and cross-client order observation/cancel were live-captured and replay-promoted
+from `5ff9cdc0f6f9b500` and `fcb7e811624e4aa9`.
+
 ### Phase 10: Multi-feature campaigns
 
-- [ ] Pairs trading workflow
-- [ ] Bracket with trailing stop-loss
-- [ ] Dollar-cost averaging
-- [ ] Stop-loss management (move as price advances)
+- [x] Pairs trading workflow (`api_pairs_trading_aapl_msft` captured 2026-04-15, replay-promoted from `0dc806f7bb0868e8`; aggressive 500-share live run/capture also completed with `86dc8f389a457efc`)
+- [ ] Bracket with trailing stop-loss (`api_bracket_trailing_stop_aapl` captured 2026-04-15, `2c0453360020a3ad`)
+- [x] Dollar-cost averaging (`api_dollar_cost_averaging_aapl` captured 2026-04-15, replay-promoted from `296bdf662eb84e30`)
+- [ ] Stop-loss management (move as price advances) (`api_stop_loss_management_aapl` captured 2026-04-15, `a563cafd26e366be`)
 - [ ] Full reconciliation (positions + executions + PnL match)
 - [ ] Options wheel (when OPT available)
+
+Progress: aggressive campaign defaults now use 500-share equity clips, 100-share
+standard probes, 5-lot option/BAG orders, and 100,000 EUR.USD forex notional.
+The 2026-04-15 aggressive pairs run exposed a live `reqExecutions` layout bug;
+server_version 200 requires `lastNDays=2147483647` and `specificDatesCount=0`,
+now frozen by codec/testhost regression coverage and a live one-share
+round-trip that returned 76 execution updates.
 
 ## 12. Blockers and Prerequisites
 
