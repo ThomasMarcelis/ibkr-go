@@ -1296,8 +1296,8 @@ type PlaceOrderRequest struct {
 	ParentID                string // "0" = no parent
 	BlockOrder              string
 	SweepToFill             string
-	DisplaySize             string
-	TriggerMethod           string
+	DisplaySize             string // always a decimal digit; "0" = unset iceberg display
+	TriggerMethod           string // always a decimal digit; "0" = Default
 	OutsideRTH              string
 	Hidden                  string
 	ComboLegs               []ComboLeg

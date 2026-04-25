@@ -123,3 +123,44 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 		}
 	}
 }
+
+// Default-int fields (send(int) in IBKR reference clients) must serialize to a
+// decimal digit even when the Order value is zero, because 0 is a semantic
+// value: TriggerMethod=0=Default, AdjustableTrailingUnit=0=Amount,
+// DisplaySize=0=unset iceberg display, OcaType=0=no OCA type. Scale-size
+// fields (sendMax(int)) keep the unset sentinel, matching the reference
+// clients' explicit-unset encoding.
+func TestToCodecPlaceOrderZeroIntFieldSemantics(t *testing.T) {
+	t.Parallel()
+
+	got := toCodecPlaceOrder(1, PlaceOrderRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+		Order: Order{
+			Action:    Buy,
+			OrderType: OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+		},
+	})
+
+	checks := map[string]string{
+		"OcaType":                got.OcaType,
+		"TriggerMethod":          got.TriggerMethod,
+		"DisplaySize":            got.DisplaySize,
+		"AdjustableTrailingUnit": got.AdjustableTrailingUnit,
+		"ScaleInitLevelSize":     got.ScaleInitLevelSize,
+		"ScaleSubsLevelSize":     got.ScaleSubsLevelSize,
+	}
+	want := map[string]string{
+		"OcaType":                "0",
+		"TriggerMethod":          "0",
+		"DisplaySize":            "0",
+		"AdjustableTrailingUnit": "0",
+		"ScaleInitLevelSize":     "",
+		"ScaleSubsLevelSize":     "",
+	}
+	for field, wantValue := range want {
+		if checks[field] != wantValue {
+			t.Fatalf("%s = %q, want %q", field, checks[field], wantValue)
+		}
+	}
+}

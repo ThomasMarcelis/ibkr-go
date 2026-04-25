@@ -691,7 +691,7 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 		strconv.FormatInt(o.ParentID, 10),
 		"0", // blockOrder
 		"0", // sweepToFill
-		"",  // displaySize
+		"0", // displaySize
 		"0", // triggerMethod
 		boolField(o.OutsideRTH),
 		"0", // hidden
@@ -832,13 +832,13 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 	}
 	// Adjusted order type fields.
 	fields = append(fields,
-		"", // adjustedOrderType
-		"", // triggerPrice
-		"", // lmtPriceOffset
-		"", // adjustedStopPrice
-		"", // adjustedStopLimitPrice
-		"", // adjustedTrailingAmount
-		"", // adjustableTrailingUnit
+		"",  // adjustedOrderType
+		"",  // triggerPrice
+		"",  // lmtPriceOffset
+		"",  // adjustedStopPrice
+		"",  // adjustedStopLimitPrice
+		"",  // adjustedTrailingAmount
+		"0", // adjustableTrailingUnit
 	)
 	fields = append(fields,
 		"",  // extOperator

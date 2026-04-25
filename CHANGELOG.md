@@ -4,6 +4,60 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Fixed
+
+- **Completed-order tail decoding is resilient to server_version 200 tail drift.**
+  Completed-order payloads include tail fields that must be validated against
+  the structural suffix before decoding; quantities now flatten to observed
+  filled values consistently.
+- **`ReqExecutions` matches the server_version 200 wire layout.** The v200
+  shape requires `lastNDays=2147483647` and `specificDatesCount=0`; codec,
+  testhost, and a live one-share round-trip freeze that contract.
+- **PlaceOrder default-int fields always serialize as decimal digits.**
+  `OcaType`, `TriggerMethod`, `DisplaySize`, and `AdjustableTrailingUnit`
+  follow IBKR reference clients' `send(int)` semantics: zero is a semantic
+  value, not unset. Scale-size fields keep the `sendMax(int)` empty-sentinel
+  encoding.
+
+## v1.4.5 — 2026-04-14
+
+### Changed (breaking)
+
+- **`minServerVersion` raised to require CME tagging on cancel requests.**
+  Gateway server_version 200 rejects individual and global cancel messages
+  without CME tagging fields. Older servers are refused at connect time.
+
+### Added
+
+- **Public `Order` exposes the full advanced-order field surface.** Live
+  capture scenarios now drive brackets, OCA, conditions, combos, and pegged
+  orders through the typed client API rather than raw protocol shims.
+- **Capture tooling records structured driver events and scenario
+  checkpoints.** `driver_events.jsonl`, multi-leg recorder support, transcript
+  skeleton generation in `ibkr-normalize`, and IOC/FOK plus pegged coverage
+  in the capture matrix.
+
+### Fixed
+
+- **Subscription and OrderHandle drain `Events()` before closing `Done()`.**
+  Consumers that drain events during teardown see every buffered execution
+  and commission before `Done()` fires; the select-on-Done race is closed.
+- **`OrderHandle` drains terminal routes briefly before closing.** Live
+  delayed-modify-to-market captures showed `Filled` can arrive before
+  execution and commission callbacks; the drain window preserves the full
+  terminal trail.
+- **Execution-time parsing handles Gateway's native format.**
+  `parseExecutionTime` accepts `"YYYYMMDD HH:MM:SS TZ_NAME"` alongside
+  RFC3339, fixing `ExecutionDetail` time extraction.
+- **`ExecutionDetail` decoder skips the currency field.** The contract block
+  includes a currency field between `exchange` and `localSymbol` that had
+  been misaligning `execID`, time, and side extraction.
+- **Code 202 is routed as a cancellation notice, not a request failure.**
+  Terminal order status remains authoritative; cancellation acknowledgements
+  no longer surface as order errors.
+
 ## v1.4.4
 
 ### Added

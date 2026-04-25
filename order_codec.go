@@ -20,15 +20,15 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 
 		TIF:                         string(req.Order.TIF),
 		OcaGroup:                    req.Order.OcaGroup,
-		OcaType:                     intOrEmpty(req.Order.OcaType),
+		OcaType:                     strconv.Itoa(req.Order.OcaType),
 		Account:                     req.Order.Account,
 		Origin:                      "0",
 		OrderRef:                    req.Order.OrderRef,
 		Transmit:                    optBoolToString(req.Order.Transmit, "1"),
 		ParentID:                    strconv.FormatInt(req.Order.ParentID, 10),
-		TriggerMethod:               intOrEmpty(req.Order.TriggerMethod),
+		TriggerMethod:               strconv.Itoa(req.Order.TriggerMethod),
 		OutsideRTH:                  boolToString(req.Order.OutsideRTH),
-		DisplaySize:                 intOrEmpty(req.Order.DisplaySize),
+		DisplaySize:                 strconv.Itoa(req.Order.DisplaySize),
 		ComboLegs:                   comboLegsToCodec(req.Order.ComboLegs),
 		OrderComboLegPrices:         append([]string(nil), req.Order.OrderComboLegPrices...),
 		SmartComboRoutingParams:     tagValuesToCodec(req.Order.SmartComboRoutingParams),
@@ -40,8 +40,8 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		PercentOffset:               decimalOrEmpty(req.Order.PercentOffset),
 		TrailStopPrice:              decimalOrEmpty(req.Order.TrailStopPrice),
 		TrailingPercent:             decimalOrEmpty(req.Order.TrailingPercent),
-		ScaleInitLevelSize:          intOrEmpty(req.Order.ScaleInitLevelSize),
-		ScaleSubsLevelSize:          intOrEmpty(req.Order.ScaleSubsLevelSize),
+		ScaleInitLevelSize:          scaleSizeOrEmpty(req.Order.ScaleInitLevelSize),
+		ScaleSubsLevelSize:          scaleSizeOrEmpty(req.Order.ScaleSubsLevelSize),
 		ScalePriceIncrement:         decimalOrEmpty(req.Order.ScalePriceIncrement),
 		ScaleTable:                  req.Order.ScaleTable,
 		ActiveStartTime:             req.Order.ActiveStartTime,
@@ -60,7 +60,7 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		AdjustedStopPrice:           decimalOrEmpty(req.Order.AdjustedStopPrice),
 		AdjustedStopLimitPrice:      decimalOrEmpty(req.Order.AdjustedStopLimitPrice),
 		AdjustedTrailingAmount:      decimalOrEmpty(req.Order.AdjustedTrailingAmount),
-		AdjustableTrailingUnit:      intOrEmpty(req.Order.AdjustableTrailingUnit),
+		AdjustableTrailingUnit:      strconv.Itoa(req.Order.AdjustableTrailingUnit),
 		CashQty:                     decimalOrEmpty(req.Order.CashQty),
 		DontUseAutoPriceForHedge:    optBoolToString(req.Order.DontUseAutoPriceForHedge, ""),
 		UsePriceMgmtAlgo:            optBoolToString(req.Order.UsePriceMgmtAlgo, ""),
@@ -77,7 +77,9 @@ func decimalOrEmpty(d decimal.Decimal) string {
 	return d.String()
 }
 
-func intOrEmpty(n int) string {
+// scaleSizeOrEmpty mirrors IBKR reference clients' sendMax(int): zero encodes
+// as an explicit-unset empty field for the scale-size sentinels.
+func scaleSizeOrEmpty(n int) string {
 	if n == 0 {
 		return ""
 	}

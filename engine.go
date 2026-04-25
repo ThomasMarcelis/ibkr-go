@@ -4617,6 +4617,11 @@ func (e *engine) closeEngine(err error) {
 	for id, or := range e.orders {
 		if !or.closed {
 			or.closed = true
+			// Terminal order status is authoritative for the handle's close (see
+			// docs/session-contract.md, "OrderHandle"). Session-level transport and
+			// reconnect errors stay observable via SessionEvents() and Client.Wait()
+			// and must not bleed into per-order Wait() once the order reached a
+			// terminal business state (see "Completion and Reconnect").
 			orderErr := err
 			if or.terminalCloseSeq > 0 {
 				orderErr = nil
