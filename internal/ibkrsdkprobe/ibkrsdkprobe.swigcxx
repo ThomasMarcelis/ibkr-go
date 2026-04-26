@@ -7,5 +7,4 @@
 %}
 
 %include "std_string.i"
-
-std::string IbkrSdkProbeCompileVersion();
+%include "ibkr_swig_probe.hpp"

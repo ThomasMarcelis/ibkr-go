@@ -143,15 +143,18 @@ Risks:
 - The helper script must discover:
   - `API_VersionNum.txt`,
   - C++ client headers, usually under `source/cppclient/client` or
-    `source/CppClient/client`,
+    `source/CppClient/client`, including `DefaultEWrapper.h`,
   - protobuf include directories such as `protobuf` or `protobufUnix`,
-  - `libTwsSocketClient.a`,
-  - protobuf linker flags.
+  - built C++ SDK library: `libTwsSocketClient.a`, `libTwsSocketClient.so`, or
+    `libtwsapi.so`,
+  - protobuf compiler and linker flags.
 - The branch must not add SDK source, generated copies of SDK source, or large
   generated SWIG output.
-- If the official SDK package does not ship a usable static library on Linux,
-  the next step is documenting the SDK build command rather than committing a
-  replacement build system.
+- The 10.46 Mac/Unix SDK ZIP ships source rather than a ready-to-use Linux SDK
+  library. In local verification, the usable output was
+  `source/cppclient/client/libTwsSocketClient.so`, built outside git tracking
+  after regenerating `protobufUnix` with the local `protoc` and linking the
+  externally built Intel decimal floating-point `libbid.a`.
 
 ## Runtime Architecture Requirements
 
@@ -170,6 +173,21 @@ The production-grade version, if pursued, needs a single ownership model:
   them.
 - Shutdown must be explicit: stop reader loop, disconnect socket, drain or mark
   routes failed, release C++ objects, then close Go channels.
+
+## Spike Implementation Status
+
+The current spike uses a narrow internal adapter, not a broad SDK wrapper:
+
+- `OfficialSDKProbe` is wrapped by SWIG and exposed only from
+  `internal/ibkrsdkprobe` behind `ibkr_swig && cgo && linux`.
+- C++ owns `EClientSocket`, `EReaderOSSignal`, `EReader`, the reader thread,
+  and a `DefaultEWrapper` subclass.
+- The C++ to Go boundary exposes copied strings, integers, account summary
+  rows, and SDK errors only. It does not call Go callbacks from the SDK reader
+  thread.
+- The live probe attempts bootstrap via `nextValidId` and `managedAccounts`,
+  requests `currentTime`, and then requests a read-only account summary if
+  bootstrap succeeds.
 
 ## Full Public Surface Mapping
 
@@ -261,7 +279,7 @@ eval "$(scripts/check-ibkr-swig-env.sh --print-env)"
 go test -tags=ibkr_swig ./internal/ibkrsdkprobe
 ```
 
-Future live probe:
+Live probe:
 
 ```sh
 IBKR_LIVE=1 \
@@ -279,6 +297,32 @@ mapping table:
 - release-drift diff against every new official SDK package,
 - stress tests around callback ordering, slow consumers, reconnect, and order
   lifecycle.
+
+## Local Verification
+
+2026-04-26 on Linux:
+
+- The official IBKR TWS API Latest Mac/Unix SDK ZIP
+  `twsapi_macunix.1046.01.zip` was unpacked under the git-excluded local path
+  `.external/IBJts`.
+- The official GitHub repository `InteractiveBrokers/tws-api-public` was also
+  checked, but it contained only `README.md`; it was not a usable SDK source.
+- The SDK reported `API_Version=10.46.01`.
+- The checked-in `protobufUnix` files did not compile against local protobuf
+  3.19.6. Per the SDK `ProtoBuf_readme.txt`, they were regenerated locally with
+  `protoc --experimental_allow_proto3_optional`.
+- The SDK required Intel Decimal Floating-Point Math Library. `libbid.a` was
+  built locally with `CFLAGS_OPT=-fPIC`, then the SDK makefile produced
+  `.external/IBJts/source/cppclient/client/libTwsSocketClient.so`.
+- `bash -n scripts/check-ibkr-swig-env.sh` passed.
+- `go test ./...`, `go build ./...`, and `go vet ./...` passed without tags.
+- `eval "$(scripts/check-ibkr-swig-env.sh --print-env .external/IBJts)" &&
+  go test -tags=ibkr_swig ./internal/ibkrsdkprobe` passed.
+- Local Gateway/TWS was listening on `127.0.0.1:4002`. The live SDK probe passed:
+  server version `203`, connection time
+  `20260426 21:35:09 Central European Standard Time`, next valid ID `1`, one
+  managed account, current time `2026-04-26T19:35:09Z`, and account summary
+  returned 2 rows.
 
 ## Spike Recommendation
 
@@ -304,4 +348,3 @@ support where IBKR exposes stable schemas.
 - IBKR 2026 API production release notes:
   https://www.ibkrguides.com/releasenotes/prod-2026.htm
 - SWIG Go documentation: https://www.swig.org/Doc4.3/Go.html
-
