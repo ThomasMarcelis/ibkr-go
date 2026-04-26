@@ -1,0 +1,11 @@
+//go:build ibkr_swig && cgo && linux
+
+%module ibkrsdkprobe
+
+%{
+#include "ibkr_swig_probe.hpp"
+%}
+
+%include "std_string.i"
+
+std::string IbkrSdkProbeCompileVersion();
