@@ -317,6 +317,7 @@ test orders. Read-only live smoke tests do not require it.
 For contributors and maintainers:
 
 - [`docs/architecture.md`](docs/architecture.md) — internal layer design
+- [`docs/official-sdk.md`](docs/official-sdk.md) — manual cgo SDK runtime setup
 - [`docs/transcripts.md`](docs/transcripts.md) — test transcript format
 - [`docs/message-coverage.md`](docs/message-coverage.md) — protocol message matrix
 - [`docs/roadmap.md`](docs/roadmap.md) — project direction

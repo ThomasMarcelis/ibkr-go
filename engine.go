@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 	"github.com/shopspring/decimal"
@@ -33,6 +34,7 @@ type engine struct {
 	snapshot   Snapshot
 
 	transport *transport.Conn
+	adapter   sdkadapter.Adapter
 
 	keyed       map[int]*route
 	singletons  map[string]*route
@@ -117,6 +119,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
+	cfg.useSDK = sdkRuntimeAvailable() && sdkRuntimeRequested() && !cfg.customDialer
 	if cfg.clientID < 0 {
 		return nil, fmt.Errorf("ibkr: client id must be >= 0")
 	}
@@ -4137,6 +4140,10 @@ func (e *engine) enqueue(fn func()) {
 }
 
 func (e *engine) startConnect(ctx context.Context, reconnect bool) {
+	if e.cfg.useSDK {
+		e.startSDKConnect(ctx, reconnect)
+		return
+	}
 	if e.closed {
 		return
 	}
@@ -4223,6 +4230,43 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	e.setState(StateHandshaking, 0, "", nil)
 }
 
+func (e *engine) startSDKConnect(ctx context.Context, reconnect bool) {
+	if e.closed {
+		return
+	}
+	e.bootstrap = bootstrapState{}
+	if reconnect {
+		e.setState(StateReconnecting, 0, "sdk reconnect attempt", nil)
+	} else {
+		e.setState(StateConnecting, 0, "", nil)
+	}
+
+	adapter, err := newSDKAdapter(e.cfg.eventBuffer)
+	if err != nil {
+		e.connectFailed("sdk_adapter", err, reconnect)
+		return
+	}
+	e.adapter = adapter
+	connectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := adapter.Connect(connectCtx, sdkadapter.ConnectRequest{
+		Host:      e.cfg.host,
+		Port:      e.cfg.port,
+		ClientID:  e.cfg.clientID,
+		Timeout:   10 * time.Second,
+		QueueSize: e.cfg.eventBuffer,
+	}); err != nil {
+		_ = adapter.Close()
+		e.adapter = nil
+		e.connectFailed("sdk_connect", err, reconnect)
+		return
+	}
+
+	e.attachSDKAdapter(adapter)
+	e.scheduleSDKBootstrapTimeout(adapter, reconnect)
+	e.setState(StateHandshaking, 0, "", nil)
+}
+
 func (e *engine) connectFailed(op string, err error, reconnect bool) {
 	connectErr := &ConnectError{Op: op, Err: err}
 	if !reconnect {
@@ -4272,6 +4316,118 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 	}()
 }
 
+type sdkConnectionMetadata struct {
+	serverVersion  int
+	connectionTime string
+}
+
+func (e *engine) attachSDKAdapter(adapter sdkadapter.Adapter) {
+	go func() {
+		ticker := time.NewTicker(10 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			events, err := adapter.DrainEvents(context.Background(), 64)
+			if err != nil {
+				select {
+				case <-e.done:
+				case e.transportErr <- err:
+				}
+				return
+			}
+			if len(events) == 0 {
+				select {
+				case <-e.done:
+					return
+				case <-ticker.C:
+				}
+				continue
+			}
+			for _, event := range events {
+				msg, err := sdkEventToMessage(event)
+				if err != nil {
+					select {
+					case <-e.done:
+					case e.transportErr <- err:
+					}
+					return
+				}
+				if msg == nil {
+					continue
+				}
+				select {
+				case <-e.done:
+					return
+				case e.incoming <- msg:
+				}
+			}
+		}
+	}()
+}
+
+func sdkEventToMessage(event sdkadapter.Event) (any, error) {
+	switch event.Kind {
+	case sdkadapter.EventConnectionMetadata:
+		return sdkConnectionMetadata{
+			serverVersion:  event.ServerVersion,
+			connectionTime: event.ConnectionTime,
+		}, nil
+	case sdkadapter.EventManagedAccounts:
+		return codec.ManagedAccounts{Accounts: append([]string(nil), event.Accounts...)}, nil
+	case sdkadapter.EventNextValidID:
+		return codec.NextValidID{OrderID: event.NextValidID}, nil
+	case sdkadapter.EventCurrentTime:
+		return codec.CurrentTime{Time: strconv.FormatInt(event.CurrentTime, 10)}, nil
+	case sdkadapter.EventAccountSummary:
+		return codec.AccountSummaryValue{
+			ReqID:    event.ReqID,
+			Account:  event.AccountSummary.Account,
+			Tag:      event.AccountSummary.Tag,
+			Value:    event.AccountSummary.Value,
+			Currency: event.AccountSummary.Currency,
+		}, nil
+	case sdkadapter.EventAccountSummaryEnd:
+		return codec.AccountSummaryEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventAPIError:
+		return codec.APIError{
+			ReqID:                   event.APIError.ReqID,
+			Code:                    event.APIError.Code,
+			Message:                 event.APIError.Message,
+			AdvancedOrderRejectJSON: event.APIError.AdvancedOrderRejectJSON,
+		}, nil
+	case sdkadapter.EventConnectionClosed:
+		return nil, ErrInterrupted
+	case sdkadapter.EventAdapterFatal:
+		return nil, &ProtocolError{Direction: "sdk", Message: "adapter", Err: errors.New(event.FatalMessage)}
+	default:
+		return nil, &ProtocolError{Direction: "sdk", Message: "adapter", Err: fmt.Errorf("unknown SDK adapter event %q", event.Kind)}
+	}
+}
+
+func (e *engine) scheduleSDKBootstrapTimeout(adapter sdkadapter.Adapter, reconnect bool) {
+	time.AfterFunc(bootstrapTimeout, func() {
+		e.enqueue(func() {
+			if e.closed || e.adapter != adapter {
+				return
+			}
+			e.snapshotMu.RLock()
+			state := e.snapshot.State
+			e.snapshotMu.RUnlock()
+			if state != StateHandshaking {
+				return
+			}
+			err := &ConnectError{Op: "sdk_bootstrap", Err: context.DeadlineExceeded}
+			_ = adapter.Close()
+			e.adapter = nil
+			if reconnect {
+				e.connectFailed("sdk_bootstrap", err, true)
+				return
+			}
+			e.reportReady(err)
+			e.closeEngine(err)
+		})
+	})
+}
+
 func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
 	time.AfterFunc(bootstrapTimeout, func() {
 		e.enqueue(func() {
@@ -4291,6 +4447,13 @@ func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
 
 func (e *engine) handleIncoming(msg any) {
 	switch m := msg.(type) {
+	case sdkConnectionMetadata:
+		e.updateSnapshot(func(s *Snapshot) {
+			s.ServerVersion = m.serverVersion
+		})
+		e.bootstrap.serverInfo = true
+		e.maybeReady()
+		return
 	case codec.ManagedAccounts:
 		e.updateSnapshot(func(s *Snapshot) {
 			s.ManagedAccounts = append([]string(nil), m.Accounts...)
@@ -4477,11 +4640,15 @@ func (e *engine) handleTransportLoss(err error) {
 	if e.closed {
 		return
 	}
-	if e.transport == nil {
+	if e.transport == nil && e.adapter == nil {
 		return
 	}
 	err = normalizeTransportErr(err)
 	e.transport = nil
+	if e.adapter != nil {
+		_ = e.adapter.Close()
+		e.adapter = nil
+	}
 	e.executions.reset()
 	if e.cfg.reconnect == ReconnectOff {
 		if err == nil {
@@ -4606,6 +4773,10 @@ func (e *engine) closeEngine(err error) {
 	if e.transport != nil {
 		_ = e.transport.Close()
 	}
+	if e.adapter != nil {
+		_ = e.adapter.Close()
+		e.adapter = nil
+	}
 	for reqID, route := range e.keyed {
 		route.close(err)
 		e.deleteKeyedRoute(reqID)
@@ -4700,6 +4871,9 @@ func (e *engine) send(msg codec.Message) error {
 }
 
 func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
+	if e.adapter != nil {
+		return e.sendSDKContext(ctx, msg)
+	}
 	if e.transport == nil {
 		return ErrNotReady
 	}
@@ -4712,6 +4886,29 @@ func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 		return ErrInterrupted
 	}
 	return err
+}
+
+func (e *engine) sendSDKContext(ctx context.Context, msg codec.Message) error {
+	var command sdkadapter.Command
+	switch m := msg.(type) {
+	case codec.CurrentTimeRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandCurrentTime}
+	case codec.AccountSummaryRequest:
+		command = sdkadapter.Command{
+			Kind:  sdkadapter.CommandAccountSummary,
+			ReqID: m.ReqID,
+			Group: m.Account,
+			Tags:  append([]string(nil), m.Tags...),
+		}
+	case codec.CancelAccountSummary:
+		command = sdkadapter.Command{
+			Kind:  sdkadapter.CommandCancelAccountSummary,
+			ReqID: m.ReqID,
+		}
+	default:
+		return fmt.Errorf("ibkr: SDK runtime does not support %T yet", msg)
+	}
+	return e.adapter.Submit(ctx, command)
 }
 
 func normalizeTransportErr(err error) error {
@@ -4750,7 +4947,7 @@ func (e *engine) connectionSeq() uint64 {
 }
 
 func (e *engine) isReady() bool {
-	if e.transport == nil {
+	if e.transport == nil && e.adapter == nil {
 		return false
 	}
 	e.snapshotMu.RLock()

@@ -1,5 +1,10 @@
 # SWIG Over the Official IBKR C++ SDK
 
+Status: superseded for production planning. The SWIG spike remains useful
+evidence that the official C++ SDK can be isolated behind a narrow adapter, but
+the production rebuild direction is now manual cgo over a repo-owned C ABI. Do
+not treat SWIG as the planned production binding layer.
+
 This document evaluates whether `ibkr-go` should use the official Interactive
 Brokers C++ TWS API SDK through SWIG, either as the production protocol backend
 or as a conformance/reference path.

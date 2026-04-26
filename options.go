@@ -18,6 +18,8 @@ type config struct {
 	port                int
 	clientID            int
 	dialer              transport.Dialer
+	customDialer        bool
+	useSDK              bool
 	logger              *slog.Logger
 	reconnect           ReconnectPolicy
 	tcpKeepAlive        time.Duration
@@ -80,6 +82,7 @@ func WithClientID(clientID int) Option {
 func WithDialer(dialer transport.Dialer) Option {
 	return func(cfg *config) {
 		cfg.dialer = dialer
+		cfg.customDialer = true
 	}
 }
 
