@@ -29,8 +29,7 @@ func TestLiveIssue9GatewayDailyRestartAutoReconnects(t *testing.T) {
 	requireLiveRestart(t)
 
 	client, cancel := dialLiveIssueClient(t,
-		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto),
-		ibkr.WithTCPKeepAlive(30*time.Second))
+		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
 	defer cancel()
 	defer closeLiveIssueClient(t, client)
 
@@ -81,8 +80,7 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 	defer proxy.Close()
 
 	client := dialLiveIssueClientAt(t, 15*time.Second, proxy.Addr(),
-		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto),
-		ibkr.WithTCPKeepAlive(30*time.Second))
+		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
 	defer closeLiveIssueClient(t, client)
 
 	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
@@ -126,8 +124,7 @@ func TestLiveIssue12GatewayIdleSessionDetectsRestart(t *testing.T) {
 	requireLiveRestart(t)
 
 	client, cancel := dialLiveIssueClient(t,
-		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto),
-		ibkr.WithTCPKeepAlive(30*time.Second))
+		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
 	defer cancel()
 	defer closeLiveIssueClient(t, client)
 
@@ -150,8 +147,7 @@ func TestLiveIssue12IdleSessionRecoversAfterRealGatewayProxyOutage(t *testing.T)
 	defer proxy.Close()
 
 	client := dialLiveIssueClientAt(t, 15*time.Second, proxy.Addr(),
-		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto),
-		ibkr.WithTCPKeepAlive(30*time.Second))
+		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
 	defer closeLiveIssueClient(t, client)
 
 	initialSeq := client.Session().ConnectionSeq

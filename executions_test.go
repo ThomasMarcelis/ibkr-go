@@ -3,7 +3,7 @@ package ibkr
 import (
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
 func TestExecutionCorrelatorDeliversBacklogToOverlappingRoutes(t *testing.T) {
@@ -13,12 +13,12 @@ func TestExecutionCorrelatorDeliversBacklogToOverlappingRoutes(t *testing.T) {
 	c.registerRoute(1, ExecutionsRequest{Account: "DU12345"})
 	c.registerRoute(2, ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
 
-	ready := c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
+	ready := c.recordCommission(sdkadapter.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
 	if len(ready) != 0 {
 		t.Fatalf("recordCommission() ready len = %d, want 0", len(ready))
 	}
 
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(1, sdkadapter.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("undeliveredCommissions(route1) len = %d, want 1", len(got))
 	}
@@ -27,7 +27,7 @@ func TestExecutionCorrelatorDeliversBacklogToOverlappingRoutes(t *testing.T) {
 		t.Fatalf("undeliveredCommissions(route2 before execution) len = %d, want 0", len(got))
 	}
 
-	c.observeExecution(2, codec.ExecutionDetail{ReqID: 2, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(2, sdkadapter.ExecutionDetail{ReqID: 2, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
 	if got := c.undeliveredCommissions(2, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("undeliveredCommissions(route2 after execution) len = %d, want 1", len(got))
 	}
@@ -39,8 +39,8 @@ func TestExecutionCorrelatorClearsDeliveredHistoryButPreservesRoutes(t *testing.
 	c := newExecutionCorrelator()
 	c.registerRoute(1, ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
 
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
-	c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
+	c.observeExecution(1, sdkadapter.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.recordCommission(sdkadapter.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("first undeliveredCommissions() len = %d, want 1", len(got))
 	}
@@ -56,7 +56,7 @@ func TestExecutionCorrelatorClearsDeliveredHistoryButPreservesRoutes(t *testing.
 		t.Fatal("route state missing after history clear")
 	}
 
-	ready := c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "0.75", Currency: "USD", RealizedPNL: "0"})
+	ready := c.recordCommission(sdkadapter.CommissionReport{ExecID: "exec-aapl", Commission: "0.75", Currency: "USD", RealizedPNL: "0"})
 	if len(ready) != 1 || ready[0] != 1 {
 		t.Fatalf("recordCommission() ready = %#v, want route 1", ready)
 	}
@@ -72,8 +72,8 @@ func TestExecutionCorrelatorDropsClosedRoutesFromPendingBacklog(t *testing.T) {
 	c.registerRoute(1, ExecutionsRequest{Account: "DU12345"})
 	c.registerRoute(2, ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
 
-	c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.recordCommission(sdkadapter.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
+	c.observeExecution(1, sdkadapter.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("route1 undeliveredCommissions() len = %d, want 1", len(got))
 	}
@@ -95,10 +95,10 @@ func TestExecutionCorrelatorKeepsPreDetailBacklogWhenRouteCloses(t *testing.T) {
 	c.registerRoute(1, ExecutionsRequest{Account: "DU12345"})
 	c.registerRoute(2, ExecutionsRequest{Account: "DU12345", Symbol: "MSFT"})
 
-	c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
+	c.recordCommission(sdkadapter.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
 	c.unregisterRoute(2)
 
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(1, sdkadapter.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("undeliveredCommissions(route1 after close) len = %d, want 1", len(got))
 	}

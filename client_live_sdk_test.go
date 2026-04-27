@@ -4,7 +4,6 @@ package ibkr_test
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
@@ -12,11 +11,7 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/testing/ibkrlive"
 )
 
-func TestLiveOfficialSDKVerticalSlice(t *testing.T) {
-	if os.Getenv("IBKR_USE_OFFICIAL_SDK") != "1" {
-		t.Skip("set IBKR_USE_OFFICIAL_SDK=1 to exercise the manual cgo SDK runtime")
-	}
-
+func TestLiveOfficialSDKSmoke(t *testing.T) {
 	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
 	defer cancel()
 	defer client.Close()
@@ -46,6 +41,15 @@ func TestLiveOfficialSDKVerticalSlice(t *testing.T) {
 	}
 	t.Logf("official SDK currentTime received: %s", currentTime.Format(time.RFC3339))
 
+	currentTimeMillis, err := client.CurrentTimeMillis(ctx)
+	if err != nil {
+		t.Fatalf("CurrentTimeMillis() error = %v", err)
+	}
+	if currentTimeMillis.IsZero() {
+		t.Fatal("CurrentTimeMillis() returned zero time")
+	}
+	t.Logf("official SDK currentTimeMillis received: %s", currentTimeMillis.Format(time.RFC3339Nano))
+
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
 		Account: "All",
 		Tags:    []string{"NetLiquidation", "BuyingPower"},
@@ -57,4 +61,24 @@ func TestLiveOfficialSDKVerticalSlice(t *testing.T) {
 		t.Fatal("AccountSummary() returned no rows")
 	}
 	t.Logf("official SDK accountSummary rows=%d", len(values))
+
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	})
+	if err != nil {
+		t.Fatalf("ContractDetails() error = %v", err)
+	}
+	if len(details) == 0 {
+		t.Fatal("ContractDetails() returned no rows")
+	}
+	t.Logf("official SDK contractDetails rows=%d", len(details))
+
+	positions, err := client.Accounts().Positions(ctx)
+	if err != nil {
+		t.Fatalf("Positions() error = %v", err)
+	}
+	t.Logf("official SDK positions rows=%d", len(positions))
 }

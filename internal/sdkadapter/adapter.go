@@ -29,20 +29,54 @@ type ConnectRequest struct {
 	QueueSize int
 }
 
+type BuildInfo struct {
+	AdapterABIVersion string
+	SDKAPIVersion     string
+	Compiler          string
+	ProtobufMode      string
+}
+
 type CommandKind string
 
 const (
 	CommandCurrentTime          CommandKind = "current_time"
+	CommandCurrentTimeMillis    CommandKind = "current_time_millis"
 	CommandAccountSummary       CommandKind = "account_summary"
 	CommandCancelAccountSummary CommandKind = "cancel_account_summary"
+	CommandContractDetails      CommandKind = "contract_details"
+	CommandPositions            CommandKind = "positions"
+	CommandCancelPositions      CommandKind = "cancel_positions"
 )
 
 type Command struct {
-	Kind  CommandKind
+	Kind CommandKind
+
+	CurrentTime          CurrentTimeRequest
+	AccountSummary       AccountSummaryCommand
+	CancelAccountSummary CancelAccountSummaryCommand
+	ContractDetails      ContractDetailsCommand
+	Positions            PositionsCommand
+	CancelPositions      CancelPositionsCommand
+}
+
+type AccountSummaryCommand struct {
 	ReqID int
 	Group string
 	Tags  []string
 }
+
+type CancelAccountSummaryCommand struct {
+	ReqID int
+}
+
+type ContractDetailsCommand struct {
+	ReqID    int
+	Contract Contract
+}
+
+type PositionsCommand struct{}
+
+type CancelPositionsCommand struct{}
 
 type EventKind string
 
@@ -52,10 +86,15 @@ const (
 	EventNextValidID        EventKind = "next_valid_id"
 	EventManagedAccounts    EventKind = "managed_accounts"
 	EventCurrentTime        EventKind = "current_time"
+	EventCurrentTimeMillis  EventKind = "current_time_millis"
 	EventAccountSummary     EventKind = "account_summary"
 	EventAccountSummaryEnd  EventKind = "account_summary_end"
 	EventAPIError           EventKind = "api_error"
 	EventAdapterFatal       EventKind = "adapter_fatal"
+	EventContractDetails    EventKind = "contract_details"
+	EventContractDetailsEnd EventKind = "contract_details_end"
+	EventPosition           EventKind = "position"
+	EventPositionEnd        EventKind = "position_end"
 )
 
 type Event struct {
@@ -69,16 +108,26 @@ type Event struct {
 	Accounts       []string
 	CurrentTime    int64
 
-	AccountSummary AccountSummaryValue
-	APIError       Error
-	FatalMessage   string
+	AccountSummary  AccountSummaryValue
+	ContractDetails ContractDetailsValue
+	Position        PositionValue
+	APIError        Error
+	FatalMessage    string
 }
 
-type AccountSummaryValue struct {
+type ContractDetailsValue struct {
+	Contract   Contract
+	MarketName string
+	MinTick    string
+	LongName   string
+	TimeZoneID string
+}
+
+type PositionValue struct {
 	Account  string
-	Tag      string
-	Value    string
-	Currency string
+	Contract Contract
+	Position string
+	AvgCost  string
 }
 
 type Error struct {
@@ -113,6 +162,6 @@ func CloneEvents(events []Event) []Event {
 }
 
 func CloneCommand(command Command) Command {
-	command.Tags = append([]string(nil), command.Tags...)
+	command.AccountSummary.Tags = append([]string(nil), command.AccountSummary.Tags...)
 	return command
 }

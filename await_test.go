@@ -7,7 +7,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
 func TestEnqueueOneShotSetupSkipsCanceledContext(t *testing.T) {
@@ -156,9 +156,9 @@ func TestEnqueueOneShotSetupRunsActiveContext(t *testing.T) {
 
 	ctx := context.Background()
 	e := &engine{
-		cmds:      make(chan func(), 1),
-		done:      make(chan struct{}),
-		transport: &transport.Conn{},
+		cmds:    make(chan func(), 1),
+		done:    make(chan struct{}),
+		adapter: sdkadapter.NewReplayAdapter(nil),
 		snapshot: Snapshot{
 			State: StateReady,
 		},
@@ -197,7 +197,7 @@ func TestEnqueueOneShotSetupWaitsForReady(t *testing.T) {
 
 		time.Sleep(reconnectBackoff)
 		synctest.Wait()
-		e.transport = &transport.Conn{}
+		e.adapter = sdkadapter.NewReplayAdapter(nil)
 		e.snapshot = Snapshot{State: StateReady}
 		(<-e.cmds)()
 
@@ -213,7 +213,7 @@ func TestEnqueueHistoricalSetupForwardsCancelDuringPacing(t *testing.T) {
 		e := &engine{
 			cmds:                  make(chan func(), 2),
 			done:                  make(chan struct{}),
-			transport:             &transport.Conn{},
+			adapter:               sdkadapter.NewReplayAdapter(nil),
 			nextHistoricalRequest: time.Now().Add(time.Second),
 			snapshot:              Snapshot{State: StateReady},
 		}
@@ -256,9 +256,9 @@ func TestEnqueueHistoricalSetupPrunesStalePacingKeys(t *testing.T) {
 	now := time.Now()
 	ctx := context.Background()
 	e := &engine{
-		cmds:      make(chan func(), 1),
-		done:      make(chan struct{}),
-		transport: &transport.Conn{},
+		cmds:    make(chan func(), 1),
+		done:    make(chan struct{}),
+		adapter: sdkadapter.NewReplayAdapter(nil),
 		recentHistoricalRequests: map[string]time.Time{
 			"old":    now.Add(-historicalIdenticalSpacing - time.Second),
 			"recent": now.Add(-historicalIdenticalSpacing / 2),

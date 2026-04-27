@@ -6,19 +6,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
-func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (codec.HistoricalBarsRequest, error) {
+func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (sdkadapter.HistoricalBarsRequest, error) {
 	duration, err := formatHistoricalDuration(req.Duration)
 	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
+		return sdkadapter.HistoricalBarsRequest{}, err
 	}
 	barSize, err := formatHistoricalBarSize(req.BarSize)
 	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
+		return sdkadapter.HistoricalBarsRequest{}, err
 	}
-	return codec.HistoricalBarsRequest{
+	return sdkadapter.HistoricalBarsRequest{
 		ReqID:       reqID,
 		Contract:    toCodecContract(req.Contract),
 		EndDateTime: formatHistoricalEndTime(req.EndTime),
@@ -81,19 +81,19 @@ func validateHistoricalBarsStreamRequest(req HistoricalBarsRequest) error {
 }
 
 // buildHistoricalScheduleRequest constructs the outbound wire request for a
-// HistoricalSchedule one-shot. It reuses codec.HistoricalBarsRequest under the
+// HistoricalSchedule one-shot. It reuses sdkadapter.HistoricalBarsRequest under the
 // hood because REQ_HISTORICAL_DATA (msg_id 20) is the same outbound message;
 // the inbound path is a separate InHistoricalSchedule decoder.
-func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (codec.HistoricalBarsRequest, error) {
+func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (sdkadapter.HistoricalBarsRequest, error) {
 	duration, err := formatHistoricalDuration(req.Duration)
 	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
+		return sdkadapter.HistoricalBarsRequest{}, err
 	}
 	barSize, err := formatHistoricalBarSize(req.BarSize)
 	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
+		return sdkadapter.HistoricalBarsRequest{}, err
 	}
-	return codec.HistoricalBarsRequest{
+	return sdkadapter.HistoricalBarsRequest{
 		ReqID:       reqID,
 		Contract:    toCodecContract(req.Contract),
 		EndDateTime: formatHistoricalEndTime(req.EndTime),

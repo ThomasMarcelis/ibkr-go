@@ -91,6 +91,8 @@ if [[ -z "$version_file" ]]; then
   echo "could not find API_VersionNum.txt under $sdk_dir" >&2
   exit 2
 fi
+sdk_api_version="$(tr -d '\r\n' < "$version_file")"
+sdk_api_version="${sdk_api_version#API_Version=}"
 
 client_dir=""
 for candidate in \
@@ -205,39 +207,72 @@ lib_file="$(basename "$lib_path")"
 libbid_dir="$(dirname "$libbid_path")"
 libbid_file="$(basename "$libbid_path")"
 
+cxxflags=("-std=c++14")
+for dir in "${include_dirs[@]}"; do
+  cxxflags+=("-I$dir")
+done
+cxxflags+=("-DIBKR_SDK_API_VERSION=$sdk_api_version")
+# shellcheck disable=SC2046
+cxxflags+=($(pkg-config --cflags protobuf))
+
+ldflags=("-L$lib_dir" "-l:$lib_file" "-L$libbid_dir" "-l:$libbid_file")
+runtime_path=""
+if [[ "$lib_file" == *.so ]]; then
+  ldflags+=("-Wl,-rpath,$lib_dir")
+  runtime_path="$lib_dir"
+fi
+if [[ "$libbid_file" == *.so ]]; then
+  ldflags+=("-Wl,-rpath,$libbid_dir")
+  if [[ -n "$runtime_path" && "$libbid_dir" != "$lib_dir" ]]; then
+    runtime_path="$runtime_path:$libbid_dir"
+  elif [[ -z "$runtime_path" ]]; then
+    runtime_path="$libbid_dir"
+  fi
+fi
+# shellcheck disable=SC2046
+ldflags+=($(pkg-config --libs protobuf))
+ldflags+=("-lpthread" "-lstdc++")
+
 if ! printf 'int main() { return 0; }\n' | g++ -std=c++14 -x c++ - -o /tmp/ibkr-sdk-cxx14-check >/dev/null 2>&1; then
   echo "g++ cannot compile a minimal C++14 program." >&2
   exit 2
 fi
 rm -f /tmp/ibkr-sdk-cxx14-check
 
+probe_src="/tmp/ibkr-sdk-link-check-$$.cpp"
+probe_bin="/tmp/ibkr-sdk-link-check-$$"
+probe_log="/tmp/ibkr-sdk-link-check-$$.log"
+cat > "$probe_src" <<'CPP'
+#include "DefaultEWrapper.h"
+#include "EClientSocket.h"
+#include "EReaderOSSignal.h"
+
+int main() {
+  EReaderOSSignal signal(1);
+  DefaultEWrapper wrapper;
+  EClientSocket client(&wrapper, &signal);
+  return client.isConnected() ? 1 : 0;
+}
+CPP
+if ! g++ "${cxxflags[@]}" "$probe_src" "${ldflags[@]}" -o "$probe_bin" >"$probe_log" 2>&1; then
+  echo "g++ cannot link a minimal program against the IBKR SDK library." >&2
+  cat "$probe_log" >&2
+  rm -f "$probe_src" "$probe_bin" "$probe_log"
+  exit 2
+fi
+if ! "$probe_bin" >"$probe_log" 2>&1; then
+  echo "linked IBKR SDK probe could not run. Check runtime library paths." >&2
+  cat "$probe_log" >&2
+  rm -f "$probe_src" "$probe_bin" "$probe_log"
+  exit 2
+fi
+rm -f "$probe_src" "$probe_bin" "$probe_log"
+
 if [[ "$print_env" -eq 1 ]]; then
-  cxxflags=("-std=c++14")
-  for dir in "${include_dirs[@]}"; do
-    cxxflags+=("-I$dir")
-  done
-  # shellcheck disable=SC2046
-  cxxflags+=($(pkg-config --cflags protobuf))
-
-  ldflags=("-L$lib_dir" "-l:$lib_file" "-L$libbid_dir" "-l:$libbid_file")
-  if [[ "$lib_file" == *.so ]]; then
-    ldflags+=("-Wl,-rpath,$lib_dir")
-  fi
-  if [[ "$libbid_file" == *.so ]]; then
-    ldflags+=("-Wl,-rpath,$libbid_dir")
-  fi
-  # shellcheck disable=SC2046
-  ldflags+=($(pkg-config --libs protobuf))
-  ldflags+=("-lpthread" "-lstdc++")
-
   printf 'export IBKR_TWS_API_DIR=%q\n' "$sdk_dir"
   printf 'export CGO_CXXFLAGS=%q\n' "${cxxflags[*]}"
   printf 'export CGO_LDFLAGS=%q\n' "${ldflags[*]}"
-  if [[ "$lib_file" == *.so ]]; then
-    runtime_path="$lib_dir"
-    if [[ "$libbid_file" == *.so && "$libbid_dir" != "$lib_dir" ]]; then
-      runtime_path="$runtime_path:$libbid_dir"
-    fi
+  if [[ -n "$runtime_path" ]]; then
     if [[ -n "${LD_LIBRARY_PATH:-}" ]]; then
       printf 'export LD_LIBRARY_PATH=%q\n' "$runtime_path:$LD_LIBRARY_PATH"
     else
@@ -249,12 +284,18 @@ fi
 
 echo "IBKR SDK cgo environment OK"
 echo "  SDK dir:       $sdk_dir"
-echo "  API version:   $(tr -d '\r\n' < "$version_file")"
+echo "  API version:   $sdk_api_version"
 echo "  C++ headers:   $client_dir"
 echo "  protobuf:      $proto_dir"
 echo "  SDK library:   $lib_path"
 echo "  Intel libbid:  $libbid_path"
+if [[ -n "$runtime_path" ]]; then
+  echo "  runtime path:  $runtime_path"
+else
+  echo "  runtime path:  (static SDK/libbid linkage)"
+fi
 echo "  Go:            $(go version)"
 echo "  g++:           $(g++ -dumpfullversion -dumpversion)"
 echo "  protoc:        $(protoc --version)"
 echo "  protobuf pc:   $(pkg-config --modversion protobuf)"
+echo "  link probe:    OK"

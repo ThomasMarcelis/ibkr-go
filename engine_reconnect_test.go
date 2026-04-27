@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
 func TestHandleTransportLossPreservesReconnectAttempt(t *testing.T) {
@@ -16,7 +16,7 @@ func TestHandleTransportLossPreservesReconnectAttempt(t *testing.T) {
 		cmds:             make(chan func(), 1),
 		done:             done,
 		events:           newObserver[Event](1),
-		transport:        &transport.Conn{},
+		adapter:          sdkadapter.NewReplayAdapter(nil),
 		keyed:            make(map[int]*route),
 		singletons:       make(map[string]*route),
 		orders:           make(map[int64]*orderRoute),

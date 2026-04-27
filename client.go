@@ -36,6 +36,12 @@ func (c *Client) CurrentTime(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTime(ctx)
 }
 
+// CurrentTimeMillis asks the Gateway for the server's current wall-clock time
+// using the SDK's millisecond-precision request/callback pair.
+func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
+	return c.engine.CurrentTimeMillis(ctx)
+}
+
 // Accounts returns the sub-client for account values, positions, and PnL.
 func (c *Client) Accounts() AccountsClient { return AccountsClient{engine: c.engine} }
 

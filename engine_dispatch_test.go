@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
 // newEngineForDispatchTest builds a minimal engine suitable for exercising
@@ -44,7 +44,7 @@ func TestRouteCommissionReportLogsAndDropsOnDecodeError(t *testing.T) {
 	// A malformed decimal (not the sentinel, not empty) is the one case
 	// that can still reach the engine after W1: the codec accepted it but
 	// fromCodecCommission rejects it.
-	e.routeCommissionReport(codec.CommissionReport{
+	e.routeCommissionReport(sdkadapter.CommissionReport{
 		ExecID:     "exec-bad",
 		Commission: "not-a-number",
 		Currency:   "USD",
@@ -83,7 +83,7 @@ func TestRouteCommissionReportDeliversValidReport(t *testing.T) {
 	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
 	e.execToOrder["exec-ok"] = 42
 
-	e.routeCommissionReport(codec.CommissionReport{
+	e.routeCommissionReport(sdkadapter.CommissionReport{
 		ExecID:      "exec-ok",
 		Commission:  "1.25",
 		Currency:    "USD",
@@ -121,7 +121,7 @@ func TestDispatchExecutionToOrderLogsAndDropsOnDecodeError(t *testing.T) {
 	e.orders[77] = &orderRoute{orderID: 77, handle: handle}
 
 	// Malformed Time field makes fromCodecExecution fail deterministically.
-	e.dispatchExecutionToOrder(codec.ExecutionDetail{
+	e.dispatchExecutionToOrder(sdkadapter.ExecutionDetail{
 		ReqID:   1,
 		OrderID: 77,
 		ExecID:  "exec-bad-time",

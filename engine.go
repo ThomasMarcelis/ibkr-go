@@ -4,28 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 	"github.com/shopspring/decimal"
 )
 
 type engine struct {
 	cfg config
 
-	cmds         chan func()
-	incoming     chan any
-	transportErr chan error
-	ready        chan error
-	done         chan struct{}
-	events       *observer[Event]
+	cmds       chan func()
+	incoming   chan any
+	adapterErr chan error
+	ready      chan error
+	done       chan struct{}
+	events     *observer[Event]
 
 	waitMu  sync.Mutex
 	waitErr error
@@ -33,8 +29,7 @@ type engine struct {
 	snapshotMu sync.RWMutex
 	snapshot   Snapshot
 
-	transport *transport.Conn
-	adapter   sdkadapter.Adapter
+	adapter sdkadapter.Adapter
 
 	keyed       map[int]*route
 	singletons  map[string]*route
@@ -86,15 +81,16 @@ const (
 	singletonNewsBulletins     = "news_bulletins"
 	singletonFA                = "fa"
 	singletonCurrentTime       = "current_time"
+	singletonCurrentTimeMillis = "current_time_millis"
 )
 
 type route struct {
 	opKind       OpKind
 	subscription bool
 	resume       ResumePolicy
-	request      codec.Message
+	request      sdkadapter.Message
 	handle       func(any, *engine)
-	handleAPIErr func(codec.APIError, *engine)
+	handleAPIErr func(sdkadapter.APIError, *engine)
 	onDisconnect func(*engine, error) bool
 	emitGap      func(*engine)
 	emitResumed  func(*engine)
@@ -119,7 +115,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	cfg.useSDK = sdkRuntimeAvailable() && sdkRuntimeRequested() && !cfg.customDialer
+	cfg.useSDK = sdkRuntimeAvailable() && sdkRuntimeRequested()
 	if cfg.clientID < 0 {
 		return nil, fmt.Errorf("ibkr: client id must be >= 0")
 	}
@@ -131,7 +127,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		cfg:                      cfg,
 		cmds:                     make(chan func(), 256),
 		incoming:                 make(chan any, 256),
-		transportErr:             make(chan error, 8),
+		adapterErr:               make(chan error, 8),
 		ready:                    make(chan error, 1),
 		done:                     make(chan struct{}),
 		events:                   newObserver[Event](cfg.eventBuffer),
@@ -215,7 +211,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 			subscription: false,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.ContractDetails:
+				case sdkadapter.ContractDetails:
 					detail, err := fromCodecContractDetails(m)
 					if err != nil {
 						delete(e.keyed, reqID)
@@ -223,12 +219,12 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 						return
 					}
 					values = append(values, detail)
-				case codec.ContractDetailsEnd:
+				case sdkadapter.ContractDetailsEnd:
 					delete(e.keyed, reqID)
 					resp <- result{values: values}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpContractDetails, m)}
 			},
@@ -241,7 +237,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.ContractDetailsRequest{
+		if err := e.sendContext(ctx, sdkadapter.ContractDetailsRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(contract),
 		}); err != nil {
@@ -303,7 +299,7 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 			opKind: OpHistoricalBars,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.HistoricalBar:
+				case sdkadapter.HistoricalBar:
 					bar, err := fromCodecBar(m)
 					if err != nil {
 						delete(e.keyed, reqID)
@@ -311,12 +307,12 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 						return
 					}
 					values = append(values, bar)
-				case codec.HistoricalBarsEnd:
+				case sdkadapter.HistoricalBarsEnd:
 					delete(e.keyed, reqID)
 					resp <- result{values: values}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpHistoricalBars, m)}
 			},
@@ -372,7 +368,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 			opKind: OpHistoricalSchedule,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.HistoricalScheduleResponse:
+				case sdkadapter.HistoricalScheduleResponse:
 					delete(e.keyed, reqID)
 					sessions := make([]HistoricalScheduleSession, len(m.Sessions))
 					for i, s := range m.Sessions {
@@ -390,7 +386,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 					}}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpHistoricalSchedule, m)}
 			},
@@ -462,7 +458,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelAccountSummary{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelAccountSummary{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -475,7 +471,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 			request:      plan.request,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.AccountSummaryValue:
+				case sdkadapter.AccountSummaryValue:
 					if !plan.matches(m.Account) {
 						return
 					}
@@ -487,14 +483,14 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 							Currency: m.Currency,
 						},
 					})
-				case codec.AccountSummaryEnd:
+				case sdkadapter.AccountSummaryEnd:
 					sub.emitState(SubscriptionStateEvent{
 						Kind:          SubscriptionSnapshotComplete,
 						ConnectionSeq: e.connectionSeq(),
 					})
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpAccountSummary, m))
 			},
@@ -572,7 +568,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 					return
 				}
 				delete(e.singletons, singletonPositions)
-				_ = e.send(codec.CancelPositions{})
+				_ = e.send(sdkadapter.CancelPositions{})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -582,10 +578,10 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			opKind:       OpPositions,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.PositionsRequest{},
+			request:      sdkadapter.PositionsRequest{},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.Position:
+				case sdkadapter.Position:
 					position, err := fromCodecPosition(m)
 					if err != nil {
 						delete(e.singletons, singletonPositions)
@@ -593,7 +589,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 						return
 					}
 					sub.emit(PositionUpdate{Position: position})
-				case codec.PositionEnd:
+				case sdkadapter.PositionEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
 			},
@@ -607,7 +603,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			},
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.sendContext(ctx, codec.PositionsRequest{}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.PositionsRequest{}); err != nil {
 			delete(e.singletons, singletonPositions)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -638,7 +634,7 @@ func (e *engine) SetMarketDataType(ctx context.Context, dataType MarketDataType)
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(dataType)})
+		return e.sendContext(ctx, sdkadapter.ReqMarketDataType{DataType: int(dataType)})
 	})
 }
 
@@ -720,7 +716,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelQuote{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelQuote{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -733,7 +729,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			opKind:       OpQuotes,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.QuoteRequest{
+			request: sdkadapter.QuoteRequest{
 				ReqID:        reqID,
 				Contract:     toCodecContract(req.Contract),
 				Snapshot:     snapshot,
@@ -741,7 +737,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.TickPrice:
+				case sdkadapter.TickPrice:
 					changed, err := applyTickPrice(&quote, m.TickType, m.Price)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -749,7 +745,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						return
 					}
 					sub.emit(QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
-				case codec.TickSize:
+				case sdkadapter.TickSize:
 					changed, err := applyTickSize(&quote, m.TickType, m.Size)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -757,20 +753,20 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						return
 					}
 					sub.emit(QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
-				case codec.MarketDataType:
+				case sdkadapter.MarketDataType:
 					quote.MarketDataType = MarketDataType(m.DataType)
 					quote.Available |= QuoteFieldMarketDataType
 					sub.emit(QuoteUpdate{Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
-				case codec.TickGeneric:
+				case sdkadapter.TickGeneric:
 					// Generic ticks carry informational data (e.g. halted status).
 					// Silently consumed — no standard quote field mapping.
-				case codec.TickString:
+				case sdkadapter.TickString:
 					// String ticks carry informational data (e.g. last timestamp).
 					// Silently consumed — no standard quote field mapping.
-				case codec.TickReqParams:
+				case sdkadapter.TickReqParams:
 					// Tick request params are informational (minTick, BBO exchange).
 					// Silently consumed.
-				case codec.TickSnapshotEnd:
+				case sdkadapter.TickSnapshotEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 					if snapshot {
 						e.deleteKeyedRoute(reqID)
@@ -778,7 +774,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				// 10167: delayed market data warning — the subscription
 				// stays open and will receive delayed ticks.
 				if m.Code == 10167 {
@@ -875,7 +871,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelRealTimeBars{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelRealTimeBars{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -884,14 +880,14 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			opKind:       OpRealTimeBars,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.RealTimeBarsRequest{
+			request: sdkadapter.RealTimeBarsRequest{
 				ReqID:      reqID,
 				Contract:   toCodecContract(req.Contract),
 				WhatToShow: string(req.WhatToShow),
 				UseRTH:     req.UseRTH,
 			},
 			handle: func(msg any, e *engine) {
-				barMsg, ok := msg.(codec.RealTimeBar)
+				barMsg, ok := msg.(sdkadapter.RealTimeBar)
 				if !ok {
 					return
 				}
@@ -903,7 +899,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				}
 				sub.emit(bar)
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				if m.Code == 10167 {
 					e.emitEvent(m.Code, m.Message)
 					return
@@ -991,7 +987,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelMarketDepth{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelMarketDepth{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -1000,7 +996,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			opKind:       OpMarketDepth,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.MarketDepthRequest{
+			request: sdkadapter.MarketDepthRequest{
 				ReqID:        reqID,
 				Contract:     toCodecContract(req.Contract),
 				NumRows:      req.NumRows,
@@ -1008,7 +1004,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.MarketDepthUpdate:
+				case sdkadapter.MarketDepthUpdate:
 					row, err := fromCodecMarketDepth(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -1016,7 +1012,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 						return
 					}
 					sub.emit(row)
-				case codec.MarketDepthL2Update:
+				case sdkadapter.MarketDepthL2Update:
 					row, err := fromCodecMarketDepthL2(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -1026,7 +1022,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					sub.emit(row)
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpMarketDepth, m))
 			},
@@ -1134,12 +1130,12 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			opKind:       OpOpenOrders,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.OpenOrdersRequest{Scope: string(scope)},
+			request:      sdkadapter.OpenOrdersRequest{Scope: string(scope)},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case parsedOpenOrder:
 					sub.emit(OpenOrderUpdate{Order: m.order})
-				case codec.OpenOrderEnd:
+				case sdkadapter.OpenOrderEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
 			},
@@ -1152,7 +1148,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		}
 
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.sendContext(ctx, codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.OpenOrdersRequest{Scope: string(scope)}); err != nil {
 			delete(e.singletons, singletonOpenOrders)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -1223,14 +1219,14 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			opKind:       OpExecutions,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.ExecutionsRequest{
+			request: sdkadapter.ExecutionsRequest{
 				ReqID:   reqID,
 				Account: req.Account,
 				Symbol:  req.Symbol,
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.ExecutionDetail:
+				case sdkadapter.ExecutionDetail:
 					update, err := fromCodecExecution(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -1242,17 +1238,17 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
 						return
 					}
-				case codec.ExecutionsEnd:
+				case sdkadapter.ExecutionsEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(nil)
-				case codec.CommissionReport:
+				case sdkadapter.CommissionReport:
 					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
 						return
 					}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpExecutions, m))
 			},
@@ -1308,7 +1304,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 			opKind: OpFamilyCodes,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.FamilyCodes:
+				case sdkadapter.FamilyCodes:
 					delete(eng.singletons, singletonFamilyCodes)
 					codes := make([]FamilyCode, len(m.Codes))
 					for i, c := range m.Codes {
@@ -1326,7 +1322,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.FamilyCodesRequest{}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.FamilyCodesRequest{}); err != nil {
 			delete(e.singletons, singletonFamilyCodes)
 			resp <- result{err: err}
 		}
@@ -1358,13 +1354,10 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 			return
 		}
 
-		// No handleAPIErr: req_current_time carries no reqID, so the engine
-		// cannot route an APIError to this singleton. ctx cancellation and
-		// onDisconnect are the only failure paths.
 		e.singletons[singletonCurrentTime] = &route{
 			opKind: OpCurrentTime,
 			handle: func(msg any, eng *engine) {
-				m, ok := msg.(codec.CurrentTime)
+				m, ok := msg.(sdkadapter.CurrentTime)
 				if !ok {
 					return
 				}
@@ -1376,6 +1369,10 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				}
 				resp <- result{ts: ts}
 			},
+			handleAPIErr: func(m sdkadapter.APIError, eng *engine) {
+				delete(eng.singletons, singletonCurrentTime)
+				resp <- result{err: eng.apiErr(OpCurrentTime, m)}
+			},
 			onDisconnect: func(eng *engine, err error) bool {
 				delete(eng.singletons, singletonCurrentTime)
 				resp <- result{err: ErrInterrupted}
@@ -1385,7 +1382,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.CurrentTimeRequest{}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.CurrentTimeRequest{}); err != nil {
 			delete(e.singletons, singletonCurrentTime)
 			resp <- result{err: err}
 		}
@@ -1393,6 +1390,66 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
 		e.enqueue(func() { delete(e.singletons, singletonCurrentTime) })
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return out.ts, out.err
+}
+
+func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
+	type result struct {
+		ts  time.Time
+		err error
+	}
+	resp := make(chan result, 1)
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		if _, exists := e.singletons[singletonCurrentTimeMillis]; exists {
+			resp <- result{err: fmt.Errorf("ibkr: current time millis request already in progress")}
+			return
+		}
+
+		e.singletons[singletonCurrentTimeMillis] = &route{
+			opKind: OpCurrentTimeMillis,
+			handle: func(msg any, eng *engine) {
+				m, ok := msg.(sdkadapter.CurrentTimeMillis)
+				if !ok {
+					return
+				}
+				delete(eng.singletons, singletonCurrentTimeMillis)
+				ts, parseErr := parseEpochMilliseconds(m.Time)
+				if parseErr != nil {
+					resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", parseErr)}
+					return
+				}
+				resp <- result{ts: ts}
+			},
+			handleAPIErr: func(m sdkadapter.APIError, eng *engine) {
+				delete(eng.singletons, singletonCurrentTimeMillis)
+				resp <- result{err: eng.apiErr(OpCurrentTimeMillis, m)}
+			},
+			onDisconnect: func(eng *engine, err error) bool {
+				delete(eng.singletons, singletonCurrentTimeMillis)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.sendContext(ctx, sdkadapter.CurrentTimeMillisRequest{}); err != nil {
+			delete(e.singletons, singletonCurrentTimeMillis)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { delete(e.singletons, singletonCurrentTimeMillis) })
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -1421,7 +1478,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 			opKind: OpMktDepthExchanges,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.MktDepthExchanges:
+				case sdkadapter.MktDepthExchanges:
 					delete(eng.singletons, singletonMktDepthExchanges)
 					exchanges := make([]DepthExchange, len(m.Exchanges))
 					for i, x := range m.Exchanges {
@@ -1443,7 +1500,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.MktDepthExchangesRequest{}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.MktDepthExchangesRequest{}); err != nil {
 			delete(e.singletons, singletonMktDepthExchanges)
 			resp <- result{err: err}
 		}
@@ -1479,7 +1536,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 			opKind: OpNewsProviders,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.NewsProviders:
+				case sdkadapter.NewsProviders:
 					delete(eng.singletons, singletonNewsProviders)
 					providers := make([]NewsProvider, len(m.Providers))
 					for i, p := range m.Providers {
@@ -1497,7 +1554,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.NewsProvidersRequest{}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.NewsProvidersRequest{}); err != nil {
 			delete(e.singletons, singletonNewsProviders)
 			resp <- result{err: err}
 		}
@@ -1533,7 +1590,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 			opKind: OpScannerParameters,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.ScannerParameters:
+				case sdkadapter.ScannerParameters:
 					delete(eng.singletons, singletonScannerParameters)
 					resp <- result{xml: m.XML}
 				}
@@ -1547,7 +1604,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.ScannerParametersRequest{}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.ScannerParametersRequest{}); err != nil {
 			delete(e.singletons, singletonScannerParameters)
 			resp <- result{err: err}
 		}
@@ -1581,12 +1638,12 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 			opKind: OpUserInfo,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.UserInfo:
+				case sdkadapter.UserInfo:
 					eng.deleteKeyedRoute(reqID)
 					resp <- result{whiteBrandingID: m.WhiteBrandingID}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, eng *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, eng *engine) {
 				eng.deleteKeyedRoute(reqID)
 				resp <- result{err: eng.apiErr(OpUserInfo, m)}
 			},
@@ -1599,7 +1656,7 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.UserInfoRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.UserInfoRequest{ReqID: reqID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
@@ -1633,7 +1690,7 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 			opKind: OpMatchingSymbols,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.MatchingSymbols:
+				case sdkadapter.MatchingSymbols:
 					eng.deleteKeyedRoute(reqID)
 					symbols := make([]MatchingSymbol, len(m.Symbols))
 					for i, s := range m.Symbols {
@@ -1650,7 +1707,7 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 					resp <- result{symbols: symbols}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, eng *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, eng *engine) {
 				eng.deleteKeyedRoute(reqID)
 				resp <- result{err: eng.apiErr(OpMatchingSymbols, m)}
 			},
@@ -1663,7 +1720,7 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
@@ -1697,7 +1754,7 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 			opKind: OpHeadTimestamp,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.HeadTimestamp:
+				case sdkadapter.HeadTimestamp:
 					timestamp, err := parseHeadTimestamp(m.Timestamp)
 					if err != nil {
 						eng.deleteKeyedRoute(reqID)
@@ -1708,7 +1765,7 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 					resp <- result{timestamp: timestamp}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, eng *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, eng *engine) {
 				eng.deleteKeyedRoute(reqID)
 				resp <- result{err: eng.apiErr(OpHeadTimestamp, m)}
 			},
@@ -1721,7 +1778,7 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.HeadTimestampRequest{
+		if err := e.sendContext(ctx, sdkadapter.HeadTimestampRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
 			WhatToShow: string(req.WhatToShow),
@@ -1736,7 +1793,7 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelHeadTimestamp{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelHeadTimestamp{ReqID: reqID})
 			}
 		})
 	})
@@ -1767,7 +1824,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 			opKind: OpMarketRule,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.MarketRule:
+				case sdkadapter.MarketRule:
 					delete(eng.singletons, singletonMarketRule)
 					increments := make([]PriceIncrement, len(m.Increments))
 					for i, inc := range m.Increments {
@@ -1803,7 +1860,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.MarketRuleRequest{MarketRuleID: marketRuleID}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.MarketRuleRequest{MarketRuleID: marketRuleID}); err != nil {
 			delete(e.singletons, singletonMarketRule)
 			resp <- result{err: err}
 		}
@@ -1841,7 +1898,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 			opKind: OpCompletedOrders,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.CompletedOrder:
+				case sdkadapter.CompletedOrder:
 					qty, err := parseRequiredDecimal(m.Quantity, "completed order quantity")
 					if err != nil {
 						delete(eng.singletons, singletonCompletedOrders)
@@ -1869,7 +1926,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 						Filled:    filled,
 						Remaining: remaining,
 					})
-				case codec.CompletedOrderEnd:
+				case sdkadapter.CompletedOrderEnd:
 					delete(eng.singletons, singletonCompletedOrders)
 					resp <- result{orders: collected}
 				}
@@ -1883,7 +1940,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.CompletedOrdersRequest{APIOnly: apiOnly}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.CompletedOrdersRequest{APIOnly: apiOnly}); err != nil {
 			delete(e.singletons, singletonCompletedOrders)
 			resp <- result{err: err}
 		}
@@ -1941,7 +1998,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					return
 				}
 				delete(e.singletons, singletonAccountUpdates)
-				_ = e.send(codec.AccountUpdatesRequest{Subscribe: false, Account: account})
+				_ = e.send(sdkadapter.AccountUpdatesRequest{Subscribe: false, Account: account})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -1951,14 +2008,14 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			opKind:       OpAccountUpdates,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.AccountUpdatesRequest{Subscribe: true, Account: account},
+			request:      sdkadapter.AccountUpdatesRequest{Subscribe: true, Account: account},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.UpdateAccountValue:
+				case sdkadapter.UpdateAccountValue:
 					sub.emit(AccountUpdate{AccountValue: &AccountUpdateValue{
 						Key: m.Key, Value: m.Value, Currency: m.Currency, Account: m.Account,
 					}})
-				case codec.UpdatePortfolio:
+				case sdkadapter.UpdatePortfolio:
 					position, err := parseOptionalDecimal(m.Position, "account updates position")
 					if err != nil {
 						delete(e.singletons, singletonAccountUpdates)
@@ -2005,9 +2062,9 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 						UnrealizedPNL: unrealizedPNL,
 						RealizedPNL:   realizedPNL,
 					}})
-				case codec.UpdateAccountTime:
+				case sdkadapter.UpdateAccountTime:
 					// Informational timestamp — silently consumed.
-				case codec.AccountDownloadEnd:
+				case sdkadapter.AccountDownloadEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
 			},
@@ -2019,7 +2076,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.sendContext(ctx, codec.AccountUpdatesRequest{Subscribe: true, Account: account}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.AccountUpdatesRequest{Subscribe: true, Account: account}); err != nil {
 			delete(e.singletons, singletonAccountUpdates)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2081,7 +2138,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelAccountUpdatesMulti{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelAccountUpdatesMulti{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2091,19 +2148,19 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 			opKind:       OpAccountUpdatesMulti,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.AccountUpdatesMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
+			request:      sdkadapter.AccountUpdatesMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.AccountUpdateMultiValue:
+				case sdkadapter.AccountUpdateMultiValue:
 					sub.emit(AccountUpdateMultiValue{
 						Account: m.Account, ModelCode: m.ModelCode,
 						Key: m.Key, Value: m.Value, Currency: m.Currency,
 					})
-				case codec.AccountUpdateMultiEnd:
+				case sdkadapter.AccountUpdateMultiEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpAccountUpdatesMulti, m))
 			},
@@ -2177,7 +2234,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelPositionsMulti{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelPositionsMulti{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2187,10 +2244,10 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			opKind:       OpPositionsMulti,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.PositionsMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
+			request:      sdkadapter.PositionsMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.PositionMulti:
+				case sdkadapter.PositionMulti:
 					position, err := parseRequiredDecimal(m.Position, "positions multi position")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -2208,11 +2265,11 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 						Contract: fromCodecContract(m.Contract),
 						Position: position, AvgCost: avgCost,
 					})
-				case codec.PositionMultiEnd:
+				case sdkadapter.PositionMultiEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpPositionsMulti, m))
 			},
@@ -2276,7 +2333,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelPnL{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelPnL{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2285,9 +2342,9 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			opKind:       OpPnL,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
+			request:      sdkadapter.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
 			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.PnLValue); ok {
+				if m, ok := msg.(sdkadapter.PnLValue); ok {
 					daily, err := parseOptionalDecimal(m.DailyPnL, "pnl daily")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -2309,7 +2366,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 					sub.emit(PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpPnL, m))
 			},
@@ -2373,7 +2430,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelPnLSingle{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelPnLSingle{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2382,9 +2439,9 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			opKind:       OpPnLSingle,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID},
+			request:      sdkadapter.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID},
 			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.PnLSingleValue); ok {
+				if m, ok := msg.(sdkadapter.PnLSingleValue); ok {
 					pos, err := parseOptionalDecimal(m.Position, "pnl single position")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -2418,7 +2475,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 					sub.emit(PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpPnLSingle, m))
 			},
@@ -2482,7 +2539,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelTickByTick{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelTickByTick{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2491,12 +2548,12 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			opKind:       OpTickByTick,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.TickByTickRequest{
+			request: sdkadapter.TickByTickRequest{
 				ReqID: reqID, Contract: toCodecContract(req.Contract),
 				TickType: string(req.TickType), NumberOfTicks: req.NumberOfTicks, IgnoreSize: req.IgnoreSize,
 			},
 			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.TickByTickData); ok {
+				if m, ok := msg.(sdkadapter.TickByTickData); ok {
 					ts, err := parseTickByTickTime(m.Time)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -2556,7 +2613,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 					sub.emit(tick)
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				if m.Code == 10167 {
 					e.emitEvent(m.Code, m.Message)
 					return
@@ -2628,7 +2685,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 					return
 				}
 				delete(e.singletons, singletonNewsBulletins)
-				_ = e.send(codec.CancelNewsBulletins{})
+				_ = e.send(sdkadapter.CancelNewsBulletins{})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2637,9 +2694,9 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			opKind:       OpNewsBulletins,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.NewsBulletinsRequest{AllMessages: allMessages},
+			request:      sdkadapter.NewsBulletinsRequest{AllMessages: allMessages},
 			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.NewsBulletin); ok {
+				if m, ok := msg.(sdkadapter.NewsBulletin); ok {
 					sub.emit(NewsBulletin{MsgID: m.MsgID, MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
 				}
 			},
@@ -2651,7 +2708,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.sendContext(ctx, codec.NewsBulletinsRequest{AllMessages: allMessages}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.NewsBulletinsRequest{AllMessages: allMessages}); err != nil {
 			delete(e.singletons, singletonNewsBulletins)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -2719,7 +2776,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelHistoricalData{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelHistoricalData{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -2732,7 +2789,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			request:      codecReq,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.HistoricalBar:
+				case sdkadapter.HistoricalBar:
 					bar, err := fromCodecBar(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -2740,10 +2797,10 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 						return
 					}
 					sub.emit(bar)
-				case codec.HistoricalBarsEnd:
+				case sdkadapter.HistoricalBarsEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
-				case codec.HistoricalDataUpdate:
-					bar, err := fromCodecBar(codec.HistoricalBar{
+				case sdkadapter.HistoricalDataUpdate:
+					bar, err := fromCodecBar(sdkadapter.HistoricalBar{
 						ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
 						Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP, Count: m.Count,
 					})
@@ -2755,7 +2812,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 					sub.emit(bar)
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				if m.Code == 10167 {
 					e.emitEvent(m.Code, m.Message)
 					return
@@ -2812,7 +2869,7 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 			opKind: OpSecDefOptParams,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.SecDefOptParamsResponse:
+				case sdkadapter.SecDefOptParamsResponse:
 					strikes := make([]decimal.Decimal, len(m.Strikes))
 					for i, s := range m.Strikes {
 						strike, err := parseRequiredDecimal(s, "sec def opt params strike")
@@ -2831,12 +2888,12 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 						Expirations:     append([]string(nil), m.Expirations...),
 						Strikes:         strikes,
 					})
-				case codec.SecDefOptParamsEnd:
+				case sdkadapter.SecDefOptParamsEnd:
 					delete(e.keyed, reqID)
 					resp <- result{values: values}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpSecDefOptParams, m)}
 			},
@@ -2849,7 +2906,7 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.SecDefOptParamsRequest{
+		if err := e.sendContext(ctx, sdkadapter.SecDefOptParamsRequest{
 			ReqID:             reqID,
 			UnderlyingSymbol:  req.UnderlyingSymbol,
 			FutFopExchange:    req.FutFopExchange,
@@ -2887,7 +2944,7 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 			opKind: OpSmartComponents,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.SmartComponentsResponse:
+				case sdkadapter.SmartComponentsResponse:
 					delete(e.keyed, reqID)
 					components := make([]SmartComponent, len(m.Components))
 					for i, c := range m.Components {
@@ -2900,7 +2957,7 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 					resp <- result{components: components}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpSmartComponents, m)}
 			},
@@ -2913,7 +2970,7 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.SmartComponentsRequest{ReqID: reqID, BBOExchange: bboExchange}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.SmartComponentsRequest{ReqID: reqID, BBOExchange: bboExchange}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -2945,7 +3002,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 			opKind: OpCalcImpliedVol,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.TickOptionComputation:
+				case sdkadapter.TickOptionComputation:
 					delete(e.keyed, reqID)
 					value, err := fromCodecOptionComputation(m)
 					if err != nil {
@@ -2955,7 +3012,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 					resp <- result{value: value}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpCalcImpliedVol, m)}
 			},
@@ -2968,7 +3025,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.CalcImpliedVolatilityRequest{
+		if err := e.sendContext(ctx, sdkadapter.CalcImpliedVolatilityRequest{
 			ReqID:       reqID,
 			Contract:    toCodecContract(req.Contract),
 			OptionPrice: req.OptionPrice.String(),
@@ -2983,7 +3040,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelCalcImpliedVolatility{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelCalcImpliedVolatility{ReqID: reqID})
 			}
 		})
 	})
@@ -3010,7 +3067,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 			opKind: OpCalcOptionPrice,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.TickOptionComputation:
+				case sdkadapter.TickOptionComputation:
 					delete(e.keyed, reqID)
 					value, err := fromCodecOptionComputation(m)
 					if err != nil {
@@ -3020,7 +3077,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 					resp <- result{value: value}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpCalcOptionPrice, m)}
 			},
@@ -3033,7 +3090,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.CalcOptionPriceRequest{
+		if err := e.sendContext(ctx, sdkadapter.CalcOptionPriceRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
 			Volatility: req.Volatility.String(),
@@ -3048,7 +3105,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelCalcOptionPrice{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelCalcOptionPrice{ReqID: reqID})
 			}
 		})
 	})
@@ -3075,7 +3132,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 			opKind: OpHistogramData,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.HistogramDataResponse:
+				case sdkadapter.HistogramDataResponse:
 					delete(e.keyed, reqID)
 					entries := make([]HistogramEntry, len(m.Entries))
 					for i, entry := range m.Entries {
@@ -3097,7 +3154,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 					resp <- result{entries: entries}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpHistogramData, m)}
 			},
@@ -3110,7 +3167,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.HistogramDataRequest{
+		if err := e.sendContext(ctx, sdkadapter.HistogramDataRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(req.Contract),
 			UseRTH:   req.UseRTH,
@@ -3125,7 +3182,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelHistogramData{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelHistogramData{ReqID: reqID})
 			}
 		})
 	})
@@ -3152,7 +3209,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 			opKind: OpHistoricalTicks,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.HistoricalTicksResponse:
+				case sdkadapter.HistoricalTicksResponse:
 					e.deleteKeyedRoute(reqID)
 					ticks := make([]HistoricalTick, len(m.Ticks))
 					for i, t := range m.Ticks {
@@ -3174,7 +3231,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 						}
 					}
 					resp <- result{value: HistoricalTicksResult{Ticks: ticks}}
-				case codec.HistoricalTicksBidAskResponse:
+				case sdkadapter.HistoricalTicksBidAskResponse:
 					e.deleteKeyedRoute(reqID)
 					ticks := make([]HistoricalTickBidAsk, len(m.Ticks))
 					for i, t := range m.Ticks {
@@ -3207,7 +3264,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 						}
 					}
 					resp <- result{value: HistoricalTicksResult{BidAsk: ticks}}
-				case codec.HistoricalTicksLastResponse:
+				case sdkadapter.HistoricalTicksLastResponse:
 					e.deleteKeyedRoute(reqID)
 					ticks := make([]HistoricalTickLast, len(m.Ticks))
 					for i, t := range m.Ticks {
@@ -3234,7 +3291,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 					resp <- result{value: HistoricalTicksResult{Last: ticks}}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpHistoricalTicks, m)}
 			},
@@ -3247,7 +3304,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.HistoricalTicksRequest{
+		if err := e.sendContext(ctx, sdkadapter.HistoricalTicksRequest{
 			ReqID:         reqID,
 			Contract:      toCodecContract(req.Contract),
 			StartDateTime: formatHistoricalTickTime(req.StartTime),
@@ -3288,12 +3345,12 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 			opKind: OpNewsArticle,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.NewsArticleResponse:
+				case sdkadapter.NewsArticleResponse:
 					delete(e.keyed, reqID)
 					resp <- result{article: NewsArticle{ArticleType: m.ArticleType, ArticleText: m.ArticleText}}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpNewsArticle, m)}
 			},
@@ -3306,7 +3363,7 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.NewsArticleRequest{ReqID: reqID, ProviderCode: string(req.ProviderCode), ArticleID: req.ArticleID}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.NewsArticleRequest{ReqID: reqID, ProviderCode: string(req.ProviderCode), ArticleID: req.ArticleID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3339,7 +3396,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 			opKind: OpHistoricalNews,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.HistoricalNewsItem:
+				case sdkadapter.HistoricalNewsItem:
 					timestamp, err := parseHistoricalNewsTime(m.Time)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -3350,12 +3407,12 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 						Time: timestamp, ProviderCode: NewsProviderCode(m.ProviderCode),
 						ArticleID: m.ArticleID, Headline: m.Headline,
 					})
-				case codec.HistoricalNewsEnd:
+				case sdkadapter.HistoricalNewsEnd:
 					e.deleteKeyedRoute(reqID)
 					resp <- result{items: collected}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpHistoricalNews, m)}
 			},
@@ -3368,7 +3425,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.HistoricalNewsRequest{
+		if err := e.sendContext(ctx, sdkadapter.HistoricalNewsRequest{
 			ReqID: reqID, ConID: req.ConID, ProviderCodes: formatProviderCodes(req.ProviderCodes),
 			StartDate: formatHistoricalNewsTime(req.StartTime), EndDate: formatHistoricalNewsTime(req.EndTime), TotalResults: req.TotalResults,
 		}); err != nil {
@@ -3415,7 +3472,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelScannerSubscription{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelScannerSubscription{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -3424,7 +3481,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			opKind:       OpScannerSubscription,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.ScannerSubscriptionRequest{
+			request: sdkadapter.ScannerSubscriptionRequest{
 				ReqID:        reqID,
 				NumberOfRows: req.NumberOfRows,
 				Instrument:   string(req.Instrument),
@@ -3433,7 +3490,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.ScannerDataResponse:
+				case sdkadapter.ScannerDataResponse:
 					results := make([]ScannerResult, len(m.Entries))
 					for i, entry := range m.Entries {
 						results[i] = ScannerResult{
@@ -3448,7 +3505,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 					sub.emit(results)
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpScannerSubscription, m))
 			},
@@ -3506,7 +3563,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 			opKind: OpFAConfig,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
-				case codec.ReceiveFA:
+				case sdkadapter.ReceiveFA:
 					delete(eng.singletons, singletonFA)
 					resp <- result{xml: m.XML}
 				}
@@ -3520,7 +3577,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.RequestFA{FADataType: int(faDataType)}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.RequestFA{FADataType: int(faDataType)}); err != nil {
 			delete(e.singletons, singletonFA)
 			resp <- result{err: err}
 		}
@@ -3540,7 +3597,7 @@ func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml strin
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.ReplaceFA{FADataType: int(faDataType), XML: xml})
+		return e.sendContext(ctx, sdkadapter.ReplaceFA{FADataType: int(faDataType), XML: xml})
 	})
 }
 
@@ -3561,7 +3618,7 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 			opKind: OpSoftDollarTiers,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.SoftDollarTiersResponse:
+				case sdkadapter.SoftDollarTiersResponse:
 					delete(e.keyed, reqID)
 					tiers := make([]SoftDollarTier, len(m.Tiers))
 					for i, t := range m.Tiers {
@@ -3570,7 +3627,7 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 					resp <- result{tiers: tiers}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpSoftDollarTiers, m)}
 			},
@@ -3583,7 +3640,7 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3617,12 +3674,12 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 			opKind: OpWSHMetaData,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.WSHMetaDataResponse:
+				case sdkadapter.WSHMetaDataResponse:
 					delete(e.keyed, reqID)
 					resp <- result{dataJSON: m.DataJSON}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpWSHMetaData, m)}
 			},
@@ -3635,7 +3692,7 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.WSHMetaDataRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.WSHMetaDataRequest{ReqID: reqID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3667,12 +3724,12 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 			opKind: OpWSHEventData,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.WSHEventDataResponse:
+				case sdkadapter.WSHEventDataResponse:
 					delete(e.keyed, reqID)
 					resp <- result{dataJSON: m.DataJSON}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpWSHEventData, m)}
 			},
@@ -3685,7 +3742,7 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.WSHEventDataRequest{
+		if err := e.sendContext(ctx, sdkadapter.WSHEventDataRequest{
 			ReqID:           reqID,
 			ConID:           req.ConID,
 			Filter:          string(req.Filter),
@@ -3729,12 +3786,12 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 			opKind: OpDisplayGroups,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.DisplayGroupList:
+				case sdkadapter.DisplayGroupList:
 					delete(e.keyed, reqID)
 					resp <- result{groups: m.Groups}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpDisplayGroups, m)}
 			},
@@ -3747,7 +3804,7 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
+		if err := e.sendContext(ctx, sdkadapter.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
 		}
@@ -3792,7 +3849,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID})
+				_ = e.send(sdkadapter.UnsubscribeFromGroupEventsRequest{ReqID: reqID})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -3801,13 +3858,13 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			opKind:       OpDisplayGroupEvents,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codec.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: int(groupID)},
+			request:      sdkadapter.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: int(groupID)},
 			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.DisplayGroupUpdated); ok {
+				if m, ok := msg.(sdkadapter.DisplayGroupUpdated); ok {
 					sub.emit(DisplayGroupUpdate{ContractInfo: m.ContractInfo})
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpDisplayGroupEvents, m))
 			},
@@ -3856,11 +3913,11 @@ func (e *engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.UpdateDisplayGroupRequest{ReqID: reqID, ContractInfo: contractInfo})
+		return e.sendContext(ctx, sdkadapter.UpdateDisplayGroupRequest{ReqID: reqID, ContractInfo: contractInfo})
 	})
 }
 
-func fromCodecOptionComputation(m codec.TickOptionComputation) (OptionComputation, error) {
+func fromCodecOptionComputation(m sdkadapter.TickOptionComputation) (OptionComputation, error) {
 	iv, err := parseOptionalDecimal(m.ImpliedVol, "option computation implied vol")
 	if err != nil {
 		return OptionComputation{}, err
@@ -3927,7 +3984,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 					ch <- ErrNotReady
 					return
 				}
-				ch <- e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
+				ch <- e.sendContext(ctx, sdkadapter.CancelOrderRequest{OrderID: orderID})
 			})
 			select {
 			case err := <-ch:
@@ -3987,7 +4044,7 @@ func (e *engine) CancelOrder(ctx context.Context, orderID int64) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
+		return e.sendContext(ctx, sdkadapter.CancelOrderRequest{OrderID: orderID})
 	})
 }
 
@@ -3999,7 +4056,7 @@ func (e *engine) GlobalCancel(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.GlobalCancelRequest{})
+		return e.sendContext(ctx, sdkadapter.GlobalCancelRequest{})
 	})
 }
 
@@ -4021,12 +4078,12 @@ func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest
 			opKind: OpFundamentalData,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case codec.FundamentalDataResponse:
+				case sdkadapter.FundamentalDataResponse:
 					delete(e.keyed, reqID)
 					resp <- result{data: m.Data}
 				}
 			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+			handleAPIErr: func(m sdkadapter.APIError, e *engine) {
 				delete(e.keyed, reqID)
 				resp <- result{err: e.apiErr(OpFundamentalData, m)}
 			},
@@ -4039,7 +4096,7 @@ func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest
 				resp <- result{err: err}
 			},
 		}
-		if err := e.sendContext(ctx, codec.FundamentalDataRequest{
+		if err := e.sendContext(ctx, sdkadapter.FundamentalDataRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
 			ReportType: string(req.ReportType),
@@ -4054,7 +4111,7 @@ func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelFundamentalData{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelFundamentalData{ReqID: reqID})
 			}
 		})
 	})
@@ -4074,7 +4131,7 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 			override = 1
 		}
 		reqID := e.allocReqID()
-		return e.sendContext(ctx, codec.ExerciseOptionsRequest{
+		return e.sendContext(ctx, sdkadapter.ExerciseOptionsRequest{
 			ReqID:            reqID,
 			Contract:         toCodecContract(req.Contract),
 			ExerciseAction:   int(req.ExerciseAction),
@@ -4098,10 +4155,10 @@ func (e *engine) run() {
 		}
 
 		select {
-		case err := <-e.transportErr:
+		case err := <-e.adapterErr:
 			if len(e.incoming) > 0 {
 				go func(err error) {
-					e.transportErr <- err
+					e.adapterErr <- err
 				}(err)
 				continue
 			}
@@ -4117,10 +4174,10 @@ func (e *engine) run() {
 			}
 		case msg := <-e.incoming:
 			e.handleIncoming(msg)
-		case err := <-e.transportErr:
+		case err := <-e.adapterErr:
 			if len(e.incoming) > 0 {
 				go func(err error) {
-					e.transportErr <- err
+					e.adapterErr <- err
 				}(err)
 				continue
 			}
@@ -4140,94 +4197,7 @@ func (e *engine) enqueue(fn func()) {
 }
 
 func (e *engine) startConnect(ctx context.Context, reconnect bool) {
-	if e.cfg.useSDK {
-		e.startSDKConnect(ctx, reconnect)
-		return
-	}
-	if e.closed {
-		return
-	}
-	e.bootstrap = bootstrapState{}
-	if reconnect {
-		e.setState(StateReconnecting, 0, "reconnect attempt", nil)
-	} else {
-		e.setState(StateConnecting, 0, "", nil)
-	}
-
-	conn, err := e.cfg.dialer.DialContext(ctx, "tcp", net.JoinHostPort(e.cfg.host, strconv.Itoa(e.cfg.port)))
-	if err != nil {
-		e.connectFailed("dial", err, reconnect)
-		return
-	}
-	if err := configureTCPKeepAlive(conn, e.cfg.tcpKeepAlive); err != nil {
-		_ = conn.Close()
-		e.connectFailed("keepalive", err, reconnect)
-		return
-	}
-
-	// Synchronous handshake before starting transport goroutines.
-	deadline := time.Now().Add(10 * time.Second)
-
-	// 1. Send API prefix (raw bytes, not framed)
-	if err := transport.WriteRaw(conn, codec.EncodeHandshakePrefix()); err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
-		return
-	}
-
-	// 2. Send version range (framed)
-	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, maxServerVersion)); err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
-		return
-	}
-
-	// 3. Read server info (framed, but no msg_id prefix)
-	serverPayload, err := transport.ReadOneFrame(conn, deadline)
-	if err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
-		return
-	}
-	info, err := codec.DecodeServerInfo(serverPayload)
-	if err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
-		return
-	}
-
-	// 4. Version check
-	if info.ServerVersion < minServerVersion {
-		// A server-version mismatch is a protocol capability failure, not a
-		// transient reconnect failure. Terminate even during reconnect.
-		conn.Close()
-		e.reportReady(ErrUnsupportedServerVersion)
-		e.closeEngine(ErrUnsupportedServerVersion)
-		return
-	}
-	e.updateSnapshot(func(s *Snapshot) {
-		s.ServerVersion = info.ServerVersion
-	})
-	e.bootstrap.serverInfo = true
-
-	// 5. Send START_API (framed normal message)
-	startPayload, err := codec.Encode(codec.StartAPI{ClientID: e.cfg.clientID})
-	if err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
-		return
-	}
-	if err := wire.WriteFrame(conn, startPayload); err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
-		return
-	}
-
-	// 6. Start async transport — ManagedAccounts + NextValidID arrive on incoming channel
-	e.transport = transport.New(conn, e.cfg.logger, e.cfg.sendRate)
-	e.attachTransport(e.transport)
-	e.scheduleBootstrapTimeout(e.transport)
-	e.setState(StateHandshaking, 0, "", nil)
+	e.startSDKConnect(ctx, reconnect)
 }
 
 func (e *engine) startSDKConnect(ctx context.Context, reconnect bool) {
@@ -4278,44 +4248,6 @@ func (e *engine) connectFailed(op string, err error, reconnect bool) {
 	e.scheduleReconnect()
 }
 
-func configureTCPKeepAlive(conn net.Conn, period time.Duration) error {
-	tcpConn, ok := conn.(*net.TCPConn)
-	if !ok {
-		return nil
-	}
-	if period <= 0 {
-		return tcpConn.SetKeepAlive(false)
-	}
-	if err := tcpConn.SetKeepAlive(true); err != nil {
-		return err
-	}
-	return tcpConn.SetKeepAlivePeriod(period)
-}
-
-func (e *engine) attachTransport(tr *transport.Conn) {
-	decodedDone := make(chan struct{})
-	go func() {
-		defer close(decodedDone)
-		for payload := range tr.Incoming() {
-			msgs, err := codec.DecodeBatch(payload)
-			if err != nil {
-				_ = tr.Close()
-				e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}
-				return
-			}
-			for _, msg := range msgs {
-				e.incoming <- msg
-			}
-		}
-	}()
-
-	go func() {
-		<-tr.Done()
-		<-decodedDone
-		e.transportErr <- tr.Wait()
-	}()
-}
-
 type sdkConnectionMetadata struct {
 	serverVersion  int
 	connectionTime string
@@ -4330,7 +4262,7 @@ func (e *engine) attachSDKAdapter(adapter sdkadapter.Adapter) {
 			if err != nil {
 				select {
 				case <-e.done:
-				case e.transportErr <- err:
+				case e.adapterErr <- err:
 				}
 				return
 			}
@@ -4347,7 +4279,7 @@ func (e *engine) attachSDKAdapter(adapter sdkadapter.Adapter) {
 				if err != nil {
 					select {
 					case <-e.done:
-					case e.transportErr <- err:
+					case e.adapterErr <- err:
 					}
 					return
 				}
@@ -4372,13 +4304,15 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 			connectionTime: event.ConnectionTime,
 		}, nil
 	case sdkadapter.EventManagedAccounts:
-		return codec.ManagedAccounts{Accounts: append([]string(nil), event.Accounts...)}, nil
+		return sdkadapter.ManagedAccounts{Accounts: append([]string(nil), event.Accounts...)}, nil
 	case sdkadapter.EventNextValidID:
-		return codec.NextValidID{OrderID: event.NextValidID}, nil
+		return sdkadapter.NextValidID{OrderID: event.NextValidID}, nil
 	case sdkadapter.EventCurrentTime:
-		return codec.CurrentTime{Time: strconv.FormatInt(event.CurrentTime, 10)}, nil
+		return sdkadapter.CurrentTime{Time: strconv.FormatInt(event.CurrentTime, 10)}, nil
+	case sdkadapter.EventCurrentTimeMillis:
+		return sdkadapter.CurrentTimeMillis{Time: strconv.FormatInt(event.CurrentTime, 10)}, nil
 	case sdkadapter.EventAccountSummary:
-		return codec.AccountSummaryValue{
+		return sdkadapter.AccountSummaryValue{
 			ReqID:    event.ReqID,
 			Account:  event.AccountSummary.Account,
 			Tag:      event.AccountSummary.Tag,
@@ -4386,9 +4320,29 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 			Currency: event.AccountSummary.Currency,
 		}, nil
 	case sdkadapter.EventAccountSummaryEnd:
-		return codec.AccountSummaryEnd{ReqID: event.ReqID}, nil
+		return sdkadapter.AccountSummaryEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventContractDetails:
+		return sdkadapter.ContractDetails{
+			ReqID:      event.ReqID,
+			Contract:   fromSDKContract(event.ContractDetails.Contract),
+			MarketName: event.ContractDetails.MarketName,
+			MinTick:    event.ContractDetails.MinTick,
+			LongName:   event.ContractDetails.LongName,
+			TimeZoneID: event.ContractDetails.TimeZoneID,
+		}, nil
+	case sdkadapter.EventContractDetailsEnd:
+		return sdkadapter.ContractDetailsEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventPosition:
+		return sdkadapter.Position{
+			Account:  event.Position.Account,
+			Contract: fromSDKContract(event.Position.Contract),
+			Position: event.Position.Position,
+			AvgCost:  event.Position.AvgCost,
+		}, nil
+	case sdkadapter.EventPositionEnd:
+		return sdkadapter.PositionEnd{}, nil
 	case sdkadapter.EventAPIError:
-		return codec.APIError{
+		return sdkadapter.APIError{
 			ReqID:                   event.APIError.ReqID,
 			Code:                    event.APIError.Code,
 			Message:                 event.APIError.Message,
@@ -4428,23 +4382,6 @@ func (e *engine) scheduleSDKBootstrapTimeout(adapter sdkadapter.Adapter, reconne
 	})
 }
 
-func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
-	time.AfterFunc(bootstrapTimeout, func() {
-		e.enqueue(func() {
-			if e.closed || e.transport != tr {
-				return
-			}
-			e.snapshotMu.RLock()
-			state := e.snapshot.State
-			e.snapshotMu.RUnlock()
-			if state != StateHandshaking {
-				return
-			}
-			_ = tr.Close()
-		})
-	})
-}
-
 func (e *engine) handleIncoming(msg any) {
 	switch m := msg.(type) {
 	case sdkConnectionMetadata:
@@ -4454,21 +4391,21 @@ func (e *engine) handleIncoming(msg any) {
 		e.bootstrap.serverInfo = true
 		e.maybeReady()
 		return
-	case codec.ManagedAccounts:
+	case sdkadapter.ManagedAccounts:
 		e.updateSnapshot(func(s *Snapshot) {
 			s.ManagedAccounts = append([]string(nil), m.Accounts...)
 		})
 		e.bootstrap.managed = true
 		e.maybeReady()
 		return
-	case codec.NextValidID:
+	case sdkadapter.NextValidID:
 		e.updateSnapshot(func(s *Snapshot) {
 			s.NextValidID = m.OrderID
 		})
 		e.bootstrap.nextValidID = true
 		e.maybeReady()
 		return
-	case codec.CurrentTime:
+	case sdkadapter.CurrentTime:
 		// CurrentTime responses arrive without a reqID. Parse the server's
 		// epoch-seconds string, update the session snapshot, and route to a
 		// registered singleton one-shot if one exists. The route handler
@@ -4483,7 +4420,17 @@ func (e *engine) handleIncoming(msg any) {
 			route.handle(m, e)
 		}
 		return
-	case codec.APIError:
+	case sdkadapter.CurrentTimeMillis:
+		if ts, err := parseEpochMilliseconds(m.Time); err == nil {
+			e.updateSnapshot(func(s *Snapshot) {
+				s.CurrentTime = ts
+			})
+		}
+		if route, ok := e.singletons[singletonCurrentTimeMillis]; ok {
+			route.handle(m, e)
+		}
+		return
+	case sdkadapter.APIError:
 		e.handleAPIError(m)
 		return
 	}
@@ -4492,7 +4439,7 @@ func (e *engine) handleIncoming(msg any) {
 		if route, found := e.keyed[reqID]; found {
 			route.handle(msg, e)
 			// ExecutionDetail needs dual dispatch: keyed subscription + order handle.
-			if m, ok := msg.(codec.ExecutionDetail); ok {
+			if m, ok := msg.(sdkadapter.ExecutionDetail); ok {
 				e.dispatchExecutionToOrder(m)
 			}
 			return
@@ -4500,64 +4447,64 @@ func (e *engine) handleIncoming(msg any) {
 	}
 
 	switch msg := msg.(type) {
-	case codec.ExecutionDetail:
+	case sdkadapter.ExecutionDetail:
 		// Unsolicited execution (reqID=-1 or no matching keyed route).
 		e.dispatchExecutionToOrder(msg)
 
-	case codec.Position, codec.PositionEnd:
+	case sdkadapter.Position, sdkadapter.PositionEnd:
 		if route, ok := e.singletons[singletonPositions]; ok {
 			route.handle(msg, e)
 		}
-	case codec.OpenOrder:
+	case sdkadapter.OpenOrder:
 		e.dispatchObservedOpenOrder(msg)
-	case codec.OrderStatus:
+	case sdkadapter.OrderStatus:
 		e.dispatchObservedOrderStatus(msg)
-	case codec.OpenOrderEnd:
+	case sdkadapter.OpenOrderEnd:
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			route.handle(msg, e)
 		}
-	case codec.CommissionReport:
+	case sdkadapter.CommissionReport:
 		e.routeCommissionReport(msg)
-	case codec.FamilyCodes:
+	case sdkadapter.FamilyCodes:
 		if rt, ok := e.singletons[singletonFamilyCodes]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.MktDepthExchanges:
+	case sdkadapter.MktDepthExchanges:
 		if rt, ok := e.singletons[singletonMktDepthExchanges]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.NewsProviders:
+	case sdkadapter.NewsProviders:
 		if rt, ok := e.singletons[singletonNewsProviders]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.ScannerParameters:
+	case sdkadapter.ScannerParameters:
 		if rt, ok := e.singletons[singletonScannerParameters]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.MarketRule:
+	case sdkadapter.MarketRule:
 		if rt, ok := e.singletons[singletonMarketRule]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.CompletedOrder, codec.CompletedOrderEnd:
+	case sdkadapter.CompletedOrder, sdkadapter.CompletedOrderEnd:
 		if rt, ok := e.singletons[singletonCompletedOrders]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.UpdateAccountValue, codec.UpdatePortfolio, codec.UpdateAccountTime, codec.AccountDownloadEnd:
+	case sdkadapter.UpdateAccountValue, sdkadapter.UpdatePortfolio, sdkadapter.UpdateAccountTime, sdkadapter.AccountDownloadEnd:
 		if rt, ok := e.singletons[singletonAccountUpdates]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.NewsBulletin:
+	case sdkadapter.NewsBulletin:
 		if rt, ok := e.singletons[singletonNewsBulletins]; ok {
 			rt.handle(msg, e)
 		}
-	case codec.ReceiveFA:
+	case sdkadapter.ReceiveFA:
 		if rt, ok := e.singletons[singletonFA]; ok {
 			rt.handle(msg, e)
 		}
 	}
 }
 
-func (e *engine) handleAPIError(msg codec.APIError) {
+func (e *engine) handleAPIError(msg sdkadapter.APIError) {
 	// Connectivity codes drive session state transitions.
 	switch msg.Code {
 	case 1100:
@@ -4573,8 +4520,8 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		e.emitResumed()
 		return
 	case 1300:
-		if e.transport != nil {
-			_ = e.transport.Close()
+		if e.adapter != nil {
+			_ = e.adapter.Close()
 		}
 		return
 	}
@@ -4599,6 +4546,17 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		}
 		e.emitEvent(msg.Code, msg.Message)
 		return
+	}
+
+	if msg.ReqID <= 0 {
+		if route, ok := e.singletons[singletonCurrentTimeMillis]; ok && route.handleAPIErr != nil {
+			route.handleAPIErr(msg, e)
+			return
+		}
+		if route, ok := e.singletons[singletonCurrentTime]; ok && route.handleAPIErr != nil {
+			route.handleAPIErr(msg, e)
+			return
+		}
 	}
 
 	// Request-specific errors (200, 420, etc.) are routed to the keyed
@@ -4640,11 +4598,10 @@ func (e *engine) handleTransportLoss(err error) {
 	if e.closed {
 		return
 	}
-	if e.transport == nil && e.adapter == nil {
+	if e.adapter == nil {
 		return
 	}
 	err = normalizeTransportErr(err)
-	e.transport = nil
 	if e.adapter != nil {
 		_ = e.adapter.Close()
 		e.adapter = nil
@@ -4658,7 +4615,7 @@ func (e *engine) handleTransportLoss(err error) {
 		e.closeEngine(err)
 		return
 	}
-	e.setState(StateReconnecting, 0, "transport lost", err)
+	e.setState(StateReconnecting, 0, "sdk adapter lost", err)
 	e.disconnectRoutes(err)
 	e.scheduleReconnect()
 }
@@ -4668,7 +4625,7 @@ func (e *engine) scheduleReconnect() {
 	e.reconnectAttempt++
 	time.AfterFunc(delay, func() {
 		e.enqueue(func() {
-			if e.closed || e.transport != nil || e.cfg.reconnect == ReconnectOff {
+			if e.closed || e.adapter != nil || e.cfg.reconnect == ReconnectOff {
 				return
 			}
 			dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -4770,9 +4727,6 @@ func (e *engine) closeEngine(err error) {
 		return
 	}
 	e.closed = true
-	if e.transport != nil {
-		_ = e.transport.Close()
-	}
 	if e.adapter != nil {
 		_ = e.adapter.Close()
 		e.adapter = nil
@@ -4789,7 +4743,7 @@ func (e *engine) closeEngine(err error) {
 		if !or.closed {
 			or.closed = true
 			// Terminal order status is authoritative for the handle's close (see
-			// docs/session-contract.md, "OrderHandle"). Session-level transport and
+			// docs/session-contract.md, "OrderHandle"). Session-level adapter and
 			// reconnect errors stay observable via SessionEvents() and Client.Wait()
 			// and must not bleed into per-order Wait() once the order reached a
 			// terminal business state (see "Completion and Reconnect").
@@ -4864,57 +4818,95 @@ func (e *engine) updateSnapshot(update func(*Snapshot)) {
 	update(&e.snapshot)
 }
 
-func (e *engine) send(msg codec.Message) error {
+func (e *engine) send(msg sdkadapter.Message) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return e.sendContext(ctx, msg)
 }
 
-func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
-	if e.adapter != nil {
-		return e.sendSDKContext(ctx, msg)
-	}
-	if e.transport == nil {
+func (e *engine) sendContext(ctx context.Context, msg sdkadapter.Message) error {
+	if e.adapter == nil {
 		return ErrNotReady
 	}
-	payload, err := codec.Encode(msg)
-	if err != nil {
-		return err
-	}
-	err = e.transport.Send(ctx, payload)
-	if errors.Is(err, transport.ErrSendQueueFull) {
-		return ErrInterrupted
-	}
-	return err
+	return e.sendSDKContext(ctx, msg)
 }
 
-func (e *engine) sendSDKContext(ctx context.Context, msg codec.Message) error {
+func (e *engine) sendSDKContext(ctx context.Context, msg sdkadapter.Message) error {
 	var command sdkadapter.Command
 	switch m := msg.(type) {
-	case codec.CurrentTimeRequest:
+	case sdkadapter.CurrentTimeRequest:
 		command = sdkadapter.Command{Kind: sdkadapter.CommandCurrentTime}
-	case codec.AccountSummaryRequest:
+	case sdkadapter.CurrentTimeMillisRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandCurrentTimeMillis}
+	case sdkadapter.AccountSummaryRequest:
 		command = sdkadapter.Command{
-			Kind:  sdkadapter.CommandAccountSummary,
-			ReqID: m.ReqID,
-			Group: m.Account,
-			Tags:  append([]string(nil), m.Tags...),
+			Kind: sdkadapter.CommandAccountSummary,
+			AccountSummary: sdkadapter.AccountSummaryCommand{
+				ReqID: m.ReqID,
+				Group: m.Account,
+				Tags:  append([]string(nil), m.Tags...),
+			},
 		}
-	case codec.CancelAccountSummary:
+	case sdkadapter.CancelAccountSummary:
 		command = sdkadapter.Command{
-			Kind:  sdkadapter.CommandCancelAccountSummary,
-			ReqID: m.ReqID,
+			Kind: sdkadapter.CommandCancelAccountSummary,
+			CancelAccountSummary: sdkadapter.CancelAccountSummaryCommand{
+				ReqID: m.ReqID,
+			},
 		}
+	case sdkadapter.ContractDetailsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandContractDetails,
+			ContractDetails: sdkadapter.ContractDetailsCommand{
+				ReqID:    m.ReqID,
+				Contract: toSDKContract(m.Contract),
+			},
+		}
+	case sdkadapter.PositionsRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandPositions}
+	case sdkadapter.CancelPositions:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandCancelPositions}
 	default:
 		return fmt.Errorf("ibkr: SDK runtime does not support %T yet", msg)
 	}
 	return e.adapter.Submit(ctx, command)
 }
 
-func normalizeTransportErr(err error) error {
-	if errors.Is(err, transport.ErrSendQueueFull) {
-		return ErrInterrupted
+func toSDKContract(c sdkadapter.Contract) sdkadapter.Contract {
+	return sdkadapter.Contract{
+		ConID:           c.ConID,
+		Symbol:          c.Symbol,
+		SecType:         c.SecType,
+		Expiry:          c.Expiry,
+		Strike:          c.Strike,
+		Right:           c.Right,
+		Multiplier:      c.Multiplier,
+		Exchange:        c.Exchange,
+		Currency:        c.Currency,
+		LocalSymbol:     c.LocalSymbol,
+		TradingClass:    c.TradingClass,
+		PrimaryExchange: c.PrimaryExchange,
 	}
+}
+
+func fromSDKContract(c sdkadapter.Contract) sdkadapter.Contract {
+	return sdkadapter.Contract{
+		ConID:           c.ConID,
+		Symbol:          c.Symbol,
+		SecType:         c.SecType,
+		Expiry:          c.Expiry,
+		Strike:          c.Strike,
+		Right:           c.Right,
+		Multiplier:      c.Multiplier,
+		Exchange:        c.Exchange,
+		Currency:        c.Currency,
+		LocalSymbol:     c.LocalSymbol,
+		TradingClass:    c.TradingClass,
+		PrimaryExchange: c.PrimaryExchange,
+	}
+}
+
+func normalizeTransportErr(err error) error {
 	return err
 }
 
@@ -4947,7 +4939,7 @@ func (e *engine) connectionSeq() uint64 {
 }
 
 func (e *engine) isReady() bool {
-	if e.transport == nil && e.adapter == nil {
+	if e.adapter == nil {
 		return false
 	}
 	e.snapshotMu.RLock()
@@ -4956,7 +4948,7 @@ func (e *engine) isReady() bool {
 	return state == StateReady || state == StateDegraded
 }
 
-func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
+func (e *engine) apiErr(opKind OpKind, msg sdkadapter.APIError) error {
 	return &APIError{
 		Code:          msg.Code,
 		Message:       msg.Message,
@@ -4965,7 +4957,7 @@ func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
 	}
 }
 
-func isOrderCancellationNotice(msg codec.APIError) bool {
+func isOrderCancellationNotice(msg sdkadapter.APIError) bool {
 	return msg.Code == 202
 }
 
@@ -5011,7 +5003,7 @@ func (e *engine) emitResumed() {
 	}
 }
 
-func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
+func (e *engine) dispatchObservedOpenOrder(msg sdkadapter.OpenOrder) {
 	orderRoute, orderObserved := e.orders[msg.OrderID]
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
 	if (!orderObserved || orderRoute.closed) && !singletonObserved {
@@ -5041,7 +5033,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	}
 }
 
-func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
+func (e *engine) dispatchObservedOrderStatus(msg sdkadapter.OrderStatus) {
 	orderRoute, ok := e.orders[msg.OrderID]
 	if !ok || orderRoute.closed {
 		return
@@ -5101,7 +5093,7 @@ func (e *engine) deleteKeyedRoute(reqID int) {
 	}
 }
 
-func (e *engine) routeCommissionReport(report codec.CommissionReport) {
+func (e *engine) routeCommissionReport(report sdkadapter.CommissionReport) {
 	for _, reqID := range e.executions.recordCommission(report) {
 		route, found := e.keyed[reqID]
 		if !found || route.opKind != OpExecutions {
@@ -5127,7 +5119,7 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 	}
 }
 
-func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
+func (e *engine) dispatchExecutionToOrder(m sdkadapter.ExecutionDetail) {
 	if m.OrderID == 0 {
 		return
 	}
@@ -5151,7 +5143,7 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	e.execToOrder[m.ExecID] = m.OrderID
 }
 
-func (e *engine) undeliveredCommissions(reqID int, execID string) []codec.CommissionReport {
+func (e *engine) undeliveredCommissions(reqID int, execID string) []sdkadapter.CommissionReport {
 	return e.executions.undeliveredCommissions(reqID, execID)
 }
 
@@ -5170,109 +5162,109 @@ func (e *engine) emitUndeliveredExecutionCommissions(reqID int, execID string, s
 
 func messageReqID(msg any) (int, bool) {
 	switch m := msg.(type) {
-	case codec.ContractDetails:
+	case sdkadapter.ContractDetails:
 		return m.ReqID, true
-	case codec.ContractDetailsEnd:
+	case sdkadapter.ContractDetailsEnd:
 		return m.ReqID, true
-	case codec.HistoricalBar:
+	case sdkadapter.HistoricalBar:
 		return m.ReqID, true
-	case codec.HistoricalBarsEnd:
+	case sdkadapter.HistoricalBarsEnd:
 		return m.ReqID, true
-	case codec.AccountSummaryValue:
+	case sdkadapter.AccountSummaryValue:
 		return m.ReqID, true
-	case codec.AccountSummaryEnd:
+	case sdkadapter.AccountSummaryEnd:
 		return m.ReqID, true
-	case codec.TickPrice:
+	case sdkadapter.TickPrice:
 		return m.ReqID, true
-	case codec.TickSize:
+	case sdkadapter.TickSize:
 		return m.ReqID, true
-	case codec.TickGeneric:
+	case sdkadapter.TickGeneric:
 		return m.ReqID, true
-	case codec.TickString:
+	case sdkadapter.TickString:
 		return m.ReqID, true
-	case codec.TickReqParams:
+	case sdkadapter.TickReqParams:
 		return m.ReqID, true
-	case codec.MarketDataType:
+	case sdkadapter.MarketDataType:
 		return m.ReqID, true
-	case codec.TickSnapshotEnd:
+	case sdkadapter.TickSnapshotEnd:
 		return m.ReqID, true
-	case codec.RealTimeBar:
+	case sdkadapter.RealTimeBar:
 		return m.ReqID, true
-	case codec.ExecutionDetail:
+	case sdkadapter.ExecutionDetail:
 		return m.ReqID, true
-	case codec.ExecutionsEnd:
+	case sdkadapter.ExecutionsEnd:
 		return m.ReqID, true
-	case codec.UserInfo:
+	case sdkadapter.UserInfo:
 		return m.ReqID, true
-	case codec.MatchingSymbols:
+	case sdkadapter.MatchingSymbols:
 		return m.ReqID, true
-	case codec.HeadTimestamp:
+	case sdkadapter.HeadTimestamp:
 		return m.ReqID, true
-	case codec.AccountUpdateMultiValue:
+	case sdkadapter.AccountUpdateMultiValue:
 		return m.ReqID, true
-	case codec.AccountUpdateMultiEnd:
+	case sdkadapter.AccountUpdateMultiEnd:
 		return m.ReqID, true
-	case codec.PositionMulti:
+	case sdkadapter.PositionMulti:
 		return m.ReqID, true
-	case codec.PositionMultiEnd:
+	case sdkadapter.PositionMultiEnd:
 		return m.ReqID, true
-	case codec.PnLValue:
+	case sdkadapter.PnLValue:
 		return m.ReqID, true
-	case codec.PnLSingleValue:
+	case sdkadapter.PnLSingleValue:
 		return m.ReqID, true
-	case codec.TickByTickData:
+	case sdkadapter.TickByTickData:
 		return m.ReqID, true
-	case codec.HistoricalDataUpdate:
+	case sdkadapter.HistoricalDataUpdate:
 		return m.ReqID, true
-	case codec.HistoricalScheduleResponse:
+	case sdkadapter.HistoricalScheduleResponse:
 		return m.ReqID, true
-	case codec.SecDefOptParamsResponse:
+	case sdkadapter.SecDefOptParamsResponse:
 		return m.ReqID, true
-	case codec.SecDefOptParamsEnd:
+	case sdkadapter.SecDefOptParamsEnd:
 		return m.ReqID, true
-	case codec.SmartComponentsResponse:
+	case sdkadapter.SmartComponentsResponse:
 		return m.ReqID, true
-	case codec.TickOptionComputation:
+	case sdkadapter.TickOptionComputation:
 		return m.ReqID, true
-	case codec.HistogramDataResponse:
+	case sdkadapter.HistogramDataResponse:
 		return m.ReqID, true
-	case codec.HistoricalTicksResponse:
+	case sdkadapter.HistoricalTicksResponse:
 		return m.ReqID, true
-	case codec.HistoricalTicksBidAskResponse:
+	case sdkadapter.HistoricalTicksBidAskResponse:
 		return m.ReqID, true
-	case codec.HistoricalTicksLastResponse:
+	case sdkadapter.HistoricalTicksLastResponse:
 		return m.ReqID, true
-	case codec.NewsArticleResponse:
+	case sdkadapter.NewsArticleResponse:
 		return m.ReqID, true
-	case codec.HistoricalNewsItem:
+	case sdkadapter.HistoricalNewsItem:
 		return m.ReqID, true
-	case codec.HistoricalNewsEnd:
+	case sdkadapter.HistoricalNewsEnd:
 		return m.ReqID, true
-	case codec.ScannerDataResponse:
+	case sdkadapter.ScannerDataResponse:
 		return m.ReqID, true
-	case codec.SoftDollarTiersResponse:
+	case sdkadapter.SoftDollarTiersResponse:
 		return m.ReqID, true
-	case codec.WSHMetaDataResponse:
+	case sdkadapter.WSHMetaDataResponse:
 		return m.ReqID, true
-	case codec.WSHEventDataResponse:
+	case sdkadapter.WSHEventDataResponse:
 		return m.ReqID, true
-	case codec.DisplayGroupList:
+	case sdkadapter.DisplayGroupList:
 		return m.ReqID, true
-	case codec.DisplayGroupUpdated:
+	case sdkadapter.DisplayGroupUpdated:
 		return m.ReqID, true
-	case codec.MarketDepthUpdate:
+	case sdkadapter.MarketDepthUpdate:
 		return m.ReqID, true
-	case codec.MarketDepthL2Update:
+	case sdkadapter.MarketDepthL2Update:
 		return m.ReqID, true
-	case codec.FundamentalDataResponse:
+	case sdkadapter.FundamentalDataResponse:
 		return m.ReqID, true
 	default:
 		return 0, false
 	}
 }
 
-func toCodecContract(c Contract) codec.Contract {
-	return codec.Contract{
+func toCodecContract(c Contract) sdkadapter.Contract {
+	return sdkadapter.Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
 		SecType:         string(c.SecType),
@@ -5288,7 +5280,7 @@ func toCodecContract(c Contract) codec.Contract {
 	}
 }
 
-func fromCodecContract(c codec.Contract) Contract {
+func fromCodecContract(c sdkadapter.Contract) Contract {
 	return Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
@@ -5305,7 +5297,7 @@ func fromCodecContract(c codec.Contract) Contract {
 	}
 }
 
-func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) {
+func fromCodecContractDetails(m sdkadapter.ContractDetails) (ContractDetails, error) {
 	minTick, err := parseOptionalDecimal(m.MinTick, "contract details min tick")
 	if err != nil {
 		return ContractDetails{}, err
@@ -5319,7 +5311,7 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 	}, nil
 }
 
-func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
+func fromCodecBar(m sdkadapter.HistoricalBar) (Bar, error) {
 	ts, err := parseBarTime(m.Time)
 	if err != nil {
 		return Bar{}, err
@@ -5380,11 +5372,11 @@ func parseBarTime(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("ibkr: parse bar time %q", raw)
 }
 
-func fromCodecRealtimeBar(m codec.RealTimeBar) (Bar, error) {
-	return fromCodecBar(codec.HistoricalBar(m))
+func fromCodecRealtimeBar(m sdkadapter.RealTimeBar) (Bar, error) {
+	return fromCodecBar(sdkadapter.HistoricalBar(m))
 }
 
-func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
+func fromCodecMarketDepth(m sdkadapter.MarketDepthUpdate) (DepthRow, error) {
 	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth price: %w", err)
@@ -5402,7 +5394,7 @@ func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
 	}, nil
 }
 
-func fromCodecMarketDepthL2(m codec.MarketDepthL2Update) (DepthRow, error) {
+func fromCodecMarketDepthL2(m sdkadapter.MarketDepthL2Update) (DepthRow, error) {
 	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 price: %w", err)
@@ -5470,7 +5462,7 @@ func parseHeadTimestamp(raw string) (time.Time, error) {
 	return ts.UTC(), nil
 }
 
-func fromCodecPosition(m codec.Position) (Position, error) {
+func fromCodecPosition(m sdkadapter.Position) (Position, error) {
 	position, err := decimal.NewFromString(m.Position)
 	if err != nil {
 		return Position{}, err
@@ -5487,7 +5479,7 @@ func fromCodecPosition(m codec.Position) (Position, error) {
 	}, nil
 }
 
-func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
+func fromCodecOpenOrder(m sdkadapter.OpenOrder) (OpenOrder, error) {
 	quantity, err := parseOptionalDecimal(m.Quantity, "open order quantity")
 	if err != nil {
 		return OpenOrder{}, err
@@ -5582,7 +5574,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 	}, nil
 }
 
-func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
+func fromCodecOrderStatus(m sdkadapter.OrderStatus) (OrderStatusUpdate, error) {
 	filled, err := parseOptionalDecimal(m.Filled, "order status filled")
 	if err != nil {
 		return OrderStatusUpdate{}, err
@@ -5630,7 +5622,7 @@ func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
 	}, nil
 }
 
-func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
+func fromCodecExecution(m sdkadapter.ExecutionDetail) (ExecutionUpdate, error) {
 	shares, err := parseRequiredDecimal(m.Shares, "execution shares")
 	if err != nil {
 		return ExecutionUpdate{}, err
@@ -5684,7 +5676,7 @@ func parseExecutionTime(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("ibkr: parse execution time %q", raw)
 }
 
-func fromCodecCommission(m codec.CommissionReport) (CommissionReport, error) {
+func fromCodecCommission(m sdkadapter.CommissionReport) (CommissionReport, error) {
 	// Commission and RealizedPNL are parsed as optional so that the Java
 	// reference encoding of "unset" — either an empty string or the literal
 	// Double.MAX_VALUE sentinel — decodes to a zero decimal instead of an error.

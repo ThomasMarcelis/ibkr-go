@@ -1,3 +1,5 @@
+//go:build legacy_native_socket
+
 package main
 
 import (

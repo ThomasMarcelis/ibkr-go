@@ -3,12 +3,12 @@ package ibkr
 import (
 	"strconv"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 	"github.com/shopspring/decimal"
 )
 
-func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
-	return codec.PlaceOrderRequest{
+func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) sdkadapter.PlaceOrderRequest {
+	return sdkadapter.PlaceOrderRequest{
 		OrderID:  orderID,
 		Contract: toCodecContract(req.Contract),
 
@@ -103,13 +103,13 @@ func optBoolToString(b *bool, dflt string) string {
 	return "0"
 }
 
-func comboLegsToCodec(legs []ComboLeg) []codec.ComboLeg {
+func comboLegsToCodec(legs []ComboLeg) []sdkadapter.ComboLeg {
 	if len(legs) == 0 {
 		return nil
 	}
-	out := make([]codec.ComboLeg, len(legs))
+	out := make([]sdkadapter.ComboLeg, len(legs))
 	for i, leg := range legs {
-		out[i] = codec.ComboLeg{
+		out[i] = sdkadapter.ComboLeg{
 			ConID:              leg.ConID,
 			Ratio:              leg.Ratio,
 			Action:             leg.Action,
@@ -123,24 +123,24 @@ func comboLegsToCodec(legs []ComboLeg) []codec.ComboLeg {
 	return out
 }
 
-func tagValuesToCodec(values []TagValue) []codec.TagValue {
+func tagValuesToCodec(values []TagValue) []sdkadapter.TagValue {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]codec.TagValue, len(values))
+	out := make([]sdkadapter.TagValue, len(values))
 	for i, value := range values {
-		out[i] = codec.TagValue{Tag: value.Tag, Value: value.Value}
+		out[i] = sdkadapter.TagValue{Tag: value.Tag, Value: value.Value}
 	}
 	return out
 }
 
-func orderConditionsToCodec(values []OrderCondition) []codec.OrderCondition {
+func orderConditionsToCodec(values []OrderCondition) []sdkadapter.OrderCondition {
 	if len(values) == 0 {
 		return nil
 	}
-	out := make([]codec.OrderCondition, len(values))
+	out := make([]sdkadapter.OrderCondition, len(values))
 	for i, value := range values {
-		out[i] = codec.OrderCondition{
+		out[i] = sdkadapter.OrderCondition{
 			Type:          value.Type,
 			Conjunction:   value.Conjunction,
 			ConID:         value.ConID,
@@ -155,7 +155,7 @@ func orderConditionsToCodec(values []OrderCondition) []codec.OrderCondition {
 	return out
 }
 
-func comboLegsFromCodec(legs []codec.ComboLeg) []ComboLeg {
+func comboLegsFromCodec(legs []sdkadapter.ComboLeg) []ComboLeg {
 	if len(legs) == 0 {
 		return nil
 	}
@@ -177,7 +177,7 @@ func comboLegsFromCodec(legs []codec.ComboLeg) []ComboLeg {
 	return out
 }
 
-func tagValuesFromCodec(values []codec.TagValue) []TagValue {
+func tagValuesFromCodec(values []sdkadapter.TagValue) []TagValue {
 	if len(values) == 0 {
 		return nil
 	}
@@ -188,7 +188,7 @@ func tagValuesFromCodec(values []codec.TagValue) []TagValue {
 	return out
 }
 
-func orderConditionsFromCodec(values []codec.OrderCondition) []OrderCondition {
+func orderConditionsFromCodec(values []sdkadapter.OrderCondition) []OrderCondition {
 	if len(values) == 0 {
 		return nil
 	}

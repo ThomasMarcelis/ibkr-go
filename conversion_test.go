@@ -4,16 +4,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
 func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecOpenOrder(codec.OpenOrder{
+	_, err := fromCodecOpenOrder(sdkadapter.OpenOrder{
 		OrderID:   1,
 		Account:   "DU12345",
-		Contract:  codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+		Contract:  sdkadapter.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
 		Action:    "BUY",
 		OrderType: "LMT",
 		Quantity:  "1",
@@ -27,7 +27,7 @@ func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecOrderStatus(codec.OrderStatus{
+	_, err := fromCodecOrderStatus(sdkadapter.OrderStatus{
 		OrderID:      1,
 		Status:       "Submitted",
 		Filled:       "abc",
@@ -45,7 +45,7 @@ func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) 
 func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(codec.ExecutionDetail{
+	update, err := fromCodecExecution(sdkadapter.ExecutionDetail{
 		OrderID: 42,
 		ExecID:  "0000e0d5.69dd4c37.01.01",
 		Account: "DU12345",
@@ -70,7 +70,7 @@ func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(codec.ExecutionDetail{
+	update, err := fromCodecExecution(sdkadapter.ExecutionDetail{
 		OrderID: 42,
 		ExecID:  "exec-1",
 		Account: "DU12345",
@@ -92,7 +92,7 @@ func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecExecution(codec.ExecutionDetail{
+	_, err := fromCodecExecution(sdkadapter.ExecutionDetail{
 		OrderID: 42,
 		ExecID:  "exec-bad-time",
 		Account: "DU12345",
@@ -159,10 +159,10 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 
 	const sentinel = "1.7976931348623157E308"
 
-	order, err := fromCodecOpenOrder(codec.OpenOrder{
+	order, err := fromCodecOpenOrder(sdkadapter.OpenOrder{
 		OrderID:       1,
 		Account:       "DU12345",
-		Contract:      codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+		Contract:      sdkadapter.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
 		Action:        "BUY",
 		OrderType:     "LMT",
 		Quantity:      "1",
@@ -213,7 +213,7 @@ func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			report, err := fromCodecCommission(codec.CommissionReport{
+			report, err := fromCodecCommission(sdkadapter.CommissionReport{
 				ExecID:      "exec-1",
 				Commission:  tt.commission,
 				Currency:    "USD",
@@ -237,7 +237,7 @@ func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 func TestFromCodecCommissionPreservesRealValues(t *testing.T) {
 	t.Parallel()
 
-	report, err := fromCodecCommission(codec.CommissionReport{
+	report, err := fromCodecCommission(sdkadapter.CommissionReport{
 		ExecID:      "exec-2",
 		Commission:  "1.25",
 		Currency:    "USD",
@@ -260,7 +260,7 @@ func TestFromCodecCommissionPreservesRealValues(t *testing.T) {
 func TestFromCodecCommissionRejectsMalformedField(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecCommission(codec.CommissionReport{
+	_, err := fromCodecCommission(sdkadapter.CommissionReport{
 		ExecID:      "exec-3",
 		Commission:  "not-a-decimal",
 		Currency:    "USD",

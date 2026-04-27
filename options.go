@@ -3,10 +3,6 @@ package ibkr
 import (
 	"io"
 	"log/slog"
-	"net"
-	"time"
-
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
 
 type Option func(*config)
@@ -17,13 +13,9 @@ type config struct {
 	host                string
 	port                int
 	clientID            int
-	dialer              transport.Dialer
-	customDialer        bool
 	useSDK              bool
 	logger              *slog.Logger
 	reconnect           ReconnectPolicy
-	tcpKeepAlive        time.Duration
-	sendRate            int
 	eventBuffer         int
 	subscriptionBuffer  int
 	defaultResume       ResumePolicy
@@ -41,11 +33,8 @@ func defaultConfig() config {
 		host:                "127.0.0.1",
 		port:                7497,
 		clientID:            1,
-		dialer:              &net.Dialer{},
 		logger:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		reconnect:           ReconnectAuto,
-		tcpKeepAlive:        30 * time.Second,
-		sendRate:            50,
 		eventBuffer:         64,
 		subscriptionBuffer:  64,
 		defaultResume:       ResumeNever,
@@ -79,13 +68,6 @@ func WithClientID(clientID int) Option {
 	}
 }
 
-func WithDialer(dialer transport.Dialer) Option {
-	return func(cfg *config) {
-		cfg.dialer = dialer
-		cfg.customDialer = true
-	}
-}
-
 func WithLogger(logger *slog.Logger) Option {
 	return func(cfg *config) {
 		if logger != nil {
@@ -97,21 +79,6 @@ func WithLogger(logger *slog.Logger) Option {
 func WithReconnectPolicy(policy ReconnectPolicy) Option {
 	return func(cfg *config) {
 		cfg.reconnect = policy
-	}
-}
-
-// WithTCPKeepAlive configures OS TCP keepalive for Gateway/TWS connections.
-// A positive duration enables keepalive with that period. A non-positive duration
-// disables keepalive after dialing.
-func WithTCPKeepAlive(period time.Duration) Option {
-	return func(cfg *config) {
-		cfg.tcpKeepAlive = period
-	}
-}
-
-func WithSendRate(rate int) Option {
-	return func(cfg *config) {
-		cfg.sendRate = rate
 	}
 }
 

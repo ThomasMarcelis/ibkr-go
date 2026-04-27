@@ -1,14 +1,12 @@
 # Session Contract
 
-This document freezes the public contract. Internal codec and transcript
+This document freezes the public contract. Internal SDK adapter and fixture
 plumbing may change as long as this public surface and its semantics do not.
 
 ## Session
 
-`DialContext` returns only after transport connection, server-version
-negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The current codec targets the live-validated `server_version 200` layout;
-older server versions are rejected during handshake.
+`DialContext` returns only after SDK connection, server-version negotiation,
+bootstrap, managed-account loading, and transition to `Ready`.
 
 ```go
 type Client struct{ /* opaque */ }
@@ -21,6 +19,7 @@ func (c *Client) Wait() error
 func (c *Client) Session() Snapshot
 func (c *Client) SessionEvents() <-chan Event
 func (c *Client) CurrentTime(ctx context.Context) (time.Time, error)
+func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error)
 ```
 
 Session states are `Disconnected`, `Connecting`, `Handshaking`, `Ready`,

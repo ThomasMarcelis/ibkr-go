@@ -35,6 +35,23 @@ func New(queueCapacity int) (*Adapter, error) {
 	return &Adapter{handle: handle}, nil
 }
 
+func BuildInfo() (sdkadapter.BuildInfo, error) {
+	var out C.ibkr_build_info_result
+	var cErr C.ibkr_error
+	ok := C.ibkr_build_info(&out, &cErr)
+	if ok == 0 {
+		defer C.ibkr_error_clear(&cErr)
+		return sdkadapter.BuildInfo{}, fromCError(cErr)
+	}
+	defer C.ibkr_build_info_free(out)
+	return sdkadapter.BuildInfo{
+		AdapterABIVersion: goString(out.adapter_abi_version),
+		SDKAPIVersion:     goString(out.sdk_api_version),
+		Compiler:          goString(out.compiler),
+		ProtobufMode:      goString(out.protobuf_mode),
+	}, nil
+}
+
 func (a *Adapter) Connect(ctx context.Context, req sdkadapter.ConnectRequest) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -118,14 +135,24 @@ func (a *Adapter) Submit(ctx context.Context, command sdkadapter.Command) error 
 	switch command.Kind {
 	case sdkadapter.CommandCurrentTime:
 		ok = C.ibkr_adapter_req_current_time(a.handle, &cErr)
+	case sdkadapter.CommandCurrentTimeMillis:
+		ok = C.ibkr_adapter_req_current_time_millis(a.handle, &cErr)
 	case sdkadapter.CommandAccountSummary:
-		group := C.CString(command.Group)
-		tags := C.CString(strings.Join(command.Tags, ","))
-		ok = C.ibkr_adapter_req_account_summary(a.handle, C.int(command.ReqID), group, tags, &cErr)
+		group := C.CString(command.AccountSummary.Group)
+		tags := C.CString(strings.Join(command.AccountSummary.Tags, ","))
+		ok = C.ibkr_adapter_req_account_summary(a.handle, C.int(command.AccountSummary.ReqID), group, tags, &cErr)
 		C.free(unsafe.Pointer(group))
 		C.free(unsafe.Pointer(tags))
 	case sdkadapter.CommandCancelAccountSummary:
-		ok = C.ibkr_adapter_cancel_account_summary(a.handle, C.int(command.ReqID), &cErr)
+		ok = C.ibkr_adapter_cancel_account_summary(a.handle, C.int(command.CancelAccountSummary.ReqID), &cErr)
+	case sdkadapter.CommandContractDetails:
+		contract := toCContract(command.ContractDetails.Contract)
+		ok = C.ibkr_adapter_req_contract_details(a.handle, C.int(command.ContractDetails.ReqID), &contract, &cErr)
+		freeCContract(contract)
+	case sdkadapter.CommandPositions:
+		ok = C.ibkr_adapter_req_positions(a.handle, &cErr)
+	case sdkadapter.CommandCancelPositions:
+		ok = C.ibkr_adapter_cancel_positions(a.handle, &cErr)
 	default:
 		return sdkadapter.ErrUnsupportedCommand
 	}
@@ -211,6 +238,8 @@ func fromCEvent(row C.ibkr_event) sdkadapter.Event {
 		}
 	case C.IBKR_EVENT_CURRENT_TIME:
 		event.Kind = sdkadapter.EventCurrentTime
+	case C.IBKR_EVENT_CURRENT_TIME_MILLIS:
+		event.Kind = sdkadapter.EventCurrentTimeMillis
 	case C.IBKR_EVENT_ACCOUNT_SUMMARY:
 		event.Kind = sdkadapter.EventAccountSummary
 		event.AccountSummary = sdkadapter.AccountSummaryValue{
@@ -221,6 +250,27 @@ func fromCEvent(row C.ibkr_event) sdkadapter.Event {
 		}
 	case C.IBKR_EVENT_ACCOUNT_SUMMARY_END:
 		event.Kind = sdkadapter.EventAccountSummaryEnd
+	case C.IBKR_EVENT_CONTRACT_DETAILS:
+		event.Kind = sdkadapter.EventContractDetails
+		event.ContractDetails = sdkadapter.ContractDetailsValue{
+			Contract:   fromCContract(row.contract_details.contract),
+			MarketName: goString(row.contract_details.market_name),
+			MinTick:    goString(row.contract_details.min_tick),
+			LongName:   goString(row.contract_details.long_name),
+			TimeZoneID: goString(row.contract_details.time_zone_id),
+		}
+	case C.IBKR_EVENT_CONTRACT_DETAILS_END:
+		event.Kind = sdkadapter.EventContractDetailsEnd
+	case C.IBKR_EVENT_POSITION:
+		event.Kind = sdkadapter.EventPosition
+		event.Position = sdkadapter.PositionValue{
+			Account:  goString(row.position.account),
+			Contract: fromCContract(row.position.contract),
+			Position: goString(row.position.position),
+			AvgCost:  goString(row.position.avg_cost),
+		}
+	case C.IBKR_EVENT_POSITION_END:
+		event.Kind = sdkadapter.EventPositionEnd
 	case C.IBKR_EVENT_API_ERROR:
 		event.Kind = sdkadapter.EventAPIError
 		event.APIError = sdkadapter.Error{
@@ -239,6 +289,54 @@ func fromCEvent(row C.ibkr_event) sdkadapter.Event {
 		event.FatalMessage = fmt.Sprintf("unknown native adapter event kind %d", int(row.kind))
 	}
 	return event
+}
+
+func toCContract(contract sdkadapter.Contract) C.ibkr_contract {
+	return C.ibkr_contract{
+		con_id:           C.int(contract.ConID),
+		symbol:           C.CString(contract.Symbol),
+		sec_type:         C.CString(contract.SecType),
+		expiry:           C.CString(contract.Expiry),
+		strike:           C.CString(contract.Strike),
+		right:            C.CString(contract.Right),
+		multiplier:       C.CString(contract.Multiplier),
+		exchange:         C.CString(contract.Exchange),
+		currency:         C.CString(contract.Currency),
+		local_symbol:     C.CString(contract.LocalSymbol),
+		trading_class:    C.CString(contract.TradingClass),
+		primary_exchange: C.CString(contract.PrimaryExchange),
+	}
+}
+
+func freeCContract(contract C.ibkr_contract) {
+	C.free(unsafe.Pointer(contract.symbol))
+	C.free(unsafe.Pointer(contract.sec_type))
+	C.free(unsafe.Pointer(contract.expiry))
+	C.free(unsafe.Pointer(contract.strike))
+	C.free(unsafe.Pointer(contract.right))
+	C.free(unsafe.Pointer(contract.multiplier))
+	C.free(unsafe.Pointer(contract.exchange))
+	C.free(unsafe.Pointer(contract.currency))
+	C.free(unsafe.Pointer(contract.local_symbol))
+	C.free(unsafe.Pointer(contract.trading_class))
+	C.free(unsafe.Pointer(contract.primary_exchange))
+}
+
+func fromCContract(contract C.ibkr_contract) sdkadapter.Contract {
+	return sdkadapter.Contract{
+		ConID:           int(contract.con_id),
+		Symbol:          goString(contract.symbol),
+		SecType:         goString(contract.sec_type),
+		Expiry:          goString(contract.expiry),
+		Strike:          goString(contract.strike),
+		Right:           goString(contract.right),
+		Multiplier:      goString(contract.multiplier),
+		Exchange:        goString(contract.exchange),
+		Currency:        goString(contract.currency),
+		LocalSymbol:     goString(contract.local_symbol),
+		TradingClass:    goString(contract.trading_class),
+		PrimaryExchange: goString(contract.primary_exchange),
+	}
 }
 
 func fromCError(cErr C.ibkr_error) error {

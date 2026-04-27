@@ -1340,3 +1340,21 @@ func isLiveHistoricalSessionError(err error) bool {
 		(apiErr.Code == 162 || apiErr.Code == 10187) &&
 		strings.Contains(apiErr.Message, "Trading TWS session is connected from a different IP address")
 }
+
+func waitForStateKind(t *testing.T, ch <-chan ibkr.SubscriptionStateEvent, want ibkr.SubscriptionStateKind) ibkr.SubscriptionStateEvent {
+	t.Helper()
+
+	for {
+		select {
+		case state, ok := <-ch:
+			if !ok {
+				t.Fatal("state channel closed before target state arrived")
+			}
+			if state.Kind == want {
+				return state
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for subscription state")
+		}
+	}
+}

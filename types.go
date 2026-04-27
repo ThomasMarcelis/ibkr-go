@@ -73,6 +73,7 @@ const (
 	OpGlobalCancel         OpKind = "global_cancel"
 	OpHistoricalSchedule   OpKind = "historical_schedule"
 	OpCurrentTime          OpKind = "current_time"
+	OpCurrentTimeMillis    OpKind = "current_time_millis"
 )
 
 type OrderAction string

@@ -1,9 +1,9 @@
 package ibkr
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/codec"
+import "github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 
 type accountSummaryPlan struct {
-	request  codec.AccountSummaryRequest
+	request  sdkadapter.AccountSummaryRequest
 	wildcard bool
 	account  string
 }
@@ -15,7 +15,7 @@ func newAccountSummaryPlan(reqID int, req AccountSummaryRequest) accountSummaryP
 		account = ""
 	}
 	return accountSummaryPlan{
-		request: codec.AccountSummaryRequest{
+		request: sdkadapter.AccountSummaryRequest{
 			ReqID:   reqID,
 			Account: "All",
 			Tags:    append([]string(nil), req.Tags...),

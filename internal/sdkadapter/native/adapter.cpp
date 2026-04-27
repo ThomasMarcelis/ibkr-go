@@ -17,11 +17,23 @@
 #include <vector>
 
 #include "DefaultEWrapper.h"
+#include "Contract.h"
+#include "Decimal.h"
 #include "EClientSocket.h"
 #include "EReader.h"
 #include "EReaderOSSignal.h"
+#include "google/protobuf/stubs/common.h"
+
+#ifndef IBKR_SDK_API_VERSION
+#define IBKR_SDK_API_VERSION unknown
+#endif
+
+#define IBKR_STRINGIFY_VALUE(value) #value
+#define IBKR_STRINGIFY(value) IBKR_STRINGIFY_VALUE(value)
 
 namespace {
+
+constexpr const char* kAdapterABIVersion = "1";
 
 char* copy_string(const std::string& value) {
 	char* out = static_cast<char*>(std::malloc(value.size() + 1));
@@ -68,7 +80,88 @@ struct AdapterEvent {
 	long long errorTime = 0;
 	int code = 0;
 	std::string advancedOrderRejectJSON;
+
+	Contract contract;
+	std::string marketName;
+	std::string minTick;
+	std::string longName;
+	std::string timeZoneID;
+	std::string position;
+	std::string avgCost;
 };
+
+void set_c_contract(ibkr_contract& out, const Contract& contract) {
+	out.con_id = contract.conId;
+	out.symbol = copy_string(contract.symbol);
+	out.sec_type = copy_string(contract.secType);
+	out.expiry = copy_string(contract.lastTradeDateOrContractMonth);
+	out.strike = copy_string(contract.strike == UNSET_DOUBLE ? "" : std::to_string(contract.strike));
+	out.right = copy_string(contract.right);
+	out.multiplier = copy_string(contract.multiplier);
+	out.exchange = copy_string(contract.exchange);
+	out.currency = copy_string(contract.currency);
+	out.local_symbol = copy_string(contract.localSymbol);
+	out.trading_class = copy_string(contract.tradingClass);
+	out.primary_exchange = copy_string(contract.primaryExchange);
+}
+
+void free_c_contract(ibkr_contract& contract) {
+	std::free(contract.symbol);
+	std::free(contract.sec_type);
+	std::free(contract.expiry);
+	std::free(contract.strike);
+	std::free(contract.right);
+	std::free(contract.multiplier);
+	std::free(contract.exchange);
+	std::free(contract.currency);
+	std::free(contract.local_symbol);
+	std::free(contract.trading_class);
+	std::free(contract.primary_exchange);
+}
+
+std::string decimal_to_string(Decimal value) {
+	if (value == UNSET_DECIMAL) {
+		return "";
+	}
+	return DecimalFunctions::decimalToString(value);
+}
+
+std::string double_to_string(double value) {
+	if (value == UNSET_DOUBLE) {
+		return "";
+	}
+	std::ostringstream out;
+	out.precision(17);
+	out << value;
+	return out.str();
+}
+
+double parse_double(const char* value) {
+	if (!value || std::strlen(value) == 0) {
+		return 0;
+	}
+	return std::strtod(value, nullptr);
+}
+
+Contract contract_from_c(const ibkr_contract* in) {
+	Contract contract;
+	if (!in) {
+		return contract;
+	}
+	contract.conId = in->con_id;
+	contract.symbol = in->symbol ? in->symbol : "";
+	contract.secType = in->sec_type ? in->sec_type : "";
+	contract.lastTradeDateOrContractMonth = in->expiry ? in->expiry : "";
+	contract.strike = parse_double(in->strike);
+	contract.right = in->right ? in->right : "";
+	contract.multiplier = in->multiplier ? in->multiplier : "";
+	contract.exchange = in->exchange ? in->exchange : "";
+	contract.currency = in->currency ? in->currency : "";
+	contract.localSymbol = in->local_symbol ? in->local_symbol : "";
+	contract.tradingClass = in->trading_class ? in->trading_class : "";
+	contract.primaryExchange = in->primary_exchange ? in->primary_exchange : "";
+	return contract;
+}
 
 ibkr_event to_c_event(const AdapterEvent& event) {
 	ibkr_event out{};
@@ -88,6 +181,16 @@ ibkr_event to_c_event(const AdapterEvent& event) {
 	out.api_error.code = event.code;
 	out.api_error.message = copy_string(event.text);
 	out.api_error.advanced_order_reject_json = copy_string(event.advancedOrderRejectJSON);
+	out.contract_details.req_id = event.reqID;
+	set_c_contract(out.contract_details.contract, event.contract);
+	out.contract_details.market_name = copy_string(event.marketName);
+	out.contract_details.min_tick = copy_string(event.minTick);
+	out.contract_details.long_name = copy_string(event.longName);
+	out.contract_details.time_zone_id = copy_string(event.timeZoneID);
+	out.position.account = copy_string(event.account);
+	set_c_contract(out.position.contract, event.contract);
+	out.position.position = copy_string(event.position);
+	out.position.avg_cost = copy_string(event.avgCost);
 	return out;
 }
 
@@ -99,6 +202,15 @@ void free_c_event(ibkr_event& event) {
 	std::free(event.account_summary.currency);
 	std::free(event.api_error.message);
 	std::free(event.api_error.advanced_order_reject_json);
+	free_c_contract(event.contract_details.contract);
+	std::free(event.contract_details.market_name);
+	std::free(event.contract_details.min_tick);
+	std::free(event.contract_details.long_name);
+	std::free(event.contract_details.time_zone_id);
+	std::free(event.position.account);
+	free_c_contract(event.position.contract);
+	std::free(event.position.position);
+	std::free(event.position.avg_cost);
 }
 
 std::vector<std::string> split_accounts(const std::string& accountsList) {
@@ -118,6 +230,14 @@ std::vector<std::string> split_accounts(const std::string& accountsList) {
 		accounts.push_back(current);
 	}
 	return accounts;
+}
+
+std::string protobuf_mode() {
+#ifdef GOOGLE_PROTOBUF_VERSION
+	return std::string("protobuf ") + IBKR_STRINGIFY(GOOGLE_PROTOBUF_VERSION);
+#else
+	return "protobuf unknown";
+#endif
 }
 
 } // namespace
@@ -151,6 +271,13 @@ public:
 			adapter_.Push(std::move(event));
 		}
 
+		void currentTimeInMillis(time_t timeInMillis) override {
+			AdapterEvent event;
+			event.kind = IBKR_EVENT_CURRENT_TIME_MILLIS;
+			event.integerValue = static_cast<long long>(timeInMillis);
+			adapter_.Push(std::move(event));
+		}
+
 		void accountSummary(int reqID, const std::string& account, const std::string& tag, const std::string& value, const std::string& currency) override {
 			AdapterEvent event;
 			event.kind = IBKR_EVENT_ACCOUNT_SUMMARY;
@@ -166,6 +293,41 @@ public:
 			AdapterEvent event;
 			event.kind = IBKR_EVENT_ACCOUNT_SUMMARY_END;
 			event.reqID = reqID;
+			adapter_.Push(std::move(event));
+		}
+
+		void contractDetails(int reqID, const ContractDetails& details) override {
+			AdapterEvent event;
+			event.kind = IBKR_EVENT_CONTRACT_DETAILS;
+			event.reqID = reqID;
+			event.contract = details.contract;
+			event.marketName = details.marketName;
+			event.minTick = double_to_string(details.minTick);
+			event.longName = details.longName;
+			event.timeZoneID = details.timeZoneId;
+			adapter_.Push(std::move(event));
+		}
+
+		void contractDetailsEnd(int reqID) override {
+			AdapterEvent event;
+			event.kind = IBKR_EVENT_CONTRACT_DETAILS_END;
+			event.reqID = reqID;
+			adapter_.Push(std::move(event));
+		}
+
+		void position(const std::string& account, const Contract& contract, Decimal position, double avgCost) override {
+			AdapterEvent event;
+			event.kind = IBKR_EVENT_POSITION;
+			event.account = account;
+			event.contract = contract;
+			event.position = decimal_to_string(position);
+			event.avgCost = double_to_string(avgCost);
+			adapter_.Push(std::move(event));
+		}
+
+		void positionEnd() override {
+			AdapterEvent event;
+			event.kind = IBKR_EVENT_POSITION_END;
 			adapter_.Push(std::move(event));
 		}
 
@@ -293,6 +455,10 @@ public:
 		return WithClient("current_time", error, [this]() { client_->reqCurrentTime(); });
 	}
 
+	bool ReqCurrentTimeMillis(ibkr_error* error) {
+		return WithClient("current_time_millis", error, [this]() { client_->reqCurrentTimeInMillis(); });
+	}
+
 	bool ReqAccountSummary(int reqID, const char* group, const char* tags, ibkr_error* error) {
 		const std::string groupCopy = group ? group : "";
 		const std::string tagsCopy = tags ? tags : "";
@@ -304,6 +470,25 @@ public:
 	bool CancelAccountSummary(int reqID, ibkr_error* error) {
 		return WithClient("cancel_account_summary", error, [this, reqID]() {
 			client_->cancelAccountSummary(reqID);
+		});
+	}
+
+	bool ReqContractDetails(int reqID, const ibkr_contract* contract, ibkr_error* error) {
+		const Contract contractCopy = contract_from_c(contract);
+		return WithClient("contract_details", error, [this, reqID, contractCopy]() {
+			client_->reqContractDetails(reqID, contractCopy);
+		});
+	}
+
+	bool ReqPositions(ibkr_error* error) {
+		return WithClient("positions", error, [this]() {
+			client_->reqPositions();
+		});
+	}
+
+	bool CancelPositions(ibkr_error* error) {
+		return WithClient("cancel_positions", error, [this]() {
+			client_->cancelPositions();
 		});
 	}
 
@@ -472,6 +657,26 @@ void ibkr_error_clear(ibkr_error* error) {
 	*error = ibkr_error{};
 }
 
+int ibkr_build_info(ibkr_build_info_result* out, ibkr_error* error) {
+	if (!out) {
+		set_error(error, "build_info", "output is null");
+		return 0;
+	}
+	*out = ibkr_build_info_result{};
+	out->adapter_abi_version = copy_string(kAdapterABIVersion);
+	out->sdk_api_version = copy_string(IBKR_STRINGIFY(IBKR_SDK_API_VERSION));
+	out->compiler = copy_string(__VERSION__);
+	out->protobuf_mode = copy_string(protobuf_mode());
+	return 1;
+}
+
+void ibkr_build_info_free(ibkr_build_info_result value) {
+	std::free(value.adapter_abi_version);
+	std::free(value.sdk_api_version);
+	std::free(value.compiler);
+	std::free(value.protobuf_mode);
+}
+
 ibkr_adapter* ibkr_adapter_new(int queue_capacity, ibkr_error* error) {
 	try {
 		return new ibkr_adapter(queue_capacity);
@@ -534,6 +739,14 @@ int ibkr_adapter_req_current_time(ibkr_adapter* adapter, ibkr_error* error) {
 	return adapter->impl.ReqCurrentTime(error) ? 1 : 0;
 }
 
+int ibkr_adapter_req_current_time_millis(ibkr_adapter* adapter, ibkr_error* error) {
+	if (!adapter) {
+		set_error(error, "current_time_millis", "adapter handle is null");
+		return 0;
+	}
+	return adapter->impl.ReqCurrentTimeMillis(error) ? 1 : 0;
+}
+
 int ibkr_adapter_req_account_summary(ibkr_adapter* adapter, int req_id, const char* group, const char* tags, ibkr_error* error) {
 	if (!adapter) {
 		set_error(error, "account_summary", "adapter handle is null");
@@ -548,6 +761,34 @@ int ibkr_adapter_cancel_account_summary(ibkr_adapter* adapter, int req_id, ibkr_
 		return 0;
 	}
 	return adapter->impl.CancelAccountSummary(req_id, error) ? 1 : 0;
+}
+
+int ibkr_adapter_req_contract_details(ibkr_adapter* adapter, int req_id, const ibkr_contract* contract, ibkr_error* error) {
+	if (!adapter) {
+		set_error(error, "contract_details", "adapter handle is null");
+		return 0;
+	}
+	if (!contract) {
+		set_error(error, "contract_details", "contract is null");
+		return 0;
+	}
+	return adapter->impl.ReqContractDetails(req_id, contract, error) ? 1 : 0;
+}
+
+int ibkr_adapter_req_positions(ibkr_adapter* adapter, ibkr_error* error) {
+	if (!adapter) {
+		set_error(error, "positions", "adapter handle is null");
+		return 0;
+	}
+	return adapter->impl.ReqPositions(error) ? 1 : 0;
+}
+
+int ibkr_adapter_cancel_positions(ibkr_adapter* adapter, ibkr_error* error) {
+	if (!adapter) {
+		set_error(error, "cancel_positions", "adapter handle is null");
+		return 0;
+	}
+	return adapter->impl.CancelPositions(error) ? 1 : 0;
 }
 
 int ibkr_adapter_drain_events(ibkr_adapter* adapter, int max_events, ibkr_event_batch** out, ibkr_error* error) {

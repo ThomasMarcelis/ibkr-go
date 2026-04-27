@@ -43,7 +43,7 @@ committed.
 
 | Group | Official Methods | ibkr-go Status |
 |-------|------------------|----------------|
-| Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is implemented as `Client.CurrentTime`; explicit `reqIds` is captured but has no public facade yet. `reqManagedAccts`, server log level, redirect, and old connection toggles are matrix targets or explicit non-goals. |
+| Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqCurrentTimeInMillis`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is implemented as `Client.CurrentTime`; `reqCurrentTimeInMillis` is implemented as `Client.CurrentTimeMillis`; explicit `reqIds` is captured but has no public facade yet. `reqManagedAccts`, server log level, redirect, and old connection toggles are matrix targets or explicit non-goals. |
 | Verification/internal auth | `verifyRequest`, `verifyMessage`, `verifyAndAuthRequest`, `verifyAndAuthMessage` | Officially internal-purpose. Matrix as out of public scope unless live Gateway emits callbacks. |
 | Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Needs MECE coverage by live, frozen, delayed, delayed-frozen, generic tick families, snapshot, stream, and cancel. |
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
@@ -64,7 +64,7 @@ committed.
 
 | Group | Official Callbacks | ibkr-go Status |
 |-------|--------------------|----------------|
-| Errors/session | `error`, `connectionClosed`, `currentTime`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
+| Errors/session | `error`, `connectionClosed`, `currentTime`, `currentTimeInMillis`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
 | Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | Most implemented. `tickEFP` and `tickNews` are official callbacks not currently represented as implemented message IDs. |
 | Tick-by-tick | `tickByTickAllLast`, `tickByTickBidAsk`, `tickByTickMidPoint` | Implemented through unified tick-by-tick decode. Needs separate verification rows. |
 | Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Implemented except bond-specific callback is represented through generic contract details only if live wire confirms same path. Needs explicit bond row. |
@@ -80,7 +80,7 @@ committed.
 
 | Facade | Public Methods |
 |--------|----------------|
-| `Client` | `Close`, `Done`, `Wait`, `Session`, `SessionEvents`, `CurrentTime`, `Accounts`, `Contracts`, `MarketData`, `History`, `Orders`, `Options`, `News`, `Scanner`, `Advisors`, `WSH`, `TWS` |
+| `Client` | `Close`, `Done`, `Wait`, `Session`, `SessionEvents`, `CurrentTime`, `CurrentTimeMillis`, `Accounts`, `Contracts`, `MarketData`, `History`, `Orders`, `Options`, `News`, `Scanner`, `Advisors`, `WSH`, `TWS` |
 | `Accounts()` | `Summary`, `SubscribeSummary`, `Positions`, `SubscribePositions`, `Updates`, `SubscribeUpdates`, `UpdatesMulti`, `SubscribeUpdatesMulti`, `PositionsMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle`, `FamilyCodes` |
 | `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges`, `FundamentalData` |
 | `MarketData()` | `SetType`, `Quote`, `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |

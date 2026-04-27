@@ -1,6 +1,6 @@
 package ibkr
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/codec"
+import "github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 
 type executionCorrelator struct {
 	routes map[int]ExecutionsRequest
@@ -9,7 +9,7 @@ type executionCorrelator struct {
 
 type executionState struct {
 	routes      map[int]*executionRouteState
-	commissions []codec.CommissionReport
+	commissions []sdkadapter.CommissionReport
 }
 
 type executionRouteState struct {
@@ -42,7 +42,7 @@ func (c *executionCorrelator) unregisterRoute(reqID int) {
 	}
 }
 
-func (c *executionCorrelator) observeExecution(reqID int, detail codec.ExecutionDetail) {
+func (c *executionCorrelator) observeExecution(reqID int, detail sdkadapter.ExecutionDetail) {
 	state := c.ensureExecState(detail.ExecID)
 	for routeID, req := range c.routes {
 		if !matchesExecutionRequest(req, detail) {
@@ -58,7 +58,7 @@ func (c *executionCorrelator) observeExecution(reqID int, detail codec.Execution
 	state.routes[reqID].seenExecution = true
 }
 
-func (c *executionCorrelator) recordCommission(report codec.CommissionReport) []int {
+func (c *executionCorrelator) recordCommission(report sdkadapter.CommissionReport) []int {
 	state := c.ensureExecState(report.ExecID)
 	state.commissions = append(state.commissions, report)
 
@@ -71,7 +71,7 @@ func (c *executionCorrelator) recordCommission(report codec.CommissionReport) []
 	return ready
 }
 
-func (c *executionCorrelator) undeliveredCommissions(reqID int, execID string) []codec.CommissionReport {
+func (c *executionCorrelator) undeliveredCommissions(reqID int, execID string) []sdkadapter.CommissionReport {
 	state, ok := c.execs[execID]
 	if !ok {
 		return nil
@@ -84,7 +84,7 @@ func (c *executionCorrelator) undeliveredCommissions(reqID int, execID string) [
 		return nil
 	}
 
-	out := append([]codec.CommissionReport(nil), state.commissions[routeState.deliveredCommissions:]...)
+	out := append([]sdkadapter.CommissionReport(nil), state.commissions[routeState.deliveredCommissions:]...)
 	routeState.deliveredCommissions = len(state.commissions)
 	c.maybeClearCommissionHistory(execID)
 	return out
@@ -126,7 +126,7 @@ func (c *executionCorrelator) maybeClearCommissionHistory(execID string) {
 	}
 }
 
-func matchesExecutionRequest(req ExecutionsRequest, detail codec.ExecutionDetail) bool {
+func matchesExecutionRequest(req ExecutionsRequest, detail sdkadapter.ExecutionDetail) bool {
 	if req.Account != "" && req.Account != detail.Account {
 		return false
 	}
