@@ -3,15 +3,10 @@
 package ibkr
 
 import (
-	"fmt"
-
 	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
+	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter/native"
 )
 
-func sdkRuntimeAvailable() bool { return false }
-
-func sdkRuntimeRequested() bool { return false }
-
-func newSDKAdapter(int) (sdkadapter.Adapter, error) {
-	return nil, fmt.Errorf("ibkr: SDK runtime requires -tags=ibkr_sdk, cgo, and linux")
+func newSDKAdapter(queueCapacity int) (sdkadapter.Adapter, error) {
+	return native.New(queueCapacity)
 }

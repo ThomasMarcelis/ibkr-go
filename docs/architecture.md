@@ -1,30 +1,54 @@
 # Architecture
 
 `ibkr-go` is built as a session engine with a typed facade. The library does
-not expose an `EWrapper` / `EClient` callback surface as its primary model.
+not expose an `EWrapper` / `EClient` callback surface as its public model.
 
-The library covers the full free read-only TWS API surface plus order
-management, market depth, fundamental data, and option exercise. Public
-contracts, codec, and replay fixtures are validated against live IB
-Gateway server_version 200. The current session handshake requires that
-server version; broader version support belongs behind explicit version-aware
-codec paths.
+The production runtime uses the official IBKR C++ SDK as the protocol owner
+through a narrow copied-value ABI. Go owns the public API shape, routing,
+lifecycle, reconnect semantics, validation, and tests. C++ owns
+`EClientSocket`, `EReaderOSSignal`, `EReader`, SDK value objects, the SDK
+reader thread, SDK callbacks, native queueing, shutdown, and SDK exceptions.
+
+Current SDK-native coverage is still narrow. The implemented native slice is
+session/bootstrap, current time/current time millis, account summary, account
+updates, account updates multi, positions, positions multi, PnL, PnL single,
+contract details/qualification, family codes, market-data type control,
+quote snapshots and streams, real-time bars, tick-by-tick data, market depth
+streams, market-depth exchange metadata, contract search, market rules, sec-def
+option params, smart components, head timestamp, histogram data, fundamental
+data, news providers, news bulletins, scanner parameters, scanner result
+subscriptions, historical bars, historical bar subscriptions, historical
+schedule, historical ticks, option implied-volatility and price calculations,
+option exercise, soft-dollar tiers, FA config reads and writes, news articles,
+historical news, WSH metadata/event data, user info, display groups,
+display group subscriptions, order placement and modification, open-order
+snapshots and subscriptions, completed-order snapshots, execution snapshots,
+commission reports, and cancellation for account summary, account updates,
+account updates multi, positions, positions multi, PnL, PnL single, order
+cancellation, global cancellation, news bulletins, scanner subscriptions,
+display group subscriptions, quote streams, real-time bars, tick-by-tick data,
+market depth, historical bars, historical ticks, option calculations, head
+timestamp, histogram data, WSH
+metadata/event data, and fundamental data.
+The rest of the public facade shape is tracked in
+[`sdk-migration-matrix.md`](sdk-migration-matrix.md) and fails closed until
+ported.
 
 ## Layers
 
 - module root: public typed facade plus the unexported session engine,
   lifecycle, correlation, reconnect, and subscription management
-- `internal/transport/`: socket dial, frame read/write loops, pacing
-- `internal/codec/`: typed message encode/decode
-- `internal/wire/`: frame and field framing
-- `testing/testhost/`: deterministic replay and fault-injection harness for
-  checked-in fixtures
+- `internal/sdkadapter/`: copied-value command records, event records, SDK
+  fixture schema, and replay adapter
+- `internal/sdkadapter/native/`: cgo wrapper, C ABI declarations, and C++
+  adapter around the official SDK
 
 ## Runtime Model
 
 - One session actor goroutine owns mutable state.
-- One reader goroutine reads frames and forwards decoded messages to the actor.
-- One writer goroutine serializes outbound frames and applies global pacing.
+- Native SDK callbacks are copied into `sdkadapter.Event` values and drained into
+  the actor.
+- Public requests become one copied `sdkadapter.Command` at the native boundary.
 - Public methods talk to the actor through typed commands instead of sharing
   mutable maps or callback registries.
 
@@ -83,15 +107,15 @@ order IDs manually.
 - **Cancel(ctx)** sends a CancelOrder request for this order.
 - **Modify(order)** sends a modified PlaceOrder with the same OrderID.
 
-## Protocol Realities
+## SDK Routing Realities
 
 - Request correlation is split between keyed flows, singleton flows, and
-  order flows. Not all protocol areas route cleanly through one
+  order flows. Not all SDK callback families route cleanly through one
   `reqID -> channel` map.
-- Snapshot completion is driven by explicit protocol end markers, never by
+- Snapshot completion is driven by explicit SDK completion callbacks, never by
   silence or timeouts.
-- Global pacing belongs in the write path. Endpoint-specific admission limits
-  belong at the session layer.
+- Endpoint-specific admission limits belong at the session layer before SDK
+  submission.
 - Public request setup waits for a usable session. Reconnect backoff and
   endpoint pacing are internal engine concerns, bounded by the caller context.
 - Managed accounts, negotiated server version, and next valid id are bootstrap
@@ -107,7 +131,7 @@ order IDs manually.
   the newest state is favored when buffers fill. OrderHandle follows the same
   shape with order-specific extensions.
 
-These public contracts are intended to survive the remaining protocol work.
+These public contracts are intended to survive SDK adapter growth.
 
 ## Reconnect
 

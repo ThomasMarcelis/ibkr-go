@@ -1,0 +1,61 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T15:39:53Z",
+    "scenario": "current_time_millis",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "c605a7d012b27733f22f7782d7b369a3dff98799a18f49080ee1805a25349b69"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 17:39:52 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "CurrentTime": 1777736392854,
+      "Kind": "current_time_millis"
+    }
+  ]
+}

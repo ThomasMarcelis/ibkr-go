@@ -1,0 +1,169 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T16:39:54Z",
+    "scenario": "historical_bars_short",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "496348c4f40dfa0a64cd607d1921167ff344b20547bd406f7a353eda4f4bcc64"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 18:39:53 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "HistoricalBar": {
+        "Close": "283.94999999999999",
+        "Count": "111651",
+        "High": "284.75",
+        "Low": "278.37",
+        "Open": "278.86000000000001",
+        "Time": "20260501 09:30:00 US/Eastern",
+        "Volume": "+15127267E+0",
+        "WAP": "+281829E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "HistoricalBar": {
+        "Close": "282.61000000000001",
+        "Count": "101715",
+        "High": "287.22000000000003",
+        "Low": "282.00999999999999",
+        "Open": "283.94999999999999",
+        "Time": "20260501 10:00:00 US/Eastern",
+        "Volume": "+12870211E+0",
+        "WAP": "+284814E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "HistoricalBar": {
+        "Close": "284.75",
+        "Count": "52963",
+        "High": "285.49000000000001",
+        "Low": "281.45999999999998",
+        "Open": "282.64999999999998",
+        "Time": "20260501 11:00:00 US/Eastern",
+        "Volume": "+6757668E+0",
+        "WAP": "+283803E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "HistoricalBar": {
+        "Close": "283.12",
+        "Count": "41203",
+        "High": "285",
+        "Low": "282.38999999999999",
+        "Open": "284.70999999999998",
+        "Time": "20260501 12:00:00 US/Eastern",
+        "Volume": "+4795156E+0",
+        "WAP": "+283769E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "HistoricalBar": {
+        "Close": "281.48000000000002",
+        "Count": "32585",
+        "High": "283.5",
+        "Low": "281.42000000000002",
+        "Open": "283.13",
+        "Time": "20260501 13:00:00 US/Eastern",
+        "Volume": "+3629153E+0",
+        "WAP": "+282433E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "HistoricalBar": {
+        "Close": "280.44999999999999",
+        "Count": "37368",
+        "High": "281.54000000000002",
+        "Low": "280.14999999999998",
+        "Open": "281.48000000000002",
+        "Time": "20260501 14:00:00 US/Eastern",
+        "Volume": "+4112310E+0",
+        "WAP": "+280856E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "HistoricalBar": {
+        "Close": "280.14999999999998",
+        "Count": "66400",
+        "High": "280.88999999999999",
+        "Low": "279.61000000000001",
+        "Open": "280.45999999999998",
+        "Time": "20260501 15:00:00 US/Eastern",
+        "Volume": "+7022373E+0",
+        "WAP": "+280237E-3"
+      },
+      "Kind": "historical_data",
+      "ReqID": 401
+    },
+    {
+      "Kind": "historical_data_end",
+      "ReqID": 401
+    }
+  ]
+}

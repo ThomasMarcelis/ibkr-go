@@ -20,7 +20,7 @@ func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (sdkadapte
 	}
 	return sdkadapter.HistoricalBarsRequest{
 		ReqID:       reqID,
-		Contract:    toCodecContract(req.Contract),
+		Contract:    toSDKContract(req.Contract),
 		EndDateTime: formatHistoricalEndTime(req.EndTime),
 		Duration:    duration,
 		BarSize:     barSize,
@@ -95,7 +95,7 @@ func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (s
 	}
 	return sdkadapter.HistoricalBarsRequest{
 		ReqID:       reqID,
-		Contract:    toCodecContract(req.Contract),
+		Contract:    toSDKContract(req.Contract),
 		EndDateTime: formatHistoricalEndTime(req.EndTime),
 		Duration:    duration,
 		BarSize:     barSize,

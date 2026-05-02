@@ -1,0 +1,2529 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T18:44:33Z",
+    "scenario": "account_streams_snapshot",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; account, portfolio, position, PnL, model, and position-contract values redacted; fixture preserves real SDK account stream callback shape",
+    "source_sha256": "287bbbdbe96422f18b116f67bc1fcc09b34d017e1009784539f21aad420bd923"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 20:44:30 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "AccountCode",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "AccountOrGroup",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccountOrGroup",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "AccountOrGroup",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "AccountReady",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "AccountType",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "AccruedCash",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccruedCash",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "AccruedCash",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccruedCash-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccruedDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccruedDividend-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AvailableFunds",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AvailableFunds-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Billable",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Billable-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "BuyingPower",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "CashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "CashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "CashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "ColumnPrio-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "ColumnPrio-S",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "CorporateBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "CorporateBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "CorporateBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "Cryptocurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Cryptocurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "Cryptocurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "Currency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Currency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "Currency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "Cushion",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "EquityWithLoanValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "EquityWithLoanValue-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "ExcessLiquidity",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "ExcessLiquidity-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "ExchangeRate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "ExchangeRate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "ExchangeRate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullAvailableFunds",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullAvailableFunds-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullExcessLiquidity",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullExcessLiquidity-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullInitMarginReq",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullInitMarginReq-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullMaintMarginReq",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FullMaintMarginReq-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FutureOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FutureOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FutureOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FuturesPNL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FuturesPNL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FuturesPNL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FxCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FxCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FxCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "GrossPositionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "GrossPositionValue-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Guarantee",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Guarantee-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "IncentiveCoupons",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "IncentiveCoupons-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "IndianStockHaircut",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "IndianStockHaircut-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "InitMarginReq",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "InitMarginReq-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "IssuerOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "IssuerOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "IssuerOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "Leverage-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "Leverage-S",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadAvailableFunds",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadAvailableFunds-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadExcessLiquidity",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadExcessLiquidity-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadInitMarginReq",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadInitMarginReq-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadMaintMarginReq",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "LookAheadMaintMarginReq-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "LookAheadNextChange",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "MaintMarginReq",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "MaintMarginReq-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "MoneyMarketFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "MoneyMarketFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "MoneyMarketFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "MutualFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "MutualFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "MutualFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "NLVAndMarginInReview",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "NetDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "NetDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetLiquidation",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetLiquidation-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "NetLiquidationByCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetLiquidationByCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "NetLiquidationByCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetLiquidationUncertainty",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "OptionMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "OptionMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "OptionMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PASharesValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PASharesValue-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PhysicalCertificateValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PhysicalCertificateValue-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PostExpirationExcess",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PostExpirationExcess-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PostExpirationMargin",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "PostExpirationMargin-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "RealCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "RealCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "RealCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "RealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "RealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "RealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "SegmentTitle-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "SegmentTitle-S",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "SettledCashByDate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "SettledCashByDate-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "SettledCashByDate-S",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "StockMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "StockMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "StockMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "TBillValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TBillValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "TBillValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "TBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "TBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "TotalCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TotalCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "TotalCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TotalCashValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TotalCashValue-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TotalDebitCardPendingCharges",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TotalDebitCardPendingCharges-P",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Key": "TradingType-S",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "UnrealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "UnrealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "UnrealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "WarrantValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "WarrantValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "AccountValue": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "WarrantValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "update_account_value"
+    },
+    {
+      "Kind": "update_portfolio",
+      "Portfolio": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "MarketPrice": "REDACTED_VALUE",
+        "MarketValue": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "RealizedPNL": "REDACTED_VALUE",
+        "UnrealizedPNL": "REDACTED_VALUE"
+      }
+    },
+    {
+      "AccountTime": "12:35",
+      "Kind": "update_account_time"
+    },
+    {
+      "Kind": "update_portfolio",
+      "Portfolio": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "MarketPrice": "REDACTED_VALUE",
+        "MarketValue": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "RealizedPNL": "REDACTED_VALUE",
+        "UnrealizedPNL": "REDACTED_VALUE"
+      }
+    },
+    {
+      "AccountTime": "12:35",
+      "Kind": "update_account_time"
+    },
+    {
+      "Kind": "update_portfolio",
+      "Portfolio": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "MarketPrice": "REDACTED_VALUE",
+        "MarketValue": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "RealizedPNL": "REDACTED_VALUE",
+        "UnrealizedPNL": "REDACTED_VALUE"
+      }
+    },
+    {
+      "AccountTime": "12:35",
+      "Kind": "update_account_time"
+    },
+    {
+      "Kind": "update_portfolio",
+      "Portfolio": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "MarketPrice": "REDACTED_VALUE",
+        "MarketValue": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "RealizedPNL": "REDACTED_VALUE",
+        "UnrealizedPNL": "REDACTED_VALUE"
+      }
+    },
+    {
+      "AccountTime": "12:35",
+      "Kind": "update_account_time"
+    },
+    {
+      "Kind": "update_portfolio",
+      "Portfolio": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "MarketPrice": "REDACTED_VALUE",
+        "MarketValue": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "RealizedPNL": "REDACTED_VALUE",
+        "UnrealizedPNL": "REDACTED_VALUE"
+      }
+    },
+    {
+      "AccountTime": "12:35",
+      "Kind": "update_account_time"
+    },
+    {
+      "Kind": "update_portfolio",
+      "Portfolio": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "MarketPrice": "REDACTED_VALUE",
+        "MarketValue": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "RealizedPNL": "REDACTED_VALUE",
+        "UnrealizedPNL": "REDACTED_VALUE"
+      }
+    },
+    {
+      "AccountTime": "12:35",
+      "Kind": "update_account_time"
+    },
+    {
+      "AccountTime": "20:43",
+      "Kind": "update_account_time"
+    },
+    {
+      "AccountDownloadEnd": "DU_REDACTED",
+      "Kind": "account_download_end"
+    },
+    {
+      "APIError": {
+        "Code": 2100,
+        "Message": "API client has been unsubscribed from account data.",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Currency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "CashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TotalCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccruedCash",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "StockMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "OptionMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FutureOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FuturesPNL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetLiquidationByCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "UnrealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "RealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "ExchangeRate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "NetDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "MutualFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "MoneyMarketFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "CorporateBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "TBillValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "WarrantValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "FxCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "AccountOrGroup",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "RealCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "IssuerOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Key": "Cryptocurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "Currency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "CashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "TotalCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "AccruedCash",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "StockMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "OptionMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FutureOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FuturesPNL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "NetLiquidationByCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "UnrealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "RealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "ExchangeRate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "NetDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "MutualFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "MoneyMarketFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "CorporateBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "TBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "TBillValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "WarrantValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "FxCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "AccountOrGroup",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "RealCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "IssuerOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "USD",
+        "Key": "Cryptocurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "Currency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "CashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "TotalCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "AccruedCash",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "StockMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "OptionMarketValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FutureOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FuturesPNL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "NetLiquidationByCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "UnrealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "RealizedPnL",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "ExchangeRate",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "NetDividend",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "MutualFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "MoneyMarketFundValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "CorporateBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "TBondValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "TBillValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "WarrantValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "FxCashBalance",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "AccountOrGroup",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "RealCurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "IssuerOptionValue",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "AccountUpdateMulti": {
+        "Account": "DU_REDACTED",
+        "Currency": "BASE",
+        "Key": "Cryptocurrency",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_update_multi",
+      "ReqID": 811
+    },
+    {
+      "Kind": "account_update_multi_end",
+      "ReqID": 811
+    },
+    {
+      "Kind": "position",
+      "Position": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      }
+    },
+    {
+      "Kind": "position",
+      "Position": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      }
+    },
+    {
+      "Kind": "position",
+      "Position": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      }
+    },
+    {
+      "Kind": "position",
+      "Position": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      }
+    },
+    {
+      "Kind": "position",
+      "Position": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      }
+    },
+    {
+      "Kind": "position",
+      "Position": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      }
+    },
+    {
+      "Kind": "position_end"
+    },
+    {
+      "Kind": "position_multi",
+      "PositionMulti": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      },
+      "ReqID": 812
+    },
+    {
+      "Kind": "position_multi",
+      "PositionMulti": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      },
+      "ReqID": 812
+    },
+    {
+      "Kind": "position_multi",
+      "PositionMulti": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      },
+      "ReqID": 812
+    },
+    {
+      "Kind": "position_multi",
+      "PositionMulti": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      },
+      "ReqID": 812
+    },
+    {
+      "Kind": "position_multi",
+      "PositionMulti": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      },
+      "ReqID": 812
+    },
+    {
+      "Kind": "position_multi",
+      "PositionMulti": {
+        "Account": "DU_REDACTED",
+        "AvgCost": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Position": "REDACTED_VALUE"
+      },
+      "ReqID": 812
+    },
+    {
+      "Kind": "position_multi_end",
+      "ReqID": 812
+    },
+    {
+      "Kind": "pnl",
+      "PnL": {
+        "DailyPnL": "REDACTED_VALUE",
+        "RealizedPnL": "REDACTED_VALUE",
+        "UnrealizedPnL": "REDACTED_VALUE"
+      },
+      "ReqID": 813
+    },
+    {
+      "APIError": {
+        "Code": 2119,
+        "Message": "Market data farm is connecting:eufarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2119,
+        "Message": "Market data farm is connecting:usfuture",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2119,
+        "Message": "Market data farm is connecting:eufarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:eufarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Kind": "pnl_single",
+      "PnLSingle": {
+        "DailyPnL": "REDACTED_VALUE",
+        "Position": "REDACTED_VALUE",
+        "UnrealizedPnL": "REDACTED_VALUE",
+        "Value": "REDACTED_VALUE"
+      },
+      "ReqID": 814
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfuture",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    }
+  ]
+}

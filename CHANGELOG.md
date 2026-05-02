@@ -25,7 +25,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
-- **`minServerVersion` raised to require CME tagging on cancel requests.**
+- **Minimum server version raised to require CME tagging on cancel requests.**
   Gateway server_version 200 rejects individual and global cancel messages
   without CME tagging fields. Older servers are refused at connect time.
 
@@ -68,9 +68,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - **Historical request vocabularies are publicly validatable.** `BarSize`,
   `HistoricalDuration`, and `WhatToShow` now expose `Valid()` methods, and
   caller-side historical request failures return `*ValidationError`.
-- **TCP keepalive is explicitly configured for Gateway/TWS sockets.**
-  Connections default to 30-second TCP keepalive; non-positive
-  `WithTCPKeepAlive` values opt out.
+- **TCP keepalive was explicitly configured for Gateway/TWS sockets.**
+  Connections defaulted to 30-second TCP keepalive; non-positive keepalive
+  option values opted out.
 
 ### Fixed
 

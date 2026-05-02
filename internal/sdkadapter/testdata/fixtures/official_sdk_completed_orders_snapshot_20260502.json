@@ -1,0 +1,301 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T18:50:28Z",
+    "scenario": "completed_orders_snapshot",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; completed-order contracts and order fields redacted; fixture preserves real SDK completed-order callback shape",
+    "source_sha256": "3e7d4b241f5b122c6802b13b788b367e4583eaa77b7bfd442fd462fc54d66696"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 20:50:27 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "CompletedOrder": {
+        "Action": "REDACTED_VALUE",
+        "Contract": {
+          "Currency": "REDACTED_CONTRACT",
+          "Exchange": "REDACTED_CONTRACT",
+          "SecType": "REDACTED_CONTRACT",
+          "Symbol": "REDACTED_CONTRACT"
+        },
+        "Filled": "REDACTED_VALUE",
+        "OrderType": "REDACTED_VALUE",
+        "Quantity": "REDACTED_VALUE",
+        "Remaining": "REDACTED_VALUE",
+        "Status": "REDACTED_VALUE"
+      },
+      "Kind": "completed_order"
+    },
+    {
+      "Kind": "completed_order_end"
+    }
+  ]
+}

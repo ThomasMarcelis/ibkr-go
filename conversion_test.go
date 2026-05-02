@@ -7,10 +7,10 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
 
-func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
+func TestFromSDKOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecOpenOrder(sdkadapter.OpenOrder{
+	_, err := fromSDKOpenOrder(sdkadapter.OpenOrder{
 		OrderID:   1,
 		Account:   "DU12345",
 		Contract:  sdkadapter.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
@@ -20,14 +20,14 @@ func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 		ClientID:  "not-an-int",
 	})
 	if err == nil {
-		t.Fatal("fromCodecOpenOrder() error = nil, want malformed client id rejection")
+		t.Fatal("fromSDKOpenOrder() error = nil, want malformed client id rejection")
 	}
 }
 
-func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) {
+func TestFromSDKOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecOrderStatus(sdkadapter.OrderStatus{
+	_, err := fromSDKOrderStatus(sdkadapter.OrderStatus{
 		OrderID:      1,
 		Status:       "Submitted",
 		Filled:       "abc",
@@ -35,17 +35,17 @@ func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) 
 		AvgFillPrice: "0",
 	})
 	if err == nil {
-		t.Fatal("fromCodecOrderStatus() error = nil, want malformed filled rejection")
+		t.Fatal("fromSDKOrderStatus() error = nil, want malformed filled rejection")
 	}
 }
 
-// TestFromCodecExecutionAcceptsNativeGatewayTime freezes the live Gateway
+// TestFromSDKExecutionAcceptsNativeGatewayTime freezes the live Gateway
 // execution timestamp shape observed in ExecutionDetail msg_id=11:
 // "YYYYMMDD HH:MM:SS US/Eastern", not RFC3339.
-func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
+func TestFromSDKExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(sdkadapter.ExecutionDetail{
+	update, err := fromSDKExecution(sdkadapter.ExecutionDetail{
 		OrderID: 42,
 		ExecID:  "0000e0d5.69dd4c37.01.01",
 		Account: "DU12345",
@@ -56,7 +56,7 @@ func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 		Time:    "20260413 13:35:50 US/Eastern",
 	})
 	if err != nil {
-		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
+		t.Fatalf("fromSDKExecution() error = %v, want nil", err)
 	}
 	if update.Execution == nil {
 		t.Fatal("Execution = nil, want decoded execution")
@@ -67,10 +67,10 @@ func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	}
 }
 
-func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
+func TestFromSDKExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(sdkadapter.ExecutionDetail{
+	update, err := fromSDKExecution(sdkadapter.ExecutionDetail{
 		OrderID: 42,
 		ExecID:  "exec-1",
 		Account: "DU12345",
@@ -81,7 +81,7 @@ func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 		Time:    "2026-04-05T12:01:00Z",
 	})
 	if err != nil {
-		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
+		t.Fatalf("fromSDKExecution() error = %v, want nil", err)
 	}
 	want := time.Date(2026, 4, 5, 12, 1, 0, 0, time.UTC)
 	if !update.Execution.Time.Equal(want) {
@@ -89,10 +89,10 @@ func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 	}
 }
 
-func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
+func TestFromSDKExecutionRejectsMalformedTime(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecExecution(sdkadapter.ExecutionDetail{
+	_, err := fromSDKExecution(sdkadapter.ExecutionDetail{
 		OrderID: 42,
 		ExecID:  "exec-bad-time",
 		Account: "DU12345",
@@ -103,7 +103,7 @@ func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
 		Time:    "not-a-timestamp",
 	})
 	if err == nil {
-		t.Fatal("fromCodecExecution() error = nil, want malformed execution time rejection")
+		t.Fatal("fromSDKExecution() error = nil, want malformed execution time rejection")
 	}
 }
 
@@ -122,8 +122,7 @@ func TestParseOptionalDecimalAllowsBlank(t *testing.T) {
 // TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent freezes the rule
 // that the literal Double.MAX_VALUE string TWS emits for unset optional
 // doubles is treated the same as an empty string. The canonical form is
-// captured in internal/codec/codec_test.go alongside a live open-order
-// payload.
+// preserved by a legacy live open-order capture.
 func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 	t.Parallel()
 
@@ -150,16 +149,16 @@ func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 	}
 }
 
-// TestFromCodecOpenOrderAcceptsSentinelCommissionFields is the end-to-end
+// TestFromSDKOpenOrderAcceptsSentinelCommissionFields is the end-to-end
 // regression freeze for the reported P1: live TWS open-order traffic encodes
 // unset commission/min/max commission as the MAX_DOUBLE sentinel, and that
 // must not tear down the open-order decode path.
-func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
+func TestFromSDKOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 	t.Parallel()
 
 	const sentinel = "1.7976931348623157E308"
 
-	order, err := fromCodecOpenOrder(sdkadapter.OpenOrder{
+	order, err := fromSDKOpenOrder(sdkadapter.OpenOrder{
 		OrderID:       1,
 		Account:       "DU12345",
 		Contract:      sdkadapter.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
@@ -175,7 +174,7 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 		MaxCommission: sentinel,
 	})
 	if err != nil {
-		t.Fatalf("fromCodecOpenOrder() error = %v, want nil", err)
+		t.Fatalf("fromSDKOpenOrder() error = %v, want nil", err)
 	}
 	if !order.Commission.IsZero() {
 		t.Errorf("Commission = %s, want zero (sentinel should decode as absent)", order.Commission.String())
@@ -188,12 +187,12 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 	}
 }
 
-// TestFromCodecCommissionAcceptsSentinelFields freezes the receive-path
+// TestFromSDKCommissionAcceptsSentinelFields freezes the receive-path
 // contract for CommissionReport: live TWS emits the MAX_DOUBLE sentinel for
 // Commission and RealizedPNL when the server has not yet computed those
 // values, and the Go client must decode both forms to a zero decimal instead
 // of tearing down the executions subscription or silently dropping the report.
-func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
+func TestFromSDKCommissionAcceptsSentinelFields(t *testing.T) {
 	t.Parallel()
 
 	const sentinel = "1.7976931348623157E308"
@@ -213,14 +212,14 @@ func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			report, err := fromCodecCommission(sdkadapter.CommissionReport{
+			report, err := fromSDKCommission(sdkadapter.CommissionReport{
 				ExecID:      "exec-1",
 				Commission:  tt.commission,
 				Currency:    "USD",
 				RealizedPNL: tt.realized,
 			})
 			if err != nil {
-				t.Fatalf("fromCodecCommission() error = %v, want nil", err)
+				t.Fatalf("fromSDKCommission() error = %v, want nil", err)
 			}
 			if report.ExecID != "exec-1" {
 				t.Errorf("ExecID = %q, want %q", report.ExecID, "exec-1")
@@ -232,19 +231,19 @@ func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 	}
 }
 
-// TestFromCodecCommissionPreservesRealValues confirms that the sentinel fix
+// TestFromSDKCommissionPreservesRealValues confirms that the sentinel fix
 // did not alter decoding of real commission values.
-func TestFromCodecCommissionPreservesRealValues(t *testing.T) {
+func TestFromSDKCommissionPreservesRealValues(t *testing.T) {
 	t.Parallel()
 
-	report, err := fromCodecCommission(sdkadapter.CommissionReport{
+	report, err := fromSDKCommission(sdkadapter.CommissionReport{
 		ExecID:      "exec-2",
 		Commission:  "1.25",
 		Currency:    "USD",
 		RealizedPNL: "-50.00",
 	})
 	if err != nil {
-		t.Fatalf("fromCodecCommission() error = %v, want nil", err)
+		t.Fatalf("fromSDKCommission() error = %v, want nil", err)
 	}
 	if got := report.Commission.String(); got != "1.25" {
 		t.Errorf("Commission = %s, want 1.25", got)
@@ -254,19 +253,19 @@ func TestFromCodecCommissionPreservesRealValues(t *testing.T) {
 	}
 }
 
-// TestFromCodecCommissionRejectsMalformedField freezes the rule that a
+// TestFromSDKCommissionRejectsMalformedField freezes the rule that a
 // genuinely malformed decimal (not a sentinel, not empty) still produces an
 // error so the engine's log-and-drop path has something to report.
-func TestFromCodecCommissionRejectsMalformedField(t *testing.T) {
+func TestFromSDKCommissionRejectsMalformedField(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecCommission(sdkadapter.CommissionReport{
+	_, err := fromSDKCommission(sdkadapter.CommissionReport{
 		ExecID:      "exec-3",
 		Commission:  "not-a-decimal",
 		Currency:    "USD",
 		RealizedPNL: "0",
 	})
 	if err == nil {
-		t.Fatal("fromCodecCommission() error = nil, want malformed commission rejection")
+		t.Fatal("fromSDKCommission() error = nil, want malformed commission rejection")
 	}
 }

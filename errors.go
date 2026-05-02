@@ -6,19 +6,18 @@ import (
 )
 
 var (
-	ErrNotReady                 = errors.New("ibkr: session not ready")
-	ErrInterrupted              = errors.New("ibkr: request interrupted")
-	ErrResumeRequired           = errors.New("ibkr: subscription resume required")
-	ErrNoSnapshot               = errors.New("ibkr: subscription has no snapshot boundary")
-	ErrSlowConsumer             = errors.New("ibkr: slow consumer")
-	ErrUnsupportedServerVersion = errors.New("ibkr: unsupported server version")
-	ErrClosed                   = errors.New("ibkr: closed")
-	ErrNoMatch                  = errors.New("ibkr: no contract match")
-	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")
+	ErrNotReady          = errors.New("ibkr: session not ready")
+	ErrInterrupted       = errors.New("ibkr: request interrupted")
+	ErrResumeRequired    = errors.New("ibkr: subscription resume required")
+	ErrNoSnapshot        = errors.New("ibkr: subscription has no snapshot boundary")
+	ErrSlowConsumer      = errors.New("ibkr: slow consumer")
+	ErrClosed            = errors.New("ibkr: closed")
+	ErrNoMatch           = errors.New("ibkr: no contract match")
+	ErrAmbiguousContract = errors.New("ibkr: ambiguous contract")
 )
 
-// ConnectError wraps a failure during the connection phase (dial, TLS
-// negotiation, or protocol handshake).
+// ConnectError wraps a failure during SDK adapter creation, connection, or
+// bootstrap.
 type ConnectError struct {
 	Op  string
 	Err error
@@ -32,24 +31,28 @@ func (e *ConnectError) Unwrap() error {
 	return e.Err
 }
 
-// ProtocolError wraps a framing or encoding error encountered while reading
-// or writing TWS API messages on the wire.
-type ProtocolError struct {
-	Direction string
-	Message   string
-	Err       error
+// AdapterError wraps SDK adapter boundary failures such as SDK exceptions,
+// native queue failures, ABI misuse, and unknown adapter events.
+type AdapterError struct {
+	Op      string
+	Message string
+	Err     error
 }
 
-func (e *ProtocolError) Error() string {
+func (e *AdapterError) Error() string {
 	if e.Message == "" {
-		return fmt.Sprintf("ibkr: protocol %s: %v", e.Direction, e.Err)
+		return fmt.Sprintf("ibkr: sdk adapter %s: %v", e.Op, e.Err)
 	}
-	return fmt.Sprintf("ibkr: protocol %s %s: %v", e.Direction, e.Message, e.Err)
+	return fmt.Sprintf("ibkr: sdk adapter %s %s: %v", e.Op, e.Message, e.Err)
 }
 
-func (e *ProtocolError) Unwrap() error {
+func (e *AdapterError) Unwrap() error {
 	return e.Err
 }
+
+// ProtocolError is kept as a source-compatible alias for adapter boundary
+// errors. It no longer represents a Go-owned socket codec failure.
+type ProtocolError = AdapterError
 
 // APIError is an error code returned by TWS or IB Gateway in response to a
 // specific request. Code carries the IBKR error/warning code and Message is

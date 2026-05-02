@@ -89,6 +89,16 @@ if [[ ! -f "$adapter_cpp" ]]; then
   echo "missing adapter source: $adapter_cpp" >&2
   exit 2
 fi
+adapter_go="$repo_root/internal/sdkadapter/adapter.go"
+native_go="$repo_root/internal/sdkadapter/native/native.go"
+if [[ ! -f "$adapter_go" ]]; then
+  echo "missing adapter model source: $adapter_go" >&2
+  exit 2
+fi
+if [[ ! -f "$native_go" ]]; then
+  echo "missing native Go wrapper source: $native_go" >&2
+  exit 2
+fi
 
 mapfile -t request_methods < <(
   sed -n 's/.*client_->\([A-Za-z_][A-Za-z0-9_]*\)(.*/\1/p' "$adapter_cpp" |
@@ -98,6 +108,16 @@ mapfile -t request_methods < <(
 
 mapfile -t callback_methods < <(
   sed -n 's/^[[:space:]]*void \([A-Za-z_][A-Za-z0-9_]*\)(.* override.*/\1/p' "$adapter_cpp" |
+    sort -u
+)
+
+mapfile -t command_kinds < <(
+  sed -n 's/^[[:space:]]*\(Command[A-Za-z0-9_]*\)[[:space:]]\+CommandKind[[:space:]]*=.*/\1/p' "$adapter_go" |
+    sort -u
+)
+
+mapfile -t native_command_cases < <(
+  sed -n 's/^[[:space:]]*case[[:space:]]\+sdkadapter\.\(Command[A-Za-z0-9_]*\):.*/\1/p' "$native_go" |
     sort -u
 )
 
@@ -125,6 +145,13 @@ for method in "${callback_methods[@]}"; do
   fi
 done
 
+for command in "${command_kinds[@]}"; do
+  if ! printf '%s\n' "${native_command_cases[@]}" | grep -qx "$command"; then
+    echo "adapter command kind has no native Submit case: $command" >&2
+    missing=1
+  fi
+done
+
 if [[ "$missing" -ne 0 ]]; then
   exit 1
 fi
@@ -134,3 +161,4 @@ echo "  SDK dir:          $sdk_dir"
 echo "  C++ headers:      $client_dir"
 echo "  adapter requests: ${#request_methods[@]}"
 echo "  callbacks:        ${#callback_methods[@]}"
+echo "  command kinds:    ${#command_kinds[@]}"

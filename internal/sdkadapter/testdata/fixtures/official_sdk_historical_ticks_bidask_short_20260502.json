@@ -1,0 +1,1288 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T19:35:43Z",
+    "scenario": "historical_ticks_bidask_short",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "7a344933e7d5dd06221df36f9f3282b63bb2377c63149fd54899a19faf8ec3ec"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 21:35:42 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "HistoricalTicksBidAsk": [
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+200E+0",
+          "Time": "1777665598"
+        },
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+360E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+360E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.05000000000001",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.05000000000001",
+          "AskSize": "+440E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+640E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+760E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+760E+0",
+          "BidPrice": "280",
+          "BidSize": "+1720E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.02999999999997",
+          "AskSize": "+40E+0",
+          "BidPrice": "280",
+          "BidSize": "+1680E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.01999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280",
+          "BidSize": "+560E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.01999999999998",
+          "AskSize": "+960E+0",
+          "BidPrice": "279.99000000000001",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.01999999999998",
+          "AskSize": "+960E+0",
+          "BidPrice": "279.98000000000002",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.01999999999998",
+          "AskSize": "+960E+0",
+          "BidPrice": "280",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.00999999999999",
+          "AskSize": "+40E+0",
+          "BidPrice": "280",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.00999999999999",
+          "AskSize": "+440E+0",
+          "BidPrice": "279.98000000000002",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.00999999999999",
+          "AskSize": "+440E+0",
+          "BidPrice": "280",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.00999999999999",
+          "AskSize": "+520E+0",
+          "BidPrice": "279.98000000000002",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.00999999999999",
+          "AskSize": "+520E+0",
+          "BidPrice": "280",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.00999999999999",
+          "AskSize": "+440E+0",
+          "BidPrice": "279.99000000000001",
+          "BidSize": "+280E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280",
+          "AskSize": "+160E+0",
+          "BidPrice": "279.99000000000001",
+          "BidSize": "+280E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.01999999999998",
+          "AskSize": "+320E+0",
+          "BidPrice": "279.99000000000001",
+          "BidSize": "+280E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.01999999999998",
+          "AskSize": "+480E+0",
+          "BidPrice": "280",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.02999999999997",
+          "AskSize": "+240E+0",
+          "BidPrice": "280",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.02999999999997",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+320E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.05000000000001",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+360E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+1280E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.02999999999997",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+1080E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.02999999999997",
+          "AskSize": "+360E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+360E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.04000000000002",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.05000000000001",
+          "AskSize": "+280E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.05000000000001",
+          "AskSize": "+280E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+280E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.05000000000001",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.05000000000001",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.07999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.07999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.06999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+400E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.07999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+400E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.07999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+600E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+560E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+560E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+680E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+680E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+800E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+800E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+760E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+760E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+800E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+800E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+880E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+880E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+720E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+320E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+800E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+680E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+800E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+520E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+520E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+440E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+760E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+760E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+920E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.00999999999999",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.12",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.01999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.02999999999997",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+720E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+360E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+640E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+440E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+520E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+520E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+520E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+160E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+560E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+320E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+560E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+320E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+560E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+120E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.05000000000001",
+          "BidSize": "+240E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.04000000000002",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.05000000000001",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.07999999999998",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.05000000000001",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.05000000000001",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.06",
+          "BidSize": "+280E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.06999999999999",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.08999999999997",
+          "AskSize": "+480E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.10000000000002",
+          "AskSize": "+280E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.07999999999998",
+          "BidSize": "+400E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+200E+0",
+          "BidPrice": "280.08999999999997",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.11000000000001",
+          "AskSize": "+80E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+440E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+560E+0",
+          "BidPrice": "280.10000000000002",
+          "BidSize": "+440E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+560E+0",
+          "BidPrice": "280.11000000000001",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+440E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.13999999999999",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+400E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+440E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+640E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+240E+0",
+          "BidPrice": "280.13999999999999",
+          "BidSize": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13999999999999",
+          "BidSize": "+520E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13999999999999",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+440E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13999999999999",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+200E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+360E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+40E+0",
+          "BidPrice": "280.12",
+          "BidSize": "+360E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.14999999999998",
+          "AskSize": "+560E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13",
+          "BidSize": "+400E+0",
+          "Time": "1777665599"
+        },
+        {
+          "AskPrice": "280.16000000000003",
+          "AskSize": "+320E+0",
+          "BidPrice": "280.13999999999999",
+          "BidSize": "+160E+0",
+          "Time": "1777665599"
+        }
+      ],
+      "HistoricalTicksDone": true,
+      "Kind": "historical_ticks_bid_ask",
+      "ReqID": 404
+    }
+  ]
+}

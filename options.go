@@ -13,7 +13,6 @@ type config struct {
 	host                string
 	port                int
 	clientID            int
-	useSDK              bool
 	logger              *slog.Logger
 	reconnect           ReconnectPolicy
 	eventBuffer         int
@@ -35,8 +34,8 @@ func defaultConfig() config {
 		clientID:            1,
 		logger:              slog.New(slog.NewTextHandler(io.Discard, nil)),
 		reconnect:           ReconnectAuto,
-		eventBuffer:         64,
-		subscriptionBuffer:  64,
+		eventBuffer:         1024,
+		subscriptionBuffer:  1024,
 		defaultResume:       ResumeNever,
 		defaultSlowConsumer: SlowConsumerClose,
 	}

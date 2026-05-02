@@ -390,7 +390,7 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 		t.Fatalf("SubscribeAccountSummary() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -400,7 +400,7 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 		t.Fatalf("first value = %#v, want 100000.00", first)
 	}
 
-	snapshot := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
+	snapshot := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
 	if snapshot.ConnectionSeq != 1 {
 		t.Fatalf("snapshot.ConnectionSeq = %d, want 1", snapshot.ConnectionSeq)
 	}
@@ -587,7 +587,7 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -597,7 +597,7 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
 	}
 
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
@@ -605,7 +605,7 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 		t.Fatal("gap.Retryable = false, want true")
 	}
 
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
 	if resumed.ConnectionSeq != 2 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
 	}
@@ -648,7 +648,7 @@ func TestSubscribeQuotesResumeAutoResendsAfter1101(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -658,12 +658,12 @@ func TestSubscribeQuotesResumeAutoResendsAfter1101(t *testing.T) {
 		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
 	}
 
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
 
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
 	if resumed.ConnectionSeq != 1 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 1", resumed.ConnectionSeq)
 	}
@@ -703,7 +703,7 @@ func TestSubscribeQuotesResumeAutoResumesWithoutResendAfter1102(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -713,12 +713,12 @@ func TestSubscribeQuotesResumeAutoResumesWithoutResendAfter1102(t *testing.T) {
 		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
 	}
 
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
 
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
 	if resumed.ConnectionSeq != 1 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 1", resumed.ConnectionSeq)
 	}
@@ -1082,7 +1082,7 @@ func TestSubscribeRealTimeBarsResumeAutoReconnectsAfterTransportLoss(t *testing.
 		t.Fatalf("SubscribeRealTimeBars() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -1092,7 +1092,7 @@ func TestSubscribeRealTimeBarsResumeAutoReconnectsAfterTransportLoss(t *testing.
 		t.Fatalf("first close = %s, want 189.1", first.Close.String())
 	}
 
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
@@ -1100,7 +1100,7 @@ func TestSubscribeRealTimeBarsResumeAutoReconnectsAfterTransportLoss(t *testing.
 		t.Fatal("gap.Retryable = false, want true")
 	}
 
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
 	if resumed.ConnectionSeq != 2 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
 	}
@@ -1140,7 +1140,7 @@ func TestSubscribeQuotesResumeNeverRequiresManualResumeOnDisconnect(t *testing.T
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -2963,7 +2963,7 @@ func TestSubscribePnL(t *testing.T) {
 		t.Fatalf("SubscribePnL() error = %v", err)
 	}
 
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
 	update := waitForEvent(t, sub.Events())
 	if update.DailyPnL.String() != "150.25" {
@@ -3000,7 +3000,7 @@ func TestSubscribePnLSingle(t *testing.T) {
 		t.Fatalf("SubscribePnLSingle() error = %v", err)
 	}
 
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
 	update := waitForEvent(t, sub.Events())
 	if update.Position.String() != "10" {
@@ -3043,7 +3043,7 @@ func TestSubscribeTickByTick(t *testing.T) {
 		t.Fatalf("SubscribeTickByTick() error = %v", err)
 	}
 
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
 	tick := waitForEvent(t, sub.Events())
 	if tick.TickType != 1 {
@@ -3079,7 +3079,7 @@ func TestSubscribeNewsBulletins(t *testing.T) {
 		t.Fatalf("SubscribeNewsBulletins() error = %v", err)
 	}
 
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
 	bulletin := waitForEvent(t, sub.Events())
 	if bulletin.MsgID != 1 {
@@ -3130,7 +3130,7 @@ func TestSubscribeHistoricalBars(t *testing.T) {
 	}
 
 	// Wait for snapshot complete
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
+	integrationWaitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
 
 	// Receive streaming update bar
 	bar2 := waitForEvent(t, sub.Events())
@@ -3143,7 +3143,7 @@ func TestSubscribeHistoricalBars(t *testing.T) {
 	}
 }
 
-func waitForStateKind(t *testing.T, ch <-chan ibkr.SubscriptionStateEvent, want ibkr.SubscriptionStateKind) ibkr.SubscriptionStateEvent {
+func integrationWaitForStateKind(t *testing.T, ch <-chan ibkr.SubscriptionStateEvent, want ibkr.SubscriptionStateKind) ibkr.SubscriptionStateEvent {
 	t.Helper()
 
 	for {
@@ -3241,7 +3241,7 @@ func TestSubscribeDisplayGroupIntegration(t *testing.T) {
 		t.Fatalf("SubscribeDisplayGroup() error = %v", err)
 	}
 
-	waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionStarted)
+	integrationWaitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionStarted)
 
 	// Read initial "none" update.
 	initial := waitForEvent(t, handle.Events())
@@ -4154,11 +4154,11 @@ func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
 
-	gap := waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionGap)
+	gap := integrationWaitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
-	resumed := waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := integrationWaitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionResumed)
 	if resumed.ConnectionSeq != 2 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
 	}

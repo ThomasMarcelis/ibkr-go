@@ -1,0 +1,139 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T19:21:18Z",
+    "scenario": "news_article_snapshot",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; provider article ID, headline, and article text replaced with redaction placeholders while preserving callback shape",
+    "source_sha256": "e25f9cf9301804a7c6614efc580e1825d7487ab5b501b45242a67edde03567f6"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 21:21:17 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "HistoricalNews": {
+        "ArticleID": "REDACTED_ARTICLE_ID",
+        "Headline": "REDACTED_HEADLINE",
+        "ProviderCode": "BRFG",
+        "Time": "2026-05-01 14:27:06.0"
+      },
+      "Kind": "historical_news",
+      "ReqID": 903
+    },
+    {
+      "HistoricalNews": {
+        "ArticleID": "REDACTED_ARTICLE_ID",
+        "Headline": "REDACTED_HEADLINE",
+        "ProviderCode": "BRFUPDN",
+        "Time": "2026-04-28 13:19:26.0"
+      },
+      "Kind": "historical_news",
+      "ReqID": 903
+    },
+    {
+      "HistoricalNews": {
+        "ArticleID": "REDACTED_ARTICLE_ID",
+        "Headline": "REDACTED_HEADLINE",
+        "ProviderCode": "BRFG",
+        "Time": "2026-04-21 14:09:35.0"
+      },
+      "Kind": "historical_news",
+      "ReqID": 903
+    },
+    {
+      "HistoricalNews": {
+        "ArticleID": "REDACTED_ARTICLE_ID",
+        "Headline": "REDACTED_HEADLINE",
+        "ProviderCode": "BRFUPDN",
+        "Time": "2026-04-17 12:00:57.0"
+      },
+      "Kind": "historical_news",
+      "ReqID": 903
+    },
+    {
+      "HistoricalNews": {
+        "ArticleID": "REDACTED_ARTICLE_ID",
+        "Headline": "REDACTED_HEADLINE",
+        "ProviderCode": "BRFUPDN",
+        "Time": "2026-04-14 14:58:42.0"
+      },
+      "Kind": "historical_news",
+      "ReqID": 903
+    },
+    {
+      "HistoricalHasMore": true,
+      "Kind": "historical_news_end",
+      "ReqID": 903
+    },
+    {
+      "Kind": "news_article",
+      "NewsArticle": {
+        "ArticleText": "REDACTED_ARTICLE_TEXT"
+      },
+      "ReqID": 904
+    }
+  ]
+}

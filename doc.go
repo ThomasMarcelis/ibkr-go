@@ -1,12 +1,36 @@
-// Package ibkr is a Go client for the Interactive Brokers TWS/Gateway socket
-// protocol. It covers the full TWS API surface through typed methods and generic
-// subscriptions with explicit lifecycle semantics.
+// Package ibkr is an SDK-backed Go client for Interactive Brokers TWS and IB
+// Gateway. The public API is typed and Go-shaped: one-shot methods,
+// subscriptions with explicit lifecycle semantics, and order handles.
+//
+// The SDK-native runtime is still being migrated. Current native coverage
+// includes session bootstrap, current time, current time millis, account
+// summary, account updates, account updates multi, positions, positions multi,
+// PnL, PnL single, family codes, contract details, market-data type control,
+// quote snapshots and streams, real-time bars, tick-by-tick data, market depth
+// streams, contract search, market rules, sec-def option params, smart
+// components, market-depth exchange metadata, head timestamp, histogram data,
+// fundamental data, news providers, news bulletins, news articles, historical
+// news, scanner parameters, scanner result subscriptions, historical bars,
+// historical bar subscriptions, historical schedule, historical ticks, option
+// implied-volatility and price calculations, FA config reads and writes,
+// soft-dollar tiers, option exercise, user info, WSH metadata/event data,
+// display groups, display group subscriptions, order placement and modification,
+// open-order snapshots and subscriptions, completed-order snapshots, execution
+// snapshots, commission reports, and cancellation for account summary, account
+// updates, account updates multi, positions, positions multi, PnL, PnL single,
+// order cancellation, global cancellation, news bulletins, scanner
+// subscriptions, display group subscriptions, quote streams, real-time bars,
+// tick-by-tick data, market depth, historical bars, historical ticks, option
+// calculations, head timestamp, histogram data, WSH metadata/event data, and
+// fundamental data.
+// Rows without current live SDK evidence remain partial in the migration matrix.
 //
 // # Connecting
 //
 // [DialContext] establishes a connection and returns a ready [Client]. It blocks
-// until the handshake completes, the server version is negotiated, and managed
-// accounts are loaded. Pass functional options to configure the connection:
+// until the official SDK connection is established, server metadata is loaded,
+// and managed accounts are available. Pass functional options to configure the
+// connection:
 //
 //	client, err := ibkr.DialContext(ctx,
 //	    ibkr.WithHost("127.0.0.1"),
@@ -24,8 +48,8 @@
 //
 // # One-Shot Requests
 //
-// Most query methods follow a simple call-and-return pattern. Pass a context
-// for cancellation and a typed request; get back typed results:
+// Migrated query methods follow a simple call-and-return pattern. Pass a
+// context for cancellation and a typed request; get back typed results:
 //
 //	details, err := client.Contracts().Qualify(ctx, ibkr.Contract{
 //	    Symbol:   "AAPL",
@@ -38,13 +62,15 @@
 //	}
 //	fmt.Println(details.LongName, details.MinTick)
 //
-// One-shots block until the server sends all result messages and the protocol
-// completion marker. They return [*APIError] when the server rejects the request.
+// Migrated one-shots block until the server sends all result callbacks and the
+// SDK completion callback. They return [*APIError] when the server rejects the
+// request.
 //
 // # Subscriptions
 //
-// Streaming data uses [Subscription], a generic type that separates business
-// events from lifecycle state. Every subscription exposes three channels:
+// Migrated streaming data uses [Subscription], a generic type that separates
+// business events from lifecycle state. Every subscription exposes three
+// channels:
 //
 //   - Events() delivers business data (quotes, bars, positions, etc.)
 //   - Lifecycle() delivers lifecycle transitions ([SubscriptionStarted],
@@ -93,6 +119,9 @@
 //
 // # Order Management
 //
+// The order-management API is part of the public target surface, but it is not
+// yet SDK-native in the current adapter.
+//
 // [OrdersClient.Place] submits an order and returns an [*OrderHandle] that tracks
 // its full lifecycle. The handle follows the same Events/Lifecycle/Done pattern as
 // subscriptions. OrderEvent is a union: exactly one of OpenOrder, Status,
@@ -121,8 +150,8 @@
 //
 // Four structured error types cover the main failure modes:
 //
-//   - [*ConnectError] — connection or handshake failure
-//   - [*ProtocolError] — wire protocol violation
+//   - [*ConnectError] — SDK adapter creation, connection, or bootstrap failure
+//   - [*AdapterError] — SDK adapter boundary failure
 //   - [*APIError] — server-side rejection (error code + message)
 //   - [*ValidationError] — caller-side request validation failure
 //

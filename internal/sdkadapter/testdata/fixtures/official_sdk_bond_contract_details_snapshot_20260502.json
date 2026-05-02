@@ -1,0 +1,104 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T19:11:05Z",
+    "scenario": "bond_contract_details_snapshot",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "4c01eb8b0be1532ae2b678f62ac731838f57c89c48b83a9c5cfbb0141932171d"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 21:11:04 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "ContractDetails": {
+        "Contract": {
+          "ConID": 681308048,
+          "Exchange": "SMART",
+          "SecType": "BOND",
+          "TradingClass": "IBM"
+        },
+        "MinTick": "0.001"
+      },
+      "Kind": "bond_contract_details",
+      "ReqID": 1601
+    },
+    {
+      "Kind": "contract_details_end",
+      "ReqID": 1601
+    },
+    {
+      "APIError": {
+        "Code": 2113,
+        "Message": "Warning: the order size for Bonds (Bills) is entered as a nominal par value of the order, and must be a multiple\nof the Minimum Size Increment.%s",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    }
+  ]
+}

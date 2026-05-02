@@ -1,7 +1,10 @@
+//go:build legacy_native_socket
+
 package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
@@ -176,11 +179,14 @@ func dialTarget(addr string, useTLS bool) (net.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	return tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
-		ServerName:         host,
-		InsecureSkipVerify: true,
-	})
+	dialer := &tls.Dialer{
+		NetDialer: &net.Dialer{Timeout: 5 * time.Second},
+		Config: &tls.Config{
+			ServerName:         host,
+			InsecureSkipVerify: true,
+		},
+	}
+	return dialer.DialContext(context.Background(), "tcp", addr)
 }
 
 type probeVariant struct {

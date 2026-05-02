@@ -1,0 +1,2513 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T19:32:33Z",
+    "scenario": "historical_ticks_trades_short",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "f1792cfa680c5d33a0e9834f616236085bfa862af84900f8546d1a545f1f7aa0"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 21:32:32 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "HistoricalTicksDone": true,
+      "HistoricalTicksLast": [
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.04000000000002",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.02999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.02999999999997",
+          "Size": "+160E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NYSE",
+          "Price": "280.02999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+254E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.04000000000002",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.01999999999998",
+          "Size": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+2E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.00999999999999",
+          "Size": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+8E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+200E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+2E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+279E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.02999999999997",
+          "Size": "+56E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NYSE",
+          "Price": "280.02999999999997",
+          "Size": "+3E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+21E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+16E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+2E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+5E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+54E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+120E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+180E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+106E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+10E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+15E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+260E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.005",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "IEX",
+          "Price": "280.005",
+          "Size": "+13E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.005",
+          "Size": "+20E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+120E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280",
+          "Size": "+90E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.00999999999999",
+          "Size": "+20E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "279.99799999999999",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+170E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+254E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.01999999999998",
+          "Size": "+100E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.02499999999998",
+          "Size": "+34E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.02499999999998",
+          "Size": "+100E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+21E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+10E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.02499999999998",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.01999999999998",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02499999999998",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02499999999998",
+          "Size": "+160E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.01999999999998",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+10E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+21E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+12E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.00999999999999",
+          "Size": "+377E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.02499999999998",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BYX",
+          "Price": "280.00999999999999",
+          "Size": "+500E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BYX",
+          "Price": "280.00999999999999",
+          "Size": "+500E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.00999999999999",
+          "Size": "+700E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.01999999999998",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.04300000000001",
+          "Size": "+42E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.01999999999998",
+          "Size": "+184E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.06880000000001",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.02999999999997",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.01209999999998",
+          "Size": "+94E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+171E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+170E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+25E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.02999999999997",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.03269999999998",
+          "Size": "+17E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.00999999999999",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BYX",
+          "Price": "280.00999999999999",
+          "Size": "+18E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.02999999999997",
+          "Size": "+2E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.03500000000003",
+          "Size": "+100E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+91E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+59E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+21E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+2039E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BYX",
+          "Price": "280.00999999999999",
+          "Size": "+300E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+45E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+115E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.05000000000001",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.05000000000001",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.05000000000001",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.05000000000001",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+251E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+19E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+6E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.05000000000001",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.06",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+60E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.05000000000001",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+76E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.05000000000001",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+4E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+320E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.06",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+6E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+2E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+31E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+49E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+23E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+24E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+56E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.03300000000002",
+          "Size": "+160E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+26E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+54E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+54E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+26E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+54E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+23E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+69E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+360E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+510E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+211E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+96E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+24E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+251E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+320E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+76E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+118E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+160E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.13",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+120E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+50E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.12",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.13999999999999",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.12990000000002",
+          "Size": "+52E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+398E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+256E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+15E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.13",
+          "Size": "+13E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.13",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11500000000001",
+          "Size": "+200E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+60E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.11000000000001",
+          "Size": "+20E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+3E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.10000000000002",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.05000000000001",
+          "Size": "+3E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+17E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.02999999999997",
+          "Size": "+2340E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.09359999999998",
+          "Size": "+321E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+120E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+25E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+160E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+320E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+23E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+122E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+28E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+12E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+158E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+90E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.13",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+280E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+68E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+40E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.12",
+          "Size": "+7E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+145E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+34E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+61E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.125",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+33E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.11000000000001",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NYSE",
+          "Price": "280.11000000000001",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "IEX",
+          "Price": "280.11000000000001",
+          "Size": "+80E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "FINRA",
+          "Price": "280.11000000000001",
+          "Size": "+100E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+251E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+11E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.10000000000002",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.10000000000002",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.10000000000002",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NYSE",
+          "Price": "280.10000000000002",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BEX",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "PSX",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+247E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "DRCTEDGE",
+          "Price": "280.08999999999997",
+          "Size": "+7E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.08999999999997",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "EDGEA",
+          "Price": "280.08999999999997",
+          "Size": "+100E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+70E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.10000000000002",
+          "Size": "+247E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.08999999999997",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.08999999999997",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.10000000000002",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "EDGEA",
+          "Price": "280.10000000000002",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+243E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "DRCTEDGE",
+          "Price": "280.10000000000002",
+          "Size": "+7E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+238E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.05000000000001",
+          "Size": "+247E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "DRCTEDGE",
+          "Price": "280.10000000000002",
+          "Size": "+1E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.04000000000002",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.06999999999999",
+          "Size": "+100E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.10000000000002",
+          "Size": "+20E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.10000000000002",
+          "Size": "+4E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.07999999999998",
+          "Size": "+13E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+247E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+68E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.08999999999997",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.08999999999997",
+          "Size": "+20E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.08999999999997",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "DRCTEDGE",
+          "Price": "280.08999999999997",
+          "Size": "+7E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "BATS",
+          "Price": "280.10000000000002",
+          "Size": "+5E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.10000000000002",
+          "Size": "+17E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NYSE",
+          "Price": "280.10000000000002",
+          "Size": "+17E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.11000000000001",
+          "Size": "+96E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "DRCTEDGE",
+          "Price": "280.10000000000002",
+          "Size": "+5E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+74E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.13999999999999",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+169E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+25E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+4E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+408E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+86E+0",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.14999999999998",
+          "Size": "+80E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.14999999999998",
+          "Size": "+120E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.14999999999998",
+          "Size": "+4E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+101E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+371E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+60E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "ARCA",
+          "Price": "280.13999999999999",
+          "Size": "+1E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13999999999999",
+          "Size": "+72E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+40E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+160E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+60E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+3E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+7E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.13",
+          "Size": "+21E+0",
+          "SpecialConditions": " F I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.14999999999998",
+          "Size": "+170E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.14999999999998",
+          "Size": "+247E+0",
+          "SpecialConditions": " F  ",
+          "Time": "1777665599"
+        },
+        {
+          "Exchange": "NASDAQ",
+          "Price": "280.14999999999998",
+          "Size": "+10E+0",
+          "SpecialConditions": "   I",
+          "TickAttrib": 2,
+          "Time": "1777665599"
+        }
+      ],
+      "Kind": "historical_ticks_last",
+      "ReqID": 405
+    }
+  ]
+}

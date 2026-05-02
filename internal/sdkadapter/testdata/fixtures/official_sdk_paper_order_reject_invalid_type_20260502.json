@@ -1,0 +1,201 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T16:34:33Z",
+    "scenario": "paper_order_reject_invalid_type",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED and order permIDs zeroed; fixture contains one rejected paper order with an invalid order type",
+    "source_sha256": "4ae50ed4eedf69ec7f6cb9421ad8dea7c6353a2777697470f2c051cc076e2642"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 18:34:29 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "Kind": "tick_req_params",
+      "ReqID": 231,
+      "TickReqParams": {
+        "BBOExchange": "9c0001",
+        "MinTick": "0.01",
+        "SnapshotPermissions": 4
+      }
+    },
+    {
+      "Kind": "market_data_type",
+      "MarketDataType": 3,
+      "ReqID": 231
+    },
+    {
+      "APIError": {
+        "Code": 10167,
+        "Message": "Requested market data is not subscribed. Displaying delayed market data.",
+        "Op": "api",
+        "ReqID": 231
+      },
+      "Kind": "api_error",
+      "ReqID": 231
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "280.06999999999999",
+        "TickType": 68
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 231,
+      "TickSize": {
+        "Size": "+3000E+0",
+        "TickType": 71
+      }
+    },
+    {
+      "Kind": "tick_string",
+      "ReqID": 231,
+      "TickString": {
+        "TickType": 88,
+        "Value": "1777679999"
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "287.22000000000003",
+        "TickType": 72
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "278.37",
+        "TickType": 73
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 231,
+      "TickSize": {
+        "Size": "+2024311E+0",
+        "TickType": 74
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "271.35000000000002",
+        "TickType": 75
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "-1",
+        "TickType": 66
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 231,
+      "TickSize": {
+        "Size": "+0E+0",
+        "TickType": 69
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "-1",
+        "TickType": 67
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 231,
+      "TickSize": {
+        "Size": "+0E+0",
+        "TickType": 70
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 231,
+      "TickPrice": {
+        "Price": "0",
+        "TickType": 76
+      }
+    },
+    {
+      "Kind": "tick_snapshot_end",
+      "ReqID": 231
+    },
+    {
+      "APIError": {
+        "Code": 321,
+        "Message": "Error validating request.-'c' : cause - Invalid order type was entered",
+        "Op": "api",
+        "ReqID": 1
+      },
+      "Kind": "api_error",
+      "ReqID": 1
+    }
+  ]
+}

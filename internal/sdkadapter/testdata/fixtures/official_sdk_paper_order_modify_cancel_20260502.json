@@ -1,0 +1,651 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T16:19:07Z",
+    "scenario": "paper_order_modify_cancel",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED and order permIDs zeroed; fixture contains one paper order placement, quantity modify, and cancel callback sequence",
+    "source_sha256": "860489438be38dc855edaafe2496c4071cea832857d44c4972bd540e4b127aec"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 18:19:03 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 2
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 2
+    },
+    {
+      "Kind": "tick_req_params",
+      "ReqID": 211,
+      "TickReqParams": {
+        "BBOExchange": "9c0001",
+        "MinTick": "0.01",
+        "SnapshotPermissions": 4
+      }
+    },
+    {
+      "Kind": "market_data_type",
+      "MarketDataType": 3,
+      "ReqID": 211
+    },
+    {
+      "APIError": {
+        "Code": 10167,
+        "Message": "Requested market data is not subscribed. Displaying delayed market data.",
+        "Op": "api",
+        "ReqID": 211
+      },
+      "Kind": "api_error",
+      "ReqID": 211
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "280.06999999999999",
+        "TickType": 68
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 211,
+      "TickSize": {
+        "Size": "+3000E+0",
+        "TickType": 71
+      }
+    },
+    {
+      "Kind": "tick_string",
+      "ReqID": 211,
+      "TickString": {
+        "TickType": 88,
+        "Value": "1777679999"
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "287.22000000000003",
+        "TickType": 72
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "278.37",
+        "TickType": 73
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 211,
+      "TickSize": {
+        "Size": "+2024311E+0",
+        "TickType": 74
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "271.35000000000002",
+        "TickType": 75
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "-1",
+        "TickType": 66
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 211,
+      "TickSize": {
+        "Size": "+0E+0",
+        "TickType": 69
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "-1",
+        "TickType": 67
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 211,
+      "TickSize": {
+        "Size": "+0E+0",
+        "TickType": 70
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 211,
+      "TickPrice": {
+        "Price": "0",
+        "TickType": 76
+      }
+    },
+    {
+      "Kind": "tick_snapshot_end",
+      "ReqID": 211
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "APIError": {
+        "Code": 399,
+        "Message": "Order Message:\nBUY 1 AAPL NASDAQ.NMS\nWarning: Your order will not be placed at the exchange until 2026-05-04 09:30:00 US/Eastern.",
+        "Op": "api",
+        "ReqID": 2
+      },
+      "Kind": "api_error",
+      "ReqID": 2
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+2E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+2E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "APIError": {
+        "Code": 201,
+        "Message": "Order rejected - reason:Order has been cancelled already, too late to replace",
+        "Op": "api",
+        "ReqID": 2
+      },
+      "Kind": "api_error",
+      "ReqID": 2
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+0E+0",
+        "Status": "Cancelled"
+      }
+    },
+    {
+      "Kind": "open_order",
+      "OpenOrder": {
+        "Account": "DU_REDACTED",
+        "Action": "BUY",
+        "AuxPrice": "0",
+        "ClientID": "9120",
+        "ConditionsCancelOrder": "0",
+        "ConditionsIgnoreRTH": "0",
+        "Contract": {
+          "ConID": 265598,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "LocalSymbol": "AAPL",
+          "Right": "?",
+          "SecType": "STK",
+          "Strike": "0.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "NMS"
+        },
+        "DiscretionAmt": "0",
+        "Hidden": "0",
+        "LmtPrice": "252.06",
+        "OrderID": 2,
+        "OrderRef": "ibkr-go-sdk-fixture-mod-20260502T161907",
+        "OrderType": "LMT",
+        "Origin": "0",
+        "OutsideRTH": "0",
+        "ParentID": "0",
+        "PermID": "0",
+        "Quantity": "+1E+0",
+        "Status": "PreSubmitted",
+        "TIF": "DAY"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "PreSubmitted"
+      }
+    },
+    {
+      "Kind": "order_status",
+      "OrderStatus": {
+        "AvgFillPrice": "0",
+        "ClientID": "9120",
+        "Filled": "+0E+0",
+        "LastFillPrice": "0",
+        "MktCapPrice": "0",
+        "OrderID": 2,
+        "ParentID": "0",
+        "PermID": "0",
+        "Remaining": "+1E+0",
+        "Status": "Cancelled"
+      }
+    },
+    {
+      "APIError": {
+        "Code": 202,
+        "Message": "Order Canceled - reason:Revision rejected due to unapproved modification followed by cancelled order.",
+        "Op": "api",
+        "ReqID": 2
+      },
+      "Kind": "api_error",
+      "ReqID": 2
+    }
+  ]
+}

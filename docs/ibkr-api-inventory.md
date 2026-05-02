@@ -51,9 +51,9 @@ committed.
 | Market depth | `reqMarketDepth`, `cancelMktDepth`, `reqMktDepthExchanges` | Implemented. Needs regular depth, L2, smart depth, entitlement error, cancel, and depth metadata rows. |
 | Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. Needs asset-class and ambiguity/error rows. |
 | Accounts/portfolio | `reqAccountSummary`, `cancelAccountSummary`, `reqAccountUpdates`, `reqPositions`, `cancelPositions`, `reqPositionsMulti`, `cancelPositionsMulti`, `reqAccountUpdatesMulti`, `cancelAccountUpdatesMulti`, `reqFamilyCodes`, `reqPnL`, `cancelPnL`, `reqPnLSingle`, `cancelPnLSingle` | Implemented. Needs account/model/concurrent/streaming/trade-interaction rows. |
-| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented with deferred rare order sections. Needs explicit direct cancel, open-order scopes, completed-order details, execution filters, commission ordering, and advanced order branches. |
-| Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Calc implemented. Exercise implemented fire-and-forget but needs live target rows. |
-| News | `reqNewsProviders`, `reqNewsBulletins`, `cancelNewsBulletins`, `reqNewsArticle`, `reqHistoricalNews` | Implemented. `News().Article` lacks executable capture scenario. |
+| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | SDK-native for the advertised facade. Completed order details remain simplified. Needs explicit paper live evidence for SDK-native order writes, order observation, execution filters, commission ordering, and advanced order branches. |
+| Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Calc implemented with invalid-option and qualified-option SDK fixtures. Exercise implemented fire-and-forget but needs live target rows. |
+| News | `reqNewsProviders`, `reqNewsBulletins`, `cancelNewsBulletins`, `reqNewsArticle`, `reqHistoricalNews` | Implemented. SDK-event fixtures cover invalid provider errors plus a sanitized historical-news-to-article success path. |
 | Scanner | `reqScannerParameters`, `reqScannerSubscription`, `cancelScannerSubscription` | Implemented. Needs scanner filter-options rows beyond legacy core fields. |
 | FA/advisor | `requestFA`, `replaceFA`, `reqSoftDollarTiers` | Implemented. `replaceFA` lacks executable capture scenario and should usually freeze non-FA error or read-back/restore behavior. |
 | WSH | `reqWshMetaData`, `cancelWshMetaData`, `reqWshEventData`, `cancelWshEventData` | Implemented. Needs metadata, event, cancel, filter/date/portfolio/watchlist variants. |
@@ -67,13 +67,13 @@ committed.
 | Errors/session | `error`, `connectionClosed`, `currentTime`, `currentTimeInMillis`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
 | Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | Most implemented. `tickEFP` and `tickNews` are official callbacks not currently represented as implemented message IDs. |
 | Tick-by-tick | `tickByTickAllLast`, `tickByTickBidAsk`, `tickByTickMidPoint` | Implemented through unified tick-by-tick decode. Needs separate verification rows. |
-| Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Implemented except bond-specific callback is represented through generic contract details only if live wire confirms same path. Needs explicit bond row. |
+| Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Implemented, including the distinct SDK `bondContractDetails` callback. Needs broader asset-class and ambiguity/error rows. |
 | Historical | `historicalData`, `historicalDataEnd`, `historicalDataUpdate`, `historicalSchedule`, `headTimestamp`, `histogramData`, `historicalTicks`, `historicalTicksBidAsk`, `historicalTicksLast`, `historicalNews`, `historicalNewsEnd` | Implemented. |
 | Accounts/portfolio | `accountSummary`, `accountSummaryEnd`, `updateAccountValue`, `updatePortfolio`, `updateAccountTime`, `accountDownloadEnd`, `position`, `positionEnd`, `positionMulti`, `positionMultiEnd`, `accountUpdateMulti`, `accountUpdateMultiEnd`, `pnl`, `pnlSingle`, `familyCodes` | Implemented. Needs richer live scenarios. |
-| Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed order details are simplified. |
+| Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionAndFeesReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | SDK-native except `orderBound` not represented as a message/callback. Completed order details are simplified. |
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
-| News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article lacks executable capture scenario. |
-| FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented except `replaceFAEnd` not decoded/exposed. |
+| News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has sanitized SDK-event success and invalid-provider fixtures. |
+| FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented. FA replace still needs live read-back/restore evidence. |
 | Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Official callbacks not in current implemented message inventory; matrix as target/deferred/out-of-public-scope based on live behavior and project scope. |
 
 ## Current ibkr-go Public Facade Methods
@@ -257,9 +257,7 @@ and project scope decide whether to implement, defer, or mark out of scope.
 - `reqIds` public facade, `reqManagedAccts`, `setServerLogLevel`.
 - Verification/auth callbacks and redirect/reroute callbacks.
 - `tickEFP`, `tickNews`, and `deltaNeutralValidation`.
-- `bondContractDetails` as a distinct callback shape.
 - `orderBound`, completed-order full detail extraction, and rare OpenOrder
   branches.
-- `replaceFAEnd`.
 - Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
   order, soft-dollar-on-order, and advanced-reject override order branches.

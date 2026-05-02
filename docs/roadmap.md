@@ -1,125 +1,119 @@
 # Roadmap
 
-## Current state
+## Current State
 
-ibkr-go covers the complete Interactive Brokers TWS/Gateway socket protocol.
-All protocol areas below are implemented, tested against live IB Gateway
-server_version 200, and frozen into the public API contract.
+ibkr-go is being migrated to one production protocol engine: the official IBKR
+C++ SDK through the repo-owned C ABI in `internal/sdkadapter/native`.
 
-### Bootstrap and session
+The public Go API still contains the broad facade shape built during the
+socket-era implementation. The SDK-native runtime currently supports:
 
-Handshake, managed accounts, next valid ID, start API, current time, API
-error and system status code routing, session state machine. reqMarketDataType
-encoder (msg 59), reqUserInfo (msg 104).
+- session bootstrap and shutdown through the official SDK;
+- server metadata, managed accounts, and next valid order ID;
+- `Client.CurrentTime` and `Client.CurrentTimeMillis`;
+- `Accounts().Summary` and `Accounts().SubscribeSummary`;
+- `Accounts().Positions` and `Accounts().SubscribePositions`;
+- `Accounts().Updates`, `Accounts().SubscribeUpdates`,
+  `Accounts().UpdatesMulti`, `Accounts().SubscribeUpdatesMulti`,
+  `Accounts().PositionsMulti`, `Accounts().SubscribePositionsMulti`,
+  `Accounts().SubscribePnL`, and `Accounts().SubscribePnLSingle`;
+- `Accounts().FamilyCodes`;
+- `MarketData().SetType`, `MarketData().Quote`,
+  `MarketData().SubscribeQuotes`, `MarketData().SubscribeRealTimeBars`,
+  `MarketData().SubscribeTickByTick`, and `MarketData().SubscribeDepth`;
+- `Contracts().Details` and `Contracts().Qualify`;
+- `Contracts().Search` and `Contracts().MarketRule`;
+- `Contracts().SecDefOptParams`, `Contracts().SmartComponents`,
+  `Contracts().DepthExchanges`, and `Contracts().FundamentalData`;
+- `History().Bars`, `History().SubscribeBars`, `History().HeadTimestamp`,
+  `History().Histogram`, `History().Ticks`, and `History().Schedule`;
+- `Options().ImpliedVolatility`, `Options().Price`, and `Options().Exercise`;
+- `Orders().Place`, `Orders().Cancel`, `Orders().CancelAll`,
+  `Orders().Open`, `Orders().SubscribeOpen`, `Orders().Completed`,
+  `Orders().Executions`, and `OrderHandle.Modify`;
+- `News().Providers`, `News().Article`, `News().Historical`, and
+  `News().SubscribeBulletins`;
+- `Scanner().Parameters` and `Scanner().SubscribeResults`;
+- `Advisors().Config`, `Advisors().ReplaceConfig`, and `Advisors().SoftDollarTiers`;
+- `WSH().MetaData` and `WSH().EventData`;
+- `TWS().UserInfo`, `TWS().DisplayGroups`, and
+  `TWS().SubscribeDisplayGroup`;
+- cancellation for account summary, account updates, account updates multi,
+  positions, positions multi, PnL, PnL single, orders, news bulletins, scanner
+  subscriptions, display group subscriptions, real-time bars, historical bars,
+  tick-by-tick data, market depth, quote streams, historical ticks, option
+  calculations, head timestamp, histogram data, WSH metadata/event data, and
+  fundamental data.
 
-### Account and portfolio
+Rows without current SDK live evidence or replay fixtures are marked blocked
+with the exact external prerequisite or safe-test condition that is missing. The
+authoritative migration inventory is [`sdk-migration-matrix.md`](sdk-migration-matrix.md).
 
-Account summary snapshot and streaming, positions snapshot and streaming.
-reqAccountUpdates (msg 6), reqAccountUpdatesMulti (msg 76/77),
-reqPositionsMulti (msg 74/75), reqPnL (msg 92/93), reqPnLSingle
-(msg 94/95), reqFamilyCodes (msg 80), reqCompletedOrders (msg 99).
+Legacy socket/codec transcripts and live coverage remain useful source
+material, but they do not count as completed SDK-native production coverage
+until promoted into copied SDK command/event records, native ABI coverage,
+SDK-event replay fixtures, and SDK-backed live verification.
 
-### Contract and reference data
+## Migration Order
 
-Contract details, contract qualification. reqMatchingSymbols (msg 81),
-reqMarketRule (msg 91), reqSecDefOptParams (msg 78), reqSmartComponents
-(msg 83).
+### 1. SDK Adapter Foundation
 
-### Market data
+- Keep `internal/sdkadapter` as the copied-value command/event schema and
+  replay fixture package.
+- Keep `internal/sdkadapter/native` as the only production SDK bridge.
+- Make every slice, map, and string-owning value crossing goroutine or C ABI
+  boundaries copy-owned.
+- Extend architecture guards so public code cannot expose C++, cgo, SDK,
+  SWIG, protobuf, or old wire-message concepts.
+- Quarantine or remove old socket/codec/wire production paths from the default
+  build.
 
-Quote snapshot and streaming, real-time bars, historical bars, tick price,
-tick size, and market data type. TickGeneric (inbound 45), TickString
-(inbound 46), TickReqParams (inbound 81), reqMarketDataType encoder
-(outbound 59), cancelHistoricalData encoder (outbound 25),
-reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag.
+### 2. Read-Only One-Shots
 
-### Historical data extensions
+Port finite read-only calls before broad streaming or trading work. Remaining
+finite targets now belong to their owning market-data, order, option-exercise,
+or FA-write groups.
 
-reqHeadTimestamp (msg 87/90), reqHistogramData (msg 88/89),
-reqHistoricalTicks (msg 96), and historicalSchedule delivery (msg 106) through
-`History().Schedule`.
+Each port needs command/event records, native C ABI coverage, deterministic
+SDK-event replay, and read-only live smoke when a local Gateway/TWS is
+available.
 
-### Option calculations
+### 3. Streaming Subscriptions
 
-reqCalcImpliedVolatility (msg 54/56), reqCalcOptionPrice (msg 55/57).
+Market-data, account, scanner, news, and display-group streams now have
+SDK-native command/event coverage, but they still need live-derived SDK replay
+fixtures before their matrix rows can move to done.
 
-### News
+The public `Subscription[T]` contract remains the target: business events on
+`Events()`, lifecycle on `Lifecycle()`, explicit snapshot boundaries where the
+SDK provides them, and deterministic close/wait/error semantics.
 
-reqNewsProviders (msg 85), reqNewsBulletins (msg 12/13), reqNewsArticle
-(msg 84), reqHistoricalNews (msg 86). Three providers are free by default
-(BRFG, BRFUPDN, DJNL).
+### 4. Orders And Execution Lifecycle
 
-### Scanner
+Port trading after the read-only and streaming foundations are stable:
 
-reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23).
+- next-valid-ID order allocation;
+- broaden paper-account live evidence beyond the SDK-backed
+  place/cancel/modify smokes and client-scope open-orders fixture into
+  completed orders, executions, commissions, and cleanup behavior;
+- order-handle lifecycle across reconnect;
+- bracket, OCA, condition, algo, scale, hedge, combo, short-sale, FA, and
+  advanced reject fields where the public `Order` surface claims support.
 
-### Order and execution observation
+Live trading tests must run only against paper/sandbox Gateway/TWS with
+harness-level checks that refuse real-account writes.
 
-Open orders snapshot and streaming (all three scopes), executions finite query,
-and commission reports.
+### 5. Documentation And Release Readiness
 
-### Order management
+- Keep README, GoDoc, examples, and docs aligned with actual SDK-backed
+  behavior.
+- Keep the migration matrix current after every capability slice.
+- Keep deterministic tests, `go vet ./...`, `gofmt -l .`, shell syntax checks,
+  SDK-tagged tests, and live smoke results documented.
 
-PlaceOrder (msg 3), CancelOrder (msg 4), reqGlobalCancel (msg 58). OrderHandle
-tracks lifecycle with Events(), Lifecycle(), Done(), Wait(), Close(), Cancel(),
-and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder
-messages are dual-dispatched to both per-order handles and the singleton
-open-orders observer; OrderStatus remains part of the per-order handle
-contract. OrderHandle survives disconnects (Gap/Resumed) and auto-closes on
-terminal status (Filled, Cancelled, ApiCancelled, Inactive).
+## Non-Goals
 
-### Market depth (Level 2)
-
-reqMktDepth (msg 10), cancelMktDepth (msg 11), inbound MarketDepth (12) /
-MarketDepthL2 (13) — full order book depth as a keyed subscription. Requires a
-paid L2 market data subscription.
-
-### Fundamental data
-
-FundamentalData (msg 52/53, inbound 51) — Reuters fundamental data as a keyed
-one-shot returning the XML payload. Requires a subscription.
-
-### Exercise options
-
-ExerciseOptions (msg 21) — fire-and-forget option exercise request.
-
-### FA configuration
-
-RequestFA (msg 18), ReplaceFA (msg 19), inbound ReceiveFA (16),
-reqSoftDollarTiers (msg 79), inbound SoftDollarTiers (77). FA-only account
-configuration.
-
-### WSH calendar
-
-reqWSHMetaData (msg 100), cancelWSHMetaData (msg 101), reqWSHEventData (msg
-102), cancelWSHEventData (msg 103), inbound WSHMetaData (104) / WSHEventData
-(105). Keyed one-shots returning JSON. Requires WSH subscription.
-
-### Display groups
-
-queryDisplayGroups (msg 67, inbound 67), subscribeToGroupEvents (msg 68,
-inbound 68), updateDisplayGroup (msg 69), unsubscribeFromGroupEvents (msg 70).
-TWS window integration.
-
-### Cross-cutting
-
-reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
-
-## Next
-
-- Delta-neutral order extensions.
-- Scale order extensions.
-- Remaining ungrounded OpenOrder branches.
-- CompletedOrder full detail extraction.
-
-## Ongoing
-
-- Broader server version testing beyond v200.
-- Expanded test coverage and replay scenarios.
-- API ergonomics and documentation improvements.
-
-## Not planned
-
+- Flex Web Service.
 - Client Portal Web API.
-- Flex.
-- `EWrapper` / `EClient` official-style bridge.
+- An `EWrapper` / `EClient` compatibility bridge.
+- SWIG as the production binding layer.

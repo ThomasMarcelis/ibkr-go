@@ -1,7 +1,29 @@
 # Session Contract
 
-This document freezes the public contract. Internal SDK adapter and fixture
-plumbing may change as long as this public surface and its semantics do not.
+This document freezes the public contract. Internal `sdkadapter` and
+`sdkadapter/native` plumbing may change as long as this public surface and its
+semantics do not.
+
+Implementation status: this is the target public contract, not a claim that
+every facade is SDK-native today. The current native adapter supports
+session/bootstrap, current time, current time millis, account summary, account
+updates, account updates multi, family codes, positions, positions multi, PnL,
+PnL single, market-data type control, contract details/qualification, contract
+search, market rules, sec-def option params, smart components, market-depth
+exchange metadata, head timestamp, histogram data, fundamental data, news
+providers, news bulletins, news articles, historical news, scanner parameters,
+scanner result subscriptions, option implied-volatility and price calculations,
+FA config reads and writes, soft-dollar tiers, WSH metadata/event data, user
+info, display groups, display group subscriptions, order placement and
+modification, open-order snapshots and subscriptions, completed-order snapshots,
+execution snapshots, commission reports, and cancellation for account summary,
+account updates, account updates multi, positions, positions multi, PnL, PnL
+single, orders, news bulletins, scanner subscriptions, display group
+subscriptions, quote streams, real-time bars, tick-by-tick data, market depth,
+historical bars, historical ticks, option calculations, head timestamp,
+histogram data, WSH metadata/event data, and fundamental data. Rows without
+current live SDK evidence are blocked with the exact missing prerequisite in
+[`sdk-migration-matrix.md`](sdk-migration-matrix.md).
 
 ## Session
 
@@ -36,6 +58,9 @@ only; they do not create independent connections.
 
 Managed accounts are bootstrap state on `Snapshot`, not a request-shaped
 API.
+
+The full facade set remains visible so the migration can preserve the intended
+Go API shape while replacing the protocol runtime underneath it.
 
 ## Subscriptions
 
@@ -139,15 +164,15 @@ ApiCancelled, or Inactive, the handle auto-closes with `nil` error.
 - One-shots are interrupted by connection loss and are not replayed
   automatically.
 - Historical bars and schedules use internal endpoint admission so rapid
-  repeated requests respect Gateway pacing before they are written to the
-  socket.
+  repeated requests respect Gateway pacing before they are submitted to the SDK
+  adapter.
 
 ## Errors and Types
 
 Public error taxonomy:
 
 - `*ConnectError`
-- `*ProtocolError`
+- `*AdapterError`
 - `*APIError`
 - `IsRetryable(err)`
 - `ErrNotReady`
@@ -155,7 +180,6 @@ Public error taxonomy:
 - `ErrResumeRequired`
 - `ErrNoSnapshot`
 - `ErrSlowConsumer`
-- `ErrUnsupportedServerVersion`
 - `ErrClosed`
 
 Numeric and payload types:
@@ -164,5 +188,5 @@ Numeric and payload types:
 - Instants use `time.Time`.
 - Historical bar durations and bar sizes use `HistoricalDuration` and `BarSize`.
 - Raw external XML/JSON boundaries use `XMLDocument` and `JSONDocument`.
-- Stable protocol vocabularies use named types and constants instead of
+- Stable SDK-facing vocabularies use named types and constants instead of
   anonymous strings or ints where the vocabulary is stable.

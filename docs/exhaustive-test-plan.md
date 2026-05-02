@@ -1,8 +1,10 @@
 # Exhaustive Test Plan
 
-Master plan for reaching complete live evidence and CI replay coverage of the
-entire IBKR Gateway socket protocol. Every protocol message, every feature
-combination, every edge case.
+Legacy master plan for socket-era live evidence and CI replay coverage. The
+socket capture plan remains useful as historical source evidence behind the
+non-default `legacy_native_socket` build tag, but current production coverage is
+owned by the official IBKR C++ SDK runtime and tracked in
+[`sdk-migration-matrix.md`](sdk-migration-matrix.md).
 
 Companion to:
 - [`live-coverage-matrix.md`](live-coverage-matrix.md) — capability-level status tracking
@@ -11,13 +13,15 @@ Companion to:
 
 ## Coverage standard
 
-A capability is **complete** when all three layers exist:
+A legacy socket capability was considered **complete** when all three layers
+existed:
 
 1. **Live test** — runs against a real IB Gateway and asserts behavior
 2. **Capture** — raw wire recording from the live test or capture tool
 3. **Promoted transcript** — curated replay in `testdata/transcripts/` with CI integration test
 
-The goal is to reach this standard for every row below.
+Historically, the target was to reach this standard for every row below. For
+SDK-native completion, use [`sdk-migration-matrix.md`](sdk-migration-matrix.md).
 
 Executable batches now map this plan to `cmd/ibkr-capture` runs:
 `exhaustive-read-only`, `exhaustive-trading`,
@@ -88,7 +92,7 @@ scenario.
 | 81 | reqMatchingSymbols | yes | yes | yes | |
 | 82 | reqMktDepthExchanges | yes | yes | yes | |
 | 83 | reqSmartComponents | yes | yes | yes | |
-| 84 | reqNewsArticle | no | no | no | **target** — needs article ID from historical news |
+| 84 | reqNewsArticle | yes | yes | yes | SDK fixture uses an article ID sourced from live historical news; provider text is redacted |
 | 85 | reqNewsProviders | yes | yes | yes | |
 | 86 | reqHistoricalNews | yes | yes | yes | |
 | 87 | reqHeadTimestamp | yes | yes | yes | |
@@ -130,8 +134,6 @@ These are known official EWrapper callbacks with no ibkr-go message ID:
 - `tickEFP` — EFP tick pricing (no live data observed)
 - `tickNews` — news-aware tick (no live data observed)
 - `orderBound` — order-bound notification
-- `bondContractDetails` — bond-specific contract details
-- `replaceFAEnd` — FA replace completion
 - `connectAck` — TWS-specific connection ack
 - `rerouteMktDataReq` / `rerouteMktDepthReq` — reroute suggestions
 - `deltaNeutralValidation` — delta-neutral validation callback
@@ -283,12 +285,12 @@ Probe each: place → check for rejection or acceptance.
 | SecType | Constant | Live Test | Capture | Transcript | Blocker |
 |---------|----------|-----------|---------|------------|---------|
 | STK | SecTypeStock | yes | yes | yes | — |
-| OPT | SecTypeOption | partial | yes | no | 2026-04-15 broad chain probe timed out; use narrower qualified option probe or OPRA |
+| OPT | SecTypeOption | yes | yes | no | SDK qualified AAPL 20260618 200C option-calculation fixture captured 2026-05-02; option order/exercise variants still depend on paper option scenarios |
 | FUT | SecTypeFuture | yes | yes | yes | MES futures buy/flatten replay promoted |
 | FOP | SecTypeFutureOption | partial | yes | no | 2026-04-15 broad probe timed out; qualify concrete FOP |
 | CASH | SecTypeForex | yes | yes | no | — |
 | BAG | SecTypeCombo | blocked | blocked | no | depends on OPT |
-| BOND | SecTypeBond | yes | yes | no | placeholder CUSIP returned real code 200; replace with concrete bond |
+| BOND | SecTypeBond | yes | yes | no | SDK fixture freezes official sample CUSIP `449276AA2` as a distinct `bondContractDetails` callback; broader bond variants remain open |
 | CFD | SecTypeCFD | yes | yes | no | order permissions still unknown |
 | WAR | SecTypeWarrant | partial | yes | no | 2026-04-15 probe timed out; needs concrete warrant |
 | IND | SecTypeIndex | yes | yes | partial | read-only (no orders) |
@@ -587,7 +589,7 @@ rejections or no-status cleanup evidence.
 - [x] Two subscriptions same contract (singleton behavior)
 - [x] Cross-client order observation (client_id=0)
 - [ ] Server version boundary testing (sv=191 vs sv=192)
-- [ ] Bond contract details callback shape
+- [x] Bond contract details callback shape
 
 Progress: `api_transmit_false_then_transmit_aapl` was live-captured on
 2026-04-15 (`003abb59dfced542`) and replay-promoted. Duplicate quote

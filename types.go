@@ -442,6 +442,7 @@ const (
 	QuoteFieldLow
 	QuoteFieldClose
 	QuoteFieldMarketDataType
+	QuoteFieldRequestParams
 )
 
 type MarketDataType int
@@ -472,18 +473,21 @@ func (t MarketDataType) String() string {
 // Available tracks which fields have been populated by the server; unpopulated
 // fields remain at their zero value.
 type Quote struct {
-	Available      QuoteFields
-	Bid            decimal.Decimal
-	Ask            decimal.Decimal
-	Last           decimal.Decimal
-	BidSize        decimal.Decimal
-	AskSize        decimal.Decimal
-	LastSize       decimal.Decimal
-	Open           decimal.Decimal
-	High           decimal.Decimal
-	Low            decimal.Decimal
-	Close          decimal.Decimal
-	MarketDataType MarketDataType
+	Available           QuoteFields
+	Bid                 decimal.Decimal
+	Ask                 decimal.Decimal
+	Last                decimal.Decimal
+	BidSize             decimal.Decimal
+	AskSize             decimal.Decimal
+	LastSize            decimal.Decimal
+	Open                decimal.Decimal
+	High                decimal.Decimal
+	Low                 decimal.Decimal
+	Close               decimal.Decimal
+	MarketDataType      MarketDataType
+	MinTick             decimal.Decimal
+	BBOExchange         string
+	SnapshotPermissions int
 }
 
 type GenericTick string

@@ -1,0 +1,183 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T16:42:26Z",
+    "scenario": "historical_schedule_short",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "58271ad7ab173e061158f8a2f4b2fc36fd6a88514de744b8b9c179a00b1aa5d4"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 18:42:25 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "HistoricalSchedule": {
+        "EndDateTime": "20260501-16:00:00",
+        "Sessions": [
+          {
+            "EndDateTime": "20260402-16:00:00",
+            "RefDate": "20260402",
+            "StartDateTime": "20260402-09:30:00"
+          },
+          {
+            "EndDateTime": "20260406-16:00:00",
+            "RefDate": "20260406",
+            "StartDateTime": "20260406-09:30:00"
+          },
+          {
+            "EndDateTime": "20260407-16:00:00",
+            "RefDate": "20260407",
+            "StartDateTime": "20260407-09:30:00"
+          },
+          {
+            "EndDateTime": "20260408-16:00:00",
+            "RefDate": "20260408",
+            "StartDateTime": "20260408-09:30:00"
+          },
+          {
+            "EndDateTime": "20260409-16:00:00",
+            "RefDate": "20260409",
+            "StartDateTime": "20260409-09:30:00"
+          },
+          {
+            "EndDateTime": "20260410-16:00:00",
+            "RefDate": "20260410",
+            "StartDateTime": "20260410-09:30:00"
+          },
+          {
+            "EndDateTime": "20260413-16:00:00",
+            "RefDate": "20260413",
+            "StartDateTime": "20260413-09:30:00"
+          },
+          {
+            "EndDateTime": "20260414-16:00:00",
+            "RefDate": "20260414",
+            "StartDateTime": "20260414-09:30:00"
+          },
+          {
+            "EndDateTime": "20260415-16:00:00",
+            "RefDate": "20260415",
+            "StartDateTime": "20260415-09:30:00"
+          },
+          {
+            "EndDateTime": "20260416-16:00:00",
+            "RefDate": "20260416",
+            "StartDateTime": "20260416-09:30:00"
+          },
+          {
+            "EndDateTime": "20260417-16:00:00",
+            "RefDate": "20260417",
+            "StartDateTime": "20260417-09:30:00"
+          },
+          {
+            "EndDateTime": "20260420-16:00:00",
+            "RefDate": "20260420",
+            "StartDateTime": "20260420-09:30:00"
+          },
+          {
+            "EndDateTime": "20260421-16:00:00",
+            "RefDate": "20260421",
+            "StartDateTime": "20260421-09:30:00"
+          },
+          {
+            "EndDateTime": "20260422-16:00:00",
+            "RefDate": "20260422",
+            "StartDateTime": "20260422-09:30:00"
+          },
+          {
+            "EndDateTime": "20260423-16:00:00",
+            "RefDate": "20260423",
+            "StartDateTime": "20260423-09:30:00"
+          },
+          {
+            "EndDateTime": "20260424-16:00:00",
+            "RefDate": "20260424",
+            "StartDateTime": "20260424-09:30:00"
+          },
+          {
+            "EndDateTime": "20260427-16:00:00",
+            "RefDate": "20260427",
+            "StartDateTime": "20260427-09:30:00"
+          },
+          {
+            "EndDateTime": "20260428-16:00:00",
+            "RefDate": "20260428",
+            "StartDateTime": "20260428-09:30:00"
+          },
+          {
+            "EndDateTime": "20260429-16:00:00",
+            "RefDate": "20260429",
+            "StartDateTime": "20260429-09:30:00"
+          },
+          {
+            "EndDateTime": "20260430-16:00:00",
+            "RefDate": "20260430",
+            "StartDateTime": "20260430-09:30:00"
+          },
+          {
+            "EndDateTime": "20260501-16:00:00",
+            "RefDate": "20260501",
+            "StartDateTime": "20260501-09:30:00"
+          }
+        ],
+        "StartDateTime": "20260402-09:30:00",
+        "TimeZone": "US/Eastern"
+      },
+      "Kind": "historical_schedule",
+      "ReqID": 402
+    }
+  ]
+}

@@ -5,7 +5,12 @@ package native
 import (
 	"context"
 	"errors"
+	"net"
+	"os"
+	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/sdkadapter"
 )
@@ -75,6 +80,93 @@ func TestDrainEmptyBatchFreePath(t *testing.T) {
 	}
 	if len(events) != 0 {
 		t.Fatalf("DrainEvents() returned %d events, want 0", len(events))
+	}
+}
+
+func TestConnectSilentListenerTimesOut(t *testing.T) {
+	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		if errors.Is(err, os.ErrPermission) {
+			t.Skipf("local listen denied by sandbox: %v", err)
+		}
+		t.Fatalf("Listen() error = %v", err)
+	}
+
+	var connsMu sync.Mutex
+	var conns []net.Conn
+	acceptDone := make(chan struct{})
+	go func() {
+		defer close(acceptDone)
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			connsMu.Lock()
+			conns = append(conns, conn)
+			connsMu.Unlock()
+		}
+	}()
+	defer func() {
+		_ = ln.Close()
+		<-acceptDone
+		connsMu.Lock()
+		defer connsMu.Unlock()
+		for _, conn := range conns {
+			_ = conn.Close()
+		}
+	}()
+
+	adapter, err := New(8)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer adapter.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err = adapter.Connect(ctx, sdkadapter.ConnectRequest{
+		Host:     "127.0.0.1",
+		Port:     ln.Addr().(*net.TCPAddr).Port,
+		ClientID: 77,
+		Timeout:  200 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("Connect() error = nil, want metadata timeout")
+	}
+	if !strings.Contains(err.Error(), "official SDK server metadata timed out") {
+		t.Fatalf("Connect() error = %v, want metadata timeout", err)
+	}
+	if adapter.IsConnected() {
+		t.Fatal("adapter is connected after metadata timeout")
+	}
+}
+
+func TestConnectReturnsSDKErrorDetailWhenEConnectFails(t *testing.T) {
+	adapter, err := New(8)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	defer adapter.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	err = adapter.Connect(ctx, sdkadapter.ConnectRequest{
+		Host:     "127.0.0.1",
+		Port:     1,
+		ClientID: 77,
+		Timeout:  200 * time.Millisecond,
+	})
+	if err == nil {
+		t.Fatal("Connect() error = nil, want eConnect failure")
+	}
+	for _, want := range []string{"official SDK eConnect returned false", "SDK error"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("Connect() error = %v, want %q", err, want)
+		}
+	}
+	if adapter.IsConnected() {
+		t.Fatal("adapter is connected after eConnect failure")
 	}
 }
 

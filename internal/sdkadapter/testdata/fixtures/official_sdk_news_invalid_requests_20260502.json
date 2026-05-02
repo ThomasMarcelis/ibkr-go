@@ -1,0 +1,97 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T17:13:41Z",
+    "scenario": "news_invalid_requests",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "fcb13d330984c46374c9afdd0c458a1f8e9eb5e97d244ba04c84cc5cc2401b9d"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 19:13:39 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 321,
+        "Message": "Error validating request.-'b9' : cause - Not subscribed for 'NO_SUCH_PROVIDER' provider",
+        "Op": "api",
+        "ReqID": 901
+      },
+      "Kind": "api_error",
+      "ReqID": 901
+    },
+    {
+      "APIError": {
+        "Code": 321,
+        "Message": "Error validating request.-'ce' : cause - Not subscribed for 'NO_SUCH_PROVIDER' provider",
+        "Op": "api",
+        "ReqID": 902
+      },
+      "Kind": "api_error",
+      "ReqID": 902
+    }
+  ]
+}

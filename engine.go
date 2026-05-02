@@ -55,10 +55,6 @@ type bootstrapState struct {
 }
 
 const (
-	// The codec currently targets the live-validated server_version 200 wire
-	// layout. Broader support requires version-aware outbound encoding.
-	minServerVersion = 200
-	maxServerVersion = 200
 	bootstrapTimeout = 5 * time.Second
 
 	reconnectBackoff    = time.Second
@@ -88,7 +84,7 @@ type route struct {
 	opKind       OpKind
 	subscription bool
 	resume       ResumePolicy
-	request      sdkadapter.Message
+	request      any
 	handle       func(any, *engine)
 	handleAPIErr func(sdkadapter.APIError, *engine)
 	onDisconnect func(*engine, error) bool
@@ -104,6 +100,7 @@ type orderRoute struct {
 	closed           bool
 	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
 	terminalCloseSeq uint64
+	terminalStatus   OrderStatus
 }
 
 type parsedOpenOrder struct {
@@ -115,7 +112,6 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 	for _, opt := range opts {
 		opt(&cfg)
 	}
-	cfg.useSDK = sdkRuntimeAvailable() && sdkRuntimeRequested()
 	if cfg.clientID < 0 {
 		return nil, fmt.Errorf("ibkr: client id must be >= 0")
 	}
@@ -212,7 +208,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case sdkadapter.ContractDetails:
-					detail, err := fromCodecContractDetails(m)
+					detail, err := fromSDKContractDetails(m)
 					if err != nil {
 						delete(e.keyed, reqID)
 						resp <- result{err: err}
@@ -239,7 +235,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 		}
 		if err := e.sendContext(ctx, sdkadapter.ContractDetailsRequest{
 			ReqID:    reqID,
-			Contract: toCodecContract(contract),
+			Contract: toSDKContract(contract),
 		}); err != nil {
 			delete(e.keyed, reqID)
 			resp <- result{err: err}
@@ -247,7 +243,11 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+			}
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -300,7 +300,7 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case sdkadapter.HistoricalBar:
-					bar, err := fromCodecBar(m)
+					bar, err := fromSDKBar(m)
 					if err != nil {
 						delete(e.keyed, reqID)
 						resp <- result{err: err}
@@ -332,7 +332,12 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(sdkadapter.CancelHistoricalData{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -406,7 +411,12 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(sdkadapter.CancelHistoricalData{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return HistoricalSchedule{}, err
@@ -582,7 +592,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case sdkadapter.Position:
-					position, err := fromCodecPosition(m)
+					position, err := fromSDKPosition(m)
 					if err != nil {
 						delete(e.singletons, singletonPositions)
 						sub.closeWithErr(err)
@@ -731,7 +741,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			resume:       cfg.resume,
 			request: sdkadapter.QuoteRequest{
 				ReqID:        reqID,
-				Contract:     toCodecContract(req.Contract),
+				Contract:     toSDKContract(req.Contract),
 				Snapshot:     snapshot,
 				GenericTicks: formatGenericTicks(req.GenericTicks),
 			},
@@ -764,8 +774,17 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					// String ticks carry informational data (e.g. last timestamp).
 					// Silently consumed — no standard quote field mapping.
 				case sdkadapter.TickReqParams:
-					// Tick request params are informational (minTick, BBO exchange).
-					// Silently consumed.
+					minTick, err := parseOptionalDecimal(m.MinTick, "quote min tick")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					quote.MinTick = minTick
+					quote.BBOExchange = m.BBOExchange
+					quote.SnapshotPermissions = m.SnapshotPermissions
+					quote.Available |= QuoteFieldRequestParams
+					sub.emit(QuoteUpdate{Snapshot: quote, Changed: QuoteFieldRequestParams, ReceivedAt: time.Now().UTC()})
 				case sdkadapter.TickSnapshotEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 					if snapshot {
@@ -882,7 +901,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			resume:       cfg.resume,
 			request: sdkadapter.RealTimeBarsRequest{
 				ReqID:      reqID,
-				Contract:   toCodecContract(req.Contract),
+				Contract:   toSDKContract(req.Contract),
 				WhatToShow: string(req.WhatToShow),
 				UseRTH:     req.UseRTH,
 			},
@@ -891,7 +910,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				if !ok {
 					return
 				}
-				bar, err := fromCodecRealtimeBar(barMsg)
+				bar, err := fromSDKRealtimeBar(barMsg)
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
@@ -987,7 +1006,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(sdkadapter.CancelMarketDepth{ReqID: reqID})
+				_ = e.send(sdkadapter.CancelMarketDepth{ReqID: reqID, IsSmartDepth: req.IsSmartDepth})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -998,14 +1017,14 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			resume:       cfg.resume,
 			request: sdkadapter.MarketDepthRequest{
 				ReqID:        reqID,
-				Contract:     toCodecContract(req.Contract),
+				Contract:     toSDKContract(req.Contract),
 				NumRows:      req.NumRows,
 				IsSmartDepth: req.IsSmartDepth,
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case sdkadapter.MarketDepthUpdate:
-					row, err := fromCodecMarketDepth(m)
+					row, err := fromSDKMarketDepth(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
@@ -1013,7 +1032,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					}
 					sub.emit(row)
 				case sdkadapter.MarketDepthL2Update:
-					row, err := fromCodecMarketDepthL2(m)
+					row, err := fromSDKMarketDepthL2(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
@@ -1227,7 +1246,7 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case sdkadapter.ExecutionDetail:
-					update, err := fromCodecExecution(m)
+					update, err := fromSDKExecution(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
@@ -1663,7 +1682,12 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(sdkadapter.CancelHistoricalTicks{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return "", err
@@ -1780,7 +1804,7 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 		}
 		if err := e.sendContext(ctx, sdkadapter.HeadTimestampRequest{
 			ReqID:      reqID,
-			Contract:   toCodecContract(req.Contract),
+			Contract:   toSDKContract(req.Contract),
 			WhatToShow: string(req.WhatToShow),
 			UseRTH:     req.UseRTH,
 		}); err != nil {
@@ -1918,7 +1942,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 						return
 					}
 					collected = append(collected, CompletedOrderResult{
-						Contract:  fromCodecContract(m.Contract),
+						Contract:  fromSDKContract(m.Contract),
 						Action:    OrderAction(m.Action),
 						OrderType: OrderType(m.OrderType),
 						Status:    OrderStatus(m.Status),
@@ -2054,7 +2078,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					}
 					sub.emit(AccountUpdate{Portfolio: &PortfolioUpdate{
 						Account:       m.Account,
-						Contract:      fromCodecContract(m.Contract),
+						Contract:      fromSDKContract(m.Contract),
 						Position:      position,
 						MarketPrice:   marketPrice,
 						MarketValue:   marketValue,
@@ -2262,7 +2286,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 					}
 					sub.emit(PositionMulti{
 						Account: m.Account, ModelCode: m.ModelCode,
-						Contract: fromCodecContract(m.Contract),
+						Contract: fromSDKContract(m.Contract),
 						Position: position, AvgCost: avgCost,
 					})
 				case sdkadapter.PositionMultiEnd:
@@ -2549,7 +2573,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			subscription: true,
 			resume:       cfg.resume,
 			request: sdkadapter.TickByTickRequest{
-				ReqID: reqID, Contract: toCodecContract(req.Contract),
+				ReqID: reqID, Contract: toSDKContract(req.Contract),
 				TickType: string(req.TickType), NumberOfTicks: req.NumberOfTicks, IgnoreSize: req.IgnoreSize,
 			},
 			handle: func(msg any, e *engine) {
@@ -2762,12 +2786,12 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			return
 		}
 		reqID := e.allocReqID()
-		codecReq, err := buildHistoricalBarsRequest(reqID, req)
+		sdkReq, err := buildHistoricalBarsRequest(reqID, req)
 		if err != nil {
 			resp <- result{err: err}
 			return
 		}
-		codecReq.KeepUpToDate = true
+		sdkReq.KeepUpToDate = true
 
 		var sub *Subscription[Bar]
 		sub = newSubscription[Bar](cfg, func() {
@@ -2786,11 +2810,11 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			opKind:       OpHistoricalBarsStream,
 			subscription: true,
 			resume:       cfg.resume,
-			request:      codecReq,
+			request:      sdkReq,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case sdkadapter.HistoricalBar:
-					bar, err := fromCodecBar(m)
+					bar, err := fromSDKBar(m)
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
@@ -2800,7 +2824,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				case sdkadapter.HistoricalBarsEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				case sdkadapter.HistoricalDataUpdate:
-					bar, err := fromCodecBar(sdkadapter.HistoricalBar{
+					bar, err := fromSDKBar(sdkadapter.HistoricalBar{
 						ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
 						Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP, Count: m.Count,
 					})
@@ -2828,7 +2852,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			close: func(err error) { sub.closeWithErr(err) },
 		}
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
-		if err := e.sendContext(ctx, codecReq); err != nil {
+		if err := e.sendContext(ctx, sdkReq); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
 			resp <- result{err: err}
@@ -3004,7 +3028,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 				switch m := msg.(type) {
 				case sdkadapter.TickOptionComputation:
 					delete(e.keyed, reqID)
-					value, err := fromCodecOptionComputation(m)
+					value, err := fromSDKOptionComputation(m)
 					if err != nil {
 						resp <- result{err: err}
 						return
@@ -3027,7 +3051,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 		}
 		if err := e.sendContext(ctx, sdkadapter.CalcImpliedVolatilityRequest{
 			ReqID:       reqID,
-			Contract:    toCodecContract(req.Contract),
+			Contract:    toSDKContract(req.Contract),
 			OptionPrice: req.OptionPrice.String(),
 			UnderPrice:  req.UnderPrice.String(),
 		}); err != nil {
@@ -3069,7 +3093,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 				switch m := msg.(type) {
 				case sdkadapter.TickOptionComputation:
 					delete(e.keyed, reqID)
-					value, err := fromCodecOptionComputation(m)
+					value, err := fromSDKOptionComputation(m)
 					if err != nil {
 						resp <- result{err: err}
 						return
@@ -3092,7 +3116,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 		}
 		if err := e.sendContext(ctx, sdkadapter.CalcOptionPriceRequest{
 			ReqID:      reqID,
-			Contract:   toCodecContract(req.Contract),
+			Contract:   toSDKContract(req.Contract),
 			Volatility: req.Volatility.String(),
 			UnderPrice: req.UnderPrice.String(),
 		}); err != nil {
@@ -3169,7 +3193,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 		}
 		if err := e.sendContext(ctx, sdkadapter.HistogramDataRequest{
 			ReqID:    reqID,
-			Contract: toCodecContract(req.Contract),
+			Contract: toSDKContract(req.Contract),
 			UseRTH:   req.UseRTH,
 			Period:   req.Period,
 		}); err != nil {
@@ -3306,7 +3330,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 		}
 		if err := e.sendContext(ctx, sdkadapter.HistoricalTicksRequest{
 			ReqID:         reqID,
-			Contract:      toCodecContract(req.Contract),
+			Contract:      toSDKContract(req.Contract),
 			StartDateTime: formatHistoricalTickTime(req.StartTime),
 			EndDateTime:   formatHistoricalTickTime(req.EndTime),
 			NumberOfTicks: req.NumberOfTicks,
@@ -3495,7 +3519,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 					for i, entry := range m.Entries {
 						results[i] = ScannerResult{
 							Rank:       entry.Rank,
-							Contract:   fromCodecContract(entry.Contract),
+							Contract:   fromSDKContract(entry.Contract),
 							Distance:   entry.Distance,
 							Benchmark:  entry.Benchmark,
 							Projection: entry.Projection,
@@ -3593,12 +3617,54 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 }
 
 func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml string) error {
-	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
+	type result struct {
+		err error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+
+	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
-			return ErrNotReady
+			resp <- result{err: ErrNotReady}
+			return
 		}
-		return e.sendContext(ctx, sdkadapter.ReplaceFA{FADataType: int(faDataType), XML: xml})
+
+		reqID = e.allocReqID()
+		e.keyed[reqID] = &route{
+			opKind: OpFAConfig,
+			handle: func(msg any, eng *engine) {
+				switch msg.(type) {
+				case sdkadapter.ReplaceFAEnd:
+					eng.deleteKeyedRoute(reqID)
+					resp <- result{}
+				}
+			},
+			handleAPIErr: func(m sdkadapter.APIError, eng *engine) {
+				eng.deleteKeyedRoute(reqID)
+				resp <- result{err: eng.apiErr(OpFAConfig, m)}
+			},
+			onDisconnect: func(eng *engine, err error) bool {
+				eng.deleteKeyedRoute(reqID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.sendContext(ctx, sdkadapter.ReplaceFA{ReqID: reqID, FADataType: int(faDataType), XML: xml}); err != nil {
+			e.deleteKeyedRoute(reqID)
+			resp <- result{err: err}
+		}
 	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+	})
+	if err != nil {
+		return err
+	}
+	return out.err
 }
 
 func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) {
@@ -3917,7 +3983,7 @@ func (e *engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo
 	})
 }
 
-func fromCodecOptionComputation(m sdkadapter.TickOptionComputation) (OptionComputation, error) {
+func fromSDKOptionComputation(m sdkadapter.TickOptionComputation) (OptionComputation, error) {
 	iv, err := parseOptionalDecimal(m.ImpliedVol, "option computation implied vol")
 	if err != nil {
 		return OptionComputation{}, err
@@ -4001,7 +4067,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 				if !e.isReady() {
 					return ErrNotReady
 				}
-				return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
+				return e.sendContext(ctx, toSDKPlaceOrder(orderID, PlaceOrderRequest{
 					Contract: req.Contract,
 					Order:    order,
 				}))
@@ -4019,7 +4085,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 
 		e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
 
-		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, req)); err != nil {
+		if err := e.sendContext(ctx, toSDKPlaceOrder(orderID, req)); err != nil {
 			delete(e.orders, orderID)
 			handle.closeWithErr(err)
 			resp <- result{err: err}
@@ -4098,7 +4164,7 @@ func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest
 		}
 		if err := e.sendContext(ctx, sdkadapter.FundamentalDataRequest{
 			ReqID:      reqID,
-			Contract:   toCodecContract(req.Contract),
+			Contract:   toSDKContract(req.Contract),
 			ReportType: string(req.ReportType),
 		}); err != nil {
 			delete(e.keyed, reqID)
@@ -4133,7 +4199,7 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 		reqID := e.allocReqID()
 		return e.sendContext(ctx, sdkadapter.ExerciseOptionsRequest{
 			ReqID:            reqID,
-			Contract:         toCodecContract(req.Contract),
+			Contract:         toSDKContract(req.Contract),
 			ExerciseAction:   int(req.ExerciseAction),
 			ExerciseQuantity: req.ExerciseQuantity,
 			Account:          req.Account,
@@ -4321,10 +4387,43 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 		}, nil
 	case sdkadapter.EventAccountSummaryEnd:
 		return sdkadapter.AccountSummaryEnd{ReqID: event.ReqID}, nil
-	case sdkadapter.EventContractDetails:
+	case sdkadapter.EventUpdateAccountValue:
+		return sdkadapter.UpdateAccountValue{
+			Key:      event.AccountValue.Key,
+			Value:    event.AccountValue.Value,
+			Currency: event.AccountValue.Currency,
+			Account:  event.AccountValue.Account,
+		}, nil
+	case sdkadapter.EventUpdatePortfolio:
+		return sdkadapter.UpdatePortfolio{
+			Contract:      cloneSDKContractEvent(event.Portfolio.Contract),
+			Position:      event.Portfolio.Position,
+			MarketPrice:   event.Portfolio.MarketPrice,
+			MarketValue:   event.Portfolio.MarketValue,
+			AvgCost:       event.Portfolio.AvgCost,
+			UnrealizedPNL: event.Portfolio.UnrealizedPNL,
+			RealizedPNL:   event.Portfolio.RealizedPNL,
+			Account:       event.Portfolio.Account,
+		}, nil
+	case sdkadapter.EventUpdateAccountTime:
+		return sdkadapter.UpdateAccountTime{Timestamp: event.AccountTime}, nil
+	case sdkadapter.EventAccountDownloadEnd:
+		return sdkadapter.AccountDownloadEnd{Account: event.AccountDownloadEnd}, nil
+	case sdkadapter.EventAccountUpdateMulti:
+		return sdkadapter.AccountUpdateMultiValue{
+			ReqID:     event.ReqID,
+			Account:   event.AccountUpdateMulti.Account,
+			ModelCode: event.AccountUpdateMulti.ModelCode,
+			Key:       event.AccountUpdateMulti.Key,
+			Value:     event.AccountUpdateMulti.Value,
+			Currency:  event.AccountUpdateMulti.Currency,
+		}, nil
+	case sdkadapter.EventAccountUpdateMultiEnd:
+		return sdkadapter.AccountUpdateMultiEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventContractDetails, sdkadapter.EventBondContractDetails:
 		return sdkadapter.ContractDetails{
 			ReqID:      event.ReqID,
-			Contract:   fromSDKContract(event.ContractDetails.Contract),
+			Contract:   cloneSDKContractEvent(event.ContractDetails.Contract),
 			MarketName: event.ContractDetails.MarketName,
 			MinTick:    event.ContractDetails.MinTick,
 			LongName:   event.ContractDetails.LongName,
@@ -4335,12 +4434,426 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventPosition:
 		return sdkadapter.Position{
 			Account:  event.Position.Account,
-			Contract: fromSDKContract(event.Position.Contract),
+			Contract: cloneSDKContractEvent(event.Position.Contract),
 			Position: event.Position.Position,
 			AvgCost:  event.Position.AvgCost,
 		}, nil
 	case sdkadapter.EventPositionEnd:
 		return sdkadapter.PositionEnd{}, nil
+	case sdkadapter.EventPositionMulti:
+		return sdkadapter.PositionMulti{
+			ReqID:     event.ReqID,
+			Account:   event.PositionMulti.Account,
+			ModelCode: event.PositionMulti.ModelCode,
+			Contract:  cloneSDKContractEvent(event.PositionMulti.Contract),
+			Position:  event.PositionMulti.Position,
+			AvgCost:   event.PositionMulti.AvgCost,
+		}, nil
+	case sdkadapter.EventPositionMultiEnd:
+		return sdkadapter.PositionMultiEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventPnL:
+		return sdkadapter.PnLValue{
+			ReqID:         event.ReqID,
+			DailyPnL:      event.PnL.DailyPnL,
+			UnrealizedPnL: event.PnL.UnrealizedPnL,
+			RealizedPnL:   event.PnL.RealizedPnL,
+		}, nil
+	case sdkadapter.EventPnLSingle:
+		return sdkadapter.PnLSingleValue{
+			ReqID:         event.ReqID,
+			Position:      event.PnLSingle.Position,
+			DailyPnL:      event.PnLSingle.DailyPnL,
+			UnrealizedPnL: event.PnLSingle.UnrealizedPnL,
+			RealizedPnL:   event.PnLSingle.RealizedPnL,
+			Value:         event.PnLSingle.Value,
+		}, nil
+	case sdkadapter.EventOpenOrder:
+		return cloneSDKOpenOrderRecord(event.OpenOrder), nil
+	case sdkadapter.EventOpenOrderEnd:
+		return sdkadapter.OpenOrderEnd{}, nil
+	case sdkadapter.EventCompletedOrder:
+		return sdkadapter.CompletedOrder{
+			Contract:  cloneSDKContractEvent(event.CompletedOrder.Contract),
+			Action:    event.CompletedOrder.Action,
+			OrderType: event.CompletedOrder.OrderType,
+			Status:    event.CompletedOrder.Status,
+			Quantity:  event.CompletedOrder.Quantity,
+			Filled:    event.CompletedOrder.Filled,
+			Remaining: event.CompletedOrder.Remaining,
+		}, nil
+	case sdkadapter.EventCompletedOrderEnd:
+		return sdkadapter.CompletedOrderEnd{}, nil
+	case sdkadapter.EventOrderStatus:
+		return sdkadapter.OrderStatus{
+			OrderID:       event.OrderStatus.OrderID,
+			Status:        event.OrderStatus.Status,
+			Filled:        event.OrderStatus.Filled,
+			Remaining:     event.OrderStatus.Remaining,
+			AvgFillPrice:  event.OrderStatus.AvgFillPrice,
+			PermID:        event.OrderStatus.PermID,
+			ParentID:      event.OrderStatus.ParentID,
+			LastFillPrice: event.OrderStatus.LastFillPrice,
+			ClientID:      event.OrderStatus.ClientID,
+			WhyHeld:       event.OrderStatus.WhyHeld,
+			MktCapPrice:   event.OrderStatus.MktCapPrice,
+		}, nil
+	case sdkadapter.EventExecutionDetail:
+		return sdkadapter.ExecutionDetail{
+			ReqID:   event.ReqID,
+			OrderID: event.ExecutionDetail.OrderID,
+			ExecID:  event.ExecutionDetail.ExecID,
+			Account: event.ExecutionDetail.Account,
+			Symbol:  event.ExecutionDetail.Symbol,
+			Side:    event.ExecutionDetail.Side,
+			Shares:  event.ExecutionDetail.Shares,
+			Price:   event.ExecutionDetail.Price,
+			Time:    event.ExecutionDetail.Time,
+		}, nil
+	case sdkadapter.EventExecutionsEnd:
+		return sdkadapter.ExecutionsEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventCommissionReport:
+		return sdkadapter.CommissionReport{
+			ExecID:      event.CommissionReport.ExecID,
+			Commission:  event.CommissionReport.Commission,
+			Currency:    event.CommissionReport.Currency,
+			RealizedPNL: event.CommissionReport.RealizedPNL,
+		}, nil
+	case sdkadapter.EventMarketDataType:
+		return sdkadapter.MarketDataType{ReqID: event.ReqID, DataType: event.MarketDataType}, nil
+	case sdkadapter.EventTickPrice:
+		return sdkadapter.TickPrice{
+			ReqID:    event.ReqID,
+			TickType: event.TickPrice.TickType,
+			Price:    event.TickPrice.Price,
+			Size:     event.TickPrice.Size,
+			AttrMask: event.TickPrice.AttrMask,
+		}, nil
+	case sdkadapter.EventTickSize:
+		return sdkadapter.TickSize{
+			ReqID:    event.ReqID,
+			TickType: event.TickSize.TickType,
+			Size:     event.TickSize.Size,
+		}, nil
+	case sdkadapter.EventTickGeneric:
+		return sdkadapter.TickGeneric{
+			ReqID:    event.ReqID,
+			TickType: event.TickGeneric.TickType,
+			Value:    event.TickGeneric.Value,
+		}, nil
+	case sdkadapter.EventTickString:
+		return sdkadapter.TickString{
+			ReqID:    event.ReqID,
+			TickType: event.TickString.TickType,
+			Value:    event.TickString.Value,
+		}, nil
+	case sdkadapter.EventTickReqParams:
+		return sdkadapter.TickReqParams{
+			ReqID:               event.ReqID,
+			MinTick:             event.TickReqParams.MinTick,
+			BBOExchange:         event.TickReqParams.BBOExchange,
+			SnapshotPermissions: event.TickReqParams.SnapshotPermissions,
+		}, nil
+	case sdkadapter.EventTickSnapshotEnd:
+		return sdkadapter.TickSnapshotEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventRealTimeBar:
+		return sdkadapter.RealTimeBar{
+			ReqID:  event.ReqID,
+			Time:   event.RealTimeBar.Time,
+			Open:   event.RealTimeBar.Open,
+			High:   event.RealTimeBar.High,
+			Low:    event.RealTimeBar.Low,
+			Close:  event.RealTimeBar.Close,
+			Volume: event.RealTimeBar.Volume,
+			WAP:    event.RealTimeBar.WAP,
+			Count:  event.RealTimeBar.Count,
+		}, nil
+	case sdkadapter.EventTickByTick:
+		return sdkadapter.TickByTickData{
+			ReqID:             event.ReqID,
+			TickType:          event.TickByTick.TickType,
+			Time:              event.TickByTick.Time,
+			Price:             event.TickByTick.Price,
+			Size:              event.TickByTick.Size,
+			Exchange:          event.TickByTick.Exchange,
+			SpecialConditions: event.TickByTick.SpecialConditions,
+			BidPrice:          event.TickByTick.BidPrice,
+			AskPrice:          event.TickByTick.AskPrice,
+			BidSize:           event.TickByTick.BidSize,
+			AskSize:           event.TickByTick.AskSize,
+			MidPoint:          event.TickByTick.MidPoint,
+			TickAttribLast:    event.TickByTick.TickAttribLast,
+			TickAttribBidAsk:  event.TickByTick.TickAttribBidAsk,
+		}, nil
+	case sdkadapter.EventMarketDepth:
+		return sdkadapter.MarketDepthUpdate{
+			ReqID:     event.ReqID,
+			Position:  event.MarketDepth.Position,
+			Operation: event.MarketDepth.Operation,
+			Side:      event.MarketDepth.Side,
+			Price:     event.MarketDepth.Price,
+			Size:      event.MarketDepth.Size,
+		}, nil
+	case sdkadapter.EventMarketDepthL2:
+		return sdkadapter.MarketDepthL2Update{
+			ReqID:        event.ReqID,
+			Position:     event.MarketDepthL2.Position,
+			MarketMaker:  event.MarketDepthL2.MarketMaker,
+			Operation:    event.MarketDepthL2.Operation,
+			Side:         event.MarketDepthL2.Side,
+			Price:        event.MarketDepthL2.Price,
+			Size:         event.MarketDepthL2.Size,
+			IsSmartDepth: event.MarketDepthL2.IsSmartDepth,
+		}, nil
+	case sdkadapter.EventTickOptionComputation:
+		return sdkadapter.TickOptionComputation{
+			ReqID:      event.ReqID,
+			TickType:   event.TickOptionComputation.TickType,
+			TickAttrib: event.TickOptionComputation.TickAttrib,
+			ImpliedVol: event.TickOptionComputation.ImpliedVol,
+			Delta:      event.TickOptionComputation.Delta,
+			OptPrice:   event.TickOptionComputation.OptPrice,
+			PvDividend: event.TickOptionComputation.PvDividend,
+			Gamma:      event.TickOptionComputation.Gamma,
+			Vega:       event.TickOptionComputation.Vega,
+			Theta:      event.TickOptionComputation.Theta,
+			UndPrice:   event.TickOptionComputation.UndPrice,
+		}, nil
+	case sdkadapter.EventFamilyCodes:
+		codes := make([]sdkadapter.FamilyCodeEntry, len(event.FamilyCodes))
+		for i, code := range event.FamilyCodes {
+			codes[i] = sdkadapter.FamilyCodeEntry{
+				AccountID:  code.AccountID,
+				FamilyCode: code.FamilyCode,
+			}
+		}
+		return sdkadapter.FamilyCodes{Codes: codes}, nil
+	case sdkadapter.EventMktDepthExchanges:
+		exchanges := make([]sdkadapter.DepthExchangeEntry, len(event.DepthExchanges))
+		for i, exchange := range event.DepthExchanges {
+			exchanges[i] = sdkadapter.DepthExchangeEntry{
+				Exchange:        exchange.Exchange,
+				SecType:         exchange.SecType,
+				ListingExch:     exchange.ListingExch,
+				ServiceDataType: exchange.ServiceDataType,
+				AggGroup:        exchange.AggGroup,
+			}
+		}
+		return sdkadapter.MktDepthExchanges{Exchanges: exchanges}, nil
+	case sdkadapter.EventNewsProviders:
+		providers := make([]sdkadapter.NewsProviderEntry, len(event.NewsProviders))
+		for i, provider := range event.NewsProviders {
+			providers[i] = sdkadapter.NewsProviderEntry{
+				Code: provider.Code,
+				Name: provider.Name,
+			}
+		}
+		return sdkadapter.NewsProviders{Providers: providers}, nil
+	case sdkadapter.EventNewsBulletin:
+		return sdkadapter.NewsBulletin{
+			MsgID:    event.NewsBulletin.MsgID,
+			MsgType:  event.NewsBulletin.MsgType,
+			Headline: event.NewsBulletin.Headline,
+			Source:   event.NewsBulletin.Source,
+		}, nil
+	case sdkadapter.EventNewsArticle:
+		return sdkadapter.NewsArticleResponse{
+			ReqID:       event.ReqID,
+			ArticleType: event.NewsArticle.ArticleType,
+			ArticleText: event.NewsArticle.ArticleText,
+		}, nil
+	case sdkadapter.EventHistoricalNews:
+		return sdkadapter.HistoricalNewsItem{
+			ReqID:        event.ReqID,
+			Time:         event.HistoricalNews.Time,
+			ProviderCode: event.HistoricalNews.ProviderCode,
+			ArticleID:    event.HistoricalNews.ArticleID,
+			Headline:     event.HistoricalNews.Headline,
+		}, nil
+	case sdkadapter.EventHistoricalNewsEnd:
+		return sdkadapter.HistoricalNewsEnd{ReqID: event.ReqID, HasMore: event.HistoricalHasMore}, nil
+	case sdkadapter.EventScannerParameters:
+		return sdkadapter.ScannerParameters{XML: event.ScannerXML}, nil
+	case sdkadapter.EventScannerData:
+		entries := make([]sdkadapter.ScannerDataEntry, len(event.ScannerData))
+		for i, entry := range event.ScannerData {
+			entries[i] = sdkadapter.ScannerDataEntry{
+				Rank:       entry.Rank,
+				Contract:   cloneSDKContractEvent(entry.Contract),
+				Distance:   entry.Distance,
+				Benchmark:  entry.Benchmark,
+				Projection: entry.Projection,
+				LegsStr:    entry.LegsStr,
+			}
+		}
+		return sdkadapter.ScannerDataResponse{ReqID: event.ReqID, Entries: entries}, nil
+	case sdkadapter.EventReceiveFA:
+		return sdkadapter.ReceiveFA{FADataType: event.ReceiveFA.FADataType, XML: event.ReceiveFA.XML}, nil
+	case sdkadapter.EventReplaceFAEnd:
+		return sdkadapter.ReplaceFAEnd{ReqID: event.ReqID, Text: event.ReplaceFAEndText}, nil
+	case sdkadapter.EventHistoricalData:
+		return sdkadapter.HistoricalBar{
+			ReqID:  event.ReqID,
+			Time:   event.HistoricalBar.Time,
+			Open:   event.HistoricalBar.Open,
+			High:   event.HistoricalBar.High,
+			Low:    event.HistoricalBar.Low,
+			Close:  event.HistoricalBar.Close,
+			Volume: event.HistoricalBar.Volume,
+			WAP:    event.HistoricalBar.WAP,
+			Count:  event.HistoricalBar.Count,
+		}, nil
+	case sdkadapter.EventHistoricalDataEnd:
+		return sdkadapter.HistoricalBarsEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventHistoricalDataUpdate:
+		return sdkadapter.HistoricalDataUpdate{
+			ReqID:  event.ReqID,
+			Time:   event.HistoricalBar.Time,
+			Open:   event.HistoricalBar.Open,
+			High:   event.HistoricalBar.High,
+			Low:    event.HistoricalBar.Low,
+			Close:  event.HistoricalBar.Close,
+			Volume: event.HistoricalBar.Volume,
+			WAP:    event.HistoricalBar.WAP,
+			Count:  event.HistoricalBar.Count,
+		}, nil
+	case sdkadapter.EventHistoricalSchedule:
+		sessions := make([]sdkadapter.HistoricalScheduleSession, len(event.HistoricalSchedule.Sessions))
+		for i, session := range event.HistoricalSchedule.Sessions {
+			sessions[i] = sdkadapter.HistoricalScheduleSession{
+				StartDateTime: session.StartDateTime,
+				EndDateTime:   session.EndDateTime,
+				RefDate:       session.RefDate,
+			}
+		}
+		return sdkadapter.HistoricalScheduleResponse{
+			ReqID:         event.ReqID,
+			StartDateTime: event.HistoricalSchedule.StartDateTime,
+			EndDateTime:   event.HistoricalSchedule.EndDateTime,
+			TimeZone:      event.HistoricalSchedule.TimeZone,
+			Sessions:      sessions,
+		}, nil
+	case sdkadapter.EventHistoricalTicks:
+		ticks := make([]sdkadapter.HistoricalTickEntry, len(event.HistoricalTicks))
+		for i, tick := range event.HistoricalTicks {
+			ticks[i] = sdkadapter.HistoricalTickEntry{
+				Time:  tick.Time,
+				Price: tick.Price,
+				Size:  tick.Size,
+			}
+		}
+		return sdkadapter.HistoricalTicksResponse{ReqID: event.ReqID, Ticks: ticks, Done: event.HistoricalTicksDone}, nil
+	case sdkadapter.EventHistoricalTicksBidAsk:
+		ticks := make([]sdkadapter.HistoricalTickBidAskEntry, len(event.HistoricalTicksBidAsk))
+		for i, tick := range event.HistoricalTicksBidAsk {
+			ticks[i] = sdkadapter.HistoricalTickBidAskEntry{
+				TickAttrib: tick.TickAttrib,
+				Time:       tick.Time,
+				BidPrice:   tick.BidPrice,
+				AskPrice:   tick.AskPrice,
+				BidSize:    tick.BidSize,
+				AskSize:    tick.AskSize,
+			}
+		}
+		return sdkadapter.HistoricalTicksBidAskResponse{ReqID: event.ReqID, Ticks: ticks, Done: event.HistoricalTicksDone}, nil
+	case sdkadapter.EventHistoricalTicksLast:
+		ticks := make([]sdkadapter.HistoricalTickLastEntry, len(event.HistoricalTicksLast))
+		for i, tick := range event.HistoricalTicksLast {
+			ticks[i] = sdkadapter.HistoricalTickLastEntry{
+				TickAttrib:        tick.TickAttrib,
+				Time:              tick.Time,
+				Price:             tick.Price,
+				Size:              tick.Size,
+				Exchange:          tick.Exchange,
+				SpecialConditions: tick.SpecialConditions,
+			}
+		}
+		return sdkadapter.HistoricalTicksLastResponse{ReqID: event.ReqID, Ticks: ticks, Done: event.HistoricalTicksDone}, nil
+	case sdkadapter.EventHeadTimestamp:
+		return sdkadapter.HeadTimestamp{ReqID: event.ReqID, Timestamp: event.HeadTimestamp}, nil
+	case sdkadapter.EventHistogramData:
+		entries := make([]sdkadapter.HistogramDataEntry, len(event.HistogramData))
+		for i, entry := range event.HistogramData {
+			entries[i] = sdkadapter.HistogramDataEntry{
+				Price: entry.Price,
+				Size:  entry.Size,
+			}
+		}
+		return sdkadapter.HistogramDataResponse{ReqID: event.ReqID, Entries: entries}, nil
+	case sdkadapter.EventWSHMetaData:
+		return sdkadapter.WSHMetaDataResponse{ReqID: event.ReqID, DataJSON: event.WSHDataJSON}, nil
+	case sdkadapter.EventWSHEventData:
+		return sdkadapter.WSHEventDataResponse{ReqID: event.ReqID, DataJSON: event.WSHDataJSON}, nil
+	case sdkadapter.EventUserInfo:
+		return sdkadapter.UserInfo{
+			ReqID:           event.ReqID,
+			WhiteBrandingID: event.UserInfo.WhiteBrandingID,
+		}, nil
+	case sdkadapter.EventSoftDollarTiers:
+		tiers := make([]sdkadapter.SoftDollarTier, len(event.SoftDollarTiers))
+		for i, tier := range event.SoftDollarTiers {
+			tiers[i] = sdkadapter.SoftDollarTier{
+				Name:        tier.Name,
+				Value:       tier.Value,
+				DisplayName: tier.DisplayName,
+			}
+		}
+		return sdkadapter.SoftDollarTiersResponse{ReqID: event.ReqID, Tiers: tiers}, nil
+	case sdkadapter.EventDisplayGroupList:
+		return sdkadapter.DisplayGroupList{ReqID: event.ReqID, Groups: event.DisplayGroups}, nil
+	case sdkadapter.EventDisplayGroupUpdated:
+		return sdkadapter.DisplayGroupUpdated{ReqID: event.ReqID, ContractInfo: event.DisplayGroupContractInfo}, nil
+	case sdkadapter.EventMatchingSymbols:
+		symbols := make([]sdkadapter.SymbolSample, len(event.SymbolSamples))
+		for i, sample := range event.SymbolSamples {
+			symbols[i] = sdkadapter.SymbolSample{
+				ConID:              sample.ConID,
+				Symbol:             sample.Symbol,
+				SecType:            sample.SecType,
+				PrimaryExchange:    sample.PrimaryExchange,
+				Currency:           sample.Currency,
+				DerivativeSecTypes: append([]string(nil), sample.DerivativeSecTypes...),
+				Description:        sample.Description,
+				IssuerID:           sample.IssuerID,
+			}
+		}
+		return sdkadapter.MatchingSymbols{ReqID: event.ReqID, Symbols: symbols}, nil
+	case sdkadapter.EventMarketRule:
+		increments := make([]sdkadapter.PriceIncrement, len(event.PriceIncrements))
+		for i, increment := range event.PriceIncrements {
+			increments[i] = sdkadapter.PriceIncrement{
+				LowEdge:   increment.LowEdge,
+				Increment: increment.Increment,
+			}
+		}
+		return sdkadapter.MarketRule{MarketRuleID: event.MarketRuleID, Increments: increments}, nil
+	case sdkadapter.EventSecDefOptParams:
+		if len(event.SecDefOptParams) == 0 {
+			return sdkadapter.SecDefOptParamsResponse{ReqID: event.ReqID}, nil
+		}
+		params := event.SecDefOptParams[0]
+		return sdkadapter.SecDefOptParamsResponse{
+			ReqID:           event.ReqID,
+			Exchange:        params.Exchange,
+			UnderlyingConID: params.UnderlyingConID,
+			TradingClass:    params.TradingClass,
+			Multiplier:      params.Multiplier,
+			Expirations:     append([]string(nil), params.Expirations...),
+			Strikes:         append([]string(nil), params.Strikes...),
+		}, nil
+	case sdkadapter.EventSecDefOptParamsEnd:
+		return sdkadapter.SecDefOptParamsEnd{ReqID: event.ReqID}, nil
+	case sdkadapter.EventSmartComponents:
+		components := make([]sdkadapter.SmartComponentEntry, len(event.SmartComponents))
+		for i, component := range event.SmartComponents {
+			components[i] = sdkadapter.SmartComponentEntry{
+				BitNumber:      component.BitNumber,
+				ExchangeName:   component.ExchangeName,
+				ExchangeLetter: component.ExchangeLetter,
+			}
+		}
+		return sdkadapter.SmartComponentsResponse{ReqID: event.ReqID, Components: components}, nil
+	case sdkadapter.EventFundamentalData:
+		return sdkadapter.FundamentalDataResponse{ReqID: event.ReqID, Data: event.FundamentalData}, nil
 	case sdkadapter.EventAPIError:
 		return sdkadapter.APIError{
 			ReqID:                   event.APIError.ReqID,
@@ -4351,9 +4864,9 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventConnectionClosed:
 		return nil, ErrInterrupted
 	case sdkadapter.EventAdapterFatal:
-		return nil, &ProtocolError{Direction: "sdk", Message: "adapter", Err: errors.New(event.FatalMessage)}
+		return nil, &AdapterError{Op: "event", Message: "adapter fatal", Err: errors.New(event.FatalMessage)}
 	default:
-		return nil, &ProtocolError{Direction: "sdk", Message: "adapter", Err: fmt.Errorf("unknown SDK adapter event %q", event.Kind)}
+		return nil, &AdapterError{Op: "event", Message: "unknown adapter event", Err: fmt.Errorf("%q", event.Kind)}
 	}
 }
 
@@ -4570,7 +5083,11 @@ func (e *engine) handleAPIError(msg sdkadapter.APIError) {
 		// Order-specific API errors: the reqID field carries the orderID
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
-			if isOrderCancellationNotice(msg) {
+			if isOrderInformationalNotice(msg) {
+				e.emitEvent(msg.Code, msg.Message)
+				return
+			}
+			if isLateTerminalOrderNotice(or) {
 				e.emitEvent(msg.Code, msg.Message)
 				return
 			}
@@ -4818,20 +5335,20 @@ func (e *engine) updateSnapshot(update func(*Snapshot)) {
 	update(&e.snapshot)
 }
 
-func (e *engine) send(msg sdkadapter.Message) error {
+func (e *engine) send(msg any) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	return e.sendContext(ctx, msg)
 }
 
-func (e *engine) sendContext(ctx context.Context, msg sdkadapter.Message) error {
+func (e *engine) sendContext(ctx context.Context, msg any) error {
 	if e.adapter == nil {
 		return ErrNotReady
 	}
 	return e.sendSDKContext(ctx, msg)
 }
 
-func (e *engine) sendSDKContext(ctx context.Context, msg sdkadapter.Message) error {
+func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	var command sdkadapter.Command
 	switch m := msg.(type) {
 	case sdkadapter.CurrentTimeRequest:
@@ -4854,25 +5371,483 @@ func (e *engine) sendSDKContext(ctx context.Context, msg sdkadapter.Message) err
 				ReqID: m.ReqID,
 			},
 		}
+	case sdkadapter.AccountUpdatesRequest:
+		command = sdkadapter.Command{
+			Kind:           sdkadapter.CommandAccountUpdates,
+			AccountUpdates: sdkadapter.AccountUpdatesCommand{Subscribe: m.Subscribe, Account: m.Account},
+		}
+	case sdkadapter.AccountUpdatesMultiRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandAccountUpdatesMulti,
+			AccountUpdatesMulti: sdkadapter.AccountUpdatesMultiCommand{
+				ReqID:     m.ReqID,
+				Account:   m.Account,
+				ModelCode: m.ModelCode,
+			},
+		}
+	case sdkadapter.CancelAccountUpdatesMulti:
+		command = sdkadapter.Command{
+			Kind:                      sdkadapter.CommandCancelAccountUpdatesMulti,
+			CancelAccountUpdatesMulti: sdkadapter.CancelAccountUpdatesMultiCommand{ReqID: m.ReqID},
+		}
 	case sdkadapter.ContractDetailsRequest:
 		command = sdkadapter.Command{
 			Kind: sdkadapter.CommandContractDetails,
 			ContractDetails: sdkadapter.ContractDetailsCommand{
 				ReqID:    m.ReqID,
-				Contract: toSDKContract(m.Contract),
+				Contract: cloneSDKContractRecord(m.Contract),
 			},
 		}
 	case sdkadapter.PositionsRequest:
 		command = sdkadapter.Command{Kind: sdkadapter.CommandPositions}
 	case sdkadapter.CancelPositions:
 		command = sdkadapter.Command{Kind: sdkadapter.CommandCancelPositions}
+	case sdkadapter.PositionsMultiRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandPositionsMulti,
+			PositionsMulti: sdkadapter.PositionsMultiCommand{
+				ReqID:     m.ReqID,
+				Account:   m.Account,
+				ModelCode: m.ModelCode,
+			},
+		}
+	case sdkadapter.CancelPositionsMulti:
+		command = sdkadapter.Command{
+			Kind:                 sdkadapter.CommandCancelPositionsMulti,
+			CancelPositionsMulti: sdkadapter.CancelPositionsMultiCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.PnLRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandPnL,
+			PnL: sdkadapter.PnLCommand{
+				ReqID:     m.ReqID,
+				Account:   m.Account,
+				ModelCode: m.ModelCode,
+			},
+		}
+	case sdkadapter.CancelPnL:
+		command = sdkadapter.Command{
+			Kind:      sdkadapter.CommandCancelPnL,
+			CancelPnL: sdkadapter.CancelPnLCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.PnLSingleRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandPnLSingle,
+			PnLSingle: sdkadapter.PnLSingleCommand{
+				ReqID:     m.ReqID,
+				Account:   m.Account,
+				ModelCode: m.ModelCode,
+				ConID:     m.ConID,
+			},
+		}
+	case sdkadapter.CancelPnLSingle:
+		command = sdkadapter.Command{
+			Kind:            sdkadapter.CommandCancelPnLSingle,
+			CancelPnLSingle: sdkadapter.CancelPnLSingleCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.ReqMarketDataType:
+		command = sdkadapter.Command{
+			Kind:           sdkadapter.CommandMarketDataType,
+			MarketDataType: sdkadapter.MarketDataTypeCommand{DataType: m.DataType},
+		}
+	case sdkadapter.QuoteRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandQuote,
+			Quote: sdkadapter.QuoteCommand{
+				ReqID:        m.ReqID,
+				Contract:     cloneSDKContractRecord(m.Contract),
+				Snapshot:     m.Snapshot,
+				GenericTicks: append([]string(nil), m.GenericTicks...),
+			},
+		}
+	case sdkadapter.CancelQuote:
+		command = sdkadapter.Command{
+			Kind:        sdkadapter.CommandCancelQuote,
+			CancelQuote: sdkadapter.CancelQuoteCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.RealTimeBarsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandRealTimeBars,
+			RealTimeBars: sdkadapter.RealTimeBarsCommand{
+				ReqID:      m.ReqID,
+				Contract:   cloneSDKContractRecord(m.Contract),
+				WhatToShow: m.WhatToShow,
+				UseRTH:     m.UseRTH,
+			},
+		}
+	case sdkadapter.CancelRealTimeBars:
+		command = sdkadapter.Command{
+			Kind:               sdkadapter.CommandCancelRealTimeBars,
+			CancelRealTimeBars: sdkadapter.CancelRealTimeBarsCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.TickByTickRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandTickByTick,
+			TickByTick: sdkadapter.TickByTickCommand{
+				ReqID:         m.ReqID,
+				Contract:      cloneSDKContractRecord(m.Contract),
+				TickType:      m.TickType,
+				NumberOfTicks: m.NumberOfTicks,
+				IgnoreSize:    m.IgnoreSize,
+			},
+		}
+	case sdkadapter.CancelTickByTick:
+		command = sdkadapter.Command{
+			Kind:             sdkadapter.CommandCancelTickByTick,
+			CancelTickByTick: sdkadapter.CancelTickByTickCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.MarketDepthRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandMarketDepth,
+			MarketDepth: sdkadapter.MarketDepthCommand{
+				ReqID:        m.ReqID,
+				Contract:     cloneSDKContractRecord(m.Contract),
+				NumRows:      m.NumRows,
+				IsSmartDepth: m.IsSmartDepth,
+			},
+		}
+	case sdkadapter.CancelMarketDepth:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandCancelMarketDepth,
+			CancelMarketDepth: sdkadapter.CancelMarketDepthCommand{
+				ReqID:        m.ReqID,
+				IsSmartDepth: m.IsSmartDepth,
+			},
+		}
+	case sdkadapter.CalcImpliedVolatilityRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandCalcImpliedVolatility,
+			CalcImpliedVolatility: sdkadapter.CalcImpliedVolatilityCommand{
+				ReqID:       m.ReqID,
+				Contract:    cloneSDKContractRecord(m.Contract),
+				OptionPrice: m.OptionPrice,
+				UnderPrice:  m.UnderPrice,
+			},
+		}
+	case sdkadapter.CancelCalcImpliedVolatility:
+		command = sdkadapter.Command{
+			Kind:                 sdkadapter.CommandCancelCalcImpliedVol,
+			CancelCalcImpliedVol: sdkadapter.CancelCalcImpliedVolCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.CalcOptionPriceRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandCalcOptionPrice,
+			CalcOptionPrice: sdkadapter.CalcOptionPriceCommand{
+				ReqID:      m.ReqID,
+				Contract:   cloneSDKContractRecord(m.Contract),
+				Volatility: m.Volatility,
+				UnderPrice: m.UnderPrice,
+			},
+		}
+	case sdkadapter.CancelCalcOptionPrice:
+		command = sdkadapter.Command{
+			Kind:                  sdkadapter.CommandCancelCalcOptionPrice,
+			CancelCalcOptionPrice: sdkadapter.CancelCalcOptionPriceCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.ExerciseOptionsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandExerciseOptions,
+			ExerciseOptions: sdkadapter.ExerciseOptionsCommand{
+				ReqID:            m.ReqID,
+				Contract:         cloneSDKContractRecord(m.Contract),
+				ExerciseAction:   m.ExerciseAction,
+				ExerciseQuantity: m.ExerciseQuantity,
+				Account:          m.Account,
+				Override:         m.Override,
+			},
+		}
+	case sdkadapter.PlaceOrderRequest:
+		command = sdkadapter.Command{
+			Kind:       sdkadapter.CommandPlaceOrder,
+			PlaceOrder: sdkadapter.ClonePlaceOrderRequest(m),
+		}
+	case sdkadapter.OpenOrdersRequest:
+		command = sdkadapter.Command{
+			Kind:       sdkadapter.CommandOpenOrders,
+			OpenOrders: sdkadapter.OpenOrdersCommand{Scope: m.Scope},
+		}
+	case sdkadapter.CompletedOrdersRequest:
+		command = sdkadapter.Command{
+			Kind:            sdkadapter.CommandCompletedOrders,
+			CompletedOrders: sdkadapter.CompletedOrdersCommand{APIOnly: m.APIOnly},
+		}
+	case sdkadapter.CancelOrderRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandCancelOrder,
+			CancelOrder: sdkadapter.CancelOrderCommand{
+				OrderID:               m.OrderID,
+				ManualOrderCancelTime: m.ManualOrderCancelTime,
+				ExtOperator:           m.ExtOperator,
+				ManualOrderIndicator:  m.ManualOrderIndicator,
+			},
+		}
+	case sdkadapter.GlobalCancelRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandGlobalCancel,
+			GlobalCancel: sdkadapter.GlobalCancelCommand{
+				ExtOperator:          m.ExtOperator,
+				ManualOrderIndicator: m.ManualOrderIndicator,
+			},
+		}
+	case sdkadapter.ExecutionsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandExecutions,
+			Executions: sdkadapter.ExecutionsCommand{
+				ReqID:   m.ReqID,
+				Account: m.Account,
+				Symbol:  m.Symbol,
+			},
+		}
+	case sdkadapter.FamilyCodesRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandFamilyCodes}
+	case sdkadapter.MktDepthExchangesRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandMktDepthExchanges}
+	case sdkadapter.NewsProvidersRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandNewsProviders}
+	case sdkadapter.NewsBulletinsRequest:
+		command = sdkadapter.Command{
+			Kind:          sdkadapter.CommandNewsBulletins,
+			NewsBulletins: sdkadapter.NewsBulletinsCommand{AllMessages: m.AllMessages},
+		}
+	case sdkadapter.CancelNewsBulletins:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandCancelNewsBulletins}
+	case sdkadapter.NewsArticleRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandNewsArticle,
+			NewsArticle: sdkadapter.NewsArticleCommand{
+				ReqID:        m.ReqID,
+				ProviderCode: m.ProviderCode,
+				ArticleID:    m.ArticleID,
+			},
+		}
+	case sdkadapter.HistoricalNewsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandHistoricalNews,
+			HistoricalNews: sdkadapter.HistoricalNewsCommand{
+				ReqID:         m.ReqID,
+				ConID:         m.ConID,
+				ProviderCodes: m.ProviderCodes,
+				StartDate:     m.StartDate,
+				EndDate:       m.EndDate,
+				TotalResults:  m.TotalResults,
+			},
+		}
+	case sdkadapter.ScannerParametersRequest:
+		command = sdkadapter.Command{Kind: sdkadapter.CommandScannerParameters}
+	case sdkadapter.ScannerSubscriptionRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandScannerSubscription,
+			ScannerSubscription: sdkadapter.ScannerSubscriptionCommand{
+				ReqID:        m.ReqID,
+				NumberOfRows: m.NumberOfRows,
+				Instrument:   m.Instrument,
+				LocationCode: m.LocationCode,
+				ScanCode:     m.ScanCode,
+			},
+		}
+	case sdkadapter.CancelScannerSubscription:
+		command = sdkadapter.Command{
+			Kind:                      sdkadapter.CommandCancelScannerSubscription,
+			CancelScannerSubscription: sdkadapter.CancelScannerSubscriptionCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.RequestFA:
+		command = sdkadapter.Command{
+			Kind:      sdkadapter.CommandRequestFA,
+			RequestFA: sdkadapter.RequestFACommand{FADataType: m.FADataType},
+		}
+	case sdkadapter.ReplaceFA:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandReplaceFA,
+			ReplaceFA: sdkadapter.ReplaceFACommand{
+				ReqID:      m.ReqID,
+				FADataType: m.FADataType,
+				XML:        m.XML,
+			},
+		}
+	case sdkadapter.HistoricalBarsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandHistoricalData,
+			HistoricalData: sdkadapter.HistoricalDataCommand{
+				ReqID:        m.ReqID,
+				Contract:     cloneSDKContractRecord(m.Contract),
+				EndDateTime:  m.EndDateTime,
+				Duration:     m.Duration,
+				BarSize:      m.BarSize,
+				WhatToShow:   m.WhatToShow,
+				UseRTH:       m.UseRTH,
+				KeepUpToDate: m.KeepUpToDate,
+			},
+		}
+	case sdkadapter.CancelHistoricalData:
+		command = sdkadapter.Command{
+			Kind:                 sdkadapter.CommandCancelHistoricalData,
+			CancelHistoricalData: sdkadapter.CancelHistoricalDataCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.HistoricalTicksRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandHistoricalTicks,
+			HistoricalTicks: sdkadapter.HistoricalTicksCommand{
+				ReqID:         m.ReqID,
+				Contract:      cloneSDKContractRecord(m.Contract),
+				StartDateTime: m.StartDateTime,
+				EndDateTime:   m.EndDateTime,
+				NumberOfTicks: m.NumberOfTicks,
+				WhatToShow:    m.WhatToShow,
+				UseRTH:        m.UseRTH,
+				IgnoreSize:    m.IgnoreSize,
+			},
+		}
+	case sdkadapter.CancelHistoricalTicks:
+		command = sdkadapter.Command{
+			Kind:                  sdkadapter.CommandCancelHistoricalTicks,
+			CancelHistoricalTicks: sdkadapter.CancelHistoricalTicksCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.HeadTimestampRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandHeadTimestamp,
+			HeadTimestamp: sdkadapter.HeadTimestampCommand{
+				ReqID:      m.ReqID,
+				Contract:   cloneSDKContractRecord(m.Contract),
+				WhatToShow: m.WhatToShow,
+				UseRTH:     m.UseRTH,
+			},
+		}
+	case sdkadapter.CancelHeadTimestamp:
+		command = sdkadapter.Command{
+			Kind:                sdkadapter.CommandCancelHeadTimestamp,
+			CancelHeadTimestamp: sdkadapter.CancelHeadTimestampCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.HistogramDataRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandHistogramData,
+			HistogramData: sdkadapter.HistogramDataCommand{
+				ReqID:    m.ReqID,
+				Contract: cloneSDKContractRecord(m.Contract),
+				UseRTH:   m.UseRTH,
+				Period:   m.Period,
+			},
+		}
+	case sdkadapter.CancelHistogramData:
+		command = sdkadapter.Command{
+			Kind:                sdkadapter.CommandCancelHistogramData,
+			CancelHistogramData: sdkadapter.CancelHistogramDataCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.WSHMetaDataRequest:
+		command = sdkadapter.Command{
+			Kind:        sdkadapter.CommandWSHMetaData,
+			WSHMetaData: sdkadapter.WSHMetaDataCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.CancelWSHMetaData:
+		command = sdkadapter.Command{
+			Kind:              sdkadapter.CommandCancelWSHMetaData,
+			CancelWSHMetaData: sdkadapter.CancelWSHMetaDataCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.WSHEventDataRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandWSHEventData,
+			WSHEventData: sdkadapter.WSHEventDataCommand{
+				ReqID:           m.ReqID,
+				ConID:           m.ConID,
+				Filter:          m.Filter,
+				FillWatchlist:   m.FillWatchlist,
+				FillPortfolio:   m.FillPortfolio,
+				FillCompetitors: m.FillCompetitors,
+				StartDate:       m.StartDate,
+				EndDate:         m.EndDate,
+				TotalLimit:      m.TotalLimit,
+			},
+		}
+	case sdkadapter.CancelWSHEventData:
+		command = sdkadapter.Command{
+			Kind:               sdkadapter.CommandCancelWSHEventData,
+			CancelWSHEventData: sdkadapter.CancelWSHEventDataCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.UserInfoRequest:
+		command = sdkadapter.Command{
+			Kind:     sdkadapter.CommandUserInfo,
+			UserInfo: sdkadapter.UserInfoCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.SoftDollarTiersRequest:
+		command = sdkadapter.Command{
+			Kind:            sdkadapter.CommandSoftDollarTiers,
+			SoftDollarTiers: sdkadapter.SoftDollarTiersCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.QueryDisplayGroupsRequest:
+		command = sdkadapter.Command{
+			Kind:               sdkadapter.CommandQueryDisplayGroups,
+			QueryDisplayGroups: sdkadapter.QueryDisplayGroupsCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.SubscribeToGroupEventsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandSubscribeToGroupEvents,
+			SubscribeToGroupEvents: sdkadapter.SubscribeToGroupEventsCommand{
+				ReqID:   m.ReqID,
+				GroupID: m.GroupID,
+			},
+		}
+	case sdkadapter.UpdateDisplayGroupRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandUpdateDisplayGroup,
+			UpdateDisplayGroup: sdkadapter.UpdateDisplayGroupCommand{
+				ReqID:        m.ReqID,
+				ContractInfo: m.ContractInfo,
+			},
+		}
+	case sdkadapter.UnsubscribeFromGroupEventsRequest:
+		command = sdkadapter.Command{
+			Kind:                       sdkadapter.CommandUnsubscribeFromGroupEvents,
+			UnsubscribeFromGroupEvents: sdkadapter.UnsubscribeFromGroupEventsCommand{ReqID: m.ReqID},
+		}
+	case sdkadapter.MatchingSymbolsRequest:
+		command = sdkadapter.Command{
+			Kind:            sdkadapter.CommandMatchingSymbols,
+			MatchingSymbols: sdkadapter.MatchingSymbolsCommand{ReqID: m.ReqID, Pattern: m.Pattern},
+		}
+	case sdkadapter.MarketRuleRequest:
+		command = sdkadapter.Command{
+			Kind:       sdkadapter.CommandMarketRule,
+			MarketRule: sdkadapter.MarketRuleCommand{MarketRuleID: m.MarketRuleID},
+		}
+	case sdkadapter.SecDefOptParamsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandSecDefOptParams,
+			SecDefOptParams: sdkadapter.SecDefOptParamsCommand{
+				ReqID:             m.ReqID,
+				UnderlyingSymbol:  m.UnderlyingSymbol,
+				FutFopExchange:    m.FutFopExchange,
+				UnderlyingSecType: m.UnderlyingSecType,
+				UnderlyingConID:   m.UnderlyingConID,
+			},
+		}
+	case sdkadapter.SmartComponentsRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandSmartComponents,
+			SmartComponents: sdkadapter.SmartComponentsCommand{
+				ReqID:       m.ReqID,
+				BBOExchange: m.BBOExchange,
+			},
+		}
+	case sdkadapter.FundamentalDataRequest:
+		command = sdkadapter.Command{
+			Kind: sdkadapter.CommandFundamentalData,
+			FundamentalData: sdkadapter.FundamentalDataCommand{
+				ReqID:      m.ReqID,
+				Contract:   cloneSDKContractRecord(m.Contract),
+				ReportType: m.ReportType,
+			},
+		}
+	case sdkadapter.CancelFundamentalData:
+		command = sdkadapter.Command{
+			Kind:                  sdkadapter.CommandCancelFundamentalData,
+			CancelFundamentalData: sdkadapter.CancelFundamentalDataCommand{ReqID: m.ReqID},
+		}
 	default:
 		return fmt.Errorf("ibkr: SDK runtime does not support %T yet", msg)
 	}
 	return e.adapter.Submit(ctx, command)
 }
 
-func toSDKContract(c sdkadapter.Contract) sdkadapter.Contract {
+func cloneSDKContractRecord(c sdkadapter.Contract) sdkadapter.Contract {
 	return sdkadapter.Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
@@ -4889,7 +5864,7 @@ func toSDKContract(c sdkadapter.Contract) sdkadapter.Contract {
 	}
 }
 
-func fromSDKContract(c sdkadapter.Contract) sdkadapter.Contract {
+func cloneSDKContractEvent(c sdkadapter.Contract) sdkadapter.Contract {
 	return sdkadapter.Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
@@ -4957,8 +5932,27 @@ func (e *engine) apiErr(opKind OpKind, msg sdkadapter.APIError) error {
 	}
 }
 
-func isOrderCancellationNotice(msg sdkadapter.APIError) bool {
-	return msg.Code == 202
+func isOrderInformationalNotice(msg sdkadapter.APIError) bool {
+	if msg.Code == 201 &&
+		strings.Contains(msg.Message, "too late to replace") &&
+		strings.Contains(msg.Message, "cancelled already") {
+		return true
+	}
+	switch msg.Code {
+	case 202, 399:
+		return true
+	default:
+		return false
+	}
+}
+
+func isLateTerminalOrderNotice(route *orderRoute) bool {
+	switch route.terminalStatus {
+	case OrderStatusFilled, OrderStatusCancelled, OrderStatusApiCancelled:
+		return true
+	default:
+		return false
+	}
 }
 
 func (e *engine) emitGap() {
@@ -5010,7 +6004,7 @@ func (e *engine) dispatchObservedOpenOrder(msg sdkadapter.OpenOrder) {
 		return
 	}
 
-	order, err := fromCodecOpenOrder(msg)
+	order, err := fromSDKOpenOrder(msg)
 	if err != nil {
 		if orderObserved && !orderRoute.closed {
 			orderRoute.closed = true
@@ -5039,7 +6033,7 @@ func (e *engine) dispatchObservedOrderStatus(msg sdkadapter.OrderStatus) {
 		return
 	}
 
-	status, err := fromCodecOrderStatus(msg)
+	status, err := fromSDKOrderStatus(msg)
 	if err != nil {
 		orderRoute.closed = true
 		orderRoute.handle.emitOrderError(err)
@@ -5051,6 +6045,7 @@ func (e *engine) dispatchObservedOrderStatus(msg sdkadapter.OrderStatus) {
 		return
 	}
 	if IsTerminalOrderStatus(status.Status) {
+		orderRoute.terminalStatus = status.Status
 		e.scheduleTerminalOrderClose(msg.OrderID, orderRoute)
 	}
 }
@@ -5106,7 +6101,7 @@ func (e *engine) routeCommissionReport(report sdkadapter.CommissionReport) {
 	// handle — drop the event and log so the problem is observable.
 	if orderID, ok := e.execToOrder[report.ExecID]; ok {
 		if or, ok := e.orders[orderID]; ok && !or.closed {
-			cr, err := fromCodecCommission(report)
+			cr, err := fromSDKCommission(report)
 			if err != nil {
 				e.cfg.logger.Warn("ibkr: drop commission report on decode error",
 					"order_id", orderID, "exec_id", report.ExecID, "err", err)
@@ -5130,7 +6125,7 @@ func (e *engine) dispatchExecutionToOrder(m sdkadapter.ExecutionDetail) {
 	// Per-order dispatch: the order is live on the server, so a decode
 	// failure must not tear down the handle — drop the event and log so the
 	// problem is observable.
-	exec, err := fromCodecExecution(m)
+	exec, err := fromSDKExecution(m)
 	if err != nil {
 		e.cfg.logger.Warn("ibkr: drop execution detail on decode error",
 			"order_id", m.OrderID, "exec_id", m.ExecID, "err", err)
@@ -5149,7 +6144,7 @@ func (e *engine) undeliveredCommissions(reqID int, execID string) []sdkadapter.C
 
 func (e *engine) emitUndeliveredExecutionCommissions(reqID int, execID string, sub *Subscription[ExecutionUpdate]) bool {
 	for _, commissionMsg := range e.undeliveredCommissions(reqID, execID) {
-		report, err := fromCodecCommission(commissionMsg)
+		report, err := fromSDKCommission(commissionMsg)
 		if err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -5244,6 +6239,8 @@ func messageReqID(msg any) (int, bool) {
 		return m.ReqID, true
 	case sdkadapter.SoftDollarTiersResponse:
 		return m.ReqID, true
+	case sdkadapter.ReplaceFAEnd:
+		return m.ReqID, true
 	case sdkadapter.WSHMetaDataResponse:
 		return m.ReqID, true
 	case sdkadapter.WSHEventDataResponse:
@@ -5263,7 +6260,7 @@ func messageReqID(msg any) (int, bool) {
 	}
 }
 
-func toCodecContract(c Contract) sdkadapter.Contract {
+func toSDKContract(c Contract) sdkadapter.Contract {
 	return sdkadapter.Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
@@ -5280,7 +6277,17 @@ func toCodecContract(c Contract) sdkadapter.Contract {
 	}
 }
 
-func fromCodecContract(c sdkadapter.Contract) Contract {
+func cloneSDKOpenOrderRecord(order sdkadapter.OpenOrder) sdkadapter.OpenOrder {
+	order.Contract = cloneSDKContractEvent(order.Contract)
+	order.ComboLegs = append([]sdkadapter.ComboLeg(nil), order.ComboLegs...)
+	order.OrderComboLegPrices = append([]string(nil), order.OrderComboLegPrices...)
+	order.SmartComboRouting = append([]sdkadapter.TagValue(nil), order.SmartComboRouting...)
+	order.AlgoParams = append([]sdkadapter.TagValue(nil), order.AlgoParams...)
+	order.Conditions = append([]sdkadapter.OrderCondition(nil), order.Conditions...)
+	return order
+}
+
+func fromSDKContract(c sdkadapter.Contract) Contract {
 	return Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
@@ -5297,13 +6304,13 @@ func fromCodecContract(c sdkadapter.Contract) Contract {
 	}
 }
 
-func fromCodecContractDetails(m sdkadapter.ContractDetails) (ContractDetails, error) {
+func fromSDKContractDetails(m sdkadapter.ContractDetails) (ContractDetails, error) {
 	minTick, err := parseOptionalDecimal(m.MinTick, "contract details min tick")
 	if err != nil {
 		return ContractDetails{}, err
 	}
 	return ContractDetails{
-		Contract:   fromCodecContract(m.Contract),
+		Contract:   fromSDKContract(m.Contract),
 		MarketName: m.MarketName,
 		LongName:   m.LongName,
 		MinTick:    minTick,
@@ -5311,7 +6318,7 @@ func fromCodecContractDetails(m sdkadapter.ContractDetails) (ContractDetails, er
 	}, nil
 }
 
-func fromCodecBar(m sdkadapter.HistoricalBar) (Bar, error) {
+func fromSDKBar(m sdkadapter.HistoricalBar) (Bar, error) {
 	ts, err := parseBarTime(m.Time)
 	if err != nil {
 		return Bar{}, err
@@ -5372,11 +6379,11 @@ func parseBarTime(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("ibkr: parse bar time %q", raw)
 }
 
-func fromCodecRealtimeBar(m sdkadapter.RealTimeBar) (Bar, error) {
-	return fromCodecBar(sdkadapter.HistoricalBar(m))
+func fromSDKRealtimeBar(m sdkadapter.RealTimeBar) (Bar, error) {
+	return fromSDKBar(sdkadapter.HistoricalBar(m))
 }
 
-func fromCodecMarketDepth(m sdkadapter.MarketDepthUpdate) (DepthRow, error) {
+func fromSDKMarketDepth(m sdkadapter.MarketDepthUpdate) (DepthRow, error) {
 	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth price: %w", err)
@@ -5394,7 +6401,7 @@ func fromCodecMarketDepth(m sdkadapter.MarketDepthUpdate) (DepthRow, error) {
 	}, nil
 }
 
-func fromCodecMarketDepthL2(m sdkadapter.MarketDepthL2Update) (DepthRow, error) {
+func fromSDKMarketDepthL2(m sdkadapter.MarketDepthL2Update) (DepthRow, error) {
 	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 price: %w", err)
@@ -5462,7 +6469,7 @@ func parseHeadTimestamp(raw string) (time.Time, error) {
 	return ts.UTC(), nil
 }
 
-func fromCodecPosition(m sdkadapter.Position) (Position, error) {
+func fromSDKPosition(m sdkadapter.Position) (Position, error) {
 	position, err := decimal.NewFromString(m.Position)
 	if err != nil {
 		return Position{}, err
@@ -5473,13 +6480,13 @@ func fromCodecPosition(m sdkadapter.Position) (Position, error) {
 	}
 	return Position{
 		Account:  m.Account,
-		Contract: fromCodecContract(m.Contract),
+		Contract: fromSDKContract(m.Contract),
 		Position: position,
 		AvgCost:  avgCost,
 	}, nil
 }
 
-func fromCodecOpenOrder(m sdkadapter.OpenOrder) (OpenOrder, error) {
+func fromSDKOpenOrder(m sdkadapter.OpenOrder) (OpenOrder, error) {
 	quantity, err := parseOptionalDecimal(m.Quantity, "open order quantity")
 	if err != nil {
 		return OpenOrder{}, err
@@ -5539,7 +6546,7 @@ func fromCodecOpenOrder(m sdkadapter.OpenOrder) (OpenOrder, error) {
 	return OpenOrder{
 		OrderID:               m.OrderID,
 		Account:               m.Account,
-		Contract:              fromCodecContract(m.Contract),
+		Contract:              fromSDKContract(m.Contract),
 		Action:                OrderAction(m.Action),
 		OrderType:             OrderType(m.OrderType),
 		Status:                OrderStatus(m.Status),
@@ -5559,12 +6566,12 @@ func fromCodecOpenOrder(m sdkadapter.OpenOrder) (OpenOrder, error) {
 		Hidden:                hidden,
 		GoodAfterTime:         m.GoodAfterTime,
 		ParentID:              parentID,
-		ComboLegs:             comboLegsFromCodec(m.ComboLegs),
+		ComboLegs:             comboLegsFromSDK(m.ComboLegs),
 		OrderComboLegPrices:   append([]string(nil), m.OrderComboLegPrices...),
-		SmartComboRouting:     tagValuesFromCodec(m.SmartComboRouting),
+		SmartComboRouting:     tagValuesFromSDK(m.SmartComboRouting),
 		AlgoStrategy:          m.AlgoStrategy,
-		AlgoParams:            tagValuesFromCodec(m.AlgoParams),
-		Conditions:            orderConditionsFromCodec(m.Conditions),
+		AlgoParams:            tagValuesFromSDK(m.AlgoParams),
+		Conditions:            orderConditionsFromSDK(m.Conditions),
 		ConditionsIgnoreRTH:   m.ConditionsIgnoreRTH == "1",
 		ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
 		Commission:            commission,
@@ -5574,7 +6581,7 @@ func fromCodecOpenOrder(m sdkadapter.OpenOrder) (OpenOrder, error) {
 	}, nil
 }
 
-func fromCodecOrderStatus(m sdkadapter.OrderStatus) (OrderStatusUpdate, error) {
+func fromSDKOrderStatus(m sdkadapter.OrderStatus) (OrderStatusUpdate, error) {
 	filled, err := parseOptionalDecimal(m.Filled, "order status filled")
 	if err != nil {
 		return OrderStatusUpdate{}, err
@@ -5622,7 +6629,7 @@ func fromCodecOrderStatus(m sdkadapter.OrderStatus) (OrderStatusUpdate, error) {
 	}, nil
 }
 
-func fromCodecExecution(m sdkadapter.ExecutionDetail) (ExecutionUpdate, error) {
+func fromSDKExecution(m sdkadapter.ExecutionDetail) (ExecutionUpdate, error) {
 	shares, err := parseRequiredDecimal(m.Shares, "execution shares")
 	if err != nil {
 		return ExecutionUpdate{}, err
@@ -5676,7 +6683,7 @@ func parseExecutionTime(raw string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("ibkr: parse execution time %q", raw)
 }
 
-func fromCodecCommission(m sdkadapter.CommissionReport) (CommissionReport, error) {
+func fromSDKCommission(m sdkadapter.CommissionReport) (CommissionReport, error) {
 	// Commission and RealizedPNL are parsed as optional so that the Java
 	// reference encoding of "unset" — either an empty string or the literal
 	// Double.MAX_VALUE sentinel — decodes to a zero decimal instead of an error.

@@ -1,0 +1,125 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T17:44:25Z",
+    "scenario": "account_summary_snapshot",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED and account summary values replaced with REDACTED_VALUE; fixture preserves real SDK account summary callback shape",
+    "source_sha256": "64adc4661bdaeba4b6c40b3808159194a32cd302b65978a17d0a622cef2b7364"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 19:44:25 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "AccountSummary": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Tag": "BuyingPower",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_summary",
+      "ReqID": 121
+    },
+    {
+      "AccountSummary": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Tag": "NetLiquidation",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_summary",
+      "ReqID": 121
+    },
+    {
+      "AccountSummary": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Tag": "BuyingPower",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_summary",
+      "ReqID": 121
+    },
+    {
+      "AccountSummary": {
+        "Account": "DU_REDACTED",
+        "Currency": "EUR",
+        "Tag": "NetLiquidation",
+        "Value": "REDACTED_VALUE"
+      },
+      "Kind": "account_summary",
+      "ReqID": 121
+    },
+    {
+      "Kind": "account_summary_end",
+      "ReqID": 121
+    },
+    {
+      "Kind": "account_summary_end",
+      "ReqID": 121
+    }
+  ]
+}

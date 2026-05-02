@@ -225,12 +225,12 @@ must prove each row before replacing the native engine.
 | Head timestamp | `reqHeadTimestamp`, `cancelHeadTimestamp` | `headTimestamp` | Keyed one-shot with cancel/error behavior. |
 | Histogram | `reqHistogramData`, `cancelHistogramData` | `histogramData` | Keyed one-shot; vector copy. |
 | Historical ticks | `reqHistoricalTicks` | `historicalTicks`, `historicalTicksBidAsk`, `historicalTicksLast` | Keyed one-shot; support midpoint, bid/ask, last, ignoreSize, start/end windows, tick attributes. |
-| Orders place/modify | `placeOrder` | `openOrder`, embedded order state, `orderStatus`, `execDetails`, `commissionReport`, `error` | Preserve auto-allocated IDs, handle lifecycle, order state copies, combo legs, conditions, advanced attributes, zero/unset values, and protobuf-backed new fields. |
+| Orders place/modify | `placeOrder` | `openOrder`, embedded order state, `orderStatus`, `execDetails`, `commissionAndFeesReport`, `error` | SDK-native for the current public order fields; remaining gaps are paper live evidence, replay fixtures, orderBound, and any future public expansion into protobuf-only fields. |
 | Cancel order | `cancelOrder` | `orderStatus`, `error` | Preserve direct cancel and `OrderHandle.Cancel` behavior including terminal-state errors. |
 | Global cancel | `reqGlobalCancel` | order callbacks and errors | Fire-and-observe semantics with existing order handles updated. |
-| Open orders | `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders` | `openOrder`, `openOrderEnd`, `orderStatus`, `orderBound` | Preserve three scopes, client ID 0 behavior, order-bound classification, and singleton observer routing. |
-| Completed orders | `reqCompletedOrders` | `completedOrder`, `completedOrdersEnd` | Full detail extraction beyond current simplified fields if SDK exposes all fields. |
-| Executions | `reqExecutions` | `execDetails`, `execDetailsEnd`, `commissionReport` | Preserve execution filter layout, commission correlation, quantity decimals, and replayable ordering. |
+| Open orders | `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders` | `openOrder`, `openOrderEnd`, `orderStatus`, `orderBound` | SDK-native for the three public scopes and singleton observer routing; remaining gap is `orderBound` and fresh SDK live evidence. |
+| Completed orders | `reqCompletedOrders` | `completedOrder`, `completedOrdersEnd` | SDK-native for the current simplified public result; full detail extraction remains deferred if the public type expands. |
+| Executions | `reqExecutions` | `execDetails`, `execDetailsEnd`, `commissionAndFeesReport` | Preserve execution filter layout, commission correlation, quantity decimals, and replayable ordering. |
 | Option calculations | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice` | `tickOptionComputation`, errors | Keyed one-shot/cancel flow with unset values and option computation fields. |
 | Option exercise | `exerciseOptions` | errors and downstream account/order effects | Fire-and-forget semantics plus live-derived success/error evidence. |
 | News providers | `reqNewsProviders` | `newsProviders` | Singleton one-shot. |

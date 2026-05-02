@@ -1,0 +1,147 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T16:37:33Z",
+    "scenario": "quote_stream_short",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "a514f2e78dc4c5fb66ca5b7e9b21a322ce2dcadf8d87ee7d5324d408d639e72e"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 18:37:31 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "Kind": "tick_req_params",
+      "ReqID": 301,
+      "TickReqParams": {
+        "BBOExchange": "9c0001",
+        "MinTick": "0.01",
+        "SnapshotPermissions": 4
+      }
+    },
+    {
+      "Kind": "market_data_type",
+      "MarketDataType": 3,
+      "ReqID": 301
+    },
+    {
+      "APIError": {
+        "Code": 10167,
+        "Message": "Requested market data is not subscribed. Displaying delayed market data.",
+        "Op": "api",
+        "ReqID": 301
+      },
+      "Kind": "api_error",
+      "ReqID": 301
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 301,
+      "TickPrice": {
+        "Price": "287.22000000000003",
+        "TickType": 72
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 301,
+      "TickPrice": {
+        "Price": "278.37",
+        "TickType": 73
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 301,
+      "TickSize": {
+        "Size": "+2024311E+0",
+        "TickType": 74
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 301,
+      "TickPrice": {
+        "Price": "271.35000000000002",
+        "TickType": 75
+      }
+    },
+    {
+      "Kind": "tick_price",
+      "ReqID": 301,
+      "TickPrice": {
+        "Price": "280.06999999999999",
+        "TickType": 68
+      }
+    },
+    {
+      "Kind": "tick_size",
+      "ReqID": 301,
+      "TickSize": {
+        "Size": "+3000E+0",
+        "TickType": 71
+      }
+    },
+    {
+      "Kind": "tick_string",
+      "ReqID": 301,
+      "TickString": {
+        "TickType": 88,
+        "Value": "1777679999"
+      }
+    }
+  ]
+}

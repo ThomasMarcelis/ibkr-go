@@ -43,7 +43,7 @@ func TestRouteCommissionReportLogsAndDropsOnDecodeError(t *testing.T) {
 
 	// A malformed decimal (not the sentinel, not empty) is the one case
 	// that can still reach the engine after W1: the codec accepted it but
-	// fromCodecCommission rejects it.
+	// fromSDKCommission rejects it.
 	e.routeCommissionReport(sdkadapter.CommissionReport{
 		ExecID:     "exec-bad",
 		Commission: "not-a-number",
@@ -120,7 +120,7 @@ func TestDispatchExecutionToOrderLogsAndDropsOnDecodeError(t *testing.T) {
 	handle := newOrderHandle(77)
 	e.orders[77] = &orderRoute{orderID: 77, handle: handle}
 
-	// Malformed Time field makes fromCodecExecution fail deterministically.
+	// Malformed Time field makes fromSDKExecution fail deterministically.
 	e.dispatchExecutionToOrder(sdkadapter.ExecutionDetail{
 		ReqID:   1,
 		OrderID: 77,

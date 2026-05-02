@@ -1,3 +1,5 @@
+//go:build legacy_native_socket
+
 package codec
 
 // MinServerVersion constants gate conditional fields in the wire protocol.

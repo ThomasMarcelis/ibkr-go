@@ -7,10 +7,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) sdkadapter.PlaceOrderRequest {
+func toSDKPlaceOrder(orderID int64, req PlaceOrderRequest) sdkadapter.PlaceOrderRequest {
 	return sdkadapter.PlaceOrderRequest{
 		OrderID:  orderID,
-		Contract: toCodecContract(req.Contract),
+		Contract: toSDKContract(req.Contract),
 
 		Action:        string(req.Order.Action),
 		TotalQuantity: decimalOrEmpty(req.Order.Quantity),
@@ -29,9 +29,9 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) sdkadapter.PlaceOrd
 		TriggerMethod:               strconv.Itoa(req.Order.TriggerMethod),
 		OutsideRTH:                  boolToString(req.Order.OutsideRTH),
 		DisplaySize:                 strconv.Itoa(req.Order.DisplaySize),
-		ComboLegs:                   comboLegsToCodec(req.Order.ComboLegs),
+		ComboLegs:                   comboLegsToSDK(req.Order.ComboLegs),
 		OrderComboLegPrices:         append([]string(nil), req.Order.OrderComboLegPrices...),
-		SmartComboRoutingParams:     tagValuesToCodec(req.Order.SmartComboRoutingParams),
+		SmartComboRoutingParams:     tagValuesToSDK(req.Order.SmartComboRoutingParams),
 		ExemptCode:                  "-1",
 		GoodAfterTime:               req.Order.GoodAfterTime,
 		GoodTillDate:                req.Order.GoodTillDate,
@@ -49,9 +49,9 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) sdkadapter.PlaceOrd
 		HedgeType:                   req.Order.HedgeType,
 		HedgeParam:                  req.Order.HedgeParam,
 		AlgoStrategy:                req.Order.AlgoStrategy,
-		AlgoParams:                  tagValuesToCodec(req.Order.AlgoParams),
+		AlgoParams:                  tagValuesToSDK(req.Order.AlgoParams),
 		WhatIf:                      optBoolToString(req.Order.WhatIf, ""),
-		Conditions:                  orderConditionsToCodec(req.Order.Conditions),
+		Conditions:                  orderConditionsToSDK(req.Order.Conditions),
 		ConditionsIgnoreRTH:         boolToString(req.Order.ConditionsIgnoreRTH),
 		ConditionsCancelOrder:       boolToString(req.Order.ConditionsCancelOrder),
 		AdjustedOrderType:           string(req.Order.AdjustedOrderType),
@@ -103,7 +103,7 @@ func optBoolToString(b *bool, dflt string) string {
 	return "0"
 }
 
-func comboLegsToCodec(legs []ComboLeg) []sdkadapter.ComboLeg {
+func comboLegsToSDK(legs []ComboLeg) []sdkadapter.ComboLeg {
 	if len(legs) == 0 {
 		return nil
 	}
@@ -123,7 +123,7 @@ func comboLegsToCodec(legs []ComboLeg) []sdkadapter.ComboLeg {
 	return out
 }
 
-func tagValuesToCodec(values []TagValue) []sdkadapter.TagValue {
+func tagValuesToSDK(values []TagValue) []sdkadapter.TagValue {
 	if len(values) == 0 {
 		return nil
 	}
@@ -134,7 +134,7 @@ func tagValuesToCodec(values []TagValue) []sdkadapter.TagValue {
 	return out
 }
 
-func orderConditionsToCodec(values []OrderCondition) []sdkadapter.OrderCondition {
+func orderConditionsToSDK(values []OrderCondition) []sdkadapter.OrderCondition {
 	if len(values) == 0 {
 		return nil
 	}
@@ -155,7 +155,7 @@ func orderConditionsToCodec(values []OrderCondition) []sdkadapter.OrderCondition
 	return out
 }
 
-func comboLegsFromCodec(legs []sdkadapter.ComboLeg) []ComboLeg {
+func comboLegsFromSDK(legs []sdkadapter.ComboLeg) []ComboLeg {
 	if len(legs) == 0 {
 		return nil
 	}
@@ -177,7 +177,7 @@ func comboLegsFromCodec(legs []sdkadapter.ComboLeg) []ComboLeg {
 	return out
 }
 
-func tagValuesFromCodec(values []sdkadapter.TagValue) []TagValue {
+func tagValuesFromSDK(values []sdkadapter.TagValue) []TagValue {
 	if len(values) == 0 {
 		return nil
 	}
@@ -188,7 +188,7 @@ func tagValuesFromCodec(values []sdkadapter.TagValue) []TagValue {
 	return out
 }
 
-func orderConditionsFromCodec(values []sdkadapter.OrderCondition) []OrderCondition {
+func orderConditionsFromSDK(values []sdkadapter.OrderCondition) []OrderCondition {
 	if len(values) == 0 {
 		return nil
 	}

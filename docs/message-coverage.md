@@ -1,8 +1,10 @@
 # Message Coverage
 
-This matrix tracks the implemented message surface. The codec uses real IBKR
-integer message IDs and field layouts validated against server_version 200
-captures.
+This legacy matrix tracks the socket-era message surface behind the non-default
+`legacy_native_socket` build tag. It remains useful as historical capture
+evidence, but it is not the production runtime or the SDK migration completion
+matrix. Current production coverage is tracked in
+[`sdk-migration-matrix.md`](sdk-migration-matrix.md).
 
 ## Bootstrap
 

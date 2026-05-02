@@ -1,9 +1,5 @@
 package sdkadapter
 
-type Message interface {
-	messageName() string
-}
-
 // Contract holds the fields used for contract identification through the SDK adapter.
 type Contract struct {
 	ConID           int
@@ -25,49 +21,33 @@ type StartAPI struct {
 	OptionalCapabilities string
 }
 
-func (StartAPI) messageName() string { return "start_api" }
-
 type ServerInfo struct {
 	ServerVersion  int
 	ConnectionTime string
 }
 
-func (ServerInfo) messageName() string { return "server_info" }
-
 type ManagedAccounts struct {
 	Accounts []string
 }
-
-func (ManagedAccounts) messageName() string { return "managed_accounts" }
 
 type NextValidID struct {
 	OrderID int64
 }
 
-func (NextValidID) messageName() string { return "next_valid_id" }
-
 type CurrentTime struct {
 	Time string
 }
-
-func (CurrentTime) messageName() string { return "current_time" }
 
 // CurrentTimeRequest is the outbound reqCurrentTime message (OUT 49). The
 // server responds asynchronously with a CurrentTime frame using the same
 // numeric msg_id.
 type CurrentTimeRequest struct{}
 
-func (CurrentTimeRequest) messageName() string { return "req_current_time" }
-
 type CurrentTimeMillis struct {
 	Time string
 }
 
-func (CurrentTimeMillis) messageName() string { return "current_time_millis" }
-
 type CurrentTimeMillisRequest struct{}
-
-func (CurrentTimeMillisRequest) messageName() string { return "req_current_time_millis" }
 
 // ReqIDsRequest is the outbound reqIds message (OUT 8). The server responds
 // with a NextValidID frame (msg_id 9) carrying the next available order ID.
@@ -75,8 +55,6 @@ func (CurrentTimeMillisRequest) messageName() string { return "req_current_time_
 type ReqIDsRequest struct {
 	NumIDs int
 }
-
-func (ReqIDsRequest) messageName() string { return "req_ids" }
 
 type APIError struct {
 	ReqID                   int
@@ -86,14 +64,10 @@ type APIError struct {
 	ErrorTimeMs             string
 }
 
-func (APIError) messageName() string { return "api_error" }
-
 type ContractDetailsRequest struct {
 	ReqID    int
 	Contract Contract
 }
-
-func (ContractDetailsRequest) messageName() string { return "req_contract_details" }
 
 type ContractDetails struct {
 	ReqID      int
@@ -104,13 +78,9 @@ type ContractDetails struct {
 	TimeZoneID string
 }
 
-func (ContractDetails) messageName() string { return "contract_details" }
-
 type ContractDetailsEnd struct {
 	ReqID int
 }
-
-func (ContractDetailsEnd) messageName() string { return "contract_details_end" }
 
 type HistoricalBarsRequest struct {
 	ReqID        int
@@ -122,8 +92,6 @@ type HistoricalBarsRequest struct {
 	UseRTH       bool
 	KeepUpToDate bool
 }
-
-func (HistoricalBarsRequest) messageName() string { return "req_historical_bars" }
 
 type HistoricalBar struct {
 	ReqID  int
@@ -137,13 +105,9 @@ type HistoricalBar struct {
 	Count  string
 }
 
-func (HistoricalBar) messageName() string { return "historical_bar" }
-
 type HistoricalBarsEnd struct {
 	ReqID int
 }
-
-func (HistoricalBarsEnd) messageName() string { return "historical_bars_end" }
 
 type AccountSummaryRequest struct {
 	ReqID   int
@@ -151,13 +115,9 @@ type AccountSummaryRequest struct {
 	Tags    []string
 }
 
-func (AccountSummaryRequest) messageName() string { return "req_account_summary" }
-
 type CancelAccountSummary struct {
 	ReqID int
 }
-
-func (CancelAccountSummary) messageName() string { return "cancel_account_summary" }
 
 type AccountSummaryValue struct {
 	ReqID    int
@@ -167,21 +127,13 @@ type AccountSummaryValue struct {
 	Currency string
 }
 
-func (AccountSummaryValue) messageName() string { return "account_summary" }
-
 type AccountSummaryEnd struct {
 	ReqID int
 }
 
-func (AccountSummaryEnd) messageName() string { return "account_summary_end" }
-
 type PositionsRequest struct{}
 
-func (PositionsRequest) messageName() string { return "req_positions" }
-
 type CancelPositions struct{}
-
-func (CancelPositions) messageName() string { return "cancel_positions" }
 
 type Position struct {
 	Account  string
@@ -190,11 +142,7 @@ type Position struct {
 	AvgCost  string
 }
 
-func (Position) messageName() string { return "position" }
-
 type PositionEnd struct{}
-
-func (PositionEnd) messageName() string { return "position_end" }
 
 type QuoteRequest struct {
 	ReqID        int
@@ -203,13 +151,9 @@ type QuoteRequest struct {
 	GenericTicks []string
 }
 
-func (QuoteRequest) messageName() string { return "req_quote" }
-
 type CancelQuote struct {
 	ReqID int
 }
-
-func (CancelQuote) messageName() string { return "cancel_quote" }
 
 type TickPrice struct {
 	ReqID    int
@@ -219,28 +163,20 @@ type TickPrice struct {
 	AttrMask int    // tick attrib bitmask
 }
 
-func (TickPrice) messageName() string { return "tick_price" }
-
 type TickSize struct {
 	ReqID    int
 	TickType int
 	Size     string
 }
 
-func (TickSize) messageName() string { return "tick_size" }
-
 type MarketDataType struct {
 	ReqID    int
 	DataType int
 }
 
-func (MarketDataType) messageName() string { return "market_data_type" }
-
 type TickSnapshotEnd struct {
 	ReqID int
 }
-
-func (TickSnapshotEnd) messageName() string { return "tick_snapshot_end" }
 
 type RealTimeBarsRequest struct {
 	ReqID      int
@@ -249,13 +185,9 @@ type RealTimeBarsRequest struct {
 	UseRTH     bool
 }
 
-func (RealTimeBarsRequest) messageName() string { return "req_realtime_bars" }
-
 type CancelRealTimeBars struct {
 	ReqID int
 }
-
-func (CancelRealTimeBars) messageName() string { return "cancel_realtime_bars" }
 
 type RealTimeBar struct {
 	ReqID  int
@@ -269,17 +201,11 @@ type RealTimeBar struct {
 	Count  string
 }
 
-func (RealTimeBar) messageName() string { return "realtime_bar" }
-
 type OpenOrdersRequest struct {
 	Scope string
 }
 
-func (OpenOrdersRequest) messageName() string { return "req_open_orders" }
-
 type CancelOpenOrders struct{}
-
-func (CancelOpenOrders) messageName() string { return "cancel_open_orders" }
 
 type ComboLeg struct {
 	ConID              int
@@ -367,11 +293,7 @@ type OpenOrder struct {
 	ParentID  string
 }
 
-func (OpenOrder) messageName() string { return "open_order" }
-
 type OpenOrderEnd struct{}
-
-func (OpenOrderEnd) messageName() string { return "open_order_end" }
 
 type OrderStatus struct {
 	OrderID       int64
@@ -387,15 +309,11 @@ type OrderStatus struct {
 	MktCapPrice   string
 }
 
-func (OrderStatus) messageName() string { return "order_status" }
-
 type ExecutionsRequest struct {
 	ReqID   int
 	Account string
 	Symbol  string
 }
-
-func (ExecutionsRequest) messageName() string { return "req_executions" }
 
 type ExecutionDetail struct {
 	ReqID   int
@@ -409,13 +327,9 @@ type ExecutionDetail struct {
 	Time    string
 }
 
-func (ExecutionDetail) messageName() string { return "execution_detail" }
-
 type ExecutionsEnd struct {
 	ReqID int
 }
-
-func (ExecutionsEnd) messageName() string { return "executions_end" }
 
 type CommissionReport struct {
 	ExecID      string
@@ -424,23 +338,17 @@ type CommissionReport struct {
 	RealizedPNL string
 }
 
-func (CommissionReport) messageName() string { return "commission_report" }
-
 type TickGeneric struct {
 	ReqID    int
 	TickType int
 	Value    string
 }
 
-func (TickGeneric) messageName() string { return "tick_generic" }
-
 type TickString struct {
 	ReqID    int
 	TickType int
 	Value    string
 }
-
-func (TickString) messageName() string { return "tick_string" }
 
 type TickReqParams struct {
 	ReqID               int
@@ -449,29 +357,19 @@ type TickReqParams struct {
 	SnapshotPermissions int
 }
 
-func (TickReqParams) messageName() string { return "tick_req_params" }
-
 type ReqMarketDataType struct {
 	DataType int
 }
-
-func (ReqMarketDataType) messageName() string { return "req_market_data_type" }
 
 type CancelHistoricalData struct {
 	ReqID int
 }
 
-func (CancelHistoricalData) messageName() string { return "cancel_historical_data" }
-
 type FamilyCodesRequest struct{}
-
-func (FamilyCodesRequest) messageName() string { return "req_family_codes" }
 
 type FamilyCodes struct {
 	Codes []FamilyCodeEntry
 }
-
-func (FamilyCodes) messageName() string { return "family_codes" }
 
 type FamilyCodeEntry struct {
 	AccountID  string
@@ -480,13 +378,9 @@ type FamilyCodeEntry struct {
 
 type MktDepthExchangesRequest struct{}
 
-func (MktDepthExchangesRequest) messageName() string { return "req_mkt_depth_exchanges" }
-
 type MktDepthExchanges struct {
 	Exchanges []DepthExchangeEntry
 }
-
-func (MktDepthExchanges) messageName() string { return "mkt_depth_exchanges" }
 
 type DepthExchangeEntry struct {
 	Exchange        string
@@ -498,13 +392,9 @@ type DepthExchangeEntry struct {
 
 type NewsProvidersRequest struct{}
 
-func (NewsProvidersRequest) messageName() string { return "req_news_providers" }
-
 type NewsProviders struct {
 	Providers []NewsProviderEntry
 }
-
-func (NewsProviders) messageName() string { return "news_providers" }
 
 type NewsProviderEntry struct {
 	Code string
@@ -513,33 +403,23 @@ type NewsProviderEntry struct {
 
 type ScannerParametersRequest struct{}
 
-func (ScannerParametersRequest) messageName() string { return "req_scanner_parameters" }
-
 type ScannerParameters struct {
 	XML string
 }
 
-func (ScannerParameters) messageName() string { return "scanner_parameters" }
-
 type UserInfoRequest struct {
 	ReqID int
 }
-
-func (UserInfoRequest) messageName() string { return "req_user_info" }
 
 type UserInfo struct {
 	ReqID           int
 	WhiteBrandingID string
 }
 
-func (UserInfo) messageName() string { return "user_info" }
-
 type MatchingSymbolsRequest struct {
 	ReqID   int
 	Pattern string
 }
-
-func (MatchingSymbolsRequest) messageName() string { return "req_matching_symbols" }
 
 type SymbolSample struct {
 	ConID              int
@@ -557,8 +437,6 @@ type MatchingSymbols struct {
 	Symbols []SymbolSample
 }
 
-func (MatchingSymbols) messageName() string { return "matching_symbols" }
-
 type HeadTimestampRequest struct {
 	ReqID      int
 	Contract   Contract
@@ -566,26 +444,18 @@ type HeadTimestampRequest struct {
 	UseRTH     bool
 }
 
-func (HeadTimestampRequest) messageName() string { return "req_head_timestamp" }
-
 type HeadTimestamp struct {
 	ReqID     int
 	Timestamp string
 }
 
-func (HeadTimestamp) messageName() string { return "head_timestamp" }
-
 type CancelHeadTimestamp struct {
 	ReqID int
 }
 
-func (CancelHeadTimestamp) messageName() string { return "cancel_head_timestamp" }
-
 type MarketRuleRequest struct {
 	MarketRuleID int
 }
-
-func (MarketRuleRequest) messageName() string { return "req_market_rule" }
 
 type PriceIncrement struct {
 	LowEdge   string
@@ -597,13 +467,9 @@ type MarketRule struct {
 	Increments   []PriceIncrement
 }
 
-func (MarketRule) messageName() string { return "market_rule" }
-
 type CompletedOrdersRequest struct {
 	APIOnly bool
 }
-
-func (CompletedOrdersRequest) messageName() string { return "req_completed_orders" }
 
 type CompletedOrder struct {
 	Contract  Contract
@@ -615,11 +481,7 @@ type CompletedOrder struct {
 	Remaining string
 }
 
-func (CompletedOrder) messageName() string { return "completed_order" }
-
 type CompletedOrderEnd struct{}
-
-func (CompletedOrderEnd) messageName() string { return "completed_order_end" }
 
 // Account updates (OUT 6 / IN 6,7,8,54)
 
@@ -628,16 +490,12 @@ type AccountUpdatesRequest struct {
 	Account   string
 }
 
-func (AccountUpdatesRequest) messageName() string { return "req_account_updates" }
-
 type UpdateAccountValue struct {
 	Key      string
 	Value    string
 	Currency string
 	Account  string
 }
-
-func (UpdateAccountValue) messageName() string { return "update_account_value" }
 
 type UpdatePortfolio struct {
 	Contract      Contract
@@ -650,19 +508,13 @@ type UpdatePortfolio struct {
 	Account       string
 }
 
-func (UpdatePortfolio) messageName() string { return "update_portfolio" }
-
 type UpdateAccountTime struct {
 	Timestamp string
 }
 
-func (UpdateAccountTime) messageName() string { return "update_account_time" }
-
 type AccountDownloadEnd struct {
 	Account string
 }
-
-func (AccountDownloadEnd) messageName() string { return "account_download_end" }
 
 // Account updates multi (OUT 76, cancel OUT 77 / IN 73, 74)
 
@@ -672,13 +524,9 @@ type AccountUpdatesMultiRequest struct {
 	ModelCode string
 }
 
-func (AccountUpdatesMultiRequest) messageName() string { return "req_account_updates_multi" }
-
 type CancelAccountUpdatesMulti struct {
 	ReqID int
 }
-
-func (CancelAccountUpdatesMulti) messageName() string { return "cancel_account_updates_multi" }
 
 type AccountUpdateMultiValue struct {
 	ReqID     int
@@ -689,13 +537,9 @@ type AccountUpdateMultiValue struct {
 	Currency  string
 }
 
-func (AccountUpdateMultiValue) messageName() string { return "account_update_multi" }
-
 type AccountUpdateMultiEnd struct {
 	ReqID int
 }
-
-func (AccountUpdateMultiEnd) messageName() string { return "account_update_multi_end" }
 
 // Positions multi (OUT 74, cancel OUT 75 / IN 71, 72)
 
@@ -705,13 +549,9 @@ type PositionsMultiRequest struct {
 	ModelCode string
 }
 
-func (PositionsMultiRequest) messageName() string { return "req_positions_multi" }
-
 type CancelPositionsMulti struct {
 	ReqID int
 }
-
-func (CancelPositionsMulti) messageName() string { return "cancel_positions_multi" }
 
 type PositionMulti struct {
 	ReqID     int
@@ -722,13 +562,9 @@ type PositionMulti struct {
 	AvgCost   string
 }
 
-func (PositionMulti) messageName() string { return "position_multi" }
-
 type PositionMultiEnd struct {
 	ReqID int
 }
-
-func (PositionMultiEnd) messageName() string { return "position_multi_end" }
 
 // PnL (OUT 92, cancel OUT 93 / IN 94)
 
@@ -738,13 +574,9 @@ type PnLRequest struct {
 	ModelCode string
 }
 
-func (PnLRequest) messageName() string { return "req_pnl" }
-
 type CancelPnL struct {
 	ReqID int
 }
-
-func (CancelPnL) messageName() string { return "cancel_pnl" }
 
 type PnLValue struct {
 	ReqID         int
@@ -752,8 +584,6 @@ type PnLValue struct {
 	UnrealizedPnL string
 	RealizedPnL   string
 }
-
-func (PnLValue) messageName() string { return "pnl" }
 
 // PnL single (OUT 94, cancel OUT 95 / IN 95)
 
@@ -764,13 +594,9 @@ type PnLSingleRequest struct {
 	ConID     int
 }
 
-func (PnLSingleRequest) messageName() string { return "req_pnl_single" }
-
 type CancelPnLSingle struct {
 	ReqID int
 }
-
-func (CancelPnLSingle) messageName() string { return "cancel_pnl_single" }
 
 type PnLSingleValue struct {
 	ReqID         int
@@ -780,8 +606,6 @@ type PnLSingleValue struct {
 	RealizedPnL   string
 	Value         string
 }
-
-func (PnLSingleValue) messageName() string { return "pnl_single" }
 
 // Tick by tick (OUT 97, cancel OUT 98 / IN 99)
 
@@ -793,13 +617,9 @@ type TickByTickRequest struct {
 	IgnoreSize    bool
 }
 
-func (TickByTickRequest) messageName() string { return "req_tick_by_tick" }
-
 type CancelTickByTick struct {
 	ReqID int
 }
-
-func (CancelTickByTick) messageName() string { return "cancel_tick_by_tick" }
 
 type TickByTickData struct {
 	ReqID             int
@@ -819,19 +639,13 @@ type TickByTickData struct {
 	TickAttribBidAsk int
 }
 
-func (TickByTickData) messageName() string { return "tick_by_tick" }
-
 // News bulletins (OUT 12, cancel OUT 13 / IN 14)
 
 type NewsBulletinsRequest struct {
 	AllMessages bool
 }
 
-func (NewsBulletinsRequest) messageName() string { return "req_news_bulletins" }
-
 type CancelNewsBulletins struct{}
-
-func (CancelNewsBulletins) messageName() string { return "cancel_news_bulletins" }
 
 type NewsBulletin struct {
 	MsgID    int
@@ -839,8 +653,6 @@ type NewsBulletin struct {
 	Headline string
 	Source   string
 }
-
-func (NewsBulletin) messageName() string { return "news_bulletin" }
 
 // SecDefOptParams (OUT 78 / IN 75+76)
 
@@ -852,8 +664,6 @@ type SecDefOptParamsRequest struct {
 	UnderlyingConID   int
 }
 
-func (SecDefOptParamsRequest) messageName() string { return "req_sec_def_opt_params" }
-
 type SecDefOptParamsResponse struct {
 	ReqID           int
 	Exchange        string
@@ -864,13 +674,9 @@ type SecDefOptParamsResponse struct {
 	Strikes         []string
 }
 
-func (SecDefOptParamsResponse) messageName() string { return "sec_def_opt_params" }
-
 type SecDefOptParamsEnd struct {
 	ReqID int
 }
-
-func (SecDefOptParamsEnd) messageName() string { return "sec_def_opt_params_end" }
 
 // SmartComponents (OUT 83 / IN 82)
 
@@ -878,8 +684,6 @@ type SmartComponentsRequest struct {
 	ReqID       int
 	BBOExchange string
 }
-
-func (SmartComponentsRequest) messageName() string { return "req_smart_components" }
 
 type SmartComponentEntry struct {
 	BitNumber      int
@@ -892,8 +696,6 @@ type SmartComponentsResponse struct {
 	Components []SmartComponentEntry
 }
 
-func (SmartComponentsResponse) messageName() string { return "smart_components" }
-
 // CalcImpliedVolatility (OUT 54 / cancel OUT 56) / CalcOptionPrice (OUT 55 / cancel OUT 57)
 
 type CalcImpliedVolatilityRequest struct {
@@ -903,13 +705,9 @@ type CalcImpliedVolatilityRequest struct {
 	UnderPrice  string
 }
 
-func (CalcImpliedVolatilityRequest) messageName() string { return "req_calc_implied_volatility" }
-
 type CancelCalcImpliedVolatility struct {
 	ReqID int
 }
-
-func (CancelCalcImpliedVolatility) messageName() string { return "cancel_calc_implied_volatility" }
 
 type CalcOptionPriceRequest struct {
 	ReqID      int
@@ -918,13 +716,9 @@ type CalcOptionPriceRequest struct {
 	UnderPrice string
 }
 
-func (CalcOptionPriceRequest) messageName() string { return "req_calc_option_price" }
-
 type CancelCalcOptionPrice struct {
 	ReqID int
 }
-
-func (CancelCalcOptionPrice) messageName() string { return "cancel_calc_option_price" }
 
 type TickOptionComputation struct {
 	ReqID      int
@@ -940,8 +734,6 @@ type TickOptionComputation struct {
 	UndPrice   string
 }
 
-func (TickOptionComputation) messageName() string { return "tick_option_computation" }
-
 // HistogramData (OUT 88 / cancel OUT 89 / IN 89)
 
 type HistogramDataRequest struct {
@@ -951,13 +743,9 @@ type HistogramDataRequest struct {
 	Period   string
 }
 
-func (HistogramDataRequest) messageName() string { return "req_histogram_data" }
-
 type CancelHistogramData struct {
 	ReqID int
 }
-
-func (CancelHistogramData) messageName() string { return "cancel_histogram_data" }
 
 type HistogramDataEntry struct {
 	Price string
@@ -968,8 +756,6 @@ type HistogramDataResponse struct {
 	ReqID   int
 	Entries []HistogramDataEntry
 }
-
-func (HistogramDataResponse) messageName() string { return "histogram_data" }
 
 // HistoricalTicks (OUT 96 / IN 96,97,98)
 
@@ -984,8 +770,6 @@ type HistoricalTicksRequest struct {
 	IgnoreSize    bool
 }
 
-func (HistoricalTicksRequest) messageName() string { return "req_historical_ticks" }
-
 type HistoricalTickEntry struct {
 	Time  string
 	Price string
@@ -997,8 +781,6 @@ type HistoricalTicksResponse struct {
 	Ticks []HistoricalTickEntry
 	Done  bool
 }
-
-func (HistoricalTicksResponse) messageName() string { return "historical_ticks" }
 
 type HistoricalTickBidAskEntry struct {
 	TickAttrib int
@@ -1015,8 +797,6 @@ type HistoricalTicksBidAskResponse struct {
 	Done  bool
 }
 
-func (HistoricalTicksBidAskResponse) messageName() string { return "historical_ticks_bid_ask" }
-
 type HistoricalTickLastEntry struct {
 	TickAttrib        int
 	Time              string
@@ -1032,7 +812,9 @@ type HistoricalTicksLastResponse struct {
 	Done  bool
 }
 
-func (HistoricalTicksLastResponse) messageName() string { return "historical_ticks_last" }
+type CancelHistoricalTicks struct {
+	ReqID int
+}
 
 // NewsArticle (OUT 84 / IN 83)
 
@@ -1042,15 +824,11 @@ type NewsArticleRequest struct {
 	ArticleID    string
 }
 
-func (NewsArticleRequest) messageName() string { return "req_news_article" }
-
 type NewsArticleResponse struct {
 	ReqID       int
 	ArticleType int
 	ArticleText string
 }
-
-func (NewsArticleResponse) messageName() string { return "news_article" }
 
 // HistoricalNews (OUT 86 / IN 87+80)
 
@@ -1063,8 +841,6 @@ type HistoricalNewsRequest struct {
 	TotalResults  int
 }
 
-func (HistoricalNewsRequest) messageName() string { return "req_historical_news" }
-
 type HistoricalNewsItem struct {
 	ReqID        int
 	Time         string
@@ -1073,14 +849,10 @@ type HistoricalNewsItem struct {
 	Headline     string
 }
 
-func (HistoricalNewsItem) messageName() string { return "historical_news" }
-
 type HistoricalNewsEnd struct {
 	ReqID   int
 	HasMore bool
 }
-
-func (HistoricalNewsEnd) messageName() string { return "historical_news_end" }
 
 // ScannerSubscription (OUT 22 / cancel OUT 23 / IN 20)
 
@@ -1092,13 +864,9 @@ type ScannerSubscriptionRequest struct {
 	ScanCode     string
 }
 
-func (ScannerSubscriptionRequest) messageName() string { return "req_scanner_subscription" }
-
 type CancelScannerSubscription struct {
 	ReqID int
 }
-
-func (CancelScannerSubscription) messageName() string { return "cancel_scanner_subscription" }
 
 type ScannerDataEntry struct {
 	Rank       int
@@ -1114,37 +882,33 @@ type ScannerDataResponse struct {
 	Entries []ScannerDataEntry
 }
 
-func (ScannerDataResponse) messageName() string { return "scanner_data" }
-
 // FA Configuration (OUT 18, OUT 19 / IN 16)
 
 type RequestFA struct {
 	FADataType int // 1=Groups, 2=Profiles, 3=AccountAliases
 }
 
-func (RequestFA) messageName() string { return "req_fa" }
-
 type ReplaceFA struct {
+	ReqID      int
 	FADataType int
 	XML        string
 }
-
-func (ReplaceFA) messageName() string { return "replace_fa" }
 
 type ReceiveFA struct {
 	FADataType int
 	XML        string
 }
 
-func (ReceiveFA) messageName() string { return "receive_fa" }
+type ReplaceFAEnd struct {
+	ReqID int
+	Text  string
+}
 
 // SoftDollarTiers (OUT 79 / IN 77)
 
 type SoftDollarTiersRequest struct {
 	ReqID int
 }
-
-func (SoftDollarTiersRequest) messageName() string { return "req_soft_dollar_tiers" }
 
 type SoftDollarTier struct {
 	Name        string
@@ -1157,8 +921,6 @@ type SoftDollarTiersResponse struct {
 	Tiers []SoftDollarTier
 }
 
-func (SoftDollarTiersResponse) messageName() string { return "soft_dollar_tiers" }
-
 // WSH Calendar Events (OUT 100, cancel OUT 101 / IN 105)
 // WSH Event Data (OUT 102, cancel OUT 103 / IN 106)
 
@@ -1166,13 +928,9 @@ type WSHMetaDataRequest struct {
 	ReqID int
 }
 
-func (WSHMetaDataRequest) messageName() string { return "req_wsh_meta_data" }
-
 type CancelWSHMetaData struct {
 	ReqID int
 }
-
-func (CancelWSHMetaData) messageName() string { return "cancel_wsh_meta_data" }
 
 type WSHEventDataRequest struct {
 	ReqID           int
@@ -1186,27 +944,19 @@ type WSHEventDataRequest struct {
 	TotalLimit      int
 }
 
-func (WSHEventDataRequest) messageName() string { return "req_wsh_event_data" }
-
 type CancelWSHEventData struct {
 	ReqID int
 }
-
-func (CancelWSHEventData) messageName() string { return "cancel_wsh_event_data" }
 
 type WSHMetaDataResponse struct {
 	ReqID    int
 	DataJSON string
 }
 
-func (WSHMetaDataResponse) messageName() string { return "wsh_meta_data" }
-
 type WSHEventDataResponse struct {
 	ReqID    int
 	DataJSON string
 }
-
-func (WSHEventDataResponse) messageName() string { return "wsh_event_data" }
 
 // HistoricalScheduleResponse is the decoded inbound response to a
 // REQ_HISTORICAL_DATA request with whatToShow=SCHEDULE. Each session entry
@@ -1221,8 +971,6 @@ type HistoricalScheduleResponse struct {
 	TimeZone      string
 	Sessions      []HistoricalScheduleSession
 }
-
-func (HistoricalScheduleResponse) messageName() string { return "historical_schedule" }
 
 // HistoricalScheduleSession describes one trading session entry inside a
 // HistoricalScheduleResponse. IBKR emits three string fields per session:
@@ -1240,41 +988,29 @@ type QueryDisplayGroupsRequest struct {
 	ReqID int
 }
 
-func (QueryDisplayGroupsRequest) messageName() string { return "query_display_groups" }
-
 type SubscribeToGroupEventsRequest struct {
 	ReqID   int
 	GroupID int
 }
-
-func (SubscribeToGroupEventsRequest) messageName() string { return "subscribe_to_group_events" }
 
 type UpdateDisplayGroupRequest struct {
 	ReqID        int
 	ContractInfo string
 }
 
-func (UpdateDisplayGroupRequest) messageName() string { return "update_display_group" }
-
 type UnsubscribeFromGroupEventsRequest struct {
 	ReqID int
 }
-
-func (UnsubscribeFromGroupEventsRequest) messageName() string { return "unsubscribe_from_group_events" }
 
 type DisplayGroupList struct {
 	ReqID  int
 	Groups string
 }
 
-func (DisplayGroupList) messageName() string { return "display_group_list" }
-
 type DisplayGroupUpdated struct {
 	ReqID        int
 	ContractInfo string
 }
-
-func (DisplayGroupUpdated) messageName() string { return "display_group_updated" }
 
 // PlaceOrder (OUT 3 / IN 3,5) — order management
 
@@ -1420,8 +1156,6 @@ type PlaceOrderRequest struct {
 	ImbalanceOnly               string
 }
 
-func (PlaceOrderRequest) messageName() string { return "place_order" }
-
 // CancelOrderRequest cancels an order (outbound msg_id=4).
 // At server_version >= 169 (MANUAL_ORDER_TIME), no version field is sent and
 // manualOrderCancelTime is included. At server_version >= 192
@@ -1433,8 +1167,6 @@ type CancelOrderRequest struct {
 	ManualOrderIndicator  string // empty = UNSET
 }
 
-func (CancelOrderRequest) messageName() string { return "cancel_order" }
-
 // GlobalCancelRequest cancels all open orders (outbound msg_id=58).
 // At server_version >= 192 (CME_TAGGING_FIELDS), extOperator and
 // manualOrderIndicator are sent instead of the legacy version field.
@@ -1442,8 +1174,6 @@ type GlobalCancelRequest struct {
 	ExtOperator          string
 	ManualOrderIndicator string // empty = UNSET
 }
-
-func (GlobalCancelRequest) messageName() string { return "global_cancel" }
 
 // Market depth (OUT 10, cancel OUT 11 / IN 12, 13)
 
@@ -1454,13 +1184,10 @@ type MarketDepthRequest struct {
 	IsSmartDepth bool
 }
 
-func (MarketDepthRequest) messageName() string { return "req_mkt_depth" }
-
 type CancelMarketDepth struct {
-	ReqID int
+	ReqID        int
+	IsSmartDepth bool
 }
-
-func (CancelMarketDepth) messageName() string { return "cancel_mkt_depth" }
 
 type MarketDepthUpdate struct {
 	ReqID     int
@@ -1470,8 +1197,6 @@ type MarketDepthUpdate struct {
 	Price     string
 	Size      string
 }
-
-func (MarketDepthUpdate) messageName() string { return "market_depth" }
 
 type MarketDepthL2Update struct {
 	ReqID        int
@@ -1484,8 +1209,6 @@ type MarketDepthL2Update struct {
 	IsSmartDepth bool
 }
 
-func (MarketDepthL2Update) messageName() string { return "market_depth_l2" }
-
 // FundamentalData (OUT 52, cancel OUT 53 / IN 51)
 
 type FundamentalDataRequest struct {
@@ -1494,20 +1217,14 @@ type FundamentalDataRequest struct {
 	ReportType string
 }
 
-func (FundamentalDataRequest) messageName() string { return "req_fundamental_data" }
-
 type CancelFundamentalData struct {
 	ReqID int
 }
-
-func (CancelFundamentalData) messageName() string { return "cancel_fundamental_data" }
 
 type FundamentalDataResponse struct {
 	ReqID int
 	Data  string
 }
-
-func (FundamentalDataResponse) messageName() string { return "fundamental_data" }
 
 // ExerciseOptions (OUT 21)
 
@@ -1519,8 +1236,6 @@ type ExerciseOptionsRequest struct {
 	Account          string
 	Override         int
 }
-
-func (ExerciseOptionsRequest) messageName() string { return "exercise_options" }
 
 // Historical data update (IN 108) — streaming bar for keepUpToDate
 
@@ -1536,5 +1251,3 @@ type HistoricalDataUpdate struct {
 	WAP      string
 	Count    string
 }
-
-func (HistoricalDataUpdate) messageName() string { return "historical_data_update" }

@@ -42,6 +42,11 @@ jobs:
       - name: go build
         run: go build ./...
 
+      - name: Shell script syntax
+        run: |
+          bash -n scripts/check-ibkr-sdk-env.sh
+          bash -n scripts/scan-ibkr-sdk-drift.sh
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:

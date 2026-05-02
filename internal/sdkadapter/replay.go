@@ -109,9 +109,3 @@ func (a *ReplayAdapter) SetDrainError(err error) {
 	defer a.mu.Unlock()
 	a.drainErr = err
 }
-
-var ErrClosed = errorString("sdkadapter: closed")
-
-type errorString string
-
-func (e errorString) Error() string { return string(e) }

@@ -1,3 +1,5 @@
+//go:build legacy_native_socket
+
 // Command ibkr-capture drives live capture scenarios against a running IB
 // Gateway or TWS. It performs the real TWS handshake and START_API, then
 // runs one of several named scenarios that send a feature request and read

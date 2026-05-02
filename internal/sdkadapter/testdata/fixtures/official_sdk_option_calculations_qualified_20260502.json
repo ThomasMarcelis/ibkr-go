@@ -1,0 +1,148 @@
+{
+  "metadata": {
+    "sdk_version": "10.46.01",
+    "server_version": 203,
+    "captured_at": "2026-05-02T20:05:18Z",
+    "scenario": "option_calculations_qualified",
+    "redaction_notes": "account identifiers redacted to DU_REDACTED; fixture contains read-only SDK callbacks only",
+    "source_sha256": "c51064689faf03226922a56aa00da6d464784b60408d7f688ab5e6b9778435e5"
+  },
+  "events": [
+    {
+      "ConnectionTime": "20260502 22:05:15 Central European Standard Time",
+      "Kind": "connection_metadata",
+      "ServerVersion": 203
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:fundfarm",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2106,
+        "Message": "HMDS data farm connection is OK:ushmds",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2158,
+        "Message": "Sec-def data farm connection is OK:secdefnj",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Accounts": [
+        "DU_REDACTED"
+      ],
+      "Kind": "managed_accounts"
+    },
+    {
+      "Kind": "next_valid_id",
+      "NextValidID": 1
+    },
+    {
+      "ContractDetails": {
+        "Contract": {
+          "ConID": 675813159,
+          "Currency": "USD",
+          "Exchange": "SMART",
+          "Expiry": "20260618",
+          "LocalSymbol": "AAPL  260618C00200000",
+          "Multiplier": "100",
+          "Right": "C",
+          "SecType": "OPT",
+          "Strike": "200.000000",
+          "Symbol": "AAPL",
+          "TradingClass": "AAPL"
+        },
+        "LongName": "APPLE INC",
+        "MarketName": "AAPL",
+        "MinTick": "0.01",
+        "TimeZoneID": "US/Eastern"
+      },
+      "Kind": "contract_details",
+      "ReqID": 1000
+    },
+    {
+      "Kind": "contract_details_end",
+      "ReqID": 1000
+    },
+    {
+      "APIError": {
+        "Code": 2119,
+        "Message": "Market data farm is connecting:usopt",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "APIError": {
+        "Code": 2104,
+        "Message": "Market data farm connection is OK:usopt",
+        "Op": "api",
+        "ReqID": -1
+      },
+      "Kind": "api_error",
+      "ReqID": -1
+    },
+    {
+      "Kind": "tick_option_computation",
+      "ReqID": 1001,
+      "TickOptionComputation": {
+        "ImpliedVol": "0.17100140275259834",
+        "OptPrice": "5.25",
+        "TickType": 53,
+        "UndPrice": "200"
+      }
+    },
+    {
+      "Kind": "tick_option_computation",
+      "ReqID": 1002,
+      "TickOptionComputation": {
+        "Delta": "0.53489610117349773",
+        "Gamma": "0.018601976430872524",
+        "ImpliedVol": "0.29999999999999999",
+        "OptPrice": "8.9158022449933707",
+        "Theta": "-0.10192444822510516",
+        "TickType": 53,
+        "UndPrice": "200",
+        "Vega": "0.28411847152130143"
+      }
+    }
+  ]
+}

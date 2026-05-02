@@ -6,10 +6,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
+func TestToSDKPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 	t.Parallel()
 
-	got := toCodecPlaceOrder(77, PlaceOrderRequest{
+	got := toSDKPlaceOrder(77, PlaceOrderRequest{
 		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
 		Order: Order{
 			Action:                   Buy,
@@ -130,10 +130,10 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 // DisplaySize=0=unset iceberg display, OcaType=0=no OCA type. Scale-size
 // fields (sendMax(int)) keep the unset sentinel, matching the reference
 // clients' explicit-unset encoding.
-func TestToCodecPlaceOrderZeroIntFieldSemantics(t *testing.T) {
+func TestToSDKPlaceOrderZeroIntFieldSemantics(t *testing.T) {
 	t.Parallel()
 
-	got := toCodecPlaceOrder(1, PlaceOrderRequest{
+	got := toSDKPlaceOrder(1, PlaceOrderRequest{
 		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
 		Order: Order{
 			Action:    Buy,
