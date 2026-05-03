@@ -60,10 +60,10 @@ func TestSDKContractDetailsPublicRouteReplaysReadOnlyFixture(t *testing.T) {
 		t.Fatalf("Contracts().Details() len = %d, want 1", len(result.details))
 	}
 	detail := result.details[0]
-	if detail.Contract.ConID != 265598 ||
-		detail.Contract.Symbol != "AAPL" ||
-		detail.Contract.SecType != SecTypeStock ||
-		detail.Contract.PrimaryExchange != "NASDAQ" ||
+	if detail.ConID != 265598 ||
+		detail.Symbol != "AAPL" ||
+		detail.SecType != SecTypeStock ||
+		detail.PrimaryExchange != "NASDAQ" ||
 		detail.LongName != "APPLE INC" ||
 		detail.TimeZoneID != "US/Eastern" ||
 		detail.MinTick.String() != "0.01" {
@@ -124,10 +124,10 @@ func TestSDKBondContractDetailsPublicRouteReplaysOfficialFixture(t *testing.T) {
 		t.Fatalf("Contracts().Details() len = %d, want 1", len(result.details))
 	}
 	detail := result.details[0]
-	if detail.Contract.ConID != 681308048 ||
-		detail.Contract.SecType != SecTypeBond ||
-		detail.Contract.Exchange != "SMART" ||
-		detail.Contract.TradingClass != "IBM" ||
+	if detail.ConID != 681308048 ||
+		detail.SecType != SecTypeBond ||
+		detail.Exchange != "SMART" ||
+		detail.TradingClass != "IBM" ||
 		detail.MinTick.String() != "0.001" {
 		t.Fatalf("Contracts().Details() = %+v, want captured IBM bond fixture details", detail)
 	}
@@ -178,7 +178,7 @@ func TestSDKQualifyPublicRouteReplaysReadOnlyFixture(t *testing.T) {
 		if result.err != nil {
 			t.Fatalf("Contracts().Qualify() error = %v", result.err)
 		}
-		if result.detail.Contract.ConID != 265598 || result.detail.LongName != "APPLE INC" {
+		if result.detail.ConID != 265598 || result.detail.LongName != "APPLE INC" {
 			t.Fatalf("Contracts().Qualify() = %+v, want captured AAPL fixture details", result.detail)
 		}
 	case <-time.After(time.Second):
