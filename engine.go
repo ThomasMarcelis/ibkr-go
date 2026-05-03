@@ -4621,31 +4621,19 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventFamilyCodes:
 		codes := make([]sdkadapter.FamilyCodeEntry, len(event.FamilyCodes))
 		for i, code := range event.FamilyCodes {
-			codes[i] = sdkadapter.FamilyCodeEntry{
-				AccountID:  code.AccountID,
-				FamilyCode: code.FamilyCode,
-			}
+			codes[i] = sdkadapter.FamilyCodeEntry(code)
 		}
 		return sdkadapter.FamilyCodes{Codes: codes}, nil
 	case sdkadapter.EventMktDepthExchanges:
 		exchanges := make([]sdkadapter.DepthExchangeEntry, len(event.DepthExchanges))
 		for i, exchange := range event.DepthExchanges {
-			exchanges[i] = sdkadapter.DepthExchangeEntry{
-				Exchange:        exchange.Exchange,
-				SecType:         exchange.SecType,
-				ListingExch:     exchange.ListingExch,
-				ServiceDataType: exchange.ServiceDataType,
-				AggGroup:        exchange.AggGroup,
-			}
+			exchanges[i] = sdkadapter.DepthExchangeEntry(exchange)
 		}
 		return sdkadapter.MktDepthExchanges{Exchanges: exchanges}, nil
 	case sdkadapter.EventNewsProviders:
 		providers := make([]sdkadapter.NewsProviderEntry, len(event.NewsProviders))
 		for i, provider := range event.NewsProviders {
-			providers[i] = sdkadapter.NewsProviderEntry{
-				Code: provider.Code,
-				Name: provider.Name,
-			}
+			providers[i] = sdkadapter.NewsProviderEntry(provider)
 		}
 		return sdkadapter.NewsProviders{Providers: providers}, nil
 	case sdkadapter.EventNewsBulletin:
@@ -4719,11 +4707,7 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventHistoricalSchedule:
 		sessions := make([]sdkadapter.HistoricalScheduleSession, len(event.HistoricalSchedule.Sessions))
 		for i, session := range event.HistoricalSchedule.Sessions {
-			sessions[i] = sdkadapter.HistoricalScheduleSession{
-				StartDateTime: session.StartDateTime,
-				EndDateTime:   session.EndDateTime,
-				RefDate:       session.RefDate,
-			}
+			sessions[i] = sdkadapter.HistoricalScheduleSession(session)
 		}
 		return sdkadapter.HistoricalScheduleResponse{
 			ReqID:         event.ReqID,
@@ -4735,37 +4719,19 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventHistoricalTicks:
 		ticks := make([]sdkadapter.HistoricalTickEntry, len(event.HistoricalTicks))
 		for i, tick := range event.HistoricalTicks {
-			ticks[i] = sdkadapter.HistoricalTickEntry{
-				Time:  tick.Time,
-				Price: tick.Price,
-				Size:  tick.Size,
-			}
+			ticks[i] = sdkadapter.HistoricalTickEntry(tick)
 		}
 		return sdkadapter.HistoricalTicksResponse{ReqID: event.ReqID, Ticks: ticks, Done: event.HistoricalTicksDone}, nil
 	case sdkadapter.EventHistoricalTicksBidAsk:
 		ticks := make([]sdkadapter.HistoricalTickBidAskEntry, len(event.HistoricalTicksBidAsk))
 		for i, tick := range event.HistoricalTicksBidAsk {
-			ticks[i] = sdkadapter.HistoricalTickBidAskEntry{
-				TickAttrib: tick.TickAttrib,
-				Time:       tick.Time,
-				BidPrice:   tick.BidPrice,
-				AskPrice:   tick.AskPrice,
-				BidSize:    tick.BidSize,
-				AskSize:    tick.AskSize,
-			}
+			ticks[i] = sdkadapter.HistoricalTickBidAskEntry(tick)
 		}
 		return sdkadapter.HistoricalTicksBidAskResponse{ReqID: event.ReqID, Ticks: ticks, Done: event.HistoricalTicksDone}, nil
 	case sdkadapter.EventHistoricalTicksLast:
 		ticks := make([]sdkadapter.HistoricalTickLastEntry, len(event.HistoricalTicksLast))
 		for i, tick := range event.HistoricalTicksLast {
-			ticks[i] = sdkadapter.HistoricalTickLastEntry{
-				TickAttrib:        tick.TickAttrib,
-				Time:              tick.Time,
-				Price:             tick.Price,
-				Size:              tick.Size,
-				Exchange:          tick.Exchange,
-				SpecialConditions: tick.SpecialConditions,
-			}
+			ticks[i] = sdkadapter.HistoricalTickLastEntry(tick)
 		}
 		return sdkadapter.HistoricalTicksLastResponse{ReqID: event.ReqID, Ticks: ticks, Done: event.HistoricalTicksDone}, nil
 	case sdkadapter.EventHeadTimestamp:
@@ -4773,10 +4739,7 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventHistogramData:
 		entries := make([]sdkadapter.HistogramDataEntry, len(event.HistogramData))
 		for i, entry := range event.HistogramData {
-			entries[i] = sdkadapter.HistogramDataEntry{
-				Price: entry.Price,
-				Size:  entry.Size,
-			}
+			entries[i] = sdkadapter.HistogramDataEntry(entry)
 		}
 		return sdkadapter.HistogramDataResponse{ReqID: event.ReqID, Entries: entries}, nil
 	case sdkadapter.EventWSHMetaData:
@@ -4791,11 +4754,7 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventSoftDollarTiers:
 		tiers := make([]sdkadapter.SoftDollarTier, len(event.SoftDollarTiers))
 		for i, tier := range event.SoftDollarTiers {
-			tiers[i] = sdkadapter.SoftDollarTier{
-				Name:        tier.Name,
-				Value:       tier.Value,
-				DisplayName: tier.DisplayName,
-			}
+			tiers[i] = sdkadapter.SoftDollarTier(tier)
 		}
 		return sdkadapter.SoftDollarTiersResponse{ReqID: event.ReqID, Tiers: tiers}, nil
 	case sdkadapter.EventDisplayGroupList:
@@ -4820,10 +4779,7 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventMarketRule:
 		increments := make([]sdkadapter.PriceIncrement, len(event.PriceIncrements))
 		for i, increment := range event.PriceIncrements {
-			increments[i] = sdkadapter.PriceIncrement{
-				LowEdge:   increment.LowEdge,
-				Increment: increment.Increment,
-			}
+			increments[i] = sdkadapter.PriceIncrement(increment)
 		}
 		return sdkadapter.MarketRule{MarketRuleID: event.MarketRuleID, Increments: increments}, nil
 	case sdkadapter.EventSecDefOptParams:
@@ -4845,11 +4801,7 @@ func sdkEventToMessage(event sdkadapter.Event) (any, error) {
 	case sdkadapter.EventSmartComponents:
 		components := make([]sdkadapter.SmartComponentEntry, len(event.SmartComponents))
 		for i, component := range event.SmartComponents {
-			components[i] = sdkadapter.SmartComponentEntry{
-				BitNumber:      component.BitNumber,
-				ExchangeName:   component.ExchangeName,
-				ExchangeLetter: component.ExchangeLetter,
-			}
+			components[i] = sdkadapter.SmartComponentEntry(component)
 		}
 		return sdkadapter.SmartComponentsResponse{ReqID: event.ReqID, Components: components}, nil
 	case sdkadapter.EventFundamentalData:
@@ -5366,29 +5318,23 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 		}
 	case sdkadapter.CancelAccountSummary:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandCancelAccountSummary,
-			CancelAccountSummary: sdkadapter.CancelAccountSummaryCommand{
-				ReqID: m.ReqID,
-			},
+			Kind:                 sdkadapter.CommandCancelAccountSummary,
+			CancelAccountSummary: sdkadapter.CancelAccountSummaryCommand(m),
 		}
 	case sdkadapter.AccountUpdatesRequest:
 		command = sdkadapter.Command{
 			Kind:           sdkadapter.CommandAccountUpdates,
-			AccountUpdates: sdkadapter.AccountUpdatesCommand{Subscribe: m.Subscribe, Account: m.Account},
+			AccountUpdates: sdkadapter.AccountUpdatesCommand(m),
 		}
 	case sdkadapter.AccountUpdatesMultiRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandAccountUpdatesMulti,
-			AccountUpdatesMulti: sdkadapter.AccountUpdatesMultiCommand{
-				ReqID:     m.ReqID,
-				Account:   m.Account,
-				ModelCode: m.ModelCode,
-			},
+			Kind:                sdkadapter.CommandAccountUpdatesMulti,
+			AccountUpdatesMulti: sdkadapter.AccountUpdatesMultiCommand(m),
 		}
 	case sdkadapter.CancelAccountUpdatesMulti:
 		command = sdkadapter.Command{
 			Kind:                      sdkadapter.CommandCancelAccountUpdatesMulti,
-			CancelAccountUpdatesMulti: sdkadapter.CancelAccountUpdatesMultiCommand{ReqID: m.ReqID},
+			CancelAccountUpdatesMulti: sdkadapter.CancelAccountUpdatesMultiCommand(m),
 		}
 	case sdkadapter.ContractDetailsRequest:
 		command = sdkadapter.Command{
@@ -5404,51 +5350,38 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 		command = sdkadapter.Command{Kind: sdkadapter.CommandCancelPositions}
 	case sdkadapter.PositionsMultiRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandPositionsMulti,
-			PositionsMulti: sdkadapter.PositionsMultiCommand{
-				ReqID:     m.ReqID,
-				Account:   m.Account,
-				ModelCode: m.ModelCode,
-			},
+			Kind:           sdkadapter.CommandPositionsMulti,
+			PositionsMulti: sdkadapter.PositionsMultiCommand(m),
 		}
 	case sdkadapter.CancelPositionsMulti:
 		command = sdkadapter.Command{
 			Kind:                 sdkadapter.CommandCancelPositionsMulti,
-			CancelPositionsMulti: sdkadapter.CancelPositionsMultiCommand{ReqID: m.ReqID},
+			CancelPositionsMulti: sdkadapter.CancelPositionsMultiCommand(m),
 		}
 	case sdkadapter.PnLRequest:
 		command = sdkadapter.Command{
 			Kind: sdkadapter.CommandPnL,
-			PnL: sdkadapter.PnLCommand{
-				ReqID:     m.ReqID,
-				Account:   m.Account,
-				ModelCode: m.ModelCode,
-			},
+			PnL:  sdkadapter.PnLCommand(m),
 		}
 	case sdkadapter.CancelPnL:
 		command = sdkadapter.Command{
 			Kind:      sdkadapter.CommandCancelPnL,
-			CancelPnL: sdkadapter.CancelPnLCommand{ReqID: m.ReqID},
+			CancelPnL: sdkadapter.CancelPnLCommand(m),
 		}
 	case sdkadapter.PnLSingleRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandPnLSingle,
-			PnLSingle: sdkadapter.PnLSingleCommand{
-				ReqID:     m.ReqID,
-				Account:   m.Account,
-				ModelCode: m.ModelCode,
-				ConID:     m.ConID,
-			},
+			Kind:      sdkadapter.CommandPnLSingle,
+			PnLSingle: sdkadapter.PnLSingleCommand(m),
 		}
 	case sdkadapter.CancelPnLSingle:
 		command = sdkadapter.Command{
 			Kind:            sdkadapter.CommandCancelPnLSingle,
-			CancelPnLSingle: sdkadapter.CancelPnLSingleCommand{ReqID: m.ReqID},
+			CancelPnLSingle: sdkadapter.CancelPnLSingleCommand(m),
 		}
 	case sdkadapter.ReqMarketDataType:
 		command = sdkadapter.Command{
 			Kind:           sdkadapter.CommandMarketDataType,
-			MarketDataType: sdkadapter.MarketDataTypeCommand{DataType: m.DataType},
+			MarketDataType: sdkadapter.MarketDataTypeCommand(m),
 		}
 	case sdkadapter.QuoteRequest:
 		command = sdkadapter.Command{
@@ -5463,7 +5396,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelQuote:
 		command = sdkadapter.Command{
 			Kind:        sdkadapter.CommandCancelQuote,
-			CancelQuote: sdkadapter.CancelQuoteCommand{ReqID: m.ReqID},
+			CancelQuote: sdkadapter.CancelQuoteCommand(m),
 		}
 	case sdkadapter.RealTimeBarsRequest:
 		command = sdkadapter.Command{
@@ -5478,7 +5411,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelRealTimeBars:
 		command = sdkadapter.Command{
 			Kind:               sdkadapter.CommandCancelRealTimeBars,
-			CancelRealTimeBars: sdkadapter.CancelRealTimeBarsCommand{ReqID: m.ReqID},
+			CancelRealTimeBars: sdkadapter.CancelRealTimeBarsCommand(m),
 		}
 	case sdkadapter.TickByTickRequest:
 		command = sdkadapter.Command{
@@ -5494,7 +5427,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelTickByTick:
 		command = sdkadapter.Command{
 			Kind:             sdkadapter.CommandCancelTickByTick,
-			CancelTickByTick: sdkadapter.CancelTickByTickCommand{ReqID: m.ReqID},
+			CancelTickByTick: sdkadapter.CancelTickByTickCommand(m),
 		}
 	case sdkadapter.MarketDepthRequest:
 		command = sdkadapter.Command{
@@ -5508,11 +5441,8 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 		}
 	case sdkadapter.CancelMarketDepth:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandCancelMarketDepth,
-			CancelMarketDepth: sdkadapter.CancelMarketDepthCommand{
-				ReqID:        m.ReqID,
-				IsSmartDepth: m.IsSmartDepth,
-			},
+			Kind:              sdkadapter.CommandCancelMarketDepth,
+			CancelMarketDepth: sdkadapter.CancelMarketDepthCommand(m),
 		}
 	case sdkadapter.CalcImpliedVolatilityRequest:
 		command = sdkadapter.Command{
@@ -5527,7 +5457,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelCalcImpliedVolatility:
 		command = sdkadapter.Command{
 			Kind:                 sdkadapter.CommandCancelCalcImpliedVol,
-			CancelCalcImpliedVol: sdkadapter.CancelCalcImpliedVolCommand{ReqID: m.ReqID},
+			CancelCalcImpliedVol: sdkadapter.CancelCalcImpliedVolCommand(m),
 		}
 	case sdkadapter.CalcOptionPriceRequest:
 		command = sdkadapter.Command{
@@ -5542,7 +5472,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelCalcOptionPrice:
 		command = sdkadapter.Command{
 			Kind:                  sdkadapter.CommandCancelCalcOptionPrice,
-			CancelCalcOptionPrice: sdkadapter.CancelCalcOptionPriceCommand{ReqID: m.ReqID},
+			CancelCalcOptionPrice: sdkadapter.CancelCalcOptionPriceCommand(m),
 		}
 	case sdkadapter.ExerciseOptionsRequest:
 		command = sdkadapter.Command{
@@ -5564,39 +5494,27 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.OpenOrdersRequest:
 		command = sdkadapter.Command{
 			Kind:       sdkadapter.CommandOpenOrders,
-			OpenOrders: sdkadapter.OpenOrdersCommand{Scope: m.Scope},
+			OpenOrders: sdkadapter.OpenOrdersCommand(m),
 		}
 	case sdkadapter.CompletedOrdersRequest:
 		command = sdkadapter.Command{
 			Kind:            sdkadapter.CommandCompletedOrders,
-			CompletedOrders: sdkadapter.CompletedOrdersCommand{APIOnly: m.APIOnly},
+			CompletedOrders: sdkadapter.CompletedOrdersCommand(m),
 		}
 	case sdkadapter.CancelOrderRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandCancelOrder,
-			CancelOrder: sdkadapter.CancelOrderCommand{
-				OrderID:               m.OrderID,
-				ManualOrderCancelTime: m.ManualOrderCancelTime,
-				ExtOperator:           m.ExtOperator,
-				ManualOrderIndicator:  m.ManualOrderIndicator,
-			},
+			Kind:        sdkadapter.CommandCancelOrder,
+			CancelOrder: sdkadapter.CancelOrderCommand(m),
 		}
 	case sdkadapter.GlobalCancelRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandGlobalCancel,
-			GlobalCancel: sdkadapter.GlobalCancelCommand{
-				ExtOperator:          m.ExtOperator,
-				ManualOrderIndicator: m.ManualOrderIndicator,
-			},
+			Kind:         sdkadapter.CommandGlobalCancel,
+			GlobalCancel: sdkadapter.GlobalCancelCommand(m),
 		}
 	case sdkadapter.ExecutionsRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandExecutions,
-			Executions: sdkadapter.ExecutionsCommand{
-				ReqID:   m.ReqID,
-				Account: m.Account,
-				Symbol:  m.Symbol,
-			},
+			Kind:       sdkadapter.CommandExecutions,
+			Executions: sdkadapter.ExecutionsCommand(m),
 		}
 	case sdkadapter.FamilyCodesRequest:
 		command = sdkadapter.Command{Kind: sdkadapter.CommandFamilyCodes}
@@ -5607,62 +5525,41 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.NewsBulletinsRequest:
 		command = sdkadapter.Command{
 			Kind:          sdkadapter.CommandNewsBulletins,
-			NewsBulletins: sdkadapter.NewsBulletinsCommand{AllMessages: m.AllMessages},
+			NewsBulletins: sdkadapter.NewsBulletinsCommand(m),
 		}
 	case sdkadapter.CancelNewsBulletins:
 		command = sdkadapter.Command{Kind: sdkadapter.CommandCancelNewsBulletins}
 	case sdkadapter.NewsArticleRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandNewsArticle,
-			NewsArticle: sdkadapter.NewsArticleCommand{
-				ReqID:        m.ReqID,
-				ProviderCode: m.ProviderCode,
-				ArticleID:    m.ArticleID,
-			},
+			Kind:        sdkadapter.CommandNewsArticle,
+			NewsArticle: sdkadapter.NewsArticleCommand(m),
 		}
 	case sdkadapter.HistoricalNewsRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandHistoricalNews,
-			HistoricalNews: sdkadapter.HistoricalNewsCommand{
-				ReqID:         m.ReqID,
-				ConID:         m.ConID,
-				ProviderCodes: m.ProviderCodes,
-				StartDate:     m.StartDate,
-				EndDate:       m.EndDate,
-				TotalResults:  m.TotalResults,
-			},
+			Kind:           sdkadapter.CommandHistoricalNews,
+			HistoricalNews: sdkadapter.HistoricalNewsCommand(m),
 		}
 	case sdkadapter.ScannerParametersRequest:
 		command = sdkadapter.Command{Kind: sdkadapter.CommandScannerParameters}
 	case sdkadapter.ScannerSubscriptionRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandScannerSubscription,
-			ScannerSubscription: sdkadapter.ScannerSubscriptionCommand{
-				ReqID:        m.ReqID,
-				NumberOfRows: m.NumberOfRows,
-				Instrument:   m.Instrument,
-				LocationCode: m.LocationCode,
-				ScanCode:     m.ScanCode,
-			},
+			Kind:                sdkadapter.CommandScannerSubscription,
+			ScannerSubscription: sdkadapter.ScannerSubscriptionCommand(m),
 		}
 	case sdkadapter.CancelScannerSubscription:
 		command = sdkadapter.Command{
 			Kind:                      sdkadapter.CommandCancelScannerSubscription,
-			CancelScannerSubscription: sdkadapter.CancelScannerSubscriptionCommand{ReqID: m.ReqID},
+			CancelScannerSubscription: sdkadapter.CancelScannerSubscriptionCommand(m),
 		}
 	case sdkadapter.RequestFA:
 		command = sdkadapter.Command{
 			Kind:      sdkadapter.CommandRequestFA,
-			RequestFA: sdkadapter.RequestFACommand{FADataType: m.FADataType},
+			RequestFA: sdkadapter.RequestFACommand(m),
 		}
 	case sdkadapter.ReplaceFA:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandReplaceFA,
-			ReplaceFA: sdkadapter.ReplaceFACommand{
-				ReqID:      m.ReqID,
-				FADataType: m.FADataType,
-				XML:        m.XML,
-			},
+			Kind:      sdkadapter.CommandReplaceFA,
+			ReplaceFA: sdkadapter.ReplaceFACommand(m),
 		}
 	case sdkadapter.HistoricalBarsRequest:
 		command = sdkadapter.Command{
@@ -5681,7 +5578,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelHistoricalData:
 		command = sdkadapter.Command{
 			Kind:                 sdkadapter.CommandCancelHistoricalData,
-			CancelHistoricalData: sdkadapter.CancelHistoricalDataCommand{ReqID: m.ReqID},
+			CancelHistoricalData: sdkadapter.CancelHistoricalDataCommand(m),
 		}
 	case sdkadapter.HistoricalTicksRequest:
 		command = sdkadapter.Command{
@@ -5700,7 +5597,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelHistoricalTicks:
 		command = sdkadapter.Command{
 			Kind:                  sdkadapter.CommandCancelHistoricalTicks,
-			CancelHistoricalTicks: sdkadapter.CancelHistoricalTicksCommand{ReqID: m.ReqID},
+			CancelHistoricalTicks: sdkadapter.CancelHistoricalTicksCommand(m),
 		}
 	case sdkadapter.HeadTimestampRequest:
 		command = sdkadapter.Command{
@@ -5715,7 +5612,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelHeadTimestamp:
 		command = sdkadapter.Command{
 			Kind:                sdkadapter.CommandCancelHeadTimestamp,
-			CancelHeadTimestamp: sdkadapter.CancelHeadTimestampCommand{ReqID: m.ReqID},
+			CancelHeadTimestamp: sdkadapter.CancelHeadTimestampCommand(m),
 		}
 	case sdkadapter.HistogramDataRequest:
 		command = sdkadapter.Command{
@@ -5730,102 +5627,77 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelHistogramData:
 		command = sdkadapter.Command{
 			Kind:                sdkadapter.CommandCancelHistogramData,
-			CancelHistogramData: sdkadapter.CancelHistogramDataCommand{ReqID: m.ReqID},
+			CancelHistogramData: sdkadapter.CancelHistogramDataCommand(m),
 		}
 	case sdkadapter.WSHMetaDataRequest:
 		command = sdkadapter.Command{
 			Kind:        sdkadapter.CommandWSHMetaData,
-			WSHMetaData: sdkadapter.WSHMetaDataCommand{ReqID: m.ReqID},
+			WSHMetaData: sdkadapter.WSHMetaDataCommand(m),
 		}
 	case sdkadapter.CancelWSHMetaData:
 		command = sdkadapter.Command{
 			Kind:              sdkadapter.CommandCancelWSHMetaData,
-			CancelWSHMetaData: sdkadapter.CancelWSHMetaDataCommand{ReqID: m.ReqID},
+			CancelWSHMetaData: sdkadapter.CancelWSHMetaDataCommand(m),
 		}
 	case sdkadapter.WSHEventDataRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandWSHEventData,
-			WSHEventData: sdkadapter.WSHEventDataCommand{
-				ReqID:           m.ReqID,
-				ConID:           m.ConID,
-				Filter:          m.Filter,
-				FillWatchlist:   m.FillWatchlist,
-				FillPortfolio:   m.FillPortfolio,
-				FillCompetitors: m.FillCompetitors,
-				StartDate:       m.StartDate,
-				EndDate:         m.EndDate,
-				TotalLimit:      m.TotalLimit,
-			},
+			Kind:         sdkadapter.CommandWSHEventData,
+			WSHEventData: sdkadapter.WSHEventDataCommand(m),
 		}
 	case sdkadapter.CancelWSHEventData:
 		command = sdkadapter.Command{
 			Kind:               sdkadapter.CommandCancelWSHEventData,
-			CancelWSHEventData: sdkadapter.CancelWSHEventDataCommand{ReqID: m.ReqID},
+			CancelWSHEventData: sdkadapter.CancelWSHEventDataCommand(m),
 		}
 	case sdkadapter.UserInfoRequest:
 		command = sdkadapter.Command{
 			Kind:     sdkadapter.CommandUserInfo,
-			UserInfo: sdkadapter.UserInfoCommand{ReqID: m.ReqID},
+			UserInfo: sdkadapter.UserInfoCommand(m),
 		}
 	case sdkadapter.SoftDollarTiersRequest:
 		command = sdkadapter.Command{
 			Kind:            sdkadapter.CommandSoftDollarTiers,
-			SoftDollarTiers: sdkadapter.SoftDollarTiersCommand{ReqID: m.ReqID},
+			SoftDollarTiers: sdkadapter.SoftDollarTiersCommand(m),
 		}
 	case sdkadapter.QueryDisplayGroupsRequest:
 		command = sdkadapter.Command{
 			Kind:               sdkadapter.CommandQueryDisplayGroups,
-			QueryDisplayGroups: sdkadapter.QueryDisplayGroupsCommand{ReqID: m.ReqID},
+			QueryDisplayGroups: sdkadapter.QueryDisplayGroupsCommand(m),
 		}
 	case sdkadapter.SubscribeToGroupEventsRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandSubscribeToGroupEvents,
-			SubscribeToGroupEvents: sdkadapter.SubscribeToGroupEventsCommand{
-				ReqID:   m.ReqID,
-				GroupID: m.GroupID,
-			},
+			Kind:                   sdkadapter.CommandSubscribeToGroupEvents,
+			SubscribeToGroupEvents: sdkadapter.SubscribeToGroupEventsCommand(m),
 		}
 	case sdkadapter.UpdateDisplayGroupRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandUpdateDisplayGroup,
-			UpdateDisplayGroup: sdkadapter.UpdateDisplayGroupCommand{
-				ReqID:        m.ReqID,
-				ContractInfo: m.ContractInfo,
-			},
+			Kind:               sdkadapter.CommandUpdateDisplayGroup,
+			UpdateDisplayGroup: sdkadapter.UpdateDisplayGroupCommand(m),
 		}
 	case sdkadapter.UnsubscribeFromGroupEventsRequest:
 		command = sdkadapter.Command{
 			Kind:                       sdkadapter.CommandUnsubscribeFromGroupEvents,
-			UnsubscribeFromGroupEvents: sdkadapter.UnsubscribeFromGroupEventsCommand{ReqID: m.ReqID},
+			UnsubscribeFromGroupEvents: sdkadapter.UnsubscribeFromGroupEventsCommand(m),
 		}
 	case sdkadapter.MatchingSymbolsRequest:
 		command = sdkadapter.Command{
 			Kind:            sdkadapter.CommandMatchingSymbols,
-			MatchingSymbols: sdkadapter.MatchingSymbolsCommand{ReqID: m.ReqID, Pattern: m.Pattern},
+			MatchingSymbols: sdkadapter.MatchingSymbolsCommand(m),
 		}
 	case sdkadapter.MarketRuleRequest:
 		command = sdkadapter.Command{
 			Kind:       sdkadapter.CommandMarketRule,
-			MarketRule: sdkadapter.MarketRuleCommand{MarketRuleID: m.MarketRuleID},
+			MarketRule: sdkadapter.MarketRuleCommand(m),
 		}
 	case sdkadapter.SecDefOptParamsRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandSecDefOptParams,
-			SecDefOptParams: sdkadapter.SecDefOptParamsCommand{
-				ReqID:             m.ReqID,
-				UnderlyingSymbol:  m.UnderlyingSymbol,
-				FutFopExchange:    m.FutFopExchange,
-				UnderlyingSecType: m.UnderlyingSecType,
-				UnderlyingConID:   m.UnderlyingConID,
-			},
+			Kind:            sdkadapter.CommandSecDefOptParams,
+			SecDefOptParams: sdkadapter.SecDefOptParamsCommand(m),
 		}
 	case sdkadapter.SmartComponentsRequest:
 		command = sdkadapter.Command{
-			Kind: sdkadapter.CommandSmartComponents,
-			SmartComponents: sdkadapter.SmartComponentsCommand{
-				ReqID:       m.ReqID,
-				BBOExchange: m.BBOExchange,
-			},
+			Kind:            sdkadapter.CommandSmartComponents,
+			SmartComponents: sdkadapter.SmartComponentsCommand(m),
 		}
 	case sdkadapter.FundamentalDataRequest:
 		command = sdkadapter.Command{
@@ -5839,7 +5711,7 @@ func (e *engine) sendSDKContext(ctx context.Context, msg any) error {
 	case sdkadapter.CancelFundamentalData:
 		command = sdkadapter.Command{
 			Kind:                  sdkadapter.CommandCancelFundamentalData,
-			CancelFundamentalData: sdkadapter.CancelFundamentalDataCommand{ReqID: m.ReqID},
+			CancelFundamentalData: sdkadapter.CancelFundamentalDataCommand(m),
 		}
 	default:
 		return fmt.Errorf("ibkr: SDK runtime does not support %T yet", msg)
