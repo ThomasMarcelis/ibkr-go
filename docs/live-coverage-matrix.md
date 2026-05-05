@@ -105,7 +105,7 @@ handled through dimensions rather than duplicate rows:
 
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
-| ORD-001 | Basic order placement | `Orders().Place`, official `placeOrder`, `openOrder`, `orderStatus` | `place_order_lmt_buy_aapl`, `place_order_mkt_buy_aapl`, `place_order_mkt_sell_aapl`, `api_order_fill_aapl`, `api_order_rest_cancel_aapl`, `api_order_relative_cancel_aapl`, `api_order_stop_cancel_aapl`, `api_order_trailing_cancel_aapl`, `api_order_rejects_aapl`, `api_order_type_matrix_aapl`, `api_tif_attribute_matrix_aapl`, `api_transmit_false_then_transmit_aapl`, `api_transmit_false_then_transmit_aapl.txt`, `api_delayed_success_modify_aapl`, `api_future_campaign_mes`, `api_future_campaign_mes.txt`, `api_forex_lifecycle_eurusd`, `api_ioc_fok_aapl`, `api_ioc_fok_aapl.txt`, `api_tif_attribute_matrix_aapl.txt`, `place_order_limit.txt`, `place_order_fill_with_execution.txt`, `place_order_modify_to_market_late_execution.txt`, `place_order_invalid_type_live_error.txt` | candidate | MKT, LMT, STP, STP LMT, TRAIL, TRAIL LIMIT, MIT, LIT, MTL, REL, MOC, LOC, MOO, LOO, PEG families, DAY/GTC/IOC/FOK/GTD, marketable/far-from-market, staged Transmit=false then transmit |
+| ORD-001 | Basic order placement | `Orders().Place`, official `placeOrder`, `openOrder`, `orderStatus` | `place_order_lmt_buy_aapl`, `place_order_mkt_buy_aapl`, `place_order_mkt_sell_aapl`, `api_order_fill_aapl`, `api_order_rest_cancel_aapl`, `api_order_relative_cancel_aapl`, `api_order_stop_cancel_aapl`, `api_order_trailing_cancel_aapl`, `api_order_rejects_aapl`, `api_order_type_matrix_aapl`, `api_tif_attribute_matrix_aapl`, `api_transmit_false_then_transmit_aapl`, `api_transmit_false_then_transmit_aapl.txt`, `api_delayed_success_modify_aapl`, `api_future_campaign_mes`, `api_future_campaign_mes.txt`, `api_forex_lifecycle_eurusd`, `api_forex_lifecycle_eurusd.txt`, `api_ioc_fok_aapl`, `api_ioc_fok_aapl.txt`, `api_tif_attribute_matrix_aapl.txt`, `place_order_limit.txt`, `place_order_fill_with_execution.txt`, `place_order_modify_to_market_late_execution.txt`, `place_order_invalid_type_live_error.txt` | candidate | MKT, LMT, STP, STP LMT, TRAIL, TRAIL LIMIT, MIT, LIT, MTL, REL, MOC, LOC, MOO, LOO, PEG families, DAY/GTC/IOC/FOK/GTD, marketable/far-from-market, staged Transmit=false then transmit, CASH leverage rejection |
 | ORD-002 | Direct and handle cancel | `Orders().Cancel`, `OrderHandle.Cancel`, official `cancelOrder` | `place_order_cancel`, `place_order_direct_cancel`, `cancel_order.txt`, `direct_cancel_order.txt` | promoted | direct cancel by ID and handle cancel both frozen; cancel unknown order, manual cancel time, terminal status remain target variants |
 | ORD-003 | Modify | `OrderHandle.Modify`, official modify by re-sending `placeOrder` | `place_order_modify`, `place_order_modify.txt` | promoted | price, quantity, TIF, forbidden side/contract changes, mismatched order ID rejection |
 | ORD-004 | Global cancel | `Orders().CancelAll`, official `reqGlobalCancel` | `global_cancel`, `global_cancel.txt` | promoted | no orders, many orders, mixed basic/bracket/OCA/conditional, post-cancel open-orders check |
@@ -113,14 +113,14 @@ handled through dimensions rather than duplicate rows:
 | ORD-006 | Completed orders | `Orders().Completed`, official `reqCompletedOrders`, `completedOrder`, `completedOrdersEnd` | `api_completed_orders_variants_aapl`, `api_completed_orders_variants_aapl.txt`, `completed_orders`, `completed_orders.txt` | promoted | `api_completed_orders_variants_aapl` was recaptured on 2026-04-15 (`6ac84daaf4084436`) after fixing the live TRAIL LIMIT completed-order decode path; apiOnly=false and apiOnly=true both reached `completedOrdersEnd` |
 | ORD-007 | Executions and commissions | `Orders().Executions`, official `reqExecutions`, `execDetails`, `commissionReport` | `executions_snapshot`, `executions.txt`, `executions_correlated.txt`, `executions_overlapping.txt`, `trading_split_round_trip_aapl` | promoted | filters by account/client/symbol/secType/exchange/side/time, commission before/after exec, sentinel values. 2026-04-15 aggressive pairs live run exposed and fixed the server_version=200 `lastNDays`/`specificDates` request fields |
 | ORD-008 | Order handle lifecycle | `OrderHandle.Events`, `OrderHandle.Lifecycle`, `OrderHandle.Done`, `OrderHandle.Wait`, `OrderHandle.Close` | `api_reconnect_active_order_aapl`, `api_order_handle_reconnect_cancel_aapl.txt`, `api_transmit_false_then_transmit_aapl`, order replay and live tests | candidate | handle detach without cancel, terminal auto-close, active-order reconnect/open-order recovery, slow consumer |
-| ORD-009 | End-to-end trading campaign | account, orders, executions, completed orders, PnL, positions | `trading_split_round_trip_aapl`, `api_algorithmic_campaign_aapl`, `api_scale_in_campaign_aapl`, `api_stress_rapid_fire_aapl`, `api_pairs_trading_aapl_msft`, `api_pairs_trading_aapl_msft.txt`, `api_dollar_cost_averaging_aapl`, `api_dollar_cost_averaging_aapl.txt`, `api_stop_loss_management_aapl`, `api_stop_loss_management_aapl.txt` | candidate | split buys/sells, concurrent observers, cleanup, stop management (`a563cafd26e366be` live capture), pair orders, repeated buys, final account/position/PnL/open-order reconciliation. Aggressive paper sizing now defaults to 500-share campaign clips |
+| ORD-009 | End-to-end trading campaign | account, orders, executions, completed orders, PnL, positions | `trading_split_round_trip_aapl`, `api_algorithmic_campaign_aapl`, `api_scale_in_campaign_aapl`, `api_stress_rapid_fire_aapl`, `api_stress_rapid_fire_aapl.txt`, `api_pairs_trading_aapl_msft`, `api_pairs_trading_aapl_msft.txt`, `api_dollar_cost_averaging_aapl`, `api_dollar_cost_averaging_aapl.txt`, `api_stop_loss_management_aapl`, `api_stop_loss_management_aapl.txt` | candidate | split buys/sells, concurrent observers, cleanup, stop management (`a563cafd26e366be` live capture), rapid-fire ten-order global cancel (`69ee6be4cdf7d577` live capture), pair orders, repeated buys, final account/position/PnL/open-order reconciliation. Aggressive paper sizing now defaults to 500-share campaign clips |
 
 ## Advanced Orders
 
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
-| AORD-001 | Brackets and attached orders | `Orders().Place`, official bracket/attached order behavior | `place_order_bracket_aapl`, `api_bracket_trigger_aapl`, `api_bracket_trailing_stop_aapl` | candidate | parent transmit false, take-profit, stop-loss, trailing stop-loss, activation after parent, cleanup |
-| AORD-002 | OCA | official OCA group/order type | `place_order_oca_pair_aapl`, `api_oca_trigger_aapl` | candidate | one fills and cancels peer, far-from-market cleanup, mixed buy/sell |
+| AORD-001 | Brackets and attached orders | `Orders().Place`, official bracket/attached order behavior | `place_order_bracket_aapl`, `api_bracket_trigger_aapl`, `api_bracket_trigger_aapl.txt`, `api_bracket_trailing_stop_aapl` | candidate | `api_bracket_trigger_aapl.txt` freezes parent fill, child OCA group echo, and real price-band cancel/reject on forced take-profit modify; remaining target variants: take-profit fill cancels stop-loss sibling, stop-loss trigger, trailing stop-loss, cleanup |
+| AORD-002 | OCA | official OCA group/order type | `place_order_oca_pair_aapl`, `api_oca_trigger_aapl`, `api_oca_trigger_aapl.txt` | candidate | `api_oca_trigger_aapl.txt` freezes OCA group echo plus real aggressive-peer PendingCancel/Cancelled price-band rejection; remaining target variants: one fills and cancels peer, far-from-market cleanup, mixed buy/sell |
 | AORD-003 | IB algos | official IB algos and TagValue params | `place_order_algo_adaptive_aapl`, `api_algorithmic_campaign_aapl`, `api_algo_variants_aapl` | candidate | Adaptive normal/urgent/patient, TWAP, VWAP, ArrivalPx, DarkIce, AccumDist, Inline, Close, PctVol, BalanceImpactRisk, MinImpact, invalid param, open-order round trip. `api_algo_variants_aapl` captured 2026-04-15 (`1855e2554d7de3ae`) |
 | AORD-004 | Order conditions | official price/time/margin/execution/volume/percent-change conditions | `place_order_price_condition_aapl`, `api_conditions_matrix_aapl` | candidate | every condition family, and/or conjunction, ignoreRTH, cancelOrder |
 | AORD-005 | Combo/BAG | official combo legs, combo prices, smart combo routing params | `api_combo_option_vertical_aapl` | candidate | STK combo, option vertical, ratio legs, per-leg price, execution/open/completed observation |
@@ -187,6 +187,7 @@ one primary matrix row above.
 | `api_algorithmic_campaign_aapl` | ORD-009 |
 | `api_bracket_trailing_stop_aapl` | AORD-001 |
 | `api_bracket_trigger_aapl` | AORD-001 |
+| `api_bracket_trigger_aapl.txt` | AORD-001 |
 | `api_client_id0_order_observation_aapl` | ORD-005 |
 | `api_combo_option_vertical_aapl` | AORD-005 |
 | `api_completed_orders_variants_aapl` | ORD-006 |
@@ -197,12 +198,14 @@ one primary matrix row above.
 | `api_duplicate_quote_subscriptions_aapl` | MD1-003 |
 | `api_fundamental_reports_aapl` | REF-006 |
 | `api_forex_lifecycle_eurusd` | ORD-001 |
+| `api_forex_lifecycle_eurusd.txt` | ORD-001 |
 | `api_future_campaign_mes` | ORD-001 |
 | `api_historical_matrix_aapl` | HIST-001 |
 | `api_ioc_fok_aapl` | ORD-001 |
 | `api_market_data_completeness_aapl` | MD1-003 |
 | `api_news_article_aapl` | NEWS-002 |
 | `api_oca_trigger_aapl` | AORD-002 |
+| `api_oca_trigger_aapl.txt` | AORD-002 |
 | `api_order_fill_aapl` | ORD-001 |
 | `api_order_rejects_aapl` | ORD-001 |
 | `api_order_relative_cancel_aapl` | ORD-001 |

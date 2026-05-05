@@ -27,6 +27,7 @@ func main() {
 	listScenarios := flag.Bool("list", false, "list available scenarios and exit")
 	listJSON := flag.Bool("list-json", false, "list available scenarios as JSON and exit")
 	listBatch := flag.String("list-batch", "", "list scenario|client_id entries for a batch and exit")
+	roleFor := flag.Bool("role-for", false, "print capture role for positional scenario names and exit")
 	driverEvents := flag.String("driver-events", os.Getenv("IBKR_DRIVER_EVENTS"), "optional JSONL path for public API driver events")
 	dialTimeout := flag.Duration("dial-timeout", 5*time.Second, "tcp dial timeout")
 	flag.Parse()
@@ -54,6 +55,12 @@ func main() {
 	if *listBatch != "" {
 		if err := writeBatchList(os.Stdout, *listBatch); err != nil {
 			log.Fatalf("list-batch: %v", err)
+		}
+		return
+	}
+	if *roleFor {
+		if err := writeScenarioRole(os.Stdout, flag.Args()); err != nil {
+			log.Fatalf("role-for: %v", err)
 		}
 		return
 	}

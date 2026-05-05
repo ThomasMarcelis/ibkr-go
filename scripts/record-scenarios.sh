@@ -4,14 +4,17 @@
 # If no scenarios are given, records the catalog batch named by
 # IBKR_CAPTURE_BATCH, defaulting to new-v2. Explicit scenarios may be passed as
 # "name" or "name|client_id".
+# Each scenario's Gateway role is read from the cmd/ibkr-capture catalog.
+# IBKR_CAPTURE_ROLE may route read-only scenarios through paper-dev, but
+# paper-order scenarios always stay on paper-dev.
 
-UPSTREAM="${IBKR_UPSTREAM:-127.0.0.1:4002}"
 LISTEN="${IBKR_LISTEN:-127.0.0.1:4101}"
 OUTDIR="${IBKR_CAPTURES:-captures}"
 RECORDER="${IBKR_RECORDER:-/tmp/ibkr-recorder}"
 CAPTURE="${IBKR_CAPTURE:-/tmp/ibkr-capture}"
 BATCH="${IBKR_CAPTURE_BATCH:-new-v2}"
 RECORDER_MAX_LEGS="${IBKR_RECORDER_MAX_LEGS:-1}"
+ROLE="${IBKR_CAPTURE_ROLE:-}"
 TMPLOG=$(mktemp)
 TMPEVENTS=$(mktemp)
 trap "rm -f $TMPLOG $TMPEVENTS" EXIT
@@ -34,22 +37,60 @@ if [ ${#SCENARIOS[@]} -eq 0 ]; then
     exit 1
 fi
 
+role_for_scenario() {
+    local scenario="$1"
+    local catalog_role
+    catalog_role=$("$CAPTURE" -role-for "$scenario") || return 1
+    if [ -z "$ROLE" ]; then
+        echo "$catalog_role"
+        return
+    fi
+    if [ "$ROLE" != "readonly-live" ] && [ "$ROLE" != "paper-dev" ]; then
+        echo "unsupported IBKR_CAPTURE_ROLE=$ROLE (want readonly-live or paper-dev)" >&2
+        return 1
+    fi
+    if [ "$catalog_role" = "paper-dev" ] && [ "$ROLE" != "paper-dev" ]; then
+        echo "refusing to route paper scenario $scenario through $ROLE" >&2
+        return 1
+    fi
+    echo "$ROLE"
+}
+
+upstream_for_role() {
+    local role="$1"
+    if [ "$role" = "paper-dev" ]; then
+        echo "${IBKR_PAPER_UPSTREAM:-${IBKR_LIVE_PAPER_ADDR:-127.0.0.1:4002}}"
+    elif [ "$role" = "readonly-live" ]; then
+        echo "${IBKR_READONLY_UPSTREAM:-${IBKR_LIVE_READONLY_ADDR:-${IBKR_UPSTREAM:-127.0.0.1:4001}}}"
+    else
+        echo "unsupported capture role=$role (want readonly-live or paper-dev)" >&2
+        return 1
+    fi
+}
+
 mkdir -p "$OUTDIR"
 
 for entry in "${SCENARIOS[@]}"; do
     scenario="${entry%|*}"
     client_id="${entry#*|}"
-    printf "recording %-40s client_id=%-3s " "$scenario" "$client_id"
+    if ! scenario_role=$(role_for_scenario "$scenario"); then
+        echo "failed to resolve capture role for $scenario"
+        exit 1
+    fi
+    if ! upstream=$(upstream_for_role "$scenario_role"); then
+        exit 1
+    fi
+    printf "recording %-40s role=%-13s client_id=%-3s " "$scenario" "$scenario_role" "$client_id"
 
     # Start recorder in background, suppress all output
     "$RECORDER" \
-        -upstream "$UPSTREAM" \
+        -upstream "$upstream" \
         -listen "$LISTEN" \
         -out "$OUTDIR" \
         -scenario "$scenario" \
         -client-id "$client_id" \
         -max-legs "$RECORDER_MAX_LEGS" \
-        -notes "batch=$BATCH client_id=$client_id" \
+        -notes "batch=$BATCH role=$scenario_role client_id=$client_id" \
         >/dev/null 2>&1 &
     rpid=$!
 

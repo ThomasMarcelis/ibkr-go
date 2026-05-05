@@ -48,6 +48,7 @@ func TestExecutionCorrelatorClearsDeliveredHistoryButPreservesRoutes(t *testing.
 	state := c.execs["exec-aapl"]
 	if state == nil {
 		t.Fatal("exec state missing after delivery")
+		return
 	}
 	if len(state.commissions) != 0 {
 		t.Fatalf("state.commissions len = %d, want 0 after clear", len(state.commissions))
@@ -82,6 +83,7 @@ func TestExecutionCorrelatorDropsClosedRoutesFromPendingBacklog(t *testing.T) {
 	state := c.execs["exec-aapl"]
 	if state == nil {
 		t.Fatal("exec state missing after route close")
+		return
 	}
 	if len(state.commissions) != 0 {
 		t.Fatalf("state.commissions len = %d, want 0 after dropping closed route", len(state.commissions))

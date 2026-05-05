@@ -52,7 +52,7 @@ func TestLiveCapturePermissionAndMultiAssetScenarios(t *testing.T) {
 func runLiveCaptureScenario(t *testing.T, name string, timeout time.Duration) []apiDriverEvent {
 	t.Helper()
 
-	cfg := ibkrlive.Require(t)
+	cfg := ibkrlive.RequireTradingConfig(t)
 	sc, ok := scenarios[name]
 	if !ok {
 		t.Fatalf("scenario %q is not registered", name)

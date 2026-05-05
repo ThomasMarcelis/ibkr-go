@@ -1,10 +1,118 @@
 # Roadmap
 
+## Direction
+
+`ibkr-go` is a pure-Go, idiomatic client for the Interactive Brokers
+TWS/Gateway socket protocol. The runtime stays pure Go: no cgo, no C++
+toolchain, no SDK dependency on the production import path. See
+[`AGENTS.md`](../AGENTS.md) for the full policy and
+[`docs/architecture.md`](architecture.md) for the runtime model.
+
+The goal is end-to-end coverage of the IBKR TWS/Gateway socket surface that
+the official C++ SDK exposes for free entitlements — every request, every
+callback, every version-gated edge — implemented as a typed Go facade with
+deterministic replay coverage and live verification against the local
+Gateway.
+
+To get there, the official IBKR C++ SDK is used as a conformance oracle and
+capture tool, never as a runtime engine:
+
+- when adding or hardening a protocol area, run the SDK against the local
+  Gateway to capture the reference request/callback shape and edge-case
+  behavior;
+- cross-check `ibkr-go`'s decode and request encoding against the SDK's
+  interpretation of the same scenario when a discrepancy is suspected;
+- promote sanitized, live-derived captures into the deterministic replay
+  fixtures.
+
+Live Gateway behavior remains the source of truth. When SDK behavior and live
+behavior disagree, live wins.
+
+## Near-Term Verification Plan
+
+The maintainer lab uses two local Gateway roles:
+
+- `readonly-live` is the real-money Gateway with live market data and read-only
+  API permissions. It is used for market data, account, historical, scanner,
+  news, WSH, and entitlement evidence.
+- `paper-dev` is a throwaway paper Gateway. It is used for all order-placement,
+  modification, cancellation, flattening, reconnect-with-active-order, and
+  campaign evidence.
+
+Before the next release-quality sweep, run `cmd/ibkr-doctor` against both roles,
+refresh the executable capture catalog with `cmd/ibkr-capture -list-json`, and
+record market-open captures through `scripts/record-scenarios.sh`. The scripts
+derive each scenario's role from the catalog risk class, keeping the capture
+target in one place. Every promoted behavior must still follow the
+live-evidence path: live run, capture verification, sanitized transcript,
+public replay test, and updates to the coverage matrix and tracker.
+
+Current IBKR drift to check first:
+
+- The public [IBKR API Software](https://interactivebrokers.github.io/) page
+  listed API Latest 10.47, released 2026-05-20, and recommended TWS or IB
+  Gateway 1045+ when checked on 2026-05-25; verify that behavior against the
+  existing `server_version 200` codec baseline.
+- Fundamental data de-support or replacement behavior.
+- `$LEDGER-` account-value prefixes from the new account-value setting.
+- Fractional `tickSize` values and newer generic tick families.
+- New or shifted order/account tail fields that affect OpenOrder,
+  CompletedOrder, Execution, or Commission decoding.
+
+## Maintainer Execution Roadmap
+
+The north star is complete, idiomatic, pure-Go coverage of the IBKR
+TWS/Gateway socket API. The work gets there through small reviewable slices,
+not broad rewrites. A valuable slice usually moves at least one row in
+[`live-coverage-matrix.md`](live-coverage-matrix.md) from target/candidate to
+promoted, or records a real entitlement/account blocker that prevents it.
+
+Maintainers should choose work in this order:
+
+1. **Preserve safety and truth.** Read `AGENTS.md`, check `jj st`, and verify
+   whether the task is read-only or paper-trading. Never place orders outside
+   `paper-dev`.
+2. **Prefer replay promotion over new surface area.** If a verified live
+   capture already exists, promote it into a sanitized transcript plus public
+   API test before inventing another scenario.
+3. **Use the matrix to pick the next slice.** `live-coverage-matrix.md` owns
+   capability status; `ibkr-api-inventory.md` owns official surface inventory;
+   `message-coverage.md` owns codec message status; `live-test-tracker.md`
+   owns run evidence.
+4. **Keep slices vertical.** A complete slice includes the typed public API
+   behavior, codec/wire shape if touched, deterministic replay or focused unit
+   coverage, documentation status updates, and verification commands.
+5. **Treat errors as evidence.** Entitlement, account-type, permission,
+   market-state, pacing, and unsupported-feature responses are useful live
+   facts. Freeze the real error when it improves diagnosis.
+6. **Use the SDK only as an oracle.** SDK output can help compare request and
+   callback shape for the same live scenario. It never becomes production code,
+   generated repo artifacts, or a substitute for live Gateway behavior.
+
+The next high-value workstreams are:
+
+| Priority | Workstream | Why it matters | Next slices |
+|----------|------------|----------------|-------------|
+| 1 | Promote captured order campaigns | Raises deterministic CI confidence without more market dependency | what-if margin, scale-in campaign; forex lifecycle promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c` |
+| 2 | Market-open trading-basic captures | Grounds fill, modify-to-fill, order-type matrix, and rejection paths under regular-session behavior | `trading-basic` batch through `paper-dev`, then verify and triage |
+| 3 | Advanced order semantics | Closes gaps between "order placement works" and "order model is trustworthy" | brackets, OCA, conditions, scale, hedge, pegged/adjusted families |
+| 4 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10358 fundamentals, 10276 WSH |
+| 5 | Protocol drift and version edges | Keeps the pure-Go codec current with IBKR releases | current-time millis, `$LEDGER-` account values, fractional tick sizes, order/completed-order tail fields |
+| 6 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, BOND identifier, CFD/CRYPTO/FUND probes |
+| 7 | Public ergonomics and examples | Helps users trust and adopt the library | examples for live roles, error handling, replay-backed behavior notes, pkg.go.dev polish |
+
+Each workstream should stay scoped to one logical change. If the work needs a
+large plan, put the plan in a repo doc and keep the next handoff request
+focused on the next slice and its completion criteria.
+
 ## Current state
 
-ibkr-go covers the complete Interactive Brokers TWS/Gateway socket protocol.
-All protocol areas below are implemented, tested against live IB Gateway
-server_version 200, and frozen into the public API contract.
+ibkr-go covers the current public facade across the major Interactive Brokers
+TWS/Gateway socket protocol domains. The core protocol areas below are
+implemented and validated against live IB Gateway `server_version 200`, but
+rare official callbacks, new SDK additions, entitlement-dependent products, and
+some advanced order branches still need the live-evidence path described
+above.
 
 ### Bootstrap and session
 
@@ -105,15 +213,35 @@ TWS window integration.
 
 reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
 
-## Next
+## Toward full SDK-equivalent coverage
+
+Each item below is a known gap between the current public surface and the
+free-entitlement SDK surface. Closing it means: typed Go facade, deterministic
+replay fixture seeded from a sanitized SDK/live capture, and live verification
+against the local paper Gateway when applicable.
 
 - Delta-neutral order extensions.
 - Scale order extensions.
 - Remaining ungrounded OpenOrder branches.
 - CompletedOrder full detail extraction.
+- Millisecond-precision current-time pair (`reqCurrentTimeInMillis` /
+  `currentTimeInMillis`) added in newer SDK releases.
+- Order-side coverage promised by the public API but not yet exhaustively
+  grounded: OCA group semantics, bracket parent/child sequencing, condition
+  families (price, time, margin, execution, volume, percent-change), IB algo
+  parameter passthrough, hedging, and short-sale fields.
+- Server-version coverage beyond `server_version 200`, behind explicit
+  version-aware codec paths.
+
+[`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
+[`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
+trackers; new gaps land there first, then graduate here.
 
 ## Ongoing
 
+- SDK conformance oracle workflow: capture reference traces from the official
+  SDK against the local Gateway when adding or hardening a protocol area, and
+  fold sanitized live-derived captures into deterministic replay fixtures.
 - Broader server version testing beyond v200.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
@@ -123,3 +251,6 @@ reqMktDepthExchanges (msg 82) — exchange metadata for Level 2 availability.
 - Client Portal Web API.
 - Flex.
 - `EWrapper` / `EClient` official-style bridge.
+- The official IBKR C++ SDK as a runtime engine. The SDK is permitted only as
+  a conformance oracle and capture tool; production code stays pure Go on the
+  default import path.

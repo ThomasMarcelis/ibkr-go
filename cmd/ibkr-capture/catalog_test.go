@@ -88,6 +88,42 @@ func TestWriteBatchList(t *testing.T) {
 	}
 }
 
+func TestWriteScenarioRole(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		scenarios []string
+		want      string
+	}{
+		{
+			name:      "read only",
+			scenarios: []string{"api_market_data_completeness_aapl|1", "api_historical_matrix_aapl"},
+			want:      captureRoleReadOnlyLive,
+		},
+		{
+			name:      "paper",
+			scenarios: []string{"api_pairs_trading_aapl_msft|1"},
+			want:      captureRolePaperDev,
+		},
+		{
+			name:      "mixed prefers paper",
+			scenarios: []string{"api_historical_matrix_aapl", "api_pairs_trading_aapl_msft|1"},
+			want:      captureRolePaperDev,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			if err := writeScenarioRole(&buf, tc.scenarios); err != nil {
+				t.Fatalf("writeScenarioRole() error = %v", err)
+			}
+			if got := strings.TrimSpace(buf.String()); got != tc.want {
+				t.Fatalf("writeScenarioRole() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestReplayBatches(t *testing.T) {
 	t.Parallel()
 

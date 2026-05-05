@@ -8,9 +8,9 @@ Current state:
 
 - `testing/testhost` uses the production codec in both directions; transcript
   message names map to real IBKR integer message IDs
-- checked-in transcripts cover both live-grounded scenarios and synthetic
-  fault-injection cases for disconnects, partial frames, lifecycle edges, and
-  other protocol failures
+- checked-in transcripts cover live-grounded scenarios plus deliberate
+  transport fault-injection around real message shapes for disconnects,
+  partial frames, lifecycle edges, and other protocol failures
 - live-grounded behavior is captured from IB Gateway `server_version 200` and
   frozen into replay artifacts
 - raw capture logs record per-leg connect/disconnect events plus TCP chunks;
@@ -85,14 +85,30 @@ The live capture tooling separates raw evidence from replay semantics:
 
 ## Live Capture Runbook
 
-The current paper Gateway target is `127.0.0.1:4002`. Capture through the
-recorder proxy so raw evidence and normalized replay artifacts stay linked:
+Maintainer live verification uses two Gateway roles:
+
+- `readonly-live`: a real-money Gateway with live market data and read-only API
+  permissions. It defaults to `127.0.0.1:4001` and can be set with
+  `IBKR_LIVE_READONLY_ADDR`.
+- `paper-dev`: a throwaway paper Gateway where order placement, cancellation,
+  and flattening campaigns may run aggressively. It defaults to
+  `127.0.0.1:4002` and can be set with `IBKR_LIVE_PAPER_ADDR`.
+
+Run the diagnostic before recording:
+
+```bash
+go run ./cmd/ibkr-doctor -role readonly-live
+go run ./cmd/ibkr-doctor -role paper-dev
+```
+
+Capture through the recorder proxy so raw evidence and normalized replay
+artifacts stay linked:
 
 ```bash
 go build -o /tmp/ibkr-recorder ./cmd/ibkr-recorder
 go build -o /tmp/ibkr-capture ./cmd/ibkr-capture
 go build -o /tmp/ibkr-normalize ./cmd/ibkr-normalize
-IBKR_UPSTREAM=127.0.0.1:4002 ./scripts/record-scenarios.sh quote_stream_multi_asset historical_ticks_aapl_timezone_window
+IBKR_CAPTURE_ROLE=readonly-live ./scripts/record-scenarios.sh quote_stream_multi_asset historical_ticks_aapl_timezone_window
 ./scripts/verify-captures.sh captures/<capture-dir>
 ```
 
@@ -107,11 +123,20 @@ order ref.
 Useful scenario batches:
 
 ```bash
+IBKR_CAPTURE_ROLE=readonly-live IBKR_CAPTURE_BATCH=exhaustive-read-only ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-basic ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-advanced ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-campaigns ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-all ./scripts/record-scenarios.sh
 ```
+
+The scripts ask `cmd/ibkr-capture` for each scenario's role. Scenarios whose
+catalog risk class is `paper_*` use `paper-dev`; all others use
+`readonly-live`. `IBKR_CAPTURE_ROLE=paper-dev` may route read-only scenarios
+through the paper Gateway during maintenance, but paper-order scenarios cannot
+be downgraded to `readonly-live`. Use `IBKR_PAPER_UPSTREAM` or
+`IBKR_LIVE_PAPER_ADDR` for paper overrides; legacy `IBKR_UPSTREAM` applies only
+to read-only scenarios.
 
 For active-order reconnect captures, allow the recorder to accept multiple
 connection legs:

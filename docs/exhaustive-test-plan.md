@@ -26,6 +26,11 @@ Executable batches now map this plan to `cmd/ibkr-capture` runs:
 catalog so new live probes remain discoverable and replay promotion can follow
 the same capture pipeline.
 
+Capture runs use the scenario catalog's risk class to choose the Gateway role:
+`paper_*` scenarios run through the paper-dev Gateway, while read-only and
+entitlement probes run through the readonly-live Gateway unless the maintainer
+sets an explicit override.
+
 ## 1. Protocol Messages
 
 Every outbound and inbound message ID must have at least one live-grounded
@@ -88,7 +93,7 @@ scenario.
 | 81 | reqMatchingSymbols | yes | yes | yes | |
 | 82 | reqMktDepthExchanges | yes | yes | yes | |
 | 83 | reqSmartComponents | yes | yes | yes | |
-| 84 | reqNewsArticle | no | no | no | **target** — needs article ID from historical news |
+| 84 | reqNewsArticle | yes | yes | yes | captured through `api_news_article_aapl`; add invalid article/provider variants |
 | 85 | reqNewsProviders | yes | yes | yes | |
 | 86 | reqHistoricalNews | yes | yes | yes | |
 | 87 | reqHeadTimestamp | yes | yes | yes | |
@@ -119,7 +124,7 @@ All are exercised through the outbound scenarios above. Individual gaps:
 | 1 | tickPrice | EFP tick type never observed |
 | 14 | newsBulletins | live capture exists; allMessages variant untested |
 | 21 | tickOptionComputation | live calc scenarios exist; streaming OPT tick untested |
-| 83 | newsArticle | no scenario (depends on outbound 84) |
+| 83 | newsArticle | captured through `api_news_article_aapl`; invalid article/provider variants remain |
 | 101 | completedOrder | full field extraction deferred |
 | 108 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
 
@@ -479,8 +484,8 @@ tests.
 | Cancel after Done | live test |
 | Modify after Done | live test |
 | Place with Transmit=false, then cancel | live test |
-| Place with Transmit=false, then transmit | no |
-| Two subscriptions same contract | no |
+| Place with Transmit=false, then transmit | replay promoted |
+| Two subscriptions same contract | live capture |
 | Subscribe, disconnect, resume | transcript (quotes, bars) |
 
 ## 11. Execution Phases
@@ -490,7 +495,7 @@ tests.
 - [x] Fix cancel_order (CME_TAGGING_FIELDS)
 - [x] Add cancel regression tests
 - [x] Tighten live test cancel assertions
-- [ ] Promote pending transcripts (bracket, OCA, rest_cancel)
+- [ ] Promote pending transcripts (what-if, scale-in; forex replay promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c`)
 - [ ] Record fresh captures for all scenarios with fixed cancel
 - [ ] Update `cancel_order.txt` and `direct_cancel_order.txt` to include PendingCancel
 
@@ -531,7 +536,7 @@ reconnect/expiry assertions.
 
 ### Phase 5: Reconnect with active state
 
-- [ ] Reconnect with resting order → verify handle resumes
+- [x] Reconnect with resting order → verify handle resumes
 - [ ] Reconnect with filled order → verify execution delivered
 - [ ] Reconnect with active quote subscription → verify Gap/Resumed
 - [ ] Reconnect with active PnL subscription
@@ -600,7 +605,8 @@ from `5ff9cdc0f6f9b500` and `fcb7e811624e4aa9`.
 - [x] Pairs trading workflow (`api_pairs_trading_aapl_msft` captured 2026-04-15, replay-promoted from `0dc806f7bb0868e8`; aggressive 500-share live run/capture also completed with `86dc8f389a457efc`)
 - [ ] Bracket with trailing stop-loss (`api_bracket_trailing_stop_aapl` captured 2026-04-15, `2c0453360020a3ad`)
 - [x] Dollar-cost averaging (`api_dollar_cost_averaging_aapl` captured 2026-04-15, replay-promoted from `296bdf662eb84e30`)
-- [ ] Stop-loss management (move as price advances) (`api_stop_loss_management_aapl` captured 2026-04-15, `a563cafd26e366be`)
+- [x] Stop-loss management (move as price advances) (`api_stop_loss_management_aapl` captured 2026-04-15, replay-promoted from `a563cafd26e366be`)
+- [x] Rapid-fire global cancel (`api_stress_rapid_fire_aapl` captured 2026-04-14, replay-promoted from `69ee6be4cdf7d577`)
 - [ ] Full reconciliation (positions + executions + PnL match)
 - [ ] Options wheel (when OPT available)
 

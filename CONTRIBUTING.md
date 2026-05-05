@@ -30,9 +30,15 @@ Wire framing and codec round-trips are also fuzzed. The intent is not just to
 have broad coverage, but to keep the protocol surface diagnosable and safe to
 extend without a live broker in CI.
 
+Maintainer live campaigns use two local Gateway roles: `readonly-live` for
+real-money read-only evidence and `paper-dev` for any order placement,
+modification, cancellation, reconnect, or flattening scenario. Run
+`go run ./cmd/ibkr-doctor -role readonly-live` and
+`go run ./cmd/ibkr-doctor -role paper-dev` before recording captures.
+
 ## Reference policy
 
-Protocol-adjacent work should be grounded in the local live TWS or IB Gateway when available, plus official IBKR docs, official IBKR client-library source, captured traffic, and other IBKR library implementations where useful. The merged implementation must still follow `ibkr-go`'s typed public API and package philosophy rather than mirroring the official public surface mechanically.
+Protocol-adjacent work should be grounded in the local live TWS or IB Gateway when available, plus official IBKR docs, official IBKR client-library source, captured traffic, and other IBKR library implementations where useful. The official IBKR C++ SDK may be used as an opt-in conformance oracle or capture tool, but production code remains pure Go on the default import path. The merged implementation must still follow `ibkr-go`'s typed public API and package philosophy rather than mirroring the official public surface mechanically.
 
 ## Commit convention
 

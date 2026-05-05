@@ -4,12 +4,82 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-04-15 (paper gateway 127.0.0.1:4002, server_version 200,
-account DUP770846).
+Last updated: 2026-05-25 (readonly-live gateway 127.0.0.1:4001 and paper-dev
+gateway 127.0.0.1:4002, both server_version 200).
+
+## Current Campaign Contract
+
+Future live sweeps use two Gateway roles. `readonly-live` points at the
+real-money, read-only Gateway for market data, account, historical, scanner,
+news, WSH, and entitlement evidence. `paper-dev` points at the disposable paper
+Gateway for every scenario that places, modifies, cancels, reconnects around,
+or flattens orders.
+
+Before a sweep, run:
+
+```bash
+go run ./cmd/ibkr-doctor -role readonly-live
+go run ./cmd/ibkr-doctor -role paper-dev
+```
+
+Capture scripts choose the role from `cmd/ibkr-capture` scenario metadata, so
+mixed batches cannot accidentally send paper-order scenarios to the read-only
+Gateway. Every new row below should record the role, server version, account
+class, and promoted transcript or remaining blocker.
+
+## Gateway Bring-Up Runs
+
+### 2026-05-25
+
+Both local Gateway roles connected with `server_version=200`.
+
+- `readonly-live` diagnostic connected and `CurrentTime` passed. AAPL quote
+  returned real IBKR code 10089: live API market-data subscription unavailable;
+  delayed data was offered by Gateway.
+- `readonly-live` broad `IBKR_LIVE=1 ... -run '^TestLive'` passed. The run
+  logged current account/session blockers instead of treating them as library
+  regressions: completed-orders silence until context deadline, historical
+  ticks code 10187 for missing ISLAND market-data permission, fundamentals
+  code 10358, WSH code 10276, and market-depth timeout with no rows.
+- `paper-dev` diagnostic connected, requested delayed data, and received an
+  AAPL delayed quote.
+- `paper-dev` order smoke passed for limit rest/cancel, invalid order type,
+  WhatIf, public limit cancel, and global cancel. `TestLiveOrderLimitRestCancel`
+  observed code 399 because the order would not reach the exchange until
+  `2026-05-26 09:30:00 US/Eastern`; the test now records that off-hours
+  Gateway warning and relies on cleanup `CancelAll`.
+
+Pre-window continuation check at 2026-05-25 15:58 Europe/Amsterdam, before the
+planned Tuesday 2026-05-26 09:30 US/Eastern market-open campaign:
+
+- `go run ./cmd/ibkr-doctor -role readonly-live -timeout 30s` connected to
+  `127.0.0.1:4001`; `server_version=200`, `next_valid_id=1`, and one managed
+  account were visible. `CurrentTime` returned `2026-05-25T13:58:39Z`. AAPL
+  quote probing returned real IBKR code 10168: requested market data is not
+  subscribed and delayed market data is not enabled.
+- `go run ./cmd/ibkr-doctor -role paper-dev -timeout 30s` connected to
+  `127.0.0.1:4002`; `server_version=200`, `next_valid_id=2`, and one managed
+  account were visible. Delayed AAPL data was available (`type=Delayed`).
+- `/tmp/ibkr-recorder`, `/tmp/ibkr-capture`, and `/tmp/ibkr-normalize` built
+  successfully from the current worktree.
+- `IBKR_CAPTURE_BATCH=trading-basic` resolves to
+  `api_delayed_success_modify_aapl`, `api_ioc_fok_aapl`,
+  `api_order_fill_aapl`, `api_order_rejects_aapl`,
+  `api_order_rest_cancel_aapl`, and `api_order_type_matrix_aapl`; the
+  executable catalog reports `paper-dev` for the whole set.
+- Paper cleanup was checked without placing new orders:
+  `IBKR_LIVE=1 IBKR_LIVE_ADDR=127.0.0.1:4002 go test . -run '^TestLiveOpenOrders$' -count=1 -timeout 1m -v`
+  passed and logged
+  `OpenOrdersSnapshot: 0 orders`.
+- The MO-1 order smoke and MO-2 `trading-basic` capture batch were not started
+  because the requested market-open window had not arrived. No new capture
+  directories or capture hashes were produced in this continuation check.
 
 ## Live Test Results (client_live_order_test.go)
 
-45 tests across 10 tiers. All pass or gracefully skip as of 2026-04-14.
+45 tests across 10 tiers. The full tier table below reflects the 2026-04-14
+paper-order campaign; the 2026-05-25 bring-up reran the targeted paper smoke
+against the role-aware `paper-dev` Gateway.
 
 ### Tier 1: Order Type Rest/Cancel
 
@@ -126,9 +196,11 @@ account DUP770846).
 | Scenario | Date | Status |
 |----------|------|--------|
 | api_whatif_margin_aapl | 2026-04-14 | recorded |
-| api_forex_lifecycle_eurusd | 2026-04-14 | recorded |
-| api_stress_rapid_fire_aapl | 2026-04-14 | recorded |
+| api_forex_lifecycle_eurusd | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `641eab5c0e6909f7`; real paper-account code 201 leverage rejection |
+| api_stress_rapid_fire_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `69ee6be4cdf7d577` |
 | api_scale_in_campaign_aapl | 2026-04-14 | recorded |
+| api_bracket_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `682a1390b2acf04c`; bracket parent fill, child OCA echo, and real price-band cancel/reject on take-profit modify |
+| api_oca_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `2dc16869778bc497`; OCA group echo plus real price-band cancellation |
 | api_ioc_fok_aapl | 2026-04-14 | recorded (updated) |
 | api_security_type_probe_matrix | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9be83e57ed176a17` |
 | api_tif_attribute_matrix_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `e6601dcc2abfd001` |
@@ -170,11 +242,11 @@ account DUP770846).
 | api_future_campaign_mes.txt | 20260415T162047Z | promoted; covers MES futures buy/flatten round trip with executions and commissions |
 | api_pairs_trading_aapl_msft.txt | 20260415T161858Z | promoted; covers paired AAPL long/MSFT short entries and per-symbol flatten replay |
 | api_dollar_cost_averaging_aapl.txt | 20260415T161924Z | promoted; covers three staged AAPL entries and aggregate flatten replay |
+| api_stress_rapid_fire_aapl.txt | 20260414T171824Z | promoted; covers ten far AAPL LMT orders, distinct order IDs, and global-cancel terminal replay |
+| api_forex_lifecycle_eurusd.txt | 20260414T182627Z | promoted; covers EUR.USD far LMT OpenOrder, Inactive status, and real code 201 leverage rejection replay |
+| api_bracket_trigger_aapl.txt | 20260413T174517Z | promoted; covers bracket parent fill, child OCA group echo, and real price-band cancel/reject on forced take-profit modify |
+| api_oca_trigger_aapl.txt | 20260413T174546Z | promoted; covers OCA group echo on both AAPL peers and real PendingCancel/Cancelled price-band rejection for the aggressive peer |
 | api_whatif_margin_aapl.txt | 20260414T164207Z | pending |
-| api_forex_lifecycle_eurusd.txt | 20260414T164824Z | pending |
-| api_bracket_trigger_aapl.txt | 20260413T174517Z | pending |
-| api_oca_trigger_aapl.txt | 20260413T174546Z | pending |
-| api_stress_rapid_fire_aapl.txt | 20260414T171824Z | pending |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | pending |
 
 ## Coverage Gaps: What We Need To Hit

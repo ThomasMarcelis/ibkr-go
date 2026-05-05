@@ -43,9 +43,10 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
 - **Go-shaped API.** One-shots return typed results. Streams return typed
   subscriptions with `Events()`, `Lifecycle()`, and `Done()`. No `EWrapper` /
   `EClient` callback surface.
-- **Full TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
+- **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
-  configuration, WSH, display groups, and more.
+  configuration, WSH, display groups, and more, with remaining official gaps
+  tracked in the roadmap and coverage matrix.
 - **Reconnects are explicit.** Session transitions and subscription lifecycle
   events — `Gap`, `Resumed`, `SnapshotComplete`, `Closed` — are part of the
   contract, not hidden behind callbacks.
@@ -268,8 +269,8 @@ Every protocol behavior this library claims has a test pinning it down.
 - Fuzz targets covering wire framing and codec round-trips
 - Deterministic CI for routine verification, without broker credentials
 - Separate live-gated tests for local verification against TWS or IB Gateway.
-  The paper Gateway default is `127.0.0.1:4002`; override with
-  `IBKR_LIVE_ADDR` when needed.
+  Read-only live checks default to `127.0.0.1:4001`; paper-trading checks
+  default to `127.0.0.1:4002`.
 
 The goal is a library whose protocol behavior can be frozen, replayed,
 stressed, and extended without guessing. For more on that approach, see
@@ -278,9 +279,10 @@ stressed, and extended without guessing. For more on that approach, see
 
 ## Status
 
-ibkr-go covers the Interactive Brokers TWS/Gateway socket protocol end to end.
-Ongoing work focuses on keeping pace with new Gateway versions, expanding
-replay coverage, and tightening API ergonomics.
+ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
+domains through an idiomatic Go facade. Ongoing work focuses on closing the
+remaining official edge branches, keeping pace with new Gateway versions,
+expanding replay coverage, and tightening API ergonomics.
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full
@@ -302,12 +304,24 @@ every push.
 Local live verification is opt-in:
 
 ```bash
-IBKR_LIVE=1 IBKR_LIVE_ADDR=127.0.0.1:4002 go test ./... -run '^TestLive' -count=1
-IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_ADDR=127.0.0.1:4002 go test ./... -run '^TestLive(PlaceOrder|GlobalCancel|Trading)' -count=1
+IBKR_LIVE=1 IBKR_LIVE_READONLY_ADDR=127.0.0.1:4001 go test ./... -run '^TestLive' -count=1
+IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 go test ./... -run '^TestLive(PlaceOrder|GlobalCancel|Trading)' -count=1
 ```
 
-`IBKR_LIVE_TRADING=1` permits paper-account order placement and marketable
-test orders. Read-only live smoke tests do not require it.
+The maintainer lab uses two Gateway roles:
+
+- `IBKR_LIVE_READONLY_ADDR` points at the real-money, read-only Gateway with
+  live market data. Read-only tests and capture campaigns use this role.
+- `IBKR_LIVE_PAPER_ADDR` points at the throwaway paper Gateway. Tests that
+  place, modify, cancel, or flatten orders require both `IBKR_LIVE_TRADING=1`
+  and this paper role.
+
+Run the setup diagnostic before a live campaign:
+
+```bash
+go run ./cmd/ibkr-doctor -role readonly-live
+go run ./cmd/ibkr-doctor -role paper-dev
+```
 
 ## Documentation
 
@@ -319,6 +333,9 @@ For contributors and maintainers:
 - [`docs/architecture.md`](docs/architecture.md) — internal layer design
 - [`docs/transcripts.md`](docs/transcripts.md) — test transcript format
 - [`docs/message-coverage.md`](docs/message-coverage.md) — protocol message matrix
+- [`docs/ibkr-api-inventory.md`](docs/ibkr-api-inventory.md) — official/repo surface inventory
+- [`docs/live-coverage-matrix.md`](docs/live-coverage-matrix.md) — capability coverage status
+- [`docs/live-test-tracker.md`](docs/live-test-tracker.md) — live run and capture evidence
 - [`docs/roadmap.md`](docs/roadmap.md) — project direction
 
 ## Contributing

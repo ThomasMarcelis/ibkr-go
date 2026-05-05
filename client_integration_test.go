@@ -2099,6 +2099,7 @@ done:
 	}
 	if execution == nil {
 		t.Fatal("never received Execution event")
+		return
 	}
 	if execution.ExecID != "0000e0d5.69dd7411.01.01" {
 		t.Fatalf("Execution.ExecID = %q", execution.ExecID)
@@ -2112,6 +2113,7 @@ done:
 	}
 	if commission == nil {
 		t.Fatal("never received Commission event")
+		return
 	}
 	if commission.ExecID != execution.ExecID {
 		t.Fatalf("Commission.ExecID = %q, want %q", commission.ExecID, execution.ExecID)
@@ -2767,6 +2769,7 @@ func TestGroundedPositions(t *testing.T) {
 
 	if amzn == nil {
 		t.Fatal("AMZN position not found")
+		return
 	}
 	if amzn.Account != "DU9000001" {
 		t.Errorf("AMZN account = %q, want DU9000001", amzn.Account)
@@ -2792,6 +2795,7 @@ func TestGroundedPositions(t *testing.T) {
 
 	if aapl == nil {
 		t.Fatal("AAPL position not found")
+		return
 	}
 	if aapl.Position.String() != "10" {
 		t.Errorf("AAPL position = %s, want 10", aapl.Position.String())
@@ -2802,6 +2806,7 @@ func TestGroundedPositions(t *testing.T) {
 
 	if yw == nil {
 		t.Fatal("YW position not found")
+		return
 	}
 	if yw.Contract.SecType != ibkr.SecTypeFuture {
 		t.Errorf("YW secType = %q, want FUT", yw.Contract.SecType)
@@ -2824,6 +2829,7 @@ func TestGroundedPositions(t *testing.T) {
 
 	if qqq == nil {
 		t.Fatal("QQQ position not found")
+		return
 	}
 	if qqq.Contract.SecType != ibkr.SecTypeOption {
 		t.Errorf("QQQ secType = %q, want OPT", qqq.Contract.SecType)
@@ -3832,6 +3838,297 @@ func TestAPIDollarCostAveragingAAPLReplay(t *testing.T) {
 	}
 }
 
+func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_stress_rapid_fire_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+	prices := []string{"12.98", "13.98", "14.98", "15.98", "16.98", "17.98", "18.98", "19.98", "20.98", "21.98"}
+	handles := make([]*ibkr.OrderHandle, 0, len(prices))
+	orderIDs := map[int64]bool{}
+	for i, price := range prices {
+		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+			Contract: contract,
+			Order: ibkr.Order{
+				Action:    ibkr.Buy,
+				OrderType: ibkr.OrderTypeLimit,
+				Quantity:  decimal.RequireFromString("1"),
+				LmtPrice:  decimal.RequireFromString(price),
+				TIF:       ibkr.TIFDay,
+				Account:   "DU9000001",
+			},
+		})
+		if err != nil {
+			t.Fatalf("stress order[%d] PlaceOrder: %v", i, err)
+		}
+		if orderIDs[handle.OrderID()] {
+			t.Fatalf("stress order[%d] reused order ID %d", i, handle.OrderID())
+		}
+		orderIDs[handle.OrderID()] = true
+		handles = append(handles, handle)
+	}
+	if len(orderIDs) != len(prices) {
+		t.Fatalf("distinct order IDs = %d, want %d", len(orderIDs), len(prices))
+	}
+
+	for i, handle := range handles {
+		waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+		if got := handle.OrderID(); got == 0 {
+			t.Fatalf("stress order[%d] order ID = 0", i)
+		}
+	}
+
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("CancelAll: %v", err)
+	}
+	for i, handle := range handles {
+		statuses := waitOrderStatuses(t, ctx, handle)
+		if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
+			t.Fatalf("stress order[%d] statuses = %v, want Cancelled from live capture", i, statuses)
+		}
+		if err := handle.Wait(); err != nil {
+			t.Fatalf("stress order[%d] Wait: %v", i, err)
+		}
+	}
+}
+
+func TestAPIForexLifecycleEURUSDReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_forex_lifecycle_eurusd.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "EUR",
+			SecType:  ibkr.SecTypeForex,
+			Exchange: "IDEALPRO",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("20000"),
+			LmtPrice:  decimal.RequireFromString("0.99"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("forex PlaceOrder: %v", err)
+	}
+
+	statuses := waitOrderStatuses(t, ctx, handle)
+	if !hasOrderStatus(statuses, ibkr.OrderStatusInactive) {
+		t.Fatalf("forex statuses = %v, want Inactive from live capture", statuses)
+	}
+	err = handle.Wait()
+	if err == nil {
+		t.Fatal("forex Wait error = nil, want live leverage rejection")
+	}
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok {
+		t.Fatalf("forex Wait error type = %T, want *ibkr.APIError", err)
+	}
+	if apiErr.Code != 201 || !strings.Contains(apiErr.Message, "currency leverage") {
+		t.Fatalf("forex Wait error = %v, want code=201 currency leverage rejection", err)
+	}
+}
+
+func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_bracket_trigger_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			Transmit:  new(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("bracket parent PlaceOrder: %v", err)
+	}
+	takeProfit, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("2578.5"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			Transmit:  new(false),
+			ParentID:  parent.OrderID(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("bracket take-profit PlaceOrder: %v", err)
+	}
+	stopLoss, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeStop,
+			Quantity:  decimal.RequireFromString("1"),
+			AuxPrice:  decimal.RequireFromString("12.89"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			ParentID:  parent.OrderID(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("bracket stop-loss PlaceOrder: %v", err)
+	}
+
+	parentFilled, parentExecution := waitOrderFillAndExecution(t, ctx, parent)
+	if !parentFilled || !parentExecution {
+		t.Fatalf("bracket parent filled=%v execution=%v, want both true", parentFilled, parentExecution)
+	}
+	takeProfitOpen := waitForOpenOrder(t, ctx, takeProfit)
+	stopLossOpen := waitForOpenOrder(t, ctx, stopLoss)
+	if takeProfitOpen.ParentID != parent.OrderID() {
+		t.Fatalf("take-profit parent = %d, want %d", takeProfitOpen.ParentID, parent.OrderID())
+	}
+	if stopLossOpen.ParentID != parent.OrderID() {
+		t.Fatalf("stop-loss parent = %d, want %d", stopLossOpen.ParentID, parent.OrderID())
+	}
+	if takeProfitOpen.OcaGroup == "" || stopLossOpen.OcaGroup != takeProfitOpen.OcaGroup {
+		t.Fatalf("child OCA groups = %q and %q, want same non-empty group", takeProfitOpen.OcaGroup, stopLossOpen.OcaGroup)
+	}
+
+	err = takeProfit.Modify(ctx, ibkr.Order{
+		Action:    ibkr.Sell,
+		OrderType: ibkr.OrderTypeLimit,
+		Quantity:  decimal.RequireFromString("1"),
+		LmtPrice:  decimal.RequireFromString("206.28"),
+		TIF:       ibkr.TIFDay,
+		Account:   "DU9000001",
+		ParentID:  parent.OrderID(),
+	})
+	if err != nil {
+		t.Fatalf("bracket take-profit Modify: %v", err)
+	}
+	statuses := waitOrderStatuses(t, ctx, takeProfit)
+	if !hasOrderStatus(statuses, ibkr.OrderStatusPendingCancel) {
+		t.Fatalf("bracket take-profit statuses = %v, want PendingCancel from live capture", statuses)
+	}
+	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("bracket take-profit statuses = %v, want Cancelled from live capture", statuses)
+	}
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("bracket cleanup CancelAll: %v", err)
+	}
+}
+
+func TestAPIOCATriggerAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_oca_trigger_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+	group := "ibkr-go-api-oca-1776102346"
+	resting, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("12.9"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			OcaGroup:  group,
+			OcaType:   1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OCA resting PlaceOrder: %v", err)
+	}
+	restingOpen := waitForOpenOrder(t, ctx, resting)
+	if restingOpen.OcaGroup != group {
+		t.Fatalf("resting OCA group = %q, want %q", restingOpen.OcaGroup, group)
+	}
+	waitForOrderStatus(t, ctx, resting, ibkr.OrderStatusPreSubmitted)
+
+	marketable, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("309.48"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			OcaGroup:  group,
+			OcaType:   1,
+		},
+	})
+	if err != nil {
+		t.Fatalf("OCA marketable PlaceOrder: %v", err)
+	}
+	marketableOpen := waitForOpenOrder(t, ctx, marketable)
+	if marketableOpen.OcaGroup != group {
+		t.Fatalf("marketable OCA group = %q, want %q", marketableOpen.OcaGroup, group)
+	}
+	statuses := waitOrderStatuses(t, ctx, marketable)
+	if !hasOrderStatus(statuses, ibkr.OrderStatusPendingCancel) {
+		t.Fatalf("OCA marketable statuses = %v, want PendingCancel from live capture", statuses)
+	}
+	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("OCA marketable statuses = %v, want Cancelled from live capture", statuses)
+	}
+	if err := marketable.Wait(); err != nil {
+		t.Fatalf("OCA marketable Wait: %v", err)
+	}
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("OCA CancelAll: %v", err)
+	}
+}
+
 func TestAPIPairsTradingAAPLMSFTReplay(t *testing.T) {
 	t.Parallel()
 
@@ -4343,6 +4640,38 @@ func waitForOrderStatus(t *testing.T, ctx context.Context, handle *ibkr.OrderHan
 			}
 		case <-ctx.Done():
 			t.Fatalf("timeout waiting for order status %s", want)
+		}
+	}
+}
+
+func waitForOpenOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) ibkr.OpenOrder {
+	t.Helper()
+
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				t.Fatal("order events closed before OpenOrder")
+			}
+			if evt.OpenOrder != nil {
+				return *evt.OpenOrder
+			}
+		case <-handle.Done():
+			for {
+				select {
+				case evt, ok := <-handle.Events():
+					if !ok {
+						t.Fatal("order events closed before OpenOrder")
+					}
+					if evt.OpenOrder != nil {
+						return *evt.OpenOrder
+					}
+				default:
+					t.Fatal("order done before OpenOrder")
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for OpenOrder")
 		}
 	}
 }

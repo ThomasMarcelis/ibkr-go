@@ -2,9 +2,11 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -202,7 +204,53 @@ func livePlaceAndCancel(t *testing.T, ctx context.Context, client *ibkr.Client, 
 	result := liveObserveOrder(t, ctx, handle, "cancel-drain", 15*time.Second)
 	t.Logf("cancel result: lastStatus=%s cancelled=%v inactive=%v waitErr=%v", result.lastStatus, result.cancelled, result.inactive, result.waitErr)
 	if !result.cancelled && !result.inactive {
+		if isLiveDeferredOrderWarning(result.waitErr) {
+			liveCancelAllAndVerifyGone(t, client, handle.OrderID())
+			t.Logf("order received deferred-until-next-session warning; CancelAll verified orderID=%d no longer open", handle.OrderID())
+			return
+		}
 		t.Errorf("order did not reach terminal after cancel: lastStatus=%s", result.lastStatus)
+	}
+}
+
+func isLiveDeferredOrderWarning(err error) bool {
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	return ok &&
+		apiErr.Code == 399 &&
+		strings.Contains(apiErr.Message, "will not be placed at the exchange until")
+}
+
+func liveCancelAllAndVerifyGone(t *testing.T, client *ibkr.Client, orderID int64) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("CancelAll after deferred order warning: %v", err)
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		orders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
+		if err != nil {
+			t.Fatalf("OpenOrders after deferred order warning: %v", err)
+		}
+		found := false
+		for _, order := range orders {
+			if order.OrderID == orderID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			t.Fatalf("orderID=%d remained open after CancelAll: %v", orderID, ctx.Err())
+		}
 	}
 }
 
@@ -450,7 +498,7 @@ func liveChooseVerticalStrikes(strikes []decimal.Decimal, anchor decimal.Decimal
 
 func TestLiveOrderLimitRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -468,7 +516,7 @@ func TestLiveOrderLimitRestCancel(t *testing.T) {
 
 func TestLiveOrderStopRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -486,7 +534,7 @@ func TestLiveOrderStopRestCancel(t *testing.T) {
 
 func TestLiveOrderStopLimitRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -505,7 +553,7 @@ func TestLiveOrderStopLimitRestCancel(t *testing.T) {
 
 func TestLiveOrderTrailingStopRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -524,7 +572,7 @@ func TestLiveOrderTrailingStopRestCancel(t *testing.T) {
 
 func TestLiveOrderTrailingLimitRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -544,7 +592,7 @@ func TestLiveOrderTrailingLimitRestCancel(t *testing.T) {
 
 func TestLiveOrderMITRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -562,7 +610,7 @@ func TestLiveOrderMITRestCancel(t *testing.T) {
 
 func TestLiveOrderLITRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -581,7 +629,7 @@ func TestLiveOrderLITRestCancel(t *testing.T) {
 
 func TestLiveOrderRelativeRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -599,7 +647,7 @@ func TestLiveOrderRelativeRestCancel(t *testing.T) {
 
 func TestLiveOrderOpenCloseTypesAcceptOrReject(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 45*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 45*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -637,7 +685,7 @@ func TestLiveOrderOpenCloseTypesAcceptOrReject(t *testing.T) {
 
 func TestLiveOrderPegFamiliesAcceptOrReject(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 180*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 180*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -666,7 +714,7 @@ func TestLiveOrderPegFamiliesAcceptOrReject(t *testing.T) {
 
 func TestLiveOrderMarketBuyFill(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -689,7 +737,7 @@ func TestLiveOrderMarketBuyFill(t *testing.T) {
 
 func TestLiveOrderMarketableLimitFill(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -733,7 +781,7 @@ func TestLiveOrderMarketableLimitFill(t *testing.T) {
 
 func TestLiveOrderMarketToLimitFill(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -752,7 +800,7 @@ func TestLiveOrderMarketToLimitFill(t *testing.T) {
 
 func TestLiveOrderIOCFill(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -796,7 +844,7 @@ func TestLiveOrderIOCFill(t *testing.T) {
 
 func TestLiveOrderFOKFillOrReject(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -858,7 +906,7 @@ func TestLiveOrderFOKFillOrReject(t *testing.T) {
 
 func TestLiveOrderRejectInvalidContract(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -886,7 +934,7 @@ func TestLiveOrderRejectInvalidContract(t *testing.T) {
 
 func TestLiveOrderRejectInvalidType(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -911,7 +959,7 @@ func TestLiveOrderRejectInvalidType(t *testing.T) {
 
 func TestLiveOrderCancelUnknownID(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 15*time.Second)
 	defer cancel()
 	defer client.Close()
 
@@ -925,7 +973,7 @@ func TestLiveOrderCancelUnknownID(t *testing.T) {
 
 func TestLiveOrderDoubleCancelOrder(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -972,7 +1020,7 @@ func TestLiveOrderDoubleCancelOrder(t *testing.T) {
 
 func TestLiveOrderModifyFilledOrder(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1023,7 +1071,7 @@ func TestLiveOrderModifyFilledOrder(t *testing.T) {
 
 func TestLiveOrderModifyLimitToFill(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1088,7 +1136,7 @@ func TestLiveOrderModifyLimitToFill(t *testing.T) {
 
 func TestLiveOrderModifyQuantity(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1160,7 +1208,7 @@ func TestLiveOrderModifyQuantity(t *testing.T) {
 
 func TestLiveOrderRapidModifications(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1243,7 +1291,7 @@ done:
 
 func TestLiveBracketFillChildrenActivate(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1327,7 +1375,7 @@ func TestLiveBracketFillChildrenActivate(t *testing.T) {
 
 func TestLiveBracketTriggerTakeProfit(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 90*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 90*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1413,7 +1461,7 @@ func TestLiveBracketTriggerTakeProfit(t *testing.T) {
 
 func TestLiveBracketCancelBeforeTransmit(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1454,7 +1502,7 @@ func TestLiveBracketCancelBeforeTransmit(t *testing.T) {
 
 func TestLiveOCAFillCancelsOthers(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1530,7 +1578,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 
 func TestLiveOCACancelAll(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1594,7 +1642,7 @@ func TestLiveOCACancelAll(t *testing.T) {
 
 func TestLiveOptionLimitRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1614,7 +1662,7 @@ func TestLiveOptionLimitRestCancel(t *testing.T) {
 
 func TestLiveOptionBuySellRoundTrip(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 90*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 90*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1650,7 +1698,7 @@ func TestLiveOptionBuySellRoundTrip(t *testing.T) {
 
 func TestLiveFutureLimitRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 45*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 45*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1670,7 +1718,7 @@ func TestLiveFutureLimitRestCancel(t *testing.T) {
 
 func TestLiveFutureBuySellRoundTrip(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 90*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 90*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1705,7 +1753,7 @@ func TestLiveFutureBuySellRoundTrip(t *testing.T) {
 
 func TestLiveForexLimitRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1725,7 +1773,7 @@ func TestLiveForexLimitRestCancel(t *testing.T) {
 
 func TestLiveComboVerticalRestCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 45*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 45*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1761,7 +1809,7 @@ func TestLiveComboVerticalRestCancel(t *testing.T) {
 
 func TestLiveOrderWhatIf(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1800,7 +1848,7 @@ func TestLiveOrderWhatIf(t *testing.T) {
 
 func TestLiveOrderAdaptiveAlgo(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1853,7 +1901,7 @@ func TestLiveOrderAdaptiveAlgo(t *testing.T) {
 
 func TestLiveOrderIceberg(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1874,7 +1922,7 @@ func TestLiveOrderIceberg(t *testing.T) {
 
 func TestLiveOrderOutsideRTH(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1894,7 +1942,7 @@ func TestLiveOrderOutsideRTH(t *testing.T) {
 
 func TestLiveOrderConditionPrice(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1926,7 +1974,7 @@ func TestLiveOrderConditionPrice(t *testing.T) {
 
 func TestLiveStressRapidFireTenOrders(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -1998,7 +2046,7 @@ func TestLiveStressRapidFireTenOrders(t *testing.T) {
 
 func TestLiveStressConcurrentModifyCancel(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -2059,7 +2107,7 @@ func TestLiveStressConcurrentModifyCancel(t *testing.T) {
 
 func TestLiveOrdersWithSubscriptions(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -2128,7 +2176,7 @@ func TestLiveOrdersWithSubscriptions(t *testing.T) {
 
 func TestLiveAlgoScaleInWithStopLoss(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 90*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 90*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -2213,7 +2261,7 @@ func TestLiveAlgoScaleInWithStopLoss(t *testing.T) {
 
 func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 60*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)
@@ -2259,7 +2307,7 @@ func TestLiveFillAndImmediateFlatten(t *testing.T) {
 
 func TestLiveAlgorithmicCampaign(t *testing.T) {
 	ibkrlive.RequireTrading(t)
-	client, _, cancel := ibkrlive.DialContext(t, 180*time.Second)
+	client, _, cancel := ibkrlive.DialTradingContext(t, 180*time.Second)
 	defer cancel()
 	defer client.Close()
 	liveDeferCleanup(t, client)

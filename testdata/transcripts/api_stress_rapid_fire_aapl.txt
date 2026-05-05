@@ -1,0 +1,91 @@
+# Grounded by live API capture captures/20260414T171824Z-api_stress_rapid_fire_aapl.
+# server_version=200, events.jsonl sha256 prefix: 69ee6be4cdf7d577.
+# Account and perm identifiers are sanitized; the sequence preserves live paper
+# Gateway behavior observed on 2026-04-14: ten far AAPL LMT orders were accepted
+# as resting orders, then global cancel produced terminal cancellation notices.
+handshake {"server_version":200,"connection_time":"20260414 19:18:24 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":173}
+
+client place_order {"order_id":"173","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"12.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"174","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"13.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"175","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"14.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"176","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"15.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"177","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"16.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"178","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"17.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"179","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"18.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"180","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"19.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"181","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"20.98","tif":"DAY","account":"DU9000001"}
+client place_order {"order_id":"182","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"21.98","tif":"DAY","account":"DU9000001"}
+
+server open_order {"order_id":173,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"12.98","aux_price":"0","tif":"DAY","perm_id":"900173","client_id":"1","origin":"0"}
+server order_status {"order_id":173,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900173","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":173,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"12.98","aux_price":"0","tif":"DAY","perm_id":"900173","client_id":"1","origin":"0"}
+server order_status {"order_id":173,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900173","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":174,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"13.98","aux_price":"0","tif":"DAY","perm_id":"900174","client_id":"1","origin":"0"}
+server order_status {"order_id":174,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900174","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":174,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"13.98","aux_price":"0","tif":"DAY","perm_id":"900174","client_id":"1","origin":"0"}
+server order_status {"order_id":174,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900174","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":175,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"14.98","aux_price":"0","tif":"DAY","perm_id":"900175","client_id":"1","origin":"0"}
+server order_status {"order_id":175,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900175","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":175,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"14.98","aux_price":"0","tif":"DAY","perm_id":"900175","client_id":"1","origin":"0"}
+server order_status {"order_id":175,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900175","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":176,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"15.98","aux_price":"0","tif":"DAY","perm_id":"900176","client_id":"1","origin":"0"}
+server order_status {"order_id":176,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900176","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":176,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"15.98","aux_price":"0","tif":"DAY","perm_id":"900176","client_id":"1","origin":"0"}
+server order_status {"order_id":176,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900176","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":177,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"16.98","aux_price":"0","tif":"DAY","perm_id":"900177","client_id":"1","origin":"0"}
+server order_status {"order_id":177,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900177","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":178,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"17.98","aux_price":"0","tif":"DAY","perm_id":"900178","client_id":"1","origin":"0"}
+server order_status {"order_id":178,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900178","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":178,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"17.98","aux_price":"0","tif":"DAY","perm_id":"900178","client_id":"1","origin":"0"}
+server order_status {"order_id":178,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900178","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":179,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"18.98","aux_price":"0","tif":"DAY","perm_id":"900179","client_id":"1","origin":"0"}
+server order_status {"order_id":179,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900179","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":179,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"18.98","aux_price":"0","tif":"DAY","perm_id":"900179","client_id":"1","origin":"0"}
+server order_status {"order_id":179,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900179","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":180,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"19.98","aux_price":"0","tif":"DAY","perm_id":"900180","client_id":"1","origin":"0"}
+server order_status {"order_id":180,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900180","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":181,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"20.98","aux_price":"0","tif":"DAY","perm_id":"900181","client_id":"1","origin":"0"}
+server order_status {"order_id":181,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900181","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":181,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"20.98","aux_price":"0","tif":"DAY","perm_id":"900181","client_id":"1","origin":"0"}
+server order_status {"order_id":181,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900181","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+server open_order {"order_id":182,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"21.98","aux_price":"0","tif":"DAY","perm_id":"900182","client_id":"1","origin":"0"}
+server order_status {"order_id":182,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900182","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":182,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"1","filled":"0","remaining":"0","lmt_price":"21.98","aux_price":"0","tif":"DAY","perm_id":"900182","client_id":"1","origin":"0"}
+server order_status {"order_id":182,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900182","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
+
+server order_status {"order_id":181,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900181","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":181,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":182,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900182","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":182,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":179,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900179","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":179,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":180,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900180","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":180,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":177,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900177","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":177,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":178,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900178","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":178,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":175,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900175","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":175,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":176,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900176","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":176,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":173,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900173","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":173,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+server order_status {"order_id":174,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900174","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":174,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1776187217000"}
+
+sleep 100ms
+disconnect
