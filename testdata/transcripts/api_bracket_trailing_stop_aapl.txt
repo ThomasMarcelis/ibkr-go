@@ -1,0 +1,16 @@
+# Grounded by live API capture captures/20260415T161944Z-api_bracket_trailing_stop_aapl.
+# server_version=200, events.jsonl sha256 prefix: 2c0453360020a3ad.
+# Account and order-ref identifiers are sanitized; this replay freezes the real
+# Gateway code 328 rejection observed on 2026-04-15 when a TRAIL child was
+# attached under a market bracket parent. The source tail entered an
+# execution-query timeout and cleanup; that tail is intentionally not replayed.
+handshake {"server_version":200,"connection_time":"20260415 18:19:44 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":286}
+
+client place_order {"order_id":"286","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"10","order_type":"MKT","tif":"DAY","account":"DU9000001","transmit":false}
+client place_order {"order_id":"287","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"10","order_type":"LMT","lmt_price":"2649.6","tif":"DAY","account":"DU9000001","transmit":false,"parent_id":"286"}
+client place_order {"order_id":"288","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"10","order_type":"TRAIL","aux_price":"1","tif":"DAY","account":"DU9000001","parent_id":"286","trail_stop_price":"13.25"}
+server api_error {"req_id":288,"code":328,"message":"Trailing stop orders can be attached to limit or stop-limit orders only.","advanced_order_reject_json":"","error_time_ms":"1776269986150"}
+
+disconnect

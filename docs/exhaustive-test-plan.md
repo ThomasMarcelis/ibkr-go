@@ -605,7 +605,7 @@ from `5ff9cdc0f6f9b500` and `fcb7e811624e4aa9`.
 ### Phase 10: Multi-feature campaigns
 
 - [x] Pairs trading workflow (`api_pairs_trading_aapl_msft` captured 2026-04-15, replay-promoted from `0dc806f7bb0868e8`; aggressive 500-share live run/capture also completed with `86dc8f389a457efc`; source execution-query tail timed out)
-- [ ] Bracket with trailing stop-loss (`api_bracket_trailing_stop_aapl` captured 2026-04-15, `2c0453360020a3ad`)
+- [ ] Bracket with trailing stop-loss (`api_bracket_trailing_stop_aapl` captured 2026-04-15, replay-promoted from `2c0453360020a3ad`; current replay freezes live code 328 for TRAIL child under a market parent, so a valid limit/stop-limit parent variant remains)
 - [x] Dollar-cost averaging (`api_dollar_cost_averaging_aapl` captured 2026-04-15, replay-promoted from `296bdf662eb84e30`; source execution-query tail timed out)
 - [x] Stop-loss management (move as price advances) (`api_stop_loss_management_aapl` captured 2026-04-15, replay-promoted from `a563cafd26e366be`)
 - [x] Rapid-fire global cancel (`api_stress_rapid_fire_aapl` captured 2026-04-14, replay-promoted from `69ee6be4cdf7d577`)

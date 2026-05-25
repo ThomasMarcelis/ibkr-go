@@ -4218,6 +4218,88 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 	}
 }
 
+func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_bracket_trailing_stop_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("10"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			Transmit:  new(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("trailing bracket parent PlaceOrder: %v", err)
+	}
+	takeProfit, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("10"),
+			LmtPrice:  decimal.RequireFromString("2649.6"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+			ParentID:  parent.OrderID(),
+			Transmit:  new(false),
+		},
+	})
+	if err != nil {
+		t.Fatalf("trailing bracket take-profit PlaceOrder: %v", err)
+	}
+	if takeProfit.OrderID() != parent.OrderID()+1 {
+		t.Fatalf("take-profit order ID = %d, want parent+1 from live capture", takeProfit.OrderID())
+	}
+	trailingStop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:         ibkr.Sell,
+			OrderType:      ibkr.OrderTypeTrailingStop,
+			Quantity:       decimal.RequireFromString("10"),
+			AuxPrice:       decimal.RequireFromString("1"),
+			TIF:            ibkr.TIFDay,
+			Account:        "DU9000001",
+			ParentID:       parent.OrderID(),
+			TrailStopPrice: decimal.RequireFromString("13.25"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("trailing bracket stop PlaceOrder: %v", err)
+	}
+	if trailingStop.OrderID() != parent.OrderID()+2 {
+		t.Fatalf("trailing stop order ID = %d, want parent+2 from live capture", trailingStop.OrderID())
+	}
+	err = trailingStop.Wait()
+	if err == nil {
+		t.Fatal("trailing stop Wait error = nil, want live code 328 rejection")
+	}
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok {
+		t.Fatalf("trailing stop Wait error type = %T, want *ibkr.APIError", err)
+	}
+	if apiErr.Code != 328 || !strings.Contains(apiErr.Message, "Trailing stop orders can be attached") {
+		t.Fatalf("trailing stop Wait error = %v, want code=328 attachment rejection", err)
+	}
+}
+
 func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 	t.Parallel()
 
