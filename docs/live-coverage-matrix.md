@@ -150,8 +150,8 @@ handled through dimensions rather than duplicate rows:
 | FA-001 | FA request config | `Advisors().Config`, official `requestFA`, `receiveFA` | `request_fa` | candidate | groups, profiles, aliases, FA account, non-FA error |
 | FA-002 | FA replace config | `Advisors().ReplaceConfig`, official `replaceFA`, `replaceFAEnd` | none | target | non-FA error, read-back/restore if FA account exists, replaceFAEnd callback |
 | FA-003 | Soft-dollar tiers | `Advisors().SoftDollarTiers`, official `reqSoftDollarTiers`, `softDollarTiers` | `soft_dollar_tiers`, `soft_dollar_tiers.txt` | promoted | empty and non-empty tier list |
-| WSH-001 | WSH metadata | `WSH().MetaData`, official `reqWshMetaData`, `cancelWshMetaData`, `wshMetaData` | `wsh_meta_data`, `api_wsh_variants_aapl`, `wsh_meta_data_error.txt` | candidate | success, entitlement error, cancel path |
-| WSH-002 | WSH event data | `WSH().EventData`, official `reqWshEventData`, `cancelWshEventData`, `wshEventData` | `wsh_event_data_aapl`, `api_wsh_variants_aapl` | candidate | conID, filter JSON, watchlist, portfolio, competitors, date windows, entitlement error |
+| WSH-001 | WSH metadata | `WSH().MetaData`, official `reqWshMetaData`, `cancelWshMetaData`, `wshMetaData` | `wsh_meta_data`, `api_wsh_variants_aapl`, `api_wsh_variants_aapl.txt`, `wsh_meta_data_error.txt` | candidate | success and cancel path remain target variants; `api_wsh_variants_aapl.txt` freezes real code 10276 metadata entitlement error |
+| WSH-002 | WSH event data | `WSH().EventData`, official `reqWshEventData`, `cancelWshEventData`, `wshEventData` | `wsh_event_data_aapl`, `api_wsh_variants_aapl`, `api_wsh_variants_aapl.txt` | candidate | success, cancel path, and filter JSON success remain target variants; `api_wsh_variants_aapl.txt` freezes conID, portfolio, watchlist, competitor, and date-window variants returning real code 10276 |
 | TWS-001 | User info | `TWS().UserInfo`, official `reqUserInfo`, `userInfo` | `user_info`, `user_info.txt` | promoted | TWS vs Gateway differences |
 | TWS-002 | Display groups | `TWS().DisplayGroups`, `TWS().SubscribeDisplayGroup`, `DisplayGroupHandle.Update`, official display group calls | `display_groups`, `display_group_subscribe`, `display_groups.txt`, `display_group_subscribe.txt` | promoted | query, subscribe, update valid/invalid contract info, unsubscribe, invalid group |
 
@@ -161,7 +161,7 @@ handled through dimensions rather than duplicate rows:
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | ERR-001 | API errors and farm status | official `error` callback, system status codes | `error_api_error_oneshot.txt`, `error_api_error_subscription.txt`, `error_empty_results.txt`, `error_market_data_warning.txt`, `error_farm_status_codes.txt` | promoted | request-scoped, subscription-scoped, session-scoped, warning-only, advanced order reject JSON |
 | ERR-002 | Disconnect during operations | transport and protocol disconnects | `error_disconnect_during_snapshot.txt`, `error_disconnect_during_oneshot.txt`, `quote_stream_disconnect.txt` | promoted | every one-shot and every stream family has at least one disconnect behavior row |
-| ERR-003 | Entitlement and account-type failures | market data, fundamentals, WSH, FA, scanner, orders | `market_depth_error.txt`, `wsh_meta_data_error.txt`, entitlement candidate captures | candidate | freeze real paper-account blocked responses instead of inventing mocks |
+| ERR-003 | Entitlement and account-type failures | market data, fundamentals, WSH, FA, scanner, orders | `market_depth_error.txt`, `wsh_meta_data_error.txt`, `api_wsh_variants_aapl.txt`, entitlement candidate captures | candidate | freeze real paper-account blocked responses instead of inventing mocks; WSH metadata/event variants replay-promoted from 2026-04-15 capture `65aeb0a3b716e4b6` |
 
 ## Non-Goals
 
@@ -225,7 +225,10 @@ one primary matrix row above.
 | `api_tif_attribute_matrix_aapl` | ORD-001 |
 | `api_transmit_false_then_transmit_aapl` | ORD-001 |
 | `api_whatif_margin_aapl` | AORD-010 |
+| `api_wsh_variants_aapl` | WSH-001 |
 | `api_wsh_variants_aapl` | WSH-002 |
+| `api_wsh_variants_aapl.txt` | WSH-001 |
+| `api_wsh_variants_aapl.txt` | WSH-002 |
 | `bootstrap` | SESS-001 |
 | `bootstrap_client_id_0` | SESS-001 |
 | `completed_orders` | ORD-006 |

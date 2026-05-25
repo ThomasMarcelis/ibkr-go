@@ -330,6 +330,52 @@ func TestWSHMetaDataError10xxx(t *testing.T) {
 	}
 }
 
+func TestAPIWSHVariantsAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_wsh_variants_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	assertWSHEntitlementError := func(label string, err error, wantOp ibkr.OpKind) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("%s error = nil, want API error 10276", label)
+		}
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok {
+			t.Fatalf("%s error type = %T, want *ibkr.APIError", label, err)
+		}
+		if apiErr.Code != 10276 {
+			t.Fatalf("%s APIError.Code = %d, want 10276", label, apiErr.Code)
+		}
+		if apiErr.OpKind != wantOp {
+			t.Fatalf("%s APIError.OpKind = %s, want %s", label, apiErr.OpKind, wantOp)
+		}
+	}
+
+	_, err := client.WSH().MetaData(ctx)
+	assertWSHEntitlementError("MetaData", err, ibkr.OpWSHMetaData)
+
+	start := time.Date(2026, 4, 8, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	eventCases := []struct {
+		label string
+		req   ibkr.WSHEventDataRequest
+	}{
+		{label: "by_conid", req: ibkr.WSHEventDataRequest{ConID: 265598, StartDate: start, EndDate: end, TotalLimit: 10}},
+		{label: "portfolio", req: ibkr.WSHEventDataRequest{FillPortfolio: true, StartDate: start, EndDate: end, TotalLimit: 10}},
+		{label: "watchlist_competitors", req: ibkr.WSHEventDataRequest{ConID: 265598, FillWatchlist: true, FillCompetitors: true, TotalLimit: 10}},
+	}
+	for _, tc := range eventCases {
+		_, err := client.WSH().EventData(ctx, tc.req)
+		assertWSHEntitlementError(tc.label, err, ibkr.OpWSHEventData)
+	}
+}
+
 func TestMarketDepthError10xxx(t *testing.T) {
 	t.Parallel()
 

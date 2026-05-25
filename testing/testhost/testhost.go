@@ -1107,6 +1107,27 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		if len(fields) >= 3 {
 			body["con_id"] = fields[2]
 		}
+		if len(fields) >= 4 {
+			body["filter"] = fields[3]
+		}
+		if len(fields) >= 5 {
+			body["fill_watchlist"] = fields[4]
+		}
+		if len(fields) >= 6 {
+			body["fill_portfolio"] = fields[5]
+		}
+		if len(fields) >= 7 {
+			body["fill_competitors"] = fields[6]
+		}
+		if len(fields) >= 8 {
+			body["start_date"] = fields[7]
+		}
+		if len(fields) >= 9 {
+			body["end_date"] = fields[8]
+		}
+		if len(fields) >= 10 {
+			body["total_limit"] = fields[9]
+		}
 		return "req_wsh_event_data", body, nil
 	case 103: // OutCancelWSHEventData: [103, reqId]
 		body := map[string]any{}

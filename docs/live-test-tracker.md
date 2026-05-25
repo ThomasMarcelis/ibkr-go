@@ -250,6 +250,7 @@ against the role-aware `paper-dev` Gateway.
 | api_whatif_margin_aapl.txt | 20260414T164207Z | pending; no checked-in transcript because the live captures did not produce a usable WhatIf preview callback; `20260414T182608Z` returned live code 320 parser error after the WhatIf place request |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
 | api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
+| api_wsh_variants_aapl.txt | 20260415T162255Z | promoted; covers WSH metadata plus conid, portfolio, watchlist, and competitor event-data variants returning real code 10276 entitlement errors |
 
 ## Coverage Gaps: What We Need To Hit
 

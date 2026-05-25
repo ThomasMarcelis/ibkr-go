@@ -1707,7 +1707,7 @@ var scenarios = map[string]scenario{
 	},
 	"api_wsh_variants_aapl": {
 		name:        "api_wsh_variants_aapl",
-		description: "public API probe for WSH metadata and event-data filter variants",
+		description: "public API probe for WSH metadata plus conid, portfolio, watchlist, competitor, and date-window event-data entitlement variants",
 		runAPI:      runAPIWSHVariantsAAPL,
 	},
 	"api_algo_variants_aapl": {
