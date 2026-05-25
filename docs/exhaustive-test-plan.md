@@ -350,7 +350,7 @@ tests.
 
 | Campaign | Status | Steps |
 |----------|--------|-------|
-| Scale-in + protective stop + flatten | live test | 2 buys, STP, cancel, flatten |
+| Scale-in + protective stop + flatten | partial replay promoted | `api_scale_in_campaign_aapl.txt` covers 2 buys + STP trigger; cancel/flatten tail timed out in source capture |
 | Buy + immediate flatten | live test | BUY MKT → SELL MKT |
 | Algorithmic campaign | live test | subs + buys + modify + flatten |
 | Pairs trading | no | BUY AAPL + SELL MSFT simultaneously |
@@ -495,7 +495,7 @@ tests.
 - [x] Fix cancel_order (CME_TAGGING_FIELDS)
 - [x] Add cancel regression tests
 - [x] Tighten live test cancel assertions
-- [ ] Promote pending transcripts (what-if, scale-in; forex replay promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c`)
+- [ ] Promote pending transcripts (what-if still needs usable preview callback; scale-in replay promoted from `63db2db7cba21b68`; forex replay promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c`)
 - [ ] Record fresh captures for all scenarios with fixed cancel
 - [ ] Update `cancel_order.txt` and `direct_cancel_order.txt` to include PendingCancel
 
@@ -607,6 +607,7 @@ from `5ff9cdc0f6f9b500` and `fcb7e811624e4aa9`.
 - [x] Dollar-cost averaging (`api_dollar_cost_averaging_aapl` captured 2026-04-15, replay-promoted from `296bdf662eb84e30`)
 - [x] Stop-loss management (move as price advances) (`api_stop_loss_management_aapl` captured 2026-04-15, replay-promoted from `a563cafd26e366be`)
 - [x] Rapid-fire global cancel (`api_stress_rapid_fire_aapl` captured 2026-04-14, replay-promoted from `69ee6be4cdf7d577`)
+- [x] Scale-in campaign (`api_scale_in_campaign_aapl` captured 2026-04-14, replay-promoted from `63db2db7cba21b68`; replay covers two fills plus protective STP trigger, while flatten/execution-query tail timed out)
 - [ ] Full reconciliation (positions + executions + PnL match)
 - [ ] Options wheel (when OPT available)
 

@@ -3838,6 +3838,89 @@ func TestAPIDollarCostAveragingAAPLReplay(t *testing.T) {
 	}
 }
 
+func TestAPIScaleInCampaignAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_scale_in_campaign_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	for i := 0; i < 2; i++ {
+		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+			Contract: contract,
+			Order: ibkr.Order{
+				Action:    ibkr.Buy,
+				OrderType: ibkr.OrderTypeMarket,
+				Quantity:  decimal.RequireFromString("1"),
+				TIF:       ibkr.TIFDay,
+				Account:   "DU9000001",
+			},
+		})
+		if err != nil {
+			t.Fatalf("scale buy[%d] PlaceOrder: %v", i, err)
+		}
+		filled, execution := waitOrderFillAndExecution(t, ctx, handle)
+		if !filled || !execution {
+			t.Fatalf("scale buy[%d] filled=%v execution=%v, want both true", i, filled, execution)
+		}
+	}
+
+	stop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: contract,
+		Order: ibkr.Order{
+			Action:    ibkr.Sell,
+			OrderType: ibkr.OrderTypeStop,
+			Quantity:  decimal.RequireFromString("2"),
+			AuxPrice:  decimal.RequireFromString("12.98"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("scale stop-loss PlaceOrder: %v", err)
+	}
+	stopOpen := waitForOpenOrder(t, ctx, stop)
+	if stopOpen.OrderType != ibkr.OrderTypeStop || stopOpen.Action != ibkr.Sell {
+		t.Fatalf("scale stop OpenOrder type/action = %s/%s, want STP/SELL", stopOpen.OrderType, stopOpen.Action)
+	}
+	if got := stopOpen.Quantity.String(); got != "2" {
+		t.Fatalf("scale stop quantity = %s, want 2", got)
+	}
+	if got := stopOpen.AuxPrice.String(); got != "12.98" {
+		t.Fatalf("scale stop aux price = %s, want 12.98", got)
+	}
+
+	var stopStatus ibkr.OrderStatusUpdate
+	for sawStopStatus := false; !sawStopStatus; {
+		select {
+		case evt, ok := <-stop.Events():
+			if !ok {
+				t.Fatal("scale stop events closed before PreSubmitted status")
+			}
+			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusPreSubmitted {
+				stopStatus = *evt.Status
+				sawStopStatus = true
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for scale stop PreSubmitted status")
+		}
+	}
+	if stopStatus.WhyHeld != "trigger" {
+		t.Fatalf("scale stop whyHeld = %q, want trigger", stopStatus.WhyHeld)
+	}
+}
+
 func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 	t.Parallel()
 

@@ -93,7 +93,7 @@ The next high-value workstreams are:
 
 | Priority | Workstream | Why it matters | Next slices |
 |----------|------------|----------------|-------------|
-| 1 | Promote captured order campaigns | Raises deterministic CI confidence without more market dependency | what-if margin, scale-in campaign; forex lifecycle promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c` |
+| 1 | Promote captured order campaigns | Raises deterministic CI confidence without more market dependency | what-if margin still needs usable preview callback; scale-in campaign promoted from `63db2db7cba21b68`; forex lifecycle promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c` |
 | 2 | Market-open trading-basic captures | Grounds fill, modify-to-fill, order-type matrix, and rejection paths under regular-session behavior | `trading-basic` batch through `paper-dev`, then verify and triage |
 | 3 | Advanced order semantics | Closes gaps between "order placement works" and "order model is trustworthy" | brackets, OCA, conditions, scale, hedge, pegged/adjusted families |
 | 4 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10358 fundamentals, 10276 WSH |
