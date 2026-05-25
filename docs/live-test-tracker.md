@@ -195,7 +195,7 @@ against the role-aware `paper-dev` Gateway.
 
 | Scenario | Date | Status |
 |----------|------|--------|
-| api_whatif_margin_aapl | 2026-04-14 | recorded |
+| api_whatif_margin_aapl | 2026-04-14 | recorded, not promoted; `20260414T164207Z` produced no usable preview callback and cleanup timed out (`ac70de98ef2c239a`); `20260414T182608Z` returned live code 320 after the WhatIf place request (`e431bf7f0b84abd1`) |
 | api_forex_lifecycle_eurusd | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `641eab5c0e6909f7`; real paper-account code 201 leverage rejection |
 | api_stress_rapid_fire_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `69ee6be4cdf7d577` |
 | api_scale_in_campaign_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `63db2db7cba21b68`; two AAPL market fills plus protective stop-loss, with later flatten/executions/cleanup tail timing out |
@@ -247,7 +247,7 @@ against the role-aware `paper-dev` Gateway.
 | api_forex_lifecycle_eurusd.txt | 20260414T182627Z | promoted; covers EUR.USD far LMT OpenOrder, Inactive status, and real code 201 leverage rejection replay |
 | api_bracket_trigger_aapl.txt | 20260413T174517Z | promoted; covers bracket parent fill, child OCA group echo, and real price-band cancel/reject on forced take-profit modify |
 | api_oca_trigger_aapl.txt | 20260413T174546Z | promoted; covers OCA group echo on both AAPL peers and real PendingCancel/Cancelled price-band rejection for the aggressive peer |
-| api_whatif_margin_aapl.txt | 20260414T164207Z | pending |
+| api_whatif_margin_aapl.txt | 20260414T164207Z | pending; no checked-in transcript because the live captures did not produce a usable WhatIf preview callback; `20260414T182608Z` returned live code 320 parser error after the WhatIf place request |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
 | api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
 

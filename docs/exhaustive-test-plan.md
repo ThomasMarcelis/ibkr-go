@@ -495,7 +495,7 @@ tests.
 - [x] Fix cancel_order (CME_TAGGING_FIELDS)
 - [x] Add cancel regression tests
 - [x] Tighten live test cancel assertions
-- [ ] Promote pending transcripts (what-if still needs usable preview callback; scale-in replay promoted from `63db2db7cba21b68`; forex replay promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c`)
+- [ ] Promote pending transcripts (what-if still needs a fresh usable preview callback; 2026-04-14 attempts either lacked the preview callback or returned live code 320 after the WhatIf place request; scale-in replay promoted from `63db2db7cba21b68`; forex replay promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c`)
 - [ ] Record fresh captures for all scenarios with fixed cancel
 - [ ] Update `cancel_order.txt` and `direct_cancel_order.txt` to include PendingCancel
 

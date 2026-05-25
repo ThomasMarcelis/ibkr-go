@@ -128,7 +128,7 @@ handled through dimensions rather than duplicate rows:
 | AORD-007 | Delta-neutral extensions | official delta-neutral order/contract fields | none | deferred | live grounding before removing partial OpenOrder fallback |
 | AORD-008 | Scale orders | official scale fields | `api_tif_attribute_matrix_aapl` | candidate | scale init/subs size, increment, table, active times, open-order decode |
 | AORD-009 | Pegged and adjusted order families | official PEG BENCH, PEG BEST, PEG MID, adjusted stop/trailing fields | `api_order_type_matrix_aapl`, `api_tif_attribute_matrix_aapl` | candidate | live accepted/rejected captures for each specialized branch |
-| AORD-010 | Regulatory/allocation order fields | official FA allocation, MiFID, manual order time, soft-dollar, advancedErrorOverride, IBKRATS | `api_whatif_margin_aapl`, `api_tif_attribute_matrix_aapl` | candidate | accepted and rejected variants; completed/open order detail |
+| AORD-010 | Regulatory/allocation order fields | official FA allocation, MiFID, manual order time, soft-dollar, advancedErrorOverride, IBKRATS | `api_whatif_margin_aapl`, `api_tif_attribute_matrix_aapl` | candidate | accepted and rejected variants; completed/open order detail; WhatIf capture attempts remain pending because 2026-04-14 runs lacked a usable preview callback or returned live code 320 |
 
 ## Options
 
