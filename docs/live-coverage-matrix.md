@@ -66,7 +66,7 @@ handled through dimensions rather than duplicate rows:
 
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
-| REF-001 | Contract details and qualification | `Contracts().Details`, `Contracts().Qualify`, official `reqContractDetails`, `contractDetails`, `bondContractDetails`, `contractDetailsEnd` | `contract_details_aapl_stk`, `contract_details_aapl_opt`, `contract_details_eurusd_cash`, `contract_details_es_fut`, `contract_details_not_found`, `qualify_contract_aapl_exact`, `qualify_contract_ambiguous`, `api_security_type_probe_matrix`, `contract_details.txt`, `grounded_contract_details_aapl.txt` | candidate | STK, OPT, FUT, FOP, CASH, BOND, FUND, IND, BAG; exact, ambiguous, invalid, expired/includeExpired. 2026-04-15 probe captured real details/errors for STK/OPT/FUT/FOP/CASH/BOND/CFD/WAR/IND/CRYPTO/FUND/BILL/CMDTY/CONTFUT |
+| REF-001 | Contract details and qualification | `Contracts().Details`, `Contracts().Qualify`, official `reqContractDetails`, `contractDetails`, `bondContractDetails`, `contractDetailsEnd` | `contract_details_aapl_stk`, `contract_details_aapl_opt`, `contract_details_eurusd_cash`, `contract_details_es_fut`, `contract_details_not_found`, `qualify_contract_aapl_exact`, `qualify_contract_ambiguous`, `api_security_type_probe_matrix`, `api_security_type_probe_errors.txt`, `contract_details.txt`, `grounded_contract_details_aapl.txt` | candidate | STK, OPT, FUT, FOP, CASH, BOND, FUND, IND, BAG; exact, ambiguous, invalid, expired/includeExpired. 2026-04-15 probe captured real details/errors for STK/OPT/FUT/FOP/CASH/BOND/CFD/WAR/IND/CRYPTO/FUND/BILL/CMDTY/CONTFUT; BOND/BILL code 200 errors are replay-promoted from capture `9be83e57ed176a17`. |
 | REF-002 | Matching symbols | `Contracts().Search`, official `reqMatchingSymbols`, `symbolSamples` | `matching_symbols_aapl`, `matching_symbols_partial`, `matching_symbols.txt` | promoted | broad pattern, exact-ish pattern, derivative sec types, description/issuer fields |
 | REF-003 | Option chain metadata | `Contracts().SecDefOptParams`, official `reqSecDefOptParams`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd` | `sec_def_opt_params_aapl`, `sec_def_opt_params.txt` | promoted | STK underlyings, FUT/FOP underlyings, empty exchange, invalid underlying |
 | REF-004 | Market rules and smart components | `Contracts().MarketRule`, `Contracts().SmartComponents`, official `reqMarketRule`, `reqSmartComponents`, `marketRule`, `smartComponents` | `market_rule`, `smart_components`, `market_rule.txt`, `smart_components.txt` | promoted | US equity, option, future, invalid market rule, invalid BBO exchange |
@@ -220,6 +220,7 @@ one primary matrix row above.
 | `api_reconnect_active_order_aapl` | SESS-005 |
 | `api_scale_in_campaign_aapl` | ORD-009 |
 | `api_scale_in_campaign_aapl.txt` | ORD-009 |
+| `api_security_type_probe_errors.txt` | REF-001 |
 | `api_security_type_probe_matrix` | REF-001 |
 | `api_stop_loss_management_aapl` | ORD-009 |
 | `api_stress_rapid_fire_aapl` | ORD-009 |

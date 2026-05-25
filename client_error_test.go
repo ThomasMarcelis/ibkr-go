@@ -86,6 +86,41 @@ func TestAPIFundamentalReportErrorsAAPLReplay(t *testing.T) {
 	}
 }
 
+func TestAPISecurityTypeProbeErrorsReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_security_type_probe_errors.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cases := []struct {
+		label    string
+		contract ibkr.Contract
+	}{
+		{label: "BOND", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBond, Exchange: "SMART", Currency: "USD"}},
+		{label: "BILL", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBill, Exchange: "SMART", Currency: "USD"}},
+	}
+	for _, tc := range cases {
+		_, err := client.Contracts().Details(ctx, tc.contract)
+		if err == nil {
+			t.Fatalf("%s ContractDetails() error = nil, want API error 200", tc.label)
+		}
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok {
+			t.Fatalf("%s error type = %T, want *ibkr.APIError", tc.label, err)
+		}
+		if apiErr.Code != 200 {
+			t.Fatalf("%s APIError.Code = %d, want 200", tc.label, apiErr.Code)
+		}
+		if apiErr.OpKind != ibkr.OpContractDetails {
+			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpContractDetails)
+		}
+	}
+}
+
 func TestAPIErrorOnSubscription(t *testing.T) {
 	t.Parallel()
 

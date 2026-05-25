@@ -202,7 +202,7 @@ against the role-aware `paper-dev` Gateway.
 | api_bracket_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `682a1390b2acf04c`; bracket parent fill, child OCA echo, and real price-band cancel/reject on take-profit modify |
 | api_oca_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `2dc16869778bc497`; OCA group echo plus real price-band cancellation |
 | api_ioc_fok_aapl | 2026-04-14 | recorded, not promoted; existing replay remains `20260413T184916Z`; recapture repeated IOC/FOK statuses but included quote code 320 and execution-query timeout (events sha256 prefix `cfeffdcaeee3bcd2`) |
-| api_security_type_probe_matrix | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9be83e57ed176a17` |
+| api_security_type_probe_matrix | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9be83e57ed176a17`; BOND/BILL code 200 errors replay-promoted |
 | api_tif_attribute_matrix_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `e6601dcc2abfd001` |
 | api_algo_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `1855e2554d7de3ae` |
 | api_pairs_trading_aapl_msft | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `0dc806f7bb0868e8` |
@@ -251,6 +251,7 @@ against the role-aware `paper-dev` Gateway.
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
 | api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
 | api_fundamental_report_errors_aapl.txt | 20260415T162248Z | promoted; covers live code 430 `ReportRatios` and `ReportsFinStatements` errors without checking in large XML report payloads |
+| api_security_type_probe_errors.txt | 20260415T150322Z | promoted; covers live code 200 BOND and BILL contract-detail errors without checking in large successful contract-detail payloads |
 | api_wsh_variants_aapl.txt | 20260415T162255Z | promoted; covers WSH metadata plus conid, portfolio, watchlist, and competitor event-data variants returning real code 10276 entitlement errors |
 
 ## Coverage Gaps: What We Need To Hit
@@ -262,7 +263,7 @@ against the role-aware `paper-dev` Gateway.
 | OPT | 2026-04-15 probe timed out while streaming chain details | Rerun narrower qualified option probe or subscribe to OPRA data |
 | FOP | 2026-04-15 probe timed out | Rerun with a concrete future option contract after qualifying future expiry |
 | BAG (combo) | Depends on OPT qualification | Same |
-| BOND | 2026-04-15 probe returned real code 200 for placeholder CUSIP | Replace placeholder with real live-derived bond identifier |
+| BOND | 2026-04-15 placeholder probe returned real code 200; error replay is promoted | Replace placeholder with real live-derived bond identifier |
 | CFD | ContractDetails succeeded in 2026-04-15 probe | Add order/market-data entitlement probe |
 | WAR | 2026-04-15 probe timed out | Rerun with concrete warrant from exchange search |
 | CRYPTO | ContractDetails succeeded for BTC/PAXOS in 2026-04-15 probe | Add trading-permission order probe |
