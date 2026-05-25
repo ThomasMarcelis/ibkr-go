@@ -201,7 +201,7 @@ against the role-aware `paper-dev` Gateway.
 | api_scale_in_campaign_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `63db2db7cba21b68`; two AAPL market fills plus protective stop-loss, with later flatten/executions/cleanup tail timing out |
 | api_bracket_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `682a1390b2acf04c`; bracket parent fill, child OCA echo, and real price-band cancel/reject on take-profit modify |
 | api_oca_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `2dc16869778bc497`; OCA group echo plus real price-band cancellation |
-| api_ioc_fok_aapl | 2026-04-14 | recorded (updated) |
+| api_ioc_fok_aapl | 2026-04-14 | recorded, not promoted; existing replay remains `20260413T184916Z`; recapture repeated IOC/FOK statuses but included quote code 320 and execution-query timeout (events sha256 prefix `cfeffdcaeee3bcd2`) |
 | api_security_type_probe_matrix | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9be83e57ed176a17` |
 | api_tif_attribute_matrix_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `e6601dcc2abfd001` |
 | api_algo_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `1855e2554d7de3ae` |
@@ -230,7 +230,7 @@ against the role-aware `paper-dev` Gateway.
 
 | Transcript | Source Capture | Status |
 |-----------|---------------|--------|
-| api_ioc_fok_aapl.txt | 20260413T184916Z | promoted (exists) |
+| api_ioc_fok_aapl.txt | 20260413T184916Z | promoted; covers IOC cancel plus FOK inactive/reject paths |
 | api_tif_attribute_matrix_aapl.txt | 20260415T150535Z | promoted; covers GTC rest/cancel and trailing-percent fill replay |
 | api_stop_loss_management_aapl.txt | 20260415T153735Z | promoted; covers market entry, protective stop modify/cancel, and flatten replay |
 | api_transmit_false_then_transmit_aapl.txt | 20260415T162717Z | promoted; covers staged Transmit=false then transmit/cancel replay |
