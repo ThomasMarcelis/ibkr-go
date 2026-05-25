@@ -675,6 +675,9 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		return "req_executions", body, nil
 	case 59: // OutReqMarketDataType: [59, 1, dataType]
 		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["version"] = fields[1]
+		}
 		if len(fields) >= 3 {
 			dt, _ := strconv.Atoi(fields[2])
 			body["data_type"] = float64(dt)

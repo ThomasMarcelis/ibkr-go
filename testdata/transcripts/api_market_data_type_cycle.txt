@@ -1,0 +1,13 @@
+# Grounded by live API capture captures/20260415T162200Z-api_market_data_completeness_aapl.
+# server_version=200, events.jsonl sha256 prefix: f692fc168a53da9d.
+# This replay freezes the bare MarketData().SetType cycle. Later probes in the
+# source capture use real-time bars and tick-by-tick subscriptions.
+handshake {"server_version":200,"connection_time":"20260415 18:22:00 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":291}
+
+client req_market_data_type {"version":"1","data_type":1}
+client req_market_data_type {"version":"1","data_type":2}
+client req_market_data_type {"version":"1","data_type":3}
+client req_market_data_type {"version":"1","data_type":4}
+disconnect

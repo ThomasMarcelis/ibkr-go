@@ -620,6 +620,28 @@ func TestSetMarketDataType(t *testing.T) {
 	}
 }
 
+func TestAPIMarketDataTypeCycleReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_market_data_type_cycle.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	for _, dataType := range []ibkr.MarketDataType{
+		ibkr.MarketDataLive,
+		ibkr.MarketDataFrozen,
+		ibkr.MarketDataDelayed,
+		ibkr.MarketDataDelayedFrozen,
+	} {
+		if err := client.MarketData().SetType(ctx, dataType); err != nil {
+			t.Fatalf("MarketData().SetType(%s) error = %v", dataType, err)
+		}
+	}
+}
+
 func TestQuoteSnapshotRejectsGenericTicks(t *testing.T) {
 	t.Parallel()
 

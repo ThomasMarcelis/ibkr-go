@@ -77,7 +77,7 @@ handled through dimensions rather than duplicate rows:
 
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
-| MD1-001 | Market data type control | `MarketData().SetType`, official `reqMarketDataType`, `marketDataType` | `set_type_live`, `set_type_frozen`, `set_type_delayed`, `set_type_delayed_frozen`, `set_type_invalid`, `set_type_switch_while_streaming`, `api_market_data_completeness_aapl`, `quote_delayed_data.txt`, `lifecycle_set_mdt_after_close.txt` | candidate | live evidence: bare SetType(1/2/3/4) is accepted silently — no marketDataType push arrives without an active quote stream. Invalid value 99 is also accepted silently. Switching mid-stream triggers a real entitlement error 10089 for live data on a paper account. Transcript promotion pending per-type replay tests tied to quote streams that exercise the push |
+| MD1-001 | Market data type control | `MarketData().SetType`, official `reqMarketDataType`, `marketDataType` | `set_type_live`, `set_type_frozen`, `set_type_delayed`, `set_type_delayed_frozen`, `set_type_invalid`, `set_type_switch_while_streaming`, `api_market_data_completeness_aapl`, `api_market_data_type_cycle.txt`, `quote_delayed_data.txt`, `lifecycle_set_mdt_after_close.txt` | candidate | live evidence: bare SetType(1/2/3/4) is accepted silently and replay-promoted from 2026-04-15 capture `f692fc168a53da9d`; no marketDataType push arrives without an active quote stream. Invalid value 99 is also accepted silently. Switching mid-stream triggers a real entitlement error 10089 for live data on a paper account. Per-type replay tests tied to quote streams that exercise the push are still pending. |
 | MD1-002 | Quote snapshots | `MarketData().Quote`, official `reqMktData`, `cancelMktData`, `tickSnapshotEnd` | `quote_snapshot_aapl`, `api_market_data_completeness_aapl`, `quote_snapshot.txt`, `quote_delayed_data.txt` | promoted | STK/OPT/FUT/CASH snapshots, entitlement error, no data, regulatory snapshot where applicable |
 | MD1-003 | Quote streams and generic ticks | `MarketData().SubscribeQuotes`, official tick callbacks | `quote_stream_aapl`, `quote_stream_genericticks`, `quote_with_generic_ticks`, `quote_stream_multi_asset`, `api_market_data_completeness_aapl`, `api_duplicate_quote_subscriptions_aapl`, `api_duplicate_quote_subscriptions_aapl.txt`, `quote_with_generic_ticks.txt` | candidate | price/size/string/generic/option/EFP/news/dividend/shortable/RTVolume/fundamental-ratio generic tick families; duplicate same-contract subscriptions replay-promoted from 2026-04-15 capture `84f1e78a18616e0f` with SetType(Delayed) and independent delayed bid/ask streams |
 | MD1-004 | Tick callback edge shapes | official `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickNews`, `tickReqParams` | `calc_implied_volatility.txt`, `calc_option_price.txt`, quote fixtures | target | tickEFP, tickNews, tickReqParams, option computation live success/error |
@@ -205,6 +205,7 @@ one primary matrix row above.
 | `api_historical_matrix_aapl` | HIST-001 |
 | `api_ioc_fok_aapl` | ORD-001 |
 | `api_market_data_completeness_aapl` | MD1-003 |
+| `api_market_data_type_cycle.txt` | MD1-001 |
 | `api_news_article_aapl` | NEWS-002 |
 | `api_oca_trigger_aapl` | AORD-002 |
 | `api_oca_trigger_aapl.txt` | AORD-002 |
@@ -318,8 +319,9 @@ one primary matrix row above.
 
 These gaps block any claim that the matrix is fully executable:
 
-- `MarketData().SetType`: add separate live scenarios for data types 1, 2, 3,
-  4, invalid type, and switch-while-streaming behavior.
+- `MarketData().SetType`: bare data types 1, 2, 3, and 4 are replay-promoted;
+  add stream callback replays, invalid type, and switch-while-streaming
+  behavior.
 - `Orders().Cancel`: add direct cancel-by-ID live scenario distinct from
   `OrderHandle.Cancel`.
 - `Options().Exercise`: add exercise and lapse paper scenarios plus invalid
