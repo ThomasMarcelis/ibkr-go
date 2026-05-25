@@ -1035,6 +1035,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		}
 		if len(fields) >= 7 {
 			body["contract"] = map[string]any{
+				"con_id":   fields[3],
 				"symbol":   fields[4],
 				"sec_type": fields[5],
 				"exchange": safeField(fields, 6),

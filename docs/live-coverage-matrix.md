@@ -71,7 +71,7 @@ handled through dimensions rather than duplicate rows:
 | REF-003 | Option chain metadata | `Contracts().SecDefOptParams`, official `reqSecDefOptParams`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd` | `sec_def_opt_params_aapl`, `sec_def_opt_params.txt` | promoted | STK underlyings, FUT/FOP underlyings, empty exchange, invalid underlying |
 | REF-004 | Market rules and smart components | `Contracts().MarketRule`, `Contracts().SmartComponents`, official `reqMarketRule`, `reqSmartComponents`, `marketRule`, `smartComponents` | `market_rule`, `smart_components`, `market_rule.txt`, `smart_components.txt` | promoted | US equity, option, future, invalid market rule, invalid BBO exchange |
 | REF-005 | Market-depth exchanges | `Contracts().DepthExchanges`, official `reqMktDepthExchanges`, `mktDepthExchanges` | `mkt_depth_exchanges`, `mkt_depth_exchanges.txt` | promoted | all returned service data types, SMART support, invalid routing implication |
-| REF-006 | Fundamental data | `Contracts().FundamentalData`, official `reqFundamentalData`, `cancelFundamentalData`, `fundamentalData` | `fundamental_data_aapl`, `api_fundamental_reports_aapl`, `fundamental_data.txt` | candidate | all `FundamentalReportType` values, entitlement error, invalid report type, cancel path |
+| REF-006 | Fundamental data | `Contracts().FundamentalData`, official `reqFundamentalData`, `cancelFundamentalData`, `fundamentalData` | `fundamental_data_aapl`, `api_fundamental_reports_aapl`, `fundamental_data.txt`, `api_fundamental_report_errors_aapl.txt` | candidate | all `FundamentalReportType` values, entitlement error, invalid report type, cancel path. `ReportRatios` and `ReportsFinStatements` code 430 responses are replay-promoted from 2026-04-15 capture `02649216ff69f306`; large successful XML report payloads remain capture evidence only. |
 
 ## Market Data L1
 
@@ -197,6 +197,7 @@ one primary matrix row above.
 | `api_dollar_cost_averaging_aapl` | ORD-009 |
 | `api_duplicate_quote_subscriptions_aapl` | MD1-003 |
 | `api_duplicate_quote_subscriptions_aapl.txt` | MD1-003 |
+| `api_fundamental_report_errors_aapl.txt` | REF-006 |
 | `api_fundamental_reports_aapl` | REF-006 |
 | `api_forex_lifecycle_eurusd` | ORD-001 |
 | `api_forex_lifecycle_eurusd.txt` | ORD-001 |
