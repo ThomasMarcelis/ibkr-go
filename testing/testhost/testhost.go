@@ -825,6 +825,20 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		if len(fields) >= 2 {
 			body["req_id"] = fields[1]
 		}
+		if len(fields) >= 17 {
+			body["contract"] = map[string]any{
+				"con_id":           fields[2],
+				"symbol":           fields[3],
+				"sec_type":         fields[4],
+				"exchange":         safeField(fields, 9),
+				"currency":         safeField(fields, 11),
+				"primary_exchange": safeField(fields, 10),
+				"local_symbol":     safeField(fields, 12),
+			}
+			body["tick_type"] = fields[14]
+			body["number_of_ticks"] = fields[15]
+			body["ignore_size"] = fields[16] == "1"
+		}
 		return "req_tick_by_tick", body, nil
 	case 98: // OutCancelTickByTickData: [98, reqId]
 		body := map[string]any{}

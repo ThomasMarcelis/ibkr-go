@@ -88,7 +88,7 @@ handled through dimensions rather than duplicate rows:
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | MD2-001 | Market depth regular and smart | `MarketData().SubscribeDepth`, official `reqMktDepth`, `cancelMktDepth`, `updateMktDepth`, `updateMktDepthL2` | `market_depth_aapl`, `market_depth_aapl_smart`, `market_depth_error.txt` | candidate | L1 vs L2 rows, SMART depth, insert/update/delete, market maker names, entitlement errors, cancel |
-| MD2-002 | Tick-by-tick streams | `MarketData().SubscribeTickByTick`, official `reqTickByTickData`, `cancelTickByTickData`, tick-by-tick callbacks | `tick_by_tick_last`, `tick_by_tick_bidask`, `tick_by_tick_midpoint`, `api_market_data_completeness_aapl`, `tick_by_tick.txt` | candidate | Last, AllLast, BidAsk, MidPoint, ignoreSize true/false, numberOfTicks, pacing, unavailable data |
+| MD2-002 | Tick-by-tick streams | `MarketData().SubscribeTickByTick`, official `reqTickByTickData`, `cancelTickByTickData`, tick-by-tick callbacks | `tick_by_tick_last`, `tick_by_tick_bidask`, `tick_by_tick_midpoint`, `api_market_data_completeness_aapl`, `api_tick_by_tick_entitlement_errors_aapl.txt`, `tick_by_tick.txt` | candidate | Last, AllLast, BidAsk, MidPoint, ignoreSize true/false, numberOfTicks, pacing, unavailable data. AAPL Last/AllLast/AllLast ignore-size/BidAsk/MidPoint code 10089 entitlement errors are replay-promoted from 2026-04-15 capture `f692fc168a53da9d`; live success streams remain pending. |
 
 ## Historical Data
 
@@ -226,6 +226,7 @@ one primary matrix row above.
 | `api_stop_loss_management_aapl` | ORD-009 |
 | `api_stress_rapid_fire_aapl` | ORD-009 |
 | `api_tif_attribute_matrix_aapl` | ORD-001 |
+| `api_tick_by_tick_entitlement_errors_aapl.txt` | MD2-002 |
 | `api_transmit_false_then_transmit_aapl` | ORD-001 |
 | `api_whatif_margin_aapl` | AORD-010 |
 | `api_wsh_variants_aapl` | WSH-001 |

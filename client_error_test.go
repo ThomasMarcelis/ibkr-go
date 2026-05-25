@@ -237,6 +237,72 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	}
 }
 
+func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_tick_by_tick_entitlement_errors_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cases := []struct {
+		label      string
+		tickType   ibkr.TickByTickType
+		ignoreSize bool
+	}{
+		{label: "Last", tickType: ibkr.TickByTickLast},
+		{label: "AllLast", tickType: ibkr.TickByTickAllLast},
+		{label: "AllLastIgnoreSize", tickType: ibkr.TickByTickAllLast, ignoreSize: true},
+		{label: "BidAsk", tickType: ibkr.TickByTickBidAsk},
+		{label: "MidPoint", tickType: ibkr.TickByTickMidPoint},
+	}
+	for _, tc := range cases {
+		sub, err := client.MarketData().SubscribeTickByTick(ctx, ibkr.TickByTickRequest{
+			Contract: ibkr.Contract{
+				ConID:    265598,
+				Symbol:   "AAPL",
+				SecType:  ibkr.SecTypeStock,
+				Exchange: "SMART",
+				Currency: "USD",
+			},
+			TickType:   tc.tickType,
+			IgnoreSize: tc.ignoreSize,
+		})
+		if err != nil {
+			t.Fatalf("%s SubscribeTickByTick() error = %v", tc.label, err)
+		}
+
+		closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
+		apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+		if !ok {
+			t.Fatalf("%s closed.Err type = %T, want *ibkr.APIError", tc.label, closed.Err)
+		}
+		if apiErr.Code != 10089 {
+			t.Fatalf("%s APIError.Code = %d, want 10089", tc.label, apiErr.Code)
+		}
+		if apiErr.OpKind != ibkr.OpTickByTick {
+			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpTickByTick)
+		}
+		if closed.Retryable {
+			t.Fatalf("%s closed.Retryable = true, want false", tc.label)
+		}
+
+		waitErr := sub.Wait()
+		if waitErr == nil {
+			t.Fatalf("%s sub.Wait() error = nil, want API error", tc.label)
+		}
+		waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
+		if !ok {
+			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
+		}
+		if waitAPIErr.Code != 10089 {
+			t.Fatalf("%s sub.Wait() APIError.Code = %d, want 10089", tc.label, waitAPIErr.Code)
+		}
+	}
+}
+
 func TestDisconnectDuringOneShot(t *testing.T) {
 	t.Parallel()
 
