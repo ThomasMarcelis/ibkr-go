@@ -485,7 +485,7 @@ tests.
 | Modify after Done | live test |
 | Place with Transmit=false, then cancel | live test |
 | Place with Transmit=false, then transmit | replay promoted |
-| Two subscriptions same contract | live capture |
+| Two subscriptions same contract | replay promoted |
 | Subscribe, disconnect, resume | transcript (quotes, bars) |
 
 ## 11. Execution Phases
@@ -590,14 +590,15 @@ rejections or no-status cleanup evidence.
 ### Phase 9: Protocol edge cases
 
 - [x] Transmit=false then transmit (modify to transmit)
-- [x] Two subscriptions same contract (singleton behavior)
+- [x] Two subscriptions same contract (independent delayed streams)
 - [x] Cross-client order observation (client_id=0)
 - [ ] Server version boundary testing (sv=191 vs sv=192)
 - [ ] Bond contract details callback shape
 
 Progress: `api_transmit_false_then_transmit_aapl` was live-captured on
 2026-04-15 (`003abb59dfced542`) and replay-promoted. Duplicate quote
-subscriptions were live-captured the same day (`84f1e78a18616e0f`). Client ID 0
+subscriptions were live-captured and replay-promoted the same day
+(`84f1e78a18616e0f`). Client ID 0
 and cross-client order observation/cancel were live-captured and replay-promoted
 from `5ff9cdc0f6f9b500` and `fcb7e811624e4aa9`.
 

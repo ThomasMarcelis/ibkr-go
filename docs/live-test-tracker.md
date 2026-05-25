@@ -248,7 +248,7 @@ against the role-aware `paper-dev` Gateway.
 | api_oca_trigger_aapl.txt | 20260413T174546Z | promoted; covers OCA group echo on both AAPL peers and real PendingCancel/Cancelled price-band rejection for the aggressive peer |
 | api_whatif_margin_aapl.txt | 20260414T164207Z | pending |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
-| api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
+| api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
 
 ## Coverage Gaps: What We Need To Hit
 

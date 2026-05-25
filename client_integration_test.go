@@ -536,6 +536,9 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 		Currency: "USD",
 	}
 
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("MarketData().SetType(MarketDataDelayed) error = %v", err)
+	}
 	first, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: contract})
 	if err != nil {
 		t.Fatalf("first SubscribeQuotes() error = %v", err)

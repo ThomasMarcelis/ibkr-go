@@ -1,12 +1,13 @@
 # Grounded by live API capture captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl.
 # server_version=200, events.jsonl sha256 prefix: 84f1e78a18616e0f.
-# Account identifiers are sanitized; this replay freezes two independent
-# same-contract AAPL quote subscriptions receiving delayed market-data type
-# callbacks and delayed bid/ask ticks from the live paper Gateway.
+# Account identifiers are sanitized; this replay freezes SetType(Delayed)
+# followed by two independent same-contract AAPL quote subscriptions receiving
+# delayed market-data type callbacks and bid/ask ticks from the live paper Gateway.
 handshake {"server_version":200,"connection_time":"20260415 18:27:42 Central European Standard Time"}
 server managed_accounts {"accounts":["DU9000001"]}
 server next_valid_id {"order_id":294}
 
+client req_market_data_type {"data_type":3}
 client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
 client req_quote {"req_id":"$req2","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
 
