@@ -1,0 +1,26 @@
+# Grounded by live API capture captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl.
+# server_version=200, events.jsonl sha256 prefix: 84f1e78a18616e0f.
+# Account identifiers are sanitized; this replay freezes two independent
+# same-contract AAPL quote subscriptions receiving delayed market-data type
+# callbacks and delayed bid/ask ticks from the live paper Gateway.
+handshake {"server_version":200,"connection_time":"20260415 18:27:42 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":294}
+
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+client req_quote {"req_id":"$req2","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+
+server tick_req_params {"req_id":"$req1","min_tick":"0.01","bbo_exchange":"9c0001","snapshot_permissions":4}
+server tick_req_params {"req_id":"$req2","min_tick":"0.01","bbo_exchange":"9c0001","snapshot_permissions":4}
+server market_data_type {"req_id":"$req1","data_type":3}
+server market_data_type {"req_id":"$req2","data_type":3}
+server api_error {"req_id":"$req1","code":10167,"message":"Requested market data is not subscribed. Displaying delayed market data.","error_time_ms":"1776270463000"}
+
+server tick_price {"req_id":"$req1","field":66,"price":"263.45"}
+server tick_price {"req_id":"$req2","field":66,"price":"263.45"}
+server tick_price {"req_id":"$req1","field":67,"price":"263.48"}
+server tick_price {"req_id":"$req2","field":67,"price":"263.48"}
+
+client cancel_quote {"req_id":"$req1"}
+client cancel_quote {"req_id":"$req2"}
+disconnect

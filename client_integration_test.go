@@ -518,6 +518,84 @@ func TestQuoteSnapshotWithGenericTicks(t *testing.T) {
 	}
 }
 
+func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_duplicate_quote_subscriptions_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	first, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: contract})
+	if err != nil {
+		t.Fatalf("first SubscribeQuotes() error = %v", err)
+	}
+	second, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: contract})
+	if err != nil {
+		_ = first.Close()
+		t.Fatalf("second SubscribeQuotes() error = %v", err)
+	}
+
+	waitDelayedBidAsk := func(label string, events <-chan ibkr.QuoteUpdate) ibkr.Quote {
+		t.Helper()
+
+		wantFields := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldMarketDataType
+		for {
+			select {
+			case update, ok := <-events:
+				if !ok {
+					t.Fatalf("%s quote events closed before delayed bid/ask", label)
+				}
+				if update.Snapshot.Available&wantFields == wantFields {
+					return update.Snapshot
+				}
+			case <-ctx.Done():
+				t.Fatalf("timeout waiting for %s delayed bid/ask", label)
+			}
+		}
+	}
+
+	firstQuote := waitDelayedBidAsk("first duplicate subscription", first.Events())
+	secondQuote := waitDelayedBidAsk("second duplicate subscription", second.Events())
+	for label, quote := range map[string]ibkr.Quote{
+		"first":  firstQuote,
+		"second": secondQuote,
+	} {
+		if quote.MarketDataType != ibkr.MarketDataDelayed {
+			t.Fatalf("%s market data type = %s, want Delayed", label, quote.MarketDataType)
+		}
+		if got := quote.Bid.String(); got != "263.45" {
+			t.Fatalf("%s bid = %s, want 263.45", label, got)
+		}
+		if got := quote.Ask.String(); got != "263.48" {
+			t.Fatalf("%s ask = %s, want 263.48", label, got)
+		}
+	}
+
+	if err := first.Close(); err != nil {
+		t.Fatalf("first Close() error = %v", err)
+	}
+	if err := second.Close(); err != nil {
+		t.Fatalf("second Close() error = %v", err)
+	}
+	if err := first.Wait(); err != nil {
+		t.Fatalf("first Wait() error = %v", err)
+	}
+	if err := second.Wait(); err != nil {
+		t.Fatalf("second Wait() error = %v", err)
+	}
+}
+
 func TestSetMarketDataType(t *testing.T) {
 	t.Parallel()
 

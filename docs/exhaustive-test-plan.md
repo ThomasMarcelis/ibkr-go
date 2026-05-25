@@ -570,6 +570,7 @@ rejections or no-status cleanup evidence.
 
 ### Phase 7: Market data completeness
 
+- [x] Duplicate same-contract quote subscriptions (`api_duplicate_quote_subscriptions_aapl` captured 2026-04-15, replay-promoted from `84f1e78a18616e0f`)
 - [ ] All historical bar sizes (1sec through 1month)
 - [ ] All whatToShow values
 - [ ] Real-time bars BID_ASK and MIDPOINT
