@@ -237,6 +237,69 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	}
 }
 
+func TestAPIRealTimeBarsRequestErrorsAAPLReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_realtime_bars_request_errors_aapl.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	cases := []struct {
+		label      string
+		whatToShow ibkr.WhatToShow
+		wantCode   int
+	}{
+		{label: "TRADES", whatToShow: ibkr.ShowTrades, wantCode: 420},
+		{label: "BID_ASK", whatToShow: ibkr.ShowBidAsk, wantCode: 321},
+		{label: "MIDPOINT", whatToShow: ibkr.ShowMidpoint, wantCode: 10089},
+	}
+	for _, tc := range cases {
+		sub, err := client.MarketData().SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
+			Contract: ibkr.Contract{
+				ConID:    265598,
+				Symbol:   "AAPL",
+				SecType:  ibkr.SecTypeStock,
+				Exchange: "SMART",
+				Currency: "USD",
+			},
+			WhatToShow: tc.whatToShow,
+		})
+		if err != nil {
+			t.Fatalf("%s SubscribeRealTimeBars() error = %v", tc.label, err)
+		}
+
+		closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
+		apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+		if !ok {
+			t.Fatalf("%s closed.Err type = %T, want *ibkr.APIError", tc.label, closed.Err)
+		}
+		if apiErr.Code != tc.wantCode {
+			t.Fatalf("%s APIError.Code = %d, want %d", tc.label, apiErr.Code, tc.wantCode)
+		}
+		if apiErr.OpKind != ibkr.OpRealTimeBars {
+			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpRealTimeBars)
+		}
+		if closed.Retryable {
+			t.Fatalf("%s closed.Retryable = true, want false", tc.label)
+		}
+
+		waitErr := sub.Wait()
+		if waitErr == nil {
+			t.Fatalf("%s sub.Wait() error = nil, want API error", tc.label)
+		}
+		waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
+		if !ok {
+			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
+		}
+		if waitAPIErr.Code != tc.wantCode {
+			t.Fatalf("%s sub.Wait() APIError.Code = %d, want %d", tc.label, waitAPIErr.Code, tc.wantCode)
+		}
+	}
+}
+
 func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
 	t.Parallel()
 

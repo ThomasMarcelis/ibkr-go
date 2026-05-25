@@ -1,0 +1,17 @@
+# Grounded by live API capture captures/20260415T162200Z-api_market_data_completeness_aapl.
+# server_version=200, events.jsonl sha256 prefix: f692fc168a53da9d.
+# This replay freezes real-time-bars whatToShow variants that returned live
+# Gateway request-scoped errors on the paper account.
+handshake {"server_version":200,"connection_time":"20260415 18:22:00 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":291}
+
+client req_realtime_bars {"version":"3","req_id":"$trades","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"bar_size":"5","what_to_show":"TRADES","use_rth":false}
+server api_error {"req_id":"$trades","code":420,"message":"Invalid Real-time Query:No market data permissions for ISLAND STK. Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270122540"}
+
+client req_realtime_bars {"version":"3","req_id":"$bid_ask","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"bar_size":"5","what_to_show":"BID_ASK","use_rth":false}
+server api_error {"req_id":"$bid_ask","code":321,"message":"Error validating request.-'bQ' : cause - What to show field is missing or incorrect.","advanced_order_reject_json":"","error_time_ms":"1776270122541"}
+
+client req_realtime_bars {"version":"3","req_id":"$midpoint","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"bar_size":"5","what_to_show":"MIDPOINT","use_rth":false}
+server api_error {"req_id":"$midpoint","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270122634"}
+disconnect

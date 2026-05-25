@@ -81,7 +81,7 @@ handled through dimensions rather than duplicate rows:
 | MD1-002 | Quote snapshots | `MarketData().Quote`, official `reqMktData`, `cancelMktData`, `tickSnapshotEnd` | `quote_snapshot_aapl`, `api_market_data_completeness_aapl`, `quote_snapshot.txt`, `quote_delayed_data.txt` | promoted | STK/OPT/FUT/CASH snapshots, entitlement error, no data, regulatory snapshot where applicable |
 | MD1-003 | Quote streams and generic ticks | `MarketData().SubscribeQuotes`, official tick callbacks | `quote_stream_aapl`, `quote_stream_genericticks`, `quote_with_generic_ticks`, `quote_stream_multi_asset`, `api_market_data_completeness_aapl`, `api_duplicate_quote_subscriptions_aapl`, `api_duplicate_quote_subscriptions_aapl.txt`, `quote_with_generic_ticks.txt` | candidate | price/size/string/generic/option/EFP/news/dividend/shortable/RTVolume/fundamental-ratio generic tick families; duplicate same-contract subscriptions replay-promoted from 2026-04-15 capture `84f1e78a18616e0f` with SetType(Delayed) and independent delayed bid/ask streams |
 | MD1-004 | Tick callback edge shapes | official `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickNews`, `tickReqParams` | `calc_implied_volatility.txt`, `calc_option_price.txt`, quote fixtures | target | tickEFP, tickNews, tickReqParams, option computation live success/error |
-| MD1-005 | Real-time bars | `MarketData().SubscribeRealTimeBars`, official `reqRealTimeBars`, `cancelRealTimeBars`, `realtimeBar` | `realtime_bars_aapl`, `api_market_data_completeness_aapl`, `realtime_bars_reconnect.txt` | promoted | TRADES/MIDPOINT/BID_ASK, RTH true/false, cancel, reconnect |
+| MD1-005 | Real-time bars | `MarketData().SubscribeRealTimeBars`, official `reqRealTimeBars`, `cancelRealTimeBars`, `realtimeBar` | `realtime_bars_aapl`, `api_market_data_completeness_aapl`, `api_realtime_bars_request_errors_aapl.txt`, `realtime_bars_reconnect.txt` | promoted | TRADES/MIDPOINT/BID_ASK, RTH true/false, cancel, reconnect. AAPL TRADES/BID_ASK/MIDPOINT request-scoped error variants are replay-promoted from 2026-04-15 capture `f692fc168a53da9d`; live success streams still need live-derived grounding. |
 
 ## Market Data L2 And Tick-By-Tick
 
@@ -219,6 +219,7 @@ one primary matrix row above.
 | `api_order_type_matrix_aapl` | ORD-001 |
 | `api_pairs_trading_aapl_msft` | ORD-009 |
 | `api_reconnect_active_order_aapl` | SESS-005 |
+| `api_realtime_bars_request_errors_aapl.txt` | MD1-005 |
 | `api_scale_in_campaign_aapl` | ORD-009 |
 | `api_scale_in_campaign_aapl.txt` | ORD-009 |
 | `api_security_type_probe_errors.txt` | REF-001 |

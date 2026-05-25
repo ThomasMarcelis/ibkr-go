@@ -630,11 +630,15 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		return "cancel_quote", body, nil
 	case 50: // OutReqRealTimeBars: [50, 3, reqId, conId, symbol, secType, ...]
 		body := map[string]any{}
+		if len(fields) >= 2 {
+			body["version"] = fields[1]
+		}
 		if len(fields) >= 3 {
 			body["req_id"] = fields[2]
 		}
 		if len(fields) >= 19 {
 			body["contract"] = map[string]any{
+				"con_id":           fields[3],
 				"symbol":           fields[4],
 				"sec_type":         fields[5],
 				"exchange":         safeField(fields, 10),
@@ -642,6 +646,7 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 				"primary_exchange": safeField(fields, 11),
 				"local_symbol":     safeField(fields, 13),
 			}
+			body["bar_size"] = fields[15]
 			body["what_to_show"] = fields[16]
 			body["use_rth"] = fields[17] == "1"
 		}
