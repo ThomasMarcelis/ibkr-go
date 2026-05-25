@@ -221,14 +221,14 @@ func TestEncodeExecutionsRequestServer200Layout(t *testing.T) {
 
 	fields, err := encodeFields(ExecutionsRequest{
 		ReqID:   3,
-		Account: "DUP770846",
+		Account: "DU9000001",
 		Symbol:  "AAPL",
 	})
 	if err != nil {
 		t.Fatalf("encodeFields(ExecutionsRequest) error = %v", err)
 	}
 
-	want := []string{"7", "3", "3", "0", "DUP770846", "", "AAPL", "", "", "", "2147483647", "0"}
+	want := []string{"7", "3", "3", "0", "DU9000001", "", "AAPL", "", "", "", "2147483647", "0"}
 	if len(fields) != len(want) {
 		t.Fatalf("fields len = %d, want %d: %v", len(fields), len(want), fields)
 	}

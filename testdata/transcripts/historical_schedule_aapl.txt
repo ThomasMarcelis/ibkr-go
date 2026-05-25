@@ -2,8 +2,9 @@
 # events.jsonl sha256 prefix: 1b207a57180e6197
 # AAPL STK, 1 M / 1 day / SCHEDULE, useRTH=true — 21 trading sessions
 # from 2026-03-12 through 2026-04-10. Msg_id 106, live server_version 200.
+# Account identifier is sanitized to DU9000001.
 handshake {"server_version":200,"connection_time":"20260411 19:52:12 Central European Standard Time"}
-server managed_accounts {"accounts":["DUP770846"]}
+server managed_accounts {"accounts":["DU9000001"]}
 server next_valid_id {"order_id":7}
 server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775929932492"}
 server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:fundfarm","advanced_order_reject_json":"","error_time_ms":"1775929932492"}

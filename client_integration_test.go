@@ -2182,7 +2182,7 @@ done:
 		t.Fatal("never received Execution event")
 		return
 	}
-	if execution.ExecID != "0000e0d5.69dd7411.01.01" {
+	if execution.ExecID != "sanitized-native-exec-001" {
 		t.Fatalf("Execution.ExecID = %q", execution.ExecID)
 	}
 	wantTime := time.Date(2026, 4, 13, 19, 27, 4, 0, time.UTC)

@@ -160,6 +160,12 @@ notes so the replay can be traced back to live evidence without committing raw
 account data. Default replay tests should stay curated; exhaustive replay runs
 use the `replay-all` catalog batch or an explicit test flag/env in the caller.
 
+Curated live-derived fixtures use `DU9000001` as the canonical account
+redaction token. Also sanitize execution IDs, order refs, perm IDs, and other
+account-specific identifiers before checking in fixtures. If a transcript
+header cites raw Gateway evidence and contains account-scoped fields, the
+header should say that account-specific identifiers are sanitized.
+
 ## Next Transcript Work
 
 - use [`live-coverage-matrix.md`](live-coverage-matrix.md) as the target matrix
