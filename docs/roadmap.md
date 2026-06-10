@@ -51,11 +51,19 @@ Current IBKR drift to check first:
 
 - The public [IBKR API Software](https://interactivebrokers.github.io/) page
   listed API Latest 10.47, released 2026-05-20, and recommended TWS or IB
-  Gateway 1045+ when checked on 2026-05-25; verify that behavior against the
-  existing `server_version 200` codec baseline.
+  Gateway 1045+ when checked on 2026-05-25; the download page was unchanged
+  on a 2026-06-10 re-check and both local Gateway roles still negotiated
+  `server_version 200`, so the pinned codec baseline holds. The official
+  [production release notes](https://www.ibkrguides.com/releasenotes/prod-2026.htm)
+  already document a 10.48 change — `reqOpenOrders` will include
+  de-activated orders — to re-verify against `Orders().Open` expectations
+  once the local Gateways update.
 - Fundamental data de-support or replacement behavior.
 - `$LEDGER-` account-value prefixes from the new account-value setting.
-- Fractional `tickSize` values and newer generic tick families.
+- Fractional `tickSize` values and newer generic tick families. Concrete
+  probe target: odd-lot ticks 105-110 behind generic tick 787 (official docs
+  gate them on TWS/API 10.46+; observe what a `server_version 200` session
+  returns).
 - New or shifted order/account tail fields that affect OpenOrder,
   CompletedOrder, Execution, or Commission decoding.
 

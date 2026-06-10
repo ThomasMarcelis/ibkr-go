@@ -4,7 +4,7 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-05-25 (readonly-live gateway 127.0.0.1:4001 and paper-dev
+Last updated: 2026-06-10 (readonly-live gateway 127.0.0.1:4001 and paper-dev
 gateway 127.0.0.1:4002, both server_version 200).
 
 ## Current Campaign Contract
@@ -28,6 +28,33 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-06-10
+
+Campaign preflight drift gate. Both local Gateway roles connected with
+`server_version=200`, so the pinned v200 codec baseline still holds.
+
+- `go run ./cmd/ibkr-doctor -role readonly-live` connected to
+  `127.0.0.1:4001`: `state=Ready`, `server_version=200`, `next_valid_id=1`,
+  one managed account. `CurrentTime` returned `2026-06-10T19:32:07Z`. AAPL
+  quote probe returned real IBKR code 10089 (live API market-data
+  subscription unavailable; delayed offered), matching the standing
+  entitlement ledger. Note the Gateway alternates between 10089 and 10168
+  across runs depending on whether it offers delayed data: the 2026-05-25
+  15:58 continuation check recorded 10168 for the same probe.
+- `go run ./cmd/ibkr-doctor -role paper-dev` connected to `127.0.0.1:4002`:
+  `state=Ready`, `server_version=200`, `next_valid_id=2`, one managed
+  account. Delayed market data type requested; AAPL delayed quote received
+  (bid/ask/last populated).
+- [IBKR API Software](https://interactivebrokers.github.io/) re-checked:
+  the download page still lists API Latest 10.47 (2026-05-20) and Stable
+  10.45 (2026-03-30), recommended Gateway 1045+. The official
+  [production release notes](https://www.ibkrguides.com/releasenotes/prod-2026.htm)
+  already carry a 10.48 section: `reqOpenOrders` will include de-activated
+  orders. That is a pending behavioral change to `Orders().Open` result
+  sets, not a wire-shape change, and both local Gateways still negotiate
+  `server_version 200`, so capture work proceeds on the pinned baseline
+  with 10.48 recorded as a drift watch item.
 
 ### 2026-05-25
 
