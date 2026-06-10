@@ -609,7 +609,9 @@ func runAPIConditionsMatrixAAPL(ctx context.Context, addr string, clientID int) 
 			cond  ibkr.OrderCondition
 		}{
 			{label: "price_condition", cond: ibkr.OrderCondition{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: farSell(anchor).String(), TriggerMethod: 4}},
-			{label: "time_condition", cond: ibkr.OrderCondition{Type: 3, Conjunction: "a", Operator: 2, Value: time.Now().Add(2 * time.Minute).Format("20060102 15:04:05 MST")}},
+			// Gateway code 10314 rejects zone abbreviations like CEST; it
+			// accepts the documented UTC dash form yyyymmdd-hh:mm:ss.
+			{label: "time_condition", cond: ibkr.OrderCondition{Type: 3, Conjunction: "a", Operator: 2, Value: time.Now().Add(2 * time.Minute).UTC().Format("20060102-15:04:05")}},
 			{label: "margin_condition", cond: ibkr.OrderCondition{Type: 4, Conjunction: "a", Operator: 2, Value: "10"}},
 			{label: "execution_condition", cond: ibkr.OrderCondition{Type: 5, Conjunction: "a", SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"}},
 			{label: "volume_condition", cond: ibkr.OrderCondition{Type: 6, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "999999999"}},
