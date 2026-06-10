@@ -2876,9 +2876,9 @@ func readOrderCondition(r *fieldReader, conditionType int) (OrderCondition, erro
 		} else {
 			cond.Operator = 1
 		}
+		cond.Value = r.ReadString()
 		cond.ConID, _ = r.ReadInt()
 		cond.Exchange = r.ReadString()
-		cond.Value = r.ReadString()
 		cond.TriggerMethod, _ = r.ReadInt()
 	case 3: // Time
 		cond.Conjunction = r.ReadString()
@@ -2914,9 +2914,9 @@ func readOrderCondition(r *fieldReader, conditionType int) (OrderCondition, erro
 		} else {
 			cond.Operator = 1
 		}
+		cond.Value = r.ReadString()
 		cond.ConID, _ = r.ReadInt()
 		cond.Exchange = r.ReadString()
-		cond.Value = r.ReadString()
 	case 7: // Percent change
 		cond.Conjunction = r.ReadString()
 		if more, err := r.ReadBool(); err != nil {
@@ -2926,9 +2926,9 @@ func readOrderCondition(r *fieldReader, conditionType int) (OrderCondition, erro
 		} else {
 			cond.Operator = 1
 		}
+		cond.Value = r.ReadString()
 		cond.ConID, _ = r.ReadInt()
 		cond.Exchange = r.ReadString()
-		cond.Value = r.ReadString()
 	default:
 		return OrderCondition{}, fmt.Errorf("codec: unsupported order condition type %d", conditionType)
 	}
@@ -2942,13 +2942,17 @@ func writeOrderCondition(w *fieldWriter, cond OrderCondition) error {
 	} else {
 		w.WriteString("a")
 	}
+	// Contract-bound conditions follow the official client's writeExternal
+	// hierarchy: the OperatorCondition value precedes the ContractCondition
+	// conId/exchange pair. Live Gateway (server_version 200) rejects the
+	// reversed order with code 320 field-parse errors.
 	isMore := cond.Operator == 2
 	switch cond.Type {
 	case 1:
 		w.WriteBool(isMore)
+		w.WriteString(cond.Value)
 		w.WriteInt(cond.ConID)
 		w.WriteString(cond.Exchange)
-		w.WriteString(cond.Value)
 		w.WriteInt(cond.TriggerMethod)
 	case 3, 4:
 		w.WriteBool(isMore)
@@ -2959,9 +2963,9 @@ func writeOrderCondition(w *fieldWriter, cond OrderCondition) error {
 		w.WriteString(cond.Symbol)
 	case 6, 7:
 		w.WriteBool(isMore)
+		w.WriteString(cond.Value)
 		w.WriteInt(cond.ConID)
 		w.WriteString(cond.Exchange)
-		w.WriteString(cond.Value)
 	default:
 		return fmt.Errorf("codec: unsupported order condition type %d", cond.Type)
 	}

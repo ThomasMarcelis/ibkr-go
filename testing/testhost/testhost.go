@@ -1359,9 +1359,9 @@ func decodeOrderConditionClientFields(fields []string, cursor *int) []any {
 		switch conditionType {
 		case "1":
 			condition["operator"] = readClientBool(fields, cursor)
+			condition["value"] = readClientField(fields, cursor)
 			condition["con_id"] = readClientField(fields, cursor)
 			condition["exchange"] = readClientField(fields, cursor)
-			condition["value"] = readClientField(fields, cursor)
 			condition["trigger_method"] = readClientField(fields, cursor)
 		case "3", "4":
 			condition["operator"] = readClientBool(fields, cursor)
@@ -1372,9 +1372,9 @@ func decodeOrderConditionClientFields(fields []string, cursor *int) []any {
 			condition["symbol"] = readClientField(fields, cursor)
 		case "6", "7":
 			condition["operator"] = readClientBool(fields, cursor)
+			condition["value"] = readClientField(fields, cursor)
 			condition["con_id"] = readClientField(fields, cursor)
 			condition["exchange"] = readClientField(fields, cursor)
-			condition["value"] = readClientField(fields, cursor)
 		}
 		conditions = append(conditions, condition)
 	}

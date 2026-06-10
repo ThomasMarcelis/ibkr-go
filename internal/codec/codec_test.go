@@ -619,6 +619,71 @@ func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 	assertSubsequence(t, fields, []string{"0", "0", "1", "3", "a", "1", "20260409 10:00:00 US/Eastern", "1", "0"})
 }
 
+func TestEncodeContractConditionValueBeforeContract(t *testing.T) {
+	t.Parallel()
+
+	// Live paper Gateway (server_version 200, 2026-06-10) rejected the prior
+	// encoding with code 320 "Unable to parse field: 'Con Id' for input
+	// string: 'SMART'" for volume and percent-change conditions, and
+	// "Unable to parse field: 'Ignore Rth' for input string: '2923.1'" for a
+	// price condition (captures/20260610T195846Z-api_conditions_matrix_aapl,
+	// events.jsonl sha256 9602919b5a9c8c95; also
+	// 20260610T195953Z-place_order_price_condition_aapl, 2c8cb7d7cb7515a2).
+	// Contract-bound conditions serialize the OperatorCondition value BEFORE
+	// the ContractCondition conId/exchange pair, matching the official
+	// client's writeExternal hierarchy.
+	cases := []struct {
+		name string
+		cond OrderCondition
+		want []string
+	}{
+		{
+			name: "price",
+			cond: OrderCondition{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "9999.00", TriggerMethod: 4},
+			want: []string{"1", "1", "a", "1", "9999.00", "265598", "SMART", "4", "1", "0"},
+		},
+		{
+			name: "volume",
+			cond: OrderCondition{Type: 6, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "999999999"},
+			want: []string{"1", "6", "a", "1", "999999999", "265598", "SMART", "1", "0"},
+		},
+		{
+			name: "percent_change",
+			cond: OrderCondition{Type: 7, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "50"},
+			want: []string{"1", "7", "a", "1", "50", "265598", "SMART", "1", "0"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			payload, err := Encode(PlaceOrderRequest{
+				OrderID:               401,
+				Contract:              Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+				Action:                "BUY",
+				TotalQuantity:         "1",
+				OrderType:             "LMT",
+				LmtPrice:              "50.00",
+				TIF:                   "DAY",
+				Account:               "DU9000001",
+				Origin:                "0",
+				Transmit:              "1",
+				Conditions:            []OrderCondition{tc.cond},
+				ConditionsIgnoreRTH:   "1",
+				ConditionsCancelOrder: "0",
+			})
+			if err != nil {
+				t.Fatalf("Encode() error = %v", err)
+			}
+			fields, err := wire.ParseFields(payload)
+			if err != nil {
+				t.Fatalf("ParseFields() error = %v", err)
+			}
+			assertSubsequence(t, fields, tc.want)
+		})
+	}
+}
+
 func assertSubsequence(t *testing.T, fields, want []string) {
 	t.Helper()
 	for i := 0; i+len(want) <= len(fields); i++ {
