@@ -4,6 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **`cmd/ibkr-doctor` verifies both Gateway roles before a capture
+  campaign.** Order-capable live tests and capture scenarios route through
+  the disposable `paper-dev` Gateway role; read-only evidence comes from
+  `readonly-live`.
+- **Verified `server_version 200` captures are frozen as deterministic
+  replay tests.** Order campaigns (rapid-fire cancel, forex rejection,
+  bracket, OCA, scale-in, trailing-bracket rejection), market-data replays
+  (duplicate quote subscriptions, market-data type cycle, tick-by-tick and
+  real-time bars request/entitlement errors), and reference-data error
+  replays (security-type probes, fundamental reports, WSH entitlement) are
+  public replay tests, each traceable to a capture hash.
+
+### Fixed
+
+- **Live-derived fixtures no longer embed the paper account identifier.**
+  Transcripts and codec tests use sanitized placeholders;
+  `docs/transcripts.md` documents the scrubbing contract.
+
+### Changed
+
+- **Replay promotion status was realigned across the capture catalog,
+  coverage matrix, and tracker** so the three ledgers agree; remaining gaps
+  (what-if margin preview, IOC/FOK recapture) are recorded as explicit
+  ledger entries.
+
 ## v1.4.6 — 2026-04-25
 
 ### Fixed
