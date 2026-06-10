@@ -1,0 +1,15 @@
+# Grounded by live API capture captures/20260405T215014Z-contract_details_eurusd_cash.
+# server_version=200, events.jsonl sha256 prefix: 3fe2c642b2379984.
+# EUR/USD CASH on IDEALPRO resolves to exactly one contract (conID 12087792,
+# local symbol EUR.USD, min tick 0.00005).
+# Account identifiers are sanitized to the DU9000001 redaction token; frames otherwise verbatim.
+handshake {"server_version":200,"connection_time":"20260405 23:50:14 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425814717"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425814717"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425814717"}
+client req_contract_details {"req_id":"$req1","contract":{"con_id":"0","symbol":"EUR","sec_type":"CASH","exchange":"IDEALPRO","currency":"USD","primary_exchange":"","local_symbol":""}}
+server contract_details {"req_id":"$req1","contract":{"con_id":12087792,"symbol":"EUR","sec_type":"CASH","expiry":"","strike":"0","right":"","exchange":"IDEALPRO","currency":"USD","local_symbol":"EUR.USD","trading_class":"EUR.USD","primary_exchange":""},"market_name":"EUR.USD","min_tick":"0.00005","long_name":"European Monetary Union Euro","time_zone_id":"US/Eastern"}
+server contract_details_end {"req_id":"$req1"}
+disconnect

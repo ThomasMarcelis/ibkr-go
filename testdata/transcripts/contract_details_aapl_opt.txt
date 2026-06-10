@@ -1,0 +1,23 @@
+# Grounded by live API capture captures/20260405T214941Z-contract_details_aapl_opt.
+# server_version=200, events.jsonl sha256 prefix: 3dcaf0b74a7c27a4.
+# AAPL OPT chain request (SMART/USD, no expiry/strike filter): the live stream
+# carried 2816 contractData frames and the capture driver disconnected before
+# contractDataEnd arrived. This replay freezes a four-contract subset -- the
+# first three Jun-2026 calls (strikes 100/105/110) and the first Jun-2026 put
+# (strike 100), frames verbatim -- and closes the request with the
+# contractDataEnd frame [52,1,1001] captured for the same request id in the
+# sibling matrix captures (...-contract_details_eurusd_cash, ...-contract_details_es_fut).
+# Account identifiers are sanitized to the DU9000001 redaction token.
+handshake {"server_version":200,"connection_time":"20260405 23:49:41 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425781667"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425781667"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425781667"}
+client req_contract_details {"req_id":"$req1","contract":{"con_id":"0","symbol":"AAPL","sec_type":"OPT","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
+server contract_details {"req_id":"$req1","contract":{"con_id":675811965,"symbol":"AAPL","sec_type":"OPT","expiry":"20260618","strike":"100","right":"C","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260618C00100000","trading_class":"AAPL","primary_exchange":""},"market_name":"AAPL","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
+server contract_details {"req_id":"$req1","contract":{"con_id":675812035,"symbol":"AAPL","sec_type":"OPT","expiry":"20260618","strike":"105","right":"C","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260618C00105000","trading_class":"AAPL","primary_exchange":""},"market_name":"AAPL","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
+server contract_details {"req_id":"$req1","contract":{"con_id":675812080,"symbol":"AAPL","sec_type":"OPT","expiry":"20260618","strike":"110","right":"C","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260618C00110000","trading_class":"AAPL","primary_exchange":""},"market_name":"AAPL","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
+server contract_details {"req_id":"$req1","contract":{"con_id":675815175,"symbol":"AAPL","sec_type":"OPT","expiry":"20260618","strike":"100","right":"P","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260618P00100000","trading_class":"AAPL","primary_exchange":""},"market_name":"AAPL","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
+server contract_details_end {"req_id":"$req1"}
+disconnect
