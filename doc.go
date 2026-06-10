@@ -126,6 +126,12 @@
 //   - [*APIError] — server-side rejection (error code + message)
 //   - [*ValidationError] — caller-side request validation failure
 //
+// IBKR codes attested in live captures have named ErrCode constants (e.g.
+// [ErrCodeOrderCanceled], [ErrCodeMarketDataNotSubscribed]) and [*APIError]
+// classification helpers ([APIError.IsEntitlement],
+// [APIError.IsConnectivityTransition], [APIError.IsFarmStatus],
+// [APIError.IsWarning]).
+//
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
 // [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].
 // [IsRetryable] classifies final subscription errors for retry/backoff policy.
