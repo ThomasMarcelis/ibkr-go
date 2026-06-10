@@ -25,6 +25,7 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 		ErrCodeServerErrorValidatingRequest:       true,
 		ErrCodeTrailingStopAttachRejected:         true,
 		ErrCodeMarketDataNotSubscribed:            true,
+		ErrCodeOrderMessage:                       true,
 		ErrCodeInvalidRealTimeQuery:               true,
 		ErrCodeFundamentalsNotAvailable:           true,
 		ErrCodeConnectivityLost:                   true,

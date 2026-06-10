@@ -26,6 +26,11 @@ const (
 	// ErrCodeMarketDataNotSubscribed: not subscribed to requested market
 	// data; the request fails outright.
 	ErrCodeMarketDataNotSubscribed = 354
+	// ErrCodeOrderMessage: order held with a warning, e.g. an off-hours
+	// order deferred until the next session ("will not be placed at the
+	// exchange until ..."). The order stays working at IB; the engine
+	// surfaces the warning as the order handle's terminal error.
+	ErrCodeOrderMessage = 399
 	// ErrCodeInvalidRealTimeQuery: invalid real-time bars query for the
 	// requested contract or what-to-show.
 	ErrCodeInvalidRealTimeQuery = 420
