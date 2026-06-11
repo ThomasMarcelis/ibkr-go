@@ -2901,7 +2901,11 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		opt, err := qualifyAAPLCall(ctx, client, anchor)
+		// A barely in-the-money strike draws code 322 "Exercise ignored
+		// because option is not in-the-money" (capture 20260611T133444Z);
+		// target a strike well below spot so the acknowledgement path runs.
+		deepITM := anchor.Mul(decimal.RequireFromString("0.97"))
+		opt, err := qualifyAAPLCall(ctx, client, deepITM)
 		if err != nil {
 			log.Printf("qualify AAPL option: %v", err)
 			recordAPIEvent("option_qualify_error", "exercise target", func(event *apiDriverEvent) {
@@ -2940,26 +2944,61 @@ func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) er
 func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		parent := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
-		parent.Transmit = new(false)
-		parentHandle, err := placeAPIOrder(ctx, client, "hedge parent", apiAAPL, parent)
+		// Live rules frozen 2026-06-11: delta hedges hang off OPTION parents
+		// (stock parent drew 320 "parent order has to be option order",
+		// capture 20260611T133853Z) and hedge children carry zero quantity
+		// (size drew 10032 "Specifying size for hedge order is not
+		// allowed"). The compliant shape: option parent, zero-size stock
+		// delta child; the stock-parent variants stay for their real
+		// rejection evidence.
+		opt, optErr := qualifyAAPLCall(ctx, client, anchor)
+		if optErr == nil {
+			parent := withLimit(baseAPIOrder(account, decimal.NewFromInt(1), ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+			parentHandle, err := placeAPIOrder(ctx, client, "option hedge parent", opt, parent)
+			if err != nil {
+				log.Printf("option hedge parent place error: %v", err)
+			} else {
+				child := withLimit(baseAPIOrder(account, decimal.Zero, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor))
+				child.ParentID = parentHandle.OrderID()
+				child.HedgeType = "D"
+				child.HedgeParam = "0.5"
+				child.Transmit = new(true)
+				handle, err := placeAPIOrder(ctx, client, "delta_hedge_compliant", apiAAPL, child)
+				if err != nil {
+					log.Printf("delta_hedge_compliant place error: %v", err)
+				} else {
+					obs := observeOrder(ctx, handle, "delta_hedge_compliant", 10*time.Second)
+					log.Printf("delta_hedge_compliant observed status=%s", obs.lastStatus)
+					cancelOrder(ctx, handle, "delta_hedge_compliant")
+				}
+				cancelOrder(ctx, parentHandle, "option hedge parent")
+			}
+		} else {
+			log.Printf("qualify option for hedge parent: %v", optErr)
+		}
+
+		stockParent := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		parentHandle, err := placeAPIOrder(ctx, client, "hedge parent", apiAAPL, stockParent)
 		if err != nil {
 			log.Printf("hedge parent place error: %v", err)
 			return nil
 		}
-
 		hedges := []struct {
 			label string
 			typ   string
 			param string
 		}{
-			{label: "delta_hedge", typ: "D", param: "0.5"},
-			{label: "beta_hedge", typ: "B", param: "1.0"},
-			{label: "fx_hedge", typ: "F", param: ""},
-			{label: "pair_hedge", typ: "P", param: "0.8"},
+			{label: "delta_hedge_stock_parent", typ: "D", param: "0.5"},
+			{label: "beta_hedge_zero_size", typ: "B", param: "1.0"},
+			{label: "fx_hedge_zero_size", typ: "F", param: ""},
+			{label: "pair_hedge_zero_size", typ: "P", param: "0.8"},
 		}
 		for _, h := range hedges {
-			child := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor))
+			qty := decimal.Zero
+			if h.typ == "D" {
+				qty = apiStockOrderQuantity
+			}
+			child := withLimit(baseAPIOrder(account, qty, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor))
 			child.ParentID = parentHandle.OrderID()
 			child.HedgeType = h.typ
 			child.HedgeParam = h.param
