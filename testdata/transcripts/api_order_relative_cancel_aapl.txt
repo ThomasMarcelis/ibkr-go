@@ -1,0 +1,48 @@
+# Grounded by live API capture captures/20260610T195833Z-api_order_relative_cancel_aapl.
+# server_version=200, events.jsonl sha256 prefix: 65c28d7faea45243.
+# Replays the REL (relative/pegged-to-primary) rest/cancel lifecycle (ORD-001
+# relative variant) observed on 2026-06-10 against live paper Gateway: a REL
+# BUY 100 AAPL with a far-below-market price cap 14.61 (delayed-quote anchor
+# 292.17 / 20) and no client offset was accepted; the Gateway's open_order
+# echo assigned offset 0.01 in aux_price. The order moved PreSubmitted (three
+# echoes) to Submitted, the API cancel produced order_status Cancelled plus
+# the code-202 notice, and the final safety global cancel drew real code-161
+# replies: one for the previous scenario's order 340 (still bound to this
+# client id on the Gateway; the replay client has no route for it and drops
+# it) and one for order 342, which lands inside the terminal drain window and
+# closes the handle with the code-161 error.
+# Sanitized: account identifiers redacted to the DU9000001 redaction token,
+# perm ids -> 900340/900342 (including inside the code-161 message texts),
+# order ref -> ibkrgo-sanitized-20260610T195833Z-001. Trimmed: farm-status
+# 2104/2107/2158, the driver's startup safety global cancel and its code-161
+# replies for the previous scenario's orders, and the driver's delayed-quote
+# anchor exchange (market-data-type toggles, the req 1/2 tick stream, and the
+# code-10089 entitlement notice).
+handshake {"server_version":200,"connection_time":"20260610 21:58:32 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":342}
+
+# REL BUY with price cap only: the Gateway assigns the 0.01 offset
+client place_order {"order_id":"342","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"REL","lmt_price":"14.61","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195833Z-001","transmit":true}
+server open_order {"order_id":342,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"REL","quantity":"100","filled":"0","remaining":"0","lmt_price":"14.61","aux_price":"0.01","tif":"DAY","perm_id":"900342","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195833Z-001"}
+server order_status {"order_id":342,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900342","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":342,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"REL","quantity":"100","filled":"0","remaining":"0","lmt_price":"14.61","aux_price":"0.01","tif":"DAY","perm_id":"900342","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195833Z-001"}
+server order_status {"order_id":342,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900342","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":342,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"REL","quantity":"100","filled":"0","remaining":"0","lmt_price":"14.61","aux_price":"0.01","tif":"DAY","perm_id":"900342","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195833Z-001"}
+server order_status {"order_id":342,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900342","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":342,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"REL","quantity":"100","filled":"0","remaining":"0","lmt_price":"14.61","aux_price":"0.01","tif":"DAY","perm_id":"900342","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195833Z-001"}
+server order_status {"order_id":342,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900342","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client cancel_order {"field_count":"5","order_id":"342","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":342,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900342","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":342,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121523000"}
+
+# final safety global cancel: the Gateway still remembers the previous
+# scenario's order 340 for this client id and re-answers 161 for it, then
+# answers 161 for the just-cancelled order 342
+client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
+server api_error {"req_id":340,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900340","advanced_order_reject_json":"","error_time_ms":"1781121522775"}
+server api_error {"req_id":342,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900342","advanced_order_reject_json":"","error_time_ms":"1781121522775"}
+
+sleep 100ms
+disconnect

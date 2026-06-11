@@ -1,0 +1,40 @@
+# Grounded by live API capture captures/20260610T195745Z-api_order_rest_cancel_aapl.
+# server_version=200, events.jsonl sha256 prefix: cab24496228ff1fb.
+# Replays the resting-order cancel baseline (ORD-001) re-captured on
+# 2026-06-10 against live paper Gateway with the 5-field cancel encoder: a
+# far-from-market LMT BUY 100 AAPL rests at Submitted (open_order/order_status
+# echoed twice), the API cancel produces order_status Cancelled plus the
+# code-202 cancellation notice, and the driver's safety global cancel then
+# draws a real code-161 "Cancel attempted when order is not in a cancellable
+# state" for the already-cancelled order. In replay the 161 reaches the order
+# route inside the terminal drain window, so the handle closes with the
+# code-161 error. The April 2026 capture of the same scenario stays frozen in
+# api_order_rest_cancel_aapl.txt; this fixture adds the safety re-cancel tail.
+# Sanitized: account identifiers redacted to the DU9000001 redaction token,
+# perm id -> 900337 (including inside the code-161 message text), order ref ->
+# ibkrgo-sanitized-20260610T195745Z-001. Trimmed: farm-status 2104/2107/2158,
+# the driver's startup safety global cancel, and the driver's delayed-quote
+# anchor exchange (market-data-type toggles, the req 1/2 tick stream, and the
+# code-10089 entitlement notice).
+handshake {"server_version":200,"connection_time":"20260610 21:57:45 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":337}
+
+# far-from-market resting limit: delayed-quote anchor 292.25 / 20 = 14.61
+client place_order {"order_id":"337","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"LMT","lmt_price":"14.61","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195745Z-001","transmit":true}
+server open_order {"order_id":337,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","filled":"0","remaining":"0","lmt_price":"14.61","aux_price":"0.0","tif":"DAY","perm_id":"900337","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195745Z-001"}
+server order_status {"order_id":337,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900337","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":337,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","filled":"0","remaining":"0","lmt_price":"14.61","aux_price":"0.0","tif":"DAY","perm_id":"900337","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195745Z-001"}
+server order_status {"order_id":337,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900337","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client cancel_order {"field_count":"5","order_id":"337","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":337,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900337","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":337,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121476000"}
+
+# safety re-cancel of the already-cancelled order: the live Gateway answers
+# the global cancel with code 161 for order 337
+client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
+server api_error {"req_id":337,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900337","advanced_order_reject_json":"","error_time_ms":"1781121475514"}
+
+sleep 100ms
+disconnect

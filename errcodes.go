@@ -5,6 +5,10 @@ package ibkr
 // official TWS API message-code tables. Only attested codes are registered;
 // the set grows as live captures attest new ones.
 const (
+	// ErrCodeCancelNotCancellableState: a cancel was attempted while the
+	// order was not in a cancellable state (already cancelled or filled);
+	// the live Gateway appends the order's permId to the message.
+	ErrCodeCancelNotCancellableState = 161
 	// ErrCodeNoSecurityDefinition: no security definition has been found
 	// for the request, or the contract description is ambiguous.
 	ErrCodeNoSecurityDefinition = 200
@@ -65,6 +69,13 @@ const (
 	// ErrCodeDeepMarketDataNotSupported: deep (Level 2) market data is not
 	// supported for this combination of security type and exchange.
 	ErrCodeDeepMarketDataNotSupported = 10092
+	// ErrCodeOrderToCancelNotFound: the order id named in a cancel request
+	// is not known to the Gateway.
+	ErrCodeOrderToCancelNotFound = 10147
+	// ErrCodeOrderCannotBeCancelled: the order id named in a cancel request
+	// is in a state that cannot be cancelled; the message names the state
+	// (e.g. Filled or Cancelled).
+	ErrCodeOrderCannotBeCancelled = 10148
 	// ErrCodeDelayedMarketDataDisplayed: requested market data is not
 	// subscribed; delayed market data is displayed and the stream continues
 	// with delayed ticks.

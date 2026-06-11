@@ -18,6 +18,7 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 	t.Parallel()
 
 	registered := map[int]bool{
+		ErrCodeCancelNotCancellableState:          true,
 		ErrCodeNoSecurityDefinition:               true,
 		ErrCodeOrderRejected:                      true,
 		ErrCodeOrderCanceled:                      true,
@@ -37,6 +38,8 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 		ErrCodeSecDefDataFarmOK:                   true,
 		ErrCodeAdditionalSubscriptionRequired:     true,
 		ErrCodeDeepMarketDataNotSupported:         true,
+		ErrCodeOrderToCancelNotFound:              true,
+		ErrCodeOrderCannotBeCancelled:             true,
 		ErrCodeDelayedMarketDataDisplayed:         true,
 		ErrCodeNewsFeedNotAllowed:                 true,
 	}
@@ -134,6 +137,7 @@ func TestAPIErrorClassification(t *testing.T) {
 		farmStatus   bool
 		warning      bool
 	}{
+		{code: ErrCodeCancelNotCancellableState},
 		{code: ErrCodeNoSecurityDefinition},
 		{code: ErrCodeOrderRejected},
 		{code: ErrCodeOrderCanceled},
@@ -153,6 +157,8 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeSecDefDataFarmOK, farmStatus: true, warning: true},
 		{code: ErrCodeAdditionalSubscriptionRequired, entitlement: true},
 		{code: ErrCodeDeepMarketDataNotSupported},
+		{code: ErrCodeOrderToCancelNotFound},
+		{code: ErrCodeOrderCannotBeCancelled},
 		{code: ErrCodeDelayedMarketDataDisplayed, entitlement: true, warning: true},
 		{code: ErrCodeNewsFeedNotAllowed, entitlement: true},
 	}
