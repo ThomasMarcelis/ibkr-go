@@ -1,0 +1,16 @@
+# Grounded by live capture captures/20260611T074046Z-current_time.
+# server_version=200, events.jsonl sha256 prefix: efe321755946a395.
+# Explicit reqCurrentTime (SESS-002) against the read-only live Gateway:
+# client sends [49, 1]; the server replies [49, 1, 1781163646] (epoch seconds,
+# 2026-06-11 07:40:46 UTC) after the bootstrap farm-status triple.
+# Account identifiers are sanitized to the DU9000001 redaction token.
+handshake {"server_version":200,"connection_time":"20260611 09:40:46 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1781163646295"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1781163646295"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1781163646296"}
+
+client req_current_time {}
+server current_time {"time":"1781163646"}
+disconnect

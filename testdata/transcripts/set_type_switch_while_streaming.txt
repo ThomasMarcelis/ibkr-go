@@ -1,0 +1,35 @@
+# Grounded by live capture captures/20260611T074112Z-set_type_switch_while_streaming.
+# server_version=200, events.jsonl sha256 prefix: e244cae7f5eb7d57.
+# Mid-stream market-data-type switch (MD1-001) against the read-only live
+# Gateway: SetType(Delayed) then an AAPL quote stream. The Gateway pushes the
+# marketDataType(3) callback first, the code-10167 delayed-data warning, the
+# tickReqParams frame, and delayed ticks (74 volume, 75 close 291.58, 68 last
+# 0). Switching to SetType(Live) mid-stream drew no marketDataType(1) re-ack
+# in the ~3s captured window; delayed ticks kept flowing (76 open 0, 66 bid
+# -1.00, 67 ask -1.00) until the cancel. The bare SetType cycle is frozen in
+# api_market_data_type_cycle.txt. tick_price frames replay without their size
+# component (all 0 in this capture); the engine reads only the price field.
+# Account identifiers are sanitized to the DU9000001 redaction token.
+handshake {"server_version":200,"connection_time":"20260611 09:41:12 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1781163672371"}
+server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1781163672371"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1781163672371"}
+
+client req_market_data_type {"version":"1","data_type":3}
+client req_quote {"req_id":"$req_id","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+server market_data_type {"req_id":"$req_id","data_type":3}
+server api_error {"req_id":"$req_id","code":10167,"message":"Requested market data is not subscribed. Displaying delayed market data.","advanced_order_reject_json":"","error_time_ms":"1781163673000"}
+server tick_req_params {"req_id":"$req_id","min_tick":"0.01","bbo_exchange":"9c0001","snapshot_permissions":4}
+server tick_size {"req_id":"$req_id","field":74,"size":"0"}
+server tick_price {"req_id":"$req_id","field":75,"price":"291.58"}
+server tick_price {"req_id":"$req_id","field":68,"price":"0"}
+
+client req_market_data_type {"version":"1","data_type":1}
+server tick_price {"req_id":"$req_id","field":76,"price":"0"}
+server tick_price {"req_id":"$req_id","field":66,"price":"-1.00"}
+server tick_price {"req_id":"$req_id","field":67,"price":"-1.00"}
+
+client cancel_quote {"req_id":"$req_id"}
+disconnect
