@@ -31,8 +31,10 @@ const (
 	// exchange until ..."). The order stays working at IB; the engine
 	// surfaces the warning as the order handle's terminal error.
 	ErrCodeOrderMessage = 399
-	// ErrCodeInvalidRealTimeQuery: invalid real-time bars query for the
-	// requested contract or what-to-show.
+	// ErrCodeInvalidRealTimeQuery: invalid real-time bars query. The live
+	// attested instance was permission-flavored ("No market data permissions
+	// for ISLAND STK"), but the official meaning is the generic invalid
+	// query, so it stays out of the entitlement class.
 	ErrCodeInvalidRealTimeQuery = 420
 	// ErrCodeFundamentalsNotAvailable: fundamentals data for the specified
 	// security is not available.
@@ -116,9 +118,10 @@ func (e *APIError) IsFarmStatus() bool {
 }
 
 // IsWarning reports whether the code is informational rather than a request
-// failure: the farm-status set (see [APIError.IsFarmStatus]) plus
-// [ErrCodeDelayedMarketDataDisplayed], which IBKR delivers on a stream that
-// continues with delayed ticks.
+// failure: the farm-status set (see [APIError.IsFarmStatus]),
+// [ErrCodeDelayedMarketDataDisplayed] (the stream continues with delayed
+// ticks), and [ErrCodeOrderMessage] (the order stays working at IB; live
+// replays show it still cancellable after the warning).
 func (e *APIError) IsWarning() bool {
-	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed
+	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed || e.Code == ErrCodeOrderMessage
 }

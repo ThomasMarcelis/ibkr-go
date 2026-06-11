@@ -45,6 +45,13 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 	// with either a named constant or an explicit entry here.
 	unregisteredAttested := map[int]bool{}
 
+	// Registered codes whose live evidence lives in the documentation
+	// ledgers rather than a replay transcript. Each entry names where the
+	// evidence is recorded; promote a transcript to drop the entry.
+	docsAttested := map[int]string{
+		ErrCodeServerErrorReadingRequest: "docs/live-coverage-matrix.md AORD-004 (code 320 field-order evidence) and docs/live-test-tracker.md",
+	}
+
 	codes := transcriptAPIErrorCodes(t)
 	if len(codes) == 0 {
 		t.Fatal("no api_error codes found in testdata/transcripts")
@@ -54,6 +61,21 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 			continue
 		}
 		t.Errorf("api_error code %d attested in %v has no ErrCode constant and no unregisteredAttested entry", code, files)
+	}
+	// Reverse direction: every registered constant must be attested by a
+	// transcript or carry an explicit docs-evidence entry, so the registry
+	// cannot grow past the live evidence.
+	for code := range registered {
+		if len(codes[code]) > 0 {
+			continue
+		}
+		if where, ok := docsAttested[code]; ok {
+			if data, err := os.ReadFile(strings.SplitN(where, " ", 2)[0]); err != nil || !strings.Contains(string(data), strconv.Itoa(code)) {
+				t.Errorf("ErrCode %d claims docs attestation at %q but the file is missing or no longer mentions the code", code, where)
+			}
+			continue
+		}
+		t.Errorf("ErrCode constant %d is registered but attested by no transcript and no docsAttested entry", code)
 	}
 }
 
@@ -113,10 +135,15 @@ func TestAPIErrorClassification(t *testing.T) {
 		warning      bool
 	}{
 		{code: ErrCodeNoSecurityDefinition},
+		{code: ErrCodeOrderRejected},
 		{code: ErrCodeOrderCanceled},
 		{code: ErrCodeServerErrorReadingRequest},
 		{code: ErrCodeServerErrorValidatingRequest},
+		{code: ErrCodeTrailingStopAttachRejected},
 		{code: ErrCodeMarketDataNotSubscribed, entitlement: true},
+		{code: ErrCodeOrderMessage, warning: true},
+		{code: ErrCodeInvalidRealTimeQuery},
+		{code: ErrCodeFundamentalsNotAvailable},
 		{code: ErrCodeConnectivityLost, connectivity: true},
 		{code: ErrCodeConnectivityRestoredDataLost, connectivity: true},
 		{code: ErrCodeConnectivityRestoredDataMaintained, connectivity: true},
