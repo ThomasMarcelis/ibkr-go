@@ -270,3 +270,31 @@ func TestFromCodecCommissionRejectsMalformedField(t *testing.T) {
 		t.Fatal("fromCodecCommission() error = nil, want malformed commission rejection")
 	}
 }
+
+func TestParseExecutionTimeForms(t *testing.T) {
+	t.Parallel()
+
+	// The dash form is the Gateway's UTC notation, observed live on
+	// 2026-06-10 execution_data frames (capture
+	// 20260610T195819Z-api_order_trailing_cancel_aapl, events.jsonl sha256
+	// 0d3098f03fd68839); the space-and-zone form and RFC3339 were already
+	// accepted.
+	cases := []struct {
+		raw  string
+		want time.Time
+	}{
+		{"20260610-19:58:22", time.Date(2026, 6, 10, 19, 58, 22, 0, time.UTC)},
+		{"20260413 13:35:50 US/Eastern", time.Date(2026, 4, 13, 17, 35, 50, 0, time.UTC)},
+		{"2026-06-10T19:58:22Z", time.Date(2026, 6, 10, 19, 58, 22, 0, time.UTC)},
+	}
+	for _, tc := range cases {
+		got, err := parseExecutionTime(tc.raw)
+		if err != nil {
+			t.Errorf("parseExecutionTime(%q) error = %v", tc.raw, err)
+			continue
+		}
+		if !got.Equal(tc.want) {
+			t.Errorf("parseExecutionTime(%q) = %v, want %v", tc.raw, got.UTC(), tc.want)
+		}
+	}
+}

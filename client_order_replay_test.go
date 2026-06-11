@@ -453,18 +453,26 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 		t.Fatalf("CancelAll: %v", err)
 	}
 
-	// Drain the trail handle to its close, still counting the execution and
-	// commission events that must never surface.
+	// Drain the trail handle to its close, counting execution and commission
+	// events. The capture's execution times use the Gateway's UTC dash
+	// notation; the parser accepts that form, so both fills (80 and 20 at
+	// 292.14) and both commission reports must reach the handle.
 	for evt := range trail.Events() {
 		if evt.Execution != nil {
 			executions++
+			if got := evt.Execution.Shares.String(); got != "80" && got != "20" {
+				t.Errorf("execution shares = %s, want 80 or 20", got)
+			}
+			if got := evt.Execution.Price.String(); got != "292.14" {
+				t.Errorf("execution price = %s, want 292.14", got)
+			}
 		}
 		if evt.Commission != nil {
 			commissions++
 		}
 	}
-	if executions != 0 || commissions != 0 {
-		t.Fatalf("trail surfaced %d executions and %d commissions, want 0/0 (dash-UTC exec time is dropped at decode)", executions, commissions)
+	if executions != 2 || commissions != 2 {
+		t.Fatalf("trail surfaced %d executions and %d commissions, want 2/2", executions, commissions)
 	}
 	requireOrderAPIError(t, "trail", trail, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900340")
 	requireOrderAPIError(t, "trail-limit", trailLimit, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900341")

@@ -11,10 +11,10 @@
 # code-161 replies for both terminal orders; in replay both land inside the
 # terminal drain windows, so both handles close with the code-161 error.
 # The live execution_data frames carry the Gateway's UTC dash time form
-# ("20260610-19:58:22", preserved verbatim); this client's execution time
-# parser does not accept that form, so the executions and their commission
-# reports were dropped (engine warn log) and never reached the order handle,
-# live and in replay alike — the fill is visible only through order_status.
+# ("20260610-19:58:22", preserved verbatim). The execution-time parser
+# accepts that form, so both executions and their commission reports reach
+# the order handle in replay; at capture time the parser still rejected it
+# and the live client saw the fill only through order_status.
 # The open_order echoes decode as the base open-order shape on this client
 # (DeltaNeutralOrderType "None" takes the partial path), so open_order lines
 # carry the base fields; the live Filled echoes additionally carried

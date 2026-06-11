@@ -5460,10 +5460,16 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 	}, nil
 }
 
-// parseExecutionTime handles both the Gateway's native execution time format
-// ("20260413 13:35:50 US/Eastern") and RFC3339 (from test transcripts).
+// parseExecutionTime handles the Gateway's execution time forms: the UTC
+// dash notation ("20260610-19:58:22", observed live 2026-06-10), the
+// space-and-zone form ("20260413 13:35:50 US/Eastern"), and RFC3339 (from
+// test transcripts).
 func parseExecutionTime(raw string) (time.Time, error) {
 	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
+		return ts, nil
+	}
+	// IBKR UTC dash notation: "YYYYMMDD-HH:MM:SS".
+	if ts, err := time.Parse("20060102-15:04:05", raw); err == nil {
 		return ts, nil
 	}
 	// IBKR native: "YYYYMMDD HH:MM:SS TZ_NAME" where TZ_NAME is an IANA zone
