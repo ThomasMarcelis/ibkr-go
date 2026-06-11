@@ -47,5 +47,34 @@ jobs:
         with:
           version: v2.11.4
 
-      - name: go test
-        run: go test ./...
+      - name: go test (race)
+        run: go test -race -count=1 ./...
+
+      - name: coverage summary
+        run: |
+          go test -count=1 -coverprofile=coverage.out ./...
+          go tool cover -func=coverage.out | tail -1
+
+      - name: benchmarks compile and smoke
+        run: go test -run='^$' -bench=. -benchtime=1x ./...
+
+  fuzz-smoke:
+    # Short fuzz pass over every existing fuzz target; push-to-main only to
+    # keep PR latency flat.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: fuzz each target briefly
+        run: |
+          for pkg in ./internal/wire ./internal/codec; do
+            for target in $(go test -list 'Fuzz.*' "$pkg" | grep '^Fuzz'); do
+              echo "fuzzing $pkg/$target"
+              go test "$pkg" -run='^$' -fuzz="^${target}$" -fuzztime=20s
+            done
+          done
