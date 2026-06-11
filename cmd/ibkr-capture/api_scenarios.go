@@ -2897,3 +2897,83 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 		return nil
 	})
 }
+
+func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
+		opt, err := qualifyAAPLCall(ctx, client, anchor)
+		if err != nil {
+			log.Printf("qualify AAPL option: %v", err)
+			recordAPIEvent("option_qualify_error", "exercise target", func(event *apiDriverEvent) {
+				event.Symbol = "AAPL"
+				event.SecType = string(ibkr.SecTypeOption)
+				event.Error = err.Error()
+			})
+			return nil
+		}
+		log.Printf("qualified AAPL option: con_id=%d expiry=%s strike=%s", opt.ConID, opt.Expiry, opt.Strike)
+
+		buy := baseAPIOrder(account, decimal.NewFromInt(1), ibkr.Buy, ibkr.OrderTypeMarket)
+		handle, err := placeAPIOrder(ctx, client, "exercise buy", opt, buy)
+		if err != nil {
+			log.Printf("exercise buy place error: %v", err)
+			return nil
+		}
+		obs := observeOrder(ctx, handle, "exercise buy", 60*time.Second)
+		if !obs.AnyFill() {
+			log.Printf("exercise buy did not fill; exercising anyway to capture the no-position response")
+		}
+
+		if err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{Contract: opt, ExerciseAction: ibkr.Exercise, ExerciseQuantity: 1, Account: account, Override: false}); err != nil {
+			log.Printf("exercise response: %v", err)
+		} else {
+			log.Printf("exercise request sent")
+		}
+		// Exercise is fire-and-forget; hold the session open for the
+		// follow-up order/position/error traffic the Gateway emits.
+		time.Sleep(20 * time.Second)
+		queryAAPLExecutions(client, account)
+		return nil
+	})
+}
+
+func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
+		parent := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		parent.Transmit = new(false)
+		parentHandle, err := placeAPIOrder(ctx, client, "hedge parent", apiAAPL, parent)
+		if err != nil {
+			log.Printf("hedge parent place error: %v", err)
+			return nil
+		}
+
+		hedges := []struct {
+			label string
+			typ   string
+			param string
+		}{
+			{label: "delta_hedge", typ: "D", param: "0.5"},
+			{label: "beta_hedge", typ: "B", param: "1.0"},
+			{label: "fx_hedge", typ: "F", param: ""},
+			{label: "pair_hedge", typ: "P", param: "0.8"},
+		}
+		for _, h := range hedges {
+			child := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor))
+			child.ParentID = parentHandle.OrderID()
+			child.HedgeType = h.typ
+			child.HedgeParam = h.param
+			child.Transmit = new(true)
+			handle, err := placeAPIOrder(ctx, client, h.label, apiAAPL, child)
+			if err != nil {
+				log.Printf("%s place error: %v", h.label, err)
+				continue
+			}
+			obs := observeOrder(ctx, handle, h.label, 8*time.Second)
+			log.Printf("%s observed status=%s", h.label, obs.lastStatus)
+			cancelOrder(ctx, handle, h.label)
+		}
+		cancelOrder(ctx, parentHandle, "hedge parent")
+		return nil
+	})
+}

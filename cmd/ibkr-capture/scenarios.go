@@ -1745,6 +1745,16 @@ var scenarios = map[string]scenario{
 		description: "public API campaign for bracket order sequencing with a trailing stop child",
 		runAPI:      runAPIBracketTrailingStopAAPL,
 	},
+	"api_option_exercise_aapl": {
+		name:        "api_option_exercise_aapl",
+		description: "public API campaign buying one AAPL call then exercising it, freezing the real exercise or no-position response",
+		runAPI:      runAPIOptionExerciseAAPL,
+	},
+	"api_hedge_order_aapl": {
+		name:        "api_hedge_order_aapl",
+		description: "public API campaign attaching delta, beta, FX, and pair hedge children to a staged parent",
+		runAPI:      runAPIHedgeOrderAAPL,
+	},
 	"api_option_campaign_aapl": {
 		name:        "api_option_campaign_aapl",
 		description: "public API campaign for live-qualified AAPL option data, order, execution, and exercise/lapse responses",
