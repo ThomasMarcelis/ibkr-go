@@ -107,6 +107,16 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(49))
 		},
 	},
+	"current_time_millis": {
+		name:        "current_time_millis",
+		description: "REQ_CURRENT_TIME_IN_MILLIS, drain until CURRENT_TIME_IN_MILLIS (msg_id=109)",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqCurrentTimeInMillis(conn); err != nil {
+				return err
+			}
+			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(109))
+		},
+	},
 	"req_ids": {
 		name:        "req_ids",
 		description: "REQ_IDS numIds=1, drain until NEXT_VALID_ID (msg_id=9)",

@@ -173,6 +173,7 @@ Outbound message IDs:
 | `OutReqUserInfo` | 104 | User info |
 | `OutReqIds` | 8 | Explicit next-valid-ID refresh |
 | `OutReqCurrentTime` | 49 | Server wall-clock time request |
+| `OutReqCurrentTimeInMillis` | 105 | Server wall-clock time request at millisecond precision (server_version 197+) |
 
 Inbound message IDs:
 
@@ -201,6 +202,7 @@ Inbound message IDs:
 | `InTickGeneric` | 45 | Market data generic tick |
 | `InTickString` | 46 | Market data string tick |
 | `InCurrentTime` | 49 | Current time |
+| `InCurrentTimeInMillis` | 109 | Current time in milliseconds |
 | `InRealTimeBars` | 50 | Real-time bars |
 | `InFundamentalData` | 51 | Fundamental data |
 | `InContractDataEnd` | 52 | Contract details end |

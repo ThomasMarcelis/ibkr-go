@@ -76,6 +76,7 @@ const (
 	OutCancelWSHEventData          = 103
 	OutReqIds                      = 8
 	OutReqCurrentTime              = 49
+	OutReqCurrentTimeInMillis      = 105
 )
 
 // Inbound message IDs (server → client)
@@ -102,6 +103,7 @@ const (
 	InTickGeneric           = 45
 	InTickString            = 46
 	InCurrentTime           = 49
+	InCurrentTimeInMillis   = 109
 	InRealTimeBars          = 50
 	InFundamentalData       = 51
 	InContractDataEnd       = 52

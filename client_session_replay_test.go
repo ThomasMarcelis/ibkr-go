@@ -273,3 +273,26 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		t.Fatalf("sub.Close() error = %v", err)
 	}
 }
+
+// TestCurrentTimeMillisReplay freezes explicit reqCurrentTimeInMillis
+// (OUT 105) answered by the live epoch-millisecond reply (IN 109), both
+// versionless, captured 2026-06-11 against the paper Gateway
+// (captures/20260611T091447Z-current_time_millis, events.jsonl sha256
+// prefix 23d6cedcf61b86fa).
+func TestCurrentTimeMillisReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "current_time_millis.txt")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	ts, err := client.CurrentTimeMillis(ctx)
+	if err != nil {
+		t.Fatalf("CurrentTimeMillis: %v", err)
+	}
+	if want := time.UnixMilli(1781169286652).UTC(); !ts.Equal(want) {
+		t.Fatalf("CurrentTimeMillis = %v, want %v", ts, want)
+	}
+	waitHost(t, host)
+}

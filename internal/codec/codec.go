@@ -634,6 +634,9 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			ParentID:              preStatusParentID,
 		}}, nil
 
+	case InCurrentTimeInMillis: // [109, timeMs] — no version
+		return []Message{CurrentTimeMillis{TimeMs: r.ReadString()}}, nil
+
 	case InNextValidID: // [9, version, orderID]
 		r.Skip(1) // version
 		orderID, err := r.ReadInt64()
@@ -1435,6 +1438,12 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case CurrentTimeRequest:
 		return []string{itoa(OutReqCurrentTime), "1"}, nil
+
+	case CurrentTimeMillisRequest:
+		return []string{itoa(OutReqCurrentTimeInMillis)}, nil
+
+	case CurrentTimeMillis:
+		return []string{itoa(InCurrentTimeInMillis), m.TimeMs}, nil
 
 	case ReqIDsRequest:
 		numIDs := m.NumIDs

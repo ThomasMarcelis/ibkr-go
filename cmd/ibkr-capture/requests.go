@@ -132,6 +132,12 @@ func sendReqCurrentTime(conn net.Conn) error {
 	return sendMessage(conn, []string{"49", "1"})
 }
 
+func sendReqCurrentTimeInMillis(conn net.Conn) error {
+	// Bare message id, no version (official reqCurrentTimeInMillis,
+	// server_version 197+).
+	return sendMessage(conn, []string{"105"})
+}
+
 func sendReqIds(conn net.Conn, numIDs int) error {
 	if numIDs <= 0 {
 		numIDs = 1

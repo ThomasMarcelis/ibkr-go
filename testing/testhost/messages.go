@@ -21,6 +21,8 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.NextValidID{OrderID: int64(asInt(resolve(body["order_id"])))}, nil
 	case "current_time":
 		return codec.CurrentTime{Time: asString(resolve(body["time"]))}, nil
+	case "current_time_millis":
+		return codec.CurrentTimeMillis{TimeMs: asString(resolve(body["time_ms"]))}, nil
 	case "api_error":
 		return codec.APIError{ReqID: asInt(resolve(body["req_id"])), Code: asInt(resolve(body["code"])), Message: asString(resolve(body["message"])), AdvancedOrderRejectJSON: asString(resolve(body["advanced_order_reject_json"])), ErrorTimeMs: asString(resolve(body["error_time_ms"]))}, nil
 	case "contract_details":

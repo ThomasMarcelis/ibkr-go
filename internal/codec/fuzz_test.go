@@ -104,6 +104,7 @@ var allInboundMsgIDs = []int{
 	InWSHMetaData,           // 104
 	InWSHEventData,          // 105
 	InHistoricalSchedule,    // 106
+	InCurrentTimeInMillis,   // 109
 }
 
 // FuzzDecodeBatch proves DecodeBatch never panics on arbitrary byte payloads.

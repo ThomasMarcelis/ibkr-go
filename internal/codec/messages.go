@@ -62,6 +62,21 @@ type CurrentTimeRequest struct{}
 
 func (CurrentTimeRequest) messageName() string { return "req_current_time" }
 
+// CurrentTimeMillis is the inbound currentTimeInMillis frame (IN 109): the
+// server epoch time in milliseconds, no version field.
+type CurrentTimeMillis struct {
+	TimeMs string
+}
+
+func (CurrentTimeMillis) messageName() string { return "current_time_millis" }
+
+// CurrentTimeMillisRequest is the outbound reqCurrentTimeInMillis message
+// (OUT 105, server_version >= 197): the bare message id with no version or
+// fields, answered by a CurrentTimeMillis frame (IN 109).
+type CurrentTimeMillisRequest struct{}
+
+func (CurrentTimeMillisRequest) messageName() string { return "req_current_time_millis" }
+
 // ReqIDsRequest is the outbound reqIds message (OUT 8). The server responds
 // with a NextValidID frame (msg_id 9) carrying the next available order ID.
 // NumIDs is a legacy parameter kept at 1 in the official EClient.

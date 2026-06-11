@@ -526,6 +526,8 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		return "start_api", body, nil
 	case 49: // OutReqCurrentTime: [49, 1]
 		return "req_current_time", map[string]any{}, nil
+	case 105: // OutReqCurrentTimeInMillis: [105] — bare msg id
+		return "req_current_time_millis", map[string]any{}, nil
 	case 8: // OutReqIds: [8, 1, numIds]
 		body := map[string]any{}
 		if len(fields) >= 3 {

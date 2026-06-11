@@ -84,6 +84,7 @@ const (
 	singletonNewsBulletins     = "news_bulletins"
 	singletonFA                = "fa"
 	singletonCurrentTime       = "current_time"
+	singletonCurrentTimeMillis = "current_time_millis"
 )
 
 type route struct {
@@ -1390,6 +1391,65 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
 		e.enqueue(func() { delete(e.singletons, singletonCurrentTime) })
+	})
+	if err != nil {
+		return time.Time{}, err
+	}
+	return out.ts, out.err
+}
+
+func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
+	type result struct {
+		ts  time.Time
+		err error
+	}
+	resp := make(chan result, 1)
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		if _, exists := e.singletons[singletonCurrentTimeMillis]; exists {
+			resp <- result{err: fmt.Errorf("ibkr: current time millis request already in progress")}
+			return
+		}
+
+		// Like reqCurrentTime, the request carries no reqID, so APIErrors
+		// cannot route here; ctx cancellation and onDisconnect are the only
+		// failure paths.
+		e.singletons[singletonCurrentTimeMillis] = &route{
+			opKind: OpCurrentTime,
+			handle: func(msg any, eng *engine) {
+				m, ok := msg.(codec.CurrentTimeMillis)
+				if !ok {
+					return
+				}
+				delete(eng.singletons, singletonCurrentTimeMillis)
+				ms, parseErr := strconv.ParseInt(m.TimeMs, 10, 64)
+				if parseErr != nil {
+					resp <- result{err: fmt.Errorf("ibkr: current time millis: parse %q", m.TimeMs)}
+					return
+				}
+				resp <- result{ts: time.UnixMilli(ms).UTC()}
+			},
+			onDisconnect: func(eng *engine, err error) bool {
+				delete(eng.singletons, singletonCurrentTimeMillis)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.sendContext(ctx, codec.CurrentTimeMillisRequest{}); err != nil {
+			delete(e.singletons, singletonCurrentTimeMillis)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { delete(e.singletons, singletonCurrentTimeMillis) })
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -4317,6 +4377,12 @@ func (e *engine) handleIncoming(msg any) {
 			})
 		}
 		if route, ok := e.singletons[singletonCurrentTime]; ok {
+			route.handle(m, e)
+		}
+		return
+	case codec.CurrentTimeMillis:
+		// Same contract as CurrentTime: no reqID, singleton routing only.
+		if route, ok := e.singletons[singletonCurrentTimeMillis]; ok {
 			route.handle(m, e)
 		}
 		return

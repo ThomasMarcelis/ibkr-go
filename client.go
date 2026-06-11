@@ -36,6 +36,14 @@ func (c *Client) CurrentTime(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTime(ctx)
 }
 
+// CurrentTimeMillis requests the IBKR server time at millisecond precision
+// (official reqCurrentTimeInMillis / currentTimeInMillis, server_version 197
+// or later). Like [Client.CurrentTime], one request may be in flight at a
+// time and the returned time is UTC.
+func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
+	return c.engine.CurrentTimeMillis(ctx)
+}
+
 // Accounts returns the sub-client for account values, positions, and PnL.
 func (c *Client) Accounts() AccountsClient { return AccountsClient{engine: c.engine} }
 
