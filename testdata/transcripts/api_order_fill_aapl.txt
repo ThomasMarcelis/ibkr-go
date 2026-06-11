@@ -1,0 +1,210 @@
+# Grounded by live API capture captures/20260611T133024Z-api_order_fill_aapl.
+# server_version=200, events.jsonl sha256 prefix: 4fa597ba1c4bc369.
+# Replays the regular-session fill campaign (ORD-001 fill variants)
+# observed on 2026-06-11 against live paper Gateway during US market hours,
+# six lifecycles on one connection:
+#   371 MKT BUY 100   PreSubmitted, single fill 100 @ 292.79, commission
+#                     1.0003 (realized PnL -68.051912 closing prior shorts)
+#   372 MKT SELL 100  Submitted, fills 40 @ 292.33 + 40 @ 292.30 +
+#                     20 @ 292.30 (avg 292.312)
+#   373 MTL BUY 100   PreSubmitted -> Submitted, fills 40 + 60 @ 292.44
+#   374 MKT SELL 100  fills 40 @ 292.36 + 40 @ 292.33 + 20 @ 292.33
+#                     (avg 292.342)
+#   375 LMT BUY 100 @ 14.61 rests Submitted; Modify re-places the same
+#                     order id as MKT and it fills 100 @ 292.31
+#   376 MKT SELL 100  fills 40 + 40 + 20 @ 292.20
+# A one-shot executions query then returns 15 executions (including two
+# from the same day's earlier mkt buy/sell captures, orders 368/369) in the
+# Gateway's "US/Eastern" time form and re-emits 14 commission reports; the
+# 15th commission (the final 20-share fill) arrives only after
+# executions_end. Live streaming execution times use the UTC dash form
+# ("20260611-13:30:30"); both forms parse, so executions and commissions
+# must reach the handles, and the query's re-emitted executions
+# dual-dispatch to the still-open order routes (live answered 41 query
+# updates total). The final safety global cancel draws real code-161
+# replies for all six filled orders; in replay they land inside the
+# terminal drain windows and close each handle with the code-161 error.
+# Sanitized: account identifiers redacted to the DU9000001 redaction token,
+# perm ids -> 900368-900376, order refs ->
+# ibkrgo-sanitized-20260611T133024Z-001..-006, execution ids ->
+# sanitized-fill-001..-015 (-014/-015 are the foreign orders 368/369
+# surfaced only by the query). Trimmed: farm-status 2104/2107/2158, the
+# driver's startup safety global cancel and its code-161 replies for the
+# previous captures' orders, and the driver's delayed-quote anchor exchange
+# (market-data-type toggles, the req 1/2 tick stream, and the code-10089
+# entitlement notice).
+handshake {"server_version":200,"connection_time":"20260611 15:30:24 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":371}
+
+# MKT BUY 100: PreSubmitted, then a single 100-share fill at 292.79
+client place_order {"order_id":"371","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-001","transmit":true}
+server open_order {"order_id":371,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900371","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-001"}
+server order_status {"order_id":371,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900371","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":371,"exec_id":"sanitized-fill-001","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"100","price":"292.79","time":"20260611-13:30:30"}
+server open_order {"order_id":371,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900371","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-001"}
+server order_status {"order_id":371,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.79","perm_id":"900371","parent_id":"0","last_fill_price":"292.79","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":371,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900371","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-001"}
+server order_status {"order_id":371,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.79","perm_id":"900371","parent_id":"0","last_fill_price":"292.79","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-001","commission":"1.0003","currency":"USD","realized_pnl":"-68.051912"}
+
+# flatten: MKT SELL 100 fills in three executions, avg 292.312
+client place_order {"order_id":"372","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-002","transmit":true}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900372","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":372,"exec_id":"sanitized-fill-002","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.33","time":"20260611-13:30:33"}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.33","perm_id":"900372","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.33","perm_id":"900372","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-002","commission":"1.2488","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server execution_detail {"req_id":-1,"order_id":372,"exec_id":"sanitized-fill-003","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.30","time":"20260611-13:30:33"}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.315","perm_id":"900372","parent_id":"0","last_fill_price":"292.30","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.315","perm_id":"900372","parent_id":"0","last_fill_price":"292.30","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.315","perm_id":"900372","parent_id":"0","last_fill_price":"292.30","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-003","commission":"0.248775","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server execution_detail {"req_id":-1,"order_id":372,"exec_id":"sanitized-fill-004","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.30","time":"20260611-13:30:34"}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.312","perm_id":"900372","parent_id":"0","last_fill_price":"292.30","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+# MTL BUY 100: market-to-limit fills in two executions at 292.44; the
+# previous flatten's Filled re-echo and last commission arrive first
+client place_order {"order_id":"373","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MTL","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-003","transmit":true}
+server open_order {"order_id":372,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900372","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-002"}
+server order_status {"order_id":372,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.312","perm_id":"900372","parent_id":"0","last_fill_price":"292.30","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-004","commission":"0.124388","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900373","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900373","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":373,"exec_id":"sanitized-fill-005","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"40","price":"292.44","time":"20260611-13:30:34"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.44","perm_id":"900373","parent_id":"0","last_fill_price":"292.44","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.44","perm_id":"900373","parent_id":"0","last_fill_price":"292.44","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.44","perm_id":"900373","parent_id":"0","last_fill_price":"292.44","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.44","perm_id":"900373","parent_id":"0","last_fill_price":"292.44","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-005","commission":"1.00012","currency":"USD","realized_pnl":"-6.768905"}
+server execution_detail {"req_id":-1,"order_id":373,"exec_id":"sanitized-fill-006","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"60","price":"292.44","time":"20260611-13:30:35"}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.44","perm_id":"900373","parent_id":"0","last_fill_price":"292.44","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+# flatten: MKT SELL 100 fills in three executions, avg 292.342
+client place_order {"order_id":"374","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-004","transmit":true}
+server open_order {"order_id":373,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MTL","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900373","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-003"}
+server order_status {"order_id":373,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.44","perm_id":"900373","parent_id":"0","last_fill_price":"292.44","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-006","commission":"1.8E-4","currency":"USD","realized_pnl":"-8.653358"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900374","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":374,"exec_id":"sanitized-fill-007","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.36","time":"20260611-13:30:35"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.36","perm_id":"900374","parent_id":"0","last_fill_price":"292.36","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.36","perm_id":"900374","parent_id":"0","last_fill_price":"292.36","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-007","commission":"1.248825","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server execution_detail {"req_id":-1,"order_id":374,"exec_id":"sanitized-fill-008","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.33","time":"20260611-13:30:35"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.345","perm_id":"900374","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.345","perm_id":"900374","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.345","perm_id":"900374","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-008","commission":"0.2488","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server execution_detail {"req_id":-1,"order_id":374,"exec_id":"sanitized-fill-009","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.33","time":"20260611-13:30:35"}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.342","perm_id":"900374","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+# delayed-success modify: far LMT BUY 100 @ 14.61 rests at Submitted
+client place_order {"order_id":"375","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"LMT","lmt_price":"14.61","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-005","transmit":true}
+server open_order {"order_id":374,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900374","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-004"}
+server order_status {"order_id":374,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.342","perm_id":"900374","parent_id":"0","last_fill_price":"292.33","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-009","commission":"0.1244","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server open_order {"order_id":375,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","lmt_price":"14.61","aux_price":"0.0","tif":"DAY","perm_id":"900375","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-005"}
+server order_status {"order_id":375,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900375","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+# Modify re-places order id 375 as MKT; it fills 100 @ 292.31
+client place_order {"order_id":"375","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-005","transmit":true}
+server open_order {"order_id":375,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900375","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-005"}
+server order_status {"order_id":375,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900375","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":375,"exec_id":"sanitized-fill-010","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"100","price":"292.31","time":"20260611-13:30:43"}
+server open_order {"order_id":375,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900375","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-005"}
+server order_status {"order_id":375,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.31","perm_id":"900375","parent_id":"0","last_fill_price":"292.31","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+# flatten: MKT SELL 100 fills in three executions at 292.20
+client place_order {"order_id":"376","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T133024Z-006","transmit":true}
+server open_order {"order_id":375,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900375","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-005"}
+server order_status {"order_id":375,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.31","perm_id":"900375","parent_id":"0","last_fill_price":"292.31","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-010","commission":"1.0003","currency":"USD","realized_pnl":"0.577675"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900376","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":376,"exec_id":"sanitized-fill-011","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.20","time":"20260611-13:30:43"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.20","perm_id":"900376","parent_id":"0","last_fill_price":"292.20","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Submitted","filled":"40","remaining":"60","avg_fill_price":"292.20","perm_id":"900376","parent_id":"0","last_fill_price":"292.20","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-011","commission":"1.248693","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server execution_detail {"req_id":-1,"order_id":376,"exec_id":"sanitized-fill-012","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.20","time":"20260611-13:30:43"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Submitted","filled":"80","remaining":"20","avg_fill_price":"292.20","perm_id":"900376","parent_id":"0","last_fill_price":"292.20","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":376,"exec_id":"sanitized-fill-013","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.20","time":"20260611-13:30:43"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.20","perm_id":"900376","parent_id":"0","last_fill_price":"292.20","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+# one-shot executions query: 15 executions (incl. the day's earlier
+# orders 368/369) in the US/Eastern time form, then 14 commission
+# re-emits; the last fill's commission arrives only after the end
+client req_executions {"req_id":"$execReq","account":"DU9000001","symbol":"AAPL"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.20","perm_id":"900376","parent_id":"0","last_fill_price":"292.20","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-012","commission":"0.248693","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server execution_detail {"req_id":"$execReq","order_id":368,"exec_id":"sanitized-fill-014","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"292.76","time":"20260611 09:30:10 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":369,"exec_id":"sanitized-fill-015","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"1","price":"292.70","time":"20260611 09:30:12 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":371,"exec_id":"sanitized-fill-001","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"100","price":"292.79","time":"20260611 09:30:30 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":372,"exec_id":"sanitized-fill-002","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.33","time":"20260611 09:30:33 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":372,"exec_id":"sanitized-fill-003","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.30","time":"20260611 09:30:33 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":372,"exec_id":"sanitized-fill-004","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.30","time":"20260611 09:30:34 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":373,"exec_id":"sanitized-fill-005","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"40","price":"292.44","time":"20260611 09:30:34 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":373,"exec_id":"sanitized-fill-006","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"60","price":"292.44","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":374,"exec_id":"sanitized-fill-007","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.36","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":374,"exec_id":"sanitized-fill-008","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.33","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":374,"exec_id":"sanitized-fill-009","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.33","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":375,"exec_id":"sanitized-fill-010","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"100","price":"292.31","time":"20260611 09:30:43 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":376,"exec_id":"sanitized-fill-011","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.20","time":"20260611 09:30:43 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":376,"exec_id":"sanitized-fill-012","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.20","time":"20260611 09:30:43 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":376,"exec_id":"sanitized-fill-013","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.20","time":"20260611 09:30:43 US/Eastern"}
+server commission_report {"exec_id":"sanitized-fill-014","commission":"1.000003","currency":"USD","realized_pnl":"-1.636219"}
+server commission_report {"exec_id":"sanitized-fill-015","commission":"1.006228","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-001","commission":"1.0003","currency":"USD","realized_pnl":"-68.051912"}
+server commission_report {"exec_id":"sanitized-fill-002","commission":"1.2488","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-003","commission":"0.248775","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-004","commission":"0.124388","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-005","commission":"1.00012","currency":"USD","realized_pnl":"-6.768905"}
+server commission_report {"exec_id":"sanitized-fill-006","commission":"1.8E-4","currency":"USD","realized_pnl":"-8.653358"}
+server commission_report {"exec_id":"sanitized-fill-007","commission":"1.248825","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-008","commission":"0.2488","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-009","commission":"0.1244","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-010","commission":"1.0003","currency":"USD","realized_pnl":"0.577675"}
+server commission_report {"exec_id":"sanitized-fill-011","commission":"1.248693","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-012","commission":"0.248693","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server executions_end {"req_id":"$execReq"}
+server open_order {"order_id":376,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900376","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T133024Z-006"}
+server order_status {"order_id":376,"status":"Filled","filled":"100","remaining":"0","avg_fill_price":"292.20","perm_id":"900376","parent_id":"0","last_fill_price":"292.20","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-fill-013","commission":"0.124346","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+
+# final safety global cancel: real code-161 replies for all six
+# terminal orders
+client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
+server api_error {"req_id":371,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900371","advanced_order_reject_json":"","error_time_ms":"1781184643000"}
+server api_error {"req_id":373,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900373","advanced_order_reject_json":"","error_time_ms":"1781184643000"}
+server api_error {"req_id":372,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900372","advanced_order_reject_json":"","error_time_ms":"1781184643000"}
+server api_error {"req_id":375,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900375","advanced_order_reject_json":"","error_time_ms":"1781184643000"}
+server api_error {"req_id":374,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900374","advanced_order_reject_json":"","error_time_ms":"1781184643001"}
+server api_error {"req_id":376,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900376","advanced_order_reject_json":"","error_time_ms":"1781184643001"}
+
+sleep 100ms
+disconnect

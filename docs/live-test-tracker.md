@@ -323,6 +323,15 @@ against the role-aware `paper-dev` Gateway.
 | set_type_switch_while_streaming.txt | 20260611T074112Z | promoted; covers the stream-tied marketDataType(3) push, delayed ticks, mid-stream SetType(Live) acceptance, and 10167 as a session event; the four bare set_type captures add nothing beyond api_market_data_type_cycle.txt and set_type_invalid is inconclusive (driver disconnected before any reply; public API validates 1..4 client-side) |
 | current_time_millis.txt | 20260611T091447Z | promoted; covers explicit reqCurrentTimeInMillis (OUT 105, bare id) answered by the live epoch milliseconds (IN 109), both versionless |
 | api_whatif_margin_aapl.txt (preview) | 20260610T200009Z | see the AORD-010 row above; nine margin decimals plus commission on the public OpenOrder |
+| place_order_mkt_buy_aapl.txt | 20260611T133005Z | promoted; MKT BUY single fill with execution, UTC-dash time, and commission carrying a real negative realized PnL |
+| place_order_mkt_sell_aapl.txt | 20260611T133011Z | promoted; MKT SELL fill with the unset-PnL sentinel commission |
+| place_order_lmt_buy_aapl.txt | 20260611T133017Z | promoted; far LMT rest and cancel on the current 5-field cancel encoder, closing the April recapture debt |
+| api_order_fill_aapl.txt | 20260611T133024Z | promoted; six fill lifecycles with running-average partials, the 41-update executions query with dual dispatch, and the six-161 global-cancel tail |
+| api_delayed_success_modify_aapl.txt | 20260611T133046Z | promoted; rest, modify to market, fill, flatten, 161 tail |
+| api_order_type_matrix_aapl.txt | 20260611T133103Z | promoted; 22-case order-type matrix incl. silent MOC/LOC/PEG MID/PEG BEST acceptances, PEG BENCH accepted-then-321-on-cancel, and terminal 321/387 rejections |
+| api_option_exercise_not_itm_aapl.txt | 20260611T133444Z | promoted; option fill then the silently-dropped 322 not-in-the-money refusal |
+| api_option_exercise_server_reject_aapl.txt | 20260611T133636Z | promoted; deep-ITM fill, exercise accepted with the 10349 preset session event and a routeless pseudo-order, then the paper clearing 322 rejection |
+| api_hedge_order_aapl.txt | 20260611T134021Z | promoted; five hedge rules: zero-size beta/pair acceptances with Gateway-computed quantities, two delta 320 rejections, the FX 10063 currency-pair rule |
 | api_algo_variants_aapl.txt | 20260415T153524Z | promoted; thirteen-variant algo matrix: seven accepted with Gateway-normalized param echoes, six rejected with real codes 439/443/10255; the two echoes that rode as sanitized raw live-layout frames were converted to typed open_order lines after the codec encoder converged on the live layout (verified value-equal at the public OpenOrder layer) |
 
 ## Coverage Gaps: What We Need To Hit

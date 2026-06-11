@@ -1,0 +1,31 @@
+# Grounded by live API capture captures/20260611T133011Z-place_order_mkt_sell_aapl.
+# server_version=200, events.jsonl sha256 prefix: 2545fcac22377485.
+# Replays a regular-session MKT SELL 1 AAPL (ORD-001 market fill variant)
+# observed on 2026-06-11 against live paper Gateway during US market hours:
+# the order echoes PreSubmitted, fills in a single execution (1 @ 292.70 on
+# IBKRATS), re-echoes Filled twice, and the commission report (1.006228 USD)
+# carries the unset realized-PnL sentinel because the sell opened a new
+# position. The execution_data frame carries the Gateway's UTC dash time
+# form ("20260611-13:30:12"); the parser accepts it, so the execution and
+# its commission report must reach the order handle. The capture driver
+# placed the order without an order ref.
+# Sanitized: account identifiers redacted to the DU9000001 redaction token,
+# perm id -> 900369, execution id -> sanitized-mkt-sell-001. Trimmed:
+# farm-status 2104/2107/2158.
+handshake {"server_version":200,"connection_time":"20260611 15:30:11 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":369}
+
+# MKT SELL 1: PreSubmitted, then one fill at 292.70 with its commission
+client place_order {"order_id":"369","contract":{"con_id":"0","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"1","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"","transmit":true}
+server open_order {"order_id":369,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"1","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900369","client_id":"1","origin":"0"}
+server order_status {"order_id":369,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900369","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server execution_detail {"req_id":-1,"order_id":369,"exec_id":"sanitized-mkt-sell-001","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"1","price":"292.70","time":"20260611-13:30:12"}
+server open_order {"order_id":369,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"1","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900369","client_id":"1","origin":"0"}
+server order_status {"order_id":369,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"292.70","perm_id":"900369","parent_id":"0","last_fill_price":"292.70","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":369,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"1","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900369","client_id":"1","origin":"0"}
+server order_status {"order_id":369,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"292.70","perm_id":"900369","parent_id":"0","last_fill_price":"292.70","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server commission_report {"exec_id":"sanitized-mkt-sell-001","commission":"1.006228","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+
+sleep 100ms
+disconnect
