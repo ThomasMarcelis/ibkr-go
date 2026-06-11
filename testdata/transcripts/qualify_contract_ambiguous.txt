@@ -4,7 +4,8 @@
 # listed once per exchange: SMART, AMEX, NYSE, ..., T24X), so Qualify reports
 # the contract as ambiguous. The live bootstrap also replayed 37 unrelated
 # client-id-bound openOrder/orderStatus pairs from earlier order scenarios;
-# those frames are dropped here as account-scoped noise.
+# those frames and the trailing openOrderEnd marker are dropped here as
+# account-scoped noise.
 # Account identifiers are sanitized to the DU9000001 redaction token; kept frames otherwise verbatim.
 handshake {"server_version":200,"connection_time":"20260407 21:06:56 Central European Standard Time"}
 server managed_accounts {"accounts":["DU9000001"]}

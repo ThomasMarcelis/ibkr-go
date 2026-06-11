@@ -285,7 +285,7 @@ against the role-aware `paper-dev` Gateway.
 | api_wsh_variants_aapl.txt | 20260415T162255Z | promoted; covers WSH metadata plus conid, portfolio, watchlist, and competitor event-data variants returning real code 10276 entitlement errors |
 | contract_details_aapl_opt.txt | 20260405T214941Z | promoted; covers OPT chain subset (strike ladder, call/put legs) with v200 option identifiers; source capture truncated before contractDataEnd, end frame taken verbatim from same-run sibling captures |
 | contract_details_eurusd_cash.txt | 20260405T215014Z | promoted; covers single-match EUR.USD CASH details on IDEALPRO |
-| contract_details_es_fut.txt | 20260405T215018Z | promoted; covers 21-expiry ES futures ladder and the v200 full-session lastTradeDate timestamp format |
+| contract_details_es_fut.txt | 20260405T215018Z | promoted; covers 21-expiry ES futures ladder including a full-session lastTradeDate timestamp (`20261218 08:30:00 US/Central`) |
 | contract_details_not_found.txt | 20260405T215022Z | promoted; covers real code 200 not-found error surfaced as `APIError` with `OpContractDetails` |
 | qualify_contract_ambiguous.txt | 20260407T190656Z | promoted; covers 26-row ambiguous MSFT qualify resolving to `ErrAmbiguousContract` |
 | api_conditions_matrix_aapl.txt | 20260610T200935Z | promoted; covers all six condition families accepted to PreSubmitted after the field-order fix, off-hours code-399 handle closure, and 5-field cancel acknowledgements; Gateway condition echoes decode as partials pending the `"None"`-sentinel fix |

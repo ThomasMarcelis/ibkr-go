@@ -16,15 +16,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   replay tests.** Order campaigns (rapid-fire cancel, forex rejection,
   bracket, OCA, scale-in, trailing-bracket rejection), market-data replays
   (duplicate quote subscriptions, market-data type cycle, tick-by-tick and
-  real-time bars request/entitlement errors), and reference-data error
-  replays (security-type probes, fundamental reports, WSH entitlement) are
-  public replay tests, each traceable to a capture hash.
+  real-time bars request/entitlement errors), reference-data replays
+  (contract-details asset matrix: option chain, forex, futures ladder,
+  not-found, ambiguous qualify; security-type probes, fundamental reports,
+  WSH entitlement), and the order-conditions matrix (all six condition
+  families accepted live) are public replay tests, each traceable to a
+  capture hash.
+- **Named IBKR error-code constants and `APIError` classification
+  helpers.** Every code attested in the replay fixtures has an `ErrCode`
+  constant; `IsEntitlement`, `IsConnectivityTransition`, `IsFarmStatus`,
+  and `IsWarning` classify them, and an evidence-walk test keeps the
+  registry aligned with the fixtures in both directions.
 
 ### Fixed
 
+- **Contract-bound order conditions encode in the official field order.**
+  Price, volume, and percent-change conditions placed through v1.4.5/v1.4.6
+  were rejected live with code 320 field-parse errors because the condition
+  value was serialized after the conId/exchange pair. Encoder, decoder, and
+  replay harness now follow the official client hierarchy; all six
+  condition families were re-verified accepted against a live
+  `server_version 200` Gateway.
 - **Live-derived fixtures no longer embed the paper account identifier.**
   Transcripts and codec tests use sanitized placeholders;
-  `docs/transcripts.md` documents the scrubbing contract.
+  `docs/transcripts.md` documents the scrubbing contract, and a
+  sanitization test now fails the suite on any unredacted account-id shape
+  in tracked files.
 
 ### Changed
 
