@@ -331,6 +331,7 @@ against the role-aware `paper-dev` Gateway.
 | api_order_type_matrix_aapl.txt | 20260611T133103Z | promoted; 22-case order-type matrix incl. silent MOC/LOC/PEG MID/PEG BEST acceptances, PEG BENCH accepted-then-321-on-cancel, and terminal 321/387 rejections |
 | api_option_exercise_not_itm_aapl.txt | 20260611T133444Z | promoted; option fill then the silently-dropped 322 not-in-the-money refusal |
 | api_option_exercise_server_reject_aapl.txt | 20260611T133636Z | promoted; deep-ITM fill, exercise accepted with the 10349 preset session event and a routeless pseudo-order, then the paper clearing 322 rejection |
+| api_fa_replace_non_fa.txt | 20260611T143728Z | promoted; freezes the non-FA blocker: fire-and-forget ReplaceConfig, then the routeless code-321 "FA data operations ignored for non FA customers" the engine drops |
 | api_hedge_order_aapl.txt | 20260611T134021Z | promoted; five hedge rules: zero-size beta/pair acceptances with Gateway-computed quantities, two delta 320 rejections, the FX 10063 currency-pair rule |
 | api_algo_variants_aapl.txt | 20260415T153524Z | promoted; thirteen-variant algo matrix: seven accepted with Gateway-normalized param echoes, six rejected with real codes 439/443/10255; the two echoes that rode as sanitized raw live-layout frames were converted to typed open_order lines after the codec encoder converged on the live layout (verified value-equal at the public OpenOrder layer) |
 

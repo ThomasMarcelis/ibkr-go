@@ -3016,3 +3016,19 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 		return nil
 	})
 }
+
+func runAPIFAReplaceNonFA(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		groups := ibkr.XMLDocument(`<?xml version="1.0" encoding="UTF-8"?><ListOfGroups><Group><name>capture_probe</name><defaultMethod>EqualQuantity</defaultMethod><ListOfAccts varName="list"><Account><acct>` + account + `</acct></Account></ListOfAccts></Group></ListOfGroups>`)
+		if err := client.Advisors().ReplaceConfig(ctx, ibkr.FADataGroups, groups); err != nil {
+			log.Printf("fa replace response: %v", err)
+			recordAPIEvent("fa_replace_error", "groups", func(event *apiDriverEvent) {
+				event.Account = account
+				event.Error = err.Error()
+			})
+			return nil
+		}
+		log.Printf("fa replace accepted")
+		return nil
+	})
+}

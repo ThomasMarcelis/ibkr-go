@@ -1745,6 +1745,11 @@ var scenarios = map[string]scenario{
 		description: "public API campaign for bracket order sequencing with a trailing stop child",
 		runAPI:      runAPIBracketTrailingStopAAPL,
 	},
+	"api_fa_replace_non_fa": {
+		name:        "api_fa_replace_non_fa",
+		description: "public API probe replacing FA groups on a non-FA paper account, freezing the real account-type response",
+		runAPI:      runAPIFAReplaceNonFA,
+	},
 	"api_option_exercise_aapl": {
 		name:        "api_option_exercise_aapl",
 		description: "public API campaign buying one AAPL call then exercising it, freezing the real exercise or no-position response",

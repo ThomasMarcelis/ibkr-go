@@ -1,0 +1,19 @@
+# Grounded by live API capture captures/20260611T143728Z-api_fa_replace_non_fa.
+# server_version=200, events.jsonl sha256 prefix: 81e43254856879c6.
+# Replays FA group replacement against a non-FA paper account: ReplaceConfig
+# is fire-and-forget and returns once the frame is sent; the Gateway answers
+# twenty milliseconds later with code 321 "FA data operations ignored for non
+# FA customers", which matches no route and the engine drops, so the public
+# surface of the blocker is silence and the capture is the record.
+# Account identifiers are sanitized to the DU9000001 redaction token.
+# Trimmed: farm-status frames and the startup safety global cancel with its
+# foreign code-161 replies.
+handshake {"server_version":200,"connection_time":"20260611 16:37:28 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":441}
+
+client replace_fa {"fa_data_type":"1"}
+server api_error {"req_id":58,"code":321,"message":"Error validating request.-'bW' : cause - FA data operations ignored for non FA customers.","advanced_order_reject_json":"","error_time_ms":"1781188650220"}
+
+sleep 100ms
+disconnect

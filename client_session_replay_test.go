@@ -297,3 +297,35 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 		t.Fatalf("CurrentTimeMillis = %v, want %v", ts, want)
 	}
 }
+
+// TestAPIFAReplaceNonFAReplay freezes the non-FA blocker for FA group
+// replacement (captures/20260611T143728Z-api_fa_replace_non_fa, events.jsonl
+// sha256 prefix 81e43254856879c6): ReplaceConfig is fire-and-forget and
+// returns nil once sent, and the Gateway's code-321 "FA data operations
+// ignored for non FA customers" reply matches no route, so the engine drops
+// it and the session stays healthy.
+func TestAPIFAReplaceNonFAReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "api_fa_replace_non_fa.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	groups := ibkr.XMLDocument(`<?xml version="1.0" encoding="UTF-8"?><ListOfGroups><Group><name>capture_probe</name><defaultMethod>EqualQuantity</defaultMethod><ListOfAccts varName="list"><Account><acct>DU9000001</acct></Account></ListOfAccts></Group></ListOfGroups>`)
+	if err := client.Advisors().ReplaceConfig(ctx, ibkr.FADataGroups, groups); err != nil {
+		t.Fatalf("ReplaceConfig: %v", err)
+	}
+
+	// The 321 blocker is dropped without perturbing the session: no event
+	// surfaces and the session stays usable until the scripted disconnect.
+	select {
+	case evt := <-client.SessionEvents():
+		if evt.Code == 321 {
+			t.Fatalf("321 unexpectedly surfaced as a session event: %+v", evt)
+		}
+	case <-time.After(300 * time.Millisecond):
+	}
+}
