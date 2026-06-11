@@ -24,8 +24,10 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 		ErrCodeOrderCanceled:                      true,
 		ErrCodeServerErrorReadingRequest:          true,
 		ErrCodeServerErrorValidatingRequest:       true,
+		ErrCodeServerErrorProcessingRequest:       true,
 		ErrCodeTrailingStopAttachRejected:         true,
 		ErrCodeMarketDataNotSubscribed:            true,
+		ErrCodeUnsupportedOrderType:               true,
 		ErrCodeOrderMessage:                       true,
 		ErrCodeInvalidRealTimeQuery:               true,
 		ErrCodeFundamentalsNotAvailable:           true,
@@ -39,12 +41,15 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 		ErrCodeHistoricalDataFarmInactive:         true,
 		ErrCodeSecDefDataFarmOK:                   true,
 		ErrCodeAdditionalSubscriptionRequired:     true,
+		ErrCodeInvalidFXHedgeOrder:                true,
 		ErrCodeDeepMarketDataNotSupported:         true,
 		ErrCodeOrderToCancelNotFound:              true,
 		ErrCodeOrderCannotBeCancelled:             true,
 		ErrCodeDelayedMarketDataDisplayed:         true,
 		ErrCodeDisplaySizeNotAllowed:              true,
 		ErrCodeNewsFeedNotAllowed:                 true,
+		ErrCodeImbalanceOnlyNotAllowed:            true,
+		ErrCodeOrderTIFSetFromPreset:              true,
 	}
 	// Codes attested in transcripts but deliberately left unregistered.
 	// Empty today: a transcript attesting a new api_error code must land
@@ -146,8 +151,10 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeOrderCanceled},
 		{code: ErrCodeServerErrorReadingRequest},
 		{code: ErrCodeServerErrorValidatingRequest},
+		{code: ErrCodeServerErrorProcessingRequest},
 		{code: ErrCodeTrailingStopAttachRejected},
 		{code: ErrCodeMarketDataNotSubscribed, entitlement: true},
+		{code: ErrCodeUnsupportedOrderType},
 		{code: ErrCodeOrderMessage, warning: true},
 		{code: ErrCodeInvalidRealTimeQuery},
 		{code: ErrCodeFundamentalsNotAvailable},
@@ -161,12 +168,15 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeHistoricalDataFarmInactive, farmStatus: true, warning: true},
 		{code: ErrCodeSecDefDataFarmOK, farmStatus: true, warning: true},
 		{code: ErrCodeAdditionalSubscriptionRequired, entitlement: true},
+		{code: ErrCodeInvalidFXHedgeOrder},
 		{code: ErrCodeDeepMarketDataNotSupported},
 		{code: ErrCodeOrderToCancelNotFound},
 		{code: ErrCodeOrderCannotBeCancelled},
 		{code: ErrCodeDelayedMarketDataDisplayed, entitlement: true, warning: true},
 		{code: ErrCodeDisplaySizeNotAllowed},
 		{code: ErrCodeNewsFeedNotAllowed, entitlement: true},
+		{code: ErrCodeImbalanceOnlyNotAllowed},
+		{code: ErrCodeOrderTIFSetFromPreset},
 	}
 	for _, tt := range tests {
 		err := &APIError{Code: tt.code}

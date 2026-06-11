@@ -24,12 +24,22 @@ const (
 	// ErrCodeServerErrorValidatingRequest: server error when validating an
 	// API client request.
 	ErrCodeServerErrorValidatingRequest = 321
+	// ErrCodeServerErrorProcessingRequest: server error when processing an
+	// API client request. Live-attested wrapping the option-exercise
+	// refusals ("Exercise ignored because option is not in-the-money.",
+	// "Exercise/Lapse failed due to server rejection.") delivered on the
+	// exercise request id.
+	ErrCodeServerErrorProcessingRequest = 322
 	// ErrCodeTrailingStopAttachRejected: a trailing stop order can only be
 	// attached to a limit or stop-limit parent.
 	ErrCodeTrailingStopAttachRejected = 328
 	// ErrCodeMarketDataNotSubscribed: not subscribed to requested market
 	// data; the request fails outright.
 	ErrCodeMarketDataNotSubscribed = 354
+	// ErrCodeUnsupportedOrderType: unsupported order type for this exchange
+	// and security type (live-attested rejecting a PEG MKT placement on
+	// SMART/STK); the placement is rejected outright with no order_status.
+	ErrCodeUnsupportedOrderType = 387
 	// ErrCodeOrderMessage: order held with a warning, e.g. an off-hours
 	// order deferred until the next session ("will not be placed at the
 	// exchange until ..."). The order stays working at IB; the engine
@@ -71,6 +81,11 @@ const (
 	// ErrCodeSecDefDataFarmOK: security-definition data farm connection is
 	// OK.
 	ErrCodeSecDefDataFarmOK = 2158
+	// ErrCodeInvalidFXHedgeOrder: invalid FX hedge order; the hedging
+	// contract can only be a currency pair where one of the currencies
+	// matches the parent order. The placement is rejected outright with no
+	// order_status.
+	ErrCodeInvalidFXHedgeOrder = 10063
 	// ErrCodeAdditionalSubscriptionRequired: requested market data requires
 	// an additional subscription for API use.
 	ErrCodeAdditionalSubscriptionRequired = 10089
@@ -96,6 +111,16 @@ const (
 	// ErrCodeNewsFeedNotAllowed: the API client is not permissioned for the
 	// requested (WSH) news feed.
 	ErrCodeNewsFeedNotAllowed = 10276
+	// ErrCodeImbalanceOnlyNotAllowed: the 'ImbalanceOnly' order attribute may
+	// not be specified for this order. Live-attested replying to the cancel
+	// of a silently accepted PEG MID / PEG BEST order, which the Gateway
+	// later discarded on a global cancel.
+	ErrCodeImbalanceOnlyNotAllowed = 10342
+	// ErrCodeOrderTIFSetFromPreset: notice that the Gateway set the
+	// instruction's TIF from an order preset ("Order TIF was set to DAY
+	// based on order preset."), live-attested acknowledging an option
+	// exercise as a working DAY instruction.
+	ErrCodeOrderTIFSetFromPreset = 10349
 )
 
 // IsEntitlement reports whether the error signals a missing market-data or

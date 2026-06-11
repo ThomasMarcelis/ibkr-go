@@ -1027,17 +1027,24 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["xml"] = fields[3]
 		}
 		return "replace_fa", body, nil
-	case 21: // OutExerciseOptions: [21, version=2, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, exerciseAction, exerciseQuantity, account, override]
+	case 21: // OutExerciseOptions: [21, version=2, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, exerciseAction, exerciseQuantity, account, override, manualOrderTime, customerAccount, professionalCustomer]
 		body := map[string]any{}
 		if len(fields) >= 3 {
 			body["req_id"] = fields[2]
 		}
 		if len(fields) >= 14 {
 			body["contract"] = map[string]any{
-				"symbol":   fields[4],
-				"sec_type": fields[5],
-				"exchange": safeField(fields, 10),
-				"currency": safeField(fields, 11),
+				"con_id":        fields[3],
+				"symbol":        fields[4],
+				"sec_type":      fields[5],
+				"expiry":        fields[6],
+				"strike":        fields[7],
+				"right":         fields[8],
+				"multiplier":    fields[9],
+				"exchange":      safeField(fields, 10),
+				"currency":      safeField(fields, 11),
+				"local_symbol":  safeField(fields, 12),
+				"trading_class": safeField(fields, 13),
 			}
 		}
 		if len(fields) >= 15 {
@@ -1051,6 +1058,18 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 		}
 		if len(fields) >= 18 {
 			body["override"] = fields[17]
+		}
+		// server_version 200 tail (manual order time, customer account,
+		// professional customer), live-attested in the 2026-06-11 exercise
+		// captures.
+		if len(fields) >= 19 {
+			body["manual_order_time"] = fields[18]
+		}
+		if len(fields) >= 20 {
+			body["customer_account"] = fields[19]
+		}
+		if len(fields) >= 21 {
+			body["professional_customer"] = fields[20]
 		}
 		return "exercise_options", body, nil
 	case 52: // OutReqFundamentalData: [52, version=2, reqId, conId, symbol, secType, exchange, primaryExchange, currency, localSymbol, reportType]
