@@ -17,11 +17,12 @@ var (
 	accountIDPattern   = regexp.MustCompile(`\b(?:U\d{7,8}|DUP?\d{6,})\b`)
 	redactionAllowlist = regexp.MustCompile(`\bDU9000001\b`)
 
-	// Live perm-id blocks that leaked into fixtures before the 2026-06 sweep
+	// Live perm-id blocks that leaked into fixtures before the 2026-06 sweeps
 	// (docs/transcripts.md mandates perm-id sanitization; the convention is
-	// 900<order id>). The pattern pins the exact leaked ranges rather than a
-	// generic digit shape so timestamps and con ids cannot false-positive.
-	leakedPermIDPattern = regexp.MustCompile(`\b(?:1426086\d{3}|3892109\d{2}|2126921\d{3})\b`)
+	// 900<order id>). The pattern pins the observed leaked ranges, including
+	// the live-account block, rather than a generic digit shape so
+	// timestamps and con ids cannot false-positive.
+	leakedPermIDPattern = regexp.MustCompile(`\b(?:1426086\d{3}|3892109\d{2}|2126921\d{3}|15181899\d{2}|1331289\d{3})\b`)
 )
 
 // TestNoAccountIdentifiersInTrackedFiles walks the repository's committed

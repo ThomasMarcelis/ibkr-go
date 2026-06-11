@@ -29,8 +29,8 @@ var benchTickPricePayload = []byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x
 var benchOpenOrderPayload = []byte(
 	"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
 		"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
-		"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x001518189976\x00" +
-		"0\x000\x000\x00\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
+		"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x009000\x00" +
+		"0\x000\x000\x00\x009000.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
 		"0\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x00" +
 		"0\x000\x000\x00\x003\x000\x000\x00\x000\x000\x00\x000\x00None\x00\x00" +
 		"0\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x00" +
@@ -107,7 +107,7 @@ func BenchmarkDecodeOpenOrderLive(b *testing.B) {
 		b.Fatalf("got %d messages, want 1", len(msgs))
 	}
 	m, ok := msgs[0].(OpenOrder)
-	if !ok || m.Contract.ConID != 853200900 || m.Status != "PreSubmitted" || m.PermID != "1518189976" {
+	if !ok || m.Contract.ConID != 853200900 || m.Status != "PreSubmitted" || m.PermID != "9000" {
 		b.Fatalf("decoded %#v, want live OBDC openOrder", msgs[0])
 	}
 

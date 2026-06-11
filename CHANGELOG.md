@@ -16,7 +16,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   read it from `OrderStatusUpdate` events or `OrderHandle` status. The
   replay encoder now emits the live wire layout exactly, and the decoder
   has a single live-grounded walk in place of the synthetic branch and the
-  misparse-derived 169-field shortcut.
+  misparse-derived 169-field shortcut. Replay transcripts written against
+  `testing/testhost` drop `filled`/`remaining` keys on `open_order` lines
+  for the same reason.
 
 ### Added
 

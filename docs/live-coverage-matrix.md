@@ -135,7 +135,7 @@ handled through dimensions rather than duplicate rows:
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | OPT-001 | Option calculations | `Options().ImpliedVolatility`, `Options().Price`, official calculate/cancel calls | `calc_implied_volatility.txt`, `calc_option_price.txt`, live tests | promoted | valid qualified option, unavailable data, invalid option, cancel after first computation |
-| OPT-002 | Option exercise/lapse | `Options().Exercise`, official `exerciseOptions` | `api_option_exercise_aapl` | target | exercise, lapse, override true/false, invalid option/account, paper account behavior |
+| OPT-002 | Option exercise/lapse | `Options().Exercise`, official `exerciseOptions` | `api_option_exercise_aapl` | candidate | exercise, lapse, override true/false, invalid option/account, paper account behavior |
 | OPT-003 | Option order and data integration | `Orders().Place`, market data/history for OPT | `place_order_option_buy`, `api_option_campaign_aapl`, `api_combo_option_vertical_aapl` | candidate | option quote, historical ticks if available, order fill/reject, completed/execution observation |
 
 ## News, Scanner, FA, WSH, Display, And TWS

@@ -703,8 +703,8 @@ func TestCaptureDecode_OpenOrder(t *testing.T) {
 	payload := []byte(
 		"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
 			"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
-			"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x001518189976\x00" +
-			"0\x000\x000\x00\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
+			"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x009000\x00" +
+			"0\x000\x000\x00\x009000.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
 			"0\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x00" +
 			"0\x000\x000\x00\x003\x000\x000\x00\x000\x000\x00\x000\x00None\x00\x00" +
 			"0\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x00" +
@@ -796,8 +796,8 @@ func TestCaptureDecode_OpenOrder(t *testing.T) {
 	if m.Origin != "0" {
 		t.Errorf("Origin = %q, want 0", m.Origin)
 	}
-	if m.PermID != "1518189976" {
-		t.Errorf("PermID = %q, want 1518189976", m.PermID)
+	if m.PermID != "9000" {
+		t.Errorf("PermID = %q, want 9000", m.PermID)
 	}
 	if m.Status != "PreSubmitted" {
 		t.Errorf("Status = %q, want PreSubmitted", m.Status)
@@ -1269,7 +1269,7 @@ func TestCaptureDecode_OpenOrderLiveBaseLayout(t *testing.T) {
 		"5", "0", "853200900", "OBDC", "OPT", "20261120", "10", "P",
 		"100", "SMART", "USD", "OBDC  261120P00010000", "OBDC", "SELL", "1", "LMT",
 		"1.2", "0.0", "GTC", "", "DU9000001", "", "0", "",
-		"0", "1518189976", "0", "0", "0", "", "1518189976.1/DU9000001/100", "",
+		"0", "9000", "0", "0", "0", "", "9000.1/DU9000001/100", "",
 		"", "", "", "", "0", "", "", "0",
 		"", "-1", "0", "", "", "", "", "",
 		"2147483647", "0", "0", "0", "", "3", "0", "0",

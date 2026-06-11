@@ -13,40 +13,34 @@ import (
 
 // benchOpenOrderPayload is the live openOrder frame from
 // captures/20260405T215248Z-open_orders_all, line 10 (OBDC PUT option,
-// PreSubmitted): 986 payload bytes, 170 NUL-delimited fields. Same bytes as
+// PreSubmitted): the genuine 928-byte frame, 156 NUL-delimited fields. Same bytes as
 // TestCaptureDecode_OpenOrder in internal/codec/codec_capture_test.go. It is
 // the largest single frame in the capture suite's order flows, so it anchors
 // the ParseFields/EncodeFields benchmarks.
 var benchOpenOrderPayload = []byte(
 	"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
-		"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00" +
-		"SELL\x001\x00LMT\x001.2\x000.0\x00GTC\x00\x00DU9000001\x00" +
-		"\x000\x00\x000\x001518189976\x000\x000\x000\x00" +
-		"\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00" +
-		"\x000\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00" +
-		"\x002147483647\x000\x000\x000\x00\x003\x000\x000\x00" +
-		"\x000\x000\x00\x000\x00None\x00\x000\x00\x00\x00\x00" +
-		"?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x000\x000\x000\x00" +
-		"2147483647\x002147483647\x00\x00\x000\x00\x00IB\x000\x000\x00" +
-		"\x000\x000\x00" +
-		"PreSubmitted\x00" +
+		"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
+		"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x009000\x00" +
+		"0\x000\x000\x00\x009000.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
+		"0\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x00" +
+		"0\x000\x000\x00\x003\x000\x000\x00\x000\x000\x00\x000\x00None\x00\x00" +
+		"0\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x00" +
+		"0\x000\x000\x002147483647\x002147483647\x00\x00\x000\x00\x00IB\x00" +
+		"0\x000\x00\x000\x000\x00PreSubmitted\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x00\x00\x00\x00\x00" +
+		"1.7976931348623157E308\x001.7976931348623157E308\x00\x00\x00\x00\x00" +
 		"\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x00" +
-		"-9223372036854775808\x00\x000\x00\x000\x000\x000\x00None\x00" +
+		"1.7976931348623157E308\x00-9223372036854775808\x00\x000\x00\x000\x00" +
+		"0\x000\x00None\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"0\x00\x00\x00\x000\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00" +
-		"\x000\x00\x000\x00\x002147483647\x00\x000\x00\x00\x00\x00" +
-		"+3\x000\x00PreSubmitted\x000\x001\x000\x001518189976\x000\x000\x000\x00\x000\x00")
+		"1.7976931348623157E308\x001.7976931348623157E308\x000\x00\x00\x00\x00" +
+		"0\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00" +
+		"\x000\x00\x002147483647\x00\x000\x00")
 
 // benchSessionPayloads is a realistic bootstrap -> quote snapshot -> account
 // summary -> open order frame mix: many small frames plus one fat-tail order
@@ -122,7 +116,7 @@ func BenchmarkParseFields(b *testing.B) {
 	if err != nil {
 		b.Fatalf("ParseFields() error = %v", err)
 	}
-	if len(fields) != 170 || fields[0] != "5" {
+	if len(fields) != 156 || fields[0] != "5" {
 		b.Fatalf("ParseFields() = %d fields starting %q, want 170 starting %q", len(fields), fields[0], "5")
 	}
 

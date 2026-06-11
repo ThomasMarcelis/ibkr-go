@@ -31,7 +31,17 @@ class, and promoted transcript or remaining blocker.
 
 ### 2026-06-11
 
-Campaign day two. `paper-dev` healthy throughout. Operational incident on
+Campaign day two. Market-window paper captures landed regular-session
+fills (MKT buy/sell, the fill campaign, delayed modify, the order-type
+matrix), the option exercise evidence pair (barely-ITM refusal 322;
+deep-ITM accepted with the 10349 TIF preset notice then rejected by the
+paper clearing server with 322 and cancelled 202), the hedge rule map
+(beta and pair hedges accepted at zero size; delta requires an option
+parent and a valid ratio; FX hedging requires a matching currency-pair
+child; sizing draws 10032), and the pairs/DCA/algorithmic reconciliation
+tails that timed out in April. Exercise-scenario residue: two long AAPL
+Jun-12 calls (282.5, 292.5) remain in the paper account and expire the
+next session. `paper-dev` healthy throughout. Operational incident on
 `readonly-live`: two raw `cmd/ibkr-probe` attempts at the
 `reqCurrentTimeInMillis` drift check (one pre-handshake payload that the
 Gateway answered as a legacy version greeting, one framed message injected

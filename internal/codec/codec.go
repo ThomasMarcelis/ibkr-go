@@ -353,10 +353,12 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		r.ReadString() // ScaleInitLevelSize
 		r.ReadString() // ScaleSubsLevelSize
 		scalePriceIncrement := r.ReadString()
-		if isPositiveWireNumber(scalePriceIncrement) {
+		if scalePriceIncrement != unsetDoubleSentinel && isPositiveWireNumber(scalePriceIncrement) {
 			// A real scale order appends scale fields that are unattested
-			// live; no-scale frames echo 2147483647/2147483647/"" and go
-			// straight to hedgeType.
+			// live; no-scale frames echo 2147483647/2147483647 with the
+			// increment empty or carrying the unset-double sentinel, and go
+			// straight to hedgeType (official decoding appends the scale
+			// block only for a real positive increment).
 			return []Message{partial}, nil
 		}
 		hedgeType := r.ReadString()
@@ -416,7 +418,9 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 8, 0); err != nil {
+		// Official allocations carry seven fields per entry
+		// (account..isMonetary); there is no trailing reserved slot.
+		if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 7, 0); err != nil {
 			return nil, err
 		}
 		for range orderAllocationsCount {
@@ -427,7 +431,6 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			r.ReadString() // DesiredAllocQty
 			r.ReadString() // AllowedAllocQty
 			r.ReadString() // IsMonetary
-			r.ReadString() // reserved
 		}
 		warningText := r.ReadString()
 
@@ -443,6 +446,11 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		conditionsCount, err := r.ReadOptionalCount("open order conditions")
 		if err != nil {
 			return nil, err
+		}
+		// Every condition consumes at least four fields; a count past the
+		// remaining payload is a malformed frame, not an allocation request.
+		if conditionsCount > r.Remaining()/4+1 {
+			return nil, fmt.Errorf("codec: open order conditions count %d exceeds remaining fields %d", conditionsCount, r.Remaining())
 		}
 		conditions := make([]OrderCondition, conditionsCount)
 		for i := range conditions {
@@ -2795,6 +2803,10 @@ func btoa(v bool) string {
 	}
 	return "0"
 }
+
+// unsetDoubleSentinel is the wire rendering of the official UNSET_DOUBLE
+// (DBL_MAX): an unset numeric slot, not a value.
+const unsetDoubleSentinel = "1.7976931348623157E308"
 
 func isPositiveWireNumber(raw string) bool {
 	if raw == "" {
