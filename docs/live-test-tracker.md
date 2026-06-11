@@ -274,7 +274,7 @@ against the role-aware `paper-dev` Gateway.
 | api_forex_lifecycle_eurusd.txt | 20260414T182627Z | promoted; covers EUR.USD far LMT OpenOrder, Inactive status, and real code 201 leverage rejection replay |
 | api_bracket_trigger_aapl.txt | 20260413T174517Z | promoted; covers bracket parent fill, child OCA group echo, and real price-band cancel/reject on forced take-profit modify |
 | api_oca_trigger_aapl.txt | 20260413T174546Z | promoted; covers OCA group echo on both AAPL peers and real PendingCancel/Cancelled price-band rejection for the aggressive peer |
-| api_whatif_margin_aapl.txt | 20260414T164207Z | pending; no checked-in transcript because the live captures did not produce a usable WhatIf preview callback; `20260414T182608Z` returned live code 320 parser error after the WhatIf place request |
+| api_whatif_margin_aapl.txt | 20260610T200009Z | promoted; covers the complete WhatIf margin preview (nine margin decimals plus commission 1.0003 USD) on the public OpenOrder, the no-lifecycle handle semantics, and the io.EOF teardown; the 2026-04-14 no-preview/code-320 attempts were the pre-v1.4.6 default-int placement bug |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
 | api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
 | api_fundamental_report_errors_aapl.txt | 20260415T162248Z | promoted; covers live code 430 `ReportRatios` and `ReportsFinStatements` errors without checking in large XML report payloads |

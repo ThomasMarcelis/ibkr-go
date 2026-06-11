@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/shopspring/decimal"
 )
 
 func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
@@ -152,27 +153,37 @@ func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 
 // TestFromCodecOpenOrderAcceptsSentinelCommissionFields is the end-to-end
 // regression freeze for the reported P1: live TWS open-order traffic encodes
-// unset commission/min/max commission as the MAX_DOUBLE sentinel, and that
-// must not tear down the open-order decode path.
+// unset commission/min/max commission — and, on non-WhatIf orders, the
+// order-state margin fields — as the MAX_DOUBLE sentinel, and that must not
+// tear down the open-order decode path.
 func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 	t.Parallel()
 
 	const sentinel = "1.7976931348623157E308"
 
 	order, err := fromCodecOpenOrder(codec.OpenOrder{
-		OrderID:       1,
-		Account:       "DU12345",
-		Contract:      codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
-		Action:        "BUY",
-		OrderType:     "LMT",
-		Quantity:      "1",
-		Filled:        "0",
-		Remaining:     "1",
-		LmtPrice:      "150.00",
-		AuxPrice:      "0",
-		Commission:    sentinel,
-		MinCommission: sentinel,
-		MaxCommission: sentinel,
+		OrderID:              1,
+		Account:              "DU12345",
+		Contract:             codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+		Action:               "BUY",
+		OrderType:            "LMT",
+		Quantity:             "1",
+		Filled:               "0",
+		Remaining:            "1",
+		LmtPrice:             "150.00",
+		AuxPrice:             "0",
+		InitMarginBefore:     sentinel,
+		MaintMarginBefore:    sentinel,
+		EquityWithLoanBefore: sentinel,
+		InitMarginChange:     sentinel,
+		MaintMarginChange:    sentinel,
+		EquityWithLoanChange: sentinel,
+		InitMarginAfter:      sentinel,
+		MaintMarginAfter:     sentinel,
+		EquityWithLoanAfter:  sentinel,
+		Commission:           sentinel,
+		MinCommission:        sentinel,
+		MaxCommission:        sentinel,
 	})
 	if err != nil {
 		t.Fatalf("fromCodecOpenOrder() error = %v, want nil", err)
@@ -185,6 +196,21 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 	}
 	if !order.MaxCommission.IsZero() {
 		t.Errorf("MaxCommission = %s, want zero", order.MaxCommission.String())
+	}
+	for name, got := range map[string]decimal.Decimal{
+		"InitMarginBefore":     order.InitMarginBefore,
+		"MaintMarginBefore":    order.MaintMarginBefore,
+		"EquityWithLoanBefore": order.EquityWithLoanBefore,
+		"InitMarginChange":     order.InitMarginChange,
+		"MaintMarginChange":    order.MaintMarginChange,
+		"EquityWithLoanChange": order.EquityWithLoanChange,
+		"InitMarginAfter":      order.InitMarginAfter,
+		"MaintMarginAfter":     order.MaintMarginAfter,
+		"EquityWithLoanAfter":  order.EquityWithLoanAfter,
+	} {
+		if !got.IsZero() {
+			t.Errorf("%s = %s, want zero (sentinel should decode as absent)", name, got.String())
+		}
 	}
 }
 

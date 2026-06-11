@@ -105,6 +105,14 @@
 // [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a
 // modified order with the same ID.
 //
+// A what-if order ([Order].WhatIf) is a margin preview, not a trade: the
+// Gateway answers with a single OpenOrder event whose InitMargin*,
+// MaintMargin*, EquityWithLoan*, and Commission fields carry the preview,
+// and no order status lifecycle ever follows. Read the first OpenOrder
+// event from the handle, then Close it — nothing rests on the server, so
+// the handle never reaches a terminal state and Wait would block until the
+// session ends.
+//
 // # Session Lifecycle
 //
 // The session state machine is observable through [Client.SessionEvents].

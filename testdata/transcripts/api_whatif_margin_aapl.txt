@@ -1,0 +1,27 @@
+# Grounded by live API capture captures/20260610T200009Z-api_whatif_margin_aapl.
+# server_version=200, events.jsonl sha256 prefix: e8ee70b24de3fe2f.
+# Replays the WhatIf margin preview (AORD-010): a WhatIf MKT BUY 100 AAPL
+# draws exactly ONE open_order reply (157 wire fields) whose order-state
+# block carries the complete preview — status PreSubmitted, then
+# initMargin/maintMargin/equityWithLoan before/change/after, and
+# commissionAndFees 1.0003 USD (min/max commission unset). No order_status
+# lifecycle ever follows: a what-if order computes margin and leaves nothing
+# resting on the server, so the handle only terminates with the session.
+# The live frame's fill echo is absent on the v200 live layout
+# (fills arrive on order_status, which a what-if never produces), and the
+# wire marginCurrency EUR is skipped by the codec.
+# Sanitized: account identifiers redacted to the DU9000001 redaction token,
+# perm id -> 900355, order ref -> ibkrgo-sanitized-20260610T200009Z-001.
+# Trimmed: farm-status 2104/2107/2158, the driver's startup safety global
+# cancel and its stale code-161 reply for the prior scenario's order 354,
+# and the driver's cleanup global cancel — which drew no per-order response,
+# because the what-if left nothing to cancel.
+handshake {"server_version":200,"connection_time":"20260610 22:00:08 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":355}
+
+client place_order {"order_id":"355","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T200009Z-001","transmit":true,"what_if":true}
+server open_order {"order_id":355,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","status":"PreSubmitted","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900355","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T200009Z-001","init_margin_before":"156037.86","maint_margin_before":"141852.6","equity_with_loan_before":"1127799.82","init_margin_change":"0.0","maint_margin_change":"0.0","equity_with_loan_change":"-0.8600000001024455","init_margin_after":"156037.86","maint_margin_after":"141852.6","equity_with_loan_after":"1127798.96","commission":"1.0003","commission_currency":"USD"}
+
+sleep 100ms
+disconnect

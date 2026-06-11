@@ -5311,6 +5311,42 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 	if err != nil {
 		return OpenOrder{}, err
 	}
+	initMarginBefore, err := parseOptionalDecimal(m.InitMarginBefore, "open order init margin before")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	maintMarginBefore, err := parseOptionalDecimal(m.MaintMarginBefore, "open order maint margin before")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	equityWithLoanBefore, err := parseOptionalDecimal(m.EquityWithLoanBefore, "open order equity with loan before")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	initMarginChange, err := parseOptionalDecimal(m.InitMarginChange, "open order init margin change")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	maintMarginChange, err := parseOptionalDecimal(m.MaintMarginChange, "open order maint margin change")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	equityWithLoanChange, err := parseOptionalDecimal(m.EquityWithLoanChange, "open order equity with loan change")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	initMarginAfter, err := parseOptionalDecimal(m.InitMarginAfter, "open order init margin after")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	maintMarginAfter, err := parseOptionalDecimal(m.MaintMarginAfter, "open order maint margin after")
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	equityWithLoanAfter, err := parseOptionalDecimal(m.EquityWithLoanAfter, "open order equity with loan after")
+	if err != nil {
+		return OpenOrder{}, err
+	}
 	commission, err := parseOptionalDecimal(m.Commission, "open order commission")
 	if err != nil {
 		return OpenOrder{}, err
@@ -5378,6 +5414,15 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		Conditions:            orderConditionsFromCodec(m.Conditions),
 		ConditionsIgnoreRTH:   m.ConditionsIgnoreRTH == "1",
 		ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
+		InitMarginBefore:      initMarginBefore,
+		MaintMarginBefore:     maintMarginBefore,
+		EquityWithLoanBefore:  equityWithLoanBefore,
+		InitMarginChange:      initMarginChange,
+		MaintMarginChange:     maintMarginChange,
+		EquityWithLoanChange:  equityWithLoanChange,
+		InitMarginAfter:       initMarginAfter,
+		MaintMarginAfter:      maintMarginAfter,
+		EquityWithLoanAfter:   equityWithLoanAfter,
 		Commission:            commission,
 		MinCommission:         minCommission,
 		MaxCommission:         maxCommission,

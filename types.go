@@ -544,10 +544,24 @@ type OpenOrder struct {
 	Conditions            []OrderCondition
 	ConditionsIgnoreRTH   bool
 	ConditionsCancelOrder bool
-	Commission            decimal.Decimal
-	MinCommission         decimal.Decimal
-	MaxCommission         decimal.Decimal
-	CommissionCurrency    string
+
+	// Order-state margin preview. Populated on the open_order reply to a
+	// what-if order ([Order].WhatIf); on regular orders the Gateway sends
+	// unset sentinels, which decode as zero.
+	InitMarginBefore     decimal.Decimal
+	MaintMarginBefore    decimal.Decimal
+	EquityWithLoanBefore decimal.Decimal
+	InitMarginChange     decimal.Decimal
+	MaintMarginChange    decimal.Decimal
+	EquityWithLoanChange decimal.Decimal
+	InitMarginAfter      decimal.Decimal
+	MaintMarginAfter     decimal.Decimal
+	EquityWithLoanAfter  decimal.Decimal
+
+	Commission         decimal.Decimal
+	MinCommission      decimal.Decimal
+	MaxCommission      decimal.Decimal
+	CommissionCurrency string
 }
 
 type OpenOrderUpdate struct {
