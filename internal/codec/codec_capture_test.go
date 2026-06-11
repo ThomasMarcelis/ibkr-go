@@ -897,3 +897,63 @@ func TestCaptureDecode_HistoricalSchedule(t *testing.T) {
 		t.Errorf("Sessions[20] = %+v, want 20260410-09:30:00 / 20260410-16:00:00 / 20260410", last)
 	}
 }
+
+func TestCaptureDecode_SecDefOptParamsLive(t *testing.T) {
+	t.Parallel()
+	// captures/20260611T074417Z-api_option_campaign_aapl (paper Gateway,
+	// server_version 200, events.jsonl sha256 prefix fa7f3f46793d3277, verified at
+	// promotion time): first securityDefinitionOptionParameter row for the
+	// AAPL underlying. The live wire carries no marketRuleId between
+	// multiplier and the expiration count; decoding used to skip one field
+	// here, read the first expiration date as the count, and kill the
+	// session, which is why every option qualify since April died with
+	// ErrInterrupted.
+	payload := []byte("75\x003\x00CBOE\x00265598\x00AAPL\x00100\x0026\x0020260612\x0020260615\x0020260617\x0020260618\x0020260622\x0020260624\x0020260626\x0020260702\x0020260710\x0020260717\x0020260724\x0020260731\x0020260821\x0020260918\x0020261016\x0020261120\x0020261218\x0020270115\x0020270219\x0020270319\x0020270617\x0020270917\x0020271217\x0020280121\x0020280317\x0020281215\x00123\x005.0\x0010.0\x0015.0\x0020.0\x0025.0\x0030.0\x0035.0\x0040.0\x0045.0\x0050.0\x0055.0\x0060.0\x0065.0\x0070.0\x0075.0\x0080.0\x0085.0\x0090.0\x0095.0\x00100.0\x00105.0\x00110.0\x00115.0\x00120.0\x00125.0\x00130.0\x00135.0\x00140.0\x00145.0\x00150.0\x00155.0\x00160.0\x00165.0\x00170.0\x00175.0\x00180.0\x00185.0\x00190.0\x00195.0\x00200.0\x00205.0\x00210.0\x00215.0\x00220.0\x00225.0\x00230.0\x00235.0\x00240.0\x00245.0\x00250.0\x00255.0\x00257.5\x00260.0\x00262.5\x00265.0\x00267.5\x00270.0\x00272.5\x00275.0\x00277.5\x00280.0\x00282.5\x00285.0\x00287.5\x00290.0\x00292.5\x00295.0\x00297.5\x00300.0\x00302.5\x00305.0\x00307.5\x00310.0\x00312.5\x00315.0\x00317.5\x00320.0\x00322.5\x00325.0\x00327.5\x00330.0\x00332.5\x00335.0\x00337.5\x00340.0\x00342.5\x00345.0\x00347.5\x00350.0\x00355.0\x00360.0\x00365.0\x00370.0\x00375.0\x00380.0\x00385.0\x00390.0\x00395.0\x00400.0\x00405.0\x00410.0\x00415.0\x00420.0\x00425.0\x00430.0\x00435.0\x00440.0\x00450.0\x00460.0\x00470.0\x00480.0\x00490.0\x00500.0\x00510.0\x00520.0\x00530.0\x00540.0\x00550.0\x00560.0\x00570.0\x00580.0\x00590.0\x00600.0\x00")
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(SecDefOptParamsResponse)
+	if !ok {
+		t.Fatalf("type = %T, want SecDefOptParamsResponse", msgs[0])
+	}
+	if m.ReqID != 3 || m.Exchange != "CBOE" || m.UnderlyingConID != 265598 {
+		t.Errorf("header = req %d exchange %q conid %d", m.ReqID, m.Exchange, m.UnderlyingConID)
+	}
+	if m.TradingClass != "AAPL" || m.Multiplier != "100" {
+		t.Errorf("class/multiplier = %q/%q", m.TradingClass, m.Multiplier)
+	}
+	if len(m.Expirations) != 26 || m.Expirations[0] != "20260612" || m.Expirations[25] != "20281215" {
+		t.Errorf("expirations = %d first %q last %q", len(m.Expirations), m.Expirations[0], m.Expirations[len(m.Expirations)-1])
+	}
+	if len(m.Strikes) != 123 || m.Strikes[0] != "5.0" || m.Strikes[122] != "600.0" {
+		t.Errorf("strikes = %d first %q last %q", len(m.Strikes), m.Strikes[0], m.Strikes[len(m.Strikes)-1])
+	}
+}
+
+func TestCaptureDecode_TickOptionComputationLive(t *testing.T) {
+	t.Parallel()
+	// captures/20260611T075300Z-api_option_campaign_aapl (paper Gateway,
+	// server_version 200, events.jsonl sha256 prefix ede083958c7e2748): real
+	// custom-option-computation reply to a CalcOptionPrice request. The live
+	// frame carries no version field; the legacy skip used to consume the
+	// request id and abort the session.
+	payload := []byte("21\x006\x0053\x000\x000.3\x000.5579497967180902\x002.6596901785543805\x00-1\x000.0700889483259586\x000.07475592510994344\x00-0.7568548883674484\x00293.23\x00")
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(TickOptionComputation)
+	if !ok {
+		t.Fatalf("type = %T, want TickOptionComputation", msgs[0])
+	}
+	if m.ReqID != 6 || m.TickType != 53 || m.TickAttrib != 0 {
+		t.Errorf("header = req %d tick %d attrib %d", m.ReqID, m.TickType, m.TickAttrib)
+	}
+	if m.ImpliedVol != "0.3" || m.OptPrice != "2.6596901785543805" || m.UndPrice != "293.23" {
+		t.Errorf("values = vol %q px %q und %q", m.ImpliedVol, m.OptPrice, m.UndPrice)
+	}
+	if m.Delta != "0.5579497967180902" || m.PvDividend != "-1" {
+		t.Errorf("delta %q pvDividend %q", m.Delta, m.PvDividend)
+	}
+}

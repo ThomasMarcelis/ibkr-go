@@ -684,6 +684,66 @@ func TestEncodeContractConditionValueBeforeContract(t *testing.T) {
 	}
 }
 
+func TestEncodeCalcRequestsCarryNoIncludeExpired(t *testing.T) {
+	t.Parallel()
+
+	// Live paper Gateway (server_version 200, 2026-06-11) rejected the prior
+	// encoding with code 320 "Please use 'Key=Value' format for Misc
+	// Options" (captures/20260611T074859Z-api_option_campaign_aapl,
+	// events.jsonl sha256 fa7f3f46793d3277): a phantom includeExpired bool
+	// after tradingClass shifted optionPrice/underPrice one slot right, so
+	// the Gateway read the numeric underPrice as miscOptions. The official
+	// calc requests run [.., tradingClass, price, underPrice, miscOptions].
+	contract := Contract{ConID: 886441502, Symbol: "AAPL", SecType: "OPT", Expiry: "20260612", Strike: "292.5", Right: "C", Multiplier: "100", Exchange: "SMART", Currency: "USD", TradingClass: "AAPL"}
+
+	payload, err := Encode(CalcImpliedVolatilityRequest{ReqID: 6, Contract: contract, OptionPrice: "5.25", UnderPrice: "292.0"})
+	if err != nil {
+		t.Fatalf("Encode(CalcImpliedVolatilityRequest) error = %v", err)
+	}
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+	assertSubsequence(t, fields, []string{"AAPL", "5.25", "292.0", ""})
+
+	payload, err = Encode(CalcOptionPriceRequest{ReqID: 7, Contract: contract, Volatility: "0.30", UnderPrice: "292.0"})
+	if err != nil {
+		t.Fatalf("Encode(CalcOptionPriceRequest) error = %v", err)
+	}
+	fields, err = wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+	assertSubsequence(t, fields, []string{"AAPL", "0.30", "292.0", ""})
+}
+
+func TestEncodeExerciseOptionsTailFields(t *testing.T) {
+	t.Parallel()
+
+	// Live paper Gateway (server_version 200, 2026-06-11) rejected the prior
+	// encoding with code 10300 "Manual Order Time ... invalid"
+	// (captures/20260611T074859Z-api_option_campaign_aapl, events.jsonl
+	// sha256 fa7f3f46793d3277): server_version 200 expects the
+	// manualOrderTime, customerAccount, and professionalCustomer tail after
+	// override, and the frame ended early.
+	payload, err := Encode(ExerciseOptionsRequest{
+		ReqID:            7,
+		Contract:         Contract{ConID: 886441502, Symbol: "AAPL", SecType: "OPT", Expiry: "20260612", Strike: "292.5", Right: "C", Multiplier: "100", Exchange: "SMART", Currency: "USD"},
+		ExerciseAction:   2,
+		ExerciseQuantity: 1,
+		Account:          "DU9000001",
+		Override:         0,
+	})
+	if err != nil {
+		t.Fatalf("Encode(ExerciseOptionsRequest) error = %v", err)
+	}
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+	assertSubsequence(t, fields, []string{"2", "1", "DU9000001", "0", "", "", "0"})
+}
+
 func assertSubsequence(t *testing.T, fields, want []string) {
 	t.Helper()
 	for i := 0; i+len(want) <= len(fields); i++ {

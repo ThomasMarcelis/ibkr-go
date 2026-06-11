@@ -723,8 +723,10 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		}
 		return []Message{ScannerDataResponse{ReqID: reqID, Entries: entries}}, nil
 
-	case InTickOptionComputation: // [21, version=6, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice]
-		r.Skip(1) // version
+	case InTickOptionComputation: // [21, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice]
+		// No version field on the live sv200 wire; the legacy version skip
+		// consumed the request id and killed the session on the first real
+		// greeks reply (capture 20260611T075300Z-api_option_campaign_aapl).
 		reqID, _ := r.ReadInt()
 		tickType, _ := r.ReadInt()
 		tickAttrib, _ := r.ReadInt()
@@ -841,13 +843,16 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		reqID, _ := r.ReadInt()
 		return []Message{AccountSummaryEnd{ReqID: reqID}}, nil
 
-	case InSecDefOptParams: // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, marketRuleId, expirationsCount, expirations..., strikesCount, strikes...] — no version
+	case InSecDefOptParams: // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, expirationsCount, expirations..., strikesCount, strikes...] — no version
+		// Live server_version 200 frames carry the expiration count directly
+		// after the multiplier (capture 20260611T074417Z, sha fa7f3f46793d3277);
+		// a phantom marketRuleId skip here used to consume the count and kill
+		// the session on the first row.
 		reqID, _ := r.ReadInt()
 		exchange := r.ReadString()
 		underConID, _ := r.ReadInt()
 		tradingClass := r.ReadString()
 		multiplier := r.ReadString()
-		r.Skip(1) // marketRuleId
 		expirationCount, err := r.ReadCount("expiration count")
 		if err != nil {
 			return nil, err
@@ -1511,6 +1516,13 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(m.ExerciseQuantity)
 		w.WriteString(m.Account)
 		w.WriteInt(m.Override)
+		// server_version 200 expects the manual-order-time, customer-account,
+		// and professional-customer tail; ending the frame at override drew
+		// code 10300 from the live Gateway (capture 20260611T074859Z,
+		// sha fa7f3f46793d3277).
+		w.WriteString("")  // manualOrderTime
+		w.WriteString("")  // customerAccount
+		w.WriteBool(false) // professionalCustomer
 		return w.Fields(), nil
 
 	case OpenOrdersRequest:
@@ -1620,13 +1632,15 @@ func encodeFields(msg Message) ([]string, error) {
 		return []string{itoa(OutReqSmartComponents), itoa(m.ReqID), m.BBOExchange}, nil
 
 	case CalcImpliedVolatilityRequest:
+		// No includeExpired field: the live sv200 Gateway parses optionPrice
+		// directly after tradingClass (code 320 evidence, capture
+		// 20260611T074859Z, sha fa7f3f46793d3277).
 		w := fieldWriter{}
 		w.WriteInt(OutReqCalcImpliedVolatility)
 		w.WriteInt(3) // version
 		w.WriteInt(m.ReqID)
 		w.WriteInt(m.Contract.ConID)
 		writeWireContract(&w, m.Contract)
-		w.WriteBool(false) // includeExpired
 		w.WriteString(m.OptionPrice)
 		w.WriteString(m.UnderPrice)
 		w.WriteString("") // implVolOptions
@@ -1636,13 +1650,13 @@ func encodeFields(msg Message) ([]string, error) {
 		return []string{itoa(OutCancelCalcImpliedVolatility), "1", itoa(m.ReqID)}, nil
 
 	case CalcOptionPriceRequest:
+		// No includeExpired field; see CalcImpliedVolatilityRequest.
 		w := fieldWriter{}
 		w.WriteInt(OutReqCalcOptionPrice)
 		w.WriteInt(3) // version
 		w.WriteInt(m.ReqID)
 		w.WriteInt(m.Contract.ConID)
 		writeWireContract(&w, m.Contract)
-		w.WriteBool(false) // includeExpired
 		w.WriteString(m.Volatility)
 		w.WriteString(m.UnderPrice)
 		w.WriteString("") // optPxOptions
@@ -2552,7 +2566,6 @@ func encodeFields(msg Message) ([]string, error) {
 		w.WriteInt(m.UnderlyingConID)
 		w.WriteString(m.TradingClass)
 		w.WriteString(m.Multiplier)
-		w.WriteString("") // marketRuleId
 		w.WriteInt(len(m.Expirations))
 		for _, exp := range m.Expirations {
 			w.WriteString(exp)
@@ -2580,7 +2593,7 @@ func encodeFields(msg Message) ([]string, error) {
 
 	case TickOptionComputation:
 		return []string{
-			itoa(InTickOptionComputation), "6", itoa(m.ReqID), itoa(m.TickType), itoa(m.TickAttrib),
+			itoa(InTickOptionComputation), itoa(m.ReqID), itoa(m.TickType), itoa(m.TickAttrib),
 			m.ImpliedVol, m.Delta, m.OptPrice, m.PvDividend, m.Gamma, m.Vega, m.Theta, m.UndPrice,
 		}, nil
 
