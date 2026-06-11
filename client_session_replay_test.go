@@ -283,6 +283,8 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "current_time_millis.txt")
+	defer client.Close()
+	defer waitHost(t, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -294,5 +296,4 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 	if want := time.UnixMilli(1781169286652).UTC(); !ts.Equal(want) {
 		t.Fatalf("CurrentTimeMillis = %v, want %v", ts, want)
 	}
-	waitHost(t, host)
 }

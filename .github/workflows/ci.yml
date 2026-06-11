@@ -47,12 +47,10 @@ jobs:
         with:
           version: v2.11.4
 
-      - name: go test (race)
-        run: go test -race -count=1 ./...
-
-      - name: coverage summary
+      - name: go test (race, coverage)
         run: |
-          go test -count=1 -coverprofile=coverage.out ./...
+          set -euo pipefail
+          go test -race -count=1 -coverprofile=coverage.out ./...
           go tool cover -func=coverage.out | tail -1
 
       - name: benchmarks compile and smoke
@@ -72,9 +70,18 @@ jobs:
 
       - name: fuzz each target briefly
         run: |
+          set -euo pipefail
+          total=0
           for pkg in ./internal/wire ./internal/codec; do
-            for target in $(go test -list 'Fuzz.*' "$pkg" | grep '^Fuzz'); do
+            targets=$(go test -list 'Fuzz.*' "$pkg" | grep '^Fuzz')
+            for target in $targets; do
               echo "fuzzing $pkg/$target"
               go test "$pkg" -run='^$' -fuzz="^${target}$" -fuzztime=20s
+              total=$((total + 1))
             done
           done
+          # A refactor that renames or drops targets must not pass silently.
+          if [ "$total" -lt 10 ]; then
+            echo "only $total fuzz targets found, expected at least 10"
+            exit 1
+          fi

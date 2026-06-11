@@ -139,6 +139,7 @@ func FuzzDecodeBatch(f *testing.F) {
 		ManagedAccounts{Accounts: []string{"DU1234", "DU5678"}},
 		NextValidID{OrderID: 42},
 		CurrentTime{Time: "1712345678"},
+		CurrentTimeMillis{TimeMs: "1781169286652"},
 		APIError{ReqID: -1, Code: 2104, Message: "test", AdvancedOrderRejectJSON: "", ErrorTimeMs: "123"},
 		RealTimeBar{ReqID: 1, Time: "1712345678", Open: "100.0", High: "101.0", Low: "99.5", Close: "100.5", Volume: "1000", WAP: "100.5", Count: "50"},
 		CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"},

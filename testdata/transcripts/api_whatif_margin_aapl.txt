@@ -1,7 +1,7 @@
 # Grounded by live API capture captures/20260610T200009Z-api_whatif_margin_aapl.
 # server_version=200, events.jsonl sha256 prefix: e8ee70b24de3fe2f.
 # Replays the WhatIf margin preview (AORD-010): a WhatIf MKT BUY 100 AAPL
-# draws exactly ONE open_order reply (157 wire fields) whose order-state
+# draws exactly ONE open_order reply (156 NUL-terminated wire fields including the msg id) whose order-state
 # block carries the complete preview — status PreSubmitted, then
 # initMargin/maintMargin/equityWithLoan before/change/after, and
 # commissionAndFees 1.0003 USD (min/max commission unset). No order_status

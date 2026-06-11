@@ -59,7 +59,7 @@ var scenarioMetadataByName = map[string]scenarioMetadata{
 	"bootstrap":                             meta("session", []string{"DialContext"}, []int{71, 15, 9}, "read_only", nil, []string{"ready session", "farm status drain"}, 1, "promoted", batchReadOnly),
 	"bootstrap_client_id_0":                 meta("session", []string{"DialContext"}, []int{71, 15, 9}, "read_only", []string{"client_id_0"}, []string{"ready session scoped to client ID 0"}, 0, "promoted", batchReadOnly),
 	"current_time":                          meta("session", []string{"Client.CurrentTime"}, []int{49}, "read_only", nil, []string{"parsed server current time"}, 1, "promoted", batchNewV2, batchReadOnly),
-	"current_time_millis":                   meta("session", []string{"Client.CurrentTimeMillis"}, []int{105, 109}, "read_only", nil, []string{"server current time in milliseconds"}, 1, "candidate", batchReadOnly),
+	"current_time_millis":                   meta("session", []string{"Client.CurrentTimeMillis"}, []int{105, 109}, "read_only", nil, []string{"server current time in milliseconds"}, 1, "promoted", batchReadOnly),
 	"req_ids":                               meta("session", []string{"DialContext"}, []int{8, 9}, "read_only", nil, []string{"next valid id from explicit reqIds"}, 1, "promoted", batchNewV2, batchReadOnly),
 	"contract_details_aapl_stk":             meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"stock contract details end marker"}, 1, "promoted", batchReadOnly),
 	"contract_details_aapl_opt":             meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"option chain contract details"}, 1, "promoted", batchReadOnly),

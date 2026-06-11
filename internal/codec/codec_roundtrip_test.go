@@ -29,6 +29,10 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  CurrentTime{Time: "1712345678"},
 		},
 		{
+			name: "CurrentTimeMillis",
+			msg:  CurrentTimeMillis{TimeMs: "1781169286652"},
+		},
+		{
 			name: "APIError",
 			msg:  APIError{ReqID: -1, Code: 2104, Message: "Market data farm OK", AdvancedOrderRejectJSON: "", ErrorTimeMs: "1712345678000"},
 		},

@@ -13,6 +13,8 @@ captures.
 | in | 15 | ManagedAccounts | landed |
 | in | 9 | NextValidID | landed |
 | in | 49 | CurrentTime | landed |
+| out | 105 | ReqCurrentTimeInMillis | landed |
+| in | 109 | CurrentTimeInMillis | landed |
 | in | 4 | APIError / status codes | landed |
 | out | 59 | reqMarketDataType | landed |
 | out | 104 | reqUserInfo | landed |

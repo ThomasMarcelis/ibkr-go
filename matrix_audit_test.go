@@ -68,7 +68,7 @@ func publicFacadeLabels(t *testing.T) []string {
 	}
 	rootClientMethods := map[string]struct{}{
 		"Close": {}, "Done": {}, "Wait": {}, "Session": {}, "SessionEvents": {},
-		"CurrentTime": {},
+		"CurrentTime": {}, "CurrentTimeMillis": {},
 	}
 
 	var labels []string

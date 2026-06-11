@@ -19,6 +19,7 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		{ManagedAccounts{Accounts: []string{"DU12345", "DU67890"}}, "managed_accounts"},
 		{NextValidID{OrderID: 1001}, "next_valid_id"},
 		{CurrentTime{Time: "1712345678"}, "current_time"},
+		{CurrentTimeMillis{TimeMs: "1781169286652"}, "current_time_millis"},
 		{APIError{ReqID: -1, Code: 2104, Message: "Market data farm OK", AdvancedOrderRejectJSON: "", ErrorTimeMs: "1712345678000"}, "api_error"},
 		{ContractDetailsEnd{ReqID: 42}, "contract_details_end"},
 		{AccountSummaryValue{ReqID: 1, Account: "DU12345", Tag: "NetLiquidation", Value: "100000.00", Currency: "USD"}, "account_summary"},

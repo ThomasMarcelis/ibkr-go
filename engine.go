@@ -1426,12 +1426,12 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 					return
 				}
 				delete(eng.singletons, singletonCurrentTimeMillis)
-				ms, parseErr := strconv.ParseInt(m.TimeMs, 10, 64)
+				ts, parseErr := parseEpochMilliseconds(m.TimeMs)
 				if parseErr != nil {
-					resp <- result{err: fmt.Errorf("ibkr: current time millis: parse %q", m.TimeMs)}
+					resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", parseErr)}
 					return
 				}
-				resp <- result{ts: time.UnixMilli(ms).UTC()}
+				resp <- result{ts: ts}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
 				delete(eng.singletons, singletonCurrentTimeMillis)
@@ -4381,7 +4381,13 @@ func (e *engine) handleIncoming(msg any) {
 		}
 		return
 	case codec.CurrentTimeMillis:
-		// Same contract as CurrentTime: no reqID, singleton routing only.
+		// Same contract as CurrentTime: no reqID, snapshot update plus
+		// singleton routing.
+		if ts, err := parseEpochMilliseconds(m.TimeMs); err == nil {
+			e.updateSnapshot(func(s *Snapshot) {
+				s.CurrentTime = ts
+			})
+		}
 		if route, ok := e.singletons[singletonCurrentTimeMillis]; ok {
 			route.handle(m, e)
 		}
