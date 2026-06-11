@@ -15,10 +15,9 @@
 # accepts that form, so both executions and their commission reports reach
 # the order handle in replay; at capture time the parser still rejected it
 # and the live client saw the fill only through order_status.
-# The open_order echoes decode as the base open-order shape on this client
-# (DeltaNeutralOrderType "None" takes the partial path), so open_order lines
-# carry the base fields; the live Filled echoes additionally carried
-# commission data (1.497287/1.621609 USD) in the undecoded order-state tail.
+# The open_order lines carry the base fields as curated at promotion time;
+# the live "None"-sentinel frames now decode fully (including the order-state
+# tail), and the commission data rides the separate commission_report lines.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm ids -> 900340/900341 (including inside the code-161 message texts),
 # order refs -> ibkrgo-sanitized-20260610T195819Z-001/-002, execution ids ->

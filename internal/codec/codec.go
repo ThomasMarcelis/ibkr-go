@@ -324,7 +324,11 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		r.ReadString() // deprecated ETradeOnly
 		r.ReadString() // deprecated FirmQuoteOnly
 		r.ReadString() // deprecated NBBOPriceCap
-		r.ReadString() // ParentID (pre-status)
+		// The pre-status slot carries the wire's parentId on every live
+		// frame (bracket children hold real values here); the live-layout
+		// tail has no second copy, so this slot feeds OpenOrder.ParentID
+		// for both layouts.
+		preStatusParentID := r.ReadString()
 		r.ReadString() // TriggerMethod
 
 		r.ReadString() // Volatility
@@ -537,7 +541,7 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		if r.Remaining() != wantTail {
 			return []Message{partial}, nil
 		}
-		var filled, remaining, tailParentID string
+		var filled, remaining string
 		if liveLayout {
 			// adjustedOrderType, triggerPrice, trailStopPrice, lmtPriceOffset,
 			// adjustedStopPrice, adjustedStopLimitPrice, adjustedTrailingAmount,
@@ -587,7 +591,7 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			remaining = r.ReadString()
 			r.ReadString() // lastFillPrice
 			r.ReadString() // permId
-			tailParentID = r.ReadString()
+			r.ReadString() // ParentID (synthetic tail duplicate of the pre-status slot)
 			r.ReadString() // lastLiquidity
 			r.ReadString() // whyHeld
 			r.ReadString() // mktCapPrice
@@ -627,7 +631,7 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			WarningText:           warningText,
 			Filled:                filled,
 			Remaining:             remaining,
-			ParentID:              tailParentID,
+			ParentID:              preStatusParentID,
 		}}, nil
 
 	case InNextValidID: // [9, version, orderID]
@@ -645,7 +649,7 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		//   priceMagnifier, underConID, longName, primaryExchange, contractMonth,
 		//   industry, category, subcategory, timeZoneID, ...]
 		// The slot after minTick is the contract multiplier: mdSizeMultiplier
-		// left the wire at server version 152, and the v200 captures carry
+		// left the wire at server version 164 (size rules), and the v200 captures carry
 		// "100" there for AAPL options (20260405T214941Z, sha256 prefix
 		// 3dcaf0b74a7c27a4) and "50" for ES futures (20260405T215018Z,
 		// sha256 prefix e863bfbafe48370f).
@@ -1581,7 +1585,7 @@ func encodeFields(msg Message) ([]string, error) {
 		// server_version 200 expects the manual-order-time, customer-account,
 		// and professional-customer tail; ending the frame at override drew
 		// code 10300 from the live Gateway (capture 20260611T074859Z,
-		// sha fa7f3f46793d3277).
+		// sha 241a49023701e9ec).
 		w.WriteString("")  // manualOrderTime
 		w.WriteString("")  // customerAccount
 		w.WriteBool(false) // professionalCustomer
@@ -1696,7 +1700,7 @@ func encodeFields(msg Message) ([]string, error) {
 	case CalcImpliedVolatilityRequest:
 		// No includeExpired field: the live sv200 Gateway parses optionPrice
 		// directly after tradingClass (code 320 evidence, capture
-		// 20260611T074859Z, sha fa7f3f46793d3277).
+		// 20260611T074859Z, sha 241a49023701e9ec).
 		w := fieldWriter{}
 		w.WriteInt(OutReqCalcImpliedVolatility)
 		w.WriteInt(3) // version
@@ -1715,7 +1719,10 @@ func encodeFields(msg Message) ([]string, error) {
 		// No includeExpired field; see CalcImpliedVolatilityRequest.
 		w := fieldWriter{}
 		w.WriteInt(OutReqCalcOptionPrice)
-		w.WriteInt(3) // version
+		// Official REQ_CALC_OPTION_PRICE version is 2 (3 belongs to the
+		// implied-volatility request); the live Gateway tolerated 3 but the
+		// official client is the conformance contract.
+		w.WriteInt(2) // version
 		w.WriteInt(m.ReqID)
 		w.WriteInt(m.Contract.ConID)
 		writeWireContract(&w, m.Contract)

@@ -30,6 +30,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **The option pipeline works against the live Gateway.** Four phantom or
+  missing wire fields, each mirrored between the codec and the replay
+  harness so the suite stayed green, broke every option flow live:
+  `secDefOptParams` decode skipped a nonexistent marketRuleId and killed
+  the session on the first row of every option qualify; the option calc
+  requests carried a phantom includeExpired that drew code 320;
+  `exerciseOptions` ended before the `server_version 200` tail and drew
+  code 10300; and `tickOptionComputation` kept a legacy version skip that
+  aborted the session on the first real greeks reply. One live run now
+  walks qualify, real greeks, an option order, and a lapse answered by the
+  real code 322.
+- **`ContractDetails` carries the contract multiplier and open-order
+  echoes decode fully.** The v200 contractData multiplier slot was
+  skipped, and `DeltaNeutralOrderType "None"` frames (every plain live
+  order) fell to a partial decode that dropped condition echoes, the
+  order-state tail, and the wire parentId; bracket children now surface
+  their real `ParentID`.
+- **Execution times in the Gateway's UTC dash form are parsed.** Live
+  executions arrived as `yyyymmdd-hh:mm:ss` and were dropped with their
+  commission reports; both now reach the order handle.
 - **Contract-bound order conditions encode in the official field order.**
   Price, volume, and percent-change conditions placed through v1.4.5/v1.4.6
   were rejected live with code 320 field-parse errors because the condition

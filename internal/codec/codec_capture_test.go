@@ -1224,7 +1224,8 @@ func TestCaptureDecode_OpenOrderLiveBaseLayout(t *testing.T) {
 	t.Parallel()
 
 	// captures/20260405T215248Z-open_orders_all (live IB Gateway,
-	// server_version 200), the actual 156-field msg_id=5 frame from the
+	// server_version 200, events.jsonl sha256 prefix cb036e1839ecded6), the
+	// actual 156-field msg_id=5 frame from the
 	// captured stream: OBDC PUT, no conditions (count 0). This is the
 	// unconditioned variant of the live layout: DeltaNeutralOrderType "None"
 	// followed by the 8-field delta-neutral block and the 32-field
@@ -1315,5 +1316,30 @@ func liveOpenOrderPriceConditionFields() []string {
 		"0", "1", "0", "0", "0", "", "", "0",
 		"", "", "", "", "", "", "0", "",
 		"0", "", "2147483647", "", "0",
+	}
+}
+
+func TestCaptureDecode_OpenOrderLiveParentID(t *testing.T) {
+	t.Parallel()
+	// captures/20260414T183644Z-api_bracket_trigger_aapl (paper Gateway,
+	// server_version 200, events.jsonl sha256 prefix 4ee433340c2badc9): a bracket
+	// take-profit child whose parentId rides the pre-status slot of the
+	// live "None"-sentinel layout. The live tail carries no second copy,
+	// so dropping the pre-status slot zeroed ParentID on every live frame.
+	// Account, perm id, and order ref are sanitized.
+	payload := []byte("5\x00211\x00265598\x00AAPL\x00STK\x00\x000\x00?\x00\x00SMART\x00USD\x00AAPL\x00NMS\x00SELL\x001\x00LMT\x002000.0\x000.0\x00DAY\x001571710075\x00DU9000001\x00\x000\x00ibkrgo-sanitized-20260414T183644Z-001\x001\x00900211\x000\x000\x000\x00\x00900211.0/DU9000001/100\x00\x00\x00\x00\x00\x00\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x000\x000\x000\x00\x003\x000\x000\x00\x00210\x000\x00\x000\x00None\x00\x000\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x000\x000\x000\x002147483647\x002147483647\x00\x00\x000\x00\x00IB\x000\x000\x00\x000\x000\x00PreSubmitted\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x00\x00\x00\x00\x00\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x00-9223372036854775808\x00\x000\x00\x000\x000\x000\x00None\x001.7976931348623157E308\x002001.0\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x000\x00\x00\x00\x000\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00\x000\x00\x002147483647\x00papermarcelis\x000\x00")
+	msgs, err := DecodeBatch(payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+	if m.OrderID != 211 || m.ParentID != "210" {
+		t.Errorf("order/parent = %d/%q, want 211/210", m.OrderID, m.ParentID)
+	}
+	if m.Status == "" {
+		t.Errorf("status empty: live frame fell back to the partial path")
 	}
 }

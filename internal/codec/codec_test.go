@@ -690,7 +690,7 @@ func TestEncodeCalcRequestsCarryNoIncludeExpired(t *testing.T) {
 	// Live paper Gateway (server_version 200, 2026-06-11) rejected the prior
 	// encoding with code 320 "Please use 'Key=Value' format for Misc
 	// Options" (captures/20260611T074859Z-api_option_campaign_aapl,
-	// events.jsonl sha256 fa7f3f46793d3277): a phantom includeExpired bool
+	// events.jsonl sha256 241a49023701e9ec): a phantom includeExpired bool
 	// after tradingClass shifted optionPrice/underPrice one slot right, so
 	// the Gateway read the numeric underPrice as miscOptions. The official
 	// calc requests run [.., tradingClass, price, underPrice, miscOptions].
@@ -723,7 +723,7 @@ func TestEncodeExerciseOptionsTailFields(t *testing.T) {
 	// Live paper Gateway (server_version 200, 2026-06-11) rejected the prior
 	// encoding with code 10300 "Manual Order Time ... invalid"
 	// (captures/20260611T074859Z-api_option_campaign_aapl, events.jsonl
-	// sha256 fa7f3f46793d3277): server_version 200 expects the
+	// sha256 241a49023701e9ec): server_version 200 expects the
 	// manualOrderTime, customerAccount, and professionalCustomer tail after
 	// override, and the frame ended early.
 	payload, err := Encode(ExerciseOptionsRequest{

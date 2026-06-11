@@ -16,10 +16,10 @@
 # responses to the final global cancel.
 # The live conditioned open_order echoes carried normalized condition values
 # (price 2918.10, time rendered as "20260610 16:11:37 US/Eastern", execution
-# exchange echoed as ANY) but decode as the base open-order shape on this client
-# (DeltaNeutralOrderType "None" takes the partial path), so open_order lines
-# carry the base fields; the condition wire shape is pinned on the client
-# place_order lines below.
+# exchange echoed as ANY); since the None-sentinel fix they decode fully and
+# are frozen by capture-decode tests on the raw frames. The open_order lines
+# here carry the base shape curated at promotion time; the condition wire
+# shape is pinned on the client place_order lines below.
 handshake {"server_version":200,"connection_time":"20260610 22:09:36 Central European Standard Time"}
 server managed_accounts {"accounts":["DU9000001"]}
 server next_valid_id {"order_id":356}

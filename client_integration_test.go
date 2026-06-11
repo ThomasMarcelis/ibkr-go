@@ -4896,20 +4896,7 @@ func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 
 func waitForOrderStatus(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle, want ibkr.OrderStatus) {
 	t.Helper()
-
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				t.Fatalf("order events closed before status %s", want)
-			}
-			if evt.Status != nil && evt.Status.Status == want {
-				return
-			}
-		case <-ctx.Done():
-			t.Fatalf("timeout waiting for order status %s", want)
-		}
-	}
+	waitOrderStatusUpdate(t, ctx, handle, want)
 }
 
 func waitForOpenOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) ibkr.OpenOrder {
