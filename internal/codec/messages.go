@@ -350,10 +350,10 @@ type OpenOrder struct {
 	ConditionsIgnoreRTH   string
 	ConditionsCancelOrder string
 
-	// Status at wire position r[91].
+	// Status at wire position r[92] of the live sv200 layout.
 	Status string
 
-	// OrderState margin/commission section (r[92]-r[105]).
+	// OrderState margin/commission section (follows Status on the wire).
 	InitMarginBefore     string
 	MaintMarginBefore    string
 	EquityWithLoanBefore string
@@ -369,10 +369,10 @@ type OpenOrder struct {
 	CommissionCurrency   string
 	WarningText          string
 
-	// Trailing order-status block (last 9 fields of the message).
-	Filled    string
-	Remaining string
-	ParentID  string
+	// ParentID rides the pre-status slot of the live layout (bracket
+	// children carry real values there). Live open_order frames carry no
+	// fill echo; fills arrive on the separate order_status message.
+	ParentID string
 }
 
 func (OpenOrder) messageName() string { return "open_order" }

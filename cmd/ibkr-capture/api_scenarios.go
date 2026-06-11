@@ -2194,8 +2194,8 @@ func observeOrder(ctx context.Context, handle *ibkr.OrderHandle, label string, w
 
 func logOrderEvent(label string, evt ibkr.OrderEvent) {
 	if evt.OpenOrder != nil {
-		log.Printf("%s open_order order_id=%d type=%s action=%s status=%s filled=%s remaining=%s lmt=%s aux=%s parent=%d oca=%s",
-			label, evt.OpenOrder.OrderID, evt.OpenOrder.OrderType, evt.OpenOrder.Action, evt.OpenOrder.Status, evt.OpenOrder.Filled, evt.OpenOrder.Remaining, evt.OpenOrder.LmtPrice, evt.OpenOrder.AuxPrice, evt.OpenOrder.ParentID, evt.OpenOrder.OcaGroup)
+		log.Printf("%s open_order order_id=%d type=%s action=%s status=%s lmt=%s aux=%s parent=%d oca=%s",
+			label, evt.OpenOrder.OrderID, evt.OpenOrder.OrderType, evt.OpenOrder.Action, evt.OpenOrder.Status, evt.OpenOrder.LmtPrice, evt.OpenOrder.AuxPrice, evt.OpenOrder.ParentID, evt.OpenOrder.OcaGroup)
 	}
 	if evt.Status != nil {
 		log.Printf("%s status order_id=%d status=%s filled=%s remaining=%s avg=%s last=%s why_held=%s",
@@ -2223,8 +2223,6 @@ func recordOrderEvent(label string, evt ibkr.OrderEvent) {
 			event.OrderType = string(order.OrderType)
 			event.TIF = string(order.TIF)
 			event.Quantity = order.Quantity.String()
-			event.Filled = order.Filled.String()
-			event.Remaining = order.Remaining.String()
 			event.LmtPrice = order.LmtPrice.String()
 			event.AuxPrice = order.AuxPrice.String()
 			event.Status = string(order.Status)
@@ -2456,7 +2454,6 @@ func recordOpenOrdersResult(label string, orders []ibkr.OpenOrder, err error) {
 			event.OrderType = string(orders[0].OrderType)
 			event.TIF = string(orders[0].TIF)
 			event.Quantity = orders[0].Quantity.String()
-			event.Remaining = orders[0].Remaining.String()
 			event.Status = string(orders[0].Status)
 		}
 	})

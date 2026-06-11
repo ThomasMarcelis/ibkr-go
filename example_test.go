@@ -324,7 +324,7 @@ handshake {"server_version":200,"connection_time":"2026-04-06T12:00:00Z"}
 server managed_accounts {"accounts":["DU12345"]}
 server next_valid_id {"order_id":1001}
 client req_open_orders {"scope":"all"}
-server open_order {"order_id":2001,"account":"DU12345","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"action":"BUY","order_type":"LMT","status":"Submitted","quantity":"10","filled":"2","remaining":"8"}
+server open_order {"order_id":2001,"account":"DU12345","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"action":"BUY","order_type":"LMT","status":"Submitted","quantity":"10"}
 server open_order_end {}
 `)
 	defer cancel()
@@ -340,10 +340,10 @@ server open_order_end {}
 	}
 
 	for _, o := range orders {
-		fmt.Println(o.Action, o.OrderType, o.Status, o.Filled, "/", o.Remaining)
+		fmt.Println(o.Action, o.OrderType, o.Status, "qty", o.Quantity)
 	}
 	// Output:
-	// BUY LMT Submitted 2 / 8
+	// BUY LMT Submitted qty 10
 }
 
 func Example_pnlStream() {

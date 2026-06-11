@@ -692,39 +692,38 @@ func TestCaptureDecode_TickSnapshotEnd(t *testing.T) {
 
 func TestCaptureDecode_OpenOrder(t *testing.T) {
 	t.Parallel()
-	// captures/20260405T215248Z-open_orders_all, 991-byte OpenOrder frame at line 10.
-	// OBDC PUT option, PreSubmitted status. Same payload as TestDecodeOpenOrderCapture
-	// in codec_test.go but included here for completeness of the capture suite.
+	// captures/20260405T215248Z-open_orders_all (live IB Gateway,
+	// server_version 200, events.jsonl sha256 prefix cb036e1839ecded6): the
+	// 940-byte OpenOrder frame from the line-10 server chunk, exactly as
+	// framed on the wire (the chunk's trailing 43 bytes are the separate
+	// order_status frame; an earlier revision of this test misparsed the
+	// whole 991-byte chunk as one frame and fossilized a fabricated layout).
+	// OBDC PUT option, PreSubmitted. Sanitized: account -> DU9000001 (also
+	// inside the sharesAllocation echo).
 	payload := []byte(
 		"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
-			"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00" +
-			"SELL\x001\x00LMT\x001.2\x000.0\x00GTC\x00\x00DU9000001\x00" +
-			"\x000\x00\x000\x001518189976\x000\x000\x000\x00" +
-			"\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00" +
-			"\x000\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00" +
-			"\x002147483647\x000\x000\x000\x00\x003\x000\x000\x00" +
-			"\x000\x000\x00\x000\x00None\x00\x000\x00\x00\x00\x00" +
-			"?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x000\x000\x000\x00" +
-			"2147483647\x002147483647\x00\x00\x000\x00\x00IB\x000\x000\x00" +
-			"\x000\x000\x00" +
-			"PreSubmitted\x00" +
+			"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
+			"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x001518189976\x00" +
+			"0\x000\x000\x00\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
+			"0\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x00" +
+			"0\x000\x000\x00\x003\x000\x000\x00\x000\x000\x00\x000\x00None\x00\x00" +
+			"0\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x00" +
+			"0\x000\x000\x002147483647\x002147483647\x00\x00\x000\x00\x00IB\x00" +
+			"0\x000\x00\x000\x000\x00PreSubmitted\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x00\x00\x00\x00\x00" +
+			"1.7976931348623157E308\x001.7976931348623157E308\x00\x00\x00\x00\x00" +
 			"\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x00" +
-			"-9223372036854775808\x00\x000\x00\x000\x000\x000\x00None\x00" +
+			"1.7976931348623157E308\x00-9223372036854775808\x00\x000\x00\x000\x00" +
+			"0\x000\x00None\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
 			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"0\x00\x00\x00\x000\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00" +
-			"\x000\x00\x000\x00\x002147483647\x00\x000\x00\x00\x00\x00" +
-			"+3\x000\x00PreSubmitted\x000\x001\x000\x001518189976\x000\x000\x000\x00\x000\x00")
+			"1.7976931348623157E308\x001.7976931348623157E308\x000\x00\x00\x00\x00" +
+			"0\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00" +
+			"\x000\x00\x002147483647\x00\x000\x00")
 
 	msgs, err := DecodeBatch(payload)
 	if err != nil {
@@ -740,32 +739,72 @@ func TestCaptureDecode_OpenOrder(t *testing.T) {
 	if m.OrderID != 0 {
 		t.Errorf("OrderID = %d, want 0", m.OrderID)
 	}
+	if m.Contract.ConID != 853200900 {
+		t.Errorf("ConID = %d, want 853200900", m.Contract.ConID)
+	}
 	if m.Contract.Symbol != "OBDC" {
 		t.Errorf("Symbol = %q, want OBDC", m.Contract.Symbol)
 	}
 	if m.Contract.SecType != "OPT" {
 		t.Errorf("SecType = %q, want OPT", m.Contract.SecType)
 	}
-	if m.Contract.ConID != 853200900 {
-		t.Errorf("ConID = %d, want 853200900", m.Contract.ConID)
+	if m.Contract.Expiry != "20261120" {
+		t.Errorf("Expiry = %q, want 20261120", m.Contract.Expiry)
 	}
-	if m.Account != "DU9000001" {
-		t.Errorf("Account = %q, want DU9000001", m.Account)
+	if m.Contract.Strike != "10" {
+		t.Errorf("Strike = %q, want 10", m.Contract.Strike)
 	}
-	if m.Status != "PreSubmitted" {
-		t.Errorf("Status = %q, want PreSubmitted", m.Status)
+	if m.Contract.Right != "P" {
+		t.Errorf("Right = %q, want P", m.Contract.Right)
+	}
+	if m.Contract.Multiplier != "100" {
+		t.Errorf("Multiplier = %q, want 100", m.Contract.Multiplier)
+	}
+	if m.Contract.Exchange != "SMART" {
+		t.Errorf("Exchange = %q, want SMART", m.Contract.Exchange)
+	}
+	if m.Contract.Currency != "USD" {
+		t.Errorf("Currency = %q, want USD", m.Contract.Currency)
+	}
+	if m.Contract.LocalSymbol != "OBDC  261120P00010000" {
+		t.Errorf("LocalSymbol = %q, want %q", m.Contract.LocalSymbol, "OBDC  261120P00010000")
+	}
+	if m.Contract.TradingClass != "OBDC" {
+		t.Errorf("TradingClass = %q, want OBDC", m.Contract.TradingClass)
 	}
 	if m.Action != "SELL" {
 		t.Errorf("Action = %q, want SELL", m.Action)
 	}
+	if m.Quantity != "1" {
+		t.Errorf("Quantity = %q, want 1", m.Quantity)
+	}
 	if m.OrderType != "LMT" {
 		t.Errorf("OrderType = %q, want LMT", m.OrderType)
 	}
-	if m.Filled != "0" {
-		t.Errorf("Filled = %q, want 0", m.Filled)
+	if m.LmtPrice != "1.2" {
+		t.Errorf("LmtPrice = %q, want 1.2", m.LmtPrice)
 	}
-	if m.Remaining != "1" {
-		t.Errorf("Remaining = %q, want 1", m.Remaining)
+	if m.AuxPrice != "0.0" {
+		t.Errorf("AuxPrice = %q, want 0.0", m.AuxPrice)
+	}
+	if m.TIF != "GTC" {
+		t.Errorf("TIF = %q, want GTC", m.TIF)
+	}
+	if m.Account != "DU9000001" {
+		t.Errorf("Account = %q, want DU9000001", m.Account)
+	}
+	if m.Origin != "0" {
+		t.Errorf("Origin = %q, want 0", m.Origin)
+	}
+	if m.PermID != "1518189976" {
+		t.Errorf("PermID = %q, want 1518189976", m.PermID)
+	}
+	if m.Status != "PreSubmitted" {
+		t.Errorf("Status = %q, want PreSubmitted", m.Status)
+	}
+	// OrderState margin fields (all UNSET in this capture).
+	if m.InitMarginBefore != "1.7976931348623157E308" {
+		t.Errorf("InitMarginBefore = %q, want UNSET double", m.InitMarginBefore)
 	}
 }
 
@@ -1136,15 +1175,9 @@ func TestCaptureDecode_OpenOrderConditionEchoPrice(t *testing.T) {
 	}
 	// The live frame ends with the official 32-field
 	// adjustedOrderType..imbalanceOnly tail and carries no fill echo (fills
-	// arrive on the separate order_status frame), so Filled/Remaining stay
-	// empty. Reaching the full decode (Status above) with the conditions
-	// intact proves the post-conditions tail parsed without misalignment.
-	if m.Filled != "" {
-		t.Errorf("Filled = %q, want empty (no fill echo on the live frame)", m.Filled)
-	}
-	if m.Remaining != "" {
-		t.Errorf("Remaining = %q, want empty (no fill echo on the live frame)", m.Remaining)
-	}
+	// arrive on the separate order_status frame). Reaching the full decode
+	// (Status above) with the conditions intact proves the post-conditions
+	// tail parsed without misalignment.
 }
 
 func TestCaptureDecode_OpenOrderConditionEchoExecution(t *testing.T) {

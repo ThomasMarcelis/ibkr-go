@@ -21,40 +21,35 @@ import (
 // a streaming session, so this is the per-tick decode floor.
 var benchTickPricePayload = []byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00")
 
-// benchOpenOrderPayload: captures/20260405T215248Z-open_orders_all, openOrder
-// frame at line 10 (OBDC PUT option, PreSubmitted): 986 payload bytes, 170
-// fields (169 after msg_id, the live fixed-layout branch of the openOrder
-// decoder). Same bytes as TestCaptureDecode_OpenOrder.
+// benchOpenOrderPayload: captures/20260405T215248Z-open_orders_all, the
+// 940-byte openOrder frame at line 10 (OBDC PUT option, PreSubmitted): 156
+// fields (155 after msg_id, the live sv200 layout with the "None"-sentinel
+// delta-neutral block and the official 32-field tail). Same bytes as
+// TestCaptureDecode_OpenOrder.
 var benchOpenOrderPayload = []byte(
 	"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
-		"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00" +
-		"SELL\x001\x00LMT\x001.2\x000.0\x00GTC\x00\x00DU9000001\x00" +
-		"\x000\x00\x000\x001518189976\x000\x000\x000\x00" +
-		"\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00" +
-		"\x000\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00" +
-		"\x002147483647\x000\x000\x000\x00\x003\x000\x000\x00" +
-		"\x000\x000\x00\x000\x00None\x00\x000\x00\x00\x00\x00" +
-		"?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x000\x000\x000\x00" +
-		"2147483647\x002147483647\x00\x00\x000\x00\x00IB\x000\x000\x00" +
-		"\x000\x000\x00" +
-		"PreSubmitted\x00" +
+		"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
+		"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x001518189976\x00" +
+		"0\x000\x000\x00\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
+		"0\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x00" +
+		"0\x000\x000\x00\x003\x000\x000\x00\x000\x000\x00\x000\x00None\x00\x00" +
+		"0\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x00" +
+		"0\x000\x000\x002147483647\x002147483647\x00\x00\x000\x00\x00IB\x00" +
+		"0\x000\x00\x000\x000\x00PreSubmitted\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x00\x00\x00\x00\x00" +
+		"1.7976931348623157E308\x001.7976931348623157E308\x00\x00\x00\x00\x00" +
 		"\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x00" +
-		"-9223372036854775808\x00\x000\x00\x000\x000\x000\x00None\x00" +
+		"1.7976931348623157E308\x00-9223372036854775808\x00\x000\x00\x000\x00" +
+		"0\x000\x00None\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
 		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"0\x00\x00\x00\x000\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00" +
-		"\x000\x00\x000\x00\x002147483647\x00\x000\x00\x00\x00\x00" +
-		"+3\x000\x00PreSubmitted\x000\x001\x000\x001518189976\x000\x000\x000\x00\x000\x00")
+		"1.7976931348623157E308\x001.7976931348623157E308\x000\x00\x00\x00\x00" +
+		"0\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00" +
+		"\x000\x00\x002147483647\x00\x000\x00")
 
 // benchContractDetailsPayload: captures/20260405T214938Z-contract_details_aapl_stk,
 // line 10 (1171 payload bytes, 44 fields). Full AAPL STK contract details from
@@ -112,7 +107,7 @@ func BenchmarkDecodeOpenOrderLive(b *testing.B) {
 		b.Fatalf("got %d messages, want 1", len(msgs))
 	}
 	m, ok := msgs[0].(OpenOrder)
-	if !ok || m.Contract.ConID != 853200900 || m.Status != "PreSubmitted" || m.Remaining != "1" {
+	if !ok || m.Contract.ConID != 853200900 || m.Status != "PreSubmitted" || m.PermID != "1518189976" {
 		b.Fatalf("decoded %#v, want live OBDC openOrder", msgs[0])
 	}
 

@@ -16,6 +16,12 @@ import (
 var (
 	accountIDPattern   = regexp.MustCompile(`\b(?:U\d{7,8}|DUP?\d{6,})\b`)
 	redactionAllowlist = regexp.MustCompile(`\bDU9000001\b`)
+
+	// Live perm-id blocks that leaked into fixtures before the 2026-06 sweep
+	// (docs/transcripts.md mandates perm-id sanitization; the convention is
+	// 900<order id>). The pattern pins the exact leaked ranges rather than a
+	// generic digit shape so timestamps and con ids cannot false-positive.
+	leakedPermIDPattern = regexp.MustCompile(`\b(?:1426086\d{3}|3892109\d{2}|2126921\d{3})\b`)
 )
 
 // TestNoAccountIdentifiersInTrackedFiles walks the repository's committed
@@ -79,6 +85,9 @@ func TestNoAccountIdentifiersInTrackedFiles(t *testing.T) {
 					continue
 				}
 				t.Errorf("%s:%d: account identifier %q must be sanitized (use the DU9000001 redaction token)", path, lineNo, match)
+			}
+			for _, match := range leakedPermIDPattern.FindAllString(line, -1) {
+				t.Errorf("%s:%d: live perm id %q must be sanitized (use the 900<order id> convention)", path, lineNo, match)
 			}
 		}
 	}

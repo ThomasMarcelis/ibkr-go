@@ -512,6 +512,9 @@ const (
 	OpenOrdersScopeAuto   OpenOrdersScope = "auto"
 )
 
+// OpenOrder is the typed open_order echo from the Gateway. Live open_order
+// frames carry no fill progress; track fills through [OrderStatusUpdate] and
+// executions instead.
 type OpenOrder struct {
 	OrderID   int64
 	Account   string
@@ -520,8 +523,6 @@ type OpenOrder struct {
 	OrderType OrderType
 	Status    OrderStatus
 	Quantity  decimal.Decimal
-	Filled    decimal.Decimal
-	Remaining decimal.Decimal
 
 	LmtPrice              decimal.Decimal
 	AuxPrice              decimal.Decimal

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Changed (breaking)
+
+- **`OpenOrder` no longer carries `Filled`/`Remaining`.** Live
+  `server_version 200` open-order frames never carry a fill echo; the
+  fields existed because an early capture test misparsed a two-frame chunk
+  (an open_order plus an embedded order_status) as one frame, and the
+  replay harness fossilized that shape. Fill state is `OrderStatus` truth:
+  read it from `OrderStatusUpdate` events or `OrderHandle` status. The
+  replay encoder now emits the live wire layout exactly, and the decoder
+  has a single live-grounded walk in place of the synthetic branch and the
+  misparse-derived 169-field shortcut.
+
 ### Added
 
 - **`cmd/ibkr-doctor` verifies both Gateway roles before a capture

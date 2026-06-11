@@ -45,7 +45,7 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 			Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
 			Status:           "Submitted",
 			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
-			Filled: "2", Remaining: "8", ParentID: "99",
+			ParentID: "99",
 		}, "open_order"},
 		{OpenOrderEnd{}, "open_order_end"},
 		{PositionEnd{}, "position_end"},
@@ -299,140 +299,10 @@ func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 	}
 }
 
-// TestDecodeOpenOrderCapture decodes the exact bytes from a live v200 IB Gateway
-// capture (captures/20260405T215248Z-open_orders_all) and asserts the fields that
-// the read-only decoder extracts.
-func TestDecodeOpenOrderCapture(t *testing.T) {
-	t.Parallel()
-
-	// Payload from the 991-byte frame in the capture, after stripping the 4-byte
-	// length prefix. This is the raw null-delimited OpenOrder message (msg_id 5)
-	// from server_version 200.
-	payload := []byte(
-		"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
-			"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00" +
-			"SELL\x001\x00LMT\x001.2\x000.0\x00GTC\x00\x00DU9000001\x00" +
-			"\x000\x00\x000\x001518189976\x000\x000\x000\x00" +
-			"\x001518189976.1/DU9000001/100\x00\x00\x00\x00\x00" +
-			"\x000\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00" +
-			"\x002147483647\x000\x000\x000\x00\x003\x000\x000\x00" +
-			"\x000\x000\x00\x000\x00None\x00\x000\x00\x00\x00\x00" +
-			"?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x000\x000\x000\x00" +
-			"2147483647\x002147483647\x00\x00\x000\x00\x00IB\x000\x000\x00" +
-			"\x000\x000\x00" +
-			"PreSubmitted\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x00\x00\x00\x00\x00" +
-			"\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x00" +
-			"-9223372036854775808\x00\x000\x00\x000\x000\x000\x00None\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-			"0\x00\x00\x00\x000\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00" +
-			"\x000\x00\x000\x00\x002147483647\x00\x000\x00\x00\x00\x00" +
-			"+3\x000\x00PreSubmitted\x000\x001\x000\x001518189976\x000\x000\x000\x00\x000\x00")
-
-	msgs, err := DecodeBatch(payload)
-	if err != nil {
-		t.Fatalf("DecodeBatch() error = %v", err)
-	}
-	if len(msgs) != 1 {
-		t.Fatalf("DecodeBatch() len = %d, want 1", len(msgs))
-	}
-	oo, ok := msgs[0].(OpenOrder)
-	if !ok {
-		t.Fatalf("msg type = %T, want OpenOrder", msgs[0])
-	}
-
-	if oo.OrderID != 0 {
-		t.Errorf("OrderID = %d, want 0", oo.OrderID)
-	}
-	if oo.Contract.ConID != 853200900 {
-		t.Errorf("ConID = %d, want 853200900", oo.Contract.ConID)
-	}
-	if oo.Contract.Symbol != "OBDC" {
-		t.Errorf("Symbol = %q, want OBDC", oo.Contract.Symbol)
-	}
-	if oo.Contract.SecType != "OPT" {
-		t.Errorf("SecType = %q, want OPT", oo.Contract.SecType)
-	}
-	if oo.Contract.Expiry != "20261120" {
-		t.Errorf("Expiry = %q, want 20261120", oo.Contract.Expiry)
-	}
-	if oo.Contract.Strike != "10" {
-		t.Errorf("Strike = %q, want 10", oo.Contract.Strike)
-	}
-	if oo.Contract.Right != "P" {
-		t.Errorf("Right = %q, want P", oo.Contract.Right)
-	}
-	if oo.Contract.Multiplier != "100" {
-		t.Errorf("Multiplier = %q, want 100", oo.Contract.Multiplier)
-	}
-	if oo.Contract.Exchange != "SMART" {
-		t.Errorf("Exchange = %q, want SMART", oo.Contract.Exchange)
-	}
-	if oo.Contract.Currency != "USD" {
-		t.Errorf("Currency = %q, want USD", oo.Contract.Currency)
-	}
-	if oo.Contract.LocalSymbol != "OBDC  261120P00010000" {
-		t.Errorf("LocalSymbol = %q, want %q", oo.Contract.LocalSymbol, "OBDC  261120P00010000")
-	}
-	if oo.Contract.TradingClass != "OBDC" {
-		t.Errorf("TradingClass = %q, want OBDC", oo.Contract.TradingClass)
-	}
-	if oo.Action != "SELL" {
-		t.Errorf("Action = %q, want SELL", oo.Action)
-	}
-	if oo.Quantity != "1" {
-		t.Errorf("Quantity = %q, want 1", oo.Quantity)
-	}
-	if oo.OrderType != "LMT" {
-		t.Errorf("OrderType = %q, want LMT", oo.OrderType)
-	}
-	if oo.Account != "DU9000001" {
-		t.Errorf("Account = %q, want DU9000001", oo.Account)
-	}
-	// Newly expanded fields at verified wire positions.
-	if oo.LmtPrice != "1.2" {
-		t.Errorf("LmtPrice = %q, want 1.2", oo.LmtPrice)
-	}
-	if oo.AuxPrice != "0.0" {
-		t.Errorf("AuxPrice = %q, want 0.0", oo.AuxPrice)
-	}
-	if oo.TIF != "GTC" {
-		t.Errorf("TIF = %q, want GTC", oo.TIF)
-	}
-	if oo.Origin != "0" {
-		t.Errorf("Origin = %q, want 0", oo.Origin)
-	}
-	if oo.PermID != "1518189976" {
-		t.Errorf("PermID = %q, want 1518189976", oo.PermID)
-	}
-	if oo.Status != "PreSubmitted" {
-		t.Errorf("Status = %q, want PreSubmitted", oo.Status)
-	}
-	// OrderState margin fields (all UNSET in this capture).
-	if oo.InitMarginBefore != "1.7976931348623157E308" {
-		t.Errorf("InitMarginBefore = %q, want UNSET double", oo.InitMarginBefore)
-	}
-	if oo.Filled != "0" {
-		t.Errorf("Filled = %q, want 0", oo.Filled)
-	}
-	if oo.Remaining != "1" {
-		t.Errorf("Remaining = %q, want 1", oo.Remaining)
-	}
-}
-
-// TestDecodeOpenOrderNonSimple verifies that an OpenOrder message with a
-// field count different from the expected simple-order count (169) produces
-// a partial parse with only the reliably-positioned pre-variable-section fields.
+// TestDecodeOpenOrderNonSimple verifies that an OpenOrder payload whose
+// variable sections do not follow the live sv200 layout (here: an empty
+// DeltaNeutralOrderType instead of the live "None" sentinel) produces a
+// partial parse with only the reliably-positioned pre-variable-section fields.
 func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	t.Parallel()
 
@@ -444,7 +314,8 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	fields = append(fields, "265598", "AAPL", "STK", "", "", "", "", "SMART", "USD", "", "NMS") // r[1..11] contract
 	fields = append(fields, "BUY", "10", "LMT", "150.00", "0", "DAY", "", "DU9000001")          // r[12..19]
 	fields = append(fields, "", "0", "myref", "1", "99999", "0", "0", "0", "")                  // r[20..28]
-	// Pad to 180 fields (more than 169 — simulates variable-length sections).
+	// Pad with empty fields: the empty DeltaNeutralOrderType diverges from
+	// the live "None"-sentinel walk regardless of total length.
 	for len(fields) < 181 {
 		fields = append(fields, "")
 	}
@@ -492,12 +363,6 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	if oo.Status != "" {
 		t.Errorf("Status = %q, want empty (partial parse)", oo.Status)
 	}
-	if oo.Filled != "" {
-		t.Errorf("Filled = %q, want empty (partial parse)", oo.Filled)
-	}
-	if oo.Remaining != "" {
-		t.Errorf("Remaining = %q, want empty (partial parse)", oo.Remaining)
-	}
 	if oo.ParentID != "" {
 		t.Errorf("ParentID = %q, want empty (partial parse)", oo.ParentID)
 	}
@@ -534,8 +399,6 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 		AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
 		Conditions:          []OrderCondition{{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "175.0", TriggerMethod: 4}},
 		ConditionsIgnoreRTH: "1",
-		Filled:              "0",
-		Remaining:           "1",
 		ParentID:            "0",
 	})
 	if err != nil {
@@ -573,8 +436,8 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 	if oo.ConditionsIgnoreRTH != "1" {
 		t.Fatalf("ConditionsIgnoreRTH = %q, want 1", oo.ConditionsIgnoreRTH)
 	}
-	if oo.Status != "PreSubmitted" || oo.Filled != "0" || oo.Remaining != "1" {
-		t.Fatalf("status block = status %q filled %q remaining %q", oo.Status, oo.Filled, oo.Remaining)
+	if oo.Status != "PreSubmitted" {
+		t.Fatalf("Status = %q, want PreSubmitted", oo.Status)
 	}
 }
 

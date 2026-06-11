@@ -127,14 +127,12 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			},
 		},
 		{
-			// OpenOrder: the encoder uses writeWireContract (client->server
-			// 11-field layout: symbol..tradingClass with primaryExchange)
-			// but the decoder uses readWireContract (server->client layout:
-			// conID..tradingClass without primaryExchange). The contract
-			// field offset mismatch means the contract block does not
-			// roundtrip through DeepEqual. All non-contract fields survive.
+			// OpenOrder roundtrips through the live sv200 layout: the
+			// "None"-sentinel delta-neutral block, the no-scale section, and
+			// the official 32-field tail. Variable sections (combo legs, leg
+			// prices, smart routing, algo params, conditions) are populated
+			// so the count-prefixed walks are exercised end to end.
 			name: "OpenOrder",
-			skip: "writeWireContract/readWireContract layout mismatch for contract block",
 			msg: OpenOrder{
 				OrderID: 42,
 				Contract: Contract{
@@ -147,7 +145,20 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 				TIF: "DAY", OcaGroup: "", OpenClose: "", Origin: "0",
 				OrderRef: "test-ref", ClientID: "99", PermID: "123456",
 				OutsideRTH: "0", Hidden: "0", DiscretionAmt: "0",
-				GoodAfterTime:    "",
+				GoodAfterTime: "",
+				ComboLegs: []ComboLeg{{
+					ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART",
+					OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1",
+				}},
+				OrderComboLegPrices: []string{"1.25"},
+				SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
+				AlgoStrategy:        "Adaptive",
+				AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
+				Conditions: []OrderCondition{{
+					Type: 1, Conjunction: "a", Operator: 2, Value: "175.0",
+					ConID: 265598, Exchange: "SMART", TriggerMethod: 4,
+				}},
+				ConditionsIgnoreRTH: "1", ConditionsCancelOrder: "0",
 				Status:           "Submitted",
 				InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
 				EquityWithLoanBefore: "1.7976931348623157E308",
@@ -158,7 +169,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 				Commission:          "1.7976931348623157E308", MinCommission: "1.7976931348623157E308",
 				MaxCommission: "1.7976931348623157E308", CommissionCurrency: "",
 				WarningText: "",
-				Filled:      "2", Remaining: "8", ParentID: "99",
+				ParentID:    "99",
 			},
 		},
 		{

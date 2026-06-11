@@ -854,8 +854,14 @@ func TestOpenOrdersSnapshot(t *testing.T) {
 	if len(values) != 1 {
 		t.Fatalf("orders len = %d, want 1", len(values))
 	}
-	if values[0].Remaining.String() != "8" {
-		t.Fatalf("remaining = %s, want 8", values[0].Remaining.String())
+	if values[0].OrderID != 2001 {
+		t.Fatalf("order id = %d, want 2001", values[0].OrderID)
+	}
+	if values[0].Status != ibkr.OrderStatusSubmitted {
+		t.Fatalf("status = %q, want Submitted", values[0].Status)
+	}
+	if values[0].Quantity.String() != "10" {
+		t.Fatalf("quantity = %s, want 10", values[0].Quantity.String())
 	}
 }
 
@@ -876,8 +882,11 @@ func TestOpenOrdersSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T
 	if len(values) != 1 {
 		t.Fatalf("orders len = %d, want 1", len(values))
 	}
-	if values[0].Remaining.String() != "8" {
-		t.Fatalf("remaining = %s, want 8", values[0].Remaining.String())
+	if values[0].OrderID != 2001 {
+		t.Fatalf("order id = %d, want 2001", values[0].OrderID)
+	}
+	if values[0].Status != ibkr.OrderStatusSubmitted {
+		t.Fatalf("status = %q, want Submitted", values[0].Status)
 	}
 }
 

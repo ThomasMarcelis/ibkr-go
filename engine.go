@@ -5367,14 +5367,6 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 	if err != nil {
 		return OpenOrder{}, err
 	}
-	filled, err := parseOptionalDecimal(m.Filled, "open order filled")
-	if err != nil {
-		return OpenOrder{}, err
-	}
-	remaining, err := parseOptionalDecimal(m.Remaining, "open order remaining")
-	if err != nil {
-		return OpenOrder{}, err
-	}
 	lmtPrice, err := parseOptionalDecimal(m.LmtPrice, "open order limit price")
 	if err != nil {
 		return OpenOrder{}, err
@@ -5463,8 +5455,6 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		OrderType:             OrderType(m.OrderType),
 		Status:                OrderStatus(m.Status),
 		Quantity:              quantity,
-		Filled:                filled,
-		Remaining:             remaining,
 		LmtPrice:              lmtPrice,
 		AuxPrice:              auxPrice,
 		TIF:                   TimeInForce(m.TIF),

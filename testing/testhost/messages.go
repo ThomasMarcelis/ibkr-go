@@ -67,8 +67,6 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			OrderType:             asString(resolve(body["order_type"])),
 			Status:                asString(resolve(body["status"])),
 			Quantity:              asString(resolve(body["quantity"])),
-			Filled:                asString(resolve(body["filled"])),
-			Remaining:             asString(resolve(body["remaining"])),
 			LmtPrice:              asString(resolve(body["lmt_price"])),
 			AuxPrice:              asString(resolve(body["aux_price"])),
 			TIF:                   asString(resolve(body["tif"])),

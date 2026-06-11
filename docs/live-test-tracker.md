@@ -313,7 +313,7 @@ against the role-aware `paper-dev` Gateway.
 | set_type_switch_while_streaming.txt | 20260611T074112Z | promoted; covers the stream-tied marketDataType(3) push, delayed ticks, mid-stream SetType(Live) acceptance, and 10167 as a session event; the four bare set_type captures add nothing beyond api_market_data_type_cycle.txt and set_type_invalid is inconclusive (driver disconnected before any reply; public API validates 1..4 client-side) |
 | current_time_millis.txt | 20260611T091447Z | promoted; covers explicit reqCurrentTimeInMillis (OUT 105, bare id) answered by the live epoch milliseconds (IN 109), both versionless |
 | api_whatif_margin_aapl.txt (preview) | 20260610T200009Z | see the AORD-010 row above; nine margin decimals plus commission on the public OpenOrder |
-| api_algo_variants_aapl.txt | 20260415T153524Z | promoted; thirteen-variant algo matrix: seven accepted with Gateway-normalized param echoes, six rejected with real codes 439/443/10255; two echoes ride as sanitized raw live-layout frames pending the encoder convergence (synthetic five-param frames collide with the 169-field length gate) |
+| api_algo_variants_aapl.txt | 20260415T153524Z | promoted; thirteen-variant algo matrix: seven accepted with Gateway-normalized param echoes, six rejected with real codes 439/443/10255; the two echoes that rode as sanitized raw live-layout frames were converted to typed open_order lines after the codec encoder converged on the live layout (verified value-equal at the public OpenOrder layer) |
 
 ## Coverage Gaps: What We Need To Hit
 

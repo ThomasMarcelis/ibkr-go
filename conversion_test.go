@@ -168,8 +168,6 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 		Action:               "BUY",
 		OrderType:            "LMT",
 		Quantity:             "1",
-		Filled:               "0",
-		Remaining:            "1",
 		LmtPrice:             "150.00",
 		AuxPrice:             "0",
 		InitMarginBefore:     sentinel,

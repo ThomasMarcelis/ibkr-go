@@ -147,18 +147,19 @@ not reinterpret UTC instants in the login time zone.
 | out | 3 | PlaceOrder | landed | BAG combo legs, algo params, and grounded order conditions encoded; delta-neutral/scale extensions remain deferred |
 | out | 4 | CancelOrder | landed | |
 | out | 58 | reqGlobalCancel | landed | |
-| in | 5 | OpenOrder | landed | Simple 169-field orders fully parse; grounded non-simple combo/algo/conditional sections are decoded |
+| in | 5 | OpenOrder | landed | Single live-grounded sv200 walk ("None" delta-neutral sentinel, official 32-field tail) covering combo/algo/conditional sections; no fill echo (fills are order_status truth) |
 | in | 3 | OrderStatus | landed | Full parse, authoritative fill data for all order types |
 
 OpenOrder is dual-dispatched to per-order handles and the singleton open-orders
 observer. OrderStatus is routed to per-order handles; open-orders observers
 read status from the OpenOrder payload.
 
-OpenOrder uses a dual path:
-- 169-field simple orders stay on the capture-grounded fixed-layout decoder.
-- Expanded non-simple orders use a sequential decoder for grounded combo,
-  algo, and condition sections. Rare delta-neutral, scale, and other
-  ungrounded branches still fall back to the safe partial parse.
+OpenOrder uses one live-grounded sequential walk: the "None"-sentinel
+delta-neutral block, the no-scale section, grounded combo, algo, and
+condition sections, and the official 32-field adjustedOrderType..imbalanceOnly
+tail. Real delta-neutral, scale, and other live-unattested shapes fall back
+to the safe partial parse. The codec's OpenOrder encoder emits the same live
+layout, so replay fixtures exercise the production decode path.
 
 ## Order and Execution Observation
 

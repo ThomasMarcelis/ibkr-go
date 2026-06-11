@@ -9,7 +9,7 @@ server managed_accounts {"accounts":["DU9000001"]}
 server next_valid_id {"order_id":208}
 
 client place_order {"order_id":"208","contract":{"symbol":"EUR","sec_type":"CASH","exchange":"IDEALPRO","currency":"USD"},"action":"BUY","total_quantity":"20000","order_type":"LMT","lmt_price":"0.99","tif":"DAY","account":"DU9000001"}
-server open_order {"order_id":208,"account":"DU9000001","contract":{"con_id":12087792,"symbol":"EUR","sec_type":"CASH","exchange":"IDEALPRO","currency":"USD","local_symbol":"EUR.USD","trading_class":"EUR.USD"},"action":"BUY","order_type":"LMT","status":"Inactive","quantity":"20000","filled":"0","remaining":"0","lmt_price":"0.99","aux_price":"0","tif":"DAY","perm_id":"900208","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260414T182627Z-001"}
+server open_order {"order_id":208,"account":"DU9000001","contract":{"con_id":12087792,"symbol":"EUR","sec_type":"CASH","exchange":"IDEALPRO","currency":"USD","local_symbol":"EUR.USD","trading_class":"EUR.USD"},"action":"BUY","order_type":"LMT","status":"Inactive","quantity":"20000","lmt_price":"0.99","aux_price":"0","tif":"DAY","perm_id":"900208","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260414T182627Z-001"}
 server order_status {"order_id":208,"status":"Inactive","filled":"0","remaining":"20000","avg_fill_price":"0","perm_id":"900208","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
 server api_error {"req_id":208,"code":201,"message":"Order rejected - reason:FX trade would expose account to currency leverage.","advanced_order_reject_json":"","error_time_ms":"1776191194000"}
 
