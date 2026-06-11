@@ -43,6 +43,14 @@ const (
 	// ErrCodeFundamentalsNotAvailable: fundamentals data for the specified
 	// security is not available.
 	ErrCodeFundamentalsNotAvailable = 430
+	// ErrCodeAlgoDefinitionNotFound: order processing failed because the
+	// Gateway has no algorithm definition for the requested algo strategy;
+	// the placement is rejected outright with no order_status.
+	ErrCodeAlgoDefinitionNotFound = 439
+	// ErrCodeUnknownAlgoAttribute: order processing failed because an algo
+	// param tag is not a known attribute of the requested strategy; the
+	// message names the offending tag and the placement is rejected outright.
+	ErrCodeUnknownAlgoAttribute = 443
 	// ErrCodeConnectivityLost: connectivity between IB and TWS/Gateway has
 	// been lost.
 	ErrCodeConnectivityLost = 1100
@@ -80,6 +88,11 @@ const (
 	// subscribed; delayed market data is displayed and the stream continues
 	// with delayed ticks.
 	ErrCodeDelayedMarketDataDisplayed = 10167
+	// ErrCodeDisplaySizeNotAllowed: the 'Display Size' order attribute may
+	// not be specified for this order (live-attested rejecting a DarkIce
+	// algo placement carrying display size 1); the placement is rejected
+	// outright with no order_status.
+	ErrCodeDisplaySizeNotAllowed = 10255
 	// ErrCodeNewsFeedNotAllowed: the API client is not permissioned for the
 	// requested (WSH) news feed.
 	ErrCodeNewsFeedNotAllowed = 10276

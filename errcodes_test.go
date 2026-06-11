@@ -29,6 +29,8 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 		ErrCodeOrderMessage:                       true,
 		ErrCodeInvalidRealTimeQuery:               true,
 		ErrCodeFundamentalsNotAvailable:           true,
+		ErrCodeAlgoDefinitionNotFound:             true,
+		ErrCodeUnknownAlgoAttribute:               true,
 		ErrCodeConnectivityLost:                   true,
 		ErrCodeConnectivityRestoredDataLost:       true,
 		ErrCodeConnectivityRestoredDataMaintained: true,
@@ -41,6 +43,7 @@ func TestErrCodeRegistryCoversTranscriptEvidence(t *testing.T) {
 		ErrCodeOrderToCancelNotFound:              true,
 		ErrCodeOrderCannotBeCancelled:             true,
 		ErrCodeDelayedMarketDataDisplayed:         true,
+		ErrCodeDisplaySizeNotAllowed:              true,
 		ErrCodeNewsFeedNotAllowed:                 true,
 	}
 	// Codes attested in transcripts but deliberately left unregistered.
@@ -148,6 +151,8 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeOrderMessage, warning: true},
 		{code: ErrCodeInvalidRealTimeQuery},
 		{code: ErrCodeFundamentalsNotAvailable},
+		{code: ErrCodeAlgoDefinitionNotFound},
+		{code: ErrCodeUnknownAlgoAttribute},
 		{code: ErrCodeConnectivityLost, connectivity: true},
 		{code: ErrCodeConnectivityRestoredDataLost, connectivity: true},
 		{code: ErrCodeConnectivityRestoredDataMaintained, connectivity: true},
@@ -160,6 +165,7 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeOrderToCancelNotFound},
 		{code: ErrCodeOrderCannotBeCancelled},
 		{code: ErrCodeDelayedMarketDataDisplayed, entitlement: true, warning: true},
+		{code: ErrCodeDisplaySizeNotAllowed},
 		{code: ErrCodeNewsFeedNotAllowed, entitlement: true},
 	}
 	for _, tt := range tests {
