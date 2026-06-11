@@ -35,8 +35,8 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		{
 			// ContractDetails encode/decode is asymmetric: the encoder writes
 			// Expiry twice (as lastTradeDate and lastTradeDateOrContractMonth),
-			// and the decoder skips intermediate fields (mdSizeMultiplier,
-			// orderTypes, validExchanges, etc.) that the encoder fills with
+			// and the decoder skips intermediate fields (orderTypes,
+			// validExchanges, etc.) that the encoder fills with
 			// empty strings. Also the encoder does not use readWireContract
 			// so the field order differs from the standard 11-field block.
 			// The round-trip preserves all ContractDetails-level fields.

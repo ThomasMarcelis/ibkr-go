@@ -331,7 +331,31 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		r.ReadString() // VolatilityType
 		deltaNeutralOrderType := r.ReadString()
 		r.ReadString() // DeltaNeutralAuxPrice
-		if deltaNeutralOrderType != "" {
+		// Two live-attested layouts diverge here.
+		//
+		// Replay/testhost frames (produced by this codec's OpenOrder encoder)
+		// leave DeltaNeutralOrderType empty: no delta-neutral block follows,
+		// the scale section carries scaleTable/activeStartTime/activeStopTime,
+		// and the post-conditions tail is 40 fields ending in filled..trailing.
+		//
+		// Live IB Gateway (server_version 200) sends the sentinel "None" for
+		// orders without a delta-neutral leg. "None" is non-empty, so per the
+		// official field order the 8-field delta-neutral block still follows
+		// (conId, settlingFirm, clearingAccount, clearingIntent, openClose,
+		// shortSale, shortSaleSlot, designatedLocation — observed as
+		// 0,"","","","?",0,0,"" in captures/20260610T200935Z-api_conditions_matrix_aapl
+		// sha256 prefix 87059663ed139026, captures/20260611T073844Z-place_order_price_condition_aapl
+		// sha256 prefix 6c588c638895f152, and the 20260405T215248Z-open_orders_all
+		// OBDC frame). On that layout the scale section has no
+		// scaleTable/activeStartTime/activeStopTime and the post-conditions
+		// tail is the official 32-field adjustedOrderType..imbalanceOnly run.
+		// Any other DeltaNeutralOrderType (a real delta-neutral order) remains
+		// unattested live and falls back to the partial decode.
+		liveLayout := deltaNeutralOrderType == "None"
+		switch {
+		case liveLayout:
+			r.Skip(8) // delta-neutral block (see layout note above)
+		case deltaNeutralOrderType != "":
 			return []Message{partial}, nil
 		}
 		r.ReadString() // ContinuousUpdate
@@ -390,9 +414,14 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		if isPositiveWireNumber(scalePriceIncrement) {
 			return []Message{partial}, nil
 		}
-		r.ReadString() // ScaleTable
-		r.ReadString() // ActiveStartTime
-		r.ReadString() // ActiveStopTime
+		if !liveLayout {
+			// Only the replay/testhost layout carries these three fields;
+			// live v200 frames go straight from scalePriceIncrement to
+			// hedgeType (scaleInit/scaleSubs echoed as 2147483647, then "").
+			r.ReadString() // ScaleTable
+			r.ReadString() // ActiveStartTime
+			r.ReadString() // ActiveStopTime
+		}
 		hedgeType := r.ReadString()
 		if hedgeType != "" {
 			r.ReadString() // HedgeParam
@@ -495,49 +524,75 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			conditionsIgnoreRTH = btoa(mustReadBool(r))
 			conditionsCancelOrder = btoa(mustReadBool(r))
 		}
-		if r.Remaining() != 40 {
+		// Tail discrimination (see the DeltaNeutralOrderType note above):
+		// live v200 frames end with the official 32-field
+		// adjustedOrderType..imbalanceOnly run (the adjusted block carries
+		// trailStopPrice, hence 8 fields) and no fill echo; replay/testhost
+		// frames append filled..trailing for a 40-field tail with a 7-field
+		// adjusted block.
+		wantTail := 40
+		if liveLayout {
+			wantTail = 32
+		}
+		if r.Remaining() != wantTail {
 			return []Message{partial}, nil
 		}
-		r.ReadString() // AdjustedOrderType
-		r.ReadString() // TriggerPrice
-		r.ReadString() // LmtPriceOffset
-		r.ReadString() // AdjustedStopPrice
-		r.ReadString() // AdjustedStopLimitPrice
-		r.ReadString() // AdjustedTrailingAmount
-		r.ReadString() // AdjustableTrailingUnit
-		r.ReadString() // SoftDollarName
-		r.ReadString() // SoftDollarValue
-		r.ReadString() // SoftDollarDisplayName
-		r.ReadString() // CashQty
-		r.ReadString() // DontUseAutoPriceForHedge
-		r.ReadString() // IsOmsContainer
-		r.ReadString() // DiscretionaryUpToLimitPrice
-		r.ReadString() // UsePriceMgmtAlgo
-		r.ReadString() // Duration
-		r.ReadString() // PostToAts
-		r.ReadString() // AutoCancelParent
-		r.ReadString() // MinTradeQty
-		r.ReadString() // MinCompeteSize
-		r.ReadString() // CompeteAgainstBestOffset
-		r.ReadString() // MidOffsetAtWhole
-		r.ReadString() // MidOffsetAtHalf
-		r.ReadString() // CustomerAccount
-		r.ReadString() // ProfessionalCustomer
-		r.ReadString() // BondAccruedInterest
-		r.ReadString() // IncludeOvernight
-		r.ReadString() // ExtOperator
-		r.ReadString() // ManualOrderIndicator
-		r.ReadString() // Submitter
-		r.ReadString() // ImbalanceOnly
-		filled := r.ReadString()
-		remaining := r.ReadString()
-		r.ReadString() // lastFillPrice
-		r.ReadString() // permId
-		parentID := r.ReadString()
-		r.ReadString() // lastLiquidity
-		r.ReadString() // whyHeld
-		r.ReadString() // mktCapPrice
-		r.ReadString() // trailing
+		var filled, remaining, tailParentID string
+		if liveLayout {
+			// adjustedOrderType, triggerPrice, trailStopPrice, lmtPriceOffset,
+			// adjustedStopPrice, adjustedStopLimitPrice, adjustedTrailingAmount,
+			// adjustableTrailingUnit, softDollar name/value/displayName,
+			// cashQty, dontUseAutoPriceForHedge, isOmsContainer,
+			// discretionaryUpToLimitPrice, usePriceMgmtAlgo, duration,
+			// postToAts, autoCancelParent, minTradeQty, minCompeteSize,
+			// competeAgainstBestOffset, midOffsetAtWhole, midOffsetAtHalf,
+			// customerAccount, professionalCustomer, bondAccruedInterest,
+			// includeOvernight, extOperator, manualOrderIndicator, submitter,
+			// imbalanceOnly. None map to OpenOrder fields; fills arrive on
+			// the separate order_status frame.
+			r.Skip(32)
+		} else {
+			r.ReadString() // AdjustedOrderType
+			r.ReadString() // TriggerPrice
+			r.ReadString() // LmtPriceOffset
+			r.ReadString() // AdjustedStopPrice
+			r.ReadString() // AdjustedStopLimitPrice
+			r.ReadString() // AdjustedTrailingAmount
+			r.ReadString() // AdjustableTrailingUnit
+			r.ReadString() // SoftDollarName
+			r.ReadString() // SoftDollarValue
+			r.ReadString() // SoftDollarDisplayName
+			r.ReadString() // CashQty
+			r.ReadString() // DontUseAutoPriceForHedge
+			r.ReadString() // IsOmsContainer
+			r.ReadString() // DiscretionaryUpToLimitPrice
+			r.ReadString() // UsePriceMgmtAlgo
+			r.ReadString() // Duration
+			r.ReadString() // PostToAts
+			r.ReadString() // AutoCancelParent
+			r.ReadString() // MinTradeQty
+			r.ReadString() // MinCompeteSize
+			r.ReadString() // CompeteAgainstBestOffset
+			r.ReadString() // MidOffsetAtWhole
+			r.ReadString() // MidOffsetAtHalf
+			r.ReadString() // CustomerAccount
+			r.ReadString() // ProfessionalCustomer
+			r.ReadString() // BondAccruedInterest
+			r.ReadString() // IncludeOvernight
+			r.ReadString() // ExtOperator
+			r.ReadString() // ManualOrderIndicator
+			r.ReadString() // Submitter
+			r.ReadString() // ImbalanceOnly
+			filled = r.ReadString()
+			remaining = r.ReadString()
+			r.ReadString() // lastFillPrice
+			r.ReadString() // permId
+			tailParentID = r.ReadString()
+			r.ReadString() // lastLiquidity
+			r.ReadString() // whyHeld
+			r.ReadString() // mktCapPrice
+			r.ReadString() // trailing
+		}
 
 		return []Message{OpenOrder{
 			OrderID: orderID, Contract: contract,
@@ -572,7 +627,7 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			WarningText:           warningText,
 			Filled:                filled,
 			Remaining:             remaining,
-			ParentID:              parentID,
+			ParentID:              tailParentID,
 		}}, nil
 
 	case InNextValidID: // [9, version, orderID]
@@ -586,9 +641,14 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 	case InContractData: // v200 wire layout verified against live IB Gateway capture.
 		// [10, reqID, symbol, secType, lastTradeDate, lastTradeDateOrContractMonth,
 		//   strike, right, exchange, currency, localSymbol, marketName, tradingClass,
-		//   conID, minTick, mdSizeMultiplier, orderTypes, validExchanges,
+		//   conID, minTick, multiplier, orderTypes, validExchanges,
 		//   priceMagnifier, underConID, longName, primaryExchange, contractMonth,
 		//   industry, category, subcategory, timeZoneID, ...]
+		// The slot after minTick is the contract multiplier: mdSizeMultiplier
+		// left the wire at server version 152, and the v200 captures carry
+		// "100" there for AAPL options (20260405T214941Z, sha256 prefix
+		// 3dcaf0b74a7c27a4) and "50" for ES futures (20260405T215018Z,
+		// sha256 prefix e863bfbafe48370f).
 		reqID, _ := r.ReadInt()
 		symbol := r.ReadString()
 		secType := r.ReadString()
@@ -603,7 +663,8 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 		tradingClass := r.ReadString()
 		conID, _ := r.ReadInt()
 		minTick := r.ReadString()
-		r.Skip(5) // mdSizeMultiplier, orderTypes, validExchanges, priceMagnifier, underConID
+		multiplier := r.ReadString()
+		r.Skip(4) // orderTypes, validExchanges, priceMagnifier, underConID
 		longName := r.ReadString()
 		primaryExchange := r.ReadString()
 		r.Skip(4) // contractMonth, industry, category, subcategory
@@ -613,7 +674,8 @@ func decodeByMsgID(msgID int, fields []string) (msgs []Message, err error) {
 			Contract: Contract{
 				ConID: conID, Symbol: symbol, SecType: secType,
 				Expiry: expiry, Strike: strike, Right: right,
-				Exchange: exchange, Currency: currency,
+				Multiplier: multiplier,
+				Exchange:   exchange, Currency: currency,
 				LocalSymbol: localSymbol, TradingClass: tradingClass,
 				PrimaryExchange: primaryExchange,
 			},
@@ -1997,7 +2059,7 @@ func encodeFields(msg Message) ([]string, error) {
 			m.Contract.Exchange, m.Contract.Currency,
 			m.Contract.LocalSymbol, m.MarketName, m.Contract.TradingClass,
 			itoa(m.Contract.ConID), m.MinTick,
-			"", "", "", "", "",
+			m.Contract.Multiplier, "", "", "", "",
 			m.LongName, m.Contract.PrimaryExchange,
 			"", "", "", "",
 			m.TimeZoneID,

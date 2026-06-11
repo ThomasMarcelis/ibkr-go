@@ -957,3 +957,363 @@ func TestCaptureDecode_TickOptionComputationLive(t *testing.T) {
 		t.Errorf("delta %q pvDividend %q", m.Delta, m.PvDividend)
 	}
 }
+
+func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
+	t.Parallel()
+
+	// The v200 contractData layout carries the contract multiplier in the
+	// slot directly after minTick (the slot the decoder used to skip as
+	// "mdSizeMultiplier"; mdSizeMultiplier left the wire at server version
+	// 152 and at v200 this position is the multiplier). Both frames below
+	// are full msg_id=10 frames from live IB Gateway (server_version 200),
+	// reconstructed from the captured length-prefixed stream.
+	tests := []struct {
+		name           string
+		fields         []string
+		wantConID      int
+		wantSymbol     string
+		wantMinTick    string
+		wantMultiplier string
+		wantLongName   string
+		wantTimeZoneID string
+	}{
+		{
+			// captures/20260405T214941Z-contract_details_aapl_opt,
+			// events.jsonl sha256 prefix 3dcaf0b74a7c27a4, first msg_id=10
+			// frame: AAPL 20260618 C100 option, multiplier "100".
+			name: "aapl option multiplier 100",
+			fields: []string{
+				"10", "1001", "AAPL", "OPT",
+				"20260618", "20260618", "100", "C",
+				"SMART", "USD", "AAPL  260618C00100000", "AAPL",
+				"AAPL", "675811965", "0.01", "100",
+				"ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AON,AVGCOST,BASKET,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,DIS,FOK,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,MIT,MKT,MTL,NGCOMB,NONALGO,OCA,OPENCLOSE,PAON,PEGMIDVOL,PEGMKTVOL,PEGPRMVOL,PEGSRFVOL,POSTONLY,PRICECHK,REL,RELPCTOFS,RELSTK,SCALE,SCALERST,SIZECHK,SMARTSTG,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,VOLAT,WHATIF",
+				"SMART,AMEX,CBOE,PHLX,PSE,ISE,BOX,BATS,NASDAQOM,CBOE2,NASDAQBX,MIAX,GEMINI,EDGX,MERCURY,PEARL,EMERALD,MEMX,IBUSOPT,SAPPHIRE",
+				"1", "265598",
+				"APPLE INC", "", "202606", "",
+				"", "", "US/Eastern",
+				"20260405:CLOSED;20260406:0930-20260406:1600;20260407:0930-20260407:1600;20260408:0930-20260408:1600;20260409:0930-20260409:1600;20260410:0930-20260410:1600",
+				"20260405:CLOSED;20260406:0930-20260406:1600;20260407:0930-20260407:1600;20260408:0930-20260408:1600;20260409:0930-20260409:1600;20260410:0930-20260410:1600",
+				"", "", "0",
+				"2", "AAPL", "STK", "32,109,109,109,109,109,109,109,32,109,32,109,109,109,109,109,109,109,32,109",
+				"20260618", "", "1", "1",
+				"1", "0",
+			},
+			wantConID:      675811965,
+			wantSymbol:     "AAPL",
+			wantMinTick:    "0.01",
+			wantMultiplier: "100",
+			wantLongName:   "APPLE INC",
+			wantTimeZoneID: "US/Eastern",
+		},
+		{
+			// captures/20260405T215018Z-contract_details_es_fut,
+			// events.jsonl sha256 prefix e863bfbafe48370f, first msg_id=10
+			// frame: ESZ6 future, multiplier "50".
+			name: "es future multiplier 50",
+			fields: []string{
+				"10", "1001", "ES", "FUT",
+				"20261218 08:30:00 US/Central", "20261218", "0", "",
+				"CME", "USD", "ESZ6", "ES",
+				"ES", "515416632", "0.25", "50",
+				"ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,BENCHPX,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,GAT,GTC,GTD,GTT,HID,ICE,IOC,LIT,LMT,LTH,MIT,MKT,MKTPROT,MTL,NGCOMB,NONALGO,OCA,PEGBENCH,SCALE,SCALERST,SNAPMID,SNAPMKT,SNAPREL,STP,STPLMT,STPPROT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,WHATIF",
+				"CME,QBALGO", "1", "11004968",
+				"E-mini S&P 500", "", "202612", "",
+				"", "", "US/Central",
+				";20260405:1700-20260406:1600;20260406:1700-20260407:1600;20260407:1700-20260408:1600;20260408:1700-20260409:1600;20260409:1700-20260410:1600",
+				"20260405:CLOSED;20260406:0830-20260406:1600;20260407:0830-20260407:1600;20260408:0830-20260408:1600;20260409:0830-20260409:1600;20260410:0830-20260410:1600",
+				"", "", "0",
+				"2147483647", "ES", "IND", "67,67",
+				"20261218", "", "1", "1",
+				"1", "0",
+			},
+			wantConID:      515416632,
+			wantSymbol:     "ES",
+			wantMinTick:    "0.25",
+			wantMultiplier: "50",
+			wantLongName:   "E-mini S&P 500",
+			wantTimeZoneID: "US/Central",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			msgs, err := DecodeBatch([]byte(strings.Join(tt.fields, "\x00") + "\x00"))
+			if err != nil {
+				t.Fatalf("DecodeBatch: %v", err)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("got %d messages, want 1", len(msgs))
+			}
+			m, ok := msgs[0].(ContractDetails)
+			if !ok {
+				t.Fatalf("type = %T, want ContractDetails", msgs[0])
+			}
+			if m.Contract.ConID != tt.wantConID {
+				t.Errorf("ConID = %d, want %d", m.Contract.ConID, tt.wantConID)
+			}
+			if m.Contract.Symbol != tt.wantSymbol {
+				t.Errorf("Symbol = %q, want %q", m.Contract.Symbol, tt.wantSymbol)
+			}
+			if m.MinTick != tt.wantMinTick {
+				t.Errorf("MinTick = %q, want %q", m.MinTick, tt.wantMinTick)
+			}
+			if m.Contract.Multiplier != tt.wantMultiplier {
+				t.Errorf("Multiplier = %q, want %q", m.Contract.Multiplier, tt.wantMultiplier)
+			}
+			// Fields decoded after the multiplier slot stay aligned.
+			if m.LongName != tt.wantLongName {
+				t.Errorf("LongName = %q, want %q", m.LongName, tt.wantLongName)
+			}
+			if m.TimeZoneID != tt.wantTimeZoneID {
+				t.Errorf("TimeZoneID = %q, want %q", m.TimeZoneID, tt.wantTimeZoneID)
+			}
+		})
+	}
+}
+
+func TestCaptureDecode_OpenOrderConditionEchoPrice(t *testing.T) {
+	t.Parallel()
+
+	fields := liveOpenOrderPriceConditionFields()
+	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+	if m.OrderID != 356 {
+		t.Errorf("OrderID = %d, want 356", m.OrderID)
+	}
+	if m.Account != "DU9000001" {
+		t.Errorf("Account = %q, want DU9000001", m.Account)
+	}
+	// Status sits past the "None" DeltaNeutralOrderType sentinel; a partial
+	// decode leaves it empty.
+	if m.Status != "PreSubmitted" {
+		t.Errorf("Status = %q, want PreSubmitted", m.Status)
+	}
+	// Post-status alignment: the live frame carries the UNSET-double margin
+	// sentinels right after the status field.
+	if m.InitMarginBefore != "1.7976931348623157E308" {
+		t.Errorf("InitMarginBefore = %q, want UNSET double", m.InitMarginBefore)
+	}
+	if len(m.Conditions) != 1 {
+		t.Fatalf("Conditions len = %d, want 1", len(m.Conditions))
+	}
+	cond := m.Conditions[0]
+	if cond.Type != 1 {
+		t.Errorf("Condition Type = %d, want 1 (price)", cond.Type)
+	}
+	if cond.Conjunction != "a" {
+		t.Errorf("Condition Conjunction = %q, want a", cond.Conjunction)
+	}
+	if cond.Operator != 2 {
+		t.Errorf("Condition Operator = %d, want 2 (isMore)", cond.Operator)
+	}
+	if cond.Value != "2918.10" {
+		t.Errorf("Condition Value = %q, want 2918.10", cond.Value)
+	}
+	if cond.ConID != 265598 {
+		t.Errorf("Condition ConID = %d, want 265598", cond.ConID)
+	}
+	if cond.Exchange != "SMART" {
+		t.Errorf("Condition Exchange = %q, want SMART", cond.Exchange)
+	}
+	if cond.TriggerMethod != 4 {
+		t.Errorf("Condition TriggerMethod = %d, want 4", cond.TriggerMethod)
+	}
+	if m.ConditionsIgnoreRTH != "1" {
+		t.Errorf("ConditionsIgnoreRTH = %q, want 1", m.ConditionsIgnoreRTH)
+	}
+	if m.ConditionsCancelOrder != "0" {
+		t.Errorf("ConditionsCancelOrder = %q, want 0", m.ConditionsCancelOrder)
+	}
+	// The live frame ends with the official 32-field
+	// adjustedOrderType..imbalanceOnly tail and carries no fill echo (fills
+	// arrive on the separate order_status frame), so Filled/Remaining stay
+	// empty. Reaching the full decode (Status above) with the conditions
+	// intact proves the post-conditions tail parsed without misalignment.
+	if m.Filled != "" {
+		t.Errorf("Filled = %q, want empty (no fill echo on the live frame)", m.Filled)
+	}
+	if m.Remaining != "" {
+		t.Errorf("Remaining = %q, want empty (no fill echo on the live frame)", m.Remaining)
+	}
+}
+
+func TestCaptureDecode_OpenOrderConditionEchoExecution(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260610T200935Z-api_conditions_matrix_aapl (server_version
+	// 200, events.jsonl sha256 prefix 87059663ed139026), first 163-field
+	// msg_id=5 frame: order 359, LMT BUY 100 AAPL with an execution condition
+	// (secType STK, exchange echoed by the Gateway as ANY, symbol AAPL),
+	// conditionsIgnoreRTH true. The execution condition body is 4 fields wide
+	// (no operator/value), so this frame freezes the condition-width handling
+	// ahead of the shared 32-field live tail. Sanitized: account ->
+	// DU9000001, perm id -> 900359, order ref ->
+	// ibkrgo-sanitized-20260610T200935Z-001, submitter dropped.
+	fields := []string{
+		"5", "359", "265598", "AAPL", "STK", "", "0", "?",
+		"", "SMART", "USD", "AAPL", "NMS", "BUY", "100", "LMT",
+		"14.59", "0.0", "DAY", "", "DU9000001", "", "0", "ibkrgo-sanitized-20260610T200935Z-001",
+		"1", "900359", "0", "0", "0", "", "900359.0/DU9000001/100", "",
+		"", "", "", "", "", "", "", "0",
+		"", "-1", "0", "", "", "", "", "",
+		"2147483647", "0", "0", "0", "", "3", "0", "0",
+		"", "0", "0", "", "0", "None", "", "0",
+		"", "", "", "?", "0", "0", "", "0",
+		"0", "", "", "", "", "", "0", "0",
+		"0", "2147483647", "2147483647", "", "", "0", "", "IB",
+		"0", "0", "", "0", "0", "PreSubmitted", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "",
+		"", "", "", "", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "-9223372036854775808", "", "0",
+		"", "0", "0", "1", "5", "a", "STK", "ANY",
+		"AAPL", "1", "0", "None", "1.7976931348623157E308", "15.59", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "0", "", "", "", "0", "1",
+		"0", "0", "0", "", "", "0", "", "",
+		"", "", "", "", "0", "", "0", "",
+		"2147483647", "", "0",
+	}
+	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+	if m.Status != "PreSubmitted" {
+		t.Errorf("Status = %q, want PreSubmitted", m.Status)
+	}
+	if len(m.Conditions) != 1 {
+		t.Fatalf("Conditions len = %d, want 1", len(m.Conditions))
+	}
+	cond := m.Conditions[0]
+	if cond.Type != 5 {
+		t.Errorf("Condition Type = %d, want 5 (execution)", cond.Type)
+	}
+	if cond.Conjunction != "a" {
+		t.Errorf("Condition Conjunction = %q, want a", cond.Conjunction)
+	}
+	if cond.SecType != "STK" {
+		t.Errorf("Condition SecType = %q, want STK", cond.SecType)
+	}
+	if cond.Exchange != "ANY" {
+		t.Errorf("Condition Exchange = %q, want ANY", cond.Exchange)
+	}
+	if cond.Symbol != "AAPL" {
+		t.Errorf("Condition Symbol = %q, want AAPL", cond.Symbol)
+	}
+	if m.ConditionsIgnoreRTH != "1" {
+		t.Errorf("ConditionsIgnoreRTH = %q, want 1", m.ConditionsIgnoreRTH)
+	}
+	if m.ConditionsCancelOrder != "0" {
+		t.Errorf("ConditionsCancelOrder = %q, want 0", m.ConditionsCancelOrder)
+	}
+}
+
+func TestCaptureDecode_OpenOrderLiveBaseLayout(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260405T215248Z-open_orders_all (live IB Gateway,
+	// server_version 200), the actual 156-field msg_id=5 frame from the
+	// captured stream: OBDC PUT, no conditions (count 0). This is the
+	// unconditioned variant of the live layout: DeltaNeutralOrderType "None"
+	// followed by the 8-field delta-neutral block and the 32-field
+	// adjustedOrderType..imbalanceOnly tail. It used to hit the "None"
+	// partial early-out and lose the status block. Sanitized: account ->
+	// DU9000001 (also inside the sharesAllocation echo).
+	fields := []string{
+		"5", "0", "853200900", "OBDC", "OPT", "20261120", "10", "P",
+		"100", "SMART", "USD", "OBDC  261120P00010000", "OBDC", "SELL", "1", "LMT",
+		"1.2", "0.0", "GTC", "", "DU9000001", "", "0", "",
+		"0", "1518189976", "0", "0", "0", "", "1518189976.1/DU9000001/100", "",
+		"", "", "", "", "0", "", "", "0",
+		"", "-1", "0", "", "", "", "", "",
+		"2147483647", "0", "0", "0", "", "3", "0", "0",
+		"", "0", "0", "", "0", "None", "", "0",
+		"", "", "", "?", "0", "0", "", "0",
+		"0", "", "", "", "", "", "0", "0",
+		"0", "2147483647", "2147483647", "", "", "0", "", "IB",
+		"0", "0", "", "0", "0", "PreSubmitted", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "",
+		"", "", "", "", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "-9223372036854775808", "", "0",
+		"", "0", "0", "0", "None", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "0", "", "", "", "0",
+		"1", "0", "0", "0", "", "", "0", "",
+		"", "", "", "", "", "0", "", "0",
+		"", "2147483647", "", "0",
+	}
+	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(OpenOrder)
+	if !ok {
+		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+	}
+	if m.Contract.Symbol != "OBDC" || m.Contract.ConID != 853200900 {
+		t.Errorf("contract = %s/%d, want OBDC/853200900", m.Contract.Symbol, m.Contract.ConID)
+	}
+	if m.Action != "SELL" || m.OrderType != "LMT" || m.TIF != "GTC" {
+		t.Errorf("order = %s %s %s, want SELL LMT GTC", m.Action, m.OrderType, m.TIF)
+	}
+	if m.Status != "PreSubmitted" {
+		t.Errorf("Status = %q, want PreSubmitted", m.Status)
+	}
+	if m.InitMarginBefore != "1.7976931348623157E308" {
+		t.Errorf("InitMarginBefore = %q, want UNSET double", m.InitMarginBefore)
+	}
+	if len(m.Conditions) != 0 {
+		t.Errorf("Conditions len = %d, want 0", len(m.Conditions))
+	}
+	if m.ConditionsIgnoreRTH != "" || m.ConditionsCancelOrder != "" {
+		t.Errorf("conditions flags = %q/%q, want empty", m.ConditionsIgnoreRTH, m.ConditionsCancelOrder)
+	}
+}
+
+// liveOpenOrderPriceConditionFields is the full 165-field conditioned
+// open_order echo from captures/20260610T200935Z-api_conditions_matrix_aapl
+// (live paper IB Gateway, server_version 200, events.jsonl sha256 prefix
+// 87059663ed139026): order 356, LMT BUY 100 AAPL with a price condition
+// (value normalized by the Gateway to 2918.10, conId 265598, exchange SMART,
+// trigger method 4, conditionsIgnoreRTH true). The same 165-field shape with
+// DeltaNeutralOrderType "None" and the 32-field adjustedOrderType..imbalanceOnly
+// tail appears in captures/20260611T073844Z-place_order_price_condition_aapl
+// (sha256 prefix 6c588c638895f152). Sanitized: account -> DU9000001, perm id
+// -> 900356 (also inside the sharesAllocation echo), order ref ->
+// ibkrgo-sanitized-20260610T200935Z-001, submitter dropped.
+func liveOpenOrderPriceConditionFields() []string {
+	return []string{
+		"5", "356", "265598", "AAPL", "STK", "", "0", "?",
+		"", "SMART", "USD", "AAPL", "NMS", "BUY", "100", "LMT",
+		"14.59", "0.0", "DAY", "", "DU9000001", "", "0", "ibkrgo-sanitized-20260610T200935Z-001",
+		"1", "900356", "0", "0", "0", "", "900356.0/DU9000001/100", "",
+		"", "", "", "", "", "", "", "0",
+		"", "-1", "0", "", "", "", "", "",
+		"2147483647", "0", "0", "0", "", "3", "0", "0",
+		"", "0", "0", "", "0", "None", "", "0",
+		"", "", "", "?", "0", "0", "", "0",
+		"0", "", "", "", "", "", "0", "0",
+		"0", "2147483647", "2147483647", "", "", "0", "", "IB",
+		"0", "0", "", "0", "0", "PreSubmitted", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "",
+		"", "", "", "", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "-9223372036854775808", "", "0",
+		"", "0", "0", "1", "1", "a", "1", "2918.10",
+		"265598", "SMART", "4", "1", "0", "None", "1.7976931348623157E308", "15.59",
+		"1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "1.7976931348623157E308", "0", "", "", "",
+		"0", "1", "0", "0", "0", "", "", "0",
+		"", "", "", "", "", "", "0", "",
+		"0", "", "2147483647", "", "0",
+	}
+}
