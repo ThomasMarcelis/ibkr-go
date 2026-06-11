@@ -4,7 +4,7 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-06-10 (readonly-live gateway 127.0.0.1:4001 and paper-dev
+Last updated: 2026-06-11 (readonly-live gateway 127.0.0.1:4001 and paper-dev
 gateway 127.0.0.1:4002, both server_version 200).
 
 ## Current Campaign Contract
@@ -28,6 +28,19 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-06-11
+
+Campaign day two. `paper-dev` healthy throughout. Operational incident on
+`readonly-live`: two raw `cmd/ibkr-probe` attempts at the
+`reqCurrentTimeInMillis` drift check (one pre-handshake payload that the
+Gateway answered as a legacy version greeting, one framed message injected
+before `startApi`) left the 4001 API listener refusing handshakes with
+i/o timeouts; `ibkr-doctor` confirmed the wedge and recovery is pending a
+listener drain or Gateway restart. Lesson recorded: protocol probes go
+through the capture tooling and the library, never hand-rolled frames —
+the `current_time_millis` grounding capture was rerouted through the
+paper role (`IBKR_CAPTURE_ROLE=paper-dev`) and succeeded.
 
 ### 2026-06-10
 
