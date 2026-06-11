@@ -816,15 +816,18 @@ func sendPlaceOrder(conn net.Conn, orderID int64, c contractSpec, o orderSpec) e
 		} else {
 			fields = append(fields, "a")
 		}
+		// Value precedes the conId/exchange pair, matching the official
+		// client hierarchy; the Gateway rejects the reversed order with
+		// code 320 (see the codec condition field-order fix).
 		switch cond.Type {
 		case 1:
-			fields = append(fields, boolField(cond.Operator == 2), strconv.Itoa(cond.ConID), cond.Exchange, cond.Value, strconv.Itoa(cond.TriggerMethod))
+			fields = append(fields, boolField(cond.Operator == 2), cond.Value, strconv.Itoa(cond.ConID), cond.Exchange, strconv.Itoa(cond.TriggerMethod))
 		case 3, 4:
 			fields = append(fields, boolField(cond.Operator == 2), cond.Value)
 		case 5:
 			fields = append(fields, cond.SecType, cond.Exchange, cond.Symbol)
 		case 6, 7:
-			fields = append(fields, boolField(cond.Operator == 2), strconv.Itoa(cond.ConID), cond.Exchange, cond.Value)
+			fields = append(fields, boolField(cond.Operator == 2), cond.Value, strconv.Itoa(cond.ConID), cond.Exchange)
 		}
 	}
 	if len(o.Conditions) > 0 {
