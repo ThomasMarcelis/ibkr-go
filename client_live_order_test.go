@@ -293,9 +293,9 @@ func livePlaceFillAndFlatten(t *testing.T, ctx context.Context, client *ibkr.Cli
 	}
 
 	// Flatten.
-	flattenAction := ibkr.Sell
-	if order.Action == ibkr.Sell {
-		flattenAction = ibkr.Buy
+	flattenAction := ibkr.ActionSell
+	if order.Action == ibkr.ActionSell {
+		flattenAction = ibkr.ActionBuy
 	}
 	flatHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: contract,
@@ -344,7 +344,7 @@ func liveQualifyOption(t *testing.T, ctx context.Context, client *ibkr.Client, u
 		Symbol:       "AAPL",
 		SecType:      ibkr.SecTypeOption,
 		Expiry:       expiry,
-		Strike:       strike.String(),
+		Strike:       strike,
 		Right:        right,
 		Multiplier:   param.Multiplier,
 		Exchange:     "SMART",
@@ -389,7 +389,7 @@ func liveQualifyVerticalLegs(t *testing.T, ctx context.Context, client *ibkr.Cli
 			Symbol:       "AAPL",
 			SecType:      ibkr.SecTypeOption,
 			Expiry:       expiry,
-			Strike:       strike.String(),
+			Strike:       strike,
 			Right:        ibkr.RightCall,
 			Multiplier:   param.Multiplier,
 			Exchange:     "SMART",
@@ -508,7 +508,7 @@ func TestLiveOrderLimitRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 
 	livePlaceAndCancel(t, ctx, client, aaplContract, order)
@@ -526,7 +526,7 @@ func TestLiveOrderStopRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeStop)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeStop)
 	order.AuxPrice = liveFarSell(anchor) // far above market so the stop never triggers
 
 	livePlaceAndCancel(t, ctx, client, aaplContract, order)
@@ -544,7 +544,7 @@ func TestLiveOrderStopLimitRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeStopLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeStopLimit)
 	order.AuxPrice = liveFarSell(anchor) // far above market so the stop never triggers
 	order.LmtPrice = liveFarSell(anchor).Add(decimal.NewFromInt(1))
 
@@ -563,7 +563,7 @@ func TestLiveOrderTrailingStopRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeTrailingStop)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeTrailingStop)
 	order.TrailStopPrice = liveFarSell(anchor) // far above market; BUY TRAIL triggers on rise, won't reach
 	order.AuxPrice = decimal.RequireFromString("1")
 
@@ -582,7 +582,7 @@ func TestLiveOrderTrailingLimitRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeTrailingLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeTrailingLimit)
 	order.TrailStopPrice = liveFarSell(anchor) // far above market; BUY TRAIL triggers on rise, won't reach
 	order.AuxPrice = decimal.RequireFromString("1")
 	order.LmtPriceOffset = decimal.RequireFromString("0.05")
@@ -602,7 +602,7 @@ func TestLiveOrderMITRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarketIfTouched)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarketIfTouched)
 	order.AuxPrice = liveFarBuy(anchor)
 
 	livePlaceAndCancel(t, ctx, client, aaplContract, order)
@@ -620,7 +620,7 @@ func TestLiveOrderLITRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimitIfTouched)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimitIfTouched)
 	order.AuxPrice = liveFarBuy(anchor)
 	order.LmtPrice = liveFarBuy(anchor).Add(decimal.NewFromInt(1))
 
@@ -639,7 +639,7 @@ func TestLiveOrderRelativeRestCancel(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeRelative)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeRelative)
 	order.LmtPrice = liveFarBuy(anchor)
 
 	livePlaceAndCancel(t, ctx, client, aaplContract, order)
@@ -661,15 +661,15 @@ func TestLiveOrderOpenCloseTypesAcceptOrReject(t *testing.T) {
 		label string
 		order ibkr.Order
 	}{
-		{label: "moc", order: liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarketOnClose)},
+		{label: "moc", order: liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarketOnClose)},
 		{label: "loc", order: func() ibkr.Order {
-			order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimitOnClose)
+			order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimitOnClose)
 			order.LmtPrice = liveMarketableBuy(anchor)
 			return order
 		}()},
-		{label: "moo", order: liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarketOnOpen)},
+		{label: "moo", order: liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarketOnOpen)},
 		{label: "loo", order: func() ibkr.Order {
-			order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimitOnOpen)
+			order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimitOnOpen)
 			order.LmtPrice = liveMarketableBuy(anchor)
 			return order
 		}()},
@@ -677,7 +677,7 @@ func TestLiveOrderOpenCloseTypesAcceptOrReject(t *testing.T) {
 	for _, tc := range cases {
 		result := liveTryPlaceObserveCancel(t, ctx, client, aaplContract, tc.order, tc.label)
 		if result.filled {
-			flatten := liveBaseOrder(account, ibkr.Sell, ibkr.OrderTypeMarket)
+			flatten := liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeMarket)
 			liveTryPlaceObserveCancel(t, ctx, client, aaplContract, flatten, tc.label+" flatten")
 		}
 	}
@@ -702,7 +702,7 @@ func TestLiveOrderPegFamiliesAcceptOrReject(t *testing.T) {
 		ibkr.OrderTypePeggedToBest,
 		ibkr.OrderTypePeggedBenchmark,
 	} {
-		order := liveBaseOrder(account, ibkr.Buy, orderType)
+		order := liveBaseOrder(account, ibkr.ActionBuy, orderType)
 		order.LmtPrice = liveFarBuy(anchor)
 		liveTryPlaceObserveCancel(t, ctx, client, aaplContract, order, string(orderType))
 	}
@@ -723,7 +723,7 @@ func TestLiveOrderMarketBuyFill(t *testing.T) {
 	defer cancelReq()
 
 	account := liveAccount(t, client)
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 
 	result := livePlaceFillAndFlatten(t, ctx, client, aaplContract, order, account)
 	if !result.sawExecution {
@@ -747,7 +747,7 @@ func TestLiveOrderMarketableLimitFill(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveMarketableBuy(anchor)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -763,7 +763,7 @@ func TestLiveOrderMarketableLimitFill(t *testing.T) {
 		flatHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
 			Order: ibkr.Order{
-				Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+				Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 				Quantity: order.Quantity, TIF: ibkr.TIFDay, Account: account,
 			},
 		})
@@ -790,7 +790,7 @@ func TestLiveOrderMarketToLimitFill(t *testing.T) {
 	defer cancelReq()
 
 	account := liveAccount(t, client)
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarketToLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarketToLimit)
 
 	result := livePlaceFillAndFlatten(t, ctx, client, aaplContract, order, account)
 	if !result.filled {
@@ -810,7 +810,7 @@ func TestLiveOrderIOCFill(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveMarketableBuy(anchor)
 	order.TIF = ibkr.TIFIOC
 
@@ -831,7 +831,7 @@ func TestLiveOrderIOCFill(t *testing.T) {
 		flat, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
 			Order: ibkr.Order{
-				Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+				Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 				Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 			},
 		})
@@ -856,7 +856,7 @@ func TestLiveOrderFOKFillOrReject(t *testing.T) {
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
 	// Fillable FOK.
-	fillable := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	fillable := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	fillable.LmtPrice = liveMarketableBuy(anchor)
 	fillable.TIF = ibkr.TIFFOK
 
@@ -872,7 +872,7 @@ func TestLiveOrderFOKFillOrReject(t *testing.T) {
 		flat, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
 			Order: ibkr.Order{
-				Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+				Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 				Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 			},
 		})
@@ -883,7 +883,7 @@ func TestLiveOrderFOKFillOrReject(t *testing.T) {
 	}
 
 	// Unfillable FOK: far below market.
-	unfillable := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	unfillable := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	unfillable.LmtPrice = liveFarBuy(anchor)
 	unfillable.TIF = ibkr.TIFFOK
 
@@ -916,7 +916,7 @@ func TestLiveOrderRejectInvalidContract(t *testing.T) {
 
 	account := liveAccount(t, client)
 	bogus := ibkr.Contract{Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"}
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: bogus, Order: order})
 	if err != nil {
@@ -943,7 +943,7 @@ func TestLiveOrderRejectInvalidType(t *testing.T) {
 	defer cancelReq()
 
 	account := liveAccount(t, client)
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderType("FEELINGS"))
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderType("FEELINGS"))
 	order.LmtPrice = decimal.RequireFromString("100")
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -983,7 +983,7 @@ func TestLiveOrderDoubleCancelOrder(t *testing.T) {
 
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -1029,7 +1029,7 @@ func TestLiveOrderModifyFilledOrder(t *testing.T) {
 	defer cancelReq()
 
 	account := liveAccount(t, client)
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
 	if err != nil {
@@ -1042,7 +1042,7 @@ func TestLiveOrderModifyFilledOrder(t *testing.T) {
 
 	// Attempt modify on filled order: should error or be ignored.
 	err = handle.Modify(ctx, ibkr.Order{
-		Action:    ibkr.Buy,
+		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.NewFromInt(1),
 		LmtPrice:  decimal.RequireFromString("100"),
@@ -1055,7 +1055,7 @@ func TestLiveOrderModifyFilledOrder(t *testing.T) {
 	flat, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 			Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 		},
 	})
@@ -1082,7 +1082,7 @@ func TestLiveOrderModifyLimitToFill(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -1105,7 +1105,7 @@ func TestLiveOrderModifyLimitToFill(t *testing.T) {
 
 	// Modify to market order to force fill.
 	if err := handle.Modify(ctx, ibkr.Order{
-		Action:    ibkr.Buy,
+		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeMarket,
 		Quantity:  decimal.NewFromInt(1),
 		TIF:       ibkr.TIFDay,
@@ -1124,7 +1124,7 @@ func TestLiveOrderModifyLimitToFill(t *testing.T) {
 	flat, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 			Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 		},
 	})
@@ -1147,7 +1147,7 @@ func TestLiveOrderModifyQuantity(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.Quantity = decimal.NewFromInt(5)
 	order.LmtPrice = liveFarBuy(anchor)
 
@@ -1166,7 +1166,7 @@ func TestLiveOrderModifyQuantity(t *testing.T) {
 
 	// Modify quantity from 5 to 3.
 	if err := handle.Modify(ctx, ibkr.Order{
-		Action:    ibkr.Buy,
+		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.NewFromInt(3),
 		LmtPrice:  liveFarBuy(anchor),
@@ -1219,7 +1219,7 @@ func TestLiveOrderRapidModifications(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -1240,7 +1240,7 @@ func TestLiveOrderRapidModifications(t *testing.T) {
 	for i := 1; i <= 5; i++ {
 		price := baseFar.Add(decimal.NewFromInt(int64(i)))
 		if err := handle.Modify(ctx, ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.NewFromInt(1),
 			LmtPrice:  price,
@@ -1306,7 +1306,7 @@ func TestLiveBracketFillChildrenActivate(t *testing.T) {
 	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Buy, OrderType: ibkr.OrderTypeMarket,
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarket,
 			Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 			Transmit: new(false),
 		},
@@ -1320,7 +1320,7 @@ func TestLiveBracketFillChildrenActivate(t *testing.T) {
 	tp, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeLimit,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeLimit,
 			Quantity: decimal.NewFromInt(1), LmtPrice: liveFarSell(anchor),
 			TIF: ibkr.TIFGTC, Account: account,
 			ParentID: parent.OrderID(), Transmit: new(false),
@@ -1335,7 +1335,7 @@ func TestLiveBracketFillChildrenActivate(t *testing.T) {
 	sl, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeStop,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeStop,
 			Quantity: decimal.NewFromInt(1), AuxPrice: liveFarBuy(anchor),
 			TIF: ibkr.TIFGTC, Account: account,
 			ParentID: parent.OrderID(),
@@ -1389,7 +1389,7 @@ func TestLiveBracketTriggerTakeProfit(t *testing.T) {
 	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Buy, OrderType: ibkr.OrderTypeMarket,
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarket,
 			Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 			Transmit: new(false),
 		},
@@ -1401,7 +1401,7 @@ func TestLiveBracketTriggerTakeProfit(t *testing.T) {
 	tp, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeLimit,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeLimit,
 			Quantity: decimal.NewFromInt(1), LmtPrice: liveFarSell(anchor),
 			TIF: ibkr.TIFGTC, Account: account,
 			ParentID: parent.OrderID(), Transmit: new(false),
@@ -1414,7 +1414,7 @@ func TestLiveBracketTriggerTakeProfit(t *testing.T) {
 	sl, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeStop,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeStop,
 			Quantity: decimal.NewFromInt(1), AuxPrice: liveFarBuy(anchor),
 			TIF: ibkr.TIFGTC, Account: account,
 			ParentID: parent.OrderID(),
@@ -1439,7 +1439,7 @@ func TestLiveBracketTriggerTakeProfit(t *testing.T) {
 
 	// Modify TP to marketable sell to trigger fill.
 	if err := tp.Modify(ctx, ibkr.Order{
-		Action: ibkr.Sell, OrderType: ibkr.OrderTypeLimit,
+		Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeLimit,
 		Quantity: decimal.NewFromInt(1), LmtPrice: liveMarketableSell(anchor),
 		TIF: ibkr.TIFGTC, Account: account,
 		ParentID: parent.OrderID(),
@@ -1475,7 +1475,7 @@ func TestLiveBracketCancelBeforeTransmit(t *testing.T) {
 	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Buy, OrderType: ibkr.OrderTypeLimit,
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit,
 			Quantity: decimal.NewFromInt(1), LmtPrice: liveFarBuy(anchor),
 			TIF: ibkr.TIFDay, Account: account,
 			Transmit: new(false),
@@ -1515,7 +1515,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 	ocaGroup := "ibkr-go-oca-" + strconv.FormatInt(time.Now().UnixNano(), 10)
 
 	// Marketable: should fill immediately.
-	marketableOrder := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	marketableOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	marketableOrder.LmtPrice = liveMarketableBuy(anchor)
 	marketableOrder.OcaGroup = ocaGroup
 	marketableOrder.OcaType = 1
@@ -1526,7 +1526,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 	}
 
 	// Resting: should be cancelled by OCA.
-	resting1 := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	resting1 := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	resting1.LmtPrice = liveFarBuy(anchor)
 	resting1.OcaGroup = ocaGroup
 	resting1.OcaType = 1
@@ -1536,7 +1536,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 		t.Fatalf("PlaceOrder resting OCA 1: %v", err)
 	}
 
-	resting2 := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	resting2 := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	resting2.LmtPrice = liveFarBuy(anchor).Sub(decimal.NewFromInt(1))
 	resting2.OcaGroup = ocaGroup
 	resting2.OcaType = 1
@@ -1566,7 +1566,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 	flat, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 			Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 		},
 	})
@@ -1592,7 +1592,7 @@ func TestLiveOCACancelAll(t *testing.T) {
 
 	var handles []*ibkr.OrderHandle
 	for i := 0; i < 2; i++ {
-		order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+		order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		order.LmtPrice = liveFarBuy(anchor).Add(decimal.NewFromInt(int64(i)))
 		order.OcaGroup = ocaGroup
 		order.OcaType = 1
@@ -1654,7 +1654,7 @@ func TestLiveOptionLimitRestCancel(t *testing.T) {
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 	optContract := liveQualifyOption(t, ctx, client, 265598, anchor, ibkr.RightCall)
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = decimal.RequireFromString("0.01") // Far below any option price.
 
 	livePlaceAndCancel(t, ctx, client, optContract, order)
@@ -1674,7 +1674,7 @@ func TestLiveOptionBuySellRoundTrip(t *testing.T) {
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 	optContract := liveQualifyOption(t, ctx, client, 265598, anchor, ibkr.RightCall)
 
-	buyOrder := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	buyOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 	buyHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: optContract, Order: buyOrder})
 	if err != nil {
 		t.Fatalf("PlaceOrder option BUY: %v", err)
@@ -1685,7 +1685,7 @@ func TestLiveOptionBuySellRoundTrip(t *testing.T) {
 		return
 	}
 
-	sellOrder := liveBaseOrder(account, ibkr.Sell, ibkr.OrderTypeMarket)
+	sellOrder := liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeMarket)
 	sellHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: optContract, Order: sellOrder})
 	if err != nil {
 		t.Fatalf("PlaceOrder option SELL: %v", err)
@@ -1710,7 +1710,7 @@ func TestLiveFutureLimitRestCancel(t *testing.T) {
 	futContract := liveQualifyFrontFuture(t, ctx, client, "MES")
 	futAnchor := liveAnchorPrice(t, ctx, client, futContract, decimal.RequireFromString("5000"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(futAnchor)
 
 	livePlaceAndCancel(t, ctx, client, futContract, order)
@@ -1729,7 +1729,7 @@ func TestLiveFutureBuySellRoundTrip(t *testing.T) {
 	account := liveAccount(t, client)
 	futContract := liveQualifyFrontFuture(t, ctx, client, "MES")
 
-	buyOrder := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	buyOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 	buyHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: futContract, Order: buyOrder})
 	if err != nil {
 		t.Fatalf("PlaceOrder future BUY: %v", err)
@@ -1740,7 +1740,7 @@ func TestLiveFutureBuySellRoundTrip(t *testing.T) {
 		return
 	}
 
-	sellOrder := liveBaseOrder(account, ibkr.Sell, ibkr.OrderTypeMarket)
+	sellOrder := liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeMarket)
 	sellHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: futContract, Order: sellOrder})
 	if err != nil {
 		t.Fatalf("PlaceOrder future SELL: %v", err)
@@ -1764,7 +1764,7 @@ func TestLiveForexLimitRestCancel(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, eurusdContract, decimal.RequireFromString("1.10"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.Quantity = decimal.NewFromInt(20000)
 	order.LmtPrice = anchor.Mul(decimal.RequireFromString("0.90")).Round(5)
 
@@ -1792,7 +1792,7 @@ func TestLiveComboVerticalRestCancel(t *testing.T) {
 		Currency: "USD",
 	}
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = decimal.RequireFromString("0.05")
 	order.ComboLegs = []ibkr.ComboLeg{
 		{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART"},
@@ -1818,31 +1818,25 @@ func TestLiveOrderWhatIf(t *testing.T) {
 	defer cancelReq()
 
 	account := liveAccount(t, client)
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 	order.Quantity = decimal.NewFromInt(100)
-	order.WhatIf = new(true)
 
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
+	state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
 	if err != nil {
-		t.Fatalf("PlaceOrder WhatIf: %v", err)
+		t.Fatalf("Orders().Preview: %v", err)
+	}
+	t.Logf("Preview: initMarginAfter=%s maintMarginAfter=%s commission=%s min=%s max=%s currency=%s",
+		state.InitMarginAfter, state.MaintMarginAfter,
+		state.Commission, state.CommissionMin, state.CommissionMax, state.Currency)
+	if state.InitMarginAfter.IsZero() && state.MaintMarginAfter.IsZero() {
+		t.Error("Preview returned no margin data")
 	}
 
-	result := liveObserveOrder(t, ctx, handle, "whatif", 15*time.Second)
-	if result.sawExecution {
-		t.Error("WhatIf order should never produce an Execution")
-	}
-
-	// Check for commission data in OpenOrder events.
-	var sawCommissionData bool
-	for _, evt := range result.events {
-		if evt.OpenOrder != nil && (evt.OpenOrder.Commission.IsPositive() || evt.OpenOrder.MinCommission.IsPositive()) {
-			sawCommissionData = true
-			t.Logf("WhatIf commission data: commission=%s min=%s max=%s currency=%s",
-				evt.OpenOrder.Commission, evt.OpenOrder.MinCommission, evt.OpenOrder.MaxCommission, evt.OpenOrder.CommissionCurrency)
-		}
-	}
-	if !sawCommissionData {
-		t.Log("WhatIf did not return commission preview data (may depend on account permissions)")
+	// Preview must never leave an order behind; a rejected what-if flag on
+	// Place is the companion contract.
+	order.WhatIf = new(true)
+	if _, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order}); err == nil {
+		t.Error("Place accepted WhatIf=true; want ValidationError pointing at Preview")
 	}
 }
 
@@ -1859,7 +1853,7 @@ func TestLiveOrderAdaptiveAlgo(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 	order.AlgoStrategy = "Adaptive"
 	order.AlgoParams = []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Normal"}}
@@ -1912,7 +1906,7 @@ func TestLiveOrderIceberg(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.Quantity = decimal.NewFromInt(10)
 	order.LmtPrice = liveFarBuy(anchor)
 	order.DisplaySize = 3
@@ -1933,7 +1927,7 @@ func TestLiveOrderOutsideRTH(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 	order.OutsideRTH = true
 
@@ -1953,7 +1947,7 @@ func TestLiveOrderConditionPrice(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 	order.Conditions = []ibkr.OrderCondition{{
 		Type:          1, // Price condition
@@ -1989,7 +1983,7 @@ func TestLiveStressRapidFireTenOrders(t *testing.T) {
 	handles := make([]*ibkr.OrderHandle, 0, n)
 	ids := make(map[int64]bool)
 	for i := 0; i < n; i++ {
-		order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+		order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		order.LmtPrice = liveFarBuy(anchor).Add(decimal.NewFromInt(int64(i)))
 
 		h, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -2057,7 +2051,7 @@ func TestLiveStressConcurrentModifyCancel(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -2081,7 +2075,7 @@ func TestLiveStressConcurrentModifyCancel(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		_ = handle.Modify(ctx, ibkr.Order{
-			Action: ibkr.Buy, OrderType: ibkr.OrderTypeLimit,
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit,
 			Quantity: decimal.NewFromInt(1), LmtPrice: liveFarBuy(anchor).Add(decimal.NewFromInt(10)),
 			TIF: ibkr.TIFDay, Account: account,
 		})
@@ -2136,7 +2130,7 @@ func TestLiveOrdersWithSubscriptions(t *testing.T) {
 	// Place 3 far-from-market orders while subscriptions are active.
 	var handles []*ibkr.OrderHandle
 	for i := 0; i < 3; i++ {
-		order := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+		order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		order.LmtPrice = liveFarBuy(anchor).Add(decimal.NewFromInt(int64(i)))
 
 		h, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
@@ -2188,7 +2182,7 @@ func TestLiveAlgoScaleInWithStopLoss(t *testing.T) {
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
 	// Buy 1.
-	buy1 := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	buy1 := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 	h1, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: buy1})
 	if err != nil {
 		t.Fatalf("buy1: %v", err)
@@ -2224,7 +2218,7 @@ func TestLiveAlgoScaleInWithStopLoss(t *testing.T) {
 
 	// Place protective stop-loss for entire position.
 	stopOrder := ibkr.Order{
-		Action: ibkr.Sell, OrderType: ibkr.OrderTypeStop,
+		Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeStop,
 		Quantity: decimal.NewFromInt(2), AuxPrice: liveFarBuy(anchor),
 		TIF: ibkr.TIFGTC, Account: account,
 	}
@@ -2249,7 +2243,7 @@ func TestLiveAlgoScaleInWithStopLoss(t *testing.T) {
 	liveObserveOrder(t, ctx, stopHandle, "stop-cancel", 15*time.Second)
 
 	flatOrder := ibkr.Order{
-		Action: ibkr.Sell, OrderType: ibkr.OrderTypeMarket,
+		Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeMarket,
 		Quantity: decimal.NewFromInt(2), TIF: ibkr.TIFDay, Account: account,
 	}
 	flatHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: flatOrder})
@@ -2272,7 +2266,7 @@ func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	account := liveAccount(t, client)
 
 	// Buy.
-	buyOrder := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket)
+	buyOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 	buyHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: buyOrder})
 	if err != nil {
 		t.Fatalf("buy: %v", err)
@@ -2284,7 +2278,7 @@ func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	}
 
 	// Immediate sell.
-	sellOrder := liveBaseOrder(account, ibkr.Sell, ibkr.OrderTypeMarket)
+	sellOrder := liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeMarket)
 	sellHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: sellOrder})
 	if err != nil {
 		t.Fatalf("sell: %v", err)
@@ -2354,7 +2348,7 @@ func TestLiveAlgorithmicCampaign(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		h, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
-			Order:    liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeMarket),
+			Order:    liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket),
 		})
 		if err != nil {
 			t.Fatalf("buy[%d]: %v", i, err)
@@ -2371,7 +2365,7 @@ func TestLiveAlgorithmicCampaign(t *testing.T) {
 	}
 
 	// Step 4: Resting LMT -> modify to fill.
-	restOrder := liveBaseOrder(account, ibkr.Buy, ibkr.OrderTypeLimit)
+	restOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	restOrder.LmtPrice = liveFarBuy(anchor)
 	restHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: restOrder})
 	if err != nil {
@@ -2385,7 +2379,7 @@ func TestLiveAlgorithmicCampaign(t *testing.T) {
 	}
 
 	if err := restHandle.Modify(ctx, ibkr.Order{
-		Action: ibkr.Buy, OrderType: ibkr.OrderTypeMarket,
+		Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarket,
 		Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
 	}); err != nil {
 		t.Logf("modify to MKT: %v", err)
@@ -2410,7 +2404,7 @@ func TestLiveAlgorithmicCampaign(t *testing.T) {
 	for i := 0; i < filledBuys; i++ {
 		h, err := client.Orders().Place(flatCtx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
-			Order:    liveBaseOrder(account, ibkr.Sell, ibkr.OrderTypeMarket),
+			Order:    liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeMarket),
 		})
 		if err != nil {
 			t.Fatalf("flatten[%d]: %v", i, err)

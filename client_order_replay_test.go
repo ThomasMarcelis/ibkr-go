@@ -113,7 +113,7 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("100"),
 			LmtPrice:  decimal.RequireFromString("14.61"),
@@ -187,7 +187,7 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	stop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("100"),
 			AuxPrice:  decimal.RequireFromString("2921.2"),
@@ -232,7 +232,7 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	stopLimit, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeStopLimit,
 			Quantity:  decimal.RequireFromString("100"),
 			LmtPrice:  decimal.RequireFromString("2922.2"),
@@ -308,7 +308,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	trail, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:         ibkr.Sell,
+			Action:         ibkr.ActionSell,
 			OrderType:      ibkr.OrderTypeTrailingStop,
 			Quantity:       decimal.RequireFromString("100"),
 			AuxPrice:       decimal.RequireFromString("1"),
@@ -405,7 +405,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	trailLimit, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:         ibkr.Sell,
+			Action:         ibkr.ActionSell,
 			OrderType:      ibkr.OrderTypeTrailingLimit,
 			Quantity:       decimal.RequireFromString("100"),
 			AuxPrice:       decimal.RequireFromString("1"),
@@ -499,7 +499,7 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	rel, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeRelative,
 			Quantity:  decimal.RequireFromString("100"),
 			LmtPrice:  decimal.RequireFromString("14.61"),
@@ -573,7 +573,7 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 	bogus, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderType("FEELINGS"),
 			Quantity:  decimal.RequireFromString("100"),
 			LmtPrice:  decimal.RequireFromString("14.61"),
@@ -597,7 +597,7 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 	aggressive, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("100"),
 			LmtPrice:  decimal.RequireFromString("2922.3"),
@@ -647,7 +647,7 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 			Currency: "USD",
 		},
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,

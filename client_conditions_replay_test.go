@@ -92,7 +92,7 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: contract,
 			Order: ibkr.Order{
-				Action:              ibkr.Buy,
+				Action:              ibkr.ActionBuy,
 				OrderType:           ibkr.OrderTypeLimit,
 				Quantity:            decimal.RequireFromString("100"),
 				LmtPrice:            decimal.RequireFromString("14.59"),

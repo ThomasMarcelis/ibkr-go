@@ -148,7 +148,7 @@ func historicalContractPacingKey(contract Contract) string {
 		contract.Symbol,
 		string(contract.SecType),
 		contract.Expiry,
-		contract.Strike,
+		decimalOrEmpty(contract.Strike),
 		string(contract.Right),
 		contract.Multiplier,
 		contract.Exchange,

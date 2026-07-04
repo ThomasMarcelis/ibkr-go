@@ -10,6 +10,11 @@ import (
 // OrderHandle tracks a placed order's lifecycle. Events arrive via Events();
 // lifecycle state changes (Gap, Resumed) arrive via Lifecycle(). Close() detaches
 // the handle without cancelling the order. Cancel() sends a cancel request.
+//
+// Commission events may race the terminal order status: the live Gateway can
+// deliver an execution or commission callback just after a Filled or Cancelled
+// status. The handle therefore keeps a short drain window open after a terminal
+// status before closing, so those trailing events are still delivered.
 type OrderHandle struct {
 	orderID int64
 	events  chan OrderEvent

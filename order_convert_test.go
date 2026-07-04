@@ -12,7 +12,7 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 	got := toCodecPlaceOrder(77, PlaceOrderRequest{
 		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
 		Order: Order{
-			Action:                   Buy,
+			Action:                   ActionBuy,
 			OrderType:                OrderTypeTrailingLimit,
 			Quantity:                 decimal.RequireFromString("10"),
 			LmtPrice:                 decimal.RequireFromString("200.25"),
@@ -136,7 +136,7 @@ func TestToCodecPlaceOrderZeroIntFieldSemantics(t *testing.T) {
 	got := toCodecPlaceOrder(1, PlaceOrderRequest{
 		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
 		Order: Order{
-			Action:    Buy,
+			Action:    ActionBuy,
 			OrderType: OrderTypeMarket,
 			Quantity:  decimal.RequireFromString("1"),
 		},

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/shopspring/decimal"
 )
 
 // Replay coverage for the contract-details asset-type matrix (REF-001).
@@ -50,8 +51,8 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.Expiry != "20260618" {
 		t.Errorf("Expiry = %q, want 20260618", first.Expiry)
 	}
-	if first.Strike != "100" {
-		t.Errorf("Strike = %q, want 100", first.Strike)
+	if !first.Strike.Equal(decimal.RequireFromString("100")) {
+		t.Errorf("Strike = %s, want 100", first.Strike)
 	}
 	if first.Right != ibkr.RightCall {
 		t.Errorf("Right = %q, want C", first.Right)
@@ -93,8 +94,8 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 		if details[i].ConID != want.conID {
 			t.Errorf("details[%d].ConID = %d, want %d", i, details[i].ConID, want.conID)
 		}
-		if details[i].Strike != want.strike {
-			t.Errorf("details[%d].Strike = %q, want %q", i, details[i].Strike, want.strike)
+		if !details[i].Strike.Equal(decimal.RequireFromString(want.strike)) {
+			t.Errorf("details[%d].Strike = %s, want %s", i, details[i].Strike, want.strike)
 		}
 		if details[i].Right != ibkr.RightCall {
 			t.Errorf("details[%d].Right = %q, want C", i, details[i].Right)
@@ -108,8 +109,8 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if put.Right != ibkr.RightPut {
 		t.Errorf("put Right = %q, want P", put.Right)
 	}
-	if put.Strike != "100" {
-		t.Errorf("put Strike = %q, want 100", put.Strike)
+	if !put.Strike.Equal(decimal.RequireFromString("100")) {
+		t.Errorf("put Strike = %s, want 100", put.Strike)
 	}
 	if put.LocalSymbol != "AAPL  260618P00100000" {
 		t.Errorf("put LocalSymbol = %q, want AAPL  260618P00100000", put.LocalSymbol)

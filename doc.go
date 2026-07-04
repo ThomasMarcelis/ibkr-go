@@ -105,13 +105,30 @@
 // [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a
 // modified order with the same ID.
 //
-// A what-if order ([Order].WhatIf) is a margin preview, not a trade: the
-// Gateway answers with a single OpenOrder event whose InitMargin*,
-// MaintMargin*, EquityWithLoan*, and Commission fields carry the preview,
-// and no order status lifecycle ever follows. Read the first OpenOrder
-// event from the handle, then Close it — nothing rests on the server, so
-// the handle never reaches a terminal state and Wait would block until the
-// session ends.
+// # Margin Previews
+//
+// [OrdersClient.Preview] runs a what-if order: a margin-and-commission preview,
+// not a trade. It forces the what-if flag, sends the same place_order frame,
+// and returns the [OrderState] the Gateway attaches to the single open_order
+// echo — the nine InitMargin*/MaintMargin*/EquityWithLoan* decimals plus the
+// commission range and currency. Nothing rests on the server and no OrderHandle
+// is created; Preview blocks for the one reply and returns:
+//
+//	state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+//	    Contract: contract,
+//	    Order: ibkr.Order{
+//	        Action:    ibkr.ActionBuy,
+//	        OrderType: ibkr.OrderTypeMarket,
+//	        Quantity:  decimal.NewFromInt(100),
+//	    },
+//	})
+//	if err != nil {
+//	    return err
+//	}
+//	fmt.Println(state.InitMarginAfter, state.Commission)
+//
+// [OrdersClient.Place] rejects an order with [Order].WhatIf set to true with a
+// [*ValidationError]: previews go through Preview, not Place.
 //
 // # Session Lifecycle
 //

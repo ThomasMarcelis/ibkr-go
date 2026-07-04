@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"context"
 	"io"
 	"log/slog"
 	"net"
@@ -12,6 +13,14 @@ import (
 type Option func(*config)
 
 type SubscriptionOption func(*subscriptionConfig)
+
+// Dialer establishes the TCP connection to the Gateway or TWS. The standard
+// library's [*net.Dialer] satisfies this interface, so most callers pass one
+// directly; supply a custom implementation to route through a proxy or an
+// in-process pipe. Pass it with [WithDialer].
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
 
 type config struct {
 	host                string
@@ -77,7 +86,7 @@ func WithClientID(clientID int) Option {
 	}
 }
 
-func WithDialer(dialer transport.Dialer) Option {
+func WithDialer(dialer Dialer) Option {
 	return func(cfg *config) {
 		cfg.dialer = dialer
 	}

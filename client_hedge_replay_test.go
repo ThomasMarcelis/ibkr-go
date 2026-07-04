@@ -59,7 +59,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	optionParent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: exerciseAAPLJun12Call2925,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.NewFromInt(1),
 			LmtPrice:  decimal.RequireFromString("14.61"),
@@ -79,7 +79,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		return ibkr.PlaceOrderRequest{
 			Contract: orderReplayAAPL,
 			Order: ibkr.Order{
-				Action:     ibkr.Sell,
+				Action:     ibkr.ActionSell,
 				OrderType:  ibkr.OrderTypeLimit,
 				Quantity:   quantity,
 				LmtPrice:   decimal.RequireFromString("2922.4"),
@@ -126,7 +126,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	stockParent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("100"),
 			LmtPrice:  decimal.RequireFromString("14.61"),

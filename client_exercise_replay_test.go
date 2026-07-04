@@ -34,7 +34,7 @@ var exerciseAAPLJun12Call2925 = ibkr.Contract{
 	Symbol:       "AAPL",
 	SecType:      ibkr.SecTypeOption,
 	Expiry:       "20260612 16:00:00 US/Eastern",
-	Strike:       "292.5",
+	Strike:       decimal.RequireFromString("292.5"),
 	Right:        ibkr.RightCall,
 	Multiplier:   "100",
 	Exchange:     "SMART",
@@ -48,7 +48,7 @@ var exerciseAAPLJun12Call2825 = ibkr.Contract{
 	Symbol:       "AAPL",
 	SecType:      ibkr.SecTypeOption,
 	Expiry:       "20260612 16:00:00 US/Eastern",
-	Strike:       "282.5",
+	Strike:       decimal.RequireFromString("282.5"),
 	Right:        ibkr.RightCall,
 	Multiplier:   "100",
 	Exchange:     "SMART",
@@ -152,7 +152,7 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: exerciseAAPLJun12Call2925,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
 			Quantity:  decimal.NewFromInt(1),
 			TIF:       ibkr.TIFDay,
@@ -171,7 +171,7 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 	if open.Contract.ConID != 886441502 || open.Contract.SecType != ibkr.SecTypeOption {
 		t.Fatalf("open contract = %+v, want AAPL OPT con 886441502", open.Contract)
 	}
-	if open.Contract.Strike != "292.5" || open.Contract.Right != ibkr.RightCall {
+	if !open.Contract.Strike.Equal(decimal.RequireFromString("292.5")) || open.Contract.Right != ibkr.RightCall {
 		t.Fatalf("open strike/right = %s/%s, want 292.5/C", open.Contract.Strike, open.Contract.Right)
 	}
 	if open.OrderType != ibkr.OrderTypeMarket {
@@ -247,7 +247,7 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: exerciseAAPLJun12Call2825,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
 			Quantity:  decimal.NewFromInt(1),
 			TIF:       ibkr.TIFDay,
@@ -263,7 +263,7 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, handle)
-	if open.Contract.ConID != 887760542 || open.Contract.Strike != "282.5" {
+	if open.Contract.ConID != 887760542 || !open.Contract.Strike.Equal(decimal.RequireFromString("282.5")) {
 		t.Fatalf("open contract = %+v, want AAPL OPT 282.5 con 887760542", open.Contract)
 	}
 	if open.PermID != 900407 {

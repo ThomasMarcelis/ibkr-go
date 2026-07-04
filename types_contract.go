@@ -47,7 +47,7 @@ type Contract struct {
 	Symbol          string
 	SecType         SecType
 	Expiry          string
-	Strike          string
+	Strike          decimal.Decimal
 	Right           Right
 	Multiplier      string
 	Exchange        string

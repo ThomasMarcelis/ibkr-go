@@ -345,7 +345,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 			handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 				Contract: orderReplayAAPL,
 				Order: ibkr.Order{
-					Action:       ibkr.Buy,
+					Action:       ibkr.ActionBuy,
 					OrderType:    ibkr.OrderTypeLimit,
 					Quantity:     decimal.RequireFromString("1"),
 					LmtPrice:     decimal.RequireFromString("13.15"),

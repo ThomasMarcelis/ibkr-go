@@ -282,7 +282,7 @@ func TestStressConcurrentPlaceOrders(t *testing.T) {
 					Currency: "USD",
 				},
 				Order: ibkr.Order{
-					Action:    ibkr.Buy,
+					Action:    ibkr.ActionBuy,
 					OrderType: ibkr.OrderTypeLimit,
 					Quantity:  decimal.RequireFromString("1"),
 					LmtPrice:  decimal.RequireFromString("50"),
@@ -492,7 +492,7 @@ disconnect
 			Currency: "USD",
 		},
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
 			LmtPrice:  decimal.RequireFromString("50"),

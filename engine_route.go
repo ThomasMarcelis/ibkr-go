@@ -219,6 +219,21 @@ func isOrderCancellationNotice(msg codec.APIError) bool {
 
 func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	orderRoute, orderObserved := e.orders[msg.OrderID]
+
+	// A what-if preview route resolves on its single open_order echo: decode,
+	// tear the route down, and hand the result (OpenOrder or decode error) to
+	// the blocked PreviewOrder caller. No OrderHandle is ever involved.
+	if orderObserved && orderRoute.preview != nil {
+		if orderRoute.closed {
+			return
+		}
+		orderRoute.closed = true
+		delete(e.orders, msg.OrderID)
+		order, err := fromCodecOpenOrder(msg)
+		orderRoute.preview <- previewResult{order: order, err: err}
+		return
+	}
+
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
 	if (!orderObserved || orderRoute.closed) && !singletonObserved {
 		return
@@ -249,6 +264,11 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 
 func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	orderRoute, orderObserved := e.orders[msg.OrderID]
+	// A what-if preview route has no handle and resolves only on its open_order
+	// echo; a live what-if never emits order status, so ignore the order side.
+	if orderObserved && orderRoute.preview != nil {
+		orderObserved = false
+	}
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
 	if (!orderObserved || orderRoute.closed) && !singletonObserved {
 		return

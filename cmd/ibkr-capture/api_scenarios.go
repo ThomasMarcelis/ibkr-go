@@ -273,28 +273,28 @@ func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) e
 			cancelAfter  bool
 			modifyToFill bool
 		}{
-			{label: "mkt_buy_fill", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket), allowFill: true},
-			{label: "marketable_lmt_buy_fill", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), marketableBuy(anchor)), allowFill: true},
-			{label: "far_lmt_buy_cancel", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), cancelAfter: true},
-			{label: "stp_buy_rest_cancel", order: withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeStop), marketableBuy(anchor)), cancelAfter: true},
-			{label: "stp_lmt_buy_rest_cancel", order: withLimit(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeStopLimit), marketableBuy(anchor)), marketableBuy(anchor).Add(decimal.NewFromInt(1))), cancelAfter: true},
-			{label: "trail_sell_reject_or_rest", order: withTrailing(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeTrailingStop), anchor), cancelAfter: true},
-			{label: "trail_limit_sell_reject_or_rest", order: withTrailingLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeTrailingLimit), anchor), cancelAfter: true},
-			{label: "mit_buy_reject_or_trigger", order: withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarketIfTouched), marketableBuy(anchor)), allowFill: true, cancelAfter: true},
-			{label: "lit_buy_reject_or_trigger", order: withLimit(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimitIfTouched), marketableBuy(anchor)), marketableBuy(anchor).Add(decimal.NewFromInt(1))), allowFill: true, cancelAfter: true},
-			{label: "mtl_buy_fill_or_reprice", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarketToLimit), allowFill: true, cancelAfter: true},
-			{label: "rel_buy_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeRelative), farBuy(anchor)), cancelAfter: true},
-			{label: "delayed_success_modify", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), modifyToFill: true, allowFill: true},
-			{label: "invalid_order_type_reject", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderType("FEELINGS")), farBuy(anchor))},
-			{label: "moc_buy_fill_or_reject", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarketOnClose), allowFill: true, cancelAfter: true},
-			{label: "loc_buy_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimitOnClose), marketableBuy(anchor)), allowFill: true, cancelAfter: true},
-			{label: "moo_buy_reject_or_queued", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarketOnOpen), cancelAfter: true},
-			{label: "loo_buy_reject_or_queued", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimitOnOpen), marketableBuy(anchor)), cancelAfter: true},
-			{label: "peg_mkt_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypePeggedToMarket), farBuy(anchor)), cancelAfter: true},
-			{label: "peg_pri_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypePeggedToPrimary), farBuy(anchor)), cancelAfter: true},
-			{label: "peg_mid_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypePeggedToMid), farBuy(anchor)), cancelAfter: true},
-			{label: "peg_best_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypePeggedToBest), farBuy(anchor)), cancelAfter: true},
-			{label: "peg_bench_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypePeggedBenchmark), farBuy(anchor)), cancelAfter: true},
+			{label: "mkt_buy_fill", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket), allowFill: true},
+			{label: "marketable_lmt_buy_fill", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), marketableBuy(anchor)), allowFill: true},
+			{label: "far_lmt_buy_cancel", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), cancelAfter: true},
+			{label: "stp_buy_rest_cancel", order: withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeStop), marketableBuy(anchor)), cancelAfter: true},
+			{label: "stp_lmt_buy_rest_cancel", order: withLimit(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeStopLimit), marketableBuy(anchor)), marketableBuy(anchor).Add(decimal.NewFromInt(1))), cancelAfter: true},
+			{label: "trail_sell_reject_or_rest", order: withTrailing(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeTrailingStop), anchor), cancelAfter: true},
+			{label: "trail_limit_sell_reject_or_rest", order: withTrailingLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeTrailingLimit), anchor), cancelAfter: true},
+			{label: "mit_buy_reject_or_trigger", order: withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketIfTouched), marketableBuy(anchor)), allowFill: true, cancelAfter: true},
+			{label: "lit_buy_reject_or_trigger", order: withLimit(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimitIfTouched), marketableBuy(anchor)), marketableBuy(anchor).Add(decimal.NewFromInt(1))), allowFill: true, cancelAfter: true},
+			{label: "mtl_buy_fill_or_reprice", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketToLimit), allowFill: true, cancelAfter: true},
+			{label: "rel_buy_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeRelative), farBuy(anchor)), cancelAfter: true},
+			{label: "delayed_success_modify", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), modifyToFill: true, allowFill: true},
+			{label: "invalid_order_type_reject", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderType("FEELINGS")), farBuy(anchor))},
+			{label: "moc_buy_fill_or_reject", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketOnClose), allowFill: true, cancelAfter: true},
+			{label: "loc_buy_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimitOnClose), marketableBuy(anchor)), allowFill: true, cancelAfter: true},
+			{label: "moo_buy_reject_or_queued", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketOnOpen), cancelAfter: true},
+			{label: "loo_buy_reject_or_queued", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimitOnOpen), marketableBuy(anchor)), cancelAfter: true},
+			{label: "peg_mkt_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToMarket), farBuy(anchor)), cancelAfter: true},
+			{label: "peg_pri_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToPrimary), farBuy(anchor)), cancelAfter: true},
+			{label: "peg_mid_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToMid), farBuy(anchor)), cancelAfter: true},
+			{label: "peg_best_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToBest), farBuy(anchor)), cancelAfter: true},
+			{label: "peg_bench_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedBenchmark), farBuy(anchor)), cancelAfter: true},
 		}
 
 		for _, tc := range cases {
@@ -344,16 +344,16 @@ func runAPIOrderFillAAPL(ctx context.Context, addr string, clientID int) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL fill anchor price: %s", anchor)
 
-		if err := placeObserveFlatten(ctx, client, account, "fill mkt buy", baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket), 30*time.Second); err != nil {
+		if err := placeObserveFlatten(ctx, client, account, "fill mkt buy", baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket), 30*time.Second); err != nil {
 			log.Printf("fill mkt buy: %v", err)
 		}
 
-		mtl := baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarketToLimit)
+		mtl := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketToLimit)
 		if err := placeObserveFlatten(ctx, client, account, "fill mtl buy", mtl, 30*time.Second); err != nil {
 			log.Printf("fill mtl buy: %v", err)
 		}
 
-		resting := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		resting := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		handle, err := placeAPIOrder(ctx, client, "fill delayed resting", apiAAPL, resting)
 		if err != nil {
 			log.Printf("fill delayed place: %v", err)
@@ -387,7 +387,7 @@ func runAPIOrderRestCancelAAPL(ctx context.Context, addr string, clientID int) e
 			label string
 			order ibkr.Order
 		}{
-			{label: "rest far lmt buy", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))},
+			{label: "rest far lmt buy", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))},
 		}
 		for _, tc := range cases {
 			if !clientReady(client) {
@@ -412,7 +412,7 @@ func runAPIOrderRelativeCancelAAPL(ctx context.Context, addr string, clientID in
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL relative/cancel anchor price: %s", anchor)
 
-		order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeRelative), farBuy(anchor))
+		order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeRelative), farBuy(anchor))
 		handle, err := placeAPIOrder(ctx, client, "relative buy", apiAAPL, order)
 		if err != nil {
 			log.Printf("relative buy place: %v", err)
@@ -434,8 +434,8 @@ func runAPIOrderTrailingCancelAAPL(ctx context.Context, addr string, clientID in
 			label string
 			order ibkr.Order
 		}{
-			{label: "trail sell", order: withTrailing(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeTrailingStop), anchor)},
-			{label: "trail limit sell", order: withTrailingLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeTrailingLimit), anchor)},
+			{label: "trail sell", order: withTrailing(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeTrailingStop), anchor)},
+			{label: "trail limit sell", order: withTrailingLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeTrailingLimit), anchor)},
 		}
 		for _, tc := range cases {
 			if !clientReady(client) {
@@ -464,8 +464,8 @@ func runAPIOrderStopCancelAAPL(ctx context.Context, addr string, clientID int) e
 			label string
 			order ibkr.Order
 		}{
-			{label: "stop buy", order: withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeStop), farSell(anchor))},
-			{label: "stop limit buy", order: withLimit(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeStopLimit), farSell(anchor)), farSell(anchor).Add(decimal.NewFromInt(1)))},
+			{label: "stop buy", order: withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeStop), farSell(anchor))},
+			{label: "stop limit buy", order: withLimit(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeStopLimit), farSell(anchor)), farSell(anchor).Add(decimal.NewFromInt(1)))},
 		}
 		for _, tc := range cases {
 			if !clientReady(client) {
@@ -495,9 +495,9 @@ func runAPIOrderRejectsAAPL(ctx context.Context, addr string, clientID int) erro
 			contract ibkr.Contract
 			order    ibkr.Order
 		}{
-			{label: "reject invalid order type", contract: apiAAPL, order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderType("FEELINGS")), farBuy(anchor))},
-			{label: "reject price band", contract: apiAAPL, order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), anchor.Mul(decimal.NewFromInt(10)).Round(2))},
-			{label: "reject invalid contract", contract: ibkr.Contract{Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"}, order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)},
+			{label: "reject invalid order type", contract: apiAAPL, order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderType("FEELINGS")), farBuy(anchor))},
+			{label: "reject price band", contract: apiAAPL, order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), anchor.Mul(decimal.NewFromInt(10)).Round(2))},
+			{label: "reject invalid contract", contract: ibkr.Contract{Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"}, order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)},
 		}
 		for _, tc := range cases {
 			handle, err := placeAPIOrder(ctx, client, tc.label, tc.contract, tc.order)
@@ -521,7 +521,7 @@ func runAPIOrderRejectsAAPL(ctx context.Context, addr string, clientID int) erro
 func runAPIDelayedSuccessModifyAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		handle, err := placeAPIOrder(ctx, client, "delayed resting", apiAAPL, order)
 		if err != nil {
 			return fmt.Errorf("place resting order: %w", err)
@@ -546,17 +546,17 @@ func runAPIBracketTriggerAAPL(ctx context.Context, addr string, clientID int) er
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 
 		parent, err := placeAPIOrder(ctx, client, "bracket parent", apiAAPL,
-			withTransmit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket), false))
+			withTransmit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket), false))
 		if err != nil {
 			return fmt.Errorf("place bracket parent: %w", err)
 		}
 		tp, err := placeAPIOrder(ctx, client, "bracket take-profit", apiAAPL,
-			withTransmit(withParent(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor)), parent.OrderID()), false))
+			withTransmit(withParent(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeLimit), farSell(anchor)), parent.OrderID()), false))
 		if err != nil {
 			return fmt.Errorf("place bracket take-profit: %w", err)
 		}
 		sl, err := placeAPIOrder(ctx, client, "bracket stop-loss", apiAAPL,
-			withParent(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeStop), farBuy(anchor)), parent.OrderID()))
+			withParent(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeStop), farBuy(anchor)), parent.OrderID()))
 		if err != nil {
 			return fmt.Errorf("place bracket stop-loss: %w", err)
 		}
@@ -565,7 +565,7 @@ func runAPIBracketTriggerAAPL(ctx context.Context, addr string, clientID int) er
 		_ = observeOrder(ctx, tp, "bracket take-profit initial", 5*time.Second)
 		_ = observeOrder(ctx, sl, "bracket stop-loss initial", 5*time.Second)
 		if parentObs.FullFill() {
-			tpOrder := withParent(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeLimit), marketableSell(anchor)), parent.OrderID())
+			tpOrder := withParent(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeLimit), marketableSell(anchor)), parent.OrderID())
 			if err := modifyAPIOrder(ctx, tp, "bracket take-profit trigger", tpOrder); err != nil {
 				log.Printf("bracket force take-profit modify: %v", err)
 			}
@@ -582,12 +582,12 @@ func runAPIOCATriggerAAPL(ctx context.Context, addr string, clientID int) error 
 		oca := "ibkr-go-api-oca-" + strconv.FormatInt(time.Now().Unix(), 10)
 
 		resting, err := placeAPIOrder(ctx, client, "oca resting", apiAAPL,
-			withOCA(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), oca))
+			withOCA(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), oca))
 		if err != nil {
 			return fmt.Errorf("place OCA resting peer: %w", err)
 		}
 		marketable, err := placeAPIOrder(ctx, client, "oca marketable", apiAAPL,
-			withOCA(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), marketableBuy(anchor)), oca))
+			withOCA(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), marketableBuy(anchor)), oca))
 		if err != nil {
 			return fmt.Errorf("place OCA marketable peer: %w", err)
 		}
@@ -603,7 +603,7 @@ func runAPIOCATriggerAAPL(ctx context.Context, addr string, clientID int) error 
 func runAPIConditionsMatrixAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		base := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		base := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		conditions := []struct {
 			label string
 			cond  ibkr.OrderCondition
@@ -644,21 +644,21 @@ func runAPITIFAttributeMatrixAAPL(ctx context.Context, addr string, clientID int
 			label string
 			order ibkr.Order
 		}{
-			{label: "gtc_far_lmt", order: withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)},
-			{label: "gtd_far_lmt", order: withGoodTillDate(withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTD), orderTimestamp(now.Add(2*time.Hour)))},
-			{label: "good_after_far_lmt", order: withGoodAfterTime(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now.Add(2*time.Minute)))},
-			{label: "all_or_none_far_lmt", order: withAllOrNone(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)))},
-			{label: "min_qty_far_lmt", order: withMinQty(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), decimal.NewFromInt(3), decimal.NewFromInt(2))},
-			{label: "rel_percent_offset", order: withPercentOffset(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeRelative), farBuy(anchor)), decimal.RequireFromString("0.03"))},
-			{label: "trailing_percent", order: withTrailingPercent(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeTrailingStop), anchor, decimal.RequireFromString("1.5"))},
-			{label: "trigger_method_stop", order: withTriggerMethod(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeStop), farSell(anchor)), 4)},
-			{label: "explicit_order_ref", order: withOrderRef(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "ibkrgo-explicit-ref-"+scenarioHash("api_tif_attribute_matrix_aapl"))},
-			{label: "scale_far_lmt", order: withScale(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)))},
-			{label: "active_window_far_lmt", order: withActiveWindow(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now.Add(2*time.Minute)), orderTimestamp(now.Add(4*time.Minute)))},
-			{label: "price_management_far_lmt", order: withPriceManagement(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)))},
-			{label: "adjusted_stop_fields", order: withAdjustedStop(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Sell, ibkr.OrderTypeStop), farBuy(anchor)), anchor)},
-			{label: "manual_order_time_far_lmt", order: withManualOrderTime(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now))},
-			{label: "advanced_error_override_far_lmt", order: withAdvancedErrorOverride(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "IBDBUYTX")},
+			{label: "gtc_far_lmt", order: withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)},
+			{label: "gtd_far_lmt", order: withGoodTillDate(withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTD), orderTimestamp(now.Add(2*time.Hour)))},
+			{label: "good_after_far_lmt", order: withGoodAfterTime(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now.Add(2*time.Minute)))},
+			{label: "all_or_none_far_lmt", order: withAllOrNone(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)))},
+			{label: "min_qty_far_lmt", order: withMinQty(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), decimal.NewFromInt(3), decimal.NewFromInt(2))},
+			{label: "rel_percent_offset", order: withPercentOffset(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeRelative), farBuy(anchor)), decimal.RequireFromString("0.03"))},
+			{label: "trailing_percent", order: withTrailingPercent(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeTrailingStop), anchor, decimal.RequireFromString("1.5"))},
+			{label: "trigger_method_stop", order: withTriggerMethod(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeStop), farSell(anchor)), 4)},
+			{label: "explicit_order_ref", order: withOrderRef(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "ibkrgo-explicit-ref-"+scenarioHash("api_tif_attribute_matrix_aapl"))},
+			{label: "scale_far_lmt", order: withScale(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)))},
+			{label: "active_window_far_lmt", order: withActiveWindow(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now.Add(2*time.Minute)), orderTimestamp(now.Add(4*time.Minute)))},
+			{label: "price_management_far_lmt", order: withPriceManagement(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)))},
+			{label: "adjusted_stop_fields", order: withAdjustedStop(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeStop), farBuy(anchor)), anchor)},
+			{label: "manual_order_time_far_lmt", order: withManualOrderTime(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now))},
+			{label: "advanced_error_override_far_lmt", order: withAdvancedErrorOverride(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "IBDBUYTX")},
 		}
 
 		for _, tc := range cases {
@@ -985,19 +985,19 @@ func runAPIAlgoVariantsAAPL(ctx context.Context, addr string, clientID int) erro
 			label string
 			order ibkr.Order
 		}{
-			{label: "adaptive_urgent", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "Adaptive", []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Urgent"}})},
-			{label: "adaptive_patient", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "Adaptive", []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Patient"}})},
-			{label: "twap", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "Twap", []ibkr.TagValue{{Tag: "strategyType", Value: "Marketable"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "allowPastEndTime", Value: "1"}})},
-			{label: "vwap", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "Vwap", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "allowPastEndTime", Value: "1"}, {Tag: "noTakeLiq", Value: "1"}})},
-			{label: "arrival_px", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "ArrivalPx", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "riskAversion", Value: "Neutral"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "forceCompletion", Value: "0"}, {Tag: "allowPastEndTime", Value: "1"}})},
-			{label: "dark_ice", order: withAlgo(withDisplaySize(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), 1), "DarkIce", []ibkr.TagValue{{Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "allowPastEndTime", Value: "1"}})},
-			{label: "accum_dist", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "AD", []ibkr.TagValue{{Tag: "componentSize", Value: "1"}, {Tag: "timeBetweenOrders", Value: "60"}, {Tag: "randomizeTime20", Value: "0"}, {Tag: "randomizeSize55", Value: "0"}, {Tag: "giveUp", Value: "0"}, {Tag: "catchUp", Value: "1"}, {Tag: "waitForFill", Value: "1"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}})},
-			{label: "inline", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "Inline", []ibkr.TagValue{{Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}})},
-			{label: "close", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "ClosePx", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "riskAversion", Value: "Neutral"}, {Tag: "startTime", Value: start}, {Tag: "forceCompletion", Value: "0"}})},
-			{label: "pct_vol", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "PctVol", []ibkr.TagValue{{Tag: "pctVol", Value: "0.1"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "noTakeLiq", Value: "1"}})},
-			{label: "balance_impact_risk", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "BalanceImpactRisk", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "riskAversion", Value: "Neutral"}})},
-			{label: "min_impact", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "MinImpact", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}})},
-			{label: "jefferies_ad", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), "JefAD", []ibkr.TagValue{{Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "componentSize", Value: "1"}, {Tag: "timeBetweenOrders", Value: "60"}})},
+			{label: "adaptive_urgent", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "Adaptive", []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Urgent"}})},
+			{label: "adaptive_patient", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "Adaptive", []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Patient"}})},
+			{label: "twap", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "Twap", []ibkr.TagValue{{Tag: "strategyType", Value: "Marketable"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "allowPastEndTime", Value: "1"}})},
+			{label: "vwap", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "Vwap", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "allowPastEndTime", Value: "1"}, {Tag: "noTakeLiq", Value: "1"}})},
+			{label: "arrival_px", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "ArrivalPx", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "riskAversion", Value: "Neutral"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "forceCompletion", Value: "0"}, {Tag: "allowPastEndTime", Value: "1"}})},
+			{label: "dark_ice", order: withAlgo(withDisplaySize(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), 1), "DarkIce", []ibkr.TagValue{{Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "allowPastEndTime", Value: "1"}})},
+			{label: "accum_dist", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "AD", []ibkr.TagValue{{Tag: "componentSize", Value: "1"}, {Tag: "timeBetweenOrders", Value: "60"}, {Tag: "randomizeTime20", Value: "0"}, {Tag: "randomizeSize55", Value: "0"}, {Tag: "giveUp", Value: "0"}, {Tag: "catchUp", Value: "1"}, {Tag: "waitForFill", Value: "1"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}})},
+			{label: "inline", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "Inline", []ibkr.TagValue{{Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}})},
+			{label: "close", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "ClosePx", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "riskAversion", Value: "Neutral"}, {Tag: "startTime", Value: start}, {Tag: "forceCompletion", Value: "0"}})},
+			{label: "pct_vol", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "PctVol", []ibkr.TagValue{{Tag: "pctVol", Value: "0.1"}, {Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "noTakeLiq", Value: "1"}})},
+			{label: "balance_impact_risk", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "BalanceImpactRisk", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}, {Tag: "riskAversion", Value: "Neutral"}})},
+			{label: "min_impact", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "MinImpact", []ibkr.TagValue{{Tag: "maxPctVol", Value: "0.1"}})},
+			{label: "jefferies_ad", order: withAlgo(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), "JefAD", []ibkr.TagValue{{Tag: "startTime", Value: start}, {Tag: "endTime", Value: end}, {Tag: "componentSize", Value: "1"}, {Tag: "timeBetweenOrders", Value: "60"}})},
 		}
 
 		for _, tc := range cases {
@@ -1030,12 +1030,12 @@ func runAPIPairsTradingAAPLMSFT(ctx context.Context, addr string, clientID int) 
 		_, _ = client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: apiAAPL})
 		_, _ = client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: apiMSFT})
 
-		aaplOrder := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+		aaplOrder := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		aapl, err := placeAPIOrder(ctx, client, "pairs aapl buy", apiAAPL, aaplOrder)
 		if err != nil {
 			log.Printf("pairs AAPL buy: %v", err)
 		}
-		msftOrder := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Sell, ibkr.OrderTypeMarket)
+		msftOrder := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeMarket)
 		msft, err := placeAPIOrder(ctx, client, "pairs msft sell", apiMSFT, msftOrder)
 		if err != nil {
 			log.Printf("pairs MSFT sell: %v", err)
@@ -1068,7 +1068,7 @@ func runAPIDollarCostAveragingAAPL(ctx context.Context, addr string, clientID in
 	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		filledQty := decimal.Zero
 		for i := 0; i < 3; i++ {
-			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 			handle, err := placeAPIOrder(ctx, client, fmt.Sprintf("dca buy[%d]", i), apiAAPL, order)
 			if err != nil {
 				log.Printf("dca buy[%d]: %v", i, err)
@@ -1093,7 +1093,7 @@ func runAPIDollarCostAveragingAAPL(ctx context.Context, addr string, clientID in
 func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		buyOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+		buyOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		buy, err := placeAPIOrder(ctx, client, "stop-management buy", apiAAPL, buyOrder)
 		if err != nil {
 			log.Printf("stop-management buy: %v", err)
@@ -1104,7 +1104,7 @@ func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int
 			return nil
 		}
 
-		stopOrder := withAux(baseAPIOrder(account, buyObs.filledQty, ibkr.Sell, ibkr.OrderTypeStop), farBuy(anchor))
+		stopOrder := withAux(baseAPIOrder(account, buyObs.filledQty, ibkr.ActionSell, ibkr.OrderTypeStop), farBuy(anchor))
 		stop, err := placeAPIOrder(ctx, client, "stop-management stop", apiAAPL, stopOrder)
 		if err != nil {
 			log.Printf("stop-management stop: %v", err)
@@ -1131,21 +1131,21 @@ func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int
 func runAPIBracketTrailingStopAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		parentOrder := withTransmit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket), false)
+		parentOrder := withTransmit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket), false)
 		parent, err := placeAPIOrder(ctx, client, "trailing bracket parent", apiAAPL,
 			parentOrder)
 		if err != nil {
 			log.Printf("trailing bracket parent: %v", err)
 			return nil
 		}
-		takeProfitOrder := withTransmit(withParent(withLimit(baseAPIOrder(account, parentOrder.Quantity, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor)), parent.OrderID()), false)
+		takeProfitOrder := withTransmit(withParent(withLimit(baseAPIOrder(account, parentOrder.Quantity, ibkr.ActionSell, ibkr.OrderTypeLimit), farSell(anchor)), parent.OrderID()), false)
 		takeProfit, err := placeAPIOrder(ctx, client, "trailing bracket take-profit", apiAAPL,
 			takeProfitOrder)
 		if err != nil {
 			log.Printf("trailing bracket take-profit: %v", err)
 			return nil
 		}
-		trailingStopOrder := withParent(withTrailing(baseAPIOrder(account, parentOrder.Quantity, ibkr.Sell, ibkr.OrderTypeTrailingStop), anchor), parent.OrderID())
+		trailingStopOrder := withParent(withTrailing(baseAPIOrder(account, parentOrder.Quantity, ibkr.ActionSell, ibkr.OrderTypeTrailingStop), anchor), parent.OrderID())
 		trailingStopOrder.TrailStopPrice = farBuy(anchor)
 		trailingStop, err := placeAPIOrder(ctx, client, "trailing bracket stop", apiAAPL, trailingStopOrder)
 		if err != nil {
@@ -1191,14 +1191,14 @@ func runAPIOptionCampaignAAPL(ctx context.Context, addr string, clientID int) er
 			log.Printf("option price calculation: %v", err)
 		}
 
-		optionBuy := baseAPIOrder(account, apiOptionContractQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+		optionBuy := baseAPIOrder(account, apiOptionContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		handle, err := placeAPIOrder(ctx, client, "option buy", opt, optionBuy)
 		if err != nil {
 			log.Printf("option market buy place error: %v", err)
 		} else {
 			obs := observeOrder(ctx, handle, "option buy", 40*time.Second)
 			if obs.AnyFill() {
-				optionSell := baseAPIOrder(account, obs.filledQty, ibkr.Sell, ibkr.OrderTypeMarket)
+				optionSell := baseAPIOrder(account, obs.filledQty, ibkr.ActionSell, ibkr.OrderTypeMarket)
 				sell, err := placeAPIOrder(ctx, client, "option flatten", opt, optionSell)
 				if err != nil {
 					log.Printf("option flatten place error: %v", err)
@@ -1226,7 +1226,7 @@ func runAPIFutureCampaignMES(ctx context.Context, addr string, clientID int) err
 		log.Printf("qualified future: %+v", fut)
 		_, _ = client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: fut})
 
-		futureBuy := baseAPIOrder(account, apiSingleContractQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+		futureBuy := baseAPIOrder(account, apiSingleContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		handle, err := placeAPIOrder(ctx, client, "future buy", fut, futureBuy)
 		if err != nil {
 			log.Printf("future market buy place error: %v", err)
@@ -1234,7 +1234,7 @@ func runAPIFutureCampaignMES(ctx context.Context, addr string, clientID int) err
 		}
 		obs := observeOrder(ctx, handle, "future buy", 40*time.Second)
 		if obs.AnyFill() {
-			futureSell := baseAPIOrder(account, obs.filledQty, ibkr.Sell, ibkr.OrderTypeMarket)
+			futureSell := baseAPIOrder(account, obs.filledQty, ibkr.ActionSell, ibkr.OrderTypeMarket)
 			sell, err := placeAPIOrder(ctx, client, "future flatten", fut, futureSell)
 			if err != nil {
 				log.Printf("future flatten place error: %v", err)
@@ -1262,7 +1262,7 @@ func runAPIComboOptionVerticalAAPL(ctx context.Context, addr string, clientID in
 			return nil
 		}
 		bag := ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "USD"}
-		order := withLimit(baseAPIOrder(account, apiOptionContractQuantity, ibkr.Buy, ibkr.OrderTypeLimit), decimal.RequireFromString("0.05"))
+		order := withLimit(baseAPIOrder(account, apiOptionContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), decimal.RequireFromString("0.05"))
 		order.ComboLegs = []ibkr.ComboLeg{
 			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
 			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
@@ -1311,7 +1311,7 @@ func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID in
 
 		filledQty := decimal.Zero
 		for i := 0; i < 2; i++ {
-			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 			handle, err := placeAPIOrder(ctx, client, fmt.Sprintf("algorithmic split buy[%d]", i), apiAAPL, order)
 			if err != nil {
 				log.Printf("algorithmic split buy[%d]: %v", i, err)
@@ -1323,13 +1323,13 @@ func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID in
 			}
 		}
 
-		restingOrder := withLimit(baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		restingOrder := withLimit(baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		resting, err := placeAPIOrder(ctx, client, "algorithmic resting buy", apiAAPL, restingOrder)
 		if err != nil {
 			log.Printf("algorithmic resting buy: %v", err)
 		} else {
 			_ = observeOrder(ctx, resting, "algorithmic resting buy", 8*time.Second)
-			modified := withLimit(baseAPIOrder(account, restingOrder.Quantity, ibkr.Buy, ibkr.OrderTypeLimit), marketableBuy(anchor))
+			modified := withLimit(baseAPIOrder(account, restingOrder.Quantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), marketableBuy(anchor))
 			if err := modifyAPIOrder(ctx, resting, "algorithmic resting modified", modified); err != nil {
 				log.Printf("algorithmic resting modify: %v", err)
 			} else if obs := observeOrder(ctx, resting, "algorithmic resting modified", 30*time.Second); obs.AnyFill() {
@@ -1351,7 +1351,7 @@ func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID in
 
 func runAPICompletedOrdersVariantsAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
-		order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+		order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		handle, err := placeAPIOrder(ctx, client, "completed seed buy", apiAAPL, order)
 		if err != nil {
 			log.Printf("completed seed buy: %v", err)
@@ -1370,7 +1370,7 @@ func runAPICompletedOrdersVariantsAAPL(ctx context.Context, addr string, clientI
 func runAPITransmitFalseThenTransmitAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
-		order := withTransmit(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), false)
+		order := withTransmit(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), false)
 		handle, err := placeAPIOrder(ctx, client, "transmit false resting", apiAAPL, order)
 		if err != nil {
 			log.Printf("transmit false place: %v", err)
@@ -1453,7 +1453,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 	}
 
 	anchor := quoteAnchor(ctx, first, apiAAPL, decimal.RequireFromString("200"))
-	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
+	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
 	handle, err := placeAPIOrder(ctx, first, "reconnect resting", apiAAPL, order)
 	if err != nil {
 		_ = first.Close()
@@ -1528,7 +1528,7 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 		log.Printf("client0 pre-cleanup global cancel: %v", err)
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
-	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
+	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
 	handle, err := placeAPIOrder(ctx, placer, "client0 observed resting", apiAAPL, order)
 	if err != nil {
 		_ = placer.Close()
@@ -1594,7 +1594,7 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 		log.Printf("cross-client pre-cleanup global cancel: %v", err)
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
-	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
+	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
 	handle, err := placeAPIOrder(ctx, placer, "cross-client resting", apiAAPL, order)
 	if err != nil {
 		_ = placer.Close()
@@ -1716,7 +1716,7 @@ func placeObserveFlatten(ctx context.Context, client *ibkr.Client, account strin
 		return err
 	}
 	obs := observeOrder(ctx, handle, label, wait)
-	if obs.AnyFill() && order.Action == ibkr.Buy {
+	if obs.AnyFill() && order.Action == ibkr.ActionBuy {
 		return flattenAAPL(ctx, client, account, label, obs.filledQty)
 	}
 	return nil
@@ -2309,7 +2309,7 @@ func cancelOrder(ctx context.Context, handle *ibkr.OrderHandle, label string) {
 
 func flattenAAPL(ctx context.Context, client *ibkr.Client, account string, label string, qty decimal.Decimal) error {
 	order := ibkr.Order{
-		Action:    ibkr.Sell,
+		Action:    ibkr.ActionSell,
 		OrderType: ibkr.OrderTypeMarket,
 		Quantity:  qty,
 		TIF:       ibkr.TIFDay,
@@ -2341,9 +2341,9 @@ func flattenAAPLFill(ctx context.Context, client *ibkr.Client, account string, l
 }
 
 func flattenStockFill(ctx context.Context, client *ibkr.Client, account string, label string, contract ibkr.Contract, filledAction ibkr.OrderAction, qty decimal.Decimal) error {
-	action := ibkr.Sell
-	if filledAction == ibkr.Sell {
-		action = ibkr.Buy
+	action := ibkr.ActionSell
+	if filledAction == ibkr.ActionSell {
+		action = ibkr.ActionBuy
 	}
 	order := ibkr.Order{
 		Action:    action,
@@ -2484,7 +2484,7 @@ func qualifyAAPLCall(ctx context.Context, client *ibkr.Client, anchor decimal.De
 		Symbol:       "AAPL",
 		SecType:      ibkr.SecTypeOption,
 		Expiry:       expiry,
-		Strike:       strike.String(),
+		Strike:       strike,
 		Right:        ibkr.RightCall,
 		Multiplier:   param.Multiplier,
 		Exchange:     "SMART",
@@ -2526,7 +2526,7 @@ func qualifyAAPLCallVertical(ctx context.Context, client *ibkr.Client, anchor de
 			Symbol:       "AAPL",
 			SecType:      ibkr.SecTypeOption,
 			Expiry:       expiry,
-			Strike:       strike.String(),
+			Strike:       strike,
 			Right:        ibkr.RightCall,
 			Multiplier:   param.Multiplier,
 			Exchange:     "SMART",
@@ -2729,7 +2729,7 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 		log.Printf("EUR.USD anchor: %s", anchor)
 
 		// Far LMT rest.
-		order := baseAPIOrder(account, decimal.NewFromInt(100000), ibkr.Buy, ibkr.OrderTypeLimit)
+		order := baseAPIOrder(account, decimal.NewFromInt(100000), ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		order.LmtPrice = anchor.Mul(decimal.RequireFromString("0.90")).Round(5)
 
 		handle, err := placeAPIOrder(ctx, client, "forex rest", apiEURUSD, order)
@@ -2755,7 +2755,7 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 
 func runAPIWhatIfMarginAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
-		order := baseAPIOrder(account, decimal.NewFromInt(100), ibkr.Buy, ibkr.OrderTypeMarket)
+		order := baseAPIOrder(account, decimal.NewFromInt(100), ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		order.WhatIf = new(true)
 
 		handle, err := placeAPIOrder(ctx, client, "whatif mkt buy 100", apiAAPL, order)
@@ -2776,7 +2776,7 @@ func runAPIStressRapidFireAAPL(ctx context.Context, addr string, clientID int) e
 		const n = 10
 		handles := make([]*ibkr.OrderHandle, 0, n)
 		for i := 0; i < n; i++ {
-			order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor).Add(decimal.NewFromInt(int64(i))))
+			order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor).Add(decimal.NewFromInt(int64(i))))
 			h, err := placeAPIOrder(ctx, client, fmt.Sprintf("stress[%d]", i), apiAAPL, order)
 			if err != nil {
 				log.Printf("stress place[%d]: %v", i, err)
@@ -2811,7 +2811,7 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 		// 2x MKT buys.
 		filledQty := decimal.Zero
 		for i := 0; i < 2; i++ {
-			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.Buy, ibkr.OrderTypeMarket)
+			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 			handle, err := placeAPIOrder(ctx, client, fmt.Sprintf("scale buy[%d]", i), apiAAPL, order)
 			if err != nil {
 				log.Printf("scale buy[%d]: %v", i, err)
@@ -2828,7 +2828,7 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 		}
 
 		// Protective stop-loss.
-		stopOrder := baseAPIOrder(account, filledQty, ibkr.Sell, ibkr.OrderTypeStop)
+		stopOrder := baseAPIOrder(account, filledQty, ibkr.ActionSell, ibkr.OrderTypeStop)
 		stopOrder.AuxPrice = farBuy(anchor)
 		stopOrder.TIF = ibkr.TIFGTC
 		stopHandle, err := placeAPIOrder(ctx, client, "scale stop-loss", apiAAPL, stopOrder)
@@ -2856,7 +2856,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 		log.Printf("AAPL IOC/FOK anchor: %s", anchor)
 
 		// IOC marketable.
-		iocOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit)
+		iocOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		iocOrder.LmtPrice = marketableBuy(anchor)
 		iocOrder.TIF = ibkr.TIFIOC
 		handle, err := placeAPIOrder(ctx, client, "ioc marketable", apiAAPL, iocOrder)
@@ -2872,7 +2872,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 		}
 
 		// FOK marketable.
-		fokOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit)
+		fokOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		fokOrder.LmtPrice = marketableBuy(anchor)
 		fokOrder.TIF = ibkr.TIFFOK
 		handle, err = placeAPIOrder(ctx, client, "fok fillable", apiAAPL, fokOrder)
@@ -2888,7 +2888,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 		}
 
 		// FOK unfillable.
-		fokFarOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit)
+		fokFarOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		fokFarOrder.LmtPrice = farBuy(anchor)
 		fokFarOrder.TIF = ibkr.TIFFOK
 		handle, err = placeAPIOrder(ctx, client, "fok unfillable", apiAAPL, fokFarOrder)
@@ -2922,7 +2922,7 @@ func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) er
 		}
 		log.Printf("qualified AAPL option: con_id=%d expiry=%s strike=%s", opt.ConID, opt.Expiry, opt.Strike)
 
-		buy := baseAPIOrder(account, decimal.NewFromInt(1), ibkr.Buy, ibkr.OrderTypeMarket)
+		buy := baseAPIOrder(account, decimal.NewFromInt(1), ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		handle, err := placeAPIOrder(ctx, client, "exercise buy", opt, buy)
 		if err != nil {
 			log.Printf("exercise buy place error: %v", err)
@@ -2958,12 +2958,12 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 		// rejection evidence.
 		opt, optErr := qualifyAAPLCall(ctx, client, anchor)
 		if optErr == nil {
-			parent := withLimit(baseAPIOrder(account, decimal.NewFromInt(1), ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+			parent := withLimit(baseAPIOrder(account, decimal.NewFromInt(1), ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 			parentHandle, err := placeAPIOrder(ctx, client, "option hedge parent", opt, parent)
 			if err != nil {
 				log.Printf("option hedge parent place error: %v", err)
 			} else {
-				child := withLimit(baseAPIOrder(account, decimal.Zero, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor))
+				child := withLimit(baseAPIOrder(account, decimal.Zero, ibkr.ActionSell, ibkr.OrderTypeLimit), farSell(anchor))
 				child.ParentID = parentHandle.OrderID()
 				child.HedgeType = "D"
 				child.HedgeParam = "0.5"
@@ -2982,7 +2982,7 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 			log.Printf("qualify option for hedge parent: %v", optErr)
 		}
 
-		stockParent := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.Buy, ibkr.OrderTypeLimit), farBuy(anchor))
+		stockParent := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		parentHandle, err := placeAPIOrder(ctx, client, "hedge parent", apiAAPL, stockParent)
 		if err != nil {
 			log.Printf("hedge parent place error: %v", err)
@@ -3003,7 +3003,7 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 			if h.typ == "D" {
 				qty = apiStockOrderQuantity
 			}
-			child := withLimit(baseAPIOrder(account, qty, ibkr.Sell, ibkr.OrderTypeLimit), farSell(anchor))
+			child := withLimit(baseAPIOrder(account, qty, ibkr.ActionSell, ibkr.OrderTypeLimit), farSell(anchor))
 			child.ParentID = parentHandle.OrderID()
 			child.HedgeType = h.typ
 			child.HedgeParam = h.param

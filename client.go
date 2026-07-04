@@ -197,7 +197,21 @@ func (c HistoryClient) Schedule(ctx context.Context, req HistoricalScheduleReque
 type OrdersClient struct{ engine *engine }
 
 func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
+	if req.Order.WhatIf != nil && *req.Order.WhatIf {
+		return nil, &ValidationError{
+			Field:   "Order.WhatIf",
+			Message: "what-if orders are margin previews, not trades; use Orders().Preview",
+		}
+	}
 	return c.engine.PlaceOrder(ctx, req)
+}
+
+// Preview submits a what-if order and returns the Gateway's margin-and-commission
+// preview as an [OrderState]. It forces the what-if flag, so the place_order
+// frame is byte-identical to a what-if order placed through Place; nothing rests
+// on the server and no OrderHandle is created.
+func (c OrdersClient) Preview(ctx context.Context, req PlaceOrderRequest) (OrderState, error) {
+	return c.engine.PreviewOrder(ctx, req)
 }
 func (c OrdersClient) Cancel(ctx context.Context, orderID int64) error {
 	return c.engine.CancelOrder(ctx, orderID)

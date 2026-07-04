@@ -166,7 +166,7 @@ handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
         Currency: "USD",
     },
     Order: ibkr.Order{
-        Action:    ibkr.Buy,
+        Action:    ibkr.ActionBuy,
         OrderType: ibkr.OrderTypeLimit,
         Quantity:  decimal.NewFromInt(1),
         LmtPrice:  decimal.RequireFromString("150.00"),

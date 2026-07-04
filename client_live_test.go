@@ -591,7 +591,7 @@ func TestLivePlaceOrderLimitAndCancel(t *testing.T) {
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
 			LmtPrice:  decimal.RequireFromString("50"),
@@ -661,7 +661,7 @@ func TestLiveGlobalCancel(t *testing.T) {
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
 			Order: ibkr.Order{
-				Action:    ibkr.Buy,
+				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
 				Quantity:  decimal.RequireFromString("1"),
 				LmtPrice:  decimal.RequireFromString("50"),
@@ -738,7 +738,7 @@ func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
 			Order: ibkr.Order{
-				Action:    ibkr.Buy,
+				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeMarket,
 				Quantity:  decimal.RequireFromString("1"),
 				TIF:       ibkr.TIFDay,
@@ -775,7 +775,7 @@ func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: aaplContract,
 			Order: ibkr.Order{
-				Action:    ibkr.Sell,
+				Action:    ibkr.ActionSell,
 				OrderType: ibkr.OrderTypeMarket,
 				Quantity:  decimal.RequireFromString("1"),
 				TIF:       ibkr.TIFDay,
@@ -1041,7 +1041,7 @@ func TestLiveCalcImpliedVolatility(t *testing.T) {
 			Exchange: "SMART",
 			Currency: "USD",
 			Expiry:   time.Now().AddDate(0, 1, 0).Format("20060102"),
-			Strike:   "200",
+			Strike:   decimal.RequireFromString("200"),
 			Right:    ibkr.RightCall,
 		},
 		OptionPrice: decimal.RequireFromString("10"),
@@ -1072,7 +1072,7 @@ func TestLiveCalcOptionPrice(t *testing.T) {
 			Exchange: "SMART",
 			Currency: "USD",
 			Expiry:   time.Now().AddDate(0, 1, 0).Format("20060102"),
-			Strike:   "200",
+			Strike:   decimal.RequireFromString("200"),
 			Right:    ibkr.RightCall,
 		},
 		Volatility: decimal.RequireFromString("0.3"),
@@ -1104,7 +1104,7 @@ func TestLivePlaceOrderModify(t *testing.T) {
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
 			LmtPrice:  decimal.RequireFromString("50"),
@@ -1128,7 +1128,7 @@ func TestLivePlaceOrderModify(t *testing.T) {
 
 	// Modify to $51.
 	if err := handle.Modify(ctx, ibkr.Order{
-		Action:    ibkr.Buy,
+		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.RequireFromString("1"),
 		LmtPrice:  decimal.RequireFromString("51"),
@@ -1191,7 +1191,7 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
 			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
@@ -1207,7 +1207,7 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 	tp, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action:    ibkr.Sell,
+			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
 			LmtPrice:  decimal.RequireFromString("500"),
@@ -1225,7 +1225,7 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 	sl, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action:    ibkr.Sell,
+			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("1"),
 			AuxPrice:  decimal.RequireFromString("50"),
@@ -1361,7 +1361,7 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aaplContract,
 		Order: ibkr.Order{
-			Action:    ibkr.Buy,
+			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
 			LmtPrice:  decimal.RequireFromString("50"),

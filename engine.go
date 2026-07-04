@@ -92,9 +92,17 @@ type route struct {
 type orderRoute struct {
 	orderID          int64
 	handle           *OrderHandle
+	preview          chan previewResult // non-nil for a what-if preview route; no handle is created
 	closed           bool
 	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
 	terminalCloseSeq uint64
+}
+
+// previewResult carries the single what-if open_order echo back to a blocked
+// PreviewOrder caller: either the decoded OpenOrder or the decode error.
+type previewResult struct {
+	order OpenOrder
+	err   error
 }
 
 type parsedOpenOrder struct {

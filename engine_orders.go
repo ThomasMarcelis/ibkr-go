@@ -381,6 +381,80 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	return out.handle, out.err
 }
 
+// PreviewOrder submits a what-if order and returns the margin-and-commission
+// preview the Gateway attaches to the single open_order echo. It forces
+// WhatIf=true, so the place_order frame is byte-identical to a what-if
+// [engine.PlaceOrder]; the difference is purely in how the reply is consumed.
+// No OrderHandle is ever created — the preview route is resolved and torn down
+// on the one open_order echo, and nothing rests on the server.
+func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (OrderState, error) {
+	type setup struct {
+		ch  chan previewResult
+		err error
+	}
+
+	setupResp := make(chan setup, 1)
+	orderIDCh := make(chan int64, 1)
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			setupResp <- setup{err: ErrNotReady}
+			return
+		}
+
+		orderID := e.allocOrderID()
+		orderIDCh <- orderID
+		ch := make(chan previewResult, 1)
+		e.orders[orderID] = &orderRoute{orderID: orderID, preview: ch}
+
+		// Force the what-if flag; the frame is otherwise the caller's order.
+		previewReq := req
+		previewReq.Order.WhatIf = new(true)
+		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, previewReq)); err != nil {
+			delete(e.orders, orderID)
+			setupResp <- setup{err: err}
+			return
+		}
+		setupResp <- setup{ch: ch}
+	})
+
+	cleanup := func() {
+		select {
+		case orderID := <-orderIDCh:
+			e.enqueue(func() {
+				if or, ok := e.orders[orderID]; ok && or.preview != nil {
+					delete(e.orders, orderID)
+				}
+			})
+		default:
+		}
+	}
+
+	select {
+	case s := <-setupResp:
+		if s.err != nil {
+			return OrderState{}, s.err
+		}
+		select {
+		case pr := <-s.ch:
+			if pr.err != nil {
+				return OrderState{}, pr.err
+			}
+			return orderStateFromOpenOrder(pr.order), nil
+		case <-ctx.Done():
+			cleanup()
+			return OrderState{}, ctx.Err()
+		case <-e.done:
+			return OrderState{}, e.Wait()
+		}
+	case <-ctx.Done():
+		cleanup()
+		return OrderState{}, ctx.Err()
+	case <-e.done:
+		return OrderState{}, e.Wait()
+	}
+}
+
 // CancelOrder sends a cancel request for the given order ID. This is
 // fire-and-forget; the cancellation result arrives via the OrderHandle's
 // events channel as an OrderStatus with Status "Cancelled".

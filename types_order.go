@@ -10,8 +10,13 @@ import (
 type OrderAction string
 
 const (
-	Buy  OrderAction = "BUY"
-	Sell OrderAction = "SELL"
+	ActionBuy  OrderAction = "BUY"
+	ActionSell OrderAction = "SELL"
+
+	// Deprecated: use ActionBuy.
+	Buy OrderAction = ActionBuy
+	// Deprecated: use ActionSell.
+	Sell OrderAction = ActionSell
 )
 
 type OrderType string
@@ -253,6 +258,45 @@ type Order struct {
 type PlaceOrderRequest struct {
 	Contract Contract
 	Order    Order
+}
+
+// OrderState is the margin-and-commission preview returned by
+// [OrdersClient.Preview]. It mirrors the order-state block the Gateway
+// attaches to the what-if open_order echo: the nine margin decimals plus the
+// commission range and currency.
+type OrderState struct {
+	InitMarginBefore     decimal.Decimal
+	MaintMarginBefore    decimal.Decimal
+	EquityWithLoanBefore decimal.Decimal
+	InitMarginChange     decimal.Decimal
+	MaintMarginChange    decimal.Decimal
+	EquityWithLoanChange decimal.Decimal
+	InitMarginAfter      decimal.Decimal
+	MaintMarginAfter     decimal.Decimal
+	EquityWithLoanAfter  decimal.Decimal
+
+	Commission    decimal.Decimal
+	CommissionMin decimal.Decimal
+	CommissionMax decimal.Decimal
+	Currency      string
+}
+
+func orderStateFromOpenOrder(o OpenOrder) OrderState {
+	return OrderState{
+		InitMarginBefore:     o.InitMarginBefore,
+		MaintMarginBefore:    o.MaintMarginBefore,
+		EquityWithLoanBefore: o.EquityWithLoanBefore,
+		InitMarginChange:     o.InitMarginChange,
+		MaintMarginChange:    o.MaintMarginChange,
+		EquityWithLoanChange: o.EquityWithLoanChange,
+		InitMarginAfter:      o.InitMarginAfter,
+		MaintMarginAfter:     o.MaintMarginAfter,
+		EquityWithLoanAfter:  o.EquityWithLoanAfter,
+		Commission:           o.Commission,
+		CommissionMin:        o.MinCommission,
+		CommissionMax:        o.MaxCommission,
+		Currency:             o.CommissionCurrency,
+	}
 }
 
 type CompletedOrderResult struct {
