@@ -3,7 +3,6 @@ package ibkr_test
 import (
 	"context"
 	"errors"
-	"io"
 	"strings"
 	"testing"
 	"time"
@@ -27,10 +26,10 @@ import (
 //     the Gateway assigns quantity 100 itself, binds the child to the
 //     parent's perm id via oca_group, holds it PreSubmitted with
 //     why_held=child, and cancels it cleanly (Cancelled + code 202);
-//   - fx_hedge: code 10063 "Invalid FX hedge order..." rides the 10xxx
-//     range, so it surfaces as a session event and the child handle never
-//     hears about it (it closes with the transport EOF, having emitted no
-//     events);
+//   - fx_hedge: code 10063 "Invalid FX hedge order..." rejects the placement
+//     outright — the Gateway never sends anything else for the id, so the
+//     attested placement-rejection set (isOrderPlacementRejection) closes
+//     the child handle with the code-10063 APIError as its terminal error;
 //   - pair_hedge_zero_size: a zero-quantity pair child (P, 0.8) is accepted
 //     with Gateway-computed quantity 80 = 0.8 x the parent's 100.
 //
@@ -228,13 +227,12 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 			t.Fatalf("order id = %d, want 423", got)
 		}
 
-		// Code 10063 rides the 10xxx range with no keyed route: it becomes a
-		// session event and never reaches the fx child's handle (frozen at
-		// the end of the parent test as the handle's EOF close).
-		reject := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeInvalidFXHedgeOrder)
-		if reject.Message != "Invalid FX hedge order. Hedging contract can only be a currency pair where one of the currencies is the same as in parent order." {
-			t.Fatalf("10063 message = %q", reject.Message)
-		}
+		// Code 10063 is an attested outright placement rejection: no
+		// order_status ever follows it, so it closes the child handle as
+		// the terminal place error instead of riding the 10xxx
+		// session-event fallback.
+		requireOrderAPIError(t, "fx child", fx, ibkr.ErrCodeInvalidFXHedgeOrder,
+			"Invalid FX hedge order. Hedging contract can only be a currency pair where one of the currencies is the same as in parent order.")
 
 		// The beta child's cancel acknowledges now: Cancelled + code 202.
 		waitForOrderStatus(t, ctx, beta, ibkr.OrderStatusCancelled)
@@ -317,8 +315,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 
 	// Closure shapes on the transcript disconnect: handles that reached a
-	// terminal status close clean; the fx child heard nothing at all, so it
-	// surfaces the transport EOF and zero business events.
+	// terminal status close clean; the fx child closed on its code-10063
+	// rejection back in the fx subtest, having emitted no business events.
 	if err := pair.Wait(); err != nil {
 		t.Fatalf("pair Wait() = %v, want nil (terminal Cancelled)", err)
 	}
@@ -326,7 +324,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		t.Fatalf("option parent Wait() = %v, want nil (terminal Cancelled)", err)
 	}
 	requireNoMoreOrderEvents(t, ctx, "fx child", fx)
-	if err := fx.Wait(); !errors.Is(err, io.EOF) {
-		t.Fatalf("fx Wait() = %v, want io.EOF (10063 never reached the handle)", err)
+	if _, ok := errors.AsType[*ibkr.APIError](fx.Wait()); !ok {
+		t.Fatalf("fx Wait() = %v, want the terminal code-10063 *ibkr.APIError", fx.Wait())
 	}
 }

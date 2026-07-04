@@ -102,6 +102,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Order-targeted `api_error` codes in the 10xxx band now reach the order
+  routes instead of unconditionally becoming session events.** A what-if
+  rejected with such a code (live-reproduced 2026-07-05: code 10255 on a
+  what-if DarkIce placement, paper Gateway `server_version 200`) left
+  `Orders().Preview` blocked until its context deadline with the rejection
+  reason lost; it now resolves with the `*APIError`. Live `OrderHandle`s
+  close with the `*APIError` for the codes live-attested as outright
+  placement rejections (10063 invalid FX hedge, 10255 display size not
+  allowed) — the Gateway never sends an `order_status` after them, so the
+  error is the handle's only completion signal. Order-targeted cancel
+  notices (10147/10148) keep surfacing as session events, and the previous
+  session-event fallback still covers unattested codes.
+- **A data-lost connectivity restoration (code 1101) now interrupts every
+  route the Gateway cannot answer instead of only re-sending auto-resumed
+  subscriptions.** Non-resumable subscriptions closed with
+  `ErrResumeRequired`, in-flight one-shots and pending what-if previews
+  resolve with `ErrInterrupted` — mirroring the transport-loss teardown.
+  Previously a `ResumeNever` stream stayed open on a dead server-side
+  subscription indefinitely and an in-flight one-shot hung until its
+  context deadline. Code 1102 (data maintained) still interrupts nothing,
+  and live order handles still ride out the gap with Gap/Resumed lifecycle
+  events.
 - **`reqUserInfo`'s inbound msg-id corrected from 103 to the live-attested
   107.** 103 is `REPLACE_FA_END`; every live `UserInfo` call died with
   `ErrInterrupted` on the unrecognized id because the DSL-form testhost

@@ -143,7 +143,13 @@ including late `Execution` or `Commission` callbacks after a terminal status,
 must drain `Events()` until it closes, then call `Wait()`.
 
 Terminal states: when an OrderStatus arrives with status Filled, Cancelled,
-ApiCancelled, or Inactive, the handle auto-closes with `nil` error.
+ApiCancelled, or Inactive, the handle auto-closes with `nil` error. An
+order-targeted api_error that rejects the placement outright (no order_status
+ever follows) closes the handle with the `*APIError` as its terminal error;
+this covers both the sub-10000 rejection codes and the 10xxx codes
+live-attested as outright placement rejections (10063, 10255). Order-targeted
+10xxx notices for live orders — cancel replies such as 10147/10148 — stay
+session events, because the handle already carries the order's real state.
 
 ## Completion and Reconnect
 
@@ -159,6 +165,13 @@ ApiCancelled, or Inactive, the handle auto-closes with `nil` error.
   client-wide mutex for bursty request sequences.
 - One-shots are interrupted by connection loss and are not replayed
   automatically.
+- A data-lost restoration (code 1101) is a connection loss for everything the
+  Gateway cannot replay: auto-resumed subscriptions are re-sent; every other
+  route applies its transport-loss teardown — non-resumable subscriptions
+  close with `ErrResumeRequired`, in-flight one-shots and pending what-if
+  previews resolve with `ErrInterrupted` (both retryable). A data-maintained
+  restoration (code 1102) interrupts nothing. Live order handles survive both:
+  orders rest at IB, not on the Gateway's data connection.
 - Historical bars and schedules use internal endpoint admission so rapid
   repeated requests respect Gateway pacing before they are written to the
   socket.

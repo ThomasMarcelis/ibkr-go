@@ -37,7 +37,6 @@ type algoVariantCase struct {
 
 	rejectCode        int
 	rejectMessage     string
-	rejectViaSession  bool // 10xxx reject codes surface as session events, not handle errors
 	cancelAfterReject bool // the capture's safety cancel for the rejected id drew no response
 }
 
@@ -98,11 +97,11 @@ func collectAlgoEchoes(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 // six were rejected at place time with no order_status: Twap with code 443
 // naming the unknown strategyType attribute, DarkIce with code 10255 for its
 // display-size attribute, and Inline, BalanceImpactRisk, MinImpact, and JefAD
-// with code 439 "Algorithm definition not found". Codes 439/443 close the
-// handle as terminal place errors; 10255 sits in the 10xxx band the engine
-// emits as a session event when no keyed route owns the id, so the DarkIce
-// handle never terminates and the capture's follow-up cancel for that id
-// drew no Gateway response at all. Rejected placements still consume their
+// with code 439 "Algorithm definition not found". All six close the handle
+// as terminal place errors — 10255 through the attested placement-rejection
+// set (isOrderPlacementRejection) since the Gateway never sends anything
+// else for the id; the capture's follow-up cancel for the DarkIce id drew no
+// Gateway response at all. Rejected placements still consume their
 // order ids: the accepted lifecycles run on 262..271 with gaps 264/267/269
 // held by rejects, and 272..274 reject back to back. The Gateway's open_order
 // echoes reorder algo params, convert the UTC window to US/Eastern, and
@@ -209,7 +208,6 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 			displaySize:       1,
 			rejectCode:        ibkr.ErrCodeDisplaySizeNotAllowed,
 			rejectMessage:     "The 'Display Size' order attribute may not be specified for this order.",
-			rejectViaSession:  true,
 			cancelAfterReject: true,
 		},
 		{
@@ -365,22 +363,16 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 			}
 
 			if v.rejectCode != 0 {
-				if v.rejectViaSession {
-					evt := waitForSessionEventCode(t, ctx, events, v.rejectCode)
-					if evt.Message != v.rejectMessage {
-						t.Fatalf("session reject message = %q, want %q", evt.Message, v.rejectMessage)
-					}
-					if v.cancelAfterReject {
-						// The live Gateway never answered this cancel; the
-						// replay proves the cancel frame still goes out for
-						// an id whose placement was rejected.
-						if err := handle.Cancel(ctx); err != nil {
-							t.Fatalf("Cancel: %v", err)
-						}
-					}
-					return
-				}
 				requireOrderAPIError(t, v.name, handle, v.rejectCode, v.rejectMessage)
+				if v.cancelAfterReject {
+					// The live Gateway never answered this cancel; the
+					// replay proves the cancel frame still goes out for an
+					// id whose placement was rejected and whose handle
+					// already closed on the rejection.
+					if err := handle.Cancel(ctx); err != nil {
+						t.Fatalf("Cancel: %v", err)
+					}
+				}
 				return
 			}
 

@@ -837,6 +837,94 @@ func TestSubscribeQuotesResumeAutoResumesWithoutResendAfter1102(t *testing.T) {
 	}
 }
 
+// TestSubscribeQuotesResumeNeverClosesAfter1101 freezes the data-lost
+// restoration contract for non-resumable subscriptions: code 1101 means the
+// Gateway dropped every data subscription, so a ResumeNever quote stream
+// must close with ErrResumeRequired — mirroring its transport-loss close —
+// instead of staying open on a stream that will never tick again. The
+// trailing CurrentTime call proves the close happened on the 1101 frame
+// while the connection was still up (see the fixture header).
+func TestSubscribeQuotesResumeNeverClosesAfter1101(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "quote_stream_gap_1101_resume_never.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+		Contract: ibkr.Contract{
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+	})
+	if err != nil {
+		t.Fatalf("SubscribeQuotes() error = %v", err)
+	}
+
+	first := waitForEvent(t, sub.Events())
+	if first.Snapshot.Bid.String() != "189.1" {
+		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
+	}
+
+	closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
+	if !errors.Is(closed.Err, ibkr.ErrResumeRequired) {
+		t.Fatalf("closed.Err = %v, want ErrResumeRequired", closed.Err)
+	}
+	if !closed.Retryable {
+		t.Fatal("closed.Retryable = false, want true")
+	}
+	if err := sub.Wait(); !errors.Is(err, ibkr.ErrResumeRequired) {
+		t.Fatalf("sub.Wait() = %v, want ErrResumeRequired", err)
+	}
+
+	if got := client.Session().State; got != ibkr.StateReady {
+		t.Fatalf("session state after 1101 = %s, want %s", got, ibkr.StateReady)
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime after 1101 = %v, want success on the live connection", err)
+	}
+}
+
+// TestOneShotInterruptedBy1101 freezes the data-lost restoration contract
+// for in-flight one-shots: the Gateway lost the request with the data
+// connection and will never answer it, so the blocked caller must get
+// ErrInterrupted on the 1101 frame — mirroring the transport-loss
+// interruption — rather than hang until its context deadline. The trailing
+// CurrentTime call proves the interruption happened while the connection
+// was still up (see the fixture header).
+func TestOneShotInterruptedBy1101(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "contract_details_gap_1101.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	})
+	if !errors.Is(err, ibkr.ErrInterrupted) {
+		t.Fatalf("ContractDetails error after 1101 = %v, want ErrInterrupted", err)
+	}
+
+	if got := client.Session().State; got != ibkr.StateReady {
+		t.Fatalf("session state after 1101 = %s, want %s", got, ibkr.StateReady)
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime after 1101 = %v, want success on the live connection", err)
+	}
+}
+
 func TestOpenOrdersSnapshot(t *testing.T) {
 	t.Parallel()
 

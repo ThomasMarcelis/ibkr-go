@@ -1,0 +1,18 @@
+# Derived regression fixture for the data-lost restoration contract on
+# in-flight one-shots: a contract-details request is outstanding when the
+# 1100/1101 pair arrives, and the Gateway never answers it (the request was
+# lost with the data connection). The caller must get ErrInterrupted on the
+# 1101 frame instead of hanging until its context deadline. Request/response
+# shapes reuse contract_details.txt, the 1100/1101 error shapes reuse
+# quote_stream_gap_1101.txt (server_version 200); the trailing current_time
+# exchange proves the interruption happened while the connection was still
+# up, not as a side effect of the transcript disconnect.
+handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
+server managed_accounts {"accounts":["DU12345"]}
+server next_valid_id {"order_id":1001}
+client req_contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
+server api_error {"req_id":0,"code":1100,"message":"Connectivity between IB and TWS has been lost"}
+server api_error {"req_id":0,"code":1101,"message":"Connectivity between IB and TWS has been restored - data lost"}
+client req_current_time {}
+server current_time {"time":"1783207046"}
+disconnect

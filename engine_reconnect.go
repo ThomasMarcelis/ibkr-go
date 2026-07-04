@@ -101,6 +101,49 @@ func (e *engine) disconnectRoutes(err error) {
 	}
 }
 
+// dropLostRoutes interrupts every route the Gateway cannot answer after a
+// data-lost restoration (code 1101). The official semantics are that market
+// and account data subscriptions must be resubmitted: auto-resumed
+// subscriptions are re-sent by resumeRoutes, so they are skipped here;
+// non-resumable subscriptions and in-flight one-shots go through the same
+// onDisconnect teardown a transport loss would apply (ErrResumeRequired and
+// ErrInterrupted respectively). Pending what-if previews resolve with
+// ErrInterrupted — their echo died with the data connection. Live order
+// handles are untouched: orders rest at IB and survive the Gateway's blip.
+func (e *engine) dropLostRoutes() {
+	for reqID, route := range e.keyed {
+		if route.subscription && route.resume == ResumeAuto {
+			continue
+		}
+		if route.onDisconnect == nil {
+			route.close(ErrInterrupted)
+			e.deleteKeyedRoute(reqID)
+			continue
+		}
+		if !route.onDisconnect(e, nil) {
+			e.deleteKeyedRoute(reqID)
+		}
+	}
+	for key, route := range e.singletons {
+		if route.subscription && route.resume == ResumeAuto {
+			continue
+		}
+		if route.onDisconnect == nil {
+			route.close(ErrInterrupted)
+			delete(e.singletons, key)
+			continue
+		}
+		if !route.onDisconnect(e, nil) {
+			delete(e.singletons, key)
+		}
+	}
+	for id, or := range e.orders {
+		if or.resolvePreview(previewResult{err: ErrInterrupted}) {
+			delete(e.orders, id)
+		}
+	}
+}
+
 func (e *engine) resumeRoutes() {
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {

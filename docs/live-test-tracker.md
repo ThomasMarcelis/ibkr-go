@@ -373,6 +373,7 @@ against the role-aware `paper-dev` Gateway.
 | api_fa_replace_non_fa.txt | 20260611T143728Z | promoted; freezes the non-FA blocker: fire-and-forget ReplaceConfig, then the routeless code-321 "FA data operations ignored for non FA customers" the engine drops |
 | api_hedge_order_aapl.txt | 20260611T134021Z | promoted; five hedge rules: zero-size beta/pair acceptances with Gateway-computed quantities, two delta 320 rejections, the FX 10063 currency-pair rule |
 | api_algo_variants_aapl.txt | 20260415T153524Z | promoted; thirteen-variant algo matrix: seven accepted with Gateway-normalized param echoes, six rejected with real codes 439/443/10255; the two echoes that rode as sanitized raw live-layout frames were converted to typed open_order lines after the codec encoder converged on the live layout (verified value-equal at the public OpenOrder layer) |
+| whatif_rejected_10255.txt | 20260705T011725Z | promoted; what-if DarkIce + display size draws the order-targeted 10255 rejection with no echo and must resolve the blocked Preview caller (raw-frame probe capture, frames.log sha256 e0eb615458f396a8) |
 
 ## Coverage Gaps: What We Need To Hit
 

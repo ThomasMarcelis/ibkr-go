@@ -139,3 +139,92 @@ func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
 		t.Fatalf("Preview error after disconnect = %v, want ErrInterrupted", err)
 	}
 }
+
+// TestPreviewRejected10xxxReplay freezes the Preview 10xxx rejection path,
+// probed live on 2026-07-05 against paper Gateway server_version 200
+// (captures/20260705T011725Z-api_whatif_darkice_reject_aapl, frames.log
+// sha256 prefix e0eb615458f396a8): a what-if DarkIce order carrying a
+// display size draws an api_error code 10255 whose req_id is the what-if
+// order id, and no open_order echo ever follows. The order-targeted error
+// must resolve the blocked Preview caller; before the fix it rode the 10xxx
+// session-event fallback and Preview hung until its context deadline.
+func TestPreviewRejected10xxxReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "whatif_rejected_10255.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+		Contract: orderReplayAAPL,
+		Order: ibkr.Order{
+			Action:       ibkr.ActionBuy,
+			OrderType:    ibkr.OrderTypeLimit,
+			Quantity:     decimal.RequireFromString("1"),
+			LmtPrice:     decimal.RequireFromString("150"),
+			TIF:          ibkr.TIFDay,
+			Account:      "DU9000001",
+			OrderRef:     "ibkrgo-sanitized-20260705T011725Z-001",
+			DisplaySize:  1,
+			AlgoStrategy: "DarkIce",
+			AlgoParams: []ibkr.TagValue{
+				{Tag: "displaySize", Value: "1"},
+				{Tag: "startTime", Value: "20260704 23:17:26 UTC"},
+				{Tag: "endTime", Value: "20260704 23:37:26 UTC"},
+				{Tag: "allowPastEndTime", Value: "1"},
+			},
+		},
+	})
+	var apiErr *ibkr.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("Preview error = %v, want *ibkr.APIError", err)
+	}
+	if apiErr.Code != ibkr.ErrCodeDisplaySizeNotAllowed {
+		t.Fatalf("Preview rejection code = %d, want %d", apiErr.Code, ibkr.ErrCodeDisplaySizeNotAllowed)
+	}
+	if apiErr.Message != "The 'Display Size' order attribute may not be specified for this order." {
+		t.Fatalf("Preview rejection message = %q", apiErr.Message)
+	}
+}
+
+// TestPreviewInterruptedBy1101Replay freezes the Preview data-lost path: a
+// 1100/1101 connectivity cycle between the what-if place_order and its
+// open_order echo means the echo is never coming, so the blocked caller
+// must get ErrInterrupted on the 1101 frame — mirroring the transport-loss
+// resolution — rather than hang until its context deadline. The trailing
+// CurrentTime call proves the engine resolved the preview while the
+// connection was still up (see the fixture header).
+func TestPreviewInterruptedBy1101Replay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "whatif_gap_1101.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+		Contract: orderReplayAAPL,
+		Order: ibkr.Order{
+			Action:    ibkr.ActionBuy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("100"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if !errors.Is(err, ibkr.ErrInterrupted) {
+		t.Fatalf("Preview error after 1101 = %v, want ErrInterrupted", err)
+	}
+
+	if got := client.Session().State; got != ibkr.StateReady {
+		t.Fatalf("session state after 1101 = %s, want %s", got, ibkr.StateReady)
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime after 1101 = %v, want success on the live connection", err)
+	}
+}

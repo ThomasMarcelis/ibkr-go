@@ -147,7 +147,13 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		e.emitGap()
 		return
 	case 1101:
+		// Data lost: every subscription and in-flight request died with the
+		// Gateway's IB connection. Auto-resumed subscriptions are re-sent by
+		// resumeRoutes; everything else is interrupted, mirroring the
+		// transport-loss teardown, so callers are not left waiting on
+		// answers that are never coming.
 		e.setState(StateReady, msg.Code, msg.Message, nil)
+		e.dropLostRoutes()
 		e.resumeRoutes()
 		return
 	case 1102:
@@ -177,6 +183,25 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			if route, ok := e.keyed[msg.ReqID]; ok && route.handleAPIErr != nil {
 				route.handleAPIErr(msg, e)
 				return
+			}
+			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
+				// A what-if rejected in the 10xxx band never gets an echo
+				// (live-attested: code 10255 on a what-if DarkIce placement,
+				// captures/20260705T011725Z), so the order-targeted error is
+				// the preview's only completion signal.
+				if or.resolvePreview(previewResult{err: e.apiErr(OpPlaceOrder, msg)}) {
+					delete(e.orders, int64(msg.ReqID))
+					return
+				}
+				// Live handles terminate only on 10xxx codes attested as
+				// outright placement rejections: no order_status ever follows
+				// them, so this error is the handle's only completion signal.
+				// Order-targeted notices (10147/10148 cancel replies) stay
+				// session events; the handle already holds its real state.
+				if isOrderPlacementRejection(msg.Code) {
+					or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
+					return
+				}
 			}
 		}
 		e.emitEvent(msg.Code, msg.Message)
@@ -222,6 +247,22 @@ func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
 
 func isOrderCancellationNotice(msg codec.APIError) bool {
 	return msg.Code == 202
+}
+
+// isOrderPlacementRejection reports whether a 10xxx code is live-attested as
+// an outright placement rejection: the Gateway discards the order and never
+// sends an order_status for it, so the order-targeted api_error is the only
+// signal the handle will ever receive. The set grows as live captures attest
+// new codes; unattested 10xxx codes conservatively stay session events
+// because closing a handle on a notice for a live order would detach it.
+// ErrCodeImbalanceOnlyNotAllowed (10342) is deliberately absent: its attested
+// context is a reply to cancelling a silently accepted resting order.
+func isOrderPlacementRejection(code int) bool {
+	switch code {
+	case ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed:
+		return true
+	}
+	return false
 }
 
 func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {

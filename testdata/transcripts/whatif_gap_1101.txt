@@ -1,0 +1,19 @@
+# Derived regression fixture for the Preview data-lost path: the 1100/1101
+# pair arrives after the what-if place_order and before any open_order echo,
+# so the echo is never coming and the blocked Preview caller must get
+# ErrInterrupted on the 1101 frame. Request line shape from
+# captures/20260610T200009Z-api_whatif_margin_aapl (e8ee70b24de3fe2f,
+# server_version 200), 1100/1101 error shapes from
+# quote_stream_gap_1101.txt; the trailing current_time exchange proves the
+# resolution happened while the connection was still up, not as a side
+# effect of the transcript disconnect.
+handshake {"server_version":200,"connection_time":"20260704 22:00:08 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":355}
+
+client place_order {"order_id":"355","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","transmit":true,"what_if":true}
+server api_error {"req_id":0,"code":1100,"message":"Connectivity between IB and TWS has been lost"}
+server api_error {"req_id":0,"code":1101,"message":"Connectivity between IB and TWS has been restored - data lost"}
+client req_current_time {}
+server current_time {"time":"1783207046"}
+disconnect
