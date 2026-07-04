@@ -1,0 +1,12 @@
+# Grounded by a live paper Gateway probe on 2026-07-04 (server_version 200):
+# req_auto_open_orders binds future orders only and the Gateway sends no
+# open_order_end for it, so an auto-scope subscription has no snapshot
+# boundary to refresh. The bind is answered by silence.
+handshake {"server_version":200,"connection_time":"20260704 20:18:09 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":336}
+
+client req_open_orders {"scope":"auto"}
+
+sleep 100ms
+disconnect

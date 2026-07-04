@@ -85,7 +85,7 @@ committed.
 | `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges`, `FundamentalData` |
 | `MarketData()` | `SetType`, `Quote`, `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `History()` | `Bars`, `SubscribeBars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` |
-| `Orders()` | `Place`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen`, `Completed`, `Executions` |
+| `Orders()` | `Place`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen`, `RefreshOpen`, `Completed`, `Executions` |
 | `Options()` | `ImpliedVolatility`, `Price`, `Exercise` |
 | `News()` | `Providers`, `Article`, `Historical`, `SubscribeBulletins` |
 | `Scanner()` | `Parameters`, `SubscribeResults` |

@@ -15,6 +15,7 @@ var (
 	ErrClosed                   = errors.New("ibkr: closed")
 	ErrNoMatch                  = errors.New("ibkr: no contract match")
 	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")
+	ErrNoSubscription           = errors.New("ibkr: no active subscription")
 )
 
 // ConnectError wraps a failure during the connection phase (dial, TLS

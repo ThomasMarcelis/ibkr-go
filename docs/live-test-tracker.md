@@ -57,6 +57,15 @@ Issue #20 fix session (US market holiday, orders rest PreSubmitted).
 - Paper residue: none; all probe orders cancelled and the final snapshot
   reported zero open orders.
 
+Issue #21 follow-up in the same session, capture 20260704T181808Z
+(`api_open_orders_refresh_aapl`): re-sending `req_open_orders` on an active
+open-orders subscription yields a fresh snapshot burst terminated by another
+`open_order_end`, with unsolicited open_order/order_status echo pairs arriving
+between the snapshots — this grounds `Orders().RefreshOpen`. A direct probe of
+`req_auto_open_orders` showed the Gateway sends no `open_order_end` for the
+auto bind (no snapshot boundary), so auto-scope refresh is rejected
+client-side with `ErrNoSnapshot`. Probe orders cancelled; zero residue.
+
 ### 2026-06-11
 
 Campaign day two. Market-window paper captures landed regular-session
@@ -314,6 +323,7 @@ against the role-aware `paper-dev` Gateway.
 | api_transmit_false_then_transmit_aapl.txt | 20260415T162717Z | promoted; covers staged Transmit=false then transmit/cancel replay |
 | api_reconnect_active_order_aapl.txt | 20260415T162822Z | promoted; covers GTC active order visible after reconnect |
 | api_reconnect_recovered_cancel_status_aapl.txt | 20260704T174748Z | promoted; covers unsolicited reconnect snapshot push, paired order_status in the recovery snapshot, and cancel-status delivery to SubscribeOpen for a recovered order (issue #20) |
+| api_open_orders_refresh_aapl.txt | 20260704T181808Z | promoted; covers RefreshOpen fresh snapshot burst on an active subscription with inter-snapshot echo pairs (issue #21) |
 | api_order_handle_reconnect_cancel_aapl.txt | 20260415T162822Z | promoted; covers original OrderHandle Gap/Resumed lifecycle and cancel after reconnect |
 | api_client_id0_order_observation_aapl.txt | 20260415T162840Z | promoted; covers client ID 0 observing/cancelling another client's GTC order |
 | api_cross_client_cancel_aapl.txt | 20260415T162857Z | promoted; covers client ID 2 observing/cancelling client ID 1 order |

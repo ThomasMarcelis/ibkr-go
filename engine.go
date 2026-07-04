@@ -4055,6 +4055,32 @@ func (e *engine) CancelOrder(ctx context.Context, orderID int64) error {
 	})
 }
 
+// RefreshOpenOrders re-sends the active open-orders subscription's request.
+// The Gateway answers with a fresh snapshot burst: the subscription receives
+// the current open orders as Order events followed by another
+// SubscriptionSnapshotComplete lifecycle event. The open-orders reply carries
+// no request ID on the wire, so a one-shot snapshot cannot coexist with the
+// subscription; refresh is the supported way to resync without tearing the
+// subscription down.
+func (e *engine) RefreshOpenOrders(ctx context.Context) error {
+	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
+		if !e.isReady() {
+			return ErrNotReady
+		}
+		route, ok := e.singletons[singletonOpenOrders]
+		if !ok {
+			return fmt.Errorf("%w: open orders", ErrNoSubscription)
+		}
+		// The auto scope binds future orders only; the live Gateway sends no
+		// open_order_end for req_auto_open_orders, so there is no snapshot
+		// to refresh.
+		if req, ok := route.request.(codec.OpenOrdersRequest); ok && req.Scope == string(OpenOrdersScopeAuto) {
+			return fmt.Errorf("%w: auto-scope open orders", ErrNoSnapshot)
+		}
+		return e.sendContext(ctx, route.request)
+	})
+}
+
 // GlobalCancel requests cancellation of all open orders. This is
 // fire-and-forget; individual cancellation results arrive via any active
 // OrderHandle events channels.

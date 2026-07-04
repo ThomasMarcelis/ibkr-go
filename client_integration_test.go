@@ -4953,6 +4953,139 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 	}
 }
 
+// TestSubscribeOpenRefreshDeliversFreshSnapshot freezes the fix for
+// https://github.com/ThomasMarcelis/ibkr-go/issues/21: RefreshOpen re-sends
+// the open-orders request on the active subscription and the Gateway answers
+// with a fresh burst terminated by another SnapshotComplete, so a consumer
+// can resync without tearing the subscription down. Grounded by live capture
+// captures/20260704T181808Z-api_open_orders_refresh_aapl, server_version 200,
+// events.jsonl sha256 prefix 9d5a9af337237a67.
+func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "api_open_orders_refresh_aapl.txt")
+	defer waitHost(t, host)
+
+	client := dialHostClient(t, host, ibkr.WithClientID(0))
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := client.Orders().RefreshOpen(ctx); !errors.Is(err, ibkr.ErrNoSubscription) {
+		t.Fatalf("RefreshOpen without subscription error = %v, want ErrNoSubscription", err)
+	}
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+
+	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll)
+	if err != nil {
+		t.Fatalf("SubscribeOpen(all): %v", err)
+	}
+	defer sub.Close()
+
+	// Consume until the initial SnapshotComplete, then refresh and consume
+	// until the second one. The transcript carries four open_order +
+	// order_status pairs in total: the initial snapshot, two unsolicited
+	// echo pairs between the snapshots, and the refresh burst.
+	orders, statuses, snapshots := 0, 0, 0
+	for snapshots < 2 {
+		select {
+		case evt, ok := <-sub.Events():
+			if !ok {
+				t.Fatal("subscription closed while consuming snapshots")
+			}
+			if evt.Order != nil {
+				orders++
+			}
+			if evt.Status != nil {
+				statuses++
+			}
+		case state, ok := <-sub.Lifecycle():
+			if !ok {
+				t.Fatal("lifecycle closed while consuming snapshots")
+			}
+			if state.Kind == ibkr.SubscriptionSnapshotComplete {
+				snapshots++
+				if snapshots == 1 {
+					if err := client.Orders().RefreshOpen(ctx); err != nil {
+						t.Fatalf("RefreshOpen: %v", err)
+					}
+				}
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out: snapshots=%d orders=%d statuses=%d", snapshots, orders, statuses)
+		}
+	}
+	// Drain events emitted before the second SnapshotComplete that may still
+	// be buffered behind the lifecycle read.
+	for orders < 4 || statuses < 4 {
+		select {
+		case evt := <-sub.Events():
+			if evt.Order != nil {
+				orders++
+			}
+			if evt.Status != nil {
+				statuses++
+			}
+		case <-ctx.Done():
+			t.Fatalf("timed out draining: orders=%d statuses=%d, want 4/4", orders, statuses)
+		}
+	}
+
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusCancelled)
+	waitHost(t, host)
+}
+
+// TestRefreshOpenAutoScopeHasNoSnapshot freezes the live-probed contract that
+// req_auto_open_orders has no snapshot boundary (the Gateway sends no
+// open_order_end for the bind, probed 2026-07-04, server_version 200), so
+// RefreshOpen rejects auto-scope subscriptions client-side.
+func TestRefreshOpenAutoScopeHasNoSnapshot(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "open_orders_auto_refresh.txt")
+	defer waitHost(t, host)
+
+	client := dialHostClient(t, host, ibkr.WithClientID(0))
+	defer client.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAuto)
+	if err != nil {
+		t.Fatalf("SubscribeOpen(auto): %v", err)
+	}
+	defer sub.Close()
+
+	if err := client.Orders().RefreshOpen(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
+		t.Fatalf("RefreshOpen(auto) error = %v, want ErrNoSnapshot", err)
+	}
+	waitHost(t, host)
+}
+
 // TestOpenOrdersSnapshotSkipsPairedStatuses freezes that the one-shot
 // open-orders snapshot returns only the orders and filters the paired
 // order_status frames the Gateway interleaves into the recovery snapshot.

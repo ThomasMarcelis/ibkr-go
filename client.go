@@ -211,6 +211,14 @@ func (c OrdersClient) Open(ctx context.Context, scope OpenOrdersScope) ([]OpenOr
 func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
 	return c.engine.SubscribeOpenOrders(ctx, scope, opts...)
 }
+
+// RefreshOpen requests a fresh open-orders snapshot on the active
+// SubscribeOpen subscription: the current open orders arrive as Order events
+// followed by another SnapshotComplete lifecycle event. Returns
+// ErrNoSubscription when no open-orders subscription is active.
+func (c OrdersClient) RefreshOpen(ctx context.Context) error {
+	return c.engine.RefreshOpenOrders(ctx)
+}
 func (c OrdersClient) Completed(ctx context.Context, apiOnly bool) ([]CompletedOrderResult, error) {
 	return c.engine.CompletedOrders(ctx, apiOnly)
 }

@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- **`Orders().RefreshOpen` resyncs an active open-orders subscription
+  ([#21](https://github.com/ThomasMarcelis/ibkr-go/issues/21)).** The
+  open-orders reply carries no request ID on the wire, so a one-shot
+  `Orders().Open` cannot coexist with `SubscribeOpen`; refresh re-sends the
+  subscription's request and the Gateway answers with a fresh snapshot burst
+  followed by another `SnapshotComplete` lifecycle event. Returns
+  `ErrNoSubscription` with no active subscription and `ErrNoSnapshot` for
+  auto-scope subscriptions (the live Gateway sends no `open_order_end` for
+  `reqAutoOpenOrders`). Grounded by a 2026-07-04 `server_version 200`
+  capture frozen as `api_open_orders_refresh_aapl.txt`.
+
 ## v1.5.0 — 2026-07-04
 
 ### Changed (breaking)
