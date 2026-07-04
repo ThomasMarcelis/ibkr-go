@@ -256,6 +256,10 @@ func (h *Host) run() {
 				continue
 			}
 
+			if serverVersion != defaultServerVersion {
+				h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames; DSL-form frames re-encode through the codec under test and would mask version-gated layout bugs", defaultServerVersion))
+				return
+			}
 			msg, err := buildMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)
@@ -282,6 +286,10 @@ func (h *Host) run() {
 			msg, err := buildMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)
+				return
+			}
+			if cur.direction == "server" && serverVersion != defaultServerVersion {
+				h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames (split step)", defaultServerVersion))
 				return
 			}
 			payload, err := codec.Encode(serverVersion, msg)

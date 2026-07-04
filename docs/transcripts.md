@@ -181,3 +181,15 @@ header should say that account-specific identifiers are sanitized.
 - broaden live capture coverage beyond `server_version 200`
 - use the recorder and normalization tooling to derive new scenarios from
   contributor-owned Gateway or TWS sessions
+
+## Raw frames are the canonical server-side representation
+
+Server frames in transcripts below `server_version 200` MUST use `raw server`
+steps carrying live-captured bytes; the testhost rejects DSL-form server
+frames for such transcripts. DSL-form frames re-encode through the codec
+under test, so a version-gated layout bug would replay green and only fail
+live — the symmetric-codec-bug class. New captures land raw by default (the
+capture pipeline already produces the raw bytes); the JSON message form is a
+human-readable view, kept where a consistency check against the decoded raw
+frame exists or where the flow is low-risk and sv200-only. Existing sv200
+transcripts migrate opportunistically, orders and executions first.
