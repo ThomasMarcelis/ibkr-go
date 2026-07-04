@@ -72,71 +72,53 @@ if err != nil {
 }
 defer client.Close()
 
-details, err := client.Contracts().Qualify(ctx, ibkr.Contract{
-    Symbol:   "AAPL",
-    SecType:  ibkr.SecTypeStock,
-    Exchange: "SMART",
-    Currency: "USD",
-})
+details, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
 if err != nil {
     return err
 }
 fmt.Println(details.LongName, details.MinTick) // APPLE INC 0.01
 ```
 
+`ibkr.Stock`, `ibkr.Forex`, `ibkr.OptionContract`, and `ibkr.Future` fill the
+common fields (SMART/IDEALPRO routing, USD, 100-share option multiplier) for
+the contract shapes IBKR actually trades; build a `Contract{}` literal
+directly for anything more exotic (combos, non-USD listings, a specific
+primary exchange).
+
 ### Stream live quotes
 
 ```go
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-    Contract: ibkr.Contract{
-        Symbol:   "AAPL",
-        SecType:  ibkr.SecTypeStock,
-        Exchange: "SMART",
-        Currency: "USD",
-    },
+    Contract: ibkr.Stock("AAPL"),
 })
 if err != nil {
     return err
 }
 defer sub.Close()
 
-events := sub.Events()
-lifecycle := sub.Lifecycle()
-for events != nil {
-    select {
-    case update, ok := <-events:
-        if !ok {
-            return sub.Wait()
-        }
-        fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
-    case state, ok := <-lifecycle:
-        if !ok {
-            lifecycle = nil
-            continue
-        }
-        fmt.Println("lifecycle:", state.Kind, "retryable:", state.Retryable)
-    }
+for update := range sub.All(ctx) {
+    fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
+}
+if err := sub.Err(); err != nil {
+    return err
 }
 ```
 
-`Events()` carries market data. `Lifecycle()` carries session boundaries —
-`SnapshotComplete`, `Gap`, `Resumed`, `Closed`. They never mix. When a stream
-ends, use `sub.Err()` or `Wait()` with `ibkr.IsRetryable(err)`, or inspect
-`state.Retryable`, to distinguish reconnectable gaps from terminal IBKR API
-rejections. Drain `Events()` until it closes when final buffered data matters;
-use `Done()` for coordinating other goroutines, not as a replacement for event
-draining.
+`sub.All(ctx)` ranges over business data until the subscription closes or ctx
+is canceled, then `sub.Err()` reports why: nil for a clean close, or e.g.
+`ibkr.ErrSlowConsumer` / `ibkr.ErrInterrupted` otherwise — check
+`ibkr.IsRetryable(err)` to tell a reconnectable gap from a terminal IBKR API
+rejection. Lifecycle transitions (`SnapshotComplete`, `Gap`, `Resumed`,
+`Closed`) are a separate channel, `sub.Lifecycle()`, and are never mixed into
+`All`/`Events`; a caller that needs both streams in one loop reads
+`Events()`/`Lifecycle()` directly with a `select`, or reads `Lifecycle()` from
+another goroutine.
 
 ### Fetch historical bars
 
 ```go
 bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
-    Contract: ibkr.Contract{
-        Symbol:   "AAPL",
-        SecType:  ibkr.SecTypeStock,
-        Exchange: "SMART",
-        Currency: "USD",
-    },
+    Contract:   ibkr.Stock("AAPL"),
     EndTime:    time.Now(),
     Duration:   ibkr.Days(1),
     BarSize:    ibkr.Bar1Hour,
@@ -160,19 +142,8 @@ non-nil per event. The channel closes after the terminal status (`Filled`,
 
 ```go
 handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-    Contract: ibkr.Contract{
-        Symbol:   "AAPL",
-        SecType:  ibkr.SecTypeStock,
-        Exchange: "SMART",
-        Currency: "USD",
-    },
-    Order: ibkr.Order{
-        Action:    ibkr.ActionBuy,
-        OrderType: ibkr.OrderTypeLimit,
-        Quantity:  decimal.NewFromInt(1),
-        LmtPrice:  decimal.RequireFromString("150.00"),
-        TIF:       ibkr.TIFDay,
-    },
+    Contract: ibkr.Stock("AAPL"),
+    Order:    ibkr.LimitOrder(ibkr.ActionBuy, decimal.NewFromInt(1), decimal.RequireFromString("150.00")),
 })
 if err != nil {
     return err

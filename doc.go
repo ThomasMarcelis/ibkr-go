@@ -57,7 +57,8 @@
 // [SubscriptionClosed] is still guaranteed before the channel closes.
 // [Subscription.AwaitSnapshot] is durable for snapshot-style subscriptions.
 //
-// The typical read loop:
+// The typical read loop ranges over [Subscription.All], an iterator that
+// yields business events until the subscription closes or ctx is canceled:
 //
 //	sub, err := client.MarketData().SubscribeQuotes(ctx, req)
 //	if err != nil {
@@ -65,31 +66,26 @@
 //	}
 //	defer sub.Close()
 //
-//	events := sub.Events()
-//	lifecycle := sub.Lifecycle()
-//	for events != nil {
-//	    select {
-//	    case update, ok := <-events:
-//	        if !ok {
-//	            return sub.Wait()
-//	        }
-//	        // handle business data
-//	    case state, ok := <-lifecycle:
-//	        if !ok {
-//	            lifecycle = nil
-//	            continue
-//	        }
-//	        // handle lifecycle (SnapshotComplete, Gap, Resumed, etc.)
-//	    }
+//	for update := range sub.All(ctx) {
+//	    // handle business data
 //	}
+//	if err := sub.Err(); err != nil {
+//	    return err
+//	}
+//
+// Lifecycle transitions (SnapshotComplete, Gap, Resumed, Closed) are not part
+// of that iteration; a consumer that needs them reads Lifecycle() from
+// another goroutine, or drops to a manual select over Events() and
+// Lifecycle() to observe both streams in one loop.
 //
 // Call Close to unsubscribe. Wait blocks until termination and returns the
 // final error, if any. Err returns the currently recorded terminal error without
 // waiting for Done. SubscriptionClosed and Gap lifecycle events include a
 // Retryable flag. API errors are terminal request rejections; use [IsRetryable]
-// on the final error when a consumer loop only observes Events().
+// on the final error when a consumer loop only observes Events() or All().
 // Done is useful for coordinating other goroutines, but consumers that need
-// every business event should drain Events until it closes, then call Wait.
+// every business event should drain Events (or All) until it closes, then
+// check Err or call Wait.
 //
 // # Order Management
 //

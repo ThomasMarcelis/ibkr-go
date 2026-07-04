@@ -468,6 +468,62 @@ sleep 2s
 	// snapshot complete
 }
 
+func ExampleStock() {
+	c := ibkr.Stock("AAPL")
+	fmt.Println(c.Symbol, c.SecType, c.Exchange, c.Currency)
+	// Output:
+	// AAPL STK SMART USD
+}
+
+func ExampleForex() {
+	c := ibkr.Forex("EURUSD")
+	fmt.Println(c.Symbol, c.Currency, c.SecType, c.Exchange)
+	// Output:
+	// EUR USD CASH IDEALPRO
+}
+
+func ExampleOptionContract() {
+	c := ibkr.OptionContract("AAPL", "20260320", decimal.RequireFromString("150"), ibkr.RightCall)
+	fmt.Println(c.Symbol, c.Expiry, c.Strike, c.Right, c.Multiplier)
+	// Output:
+	// AAPL 20260320 150 C 100
+}
+
+func ExampleFuture() {
+	c := ibkr.Future("ES", "202609", "CME")
+	fmt.Println(c.Symbol, c.Expiry, c.Exchange, c.Currency)
+	// Output:
+	// ES 202609 CME USD
+}
+
+func ExampleMarketOrder() {
+	o := ibkr.MarketOrder(ibkr.ActionBuy, decimal.NewFromInt(10))
+	fmt.Println(o.Action, o.OrderType, o.Quantity)
+	// Output:
+	// BUY MKT 10
+}
+
+func ExampleLimitOrder() {
+	o := ibkr.LimitOrder(ibkr.ActionBuy, decimal.NewFromInt(10), decimal.RequireFromString("150.00"))
+	fmt.Println(o.Action, o.OrderType, o.Quantity, o.LmtPrice)
+	// Output:
+	// BUY LMT 10 150
+}
+
+func ExampleStopOrder() {
+	o := ibkr.StopOrder(ibkr.ActionSell, decimal.NewFromInt(10), decimal.RequireFromString("140.00"))
+	fmt.Println(o.Action, o.OrderType, o.Quantity, o.AuxPrice)
+	// Output:
+	// SELL STP 10 140
+}
+
+func ExampleStopLimitOrder() {
+	o := ibkr.StopLimitOrder(ibkr.ActionSell, decimal.NewFromInt(10), decimal.RequireFromString("140.00"), decimal.RequireFromString("139.50"))
+	fmt.Println(o.Action, o.OrderType, o.Quantity, o.AuxPrice, o.LmtPrice)
+	// Output:
+	// SELL STP LMT 10 140 139.5
+}
+
 // exampleClient creates a client backed by a deterministic replay script for
 // testing. Each example function passes a script that drives the mock server.
 func exampleClient(script string) (*ibkr.Client, *testhost.Host, context.CancelFunc) {
