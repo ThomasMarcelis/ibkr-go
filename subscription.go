@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"context"
+	"iter"
 	"sync"
 	"time"
 )
@@ -45,6 +46,40 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 }
 
 func (s *Subscription[T]) Events() <-chan T { return s.events }
+
+// All returns an iterator over the subscription's events for use with a
+// range statement. It yields until the subscription closes or ctx is
+// canceled. Iterating to exhaustion drains every buffered event, so after
+// the loop [Subscription.Err] reports the terminal error: nil for a clean
+// close, or e.g. [ErrSlowConsumer] / [ErrInterrupted] otherwise. Callers
+// that break early or rely on ctx cancellation should also check ctx.Err.
+//
+//	for q := range sub.All(ctx) {
+//		fmt.Println(q.Last)
+//	}
+//	if err := sub.Err(); err != nil {
+//		log.Fatal(err)
+//	}
+//
+// Lifecycle transitions (gap, resume, snapshot boundaries) are not part of
+// the iteration; consumers that need them use [Subscription.Lifecycle].
+func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
+	return func(yield func(T) bool) {
+		for {
+			select {
+			case ev, ok := <-s.events:
+				if !ok {
+					return
+				}
+				if !yield(ev) {
+					return
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}
+}
 
 func (s *Subscription[T]) Lifecycle() <-chan SubscriptionStateEvent { return s.state.Chan() }
 
