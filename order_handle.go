@@ -1,0 +1,165 @@
+package ibkr
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+)
+
+// OrderHandle tracks a placed order's lifecycle. Events arrive via Events();
+// lifecycle state changes (Gap, Resumed) arrive via Lifecycle(). Close() detaches
+// the handle without cancelling the order. Cancel() sends a cancel request.
+type OrderHandle struct {
+	orderID int64
+	events  chan OrderEvent
+	state   *observer[SubscriptionStateEvent]
+	done    chan struct{}
+
+	closeOnce sync.Once
+	err       error
+	errMu     sync.Mutex
+
+	cancelFn func(context.Context) error        // set by engine, sends CancelOrder
+	modifyFn func(context.Context, Order) error // set by engine, sends PlaceOrder with same ID
+	detachFn func()                             // set by engine, routes Close through the actor loop
+}
+
+func newOrderHandle(orderID int64) *OrderHandle {
+	return &OrderHandle{
+		orderID: orderID,
+		events:  make(chan OrderEvent, 64),
+		state:   newObserver[SubscriptionStateEvent](8),
+		done:    make(chan struct{}),
+	}
+}
+
+func (h *OrderHandle) OrderID() int64            { return h.orderID }
+func (h *OrderHandle) Events() <-chan OrderEvent { return h.events }
+func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent {
+	return h.state.Chan()
+}
+func (h *OrderHandle) Done() <-chan struct{} { return h.done }
+
+func (h *OrderHandle) Wait() error {
+	<-h.done
+	h.errMu.Lock()
+	defer h.errMu.Unlock()
+	return h.err
+}
+
+// Close detaches the handle. The order continues executing on the server.
+// Events() and Lifecycle() channels are closed on the engine goroutine,
+// serialized with in-flight emits.
+func (h *OrderHandle) Close() error {
+	if h.detachFn != nil {
+		h.detachFn()
+		return nil
+	}
+	// Unbound handles only appear in tests; without an engine route there is no
+	// concurrent protocol emitter, so direct teardown is safe.
+	h.closeWithErr(nil)
+	return nil
+}
+
+// Cancel sends a cancel request for this order to the server.
+func (h *OrderHandle) Cancel(ctx context.Context) error {
+	if h.cancelFn == nil {
+		return fmt.Errorf("ibkr: order handle not connected")
+	}
+	return h.cancelFn(ctx)
+}
+
+// Modify sends a modified order to the server. The order is re-sent with the
+// handle's bound order ID; the Contract is fixed at placement time. Callers
+// may leave order.OrderID at zero for convenience, but setting it to any
+// value other than the handle's bound ID is rejected as a misuse rather than
+// silently corrected.
+func (h *OrderHandle) Modify(ctx context.Context, order Order) error {
+	if h.modifyFn == nil {
+		return fmt.Errorf("ibkr: order handle not connected")
+	}
+	if order.OrderID != 0 && order.OrderID != h.orderID {
+		return fmt.Errorf("ibkr: modify order: order.OrderID %d does not match handle %d", order.OrderID, h.orderID)
+	}
+	return h.modifyFn(ctx, order)
+}
+
+func (h *OrderHandle) isDone() bool {
+	select {
+	case <-h.done:
+		return true
+	default:
+		return false
+	}
+}
+
+func (h *OrderHandle) emitEvent(evt OrderEvent) bool {
+	select {
+	case <-h.done:
+		return false
+	default:
+	}
+
+	select {
+	case h.events <- evt:
+		return true
+	case <-h.done:
+		return false
+	default:
+		h.closeWithErr(ErrSlowConsumer)
+		return false
+	}
+}
+
+func (h *OrderHandle) emitOrder(o OpenOrder) bool {
+	return h.emitEvent(OrderEvent{OpenOrder: &o})
+}
+
+// IsTerminalOrderStatus reports whether a status represents a final order
+// state. Live Gateway can still deliver execution or commission callbacks just
+// after a terminal status, so the engine owns the final handle close.
+func IsTerminalOrderStatus(status OrderStatus) bool {
+	return status == OrderStatusFilled || status == OrderStatusCancelled || status == OrderStatusApiCancelled || status == OrderStatusInactive
+}
+
+func (h *OrderHandle) emitStatus(s OrderStatusUpdate) bool {
+	return h.emitEvent(OrderEvent{Status: &s})
+}
+
+func (h *OrderHandle) emitExecution(exec Execution) bool {
+	return h.emitEvent(OrderEvent{Execution: &exec})
+}
+
+func (h *OrderHandle) emitCommission(cr CommissionReport) bool {
+	return h.emitEvent(OrderEvent{Commission: &cr})
+}
+
+func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
+	if h.isDone() {
+		return
+	}
+	evt.Retryable = retryableSubscriptionState(evt)
+	if evt.At.IsZero() {
+		evt.At = time.Now().UTC()
+	}
+	h.state.EmitLatest(evt)
+}
+
+func (h *OrderHandle) emitOrderError(err error) {
+	h.closeWithErr(err)
+}
+
+func (h *OrderHandle) closeWithErr(err error) {
+	h.closeOnce.Do(func() {
+		h.errMu.Lock()
+		h.err = err
+		h.errMu.Unlock()
+		// Close events before done so Done reports completion only after the
+		// engine has stopped publishing business events. Consumers that need
+		// every buffered event should range Events(), then call Wait().
+		close(h.events)
+		h.state.Close()
+		close(h.done)
+	})
+}
