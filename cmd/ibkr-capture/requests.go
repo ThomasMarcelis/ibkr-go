@@ -158,7 +158,7 @@ func sendReqContractDetails(conn net.Conn, reqID int, c contractSpec) error {
 	fields = append(fields,
 		"", // secIdType
 		"", // secId
-		"", // issuerId (v>=MinServerVersionBondIssuerId)
+		"", // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
 	)
 	return sendMessage(conn, fields)
 }

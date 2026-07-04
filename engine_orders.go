@@ -579,6 +579,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		MinCommission:         minCommission,
 		MaxCommission:         maxCommission,
 		CommissionCurrency:    m.CommissionCurrency,
+		Partial:               m.Partial,
 	}, nil
 }
 

@@ -97,11 +97,19 @@ type UserInfo struct {
 
 // [4, reqId, code, message, advancedJson, errorTimeMs]
 func decodeErrMsg(r *fieldReader, sv int) ([]Message, error) {
+	if sv < MinServerVersionErrorTime {
+		r.Skip(1) // legacy leading version int (decoder.py:2368-2369)
+	}
 	reqID, _ := r.ReadInt()
 	code, _ := r.ReadInt()
 	message := r.ReadString()
+	// advancedOrderRejectJson is present from ADVANCED_ORDER_REJECT (166),
+	// below the 176 floor, so it is always on the wire.
 	advJSON := r.ReadString()
-	errTime := r.ReadString()
+	errTime := ""
+	if sv >= MinServerVersionErrorTime {
+		errTime = r.ReadString() // decoder.py:2380-2382
+	}
 	return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
 }
 

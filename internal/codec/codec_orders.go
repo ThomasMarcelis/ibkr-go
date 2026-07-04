@@ -111,6 +111,12 @@ type OpenOrder struct {
 	// children carry real values there). Live open_order frames carry no
 	// fill echo; fills arrive on the separate order_status message.
 	ParentID string
+
+	// Partial marks a frame whose layout diverged from the attested
+	// server->client shape at some advanced-order block, so decoding stopped
+	// early and returned only the pre-status fields; Status and the margin
+	// section are empty.
+	Partial bool
 }
 
 type OpenOrderEnd struct{}
@@ -144,11 +150,15 @@ func (m ExecutionsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.Account)
 	w.WriteString("") // time
 	w.WriteString(m.Symbol)
-	w.WriteString("")      // secType
-	w.WriteString("")      // exchange
-	w.WriteString("")      // side
-	w.WriteInt(2147483647) // lastNDays unset
-	w.WriteInt(0)          // specificDates count
+	w.WriteString("") // secType
+	w.WriteString("") // exchange
+	w.WriteString("") // side
+	if sv >= MinServerVersionParametrizedDaysOfExecutions {
+		// client.py:4085-4100: lastNDays UNSET_INTEGER (2^31-1) then a
+		// specificDates count of 0 when no dates are supplied.
+		w.WriteInt(2147483647)
+		w.WriteInt(0)
+	}
 	return w.Fields(), nil
 }
 
@@ -432,7 +442,9 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.FAGroup)
 	w.WriteString(m.FAMethod)
 	w.WriteString(m.FAPercentage)
-	// sv >= 177: no deprecated faProfile
+	if sv < MinServerVersionFAProfileDesupport {
+		w.WriteString("") // deprecated faProfile (client.py:2463-2464)
+	}
 	w.WriteString(m.ModelCode)
 	// Short sale
 	w.WriteString(m.ShortSaleSlot)
@@ -532,12 +544,27 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.AdvancedErrorOverride)
 	w.WriteString(m.ManualOrderTime)
 	// [Exchange != IBKRATS, OrderType != PEG BEST/MID => skip peg offsets]
-	w.WriteString(m.CustomerAccount)
-	w.WriteString(m.ProfessionalCustomer)
-	// [sv >= 190 => no RFQ fields]
-	w.WriteString(m.IncludeOvernight)
-	w.WriteString(m.ManualOrderIndicator)
-	w.WriteString(m.ImbalanceOnly)
+	if sv >= MinServerVersionCustomerAccount {
+		w.WriteString(m.CustomerAccount) // client.py:2746
+	}
+	if sv >= MinServerVersionProfessionalCustomer {
+		w.WriteString(m.ProfessionalCustomer) // client.py:2749
+	}
+	if sv >= MinServerVersionRFQFields && sv < MinServerVersionUndoRFQFields {
+		// Legacy RFQ window (client.py:2752-2754): empty placeholder then
+		// UNSET_INTEGER (2^31-1). Removed at UndoRFQFields (190).
+		w.WriteString("")
+		w.WriteString("2147483647")
+	}
+	if sv >= MinServerVersionIncludeOvernight {
+		w.WriteString(m.IncludeOvernight) // client.py:2756
+	}
+	if sv >= MinServerVersionCMETaggingFields {
+		w.WriteString(m.ManualOrderIndicator) // client.py:2759
+	}
+	if sv >= MinServerVersionImbalanceOnly {
+		w.WriteString(m.ImbalanceOnly) // client.py:2762
+	}
 	return w.Fields(), nil
 }
 
@@ -555,10 +582,22 @@ type CancelOrderRequest struct {
 func (m CancelOrderRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutCancelOrder)
+	if sv < MinServerVersionCMETaggingFields {
+		w.WriteString("1") // legacy version field (client.py:2899-2900)
+	}
 	w.WriteInt64(m.OrderID)
 	w.WriteString(m.ManualOrderCancelTime)
-	w.WriteString(m.ExtOperator)
-	w.WriteString(m.ManualOrderIndicator)
+	if sv >= MinServerVersionRFQFields && sv < MinServerVersionUndoRFQFields {
+		// Legacy RFQ window (client.py:2905-2908): two empty placeholders
+		// then UNSET_INTEGER. Removed at UndoRFQFields (190).
+		w.WriteString("")
+		w.WriteString("")
+		w.WriteString("2147483647")
+	}
+	if sv >= MinServerVersionCMETaggingFields {
+		w.WriteString(m.ExtOperator)          // client.py:2911
+		w.WriteString(m.ManualOrderIndicator) // client.py:2912
+	}
 	return w.Fields(), nil
 }
 
@@ -571,7 +610,16 @@ type GlobalCancelRequest struct {
 }
 
 func (m GlobalCancelRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqGlobalCancel), m.ExtOperator, m.ManualOrderIndicator}, nil
+	w := fieldWriter{}
+	w.WriteInt(OutReqGlobalCancel)
+	if sv < MinServerVersionCMETaggingFields {
+		w.WriteString("1") // legacy version field (client.py:3131-3132)
+	}
+	if sv >= MinServerVersionCMETaggingFields {
+		w.WriteString(m.ExtOperator)          // client.py:3135
+		w.WriteString(m.ManualOrderIndicator) // client.py:3136
+	}
+	return w.Fields(), nil
 }
 
 // ExerciseOptions (OUT 21)
@@ -613,9 +661,15 @@ func (m ExerciseOptionsRequest) encodeWire(sv int) ([]string, error) {
 	// and professional-customer tail; ending the frame at override drew
 	// code 10300 from the live Gateway (capture 20260611T074859Z,
 	// sha 241a49023701e9ec).
-	w.WriteString("")  // manualOrderTime
-	w.WriteString("")  // customerAccount
-	w.WriteBool(false) // professionalCustomer
+	if sv >= MinServerVersionManualOrderTimeExerciseOptions {
+		w.WriteString("") // manualOrderTime (client.py:1775)
+	}
+	if sv >= MinServerVersionCustomerAccount {
+		w.WriteString("") // customerAccount (client.py:1779)
+	}
+	if sv >= MinServerVersionProfessionalCustomer {
+		w.WriteBool(false) // professionalCustomer (client.py:1783)
+	}
 	return w.Fields(), nil
 }
 
@@ -686,6 +740,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 		ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 		Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
+		Partial: true,
 	}
 
 	// Shared pre-status order fields in the observed server->client layout.
@@ -693,6 +748,9 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	r.ReadString() // FAGroup
 	r.ReadString() // FAMethod
 	r.ReadString() // FAPercentage
+	if sv < MinServerVersionFAProfileDesupport {
+		r.ReadString() // deprecated faProfile (orderdecoder.py:136-137)
+	}
 	r.ReadString() // ModelCode
 	r.ReadString() // GoodTillDate
 	r.ReadString() // Rule80A
@@ -845,35 +903,40 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	minCommission := r.ReadString()
 	maxCommission := r.ReadString()
 	commissionCurrency := r.ReadString()
-	r.ReadString() // MarginCurrency
-	r.ReadString() // InitMarginBeforeOutsideRTH
-	r.ReadString() // MaintMarginBeforeOutsideRTH
-	r.ReadString() // EquityWithLoanBeforeOutsideRTH
-	r.ReadString() // InitMarginChangeOutsideRTH
-	r.ReadString() // MaintMarginChangeOutsideRTH
-	r.ReadString() // EquityWithLoanChangeOutsideRTH
-	r.ReadString() // InitMarginAfterOutsideRTH
-	r.ReadString() // MaintMarginAfterOutsideRTH
-	r.ReadString() // EquityWithLoanAfterOutsideRTH
-	r.ReadString() // SuggestedSize
-	r.ReadString() // RejectReason
-	orderAllocationsCount, err := r.ReadOptionalCount("open order allocations")
-	if err != nil {
-		return nil, err
-	}
-	// Official allocations carry seven fields per entry
-	// (account..isMonetary); there is no trailing reserved slot.
-	if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 7, 0); err != nil {
-		return nil, err
-	}
-	for range orderAllocationsCount {
-		r.ReadString() // Account
-		r.ReadString() // Position
-		r.ReadString() // PositionDesired
-		r.ReadString() // PositionAfter
-		r.ReadString() // DesiredAllocQty
-		r.ReadString() // AllowedAllocQty
-		r.ReadString() // IsMonetary
+	if sv >= MinServerVersionFullOrderPreviewFields {
+		// FULL_ORDER_PREVIEW block (orderdecoder.py:369-395): marginCurrency,
+		// nine outside-RTH margin fields, suggestedSize, rejectReason, then
+		// the order-allocations vector. warningText below is unconditional.
+		r.ReadString() // MarginCurrency
+		r.ReadString() // InitMarginBeforeOutsideRTH
+		r.ReadString() // MaintMarginBeforeOutsideRTH
+		r.ReadString() // EquityWithLoanBeforeOutsideRTH
+		r.ReadString() // InitMarginChangeOutsideRTH
+		r.ReadString() // MaintMarginChangeOutsideRTH
+		r.ReadString() // EquityWithLoanChangeOutsideRTH
+		r.ReadString() // InitMarginAfterOutsideRTH
+		r.ReadString() // MaintMarginAfterOutsideRTH
+		r.ReadString() // EquityWithLoanAfterOutsideRTH
+		r.ReadString() // SuggestedSize
+		r.ReadString() // RejectReason
+		orderAllocationsCount, err := r.ReadOptionalCount("open order allocations")
+		if err != nil {
+			return nil, err
+		}
+		// Official allocations carry seven fields per entry
+		// (account..isMonetary); there is no trailing reserved slot.
+		if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 7, 0); err != nil {
+			return nil, err
+		}
+		for range orderAllocationsCount {
+			r.ReadString() // Account
+			r.ReadString() // Position
+			r.ReadString() // PositionDesired
+			r.ReadString() // PositionAfter
+			r.ReadString() // DesiredAllocQty
+			r.ReadString() // AllowedAllocQty
+			r.ReadString() // IsMonetary
+		}
 	}
 	warningText := r.ReadString()
 
@@ -926,10 +989,39 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	// echo; fills arrive on the separate order_status frame. Any other
 	// tail width is an unattested shape and falls back to the partial
 	// decode.
-	if r.Remaining() != 32 {
+	//
+	// The tail is a fixed 24-field base always present at the 176 floor
+	// (adjustedOrderParams 8, softDollarTier 3, cashQty, autoPriceForHedge,
+	// omsContainer, discretionaryUpToLimit, usePriceMgmtAlgo, duration,
+	// postToAts, autoCancelParent, pegBest/pegMid offsets 5) plus one field
+	// per gated extension present at this version (orderdecoder.py:372-391).
+	// At sv200 the extensions sum to 8, giving the 32-field live tail.
+	expectedTail := 24
+	if sv >= MinServerVersionCustomerAccount {
+		expectedTail++
+	}
+	if sv >= MinServerVersionProfessionalCustomer {
+		expectedTail++
+	}
+	if sv >= MinServerVersionBondAccruedInterest {
+		expectedTail++
+	}
+	if sv >= MinServerVersionIncludeOvernight {
+		expectedTail++
+	}
+	if sv >= MinServerVersionCMETaggingFieldsInOpenOrder {
+		expectedTail += 2 // extOperator + manualOrderIndicator
+	}
+	if sv >= MinServerVersionSubmitter {
+		expectedTail++
+	}
+	if sv >= MinServerVersionImbalanceOnly {
+		expectedTail++
+	}
+	if r.Remaining() != expectedTail {
 		return []Message{partial}, nil
 	}
-	r.Skip(32)
+	r.Skip(expectedTail)
 
 	return []Message{OpenOrder{
 		OrderID: orderID, Contract: contract,

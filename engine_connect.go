@@ -44,7 +44,7 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	}
 
 	// 2. Send version range (framed)
-	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, maxServerVersion)); err != nil {
+	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, advertisedServerVersionMax)); err != nil {
 		conn.Close()
 		e.connectFailed("handshake", err, reconnect)
 		return

@@ -122,6 +122,11 @@ type OpenOrder struct {
 	MinCommission      decimal.Decimal
 	MaxCommission      decimal.Decimal
 	CommissionCurrency string
+
+	// Partial reports that an advanced or unattested order layout degraded to
+	// a partial parse: the core order fields above are populated, but Status
+	// and the margin/commission section are empty.
+	Partial bool
 }
 
 // OpenOrderUpdate is a union event from the open-orders subscription. Exactly

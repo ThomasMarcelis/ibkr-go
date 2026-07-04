@@ -54,9 +54,10 @@ type bootstrapState struct {
 }
 
 const (
-	// The codec currently targets the live-validated server_version 200 wire
-	// layout. Broader support requires version-aware outbound encoding.
-	minServerVersion = 200
+	// The codec gates post-176 wire fields on the negotiated version. The
+	// sv200 layout is live-validated; 176..199 are covered by version-gated
+	// encode/decode paths.
+	minServerVersion = 176
 	maxServerVersion = 200
 	bootstrapTimeout = 5 * time.Second
 
@@ -66,6 +67,13 @@ const (
 	historicalRequestSpacing   = 2 * time.Second
 	historicalIdenticalSpacing = 15 * time.Second
 )
+
+// advertisedServerVersionMax is the upper bound sent in the v100+ handshake.
+// The gateway negotiates down to it, so capping it below maxServerVersion
+// forces a live session onto an older wire layout. Only the version-matrix
+// live tests override it (see export_test.go); production always advertises
+// maxServerVersion.
+var advertisedServerVersionMax = maxServerVersion
 
 type route struct {
 	opKind       OpKind

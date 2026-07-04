@@ -47,6 +47,11 @@ type HistoricalBar struct {
 
 type HistoricalBarsEnd struct {
 	ReqID int
+	// StartDate and EndDate carry the dataset bounds echoed by the terminal
+	// marker below HISTORICAL_DATA_END (196). At sv>=196 the server no longer
+	// inlines them and both stay empty.
+	StartDate string
+	EndDate   string
 }
 
 type CancelHistoricalData struct {
@@ -246,12 +251,21 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Below HISTORICAL_DATA_END (196) the frame inlines the dataset start/end
+	// dates before the bar count and the terminal marker echoes them
+	// (decoder.py:897-922). At sv>=196 the end-of-data arrives as a separate
+	// frame and these fields are absent.
+	var startDate, endDate string
+	if sv < MinServerVersionHistoricalDataEnd {
+		startDate = r.ReadString()
+		endDate = r.ReadString()
+	}
 	barCount, err := r.ReadCount("bar count")
 	if err != nil {
 		return nil, err
 	}
 	if barCount <= 0 {
-		return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
+		return []Message{HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate}}, nil
 	}
 	if err := r.RequireFixedEntryFields("historical data", barCount, 8, 0); err != nil {
 		return nil, err
@@ -265,7 +279,7 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 			Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
 		})
 	}
-	msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID})
+	msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate})
 	return msgs, nil
 }
 

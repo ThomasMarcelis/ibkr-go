@@ -38,7 +38,7 @@ func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteBool(false) // includeExpired
 	w.WriteString("")  // secIdType
 	w.WriteString("")  // secId
-	w.WriteString("")  // issuerId (v>=MinServerVersionBondIssuerId)
+	w.WriteString("")  // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
 	return w.Fields(), nil
 }
 
@@ -163,8 +163,10 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	symbol := r.ReadString()
 	secType := r.ReadString()
-	expiry := r.ReadString()
-	r.Skip(1) // lastTradeDateOrContractMonth (duplicate/variant of expiry)
+	expiry := r.ReadString() // lastTradeDateOrContractMonth (readLastTradeDate)
+	if sv >= MinServerVersionLastTradeDate {
+		r.Skip(1) // explicit lastTradeDate (decoder.py:509-510)
+	}
 	strike := r.ReadString()
 	right := r.ReadString()
 	exchange := r.ReadString()

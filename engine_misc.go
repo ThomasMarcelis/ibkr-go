@@ -80,6 +80,10 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 			resp <- result{err: ErrNotReady}
 			return
 		}
+		if e.serverVersion < codec.MinServerVersionCurrentTimeInMillis {
+			resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", ErrUnsupportedServerVersion)}
+			return
+		}
 		if _, exists := e.singletons[singletonCurrentTimeMillis]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: current time millis request already in progress")}
 			return
@@ -340,6 +344,10 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 			resp <- result{err: ErrNotReady}
 			return
 		}
+		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
+			resp <- result{err: err}
+			return
+		}
 		if _, exists := e.singletons[singletonFA]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: FA request already in progress")}
 			return
@@ -383,8 +391,25 @@ func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml strin
 		if !e.isReady() {
 			return ErrNotReady
 		}
+		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
+			return err
+		}
 		return e.sendContext(ctx, codec.ReplaceFA{FADataType: int(faDataType), XML: xml})
 	})
+}
+
+// validateFADataType rejects the FA profiles data type once the negotiated
+// server desupports it (FA_PROFILE_DESUPPORT, 177); the official client raises
+// FA_PROFILE_NOT_SUPPORTED for the same case (client.py:4740-4747, 4800-4802).
+func validateFADataType(faDataType FADataType, serverVersion int) error {
+	if faDataType == FADataProfiles && serverVersion >= codec.MinServerVersionFAProfileDesupport {
+		return &ValidationError{
+			Field:   "FA data type",
+			Value:   faDataType.String(),
+			Message: "FA profiles are desupported at server_version 177 and above",
+		}
+	}
+	return nil
 }
 
 func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) {
