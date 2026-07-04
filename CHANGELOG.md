@@ -4,6 +4,182 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## [Unreleased]
+
+### Changed (breaking)
+
+- **`Buy`/`Sell` renamed to `ActionBuy`/`ActionSell`.** The old names remain
+  as deprecated aliases (`Buy = ActionBuy`, `Sell = ActionSell`) for one
+  release and are removed in the next.
+
+  ```go
+  // Before
+  Order{Action: ibkr.Buy}
+  // After
+  Order{Action: ibkr.ActionBuy}
+  ```
+
+- **`Orders().Place` rejects what-if orders.** Placing an `Order` with
+  `WhatIf` set now returns a `*ValidationError` instead of creating a
+  live `OrderHandle` for what is really a margin preview. Use
+  `Orders().Preview`, which forces the what-if flag and returns the
+  Gateway's margin-and-commission block as an `OrderState`; the
+  `place_order` frame it sends is byte-identical to the old what-if
+  `Place` call.
+
+  ```go
+  // Before
+  order.WhatIf = ptr(true)
+  handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: c, Order: order})
+  // handle never terminates normally; margin/commission read off OpenOrder echoes
+
+  // After
+  state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{Contract: c, Order: order})
+  // state.InitMarginChange, state.Commission, ... — one-shot, no OrderHandle
+  ```
+
+- **`Contract.Strike` is `decimal.Decimal`, not `string`.** Closes the last
+  stringly money field in the public contract surface. The zero value
+  encodes to the same wire bytes the empty string produced.
+
+  ```go
+  // Before
+  Contract{Strike: "150"}
+  // After
+  Contract{Strike: decimal.NewFromInt(150)}
+  ```
+
+- **`WithDialer` takes the new public `Dialer` interface, not
+  `internal/transport.Dialer`.** `Dialer` has the same single method
+  (`DialContext(ctx, network, address) (net.Conn, error)`), so
+  `*net.Dialer` and any existing custom dialer keep compiling unchanged;
+  only code that named the internal type in its own signature needs to
+  switch to `ibkr.Dialer`.
+- **Minimum supported IB Gateway `server_version` is 176 (was exactly
+  200).** The client now negotiates the range 176..200 and gates every
+  post-176 wire field on the version the Gateway actually returns, rather
+  than requiring the latest one. `CurrentTimeMillis` returns
+  `ErrUnsupportedServerVersion` below 197, the version that introduced
+  `reqCurrentTimeInMillis` on the wire.
+
+### Added
+
+- Doc comments across the public API: field-level zero-value semantics
+  on `Contract` and `Order` (which price fields each order type reads,
+  `*bool` tri-state meaning), and slow-consumer guidance on the
+  depth/tick subscription options.
+- **`Subscription.All(ctx)` returns an `iter.Seq[T]`** over a
+  subscription's events, draining to exhaustion as the canonical
+  consumption loop; this replaces the documented two-channel
+  `Events()`/`Lifecycle()` select with nil-channel toggling for callers
+  that only need business events.
+- **Contract and order constructors**: `Stock`, `Forex`, `OptionContract`,
+  and `Future` build the common contract shapes; `MarketOrder`,
+  `LimitOrder`, `StopOrder`, and `StopLimitOrder` fill the order-type,
+  action, quantity, and price fields and leave the rest at server
+  defaults.
+- **`Orders().Preview`** and the new **`OrderState`** type (see Changed
+  above).
+- **`OpenOrder.Partial`** flags a degraded parse of an unattested advanced-
+  order or version-gated layout, so a partial decode is observable
+  instead of silently dropping fields.
+- **Public `Dialer` interface** (see Changed above).
+- **Widened server-version support: 176..200**, live-validated by
+  down-negotiating the paper Gateway (`server_version 200` capped to
+  176/184/193/195/199 via the v100+ handshake) across contract details,
+  historical bars, API-error frames, and the `CurrentTimeMillis` feature
+  gate.
+- **`BenchmarkE2EQuoteStreamTCP`** and actor-stage benchmarks: a real
+  TCP handshake driving `DialContext` through `SubscribeQuotes` with
+  sanitized live `sv200` tick frames, plus the syscall-visible transport
+  benches used to measure the read-loop buffering below.
+- **CI**: Codecov coverage upload (informational, no gate), tag-driven
+  GitHub Releases that pull the matching `CHANGELOG.md` section, and
+  `gosec` added to the curated lint set scoped to the production import
+  path.
+- **239 fuzz corpus entries** from 30s soaks across all 18 wire and codec
+  fuzz targets, checked in and replayed on every run.
+
+### Fixed
+
+- **`reqUserInfo`'s inbound msg-id corrected from 103 to the live-attested
+  107.** 103 is `REPLACE_FA_END`; every live `UserInfo` call died with
+  `ErrInterrupted` on the unrecognized id because the DSL-form testhost
+  encoded server frames with the same (wrong) constant it decoded with,
+  which let the bug replay green. Frozen with a capture-decode test on
+  the raw live frame (`server_version 200`).
+- **`replaceFA` now appends the trailing `reqId` the Gateway has required
+  since `REPLACE_FA_END` (157), and its acknowledgement decodes as
+  `ReplaceFAEnd` on msg-id 103.** The encoder never sent the id, and the
+  ack frame it invites was previously misrouted to `UserInfo` because of
+  the 103/107 mix-up above.
+- **The testhost replay harness re-encodes server frames at the
+  transcript-declared `server_version`** instead of a hardcoded 200. A
+  transcript declaring an older version now actually exercises that
+  version's layout instead of silently replaying `sv200` bytes, closing
+  the class of version-gated bug that replays green and only fails live.
+  Sub-200 transcripts must now carry raw captured bytes for server
+  frames rather than DSL-form ones, for the same reason.
+
+### Performance
+
+- **Buffered transport read loop.** `wire.ReadFrame` issued two reads
+  (length prefix, then payload) per frame; a 64 KiB `bufio.Reader`
+  collapses that to roughly one syscall per buffer fill. End-to-end
+  throughput on the new benchmark improved ~76% (~995k to ~1.75M
+  msgs/sec on the measuring machine); live-verified against the paper
+  Gateway.
+- **Byte-level codec parsing.** The field reader is now a lazy cursor
+  over the frame bytes: numeric fields parse in place via transient
+  `strconv` views, and only retained strings are copied, eliminating the
+  per-frame `[]string` split. `DecodeBatch` peeks the msg-id from raw
+  bytes before any field parsing. Alloc bytes per decode drop 42-83%
+  (geomean -55%); the hot tick path is flat in time at -42% bytes; batch
+  backfills such as historical bars trade fewer bytes for more small
+  string allocations on that infrequent one-shot path.
+
+### Migration notes
+
+Every breaking change in this release, before → after:
+
+- **Actions.** `Buy`/`Sell` → `ActionBuy`/`ActionSell` (old names are
+  deprecated aliases, removed next release).
+
+  ```go
+  Order{Action: ibkr.Buy}    // before
+  Order{Action: ibkr.ActionBuy} // after
+  ```
+
+- **What-if orders.** `Orders().Place` on a `WhatIf` order → rejected
+  with `*ValidationError`; use `Orders().Preview`.
+
+  ```go
+  handle, err := client.Orders().Place(ctx, req) // before: req.Order.WhatIf = ptr(true)
+  state, err := client.Orders().Preview(ctx, req) // after: returns OrderState
+  ```
+
+- **Contract.Strike.** `string` → `decimal.Decimal`.
+
+  ```go
+  Contract{Strike: "150"}                 // before
+  Contract{Strike: decimal.NewFromInt(150)} // after
+  ```
+
+- **WithDialer.** `internal/transport.Dialer` → public `ibkr.Dialer`.
+  Source-compatible for `*net.Dialer` and any dialer that already
+  implemented `DialContext(ctx, network, address) (net.Conn, error)`;
+  only signatures that spelled out the internal type need to change.
+
+  ```go
+  func WithDialer(dialer transport.Dialer) Option // before (internal type leaked)
+  func WithDialer(dialer ibkr.Dialer) Option       // after
+  ```
+
+- **Minimum server version.** Exactly `200` → range `176..200`, negotiated
+  down as needed. `CurrentTimeMillis` now returns
+  `ErrUnsupportedServerVersion` on Gateways below 197 instead of the
+  wider handshake rejecting them outright.
+
 ## v1.5.1 — 2026-07-04
 
 ### Added

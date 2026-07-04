@@ -7,8 +7,10 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The current codec targets the live-validated `server_version 200` layout;
-older server versions are rejected during handshake.
+The client negotiates `server_version` 176..200; the Gateway's answer below
+176 is rejected during handshake, and wire fields introduced above 176 are
+gated on whatever version the Gateway actually negotiates. `sv200` remains
+the primary live-validated layout.
 
 ```go
 type Client struct{ /* opaque */ }
@@ -44,6 +46,7 @@ API.
 type Subscription[T any] struct {
     Events() <-chan T
     Lifecycle() <-chan SubscriptionStateEvent
+    All(ctx context.Context) iter.Seq[T]
     AwaitSnapshot(ctx context.Context) error
     Done() <-chan struct{}
     Err() error
@@ -51,6 +54,11 @@ type Subscription[T any] struct {
     Close() error
 }
 ```
+
+`All(ctx)` is the canonical consumption loop: ranging over it drains `Events()`
+to exhaustion (or until `ctx` ends), so `Err()`/`Wait()` are final by the time
+the loop exits. It is equivalent to the drain-then-`Wait()` pattern described
+below, without the caller managing channel state directly.
 
 `Events()` carries business data only. `Lifecycle()` carries lifecycle only and
 is bounded/observational: if unread, older queued lifecycle events may be
@@ -92,6 +100,18 @@ Default subscription behavior:
 - `ResumeAuto` is currently supported only for quote streams and real-time bars
 - account summary, positions, open orders, account updates, multi-account
   snapshots, and live historical bars expose explicit snapshot boundaries
+
+## Order Submission
+
+`Orders().Place(ctx, req)` sends a live order and returns an `OrderHandle`.
+It rejects a request whose `Order.WhatIf` is set with a `*ValidationError`
+pointing at `Orders().Preview` — a what-if request is a margin/commission
+query, not a trade, and does not fit the `OrderHandle` lifecycle contract.
+
+`Orders().Preview(ctx, req)` is the one-shot counterpart: it forces the
+what-if flag and returns an `OrderState` (the nine margin decimals plus the
+commission range and currency) with no `OrderHandle` and nothing resting on
+the server.
 
 ## OrderHandle
 

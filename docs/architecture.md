@@ -5,17 +5,25 @@ not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
 The library covers the full free read-only TWS API surface plus order
 management, market depth, fundamental data, and option exercise. Public
-contracts, codec, and replay fixtures are validated against live IB
-Gateway server_version 200. The current session handshake requires that
-server version; broader version support belongs behind explicit version-aware
-codec paths.
+contracts, codec, and replay fixtures are validated against live IB Gateway
+server_version 200. The session handshake negotiates `server_version` in the
+range 176..200; wire fields introduced after 176 are gated on the negotiated
+value the Gateway actually returns rather than assuming the latest layout.
+Server versions above 200 (the protobuf era) are out of scope until a
+coordinated future project — see [`docs/roadmap.md`](roadmap.md).
 
 ## Layers
 
-- module root: public typed facade plus the unexported session engine,
-  lifecycle, correlation, reconnect, and subscription management
-- `internal/transport/`: socket dial, frame read/write loops, pacing
-- `internal/codec/`: typed message encode/decode
+- module root: public typed facade plus the unexported session engine, split
+  by concern and domain — lifecycle, run loop, connect/reconnect, routing,
+  conversion, and one file per domain (`engine_account.go`,
+  `engine_orders.go`, `engine_marketdata.go`, etc.) — plus correlation and
+  subscription management
+- `internal/transport/`: socket dial, buffered frame read loop, write loop,
+  pacing
+- `internal/codec/`: typed message encode/decode, split into per-domain files
+  (`codec_orders.go`, `codec_marketdata.go`, etc.), the inbound decode
+  registry, and version-gate logic
 - `internal/wire/`: frame and field framing
 - `testing/testhost/`: deterministic replay and fault-injection harness for
   checked-in fixtures
@@ -24,9 +32,45 @@ codec paths.
 
 - One session actor goroutine owns mutable state.
 - One reader goroutine reads frames and forwards decoded messages to the actor.
+  It reads through a 64 KiB `bufio.Reader` rather than issuing the raw
+  length-prefix-then-payload read pair directly on the socket, collapsing two
+  syscalls per frame into roughly one per buffer fill; the reader goroutine
+  owns every post-handshake read, so this is safe without extra
+  synchronization.
 - One writer goroutine serializes outbound frames and applies global pacing.
 - Public methods talk to the actor through typed commands instead of sharing
   mutable maps or callback registries.
+
+## Codec Dispatch
+
+- **Decode.** `codec.DecodeBatch` peeks the msg-id from the raw frame bytes
+  (`bytes.IndexByte` up to the first NUL) before parsing any fields, then
+  looks it up in `inboundDecoders`, an explicit `map[int]decodeFunc` with one
+  decode function per message placed next to its struct in the relevant
+  per-domain codec file. This byte-level peek is the deliberate branch point
+  for a future protobuf path: msg-ids above 200 will carry protobuf payloads
+  whose bodies can contain embedded NUL bytes, so decoding must be able to
+  choose classic NUL-delimited parsing versus protobuf unmarshalling before
+  touching the field data. Today every frame takes the classic path.
+- **Encode.** Every message struct implements `encodeWire(sv int) ([]string,
+  error)` directly; the `Message` interface is that encode capability, so a
+  struct without `encodeWire` does not compile as a `Message` and encode
+  coverage is checked at compile time.
+- **Field parsing.** `fieldReader` is a lazy cursor over the frame's backing
+  byte slice, not a pre-split `[]string`. Numeric and boolean fields parse in
+  place through transient `unsafe.String` views handed to `strconv`; only
+  fields a decoder actually retains (`ReadString`, `ReadDecimal`) copy into a
+  new Go string. Retained strings are always copied, never aliased into the
+  transport buffer — aliasing would couple message lifetimes to buffer
+  reuse, the symmetric silent-corruption failure mode this codebase
+  deliberately avoids.
+- **Request-ID routing.** Inbound messages that carry a request ID implement
+  `codec.ReqIDer` (`RequestID() int`); the engine's keyed routing table type-
+  asserts against this interface instead of maintaining a parallel switch.
+  `OpenOrder`, `OrderStatus`, and `CompletedOrder` deliberately do not
+  implement it — they carry an order ID and route through order-handle
+  dispatch instead — and `APIError` is routed ahead of keyed dispatch because
+  its `ReqID` can be `-1` for unsolicited errors.
 
 ## Routing Tables
 
@@ -55,6 +99,30 @@ registered). `Orders().SubscribeOpen` therefore observes open-order snapshots an
 updates through `OpenOrder`, including its embedded status fields. OrderStatus,
 execution, and commission messages are routed through `OrderHandle`, not the
 singleton open-orders observer.
+
+## Version Negotiation
+
+- The negotiated `server_version` is threaded explicitly through the codec
+  rather than read from shared state: every `encodeWire` method, every decode
+  function, and the `codec.Encode`/`DecodeBatch` entry points take `sv int`.
+  The engine records the negotiated version at handshake and the decode pump
+  captures it by value when it attaches a transport, so each reconnect
+  decodes with its own freshly negotiated version even if the Gateway answers
+  differently on redial.
+- Wire fields introduced above `minServerVersion` (176) branch on `sv` at the
+  call site instead of assuming the maximum. Gated areas include outbound
+  `placeOrder`, cancel, global-cancel, exercise-options, and executions
+  fields; inbound `errMsg` layout, `contractData` last-trade-date,
+  `openOrder` FA-profile and order-preview blocks, and historical-data inline
+  dataset dates. `internal/codec/version.go` names each gate after the
+  official client's `MIN_SERVER_VER_*` constant.
+- `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
+  boundary it could not fully resolve, so a degraded parse is observable
+  instead of silently dropping fields.
+- The advertised handshake maximum (`maxServerVersion`, currently 200) is a
+  package-level override point used only by the version-matrix live tests to
+  force a session onto an older wire layout for verification; production
+  code always advertises the maximum.
 
 ## Order ID Management
 

@@ -101,13 +101,13 @@ The next high-value workstreams are:
 
 | Priority | Workstream | Why it matters | Next slices |
 |----------|------------|----------------|-------------|
-| 1 | Promote captured order campaigns | Raises deterministic CI confidence without more market dependency | what-if margin still needs usable preview callback; scale-in campaign promoted from `63db2db7cba21b68`; forex lifecycle promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c` |
+| 1 | Promote captured order campaigns | Raises deterministic CI confidence without more market dependency | what-if margin preview now has a usable API (`Orders().Preview`/`OrderState`); scale-in campaign promoted from `63db2db7cba21b68`; forex lifecycle promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c` |
 | 2 | Market-open trading-basic captures | Grounds fill, modify-to-fill, order-type matrix, and rejection paths under regular-session behavior | `trading-basic` batch through `paper-dev`, then verify and triage |
-| 3 | Advanced order semantics | Closes gaps between "order placement works" and "order model is trustworthy" | brackets, OCA, conditions, scale, hedge, pegged/adjusted families |
-| 4 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10358 fundamentals, 10276 WSH |
-| 5 | Protocol drift and version edges | Keeps the pure-Go codec current with IBKR releases | current-time millis, `$LEDGER-` account values, fractional tick sizes, order/completed-order tail fields |
-| 6 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, BOND identifier, CFD/CRYPTO/FUND probes |
-| 7 | Public ergonomics and examples | Helps users trust and adopt the library | examples for live roles, error handling, replay-backed behavior notes, pkg.go.dev polish |
+| 3 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10358 fundamentals, 10276 WSH |
+| 4 | Protocol drift and version edges | Keeps the pure-Go codec current with IBKR releases | current-time millis, `$LEDGER-` account values, fractional tick sizes, order/completed-order tail fields |
+| 5 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, BOND identifier, CFD/CRYPTO/FUND probes |
+| 6 | Public ergonomics and examples | Helps users trust and adopt the library | examples for live roles, error handling, replay-backed behavior notes, pkg.go.dev polish |
+| 7 | Advanced order semantics (after the protobuf decision) | Closes gaps between "order placement works" and "order model is trustworthy", but these are classic-branch fields whose shape a future protobuf migration could touch — see [Protobuf era](#protobuf-era-sv-201) | brackets, OCA, conditions, scale, hedge, pegged/adjusted families |
 
 Each workstream should stay scoped to one logical change. If the work needs a
 large plan, put the plan in a repo doc and keep the next handoff request
@@ -237,20 +237,42 @@ against the local paper Gateway when applicable.
 - Order-side coverage promised by the public API but not yet exhaustively
   grounded: OCA group semantics, bracket parent/child sequencing, condition
   families (price, time, margin, execution, volume, percent-change), IB algo
-  parameter passthrough, hedging, and short-sale fields.
-- Server-version coverage beyond `server_version 200`, behind explicit
-  version-aware codec paths.
+  parameter passthrough, hedging, and short-sale fields. Sequenced after the
+  protobuf decision (see below), since these are classic-branch fields.
+- ~~Server-version coverage beyond exactly `server_version 200`~~ **Done.**
+  The client negotiates `server_version` 176..200 and gates every post-176
+  wire field on the negotiated value; live-validated 2026-07-04/05 by
+  down-negotiating the paper Gateway to 176/184/193/195/199/200 across
+  contract details, historical bars, API-error frames, and the
+  `CurrentTimeMillis` feature gate. The remaining server-version gap is
+  crossing into `server_version` 201+ (protobuf), tracked separately below.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
 trackers; new gaps land there first, then graduate here.
+
+## Protobuf era (sv 201+)
+
+IBKR's later Gateway/TWS releases move part of the wire protocol to
+protobuf-framed messages at `server_version` 201 and above. `ibkr-go`
+advertises a maximum of 200 (`maxServerVersion` in `engine.go`) and does not
+negotiate higher — this ceiling is a deliberate wall, not an oversight.
+`codec.DecodeBatch` already peeks the msg-id from raw frame bytes before
+parsing any fields (see [`docs/architecture.md`](architecture.md#codec-dispatch)),
+which is exactly the dispatch seam a mixed classic/protobuf wire needs: it
+can choose NUL-delimited versus protobuf decoding per frame before the field
+data, which may contain embedded NULs, is touched. Crossing the wall means
+new protobuf message definitions, decode/encode paths for whichever messages
+IBKR has migrated, and a fresh live-capture and replay campaign — scoped as
+one coordinated future project, not a series of piecemeal codec changes
+layered onto the classic path.
 
 ## Ongoing
 
 - SDK conformance oracle workflow: capture reference traces from the official
   SDK against the local Gateway when adding or hardening a protocol area, and
   fold sanitized live-derived captures into deterministic replay fixtures.
-- Broader server version testing beyond v200.
+- Protobuf era (`server_version` 201+); see above.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
 
