@@ -10,7 +10,7 @@ type StartAPI struct {
 	OptionalCapabilities string
 }
 
-func (m StartAPI) encodeWire() ([]string, error) {
+func (m StartAPI) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
 }
 
@@ -19,7 +19,7 @@ type ServerInfo struct {
 	ConnectionTime string
 }
 
-func (m ServerInfo) encodeWire() ([]string, error) {
+func (m ServerInfo) encodeWire(sv int) ([]string, error) {
 	return nil, fmt.Errorf("codec: unsupported message type %T", m)
 }
 
@@ -40,7 +40,7 @@ type CurrentTime struct {
 // numeric msg_id.
 type CurrentTimeRequest struct{}
 
-func (m CurrentTimeRequest) encodeWire() ([]string, error) {
+func (m CurrentTimeRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqCurrentTime), "1"}, nil
 }
 
@@ -55,7 +55,7 @@ type CurrentTimeMillis struct {
 // fields, answered by a CurrentTimeMillis frame (IN 109).
 type CurrentTimeMillisRequest struct{}
 
-func (m CurrentTimeMillisRequest) encodeWire() ([]string, error) {
+func (m CurrentTimeMillisRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqCurrentTimeInMillis)}, nil
 }
 
@@ -66,7 +66,7 @@ type ReqIDsRequest struct {
 	NumIDs int
 }
 
-func (m ReqIDsRequest) encodeWire() ([]string, error) {
+func (m ReqIDsRequest) encodeWire(sv int) ([]string, error) {
 	numIDs := m.NumIDs
 	if numIDs <= 0 {
 		numIDs = 1
@@ -86,7 +86,7 @@ type UserInfoRequest struct {
 	ReqID int
 }
 
-func (m UserInfoRequest) encodeWire() ([]string, error) {
+func (m UserInfoRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqUserInfo), "1", itoa(m.ReqID)}, nil
 }
 
@@ -96,7 +96,7 @@ type UserInfo struct {
 }
 
 // [4, reqId, code, message, advancedJson, errorTimeMs]
-func decodeErrMsg(r *fieldReader) ([]Message, error) {
+func decodeErrMsg(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	code, _ := r.ReadInt()
 	message := r.ReadString()
@@ -105,21 +105,21 @@ func decodeErrMsg(r *fieldReader) ([]Message, error) {
 	return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
 }
 
-func (m APIError) encodeWire() ([]string, error) {
+func (m APIError) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
 }
 
 // [109, timeMs] — no version
-func decodeCurrentTimeInMillis(r *fieldReader) ([]Message, error) {
+func decodeCurrentTimeInMillis(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{CurrentTimeMillis{TimeMs: r.ReadString()}}, nil
 }
 
-func (m CurrentTimeMillis) encodeWire() ([]string, error) {
+func (m CurrentTimeMillis) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InCurrentTimeInMillis), m.TimeMs}, nil
 }
 
 // [9, version, orderID]
-func decodeNextValidID(r *fieldReader) ([]Message, error) {
+func decodeNextValidID(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	orderID, err := r.ReadInt64()
 	if err != nil {
@@ -128,12 +128,12 @@ func decodeNextValidID(r *fieldReader) ([]Message, error) {
 	return []Message{NextValidID{OrderID: orderID}}, nil
 }
 
-func (m NextValidID) encodeWire() ([]string, error) {
+func (m NextValidID) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InNextValidID), "1", i64toa(m.OrderID)}, nil
 }
 
 // [15, version, accountsList]
-func decodeManagedAccounts(r *fieldReader) ([]Message, error) {
+func decodeManagedAccounts(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1)
 	raw := r.ReadString()
 	accounts := []string{}
@@ -143,27 +143,27 @@ func decodeManagedAccounts(r *fieldReader) ([]Message, error) {
 	return []Message{ManagedAccounts{Accounts: accounts}}, nil
 }
 
-func (m ManagedAccounts) encodeWire() ([]string, error) {
+func (m ManagedAccounts) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
 }
 
 // [49, version, time]
-func decodeCurrentTime(r *fieldReader) ([]Message, error) {
+func decodeCurrentTime(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1)
 	return []Message{CurrentTime{Time: r.ReadString()}}, nil
 }
 
-func (m CurrentTime) encodeWire() ([]string, error) {
+func (m CurrentTime) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InCurrentTime), "1", m.Time}, nil
 }
 
 // [103, reqId, whiteBrandingId] — no version
-func decodeUserInfo(r *fieldReader) ([]Message, error) {
+func decodeUserInfo(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	whiteBrandingID := r.ReadString()
 	return []Message{UserInfo{ReqID: reqID, WhiteBrandingID: whiteBrandingID}}, nil
 }
 
-func (m UserInfo) encodeWire() ([]string, error) {
+func (m UserInfo) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InUserInfo), itoa(m.ReqID), m.WhiteBrandingID}, nil
 }

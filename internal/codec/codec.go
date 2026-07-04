@@ -35,7 +35,7 @@ func DecodeServerInfo(payload []byte) (ServerInfo, error) {
 }
 
 // DecodeBatch decodes a framed payload into one or more messages keyed by integer msg_id.
-func DecodeBatch(payload []byte) ([]Message, error) {
+func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 	fields, err := wire.ParseFields(payload)
 	if err != nil {
 		return nil, err
@@ -47,7 +47,7 @@ func DecodeBatch(payload []byte) ([]Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("codec: parse msg_id %q: %w", fields[0], err)
 	}
-	msgs, err := decodeByMsgID(msgID, fields)
+	msgs, err := decodeByMsgID(sv, msgID, fields)
 	if err != nil {
 		return nil, fmt.Errorf("codec: msg_id %d: %w", msgID, err)
 	}
@@ -55,8 +55,8 @@ func DecodeBatch(payload []byte) ([]Message, error) {
 }
 
 // Decode decodes a framed payload into exactly one message.
-func Decode(payload []byte) (Message, error) {
-	msgs, err := DecodeBatch(payload)
+func Decode(sv int, payload []byte) (Message, error) {
+	msgs, err := DecodeBatch(sv, payload)
 	if err != nil {
 		return nil, err
 	}
@@ -151,15 +151,15 @@ func skipCompletedOrderPostStatusPrefix(r *fieldReader, orderType string) error 
 }
 
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
-func Encode(msg Message) ([]byte, error) {
-	fields, err := msg.encodeWire()
+func Encode(sv int, msg Message) ([]byte, error) {
+	fields, err := msg.encodeWire(sv)
 	if err != nil {
 		return nil, err
 	}
 	return wire.EncodeFields(fields), nil
 }
 
-type decodeFunc func(r *fieldReader) ([]Message, error)
+type decodeFunc func(r *fieldReader, sv int) ([]Message, error)
 
 // inboundDecoders maps msg_id to its decoder. One explicit table, no
 // init() registration.
@@ -239,13 +239,13 @@ var inboundDecoders = map[int]decodeFunc{
 
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
 // Returns []Message because historical data packs multiple bars into one frame.
-func decodeByMsgID(msgID int, fields []string) ([]Message, error) {
+func decodeByMsgID(sv int, msgID int, fields []string) ([]Message, error) {
 	dec, ok := inboundDecoders[msgID]
 	if !ok {
 		return nil, fmt.Errorf("codec: unknown msg_id %d", msgID)
 	}
 	r := newFieldReader(fields[1:]) // skip msg_id
-	msgs, err := dec(r)
+	msgs, err := dec(r, sv)
 	if err == nil && r.Err() != nil {
 		return nil, r.Err()
 	}

@@ -180,7 +180,7 @@ func FuzzDecodeBatch(f *testing.F) {
 	}
 
 	for _, msg := range encoderSeeds {
-		payload, err := Encode(msg)
+		payload, err := Encode(200, msg)
 		if err != nil {
 			continue
 		}
@@ -217,7 +217,7 @@ func FuzzDecodeBatch(f *testing.F) {
 				t.Errorf("unexpected panic: %v", r)
 			}
 		}()
-		DecodeBatch(data)
+		DecodeBatch(200, data)
 	})
 }
 
@@ -234,11 +234,11 @@ func FuzzEncodeDecodeRoundTrip_TickPrice(f *testing.F) {
 			return // null bytes corrupt wire framing
 		}
 		original := TickPrice{ReqID: reqID, TickType: tickType, Price: price, Size: size, AttrMask: attrMask}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			t.Fatalf("decode failed after successful encode: %v", err)
 		}
@@ -279,11 +279,11 @@ func FuzzEncodeDecodeRoundTrip_AccountSummaryValue(f *testing.F) {
 			return
 		}
 		original := AccountSummaryValue{ReqID: reqID, Account: account, Tag: tag, Value: value, Currency: currency}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			t.Fatalf("decode failed after successful encode: %v", err)
 		}
@@ -323,11 +323,11 @@ func FuzzEncodeDecodeRoundTrip_PnLValue(f *testing.F) {
 			return
 		}
 		original := PnLValue{ReqID: reqID, DailyPnL: dailyPnL, UnrealizedPnL: unrealizedPnL, RealizedPnL: realizedPnL}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			t.Fatalf("decode failed after successful encode: %v", err)
 		}
@@ -364,11 +364,11 @@ func FuzzEncodeDecodeRoundTrip_TickReqParams(f *testing.F) {
 			return
 		}
 		original := TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: snapshotPermissions}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			t.Fatalf("decode failed after successful encode: %v", err)
 		}
@@ -404,11 +404,11 @@ func FuzzEncodeDecodeRoundTrip_HeadTimestamp(f *testing.F) {
 			return
 		}
 		original := HeadTimestamp{ReqID: reqID, Timestamp: timestamp}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			t.Fatalf("decode failed after successful encode: %v", err)
 		}
@@ -515,7 +515,7 @@ func TestDecodeShortFields(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%d_fields", tc.name, n), func(t *testing.T) {
 				payload := wire.EncodeFields(append([]string{strconv.Itoa(tc.msgID)}, fields...))
 				// Must not panic. Errors are acceptable.
-				mustNotPanic(t, func() { DecodeBatch(payload) })
+				mustNotPanic(t, func() { DecodeBatch(200, payload) })
 			})
 		}
 	}
@@ -539,7 +539,7 @@ func TestDecodeUnknownMsgID(t *testing.T) {
 		t.Run(strconv.Itoa(id), func(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields([]string{strconv.Itoa(id), "0", "0", "0"})
-			_, err := DecodeBatch(payload)
+			_, err := DecodeBatch(200, payload)
 			if err == nil {
 				t.Errorf("msg_id %d: expected error for unknown msg ID, got nil", id)
 			}
@@ -610,7 +610,7 @@ func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := wire.EncodeFields(tc.fields)
 			// Must not panic.
-			mustNotPanic(t, func() { DecodeBatch(payload) })
+			mustNotPanic(t, func() { DecodeBatch(200, payload) })
 		})
 	}
 }
@@ -626,11 +626,11 @@ func FuzzEncodeDecodeRoundTrip_OrderStatus(f *testing.F) {
 			return
 		}
 		original := OrderStatus{OrderID: orderID, Status: status, Filled: filled, Remaining: remaining, AvgFillPrice: avgFillPrice, PermID: permID, ParentID: parentID, LastFillPrice: lastFillPrice, ClientID: clientID, WhyHeld: whyHeld, MktCapPrice: mktCapPrice}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -688,11 +688,11 @@ func FuzzEncodeDecodeRoundTrip_ExecutionDetail(f *testing.F) {
 			return
 		}
 		original := ExecutionDetail{ReqID: reqID, OrderID: orderID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -744,11 +744,11 @@ func FuzzEncodeDecodeRoundTrip_CommissionReport(f *testing.F) {
 			return
 		}
 		original := CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -785,11 +785,11 @@ func FuzzEncodeDecodeRoundTrip_MarketDepthUpdate(f *testing.F) {
 			return
 		}
 		original := MarketDepthUpdate{ReqID: reqID, Position: position, Operation: operation, Side: side, Price: price, Size: size}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -832,11 +832,11 @@ func FuzzEncodeDecodeRoundTrip_MarketDepthL2Update(f *testing.F) {
 			return
 		}
 		original := MarketDepthL2Update{ReqID: reqID, Position: position, MarketMaker: marketMaker, Operation: operation, Side: side, Price: price, Size: size, IsSmartDepth: isSmartDepth}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -885,11 +885,11 @@ func FuzzEncodeDecodeRoundTrip_DisplayGroupList(f *testing.F) {
 			return
 		}
 		original := DisplayGroupList{ReqID: reqID, Groups: groups}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -920,11 +920,11 @@ func FuzzEncodeDecodeRoundTrip_FundamentalDataResponse(f *testing.F) {
 			return
 		}
 		original := FundamentalDataResponse{ReqID: reqID, Data: data}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -955,11 +955,11 @@ func FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate(f *testing.F) {
 			return
 		}
 		original := HistoricalDataUpdate{ReqID: reqID, BarCount: barCount, Time: ts, Open: open, High: high, Low: low, Close: close_, Volume: volume, WAP: wap, Count: count}
-		encoded, err := Encode(original)
+		encoded, err := Encode(200, original)
 		if err != nil {
 			return
 		}
-		decoded, err := DecodeBatch(encoded)
+		decoded, err := DecodeBatch(200, encoded)
 		if err != nil {
 			return
 		}
@@ -1037,7 +1037,7 @@ func TestDecodeFieldParseErrors(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields(tc.fields)
 			// Must not panic. Errors are acceptable.
-			mustNotPanic(t, func() { DecodeBatch(payload) })
+			mustNotPanic(t, func() { DecodeBatch(200, payload) })
 		})
 	}
 }
@@ -1077,7 +1077,7 @@ func TestDecodeTickByTickVariants(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields(tc.fields)
 			// Must not panic.
-			mustNotPanic(t, func() { DecodeBatch(payload) })
+			mustNotPanic(t, func() { DecodeBatch(200, payload) })
 		})
 	}
 }
@@ -1105,10 +1105,10 @@ func TestDecodeHistoricalNewsEndAndMktDepthExchanges(t *testing.T) {
 			payload := wire.EncodeFields(tc.fields)
 			if tc.wantName == "" {
 				// We just verify no panic; error or weird result is acceptable.
-				mustNotPanic(t, func() { DecodeBatch(payload) })
+				mustNotPanic(t, func() { DecodeBatch(200, payload) })
 				return
 			}
-			msgs, err := DecodeBatch(payload)
+			msgs, err := DecodeBatch(200, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch: %v", err)
 			}
@@ -1145,10 +1145,10 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields(tc.fields)
 			if tc.wantName == "" {
-				mustNotPanic(t, func() { DecodeBatch(payload) })
+				mustNotPanic(t, func() { DecodeBatch(200, payload) })
 				return
 			}
-			msgs, err := DecodeBatch(payload)
+			msgs, err := DecodeBatch(200, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch: %v", err)
 			}

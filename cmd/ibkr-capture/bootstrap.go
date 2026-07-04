@@ -56,7 +56,7 @@ func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error
 	}
 
 	// Step 3: send START_API. Layout: [msg_id=71, version=2, client_id, optional_capabilities=""].
-	startAPI, err := codec.Encode(codec.StartAPI{ClientID: clientID})
+	startAPI, err := codec.Encode(info.ServerVersion, codec.StartAPI{ClientID: clientID})
 	if err != nil {
 		return nil, fmt.Errorf("encode START_API: %w", err)
 	}
@@ -75,7 +75,7 @@ func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error
 		if err != nil {
 			return nil, fmt.Errorf("read bootstrap frame: %w", err)
 		}
-		msgs, err := codec.DecodeBatch(payload)
+		msgs, err := codec.DecodeBatch(info.ServerVersion, payload)
 		if err != nil {
 			return nil, fmt.Errorf("parse bootstrap frame: %w", err)
 		}

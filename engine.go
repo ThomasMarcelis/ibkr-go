@@ -27,7 +27,8 @@ type engine struct {
 	snapshotMu sync.RWMutex
 	snapshot   Snapshot
 
-	transport *transport.Conn
+	transport     *transport.Conn
+	serverVersion int
 
 	keyed       map[int]*route
 	singletons  map[string]*route
@@ -241,7 +242,7 @@ func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 	if e.transport == nil {
 		return ErrNotReady
 	}
-	payload, err := codec.Encode(msg)
+	payload, err := codec.Encode(e.serverVersion, msg)
 	if err != nil {
 		return err
 	}

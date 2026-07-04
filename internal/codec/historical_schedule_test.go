@@ -39,7 +39,7 @@ func TestDecodeHistoricalScheduleRejectsMalformedSessionCounts(t *testing.T) {
 
 			var err error
 			mustNotPanic(t, func() {
-				_, err = DecodeBatch(encodeTestFields(tt.fields...))
+				_, err = DecodeBatch(200, encodeTestFields(tt.fields...))
 			})
 			if err == nil {
 				t.Fatal("DecodeBatch() error = nil, want malformed count error")
@@ -51,7 +51,7 @@ func TestDecodeHistoricalScheduleRejectsMalformedSessionCounts(t *testing.T) {
 func TestDecodeHistoricalScheduleAllowsZeroSessions(t *testing.T) {
 	t.Parallel()
 
-	msgs, err := DecodeBatch(encodeTestFields(historicalScheduleFields("0")...))
+	msgs, err := DecodeBatch(200, encodeTestFields(historicalScheduleFields("0")...))
 	if err != nil {
 		t.Fatalf("DecodeBatch() error = %v", err)
 	}

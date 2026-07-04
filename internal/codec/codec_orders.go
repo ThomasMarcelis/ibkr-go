@@ -8,7 +8,7 @@ type OpenOrdersRequest struct {
 	Scope string
 }
 
-func (m OpenOrdersRequest) encodeWire() ([]string, error) {
+func (m OpenOrdersRequest) encodeWire(sv int) ([]string, error) {
 	switch m.Scope {
 	case "all":
 		return []string{itoa(OutReqAllOpenOrders), "1"}, nil
@@ -23,7 +23,7 @@ func (m OpenOrdersRequest) encodeWire() ([]string, error) {
 
 type CancelOpenOrders struct{}
 
-func (m CancelOpenOrders) encodeWire() ([]string, error) {
+func (m CancelOpenOrders) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqAutoOpenOrders), "1", "0"}, nil
 }
 
@@ -135,7 +135,7 @@ type ExecutionsRequest struct {
 	Symbol  string
 }
 
-func (m ExecutionsRequest) encodeWire() ([]string, error) {
+func (m ExecutionsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutReqExecutions)
 	w.WriteInt(3) // version
@@ -179,7 +179,7 @@ type CompletedOrdersRequest struct {
 	APIOnly bool
 }
 
-func (m CompletedOrdersRequest) encodeWire() ([]string, error) {
+func (m CompletedOrdersRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutReqCompletedOrders)
 	w.WriteBool(m.APIOnly)
@@ -204,7 +204,7 @@ type SoftDollarTiersRequest struct {
 	ReqID int
 }
 
-func (m SoftDollarTiersRequest) encodeWire() ([]string, error) {
+func (m SoftDollarTiersRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqSoftDollarTiers), itoa(m.ReqID)}, nil
 }
 
@@ -363,7 +363,7 @@ type PlaceOrderRequest struct {
 	ImbalanceOnly               string
 }
 
-func (m PlaceOrderRequest) encodeWire() ([]string, error) {
+func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutPlaceOrder)
 	// No version field at sv >= 145
@@ -552,7 +552,7 @@ type CancelOrderRequest struct {
 	ManualOrderIndicator  string // empty = UNSET
 }
 
-func (m CancelOrderRequest) encodeWire() ([]string, error) {
+func (m CancelOrderRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutCancelOrder)
 	w.WriteInt64(m.OrderID)
@@ -570,7 +570,7 @@ type GlobalCancelRequest struct {
 	ManualOrderIndicator string // empty = UNSET
 }
 
-func (m GlobalCancelRequest) encodeWire() ([]string, error) {
+func (m GlobalCancelRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqGlobalCancel), m.ExtOperator, m.ManualOrderIndicator}, nil
 }
 
@@ -585,7 +585,7 @@ type ExerciseOptionsRequest struct {
 	Override         int
 }
 
-func (m ExerciseOptionsRequest) encodeWire() ([]string, error) {
+func (m ExerciseOptionsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutExerciseOptions)
 	w.WriteInt(2) // version
@@ -620,7 +620,7 @@ func (m ExerciseOptionsRequest) encodeWire() ([]string, error) {
 }
 
 // [3, orderId, status, filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice]
-func decodeOrderStatus(r *fieldReader) ([]Message, error) {
+func decodeOrderStatus(r *fieldReader, sv int) ([]Message, error) {
 	orderID, _ := r.ReadInt64()
 	status := r.ReadString()
 	filled := r.ReadString()
@@ -640,7 +640,7 @@ func decodeOrderStatus(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
-func (m OrderStatus) encodeWire() ([]string, error) {
+func (m OrderStatus) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InOrderStatus)
 	w.WriteInt64(m.OrderID)
@@ -657,7 +657,7 @@ func (m OrderStatus) encodeWire() ([]string, error) {
 	return w.Fields(), nil
 }
 
-func decodeOpenOrder(r *fieldReader) ([]Message, error) {
+func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	orderID, _ := r.ReadInt64()     // r[0]
 	contract := readWireContract(r) // r[1..11]
 	action := r.ReadString()        // r[12]
@@ -966,7 +966,7 @@ func decodeOpenOrder(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
-func (m OpenOrder) encodeWire() ([]string, error) {
+func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InOpenOrder)
 	w.WriteInt64(m.OrderID)
@@ -1152,7 +1152,7 @@ func (m OpenOrder) encodeWire() ([]string, error) {
 }
 
 // [11, reqID, orderId, conID, symbol, secType, expiry, strike,
-func decodeExecutionData(r *fieldReader) ([]Message, error) {
+func decodeExecutionData(r *fieldReader, sv int) ([]Message, error) {
 	//   right, multiplier, exchange, currency, localSymbol, tradingClass,
 	//   execID, time, account, exchange(exec), side, shares, price, ...]
 	reqID, _ := r.ReadInt()
@@ -1170,7 +1170,7 @@ func decodeExecutionData(r *fieldReader) ([]Message, error) {
 	return []Message{ExecutionDetail{ReqID: reqID, OrderID: orderID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}}, nil
 }
 
-func (m ExecutionDetail) encodeWire() ([]string, error) {
+func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
 	return []string{
 		itoa(InExecutionData), itoa(m.ReqID),
 		i64toa(m.OrderID), "0",
@@ -1181,27 +1181,27 @@ func (m ExecutionDetail) encodeWire() ([]string, error) {
 	}, nil
 }
 
-func decodeOpenOrderEnd(r *fieldReader) ([]Message, error) {
+func decodeOpenOrderEnd(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{OpenOrderEnd{}}, nil
 }
 
-func (m OpenOrderEnd) encodeWire() ([]string, error) {
+func (m OpenOrderEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InOpenOrderEnd), "1"}, nil
 }
 
 // [55, version, reqID]
-func decodeExecutionDataEnd(r *fieldReader) ([]Message, error) {
+func decodeExecutionDataEnd(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1)
 	reqID, _ := r.ReadInt()
 	return []Message{ExecutionsEnd{ReqID: reqID}}, nil
 }
 
-func (m ExecutionsEnd) encodeWire() ([]string, error) {
+func (m ExecutionsEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [59, version, execID, commission, currency, realizedPNL, ...]
-func decodeCommissionReport(r *fieldReader) ([]Message, error) {
+func decodeCommissionReport(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1)
 	execID := r.ReadString()
 	commission := r.ReadString()
@@ -1210,12 +1210,12 @@ func decodeCommissionReport(r *fieldReader) ([]Message, error) {
 	return []Message{CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}}, nil
 }
 
-func (m CommissionReport) encodeWire() ([]string, error) {
+func (m CommissionReport) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency, m.RealizedPNL}, nil
 }
 
 // [101, contract(11-field), action, totalQty, orderType, ...]
-func decodeCompletedOrder(r *fieldReader) ([]Message, error) {
+func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	// CompletedOrder uses the broad server->client order layout, with many
 	// advanced order sections whose presence varies by order type and algo.
 	// Decode only the public fields we expose, and anchor the tail on the
@@ -1237,7 +1237,7 @@ func decodeCompletedOrder(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
-func (m CompletedOrder) encodeWire() ([]string, error) {
+func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	// Simplified encoder for testhost: server->client contract format
 	// followed by the live completed-order v200 field order. Most fields are
 	// intentionally empty because public tests only assert the public fields
@@ -1328,16 +1328,16 @@ func (m CompletedOrder) encodeWire() ([]string, error) {
 }
 
 // [102]
-func decodeCompletedOrderEnd(r *fieldReader) ([]Message, error) {
+func decodeCompletedOrderEnd(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{CompletedOrderEnd{}}, nil
 }
 
-func (m CompletedOrderEnd) encodeWire() ([]string, error) {
+func (m CompletedOrderEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InCompletedOrderEnd)}, nil
 }
 
 // [77, reqId, count, (name, value, displayName) * count]
-func decodeSoftDollarTiers(r *fieldReader) ([]Message, error) {
+func decodeSoftDollarTiers(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	count, err := r.ReadCount("soft dollar tier count")
 	if err != nil {
@@ -1353,7 +1353,7 @@ func decodeSoftDollarTiers(r *fieldReader) ([]Message, error) {
 	return []Message{SoftDollarTiersResponse{ReqID: reqID, Tiers: tiers}}, nil
 }
 
-func (m SoftDollarTiersResponse) encodeWire() ([]string, error) {
+func (m SoftDollarTiersResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InSoftDollarTiers)
 	w.WriteInt(m.ReqID)

@@ -14,7 +14,7 @@ func TestCaptureDecode_ManagedAccounts(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214926Z-bootstrap, frame at line 6
 	payload := []byte("15\x001\x00DU9000001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -34,7 +34,7 @@ func TestCaptureDecode_NextValidID(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214926Z-bootstrap, first frame in multi-frame chunk at line 7
 	payload := []byte("9\x001\x001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCaptureDecode_APIError_2104(t *testing.T) {
 	// captures/20260405T214926Z-bootstrap, second frame in multi-frame chunk at line 7
 	// APIError code 2104: "Market data farm connection is OK:usfarm"
 	payload := []byte("4\x00-1\x002104\x00Market data farm connection is OK:usfarm\x00\x001775425766350\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -103,7 +103,7 @@ func TestCaptureDecode_ContractDetails(t *testing.T) {
 			"26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26,26\x00" +
 			"\x00COMMON\x000.0001\x000.0001\x00100\x000\x00")
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
 	// currency between exchange and localSymbol; dropping that field misaligns
 	// execID/time/side. Account, exec, and perm identifiers are sanitized.
 	payload := []byte("11\x00-1\x001\x00265598\x00AAPL\x00STK\x00\x000.0\x00\x00\x00IEX\x00USD\x00AAPL\x00NMS\x00sanitized-native-exec-001\x0020260413 15:27:04 US/Eastern\x00DU9000001\x00IEX\x00BOT\x001\x00257.95\x00900001\x0094\x000\x001\x00257.95\x00\x00\x00\x00\x002\x000\x00\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -297,7 +297,7 @@ func TestCaptureDecode_CompletedOrderTrailLimitLive(t *testing.T) {
 		"0",
 		"paper-user",
 	}
-	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestCaptureDecode_CompletedOrderIgnoresEarlyStatusLikeField(t *testing.T) {
 
 	fields := completedOrderFields("LMT", "Cancelled", "0")
 	fields[19] = "Filled" // account slot; status-like noise before the real order-state status.
-	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -360,7 +360,7 @@ func TestCaptureDecode_CompletedOrderPostStatusVariableFields(t *testing.T) {
 		"", "", "", "", "", "", "0", "tester",
 	}...)
 
-	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestCaptureDecode_ContractDetailsEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214938Z-contract_details_aapl_stk, line 11
 	payload := []byte("52\x001\x001001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -415,7 +415,7 @@ func TestCaptureDecode_AccountSummaryValue(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215025Z-account_summary_snapshot, line 10 (first frame)
 	payload := []byte("63\x001\x001001\x00DU9000001\x00BuyingPower\x00300000.00\x00EUR\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestCaptureDecode_AccountSummaryEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215025Z-account_summary_snapshot, last frame in multi-frame chunk at line 11
 	payload := []byte("64\x001\x001001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestCaptureDecode_Position(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215052Z-positions_snapshot, first position frame (AMZN) at line 10
 	payload := []byte("61\x003\x00DU9000001\x003691937\x00AMZN\x00STK\x00\x000.0\x00\x00\x00NASDAQ\x00USD\x00AMZN\x00NMS\x0015\x00200.25\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -508,7 +508,7 @@ func TestCaptureDecode_PositionEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215052Z-positions_snapshot, last frame in multi-frame chunk at line 11
 	payload := []byte("62\x001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -534,7 +534,7 @@ func TestCaptureDecode_HistoricalData(t *testing.T) {
 			"20260402 14:00:00 US/Eastern\x00254.58\x00255.46\x00254.58\x00255.28\x001399189\x00255.101\x007342\x00" +
 			"20260402 15:00:00 US/Eastern\x00255.29\x00256.13\x00254.80\x00255.89\x002938382\x00255.576\x0017376\x00")
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -593,7 +593,7 @@ func TestCaptureDecode_TickPrice(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215734Z-quote_snapshot_aapl, tickType 68 (delayed last) at line 15
 	payload := []byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -625,7 +625,7 @@ func TestCaptureDecode_TickSize(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215734Z-quote_snapshot_aapl, tickType 74 (delayed volume) at line 16
 	payload := []byte("2\x006\x001001\x0074\x00312894\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -651,7 +651,7 @@ func TestCaptureDecode_MarketDataType(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215734Z-quote_snapshot_aapl, line 11
 	payload := []byte("58\x001\x001001\x003\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -674,7 +674,7 @@ func TestCaptureDecode_TickSnapshotEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215734Z-quote_snapshot_aapl, line 18
 	payload := []byte("57\x001\x001001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -725,7 +725,7 @@ func TestCaptureDecode_OpenOrder(t *testing.T) {
 			"0\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00" +
 			"\x000\x00\x002147483647\x00\x000\x00")
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -812,7 +812,7 @@ func TestCaptureDecode_OpenOrderEnd(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215248Z-open_orders_all, line 11
 	payload := []byte("53\x001\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -832,12 +832,12 @@ func TestCaptureEncode_StartAPI(t *testing.T) {
 	// captures/20260405T214926Z-bootstrap, line 5: client sends StartAPI with clientID=1
 	// Actual wire bytes (after 4-byte length prefix): "71\x002\x001\x00\x00"
 	want := []byte("71\x002\x001\x00\x00")
-	got, err := Encode(StartAPI{ClientID: 1})
+	got, err := Encode(200, StartAPI{ClientID: 1})
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Errorf("Encode(StartAPI{1}) = %q, want %q", got, want)
+		t.Errorf("Encode(200, StartAPI{1}) = %q, want %q", got, want)
 	}
 }
 
@@ -846,12 +846,12 @@ func TestCaptureEncode_PositionsRequest(t *testing.T) {
 	// captures/20260405T215052Z-positions_snapshot, line 9: client sends PositionsRequest
 	// Actual wire bytes (after 4-byte length prefix): "61\x001\x00"
 	want := []byte("61\x001\x00")
-	got, err := Encode(PositionsRequest{})
+	got, err := Encode(200, PositionsRequest{})
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Errorf("Encode(PositionsRequest{}) = %q, want %q", got, want)
+		t.Errorf("Encode(200, PositionsRequest{}) = %q, want %q", got, want)
 	}
 }
 
@@ -860,12 +860,12 @@ func TestCaptureEncode_OpenOrdersRequest(t *testing.T) {
 	// captures/20260405T215248Z-open_orders_all, line 9: client sends reqAllOpenOrders
 	// Actual wire bytes (after 4-byte length prefix): "16\x001\x00"
 	want := []byte("16\x001\x00")
-	got, err := Encode(OpenOrdersRequest{Scope: "all"})
+	got, err := Encode(200, OpenOrdersRequest{Scope: "all"})
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
 	if !bytes.Equal(got, want) {
-		t.Errorf("Encode(OpenOrdersRequest{all}) = %q, want %q", got, want)
+		t.Errorf("Encode(200, OpenOrdersRequest{all}) = %q, want %q", got, want)
 	}
 }
 
@@ -901,7 +901,7 @@ func TestCaptureDecode_HistoricalSchedule(t *testing.T) {
 			"20260409-09:30:00\x0020260409-16:00:00\x0020260409\x00" +
 			"20260410-09:30:00\x0020260410-16:00:00\x0020260410\x00")
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -948,7 +948,7 @@ func TestCaptureDecode_SecDefOptParamsLive(t *testing.T) {
 	// session, which is why every option qualify since April died with
 	// ErrInterrupted.
 	payload := []byte("75\x003\x00CBOE\x00265598\x00AAPL\x00100\x0026\x0020260612\x0020260615\x0020260617\x0020260618\x0020260622\x0020260624\x0020260626\x0020260702\x0020260710\x0020260717\x0020260724\x0020260731\x0020260821\x0020260918\x0020261016\x0020261120\x0020261218\x0020270115\x0020270219\x0020270319\x0020270617\x0020270917\x0020271217\x0020280121\x0020280317\x0020281215\x00123\x005.0\x0010.0\x0015.0\x0020.0\x0025.0\x0030.0\x0035.0\x0040.0\x0045.0\x0050.0\x0055.0\x0060.0\x0065.0\x0070.0\x0075.0\x0080.0\x0085.0\x0090.0\x0095.0\x00100.0\x00105.0\x00110.0\x00115.0\x00120.0\x00125.0\x00130.0\x00135.0\x00140.0\x00145.0\x00150.0\x00155.0\x00160.0\x00165.0\x00170.0\x00175.0\x00180.0\x00185.0\x00190.0\x00195.0\x00200.0\x00205.0\x00210.0\x00215.0\x00220.0\x00225.0\x00230.0\x00235.0\x00240.0\x00245.0\x00250.0\x00255.0\x00257.5\x00260.0\x00262.5\x00265.0\x00267.5\x00270.0\x00272.5\x00275.0\x00277.5\x00280.0\x00282.5\x00285.0\x00287.5\x00290.0\x00292.5\x00295.0\x00297.5\x00300.0\x00302.5\x00305.0\x00307.5\x00310.0\x00312.5\x00315.0\x00317.5\x00320.0\x00322.5\x00325.0\x00327.5\x00330.0\x00332.5\x00335.0\x00337.5\x00340.0\x00342.5\x00345.0\x00347.5\x00350.0\x00355.0\x00360.0\x00365.0\x00370.0\x00375.0\x00380.0\x00385.0\x00390.0\x00395.0\x00400.0\x00405.0\x00410.0\x00415.0\x00420.0\x00425.0\x00430.0\x00435.0\x00440.0\x00450.0\x00460.0\x00470.0\x00480.0\x00490.0\x00500.0\x00510.0\x00520.0\x00530.0\x00540.0\x00550.0\x00560.0\x00570.0\x00580.0\x00590.0\x00600.0\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -978,7 +978,7 @@ func TestCaptureDecode_TickOptionComputationLive(t *testing.T) {
 	// frame carries no version field; the legacy skip used to consume the
 	// request id and abort the session.
 	payload := []byte("21\x006\x0053\x000\x000.3\x000.5579497967180902\x002.6596901785543805\x00-1\x000.0700889483259586\x000.07475592510994344\x00-0.7568548883674484\x00293.23\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -1077,7 +1077,7 @@ func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			msgs, err := DecodeBatch([]byte(strings.Join(tt.fields, "\x00") + "\x00"))
+			msgs, err := DecodeBatch(200, []byte(strings.Join(tt.fields, "\x00")+"\x00"))
 			if err != nil {
 				t.Fatalf("DecodeBatch: %v", err)
 			}
@@ -1115,7 +1115,7 @@ func TestCaptureDecode_OpenOrderConditionEchoPrice(t *testing.T) {
 	t.Parallel()
 
 	fields := liveOpenOrderPriceConditionFields()
-	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -1215,7 +1215,7 @@ func TestCaptureDecode_OpenOrderConditionEchoExecution(t *testing.T) {
 		"", "", "", "", "0", "", "0", "",
 		"2147483647", "", "0",
 	}
-	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -1287,7 +1287,7 @@ func TestCaptureDecode_OpenOrderLiveBaseLayout(t *testing.T) {
 		"", "", "", "", "", "0", "", "0",
 		"", "2147483647", "", "0",
 	}
-	msgs, err := DecodeBatch([]byte(strings.Join(fields, "\x00") + "\x00"))
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
@@ -1361,7 +1361,7 @@ func TestCaptureDecode_OpenOrderLiveParentID(t *testing.T) {
 	// so dropping the pre-status slot zeroed ParentID on every live frame.
 	// Account, perm id, and order ref are sanitized.
 	payload := []byte("5\x00211\x00265598\x00AAPL\x00STK\x00\x000\x00?\x00\x00SMART\x00USD\x00AAPL\x00NMS\x00SELL\x001\x00LMT\x002000.0\x000.0\x00DAY\x001571710075\x00DU9000001\x00\x000\x00ibkrgo-sanitized-20260414T183644Z-001\x001\x00900211\x000\x000\x000\x00\x00900211.0/DU9000001/100\x00\x00\x00\x00\x00\x00\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x000\x000\x000\x00\x003\x000\x000\x00\x00210\x000\x00\x000\x00None\x00\x000\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x000\x000\x000\x002147483647\x002147483647\x00\x00\x000\x00\x00IB\x000\x000\x00\x000\x000\x00PreSubmitted\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x00\x00\x00\x00\x00\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x00-9223372036854775808\x00\x000\x00\x000\x000\x000\x00None\x001.7976931348623157E308\x002001.0\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x001.7976931348623157E308\x000\x00\x00\x00\x000\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00\x000\x00\x002147483647\x00papermarcelis\x000\x00")
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}

@@ -247,7 +247,9 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			payload, err := codec.Encode(msg)
+			// Transcripts replay server_version 200; no negotiated version is
+			// retained on the host, so encode against the fixed wire layout.
+			payload, err := codec.Encode(200, msg)
 			if err != nil {
 				h.finish(err)
 				return
@@ -271,10 +273,11 @@ func (h *Host) run() {
 				return
 			}
 			var payload []byte
+			// Transcripts replay server_version 200 (see the send case above).
 			if cur.direction == "server" {
-				payload, err = codec.Encode(msg)
+				payload, err = codec.Encode(200, msg)
 			} else {
-				payload, err = codec.Encode(msg)
+				payload, err = codec.Encode(200, msg)
 			}
 			if err != nil {
 				h.finish(err)

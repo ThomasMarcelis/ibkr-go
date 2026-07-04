@@ -525,11 +525,11 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			payload, err := Encode(tt.msg)
+			payload, err := Encode(200, tt.msg)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
-			msgs, err := DecodeBatch(payload)
+			msgs, err := DecodeBatch(200, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch() error = %v", err)
 			}

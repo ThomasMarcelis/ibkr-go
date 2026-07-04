@@ -77,7 +77,7 @@ var benchContractDetailsPayload = []byte(
 		"\x00COMMON\x000.0001\x000.0001\x00100\x000\x00")
 
 func BenchmarkDecodeTickPrice(b *testing.B) {
-	msgs, err := DecodeBatch(benchTickPricePayload)
+	msgs, err := DecodeBatch(200, benchTickPricePayload)
 	if err != nil {
 		b.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -92,14 +92,14 @@ func BenchmarkDecodeTickPrice(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(benchTickPricePayload)))
 	for b.Loop() {
-		if _, err := DecodeBatch(benchTickPricePayload); err != nil {
+		if _, err := DecodeBatch(200, benchTickPricePayload); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
 func BenchmarkDecodeOpenOrderLive(b *testing.B) {
-	msgs, err := DecodeBatch(benchOpenOrderPayload)
+	msgs, err := DecodeBatch(200, benchOpenOrderPayload)
 	if err != nil {
 		b.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -114,14 +114,14 @@ func BenchmarkDecodeOpenOrderLive(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(benchOpenOrderPayload)))
 	for b.Loop() {
-		if _, err := DecodeBatch(benchOpenOrderPayload); err != nil {
+		if _, err := DecodeBatch(200, benchOpenOrderPayload); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
 func BenchmarkDecodeContractDetails(b *testing.B) {
-	msgs, err := DecodeBatch(benchContractDetailsPayload)
+	msgs, err := DecodeBatch(200, benchContractDetailsPayload)
 	if err != nil {
 		b.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -136,7 +136,7 @@ func BenchmarkDecodeContractDetails(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(benchContractDetailsPayload)))
 	for b.Loop() {
-		if _, err := DecodeBatch(benchContractDetailsPayload); err != nil {
+		if _, err := DecodeBatch(200, benchContractDetailsPayload); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -170,7 +170,7 @@ func BenchmarkDecodeHistoricalBars(b *testing.B) {
 	fields := []string{strconv.Itoa(InHistoricalData), "1001", strconv.Itoa(len(bars) * repeats)}
 	for range repeats {
 		for _, bar := range bars {
-			barFields, err := bar.encodeWire()
+			barFields, err := bar.encodeWire(200)
 			if err != nil {
 				b.Fatalf("encodeWire(HistoricalBar) error = %v", err)
 			}
@@ -182,7 +182,7 @@ func BenchmarkDecodeHistoricalBars(b *testing.B) {
 	}
 	payload := wire.EncodeFields(fields)
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		b.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -200,7 +200,7 @@ func BenchmarkDecodeHistoricalBars(b *testing.B) {
 	b.ReportAllocs()
 	b.SetBytes(int64(len(payload)))
 	for b.Loop() {
-		if _, err := DecodeBatch(payload); err != nil {
+		if _, err := DecodeBatch(200, payload); err != nil {
 			b.Fatal(err)
 		}
 	}
@@ -239,7 +239,7 @@ func BenchmarkEncodePlaceOrder(b *testing.B) {
 		ConditionsCancelOrder:   "0",
 	}
 
-	payload, err := Encode(req)
+	payload, err := Encode(200, req)
 	if err != nil {
 		b.Fatalf("Encode() error = %v", err)
 	}
@@ -256,7 +256,7 @@ func BenchmarkEncodePlaceOrder(b *testing.B) {
 
 	b.ReportAllocs()
 	for b.Loop() {
-		if _, err := Encode(req); err != nil {
+		if _, err := Encode(200, req); err != nil {
 			b.Fatal(err)
 		}
 	}

@@ -73,13 +73,14 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 		e.closeEngine(ErrUnsupportedServerVersion)
 		return
 	}
+	e.serverVersion = info.ServerVersion
 	e.updateSnapshot(func(s *Snapshot) {
 		s.ServerVersion = info.ServerVersion
 	})
 	e.bootstrap.serverInfo = true
 
 	// 5. Send START_API (framed normal message)
-	startPayload, err := codec.Encode(codec.StartAPI{ClientID: e.cfg.clientID})
+	startPayload, err := codec.Encode(e.serverVersion, codec.StartAPI{ClientID: e.cfg.clientID})
 	if err != nil {
 		conn.Close()
 		e.connectFailed("handshake", err, reconnect)
@@ -124,11 +125,15 @@ func configureTCPKeepAlive(conn net.Conn, period time.Duration) error {
 }
 
 func (e *engine) attachTransport(tr *transport.Conn) {
+	// Capture the negotiated version by value: each reconnect re-attaches with
+	// the freshly negotiated version, and the decode pump runs off the actor
+	// goroutine, so it must not read e.serverVersion directly.
+	sv := e.serverVersion
 	decodedDone := make(chan struct{})
 	go func() {
 		defer close(decodedDone)
 		for payload := range tr.Incoming() {
-			msgs, err := codec.DecodeBatch(payload)
+			msgs, err := codec.DecodeBatch(sv, payload)
 			if err != nil {
 				_ = tr.Close()
 				e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}

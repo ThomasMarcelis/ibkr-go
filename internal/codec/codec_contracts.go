@@ -28,7 +28,7 @@ type ContractDetailsRequest struct {
 	Contract Contract
 }
 
-func (m ContractDetailsRequest) encodeWire() ([]string, error) {
+func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutReqContractData)
 	w.WriteInt(8) // version
@@ -60,7 +60,7 @@ type MatchingSymbolsRequest struct {
 	Pattern string
 }
 
-func (m MatchingSymbolsRequest) encodeWire() ([]string, error) {
+func (m MatchingSymbolsRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqMatchingSymbols), itoa(m.ReqID), m.Pattern}, nil
 }
 
@@ -84,7 +84,7 @@ type MarketRuleRequest struct {
 	MarketRuleID int
 }
 
-func (m MarketRuleRequest) encodeWire() ([]string, error) {
+func (m MarketRuleRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqMarketRule), itoa(m.MarketRuleID)}, nil
 }
 
@@ -108,7 +108,7 @@ type SecDefOptParamsRequest struct {
 	UnderlyingConID   int
 }
 
-func (m SecDefOptParamsRequest) encodeWire() ([]string, error) {
+func (m SecDefOptParamsRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqSecDefOptParams), itoa(m.ReqID), m.UnderlyingSymbol, m.FutFopExchange, m.UnderlyingSecType, itoa(m.UnderlyingConID)}, nil
 }
 
@@ -133,7 +133,7 @@ type SmartComponentsRequest struct {
 	BBOExchange string
 }
 
-func (m SmartComponentsRequest) encodeWire() ([]string, error) {
+func (m SmartComponentsRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqSmartComponents), itoa(m.ReqID), m.BBOExchange}, nil
 }
 
@@ -149,7 +149,7 @@ type SmartComponentsResponse struct {
 }
 
 // v200 wire layout verified against live IB Gateway capture.
-func decodeContractData(r *fieldReader) ([]Message, error) {
+func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	// [10, reqID, symbol, secType, lastTradeDate, lastTradeDateOrContractMonth,
 	//   strike, right, exchange, currency, localSymbol, marketName, tradingClass,
 	//   conID, minTick, multiplier, orderTypes, validExchanges,
@@ -195,7 +195,7 @@ func decodeContractData(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
-func (m ContractDetails) encodeWire() ([]string, error) {
+func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 	return []string{
 		itoa(InContractData), itoa(m.ReqID),
 		m.Contract.Symbol, m.Contract.SecType, m.Contract.Expiry,
@@ -212,18 +212,18 @@ func (m ContractDetails) encodeWire() ([]string, error) {
 }
 
 // [52, version, reqID]
-func decodeContractDataEnd(r *fieldReader) ([]Message, error) {
+func decodeContractDataEnd(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1)
 	reqID, _ := r.ReadInt()
 	return []Message{ContractDetailsEnd{ReqID: reqID}}, nil
 }
 
-func (m ContractDetailsEnd) encodeWire() ([]string, error) {
+func (m ContractDetailsEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InContractDataEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, expirationsCount, expirations..., strikesCount, strikes...] — no version
-func decodeSecDefOptParams(r *fieldReader) ([]Message, error) {
+func decodeSecDefOptParams(r *fieldReader, sv int) ([]Message, error) {
 	// Live server_version 200 frames carry the expiration count directly
 	// after the multiplier (capture 20260611T074417Z, sha fa7f3f46793d3277);
 	// a phantom marketRuleId skip here used to consume the count and kill
@@ -262,7 +262,7 @@ func decodeSecDefOptParams(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
-func (m SecDefOptParamsResponse) encodeWire() ([]string, error) {
+func (m SecDefOptParamsResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InSecDefOptParams)
 	w.WriteInt(m.ReqID)
@@ -282,17 +282,17 @@ func (m SecDefOptParamsResponse) encodeWire() ([]string, error) {
 }
 
 // [76, reqID] — no version
-func decodeSecDefOptParamsEnd(r *fieldReader) ([]Message, error) {
+func decodeSecDefOptParamsEnd(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	return []Message{SecDefOptParamsEnd{ReqID: reqID}}, nil
 }
 
-func (m SecDefOptParamsEnd) encodeWire() ([]string, error) {
+func (m SecDefOptParamsEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InSecDefOptParamsEnd), itoa(m.ReqID)}, nil
 }
 
 // [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)]
-func decodeSymbolSamples(r *fieldReader) ([]Message, error) {
+func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	count, err := r.ReadCount("sample count")
 	if err != nil {
@@ -329,7 +329,7 @@ func decodeSymbolSamples(r *fieldReader) ([]Message, error) {
 	return []Message{MatchingSymbols{ReqID: reqID, Symbols: symbols}}, nil
 }
 
-func (m MatchingSymbols) encodeWire() ([]string, error) {
+func (m MatchingSymbols) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InSymbolSamples)
 	w.WriteInt(m.ReqID)
@@ -351,7 +351,7 @@ func (m MatchingSymbols) encodeWire() ([]string, error) {
 }
 
 // [82, reqID, count, repeated(bitNumber, exchangeName, exchangeLetter)]
-func decodeSmartComponents(r *fieldReader) ([]Message, error) {
+func decodeSmartComponents(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	count, err := r.ReadCount("smart component count")
 	if err != nil {
@@ -370,7 +370,7 @@ func decodeSmartComponents(r *fieldReader) ([]Message, error) {
 	return []Message{SmartComponentsResponse{ReqID: reqID, Components: components}}, nil
 }
 
-func (m SmartComponentsResponse) encodeWire() ([]string, error) {
+func (m SmartComponentsResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InSmartComponents)
 	w.WriteInt(m.ReqID)
@@ -384,7 +384,7 @@ func (m SmartComponentsResponse) encodeWire() ([]string, error) {
 }
 
 // [92, marketRuleId, count, repeated(lowEdge, increment)] — no version
-func decodeMarketRule(r *fieldReader) ([]Message, error) {
+func decodeMarketRule(r *fieldReader, sv int) ([]Message, error) {
 	marketRuleID, _ := r.ReadInt()
 	count, err := r.ReadCount("market rule increment count")
 	if err != nil {
@@ -400,7 +400,7 @@ func decodeMarketRule(r *fieldReader) ([]Message, error) {
 	return []Message{MarketRule{MarketRuleID: marketRuleID, Increments: increments}}, nil
 }
 
-func (m MarketRule) encodeWire() ([]string, error) {
+func (m MarketRule) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InMarketRule)
 	w.WriteInt(m.MarketRuleID)

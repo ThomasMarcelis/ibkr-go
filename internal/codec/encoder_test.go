@@ -223,7 +223,7 @@ func TestEncodeExecutionsRequestServer200Layout(t *testing.T) {
 		ReqID:   3,
 		Account: "DU9000001",
 		Symbol:  "AAPL",
-	}.encodeWire()
+	}.encodeWire(200)
 	if err != nil {
 		t.Fatalf("encodeWire(ExecutionsRequest) error = %v", err)
 	}

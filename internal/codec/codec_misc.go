@@ -4,12 +4,12 @@ import "strings"
 
 // Message is a wire message that knows its own field encoding.
 type Message interface {
-	encodeWire() ([]string, error)
+	encodeWire(sv int) ([]string, error)
 }
 
 type ScannerParametersRequest struct{}
 
-func (m ScannerParametersRequest) encodeWire() ([]string, error) {
+func (m ScannerParametersRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqScannerParameters), "1"}, nil
 }
 
@@ -27,7 +27,7 @@ type ScannerSubscriptionRequest struct {
 	ScanCode     string
 }
 
-func (m ScannerSubscriptionRequest) encodeWire() ([]string, error) {
+func (m ScannerSubscriptionRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutReqScannerSubscription)
 	w.WriteInt(m.ReqID)
@@ -49,7 +49,7 @@ type CancelScannerSubscription struct {
 	ReqID int
 }
 
-func (m CancelScannerSubscription) encodeWire() ([]string, error) {
+func (m CancelScannerSubscription) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutCancelScannerSubscription), "1", itoa(m.ReqID)}, nil
 }
 
@@ -73,7 +73,7 @@ type RequestFA struct {
 	FADataType int // 1=Groups, 2=Profiles, 3=AccountAliases
 }
 
-func (m RequestFA) encodeWire() ([]string, error) {
+func (m RequestFA) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutRequestFA), "1", itoa(m.FADataType)}, nil
 }
 
@@ -82,7 +82,7 @@ type ReplaceFA struct {
 	XML        string
 }
 
-func (m ReplaceFA) encodeWire() ([]string, error) {
+func (m ReplaceFA) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReplaceFA), "1", itoa(m.FADataType), strings.ReplaceAll(m.XML, "\n", "")}, nil
 }
 
@@ -98,7 +98,7 @@ type WSHMetaDataRequest struct {
 	ReqID int
 }
 
-func (m WSHMetaDataRequest) encodeWire() ([]string, error) {
+func (m WSHMetaDataRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutReqWSHMetaData), itoa(m.ReqID)}, nil
 }
 
@@ -106,7 +106,7 @@ type CancelWSHMetaData struct {
 	ReqID int
 }
 
-func (m CancelWSHMetaData) encodeWire() ([]string, error) {
+func (m CancelWSHMetaData) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutCancelWSHMetaData), itoa(m.ReqID)}, nil
 }
 
@@ -122,7 +122,7 @@ type WSHEventDataRequest struct {
 	TotalLimit      int
 }
 
-func (m WSHEventDataRequest) encodeWire() ([]string, error) {
+func (m WSHEventDataRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutReqWSHEventData)
 	w.WriteInt(m.ReqID)
@@ -141,7 +141,7 @@ type CancelWSHEventData struct {
 	ReqID int
 }
 
-func (m CancelWSHEventData) encodeWire() ([]string, error) {
+func (m CancelWSHEventData) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutCancelWSHEventData), itoa(m.ReqID)}, nil
 }
 
@@ -161,7 +161,7 @@ type QueryDisplayGroupsRequest struct {
 	ReqID int
 }
 
-func (m QueryDisplayGroupsRequest) encodeWire() ([]string, error) {
+func (m QueryDisplayGroupsRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutQueryDisplayGroups), "1", itoa(m.ReqID)}, nil
 }
 
@@ -170,7 +170,7 @@ type SubscribeToGroupEventsRequest struct {
 	GroupID int
 }
 
-func (m SubscribeToGroupEventsRequest) encodeWire() ([]string, error) {
+func (m SubscribeToGroupEventsRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutSubscribeToGroupEvents), "1", itoa(m.ReqID), itoa(m.GroupID)}, nil
 }
 
@@ -179,7 +179,7 @@ type UpdateDisplayGroupRequest struct {
 	ContractInfo string
 }
 
-func (m UpdateDisplayGroupRequest) encodeWire() ([]string, error) {
+func (m UpdateDisplayGroupRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutUpdateDisplayGroup), "1", itoa(m.ReqID), m.ContractInfo}, nil
 }
 
@@ -187,7 +187,7 @@ type UnsubscribeFromGroupEventsRequest struct {
 	ReqID int
 }
 
-func (m UnsubscribeFromGroupEventsRequest) encodeWire() ([]string, error) {
+func (m UnsubscribeFromGroupEventsRequest) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutUnsubscribeFromGroupEvents), "1", itoa(m.ReqID)}, nil
 }
 
@@ -209,7 +209,7 @@ type FundamentalDataRequest struct {
 	ReportType string
 }
 
-func (m FundamentalDataRequest) encodeWire() ([]string, error) {
+func (m FundamentalDataRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(OutReqFundamentalData)
 	w.WriteInt(2) // version
@@ -229,7 +229,7 @@ type CancelFundamentalData struct {
 	ReqID int
 }
 
-func (m CancelFundamentalData) encodeWire() ([]string, error) {
+func (m CancelFundamentalData) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(OutCancelFundamentalData), "1", itoa(m.ReqID)}, nil
 }
 
@@ -239,18 +239,18 @@ type FundamentalDataResponse struct {
 }
 
 // [19, version=1, xml]
-func decodeScannerParameters(r *fieldReader) ([]Message, error) {
+func decodeScannerParameters(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	xml := r.ReadString()
 	return []Message{ScannerParameters{XML: xml}}, nil
 }
 
-func (m ScannerParameters) encodeWire() ([]string, error) {
+func (m ScannerParameters) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InScannerParameters), "1", m.XML}, nil
 }
 
 // [20, version=3, reqID, numberOfElements, entries(rank, contract(11), distance, benchmark, projection, legsStr)]
-func decodeScannerData(r *fieldReader) ([]Message, error) {
+func decodeScannerData(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	count, err := r.ReadCount("scanner entry count")
@@ -273,7 +273,7 @@ func decodeScannerData(r *fieldReader) ([]Message, error) {
 	return []Message{ScannerDataResponse{ReqID: reqID, Entries: entries}}, nil
 }
 
-func (m ScannerDataResponse) encodeWire() ([]string, error) {
+func (m ScannerDataResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(InScannerData)
 	w.WriteInt(3) // version
@@ -306,71 +306,71 @@ func (m ScannerDataResponse) encodeWire() ([]string, error) {
 }
 
 // [51, version, reqID, data]
-func decodeFundamentalData(r *fieldReader) ([]Message, error) {
+func decodeFundamentalData(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	data := r.ReadString()
 	return []Message{FundamentalDataResponse{ReqID: reqID, Data: data}}, nil
 }
 
-func (m FundamentalDataResponse) encodeWire() ([]string, error) {
+func (m FundamentalDataResponse) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InFundamentalData), "1", itoa(m.ReqID), m.Data}, nil
 }
 
 // [16, version, faDataType, xml]
-func decodeReceiveFA(r *fieldReader) ([]Message, error) {
+func decodeReceiveFA(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	faDataType, _ := r.ReadInt()
 	xml := r.ReadString()
 	return []Message{ReceiveFA{FADataType: faDataType, XML: xml}}, nil
 }
 
-func (m ReceiveFA) encodeWire() ([]string, error) {
+func (m ReceiveFA) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InReceiveFA), "1", itoa(m.FADataType), m.XML}, nil
 }
 
 // [104, reqId, dataJson]
-func decodeWSHMetaData(r *fieldReader) ([]Message, error) {
+func decodeWSHMetaData(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	dataJSON := r.ReadString()
 	return []Message{WSHMetaDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
 }
 
-func (m WSHMetaDataResponse) encodeWire() ([]string, error) {
+func (m WSHMetaDataResponse) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InWSHMetaData), itoa(m.ReqID), m.DataJSON}, nil
 }
 
 // [105, reqId, dataJson]
-func decodeWSHEventData(r *fieldReader) ([]Message, error) {
+func decodeWSHEventData(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	dataJSON := r.ReadString()
 	return []Message{WSHEventDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
 }
 
-func (m WSHEventDataResponse) encodeWire() ([]string, error) {
+func (m WSHEventDataResponse) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InWSHEventData), itoa(m.ReqID), m.DataJSON}, nil
 }
 
 // [67, version, reqId, groups]
-func decodeDisplayGroupList(r *fieldReader) ([]Message, error) {
+func decodeDisplayGroupList(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	groups := r.ReadString()
 	return []Message{DisplayGroupList{ReqID: reqID, Groups: groups}}, nil
 }
 
-func (m DisplayGroupList) encodeWire() ([]string, error) {
+func (m DisplayGroupList) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InDisplayGroupList), "1", itoa(m.ReqID), m.Groups}, nil
 }
 
 // [68, version, reqId, contractInfo]
-func decodeDisplayGroupUpdated(r *fieldReader) ([]Message, error) {
+func decodeDisplayGroupUpdated(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	contractInfo := r.ReadString()
 	return []Message{DisplayGroupUpdated{ReqID: reqID, ContractInfo: contractInfo}}, nil
 }
 
-func (m DisplayGroupUpdated) encodeWire() ([]string, error) {
+func (m DisplayGroupUpdated) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InDisplayGroupUpdated), "1", itoa(m.ReqID), m.ContractInfo}, nil
 }

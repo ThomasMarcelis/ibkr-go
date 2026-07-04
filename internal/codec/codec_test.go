@@ -62,11 +62,11 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			payload, err := Encode(tt.msg)
+			payload, err := Encode(200, tt.msg)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
-			msgs, err := DecodeBatch(payload)
+			msgs, err := DecodeBatch(200, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch() error = %v", err)
 			}
@@ -89,7 +89,7 @@ func TestDecodeLiveSymbolSamplesFrameShape(t *testing.T) {
 		"38708077", "AAPL", "STK", "MEXI", "MXN", "0", "APPLE INC", "",
 	})
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -117,18 +117,18 @@ func TestDecodeLiveHistoricalNewsFrameIDs(t *testing.T) {
 	itemPayload := wire.EncodeFields([]string{
 		"86", "1001", "2026-03-23 13:25:15.0", "BRFUPDN", "BRFUPDN$1deaeefd", "headline",
 	})
-	msgs, err := DecodeBatch(itemPayload)
+	msgs, err := DecodeBatch(200, itemPayload)
 	if err != nil {
-		t.Fatalf("DecodeBatch(item) error = %v", err)
+		t.Fatalf("DecodeBatch(200, item) error = %v", err)
 	}
 	if item, ok := msgs[0].(HistoricalNewsItem); !ok || item.ReqID != 1001 || item.ArticleID != "BRFUPDN$1deaeefd" {
 		t.Fatalf("historical news item decode = %#v", msgs[0])
 	}
 
 	endPayload := wire.EncodeFields([]string{"87", "1001", "1"})
-	msgs, err = DecodeBatch(endPayload)
+	msgs, err = DecodeBatch(200, endPayload)
 	if err != nil {
-		t.Fatalf("DecodeBatch(end) error = %v", err)
+		t.Fatalf("DecodeBatch(200, end) error = %v", err)
 	}
 	if end, ok := msgs[0].(HistoricalNewsEnd); !ok || end.ReqID != 1001 || !end.HasMore {
 		t.Fatalf("historical news end decode = %#v", msgs[0])
@@ -158,7 +158,7 @@ func TestDecodeByMsgID(t *testing.T) {
 			t.Parallel()
 
 			payload := wire.EncodeFields(tt.fields)
-			msgs, err := DecodeBatch(payload)
+			msgs, err := DecodeBatch(200, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch() error = %v", err)
 			}
@@ -175,7 +175,7 @@ func TestDecodeByMsgID(t *testing.T) {
 func TestEncodeHeadTimestampRequestFieldOrder(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(HeadTimestampRequest{
+	payload, err := Encode(200, HeadTimestampRequest{
 		ReqID: 42,
 		Contract: Contract{
 			Symbol:   "AAPL",
@@ -237,7 +237,7 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := DecodeBatch(wire.EncodeFields(tt.fields))
+			_, err := DecodeBatch(200, wire.EncodeFields(tt.fields))
 			if err == nil {
 				t.Fatal("DecodeBatch() error = nil, want malformed count error")
 			}
@@ -260,7 +260,7 @@ func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
 		t.Run(fields[len(fields)-1], func(t *testing.T) {
 			t.Parallel()
 
-			msgs, err := DecodeBatch(wire.EncodeFields(fields))
+			msgs, err := DecodeBatch(200, wire.EncodeFields(fields))
 			if err != nil {
 				t.Fatalf("DecodeBatch() error = %v", err)
 			}
@@ -281,7 +281,7 @@ func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
 func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 	t.Parallel()
 
-	msgs, err := DecodeBatch(wire.EncodeFields([]string{
+	msgs, err := DecodeBatch(200, wire.EncodeFields([]string{
 		"108", "42", "1",
 		"20260412 10:30:00 US/Eastern", "100.00", "101.00", "99.50", "100.50", "1500", "100.25", "37",
 	}))
@@ -322,7 +322,7 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	}
 	payload := wire.EncodeFields(fields)
 
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -372,7 +372,7 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(OpenOrder{
+	payload, err := Encode(200, OpenOrder{
 		OrderID: 42,
 		Contract: Contract{
 			ConID: 265598, Symbol: "AAPL", SecType: "STK",
@@ -405,7 +405,7 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
-	msgs, err := DecodeBatch(payload)
+	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
 		t.Fatalf("DecodeBatch() error = %v", err)
 	}
@@ -445,7 +445,7 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(PlaceOrderRequest{
+	payload, err := Encode(200, PlaceOrderRequest{
 		OrderID: 77,
 		Contract: Contract{
 			ConID: 9001, Symbol: "BAG-TEST", SecType: "BAG", Exchange: "SMART", Currency: "USD",
@@ -522,7 +522,7 @@ func TestEncodeContractConditionValueBeforeContract(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			payload, err := Encode(PlaceOrderRequest{
+			payload, err := Encode(200, PlaceOrderRequest{
 				OrderID:               401,
 				Contract:              Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
 				Action:                "BUY",
@@ -561,9 +561,9 @@ func TestEncodeCalcRequestsCarryNoIncludeExpired(t *testing.T) {
 	// calc requests run [.., tradingClass, price, underPrice, miscOptions].
 	contract := Contract{ConID: 886441502, Symbol: "AAPL", SecType: "OPT", Expiry: "20260612", Strike: "292.5", Right: "C", Multiplier: "100", Exchange: "SMART", Currency: "USD", TradingClass: "AAPL"}
 
-	payload, err := Encode(CalcImpliedVolatilityRequest{ReqID: 6, Contract: contract, OptionPrice: "5.25", UnderPrice: "292.0"})
+	payload, err := Encode(200, CalcImpliedVolatilityRequest{ReqID: 6, Contract: contract, OptionPrice: "5.25", UnderPrice: "292.0"})
 	if err != nil {
-		t.Fatalf("Encode(CalcImpliedVolatilityRequest) error = %v", err)
+		t.Fatalf("Encode(200, CalcImpliedVolatilityRequest) error = %v", err)
 	}
 	fields, err := wire.ParseFields(payload)
 	if err != nil {
@@ -571,9 +571,9 @@ func TestEncodeCalcRequestsCarryNoIncludeExpired(t *testing.T) {
 	}
 	assertSubsequence(t, fields, []string{"AAPL", "5.25", "292.0", ""})
 
-	payload, err = Encode(CalcOptionPriceRequest{ReqID: 7, Contract: contract, Volatility: "0.30", UnderPrice: "292.0"})
+	payload, err = Encode(200, CalcOptionPriceRequest{ReqID: 7, Contract: contract, Volatility: "0.30", UnderPrice: "292.0"})
 	if err != nil {
-		t.Fatalf("Encode(CalcOptionPriceRequest) error = %v", err)
+		t.Fatalf("Encode(200, CalcOptionPriceRequest) error = %v", err)
 	}
 	fields, err = wire.ParseFields(payload)
 	if err != nil {
@@ -591,7 +591,7 @@ func TestEncodeExerciseOptionsTailFields(t *testing.T) {
 	// sha256 241a49023701e9ec): server_version 200 expects the
 	// manualOrderTime, customerAccount, and professionalCustomer tail after
 	// override, and the frame ended early.
-	payload, err := Encode(ExerciseOptionsRequest{
+	payload, err := Encode(200, ExerciseOptionsRequest{
 		ReqID:            7,
 		Contract:         Contract{ConID: 886441502, Symbol: "AAPL", SecType: "OPT", Expiry: "20260612", Strike: "292.5", Right: "C", Multiplier: "100", Exchange: "SMART", Currency: "USD"},
 		ExerciseAction:   2,
@@ -600,7 +600,7 @@ func TestEncodeExerciseOptionsTailFields(t *testing.T) {
 		Override:         0,
 	})
 	if err != nil {
-		t.Fatalf("Encode(ExerciseOptionsRequest) error = %v", err)
+		t.Fatalf("Encode(200, ExerciseOptionsRequest) error = %v", err)
 	}
 	fields, err := wire.ParseFields(payload)
 	if err != nil {
@@ -638,7 +638,7 @@ func TestDecodeServerInfo(t *testing.T) {
 func TestEncodeStartAPI(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(StartAPI{ClientID: 1})
+	payload, err := Encode(200, StartAPI{ClientID: 1})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
@@ -660,7 +660,7 @@ func TestEncodeStartAPI(t *testing.T) {
 func TestEncodeReqMarketDataType(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(ReqMarketDataType{DataType: 3})
+	payload, err := Encode(200, ReqMarketDataType{DataType: 3})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
@@ -682,7 +682,7 @@ func TestEncodeReqMarketDataType(t *testing.T) {
 func TestEncodeCancelHistoricalData(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(CancelHistoricalData{ReqID: 42})
+	payload, err := Encode(200, CancelHistoricalData{ReqID: 42})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
@@ -708,7 +708,7 @@ func TestEncodeCancelHistoricalData(t *testing.T) {
 func TestEncodeCancelOrderRequest(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(CancelOrderRequest{OrderID: 42})
+	payload, err := Encode(200, CancelOrderRequest{OrderID: 42})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
@@ -775,7 +775,7 @@ func TestEncodeCancelOrderRequestRegulatoryFields(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			payload, err := Encode(tt.request)
+			payload, err := Encode(200, tt.request)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
@@ -799,7 +799,7 @@ func TestEncodeCancelOrderRequestRegulatoryFields(t *testing.T) {
 func TestEncodeGlobalCancelRequest(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(GlobalCancelRequest{})
+	payload, err := Encode(200, GlobalCancelRequest{})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
 	}
