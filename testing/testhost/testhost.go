@@ -17,6 +17,12 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
+// defaultServerVersion is the wire layout used to encode server frames for a
+// transcript that never declares one in its handshake. Every checked-in
+// transcript is captured from IB Gateway server_version 200, so that is the
+// default until version-gated transcripts land.
+const defaultServerVersion = 200
+
 type Host struct {
 	listener net.Listener
 	addr     string
@@ -85,6 +91,11 @@ func (h *Host) run() {
 
 	bindings := map[string]any{}
 	var conn net.Conn
+	// serverVersion tracks the wire layout each server frame is encoded at. It
+	// is captured from the transcript's handshake so a transcript declaring an
+	// older server_version replays frames in that version's layout rather than
+	// a hardcoded one.
+	serverVersion := defaultServerVersion
 
 	for i := 0; i < len(h.steps); i++ {
 		cur := h.steps[i]
@@ -117,8 +128,11 @@ func (h *Host) run() {
 				return
 			}
 			_ = versionPayload
-			// 3. Send framed server info
-			serverVersion := asInt(resolveBindings(cur.body["server_version"], bindings))
+			// 3. Send framed server info. Capture the declared server_version
+			// so every server frame below encodes at that wire layout.
+			if raw, ok := cur.body["server_version"]; ok {
+				serverVersion = asInt(resolveBindings(raw, bindings))
+			}
 			connTime := asString(resolveBindings(cur.body["connection_time"], bindings))
 			serverInfoPayload := wire.EncodeFields([]string{strconv.Itoa(serverVersion), connTime})
 			if err := wire.WriteFrame(conn, serverInfoPayload); err != nil {
@@ -247,9 +261,7 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			// Transcripts replay server_version 200; no negotiated version is
-			// retained on the host, so encode against the fixed wire layout.
-			payload, err := codec.Encode(200, msg)
+			payload, err := codec.Encode(serverVersion, msg)
 			if err != nil {
 				h.finish(err)
 				return
@@ -272,13 +284,7 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			var payload []byte
-			// Transcripts replay server_version 200 (see the send case above).
-			if cur.direction == "server" {
-				payload, err = codec.Encode(200, msg)
-			} else {
-				payload, err = codec.Encode(200, msg)
-			}
+			payload, err := codec.Encode(serverVersion, msg)
 			if err != nil {
 				h.finish(err)
 				return
