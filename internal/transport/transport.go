@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"io"
@@ -127,8 +128,17 @@ func (c *Conn) Wait() error {
 
 func (c *Conn) readLoop() {
 	defer close(c.incoming)
+	// readLoop owns every post-handshake read on c.conn: the handshake reads
+	// its frames with transport.ReadOneFrame on the raw conn *before*
+	// transport.New starts this goroutine (see engine_connect.go), and nothing
+	// else touches the socket afterward. That exclusive ownership makes it safe
+	// to buffer here — wire.ReadFrame issues two reads per frame (length prefix
+	// then payload), so an unbuffered conn is two syscalls per frame. A 64 KiB
+	// buffer collapses those into one syscall per fill, since the gateway
+	// coalesces many small tick frames into each TCP segment.
+	br := bufio.NewReaderSize(c.conn, 64<<10)
 	for {
-		payload, err := wire.ReadFrame(c.conn)
+		payload, err := wire.ReadFrame(br)
 		if err != nil {
 			c.finish(err)
 			return
