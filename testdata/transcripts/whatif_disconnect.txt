@@ -1,0 +1,14 @@
+# Derived regression fixture for the Preview transport-loss path: the
+# connection drops after the what-if place_order and before any open_order
+# echo. Request line shape from captures/20260610T200009Z-api_whatif_margin
+# _aapl (e8ee70b24de3fe2f, server_version 200). Before 2026-07-05 the
+# disconnect walked the order routes and dereferenced the preview route's
+# nil handle, crashing the actor goroutine; the caller must instead get
+# ErrInterrupted.
+handshake {"server_version":200,"connection_time":"20260704 22:00:08 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":355}
+
+client place_order {"order_id":"355","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","transmit":true,"what_if":true}
+sleep 50ms
+disconnect

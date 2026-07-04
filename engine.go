@@ -105,6 +105,22 @@ type previewResult struct {
 	err   error
 }
 
+// resolvePreview resolves a pending what-if preview route and reports whether
+// the route was a preview. Preview routes have no OrderHandle, so every
+// dispatch path that would touch or.handle must divert through this first:
+// the buffered channel is resolved at most once, guarded by closed. Callers
+// on the actor goroutine only.
+func (or *orderRoute) resolvePreview(res previewResult) bool {
+	if or.preview == nil {
+		return false
+	}
+	if !or.closed {
+		or.closed = true
+		or.preview <- res
+	}
+	return true
+}
+
 type parsedOpenOrder struct {
 	order OpenOrder
 }

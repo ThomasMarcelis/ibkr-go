@@ -2,6 +2,7 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -73,5 +74,68 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 	if !state.CommissionMin.IsZero() || !state.CommissionMax.IsZero() {
 		t.Errorf("CommissionMin/Max = %s/%s, want zero (unset in capture)",
 			state.CommissionMin, state.CommissionMax)
+	}
+}
+
+// TestPreviewRejectedByGatewayReplay freezes the Preview rejection path: a
+// code-201 api_error targeting the what-if order ID must resolve the blocked
+// Preview caller with an *ibkr.APIError instead of dereferencing the nil
+// handle of the preview route (actor crash before 2026-07-05). Frame shapes
+// are live-attested; see the fixture header.
+func TestPreviewRejectedByGatewayReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "whatif_rejected.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+		Contract: orderReplayAAPL,
+		Order: ibkr.Order{
+			Action:    ibkr.ActionBuy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("100"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	var apiErr *ibkr.APIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("Preview error = %v, want *ibkr.APIError", err)
+	}
+	if apiErr.Code != 201 {
+		t.Fatalf("Preview rejection code = %d, want 201", apiErr.Code)
+	}
+}
+
+// TestPreviewInterruptedByDisconnectReplay freezes the Preview transport-loss
+// path: a disconnect before the open_order echo must resolve the blocked
+// caller with ErrInterrupted instead of crashing on the preview route's nil
+// handle (see the fixture header).
+func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "whatif_disconnect.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+		Contract: orderReplayAAPL,
+		Order: ibkr.Order{
+			Action:    ibkr.ActionBuy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("100"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if !errors.Is(err, ibkr.ErrInterrupted) {
+		t.Fatalf("Preview error after disconnect = %v, want ErrInterrupted", err)
 	}
 }

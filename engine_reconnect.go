@@ -86,7 +86,14 @@ func (e *engine) disconnectRoutes(err error) {
 		}
 	}
 	// Order handles survive disconnect: emit Gap, do not close.
-	for _, or := range e.orders {
+	for id, or := range e.orders {
+		// A transport loss cannot deliver the preview echo on this
+		// connection; resolve the blocked caller instead of gapping a
+		// handle the preview route does not have.
+		if or.resolvePreview(previewResult{err: ErrInterrupted}) {
+			delete(e.orders, id)
+			continue
+		}
 		if !or.closed && !or.gapped {
 			or.gapped = true
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
@@ -123,6 +130,9 @@ func (e *engine) resumeRoutes() {
 	}
 	// Emit Resumed to all active order handles after reconnect.
 	for _, or := range e.orders {
+		if or.preview != nil {
+			continue
+		}
 		if !or.closed && or.gapped {
 			or.gapped = false
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
@@ -147,6 +157,15 @@ func (e *engine) closeEngine(err error) {
 		delete(e.singletons, key)
 	}
 	for id, or := range e.orders {
+		if previewErr := err; or.preview != nil {
+			if previewErr == nil {
+				previewErr = ErrInterrupted
+			}
+			if or.resolvePreview(previewResult{err: previewErr}) {
+				delete(e.orders, id)
+				continue
+			}
+		}
 		if !or.closed {
 			or.closed = true
 			// Terminal order status is authoritative for the handle's close (see
@@ -187,6 +206,11 @@ func (e *engine) emitGap() {
 		}
 	}
 	for _, or := range e.orders {
+		// Preview routes have no handle; they resolve on echo, APIError,
+		// or transport loss, so connectivity gaps pass them by.
+		if or.preview != nil {
+			continue
+		}
 		if !or.closed && !or.gapped {
 			or.gapped = true
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
@@ -208,6 +232,9 @@ func (e *engine) emitResumed() {
 		}
 	}
 	for _, or := range e.orders {
+		if or.preview != nil {
+			continue
+		}
 		if !or.closed && or.gapped {
 			or.gapped = false
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})

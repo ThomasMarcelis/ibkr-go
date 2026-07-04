@@ -198,6 +198,13 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				e.emitEvent(msg.Code, msg.Message)
 				return
 			}
+			// The gateway rejecting a what-if order is Preview's ordinary
+			// failure mode; resolve the blocked caller instead of touching
+			// the handle no preview route has.
+			if or.resolvePreview(previewResult{err: e.apiErr(OpPlaceOrder, msg)}) {
+				delete(e.orders, int64(msg.ReqID))
+				return
+			}
 			or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
 			return
 		}
@@ -356,6 +363,9 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 					"order_id", orderID, "exec_id", report.ExecID, "err", err)
 				return
 			}
+			if or.handle == nil {
+				return
+			}
 			if !or.handle.emitCommission(cr) {
 				or.closed = true
 			}
@@ -378,6 +388,9 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	if err != nil {
 		e.cfg.logger.Warn("ibkr: drop execution detail on decode error",
 			"order_id", m.OrderID, "exec_id", m.ExecID, "err", err)
+		return
+	}
+	if or.handle == nil {
 		return
 	}
 	if !or.handle.emitExecution(*exec.Execution) {
