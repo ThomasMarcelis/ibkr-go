@@ -2662,7 +2662,12 @@ func drainObservers(
 				}
 			case evt, ok := <-openOrderEvents(openOrders):
 				if ok {
-					log.Printf("observer open order_id=%d status=%s", evt.Order.OrderID, evt.Order.Status)
+					if evt.Order != nil {
+						log.Printf("observer open order_id=%d status=%s", evt.Order.OrderID, evt.Order.Status)
+					}
+					if evt.Status != nil {
+						log.Printf("observer open status order_id=%d status=%s", evt.Status.OrderID, evt.Status.Status)
+					}
 				}
 			case <-deadline:
 				return

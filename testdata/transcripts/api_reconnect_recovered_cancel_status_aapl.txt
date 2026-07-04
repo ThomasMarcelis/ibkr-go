@@ -1,0 +1,37 @@
+# Grounded by live API capture captures/20260704T174748Z-api_reconnect_active_order_aapl.
+# server_version=200, events.jsonl sha256 prefix: 57943d05bd0242ca.
+# Account and perm identifiers are sanitized; the two connection legs preserve
+# the live paper Gateway behavior observed on 2026-07-04 (outside regular
+# trading hours, order rests PreSubmitted): on reconnect with the same client
+# ID the Gateway pushes an unsolicited open-orders snapshot immediately after
+# START_API, the req_open_orders recovery snapshot pairs each open_order with
+# an order_status, and cancelling the recovered order by ID yields an
+# order_status Cancelled with no live OrderHandle in the process
+# (https://github.com/ThomasMarcelis/ibkr-go/issues/20).
+handshake {"server_version":200,"connection_time":"20260704 19:48:00 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":444}
+
+client place_order {"order_id":"444","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"LMT","lmt_price":"15.42","tif":"GTC","account":"DU9000001"}
+server open_order {"order_id":444,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"100","lmt_price":"15.42","aux_price":"0","tif":"GTC","perm_id":"900444","client_id":"1","origin":"0"}
+server order_status {"order_id":444,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900444","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+disconnect
+
+handshake {"server_version":200,"connection_time":"20260704 19:48:15 Central European Standard Time"}
+server open_order {"order_id":444,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"100","lmt_price":"15.42","aux_price":"0","tif":"GTC","perm_id":"900444","client_id":"1","origin":"0"}
+server order_status {"order_id":444,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900444","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order_end {}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":445}
+
+client req_open_orders {"scope":"client"}
+server open_order {"order_id":444,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"100","lmt_price":"15.42","aux_price":"0","tif":"GTC","perm_id":"900444","client_id":"1","origin":"0"}
+server order_status {"order_id":444,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900444","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order_end {}
+
+client cancel_order {"field_count":"5","order_id":"444","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":444,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900444","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":444,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1783187295000"}
+
+sleep 100ms
+disconnect

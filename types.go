@@ -565,8 +565,13 @@ type OpenOrder struct {
 	CommissionCurrency string
 }
 
+// OpenOrderUpdate is a union event from the open-orders subscription. Exactly
+// one field is non-nil. Status carries order-status transitions for orders
+// observed through the subscription, including orders that have no live
+// OrderHandle in this process (e.g. recovered after a restart).
 type OpenOrderUpdate struct {
-	Order OpenOrder
+	Order  *OpenOrder
+	Status *OrderStatusUpdate
 }
 
 type ExecutionsRequest struct {

@@ -12,7 +12,7 @@ func bindContext[T any](ctx context.Context, sub *Subscription[T]) {
 	}()
 }
 
-func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) U) ([]U, error) {
+func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) (U, bool)) ([]U, error) {
 	values := make([]U, 0, 8)
 	for {
 		select {
@@ -23,7 +23,9 @@ func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], ma
 				}
 				return values, sub.Wait()
 			}
-			values = append(values, mapFn(item))
+			if value, ok := mapFn(item); ok {
+				values = append(values, value)
+			}
 		case state, ok := <-sub.Lifecycle():
 			if !ok {
 				if sub.snapshotComplete() {
@@ -46,14 +48,16 @@ func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], ma
 	}
 }
 
-func drainSnapshotEvents[T any, U any](values []U, sub *Subscription[T], mapFn func(T) U) []U {
+func drainSnapshotEvents[T any, U any](values []U, sub *Subscription[T], mapFn func(T) (U, bool)) []U {
 	for {
 		select {
 		case item, ok := <-sub.Events():
 			if !ok {
 				return values
 			}
-			values = append(values, mapFn(item))
+			if value, ok := mapFn(item); ok {
+				values = append(values, value)
+			}
 		default:
 			return values
 		}

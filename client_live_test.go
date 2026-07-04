@@ -1338,6 +1338,128 @@ func TestLiveSubscribeOpenOrders(t *testing.T) {
 	}
 }
 
+// TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder exercises the
+// https://github.com/ThomasMarcelis/ibkr-go/issues/20 scenario against the
+// paper Gateway: a resting order is orphaned by closing its placing client,
+// recovered after a reconnect with the same clientID via SubscribeOpen, and
+// cancelled by order ID with no live OrderHandle. The cancel confirmation
+// must arrive as a Status event on the open-orders subscription.
+//
+// Both legs use clientID 0 as in the issue report: the Gateway resolves
+// cancel-by-ID within the requesting client's own order-ID space (cancelling
+// another clientID's order was rejected with code 10147 when probed live on
+// 2026-07-04).
+func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
+	ibkrlive.RequireTrading(t)
+
+	placer, _, cancelPlacer := ibkrlive.DialTradingContext(t, 30*time.Second, ibkr.WithClientID(0))
+	defer cancelPlacer()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancelReq()
+
+	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: aaplContract,
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
+			TIF:       ibkr.TIFGTC,
+		},
+	})
+	if err != nil {
+		placer.Close()
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+	orderID := handle.OrderID()
+	t.Logf("placed resting order: orderID=%d", orderID)
+
+	// Wait for the order to rest, then orphan it by closing the placer
+	// without cancelling.
+	for resting := false; !resting; {
+		select {
+		case evt := <-handle.Events():
+			if evt.Status != nil {
+				t.Logf("placer order status: %s", evt.Status.Status)
+				resting = true
+			}
+		case <-ctx.Done():
+			placer.Close()
+			t.Fatal("timeout waiting for resting status")
+		}
+	}
+	if err := placer.Close(); err != nil {
+		t.Fatalf("placer Close: %v", err)
+	}
+	// Release the shared live-session slot before dialing the observer leg.
+	cancelPlacer()
+
+	observer, _, cancelObs := ibkrlive.DialTradingContext(t, 30*time.Second, ibkr.WithClientID(0))
+	defer cancelObs()
+	defer observer.Close()
+	defer func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanCancel()
+		_ = observer.Orders().CancelAll(cleanCtx)
+	}()
+
+	sub, err := observer.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeClient,
+		ibkr.WithResumePolicy(ibkr.ResumeNever))
+	if err != nil {
+		t.Fatalf("SubscribeOpen(client): %v", err)
+	}
+	defer sub.Close()
+
+	recovered := false
+	for done := false; !done; {
+		select {
+		case evt, ok := <-sub.Events():
+			if !ok {
+				t.Fatal("subscription closed during snapshot")
+			}
+			if evt.Order != nil && evt.Order.OrderID == orderID {
+				t.Logf("recovered order %d (client %d, status %q)", evt.Order.OrderID, evt.Order.ClientID, evt.Order.Status)
+				recovered = true
+			}
+		case state := <-sub.Lifecycle():
+			if state.Kind == ibkr.SubscriptionSnapshotComplete {
+				done = true
+			}
+			if state.Err != nil {
+				t.Fatalf("subscription error: %v", state.Err)
+			}
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for open-orders snapshot")
+		}
+	}
+	if !recovered {
+		t.Fatalf("order %d not present in open-orders snapshot", orderID)
+	}
+
+	// Cancel by ID: no OrderHandle for this order exists in the observer.
+	if err := observer.Orders().Cancel(ctx, orderID); err != nil {
+		t.Fatalf("Cancel(%d): %v", orderID, err)
+	}
+
+	for {
+		select {
+		case evt, ok := <-sub.Events():
+			if !ok {
+				t.Fatal("subscription closed without delivering the cancel status")
+			}
+			if evt.Status != nil && evt.Status.OrderID == orderID {
+				t.Logf("recovered order status: %s", evt.Status.Status)
+				if evt.Status.Status == ibkr.OrderStatusCancelled {
+					return
+				}
+			}
+		case <-ctx.Done():
+			t.Fatal("cancel sent but no Cancelled status delivered to SubscribeOpen")
+		}
+	}
+}
+
 func isLiveHistoricalDataUnavailable(err error) bool {
 	apiErr, ok := errors.AsType[*ibkr.APIError](err)
 	if !ok {

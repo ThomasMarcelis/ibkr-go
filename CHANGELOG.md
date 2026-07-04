@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **`OpenOrderUpdate` is a union of `Order` and `Status` pointers.** The
+  open-orders subscription now carries order-status transitions alongside
+  open-order echoes; exactly one field is non-nil per event, mirroring
+  `OrderEvent` and `ExecutionUpdate`. Code that read the former value-typed
+  `Order` field checks `Order != nil` and dereferences.
 - **`OpenOrder` no longer carries `Filled`/`Remaining`.** Live
   `server_version 200` open-order frames never carry a fill echo; the
   fields existed because an early capture test misparsed a two-frame chunk
@@ -44,6 +49,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Status transitions for orders without a live `OrderHandle` reach
+  `SubscribeOpen` ([#20](https://github.com/ThomasMarcelis/ibkr-go/issues/20)).**
+  Orders recovered through the open-orders subscription after a restart had
+  their `order_status` frames silently dropped, so a cancel confirmed by the
+  Gateway was never observable. Status frames now dual-route to the
+  subscription exactly like `open_order` frames, and the one-shot
+  `Orders().Open` snapshot filters the paired statuses the live Gateway
+  interleaves into the recovery snapshot. Grounded by a 2026-07-04
+  `server_version 200` capture frozen as
+  `api_reconnect_recovered_cancel_status_aapl.txt`.
 - **The option pipeline works against the live Gateway.** Four phantom or
   missing wire fields, each mirrored between the codec and the replay
   harness so the suite stayed green, broke every option flow live:

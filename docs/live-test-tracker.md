@@ -29,6 +29,34 @@ class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
 
+### 2026-07-04
+
+Issue #20 fix session (US market holiday, orders rest PreSubmitted).
+`paper-dev` on 4002 healthy. Live probes with scratch drivers plus a fresh
+`api_reconnect_active_order_aapl` capture (20260704T174748Z) established:
+
+- Same-clientID recover-and-cancel works end to end: after reconnect,
+  `SubscribeOpen` recovers the resting order and `Orders().Cancel(orderID)`
+  yields `order_status Cancelled` on the wire; the engine now routes it to
+  the open-orders subscription (the issue #20 fix).
+- Cross-client cancel by order ID was rejected with real code 10147
+  ("OrderId N that needs to be cancelled is not found") for both client 0
+  and a plain second client, with a single unambiguous resting order. This
+  conflicts with the 2026-04-15 captures behind
+  `api_client_id0_order_observation_aapl.txt` and
+  `api_cross_client_cancel_aapl.txt`, which recorded the cancel succeeding
+  during regular trading hours. Whether the delta is a Gateway build change
+  or an outside-RTH/PreSubmitted condition needs a market-hours re-probe
+  before those fixtures are touched.
+- New Gateway reconnect behavior versus April: reconnecting with the same
+  clientID now receives an unsolicited open-orders snapshot (open_order +
+  order_status + open_order_end) immediately after START_API, before
+  managed_accounts/next_valid_id, and the req_open_orders recovery snapshot
+  pairs each open_order with an order_status. Frozen in
+  `api_reconnect_recovered_cancel_status_aapl.txt`.
+- Paper residue: none; all probe orders cancelled and the final snapshot
+  reported zero open orders.
+
 ### 2026-06-11
 
 Campaign day two. Market-window paper captures landed regular-session
@@ -285,6 +313,7 @@ against the role-aware `paper-dev` Gateway.
 | api_stop_loss_management_aapl.txt | 20260415T153735Z | promoted; covers market entry, protective stop modify/cancel, and flatten replay |
 | api_transmit_false_then_transmit_aapl.txt | 20260415T162717Z | promoted; covers staged Transmit=false then transmit/cancel replay |
 | api_reconnect_active_order_aapl.txt | 20260415T162822Z | promoted; covers GTC active order visible after reconnect |
+| api_reconnect_recovered_cancel_status_aapl.txt | 20260704T174748Z | promoted; covers unsolicited reconnect snapshot push, paired order_status in the recovery snapshot, and cancel-status delivery to SubscribeOpen for a recovered order (issue #20) |
 | api_order_handle_reconnect_cancel_aapl.txt | 20260415T162822Z | promoted; covers original OrderHandle Gap/Resumed lifecycle and cancel after reconnect |
 | api_client_id0_order_observation_aapl.txt | 20260415T162840Z | promoted; covers client ID 0 observing/cancelling another client's GTC order |
 | api_cross_client_cancel_aapl.txt | 20260415T162857Z | promoted; covers client ID 2 observing/cancelling client ID 1 order |

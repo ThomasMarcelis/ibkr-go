@@ -422,7 +422,7 @@ func (e *engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) 
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update AccountSummaryUpdate) AccountValue { return update.Value })
+	return collectSnapshot(ctx, sub, func(update AccountSummaryUpdate) (AccountValue, bool) { return update.Value, true })
 }
 
 func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountSummaryUpdate], error) {
@@ -535,7 +535,7 @@ func (e *engine) PositionsSnapshot(ctx context.Context) ([]Position, error) {
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update PositionUpdate) Position { return update.Position })
+	return collectSnapshot(ctx, sub, func(update PositionUpdate) (Position, bool) { return update.Position, true })
 }
 
 func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[PositionUpdate], error) {
@@ -1085,7 +1085,12 @@ func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update OpenOrderUpdate) OpenOrder { return update.Order })
+	return collectSnapshot(ctx, sub, func(update OpenOrderUpdate) (OpenOrder, bool) {
+		if update.Order == nil {
+			return OpenOrder{}, false
+		}
+		return *update.Order, true
+	})
 }
 
 func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
@@ -1136,7 +1141,9 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case parsedOpenOrder:
-					sub.emit(OpenOrderUpdate{Order: m.order})
+					sub.emit(OpenOrderUpdate{Order: &m.order})
+				case OrderStatusUpdate:
+					sub.emit(OpenOrderUpdate{Status: &m})
 				case codec.OpenOrderEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
@@ -1179,7 +1186,7 @@ func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) ([]Execu
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update ExecutionUpdate) ExecutionUpdate { return update })
+	return collectSnapshot(ctx, sub, func(update ExecutionUpdate) (ExecutionUpdate, bool) { return update, true })
 }
 
 func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
@@ -1962,7 +1969,7 @@ func (e *engine) AccountUpdatesSnapshot(ctx context.Context, account string) ([]
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(u AccountUpdate) AccountUpdate { return u })
+	return collectSnapshot(ctx, sub, func(u AccountUpdate) (AccountUpdate, bool) { return u, true })
 }
 
 // SubscribeAccountUpdates is a singleton subscription for account value/portfolio updates.
@@ -2106,7 +2113,7 @@ func (e *engine) AccountUpdatesMultiSnapshot(ctx context.Context, req AccountUpd
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(u AccountUpdateMultiValue) AccountUpdateMultiValue { return u })
+	return collectSnapshot(ctx, sub, func(u AccountUpdateMultiValue) (AccountUpdateMultiValue, bool) { return u, true })
 }
 
 func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUpdatesMultiRequest, opts ...SubscriptionOption) (*Subscription[AccountUpdateMultiValue], error) {
@@ -2202,7 +2209,7 @@ func (e *engine) PositionsMultiSnapshot(ctx context.Context, req PositionsMultiR
 		return nil, err
 	}
 	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(u PositionMulti) PositionMulti { return u })
+	return collectSnapshot(ctx, sub, func(u PositionMulti) (PositionMulti, bool) { return u, true })
 }
 
 func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMultiRequest, opts ...SubscriptionOption) (*Subscription[PositionMulti], error) {
@@ -4917,24 +4924,34 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 }
 
 func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
-	orderRoute, ok := e.orders[msg.OrderID]
-	if !ok || orderRoute.closed {
+	orderRoute, orderObserved := e.orders[msg.OrderID]
+	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
+	if (!orderObserved || orderRoute.closed) && !singletonObserved {
 		return
 	}
 
 	status, err := fromCodecOrderStatus(msg)
 	if err != nil {
-		orderRoute.closed = true
-		orderRoute.handle.emitOrderError(err)
+		if orderObserved && !orderRoute.closed {
+			orderRoute.closed = true
+			orderRoute.handle.emitOrderError(err)
+		}
+		if singletonObserved {
+			delete(e.singletons, singletonOpenOrders)
+			singletonRoute.close(err)
+		}
 		return
 	}
 
-	if !orderRoute.handle.emitStatus(status) {
-		orderRoute.closed = true
-		return
+	if orderObserved && !orderRoute.closed {
+		if !orderRoute.handle.emitStatus(status) {
+			orderRoute.closed = true
+		} else if IsTerminalOrderStatus(status.Status) {
+			e.scheduleTerminalOrderClose(msg.OrderID, orderRoute)
+		}
 	}
-	if IsTerminalOrderStatus(status.Status) {
-		e.scheduleTerminalOrderClose(msg.OrderID, orderRoute)
+	if singletonObserved {
+		singletonRoute.handle(status, e)
 	}
 }
 

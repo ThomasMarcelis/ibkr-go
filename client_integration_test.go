@@ -4855,6 +4855,162 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 	waitHost(t, host)
 }
 
+// TestSubscribeOpenDeliversCancelStatusForRecoveredOrder freezes the fix for
+// https://github.com/ThomasMarcelis/ibkr-go/issues/20: an order recovered via
+// SubscribeOpen has no OrderHandle in this process, so its status transitions
+// (the paired snapshot status and the cancel confirmation) must be routed to
+// the open-orders subscription instead of being dropped. Grounded by live
+// capture captures/20260704T174748Z-api_reconnect_active_order_aapl,
+// server_version 200, events.jsonl sha256 prefix 57943d05bd0242ca.
+func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "api_reconnect_recovered_cancel_status_aapl.txt")
+	defer waitHost(t, host)
+
+	placer := dialHostClient(t, host, ibkr.WithClientID(1))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("100"),
+			LmtPrice:  decimal.RequireFromString("15.42"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("placer Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	if err := placer.Close(); err != nil {
+		t.Fatalf("placer Close: %v", err)
+	}
+
+	observer := dialHostClient(t, host, ibkr.WithClientID(1))
+	defer observer.Close()
+
+	sub, err := observer.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeClient)
+	if err != nil {
+		t.Fatalf("SubscribeOpen(client): %v", err)
+	}
+	defer sub.Close()
+
+	// Recovery snapshot: the Gateway pairs each open_order with an
+	// order_status.
+	var recovered ibkr.OpenOrderUpdate
+	select {
+	case recovered = <-sub.Events():
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for recovered open-order event")
+	}
+	if recovered.Order == nil {
+		t.Fatalf("recovery event = %+v, want Order payload", recovered)
+	}
+	if recovered.Order.OrderID != handle.OrderID() {
+		t.Fatalf("recovered order id = %d, want %d", recovered.Order.OrderID, handle.OrderID())
+	}
+	select {
+	case evt := <-sub.Events():
+		if evt.Status == nil || evt.Status.Status != ibkr.OrderStatusPreSubmitted {
+			t.Fatalf("paired snapshot event = %+v, want PreSubmitted Status payload", evt)
+		}
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for paired snapshot status event")
+	}
+	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
+
+	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+		t.Fatalf("observer Cancel: %v", err)
+	}
+
+	select {
+	case evt, ok := <-sub.Events():
+		if !ok {
+			t.Fatal("subscription closed without delivering the cancel status")
+		}
+		if evt.Status == nil {
+			t.Fatalf("post-cancel event = %+v, want Status payload", evt)
+		}
+		if evt.Status.OrderID != handle.OrderID() {
+			t.Fatalf("status order id = %d, want %d", evt.Status.OrderID, handle.OrderID())
+		}
+		if evt.Status.Status != ibkr.OrderStatusCancelled {
+			t.Fatalf("status = %q, want %q", evt.Status.Status, ibkr.OrderStatusCancelled)
+		}
+	case <-ctx.Done():
+		t.Fatal("cancel confirmed on the wire but no status event delivered to SubscribeOpen")
+	}
+}
+
+// TestOpenOrdersSnapshotSkipsPairedStatuses freezes that the one-shot
+// open-orders snapshot returns only the orders and filters the paired
+// order_status frames the Gateway interleaves into the recovery snapshot.
+// Same live grounding as TestSubscribeOpenDeliversCancelStatusForRecoveredOrder.
+func TestOpenOrdersSnapshotSkipsPairedStatuses(t *testing.T) {
+	t.Parallel()
+
+	host := newHost(t, "api_reconnect_recovered_cancel_status_aapl.txt")
+	defer waitHost(t, host)
+
+	placer := dialHostClient(t, host, ibkr.WithClientID(1))
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.Buy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("100"),
+			LmtPrice:  decimal.RequireFromString("15.42"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("placer Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	if err := placer.Close(); err != nil {
+		t.Fatalf("placer Close: %v", err)
+	}
+
+	observer := dialHostClient(t, host, ibkr.WithClientID(1))
+	defer observer.Close()
+
+	orders, err := observer.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
+	if err != nil {
+		t.Fatalf("Open(client): %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("open orders len = %d, want 1 (paired statuses must be filtered)", len(orders))
+	}
+	if orders[0].OrderID != handle.OrderID() {
+		t.Fatalf("open order id = %d, want %d", orders[0].OrderID, handle.OrderID())
+	}
+	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+		t.Fatalf("observer Cancel: %v", err)
+	}
+	waitHost(t, host)
+}
+
 func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 	t.Parallel()
 
