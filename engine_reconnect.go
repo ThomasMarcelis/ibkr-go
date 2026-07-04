@@ -1,0 +1,216 @@
+package ibkr
+
+import (
+	"context"
+	"time"
+)
+
+func (e *engine) handleTransportLoss(err error) {
+	if e.closed {
+		return
+	}
+	if e.transport == nil {
+		return
+	}
+	err = normalizeTransportErr(err)
+	e.transport = nil
+	e.executions.reset()
+	if e.cfg.reconnect == ReconnectOff {
+		if err == nil {
+			err = ErrClosed
+		}
+		e.disconnectRoutes(err)
+		e.closeEngine(err)
+		return
+	}
+	e.setState(StateReconnecting, 0, "transport lost", err)
+	e.disconnectRoutes(err)
+	e.scheduleReconnect()
+}
+
+func (e *engine) scheduleReconnect() {
+	delay := reconnectDelay(e.reconnectAttempt)
+	e.reconnectAttempt++
+	time.AfterFunc(delay, func() {
+		e.enqueue(func() {
+			if e.closed || e.transport != nil || e.cfg.reconnect == ReconnectOff {
+				return
+			}
+			dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			e.startConnect(dialCtx, true)
+		})
+	})
+}
+
+func reconnectDelay(attempt int) time.Duration {
+	if attempt < 0 {
+		attempt = 0
+	}
+	delay := reconnectBackoff
+	for i := 0; i < attempt; i++ {
+		delay *= 2
+		if delay >= reconnectBackoffMax {
+			return reconnectBackoffMax
+		}
+	}
+	return delay
+}
+
+func (e *engine) disconnectRoutes(err error) {
+	for reqID, route := range e.keyed {
+		// Already gapped (e.g. from code 1100) — route survives, skip duplicate Gap.
+		if route.gapped {
+			continue
+		}
+		if route.onDisconnect == nil {
+			route.close(ErrInterrupted)
+			e.deleteKeyedRoute(reqID)
+			continue
+		}
+		if !route.onDisconnect(e, err) {
+			e.deleteKeyedRoute(reqID)
+		}
+	}
+	for key, route := range e.singletons {
+		if route.gapped {
+			continue
+		}
+		if route.onDisconnect == nil {
+			route.close(ErrInterrupted)
+			delete(e.singletons, key)
+			continue
+		}
+		if !route.onDisconnect(e, err) {
+			delete(e.singletons, key)
+		}
+	}
+	// Order handles survive disconnect: emit Gap, do not close.
+	for _, or := range e.orders {
+		if !or.closed && !or.gapped {
+			or.gapped = true
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
+		}
+	}
+}
+
+func (e *engine) resumeRoutes() {
+	for reqID, route := range e.keyed {
+		if route.subscription && route.resume == ResumeAuto {
+			route.gapped = false
+			if err := e.send(route.request); err != nil {
+				route.close(err)
+				e.deleteKeyedRoute(reqID)
+				continue
+			}
+			if route.emitResumed != nil {
+				route.emitResumed(e)
+			}
+		}
+	}
+	for key, route := range e.singletons {
+		if route.subscription && route.resume == ResumeAuto {
+			route.gapped = false
+			if err := e.send(route.request); err != nil {
+				route.close(err)
+				delete(e.singletons, key)
+				continue
+			}
+			if route.emitResumed != nil {
+				route.emitResumed(e)
+			}
+		}
+	}
+	// Emit Resumed to all active order handles after reconnect.
+	for _, or := range e.orders {
+		if !or.closed && or.gapped {
+			or.gapped = false
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
+		}
+	}
+}
+
+func (e *engine) closeEngine(err error) {
+	if e.closed {
+		return
+	}
+	e.closed = true
+	if e.transport != nil {
+		_ = e.transport.Close()
+	}
+	for reqID, route := range e.keyed {
+		route.close(err)
+		e.deleteKeyedRoute(reqID)
+	}
+	for key, route := range e.singletons {
+		route.close(err)
+		delete(e.singletons, key)
+	}
+	for id, or := range e.orders {
+		if !or.closed {
+			or.closed = true
+			// Terminal order status is authoritative for the handle's close (see
+			// docs/session-contract.md, "OrderHandle"). Session-level transport and
+			// reconnect errors stay observable via SessionEvents() and Client.Wait()
+			// and must not bleed into per-order Wait() once the order reached a
+			// terminal business state (see "Completion and Reconnect").
+			orderErr := err
+			if or.terminalCloseSeq > 0 {
+				orderErr = nil
+			}
+			or.handle.closeWithErr(orderErr)
+		}
+		delete(e.orders, id)
+	}
+	e.executions.reset()
+	e.execToOrder = make(map[string]int64)
+	e.setState(StateClosed, 0, "", err)
+	e.reportReady(err)
+	e.waitMu.Lock()
+	e.waitErr = err
+	e.waitMu.Unlock()
+	close(e.done)
+	e.events.Close()
+}
+
+func (e *engine) emitGap() {
+	for _, route := range e.keyed {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
+			route.gapped = true
+			route.emitGap(e)
+		}
+	}
+	for _, route := range e.singletons {
+		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
+			route.gapped = true
+			route.emitGap(e)
+		}
+	}
+	for _, or := range e.orders {
+		if !or.closed && !or.gapped {
+			or.gapped = true
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
+		}
+	}
+}
+
+func (e *engine) emitResumed() {
+	for _, route := range e.keyed {
+		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.gapped = false
+			route.emitResumed(e)
+		}
+	}
+	for _, route := range e.singletons {
+		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+			route.gapped = false
+			route.emitResumed(e)
+		}
+	}
+	for _, or := range e.orders {
+		if !or.closed && or.gapped {
+			or.gapped = false
+			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
+		}
+	}
+}
