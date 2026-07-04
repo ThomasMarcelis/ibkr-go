@@ -37,6 +37,7 @@ func (m PnLSingleValue) RequestID() int                { return m.ReqID }
 func (m PnLValue) RequestID() int                      { return m.ReqID }
 func (m PositionMulti) RequestID() int                 { return m.ReqID }
 func (m PositionMultiEnd) RequestID() int              { return m.ReqID }
+func (m ReplaceFAEnd) RequestID() int                  { return m.ReqID }
 func (m RealTimeBar) RequestID() int                   { return m.ReqID }
 func (m ScannerDataResponse) RequestID() int           { return m.ReqID }
 func (m SecDefOptParamsEnd) RequestID() int            { return m.ReqID }

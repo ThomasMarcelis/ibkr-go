@@ -394,7 +394,7 @@ func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml strin
 		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
 			return err
 		}
-		return e.sendContext(ctx, codec.ReplaceFA{FADataType: int(faDataType), XML: xml})
+		return e.sendContext(ctx, codec.ReplaceFA{ReqID: e.allocReqID(), FADataType: int(faDataType), XML: xml})
 	})
 }
 

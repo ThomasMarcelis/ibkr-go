@@ -95,6 +95,7 @@ var allInboundMsgIDs = []int{
 	InTickByTick,            // 99
 	InCompletedOrder,        // 101
 	InCompletedOrderEnd,     // 102
+	InReplaceFAEnd,          // 103
 	InUserInfo,              // 107
 	InHistoricalDataUpdate,  // 108
 	InReceiveFA,             // 16

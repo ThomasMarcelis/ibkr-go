@@ -73,7 +73,7 @@ committed.
 | Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed order details are simplified. |
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
 | News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has live capture coverage through `api_news_article_aapl`; invalid article/provider variants remain matrix work. |
-| FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented except `replaceFAEnd` not decoded/exposed. |
+| FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented; `replaceFAEnd` decoded and routed by req_id (2026-07-04). |
 | Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Official callbacks not in current implemented message inventory; matrix as target/deferred/out-of-public-scope based on live behavior and project scope. |
 
 ## Current ibkr-go Public Facade Methods
@@ -245,7 +245,8 @@ Inbound message IDs:
 | `InTickByTick` | 99 | Tick-by-tick |
 | `InCompletedOrder` | 101 | Completed order |
 | `InCompletedOrderEnd` | 102 | Completed orders end |
-| `InUserInfo` | 103 | User info |
+| `InReplaceFAEnd` | 103 | Replace FA acknowledgement |
+| `InUserInfo` | 107 | User info |
 | `InWSHMetaData` | 104 | WSH metadata |
 | `InWSHEventData` | 105 | WSH event data |
 | `InHistoricalSchedule` | 106 | Historical schedule (whatToShow=SCHEDULE) |
@@ -262,6 +263,5 @@ and project scope decide whether to implement, defer, or mark out of scope.
 - `bondContractDetails` as a distinct callback shape.
 - `orderBound`, completed-order full detail extraction, and rare OpenOrder
   branches.
-- `replaceFAEnd`.
 - Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
   order, soft-dollar-on-order, and advanced-reject override order branches.

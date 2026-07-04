@@ -211,6 +211,7 @@ var inboundDecoders = map[int]decodeFunc{
 	InMarketRule:            decodeMarketRule,
 	InCompletedOrder:        decodeCompletedOrder,
 	InCompletedOrderEnd:     decodeCompletedOrderEnd,
+	InReplaceFAEnd:          decodeReplaceFAEnd,
 	InUserInfo:              decodeUserInfo,
 	InUpdateAccountValue:    decodeUpdateAccountValue,
 	InUpdatePortfolio:       decodeUpdatePortfolio,
