@@ -5,20 +5,27 @@ import (
 	"time"
 )
 
+// State is the connection lifecycle state of a [Client], reported by
+// [Client.Session] and on the [Client.SessionEvents] stream.
 type State string
 
 const (
-	StateDisconnected State = "Disconnected"
-	StateConnecting   State = "Connecting"
-	StateHandshaking  State = "Handshaking"
-	StateReady        State = "Ready"
-	StateDegraded     State = "Degraded"
-	StateReconnecting State = "Reconnecting"
-	StateClosed       State = "Closed"
+	StateDisconnected State = "Disconnected" // no active connection
+	StateConnecting   State = "Connecting"   // TCP dial in progress
+	StateHandshaking  State = "Handshaking"  // negotiating protocol version and startup
+	StateReady        State = "Ready"        // connected and serving requests
+	StateDegraded     State = "Degraded"     // connected but a subsystem is impaired
+	StateReconnecting State = "Reconnecting" // connection lost, auto-reconnect in progress
+	StateClosed       State = "Closed"       // terminally closed, no further reconnects
 )
 
+// OpKind names the request family an [APIError] originated from, so callers can
+// attribute a server error code to the operation that produced it. The string
+// values are stable identifiers, not IBKR wire tokens.
 type OpKind string
 
+// The Op constants enumerate every request family the client can issue; each
+// value names the operation it labels.
 const (
 	OpContractDetails      OpKind = "contract_details"
 	OpHistoricalBars       OpKind = "historical_bars"
@@ -70,64 +77,89 @@ const (
 	OpCurrentTime          OpKind = "current_time"
 )
 
+// Event is a connection lifecycle transition delivered on [Client.SessionEvents].
 type Event struct {
-	At            time.Time
-	State         State
-	Previous      State
-	ConnectionSeq uint64
-	Code          int
-	Message       string
-	Err           error
+	At            time.Time // when the transition was observed
+	State         State     // the state entered
+	Previous      State     // the state left
+	ConnectionSeq uint64    // generation counter, incremented on each reconnect
+	Code          int       // IBKR notification code when the transition carries one, else 0
+	Message       string    // human-readable detail, may be empty
+	Err           error     // non-nil when the transition was caused by an error
 }
 
+// Snapshot is a point-in-time view of the session, returned by [Client.Session].
 type Snapshot struct {
-	State           State
-	ConnectionSeq   uint64
-	ServerVersion   int
-	ManagedAccounts []string
-	NextValidID     int64
-	CurrentTime     time.Time
+	State           State     // current connection state
+	ConnectionSeq   uint64    // generation counter, incremented on each reconnect
+	ServerVersion   int       // negotiated TWS API server version
+	ManagedAccounts []string  // account IDs this login controls
+	NextValidID     int64     // next order ID the server has reserved for this client
+	CurrentTime     time.Time // server time captured at connect, in UTC
 }
 
+// SubscriptionStateKind classifies a lifecycle transition on a subscription's
+// or order handle's [SubscriptionStateEvent] channel.
 type SubscriptionStateKind string
 
 const (
-	SubscriptionStarted          SubscriptionStateKind = "Started"
-	SubscriptionSnapshotComplete SubscriptionStateKind = "SnapshotComplete"
-	SubscriptionGap              SubscriptionStateKind = "Gap"
-	SubscriptionResumed          SubscriptionStateKind = "Resumed"
-	SubscriptionClosed           SubscriptionStateKind = "Closed"
+	SubscriptionStarted          SubscriptionStateKind = "Started"          // stream established
+	SubscriptionSnapshotComplete SubscriptionStateKind = "SnapshotComplete" // initial snapshot boundary reached
+	SubscriptionGap              SubscriptionStateKind = "Gap"              // connection lost, events may be missing
+	SubscriptionResumed          SubscriptionStateKind = "Resumed"          // stream re-established after a gap
+	SubscriptionClosed           SubscriptionStateKind = "Closed"           // terminally closed, see Err for the reason
 )
 
+// SubscriptionStateEvent reports a lifecycle transition on a subscription or
+// order handle, distinct from the business events on the Events channel.
 type SubscriptionStateEvent struct {
-	At            time.Time
-	Kind          SubscriptionStateKind
-	ConnectionSeq uint64
-	Err           error
-	Retryable     bool
+	At            time.Time             // when the transition was observed, UTC
+	Kind          SubscriptionStateKind // which transition occurred
+	ConnectionSeq uint64                // connection generation the transition belongs to
+	Err           error                 // non-nil on a Closed caused by an error
+	// Retryable reports whether the caller can expect this stream to recover on
+	// its own (a Gap, or a Closed with a transient error). A Closed with a
+	// server rejection or clean shutdown is not retryable.
+	Retryable bool
 }
 
+// ReconnectPolicy controls whether a [Client] automatically re-dials the
+// Gateway after the connection drops. Set with [WithReconnectPolicy].
 type ReconnectPolicy string
 
 const (
-	ReconnectOff  ReconnectPolicy = "off"
-	ReconnectAuto ReconnectPolicy = "auto"
+	ReconnectOff  ReconnectPolicy = "off"  // stay closed after a drop
+	ReconnectAuto ReconnectPolicy = "auto" // re-dial and rehandshake automatically
 )
 
+// ResumePolicy controls whether a subscription re-establishes itself after a
+// reconnect. Set the default with [WithDefaultResumePolicy] or per-subscription
+// with [WithResumePolicy].
 type ResumePolicy string
 
 const (
-	ResumeNever ResumePolicy = "never"
-	ResumeAuto  ResumePolicy = "auto"
+	ResumeNever ResumePolicy = "never" // close the subscription on connection loss
+	ResumeAuto  ResumePolicy = "auto"  // re-issue the request after reconnect
 )
 
+// SlowConsumerPolicy controls what happens when a subscriber cannot keep up
+// with the event rate and the delivery queue fills. Set the default with
+// [WithDefaultSlowConsumerPolicy] or per-subscription with [WithSlowConsumerPolicy].
+//
+// The default is [SlowConsumerClose]. High-rate streams (market depth,
+// tick-by-tick) can outrun a slow consumer and trip this; such consumers should
+// choose [SlowConsumerDropOldest] or raise the queue with [WithQueueSize].
 type SlowConsumerPolicy string
 
 const (
-	SlowConsumerClose      SlowConsumerPolicy = "close"
-	SlowConsumerDropOldest SlowConsumerPolicy = "drop_oldest"
+	SlowConsumerClose      SlowConsumerPolicy = "close"       // fail the subscription with [ErrSlowConsumer]
+	SlowConsumerDropOldest SlowConsumerPolicy = "drop_oldest" // evict the oldest queued event to make room
 )
 
+// XMLDocument is a raw XML payload returned by the Gateway (fundamental data,
+// scanner parameters, and FA configuration), passed through unparsed.
 type XMLDocument []byte
 
+// JSONDocument is a raw JSON payload returned by the Gateway (Wall Street
+// Horizon metadata and event data), passed through unparsed.
 type JSONDocument = json.RawMessage

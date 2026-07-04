@@ -7,6 +7,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// WhatToShow selects which data series a historical or real-time bar request
+// returns (trades, midpoint, bid/ask, and various derived series).
 type WhatToShow string
 
 const (
@@ -27,15 +29,32 @@ const (
 	ShowAggTrades               WhatToShow = "AGGTRADES"
 )
 
+// HistoricalDuration is the look-back window of a historical data request,
+// counted back from the request's end time. Build one with the helper
+// constructors ([Seconds], [Days], and so on); a non-positive count yields an
+// empty, invalid duration.
 type HistoricalDuration string
 
+// Seconds returns a [HistoricalDuration] spanning n seconds.
 func Seconds(n int) HistoricalDuration { return historicalDuration(n, "S") }
+
+// Minutes returns a [HistoricalDuration] spanning n minutes (expressed in seconds).
 func Minutes(n int) HistoricalDuration { return Seconds(n * 60) }
-func Hours(n int) HistoricalDuration   { return Seconds(n * 60 * 60) }
-func Days(n int) HistoricalDuration    { return historicalDuration(n, "D") }
-func Weeks(n int) HistoricalDuration   { return historicalDuration(n, "W") }
-func Months(n int) HistoricalDuration  { return historicalDuration(n, "M") }
-func Years(n int) HistoricalDuration   { return historicalDuration(n, "Y") }
+
+// Hours returns a [HistoricalDuration] spanning n hours (expressed in seconds).
+func Hours(n int) HistoricalDuration { return Seconds(n * 60 * 60) }
+
+// Days returns a [HistoricalDuration] spanning n days.
+func Days(n int) HistoricalDuration { return historicalDuration(n, "D") }
+
+// Weeks returns a [HistoricalDuration] spanning n weeks.
+func Weeks(n int) HistoricalDuration { return historicalDuration(n, "W") }
+
+// Months returns a [HistoricalDuration] spanning n months.
+func Months(n int) HistoricalDuration { return historicalDuration(n, "M") }
+
+// Years returns a [HistoricalDuration] spanning n years.
+func Years(n int) HistoricalDuration { return historicalDuration(n, "Y") }
 
 func historicalDuration(n int, unit string) HistoricalDuration {
 	if n <= 0 {
@@ -44,6 +63,7 @@ func historicalDuration(n int, unit string) HistoricalDuration {
 	return HistoricalDuration(fmt.Sprintf("%d %s", n, unit))
 }
 
+// BarSize is the aggregation interval of a historical or real-time bar.
 type BarSize string
 
 const (
@@ -70,13 +90,15 @@ const (
 	Bar1Month BarSize = "1 month"
 )
 
+// HistoricalBarsRequest describes a historical bar query for
+// [HistoryClient.Bars] and [HistoryClient.SubscribeBars].
 type HistoricalBarsRequest struct {
 	Contract   Contract
-	EndTime    time.Time
-	Duration   HistoricalDuration
-	BarSize    BarSize
-	WhatToShow WhatToShow
-	UseRTH     bool
+	EndTime    time.Time          // window end; zero means "now"
+	Duration   HistoricalDuration // look-back window from EndTime
+	BarSize    BarSize            // bar aggregation interval
+	WhatToShow WhatToShow         // which data series to return
+	UseRTH     bool               // restrict to regular trading hours
 }
 
 // Bar is an OHLCV price bar for a single time interval, returned by
@@ -125,6 +147,9 @@ type HistoricalScheduleSession struct {
 	RefDate       string
 }
 
+// QuoteFields is a bitmask of the quote fields the server has populated. It is
+// carried in [Quote.Available] and [QuoteUpdate.Changed]; test membership with
+// a bitwise AND.
 type QuoteFields uint64
 
 const (
@@ -141,13 +166,16 @@ const (
 	QuoteFieldMarketDataType
 )
 
+// MarketDataType selects live, frozen, delayed, or delayed-frozen market data.
+// Set it with [MarketDataClient.SetType]; it also appears in [Quote.MarketDataType]
+// to report what the server actually delivered.
 type MarketDataType int
 
 const (
-	MarketDataLive          MarketDataType = 1
-	MarketDataFrozen        MarketDataType = 2
-	MarketDataDelayed       MarketDataType = 3
-	MarketDataDelayedFrozen MarketDataType = 4
+	MarketDataLive          MarketDataType = 1 // real-time streaming (requires subscription)
+	MarketDataFrozen        MarketDataType = 2 // last recorded values when the market is closed
+	MarketDataDelayed       MarketDataType = 3 // delayed data, no subscription required
+	MarketDataDelayedFrozen MarketDataType = 4 // delayed last recorded values
 )
 
 func (t MarketDataType) String() string {
@@ -183,50 +211,69 @@ type Quote struct {
 	MarketDataType MarketDataType
 }
 
+// GenericTick is an IBKR generic tick type ID requested alongside a quote to
+// pull in extra fields (for example "233" for RTVolume). Encoded on the wire as
+// a comma-separated list.
 type GenericTick string
 
+// QuoteRequest describes a market-data quote request for
+// [MarketDataClient.Quote] and [MarketDataClient.SubscribeQuotes].
 type QuoteRequest struct {
 	Contract     Contract
-	GenericTicks []GenericTick
+	GenericTicks []GenericTick // extra generic tick types; unsupported for one-shot snapshots
 }
 
+// QuoteUpdate is one event from a quote subscription. Snapshot is the full,
+// accumulated [Quote] after applying this tick; Changed reports only the fields
+// this update touched, so consumers can react to a single moved field without
+// diffing the whole snapshot.
 type QuoteUpdate struct {
-	Snapshot   Quote
-	Changed    QuoteFields
-	ReceivedAt time.Time
+	Snapshot   Quote       // cumulative quote state after this update
+	Changed    QuoteFields // fields changed by this update
+	ReceivedAt time.Time   // client receive time
 }
 
+// RealTimeBarsRequest describes a 5-second real-time bar subscription for
+// [MarketDataClient.SubscribeRealTimeBars].
 type RealTimeBarsRequest struct {
 	Contract   Contract
 	WhatToShow WhatToShow
 	UseRTH     bool
 }
 
+// HeadTimestampRequest asks for the earliest available data timestamp of a
+// contract via [HistoryClient.HeadTimestamp].
 type HeadTimestampRequest struct {
 	Contract   Contract
 	WhatToShow WhatToShow
 	UseRTH     bool
 }
 
+// TickByTickType selects which tick-by-tick stream to subscribe to.
 type TickByTickType string
 
 const (
-	TickByTickLast     TickByTickType = "Last"
-	TickByTickAllLast  TickByTickType = "AllLast"
-	TickByTickBidAsk   TickByTickType = "BidAsk"
-	TickByTickMidPoint TickByTickType = "MidPoint"
+	TickByTickLast     TickByTickType = "Last"     // last trade, exchange-reported
+	TickByTickAllLast  TickByTickType = "AllLast"  // last trade including non-reportable prints
+	TickByTickBidAsk   TickByTickType = "BidAsk"   // best bid and ask
+	TickByTickMidPoint TickByTickType = "MidPoint" // midpoint of the spread
 )
 
+// TickByTickRequest describes a tick-by-tick subscription for
+// [MarketDataClient.SubscribeTickByTick].
 type TickByTickRequest struct {
 	Contract      Contract
 	TickType      TickByTickType
-	NumberOfTicks int
-	IgnoreSize    bool
+	NumberOfTicks int  // historical ticks to prepend; 0 = live only
+	IgnoreSize    bool // ignore size changes for BidAsk streams
 }
 
+// TickByTickData is one tick from a tick-by-tick stream. Which fields are
+// populated depends on the subscribed [TickByTickType]: Last/AllLast fill Price
+// and Size; BidAsk fills the Bid/Ask fields; MidPoint fills MidPoint.
 type TickByTickData struct {
 	Time              time.Time
-	TickType          int
+	TickType          int // numeric tick type reported by the Gateway
 	Price             decimal.Decimal
 	Size              decimal.Decimal
 	Exchange          string
@@ -238,24 +285,33 @@ type TickByTickData struct {
 	MidPoint          decimal.Decimal
 }
 
+// SmartComponent maps a SMART-routing bit to the exchange it represents, as
+// returned by [ContractsClient.SmartComponents].
 type SmartComponent struct {
 	BitNumber      int
 	ExchangeName   string
 	ExchangeLetter string
 }
 
+// CalcImpliedVolatilityRequest asks the Gateway to imply an option's volatility
+// from a given option price and underlying price, via
+// [OptionsClient.ImpliedVolatility].
 type CalcImpliedVolatilityRequest struct {
 	Contract    Contract
 	OptionPrice decimal.Decimal
 	UnderPrice  decimal.Decimal
 }
 
+// CalcOptionPriceRequest asks the Gateway to price an option from a given
+// volatility and underlying price, via [OptionsClient.Price].
 type CalcOptionPriceRequest struct {
 	Contract   Contract
 	Volatility decimal.Decimal
 	UnderPrice decimal.Decimal
 }
 
+// OptionComputation is an option pricing/greeks result returned by the option
+// calculation requests.
 type OptionComputation struct {
 	ImpliedVol decimal.Decimal
 	Delta      decimal.Decimal
@@ -267,35 +323,43 @@ type OptionComputation struct {
 	UndPrice   decimal.Decimal
 }
 
+// HistogramDataRequest asks for a price histogram over a period via
+// [HistoryClient.Histogram].
 type HistogramDataRequest struct {
 	Contract Contract
 	UseRTH   bool
-	Period   string
+	Period   string // aggregation period, e.g. "3 days"
 }
 
+// HistogramEntry is one price bucket of a histogram: the traded Size at Price.
 type HistogramEntry struct {
 	Price decimal.Decimal
 	Size  decimal.Decimal
 }
 
+// HistoricalTicksRequest describes a historical tick query for
+// [HistoryClient.Ticks]. Provide StartTime or EndTime (not both) together with
+// NumberOfTicks.
 type HistoricalTicksRequest struct {
 	Contract      Contract
 	StartTime     time.Time
 	EndTime       time.Time
 	NumberOfTicks int
-	WhatToShow    WhatToShow
+	WhatToShow    WhatToShow // TRADES, BID_ASK, or MIDPOINT; selects the result slice
 	UseRTH        bool
 	IgnoreSize    bool
 }
 
+// HistoricalTick is a single midpoint historical tick.
 type HistoricalTick struct {
 	Time  time.Time
 	Price decimal.Decimal
 	Size  decimal.Decimal
 }
 
+// HistoricalTickBidAsk is a single bid/ask historical tick.
 type HistoricalTickBidAsk struct {
-	TickAttrib int
+	TickAttrib int // bitmask of tick attributes (e.g. bid/ask past high/low)
 	Time       time.Time
 	BidPrice   decimal.Decimal
 	AskPrice   decimal.Decimal
@@ -303,8 +367,9 @@ type HistoricalTickBidAsk struct {
 	AskSize    decimal.Decimal
 }
 
+// HistoricalTickLast is a single trade (last) historical tick.
 type HistoricalTickLast struct {
-	TickAttrib        int
+	TickAttrib        int // bitmask of tick attributes (e.g. unreported, past limit)
 	Time              time.Time
 	Price             decimal.Decimal
 	Size              decimal.Decimal
@@ -320,18 +385,26 @@ type HistoricalTicksResult struct {
 	Last   []HistoricalTickLast   // populated for TRADES
 }
 
+// MarketDepthRequest describes a market depth (Level 2 order book)
+// subscription for [MarketDataClient.SubscribeDepth].
+//
+// Depth is a high-rate stream. The default slow-consumer policy is
+// [SlowConsumerClose], so a consumer that cannot keep up fails the
+// subscription with [ErrSlowConsumer]; deep or fast books should select
+// [SlowConsumerDropOldest] or raise the queue with [WithQueueSize].
 type MarketDepthRequest struct {
 	Contract     Contract
-	NumRows      int
-	IsSmartDepth bool
+	NumRows      int  // number of book levels per side to stream
+	IsSmartDepth bool // aggregated SMART depth across exchanges rather than a single venue
 }
 
+// DepthOperation is the mutation a [DepthRow] applies to the local order book.
 type DepthOperation int
 
 const (
-	DepthInsert DepthOperation = 0
-	DepthUpdate DepthOperation = 1
-	DepthDelete DepthOperation = 2
+	DepthInsert DepthOperation = 0 // insert a new level at Position
+	DepthUpdate DepthOperation = 1 // update the level at Position
+	DepthDelete DepthOperation = 2 // remove the level at Position
 )
 
 func (o DepthOperation) String() string {
@@ -347,11 +420,12 @@ func (o DepthOperation) String() string {
 	}
 }
 
+// BookSide identifies which side of the order book a [DepthRow] belongs to.
 type BookSide int
 
 const (
-	BookAsk BookSide = 0
-	BookBid BookSide = 1
+	BookAsk BookSide = 0 // ask (offer) side
+	BookBid BookSide = 1 // bid side
 )
 
 func (s BookSide) String() string {
@@ -365,6 +439,8 @@ func (s BookSide) String() string {
 	}
 }
 
+// DepthRow is one order-book mutation from a market depth subscription: apply
+// Operation to Side at Position with the given Price and Size.
 type DepthRow struct {
 	Position     int
 	MarketMaker  string // only populated for L2
@@ -375,10 +451,12 @@ type DepthRow struct {
 	IsSmartDepth bool
 }
 
+// DepthExchange is one exchange that offers market depth, returned by
+// [ContractsClient.DepthExchanges].
 type DepthExchange struct {
 	Exchange        string
 	SecType         SecType
 	ListingExch     string
-	ServiceDataType string
+	ServiceDataType string // depth service type, e.g. "Deep" or "Deep2"
 	AggGroup        int
 }

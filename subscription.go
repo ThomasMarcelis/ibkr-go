@@ -45,6 +45,10 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 	}
 }
 
+// Events returns the channel of business events. It closes when the
+// subscription closes; after ranging it to exhaustion, call [Subscription.Err]
+// for the terminal error. See also [Subscription.All] for a range-friendly
+// iterator.
 func (s *Subscription[T]) Events() <-chan T { return s.events }
 
 // All returns an iterator over the subscription's events for use with a
@@ -81,10 +85,18 @@ func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
 	}
 }
 
+// Lifecycle returns the channel of lifecycle transitions (started, snapshot
+// complete, gap, resume, close), distinct from the business events on Events.
 func (s *Subscription[T]) Lifecycle() <-chan SubscriptionStateEvent { return s.state.Chan() }
 
+// Done returns a channel closed when the subscription has terminated. After it
+// is closed, [Subscription.Wait] and [Subscription.Err] report the terminal error.
 func (s *Subscription[T]) Done() <-chan struct{} { return s.done }
 
+// AwaitSnapshot blocks until the subscription's initial snapshot boundary is
+// reached, then returns nil. It returns [ErrNoSnapshot] for streams that have
+// no snapshot phase, the terminal error (or [ErrInterrupted]) if the
+// subscription closes first, or ctx.Err if ctx is canceled.
 func (s *Subscription[T]) AwaitSnapshot(ctx context.Context) error {
 	s.snapshotMu.Lock()
 	if s.snapshotClosed {
@@ -123,6 +135,8 @@ func (s *Subscription[T]) AwaitSnapshot(ctx context.Context) error {
 	}
 }
 
+// Wait blocks until the subscription terminates and returns its terminal
+// error, or nil on a clean close.
 func (s *Subscription[T]) Wait() error {
 	<-s.done
 	s.errMu.Lock()
@@ -138,6 +152,8 @@ func (s *Subscription[T]) Err() error {
 	return s.err
 }
 
+// Close cancels the server-side subscription and drains its channels. It is
+// idempotent and safe to call concurrently.
 func (s *Subscription[T]) Close() error {
 	s.cancelOnce.Do(func() {
 		if s.cancelFn != nil {

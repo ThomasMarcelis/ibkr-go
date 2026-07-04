@@ -7,6 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// OrderAction is the side of an [Order]: buy or sell.
 type OrderAction string
 
 const (
@@ -19,6 +20,10 @@ const (
 	Sell OrderAction = ActionSell
 )
 
+// OrderType is the execution instruction for an [Order]. The type determines
+// which price fields the Gateway reads: MKT ignores prices, LMT reads
+// [Order.LmtPrice], STP reads [Order.AuxPrice] as the stop trigger, and
+// STP LMT reads both.
 type OrderType string
 
 const (
@@ -43,37 +48,42 @@ const (
 	OrderTypePeggedBenchmark OrderType = "PEG BENCH"
 )
 
+// OrderStatus is the lifecycle state the Gateway reports for an order. See
+// [IsTerminalOrderStatus] for which values are final.
 type OrderStatus string
 
 const (
-	OrderStatusPendingSubmit OrderStatus = "PendingSubmit"
-	OrderStatusPendingCancel OrderStatus = "PendingCancel"
-	OrderStatusPreSubmitted  OrderStatus = "PreSubmitted"
-	OrderStatusSubmitted     OrderStatus = "Submitted"
-	OrderStatusApiCancelled  OrderStatus = "ApiCancelled"
-	OrderStatusCancelled     OrderStatus = "Cancelled"
-	OrderStatusFilled        OrderStatus = "Filled"
-	OrderStatusInactive      OrderStatus = "Inactive"
+	OrderStatusPendingSubmit OrderStatus = "PendingSubmit" // accepted locally, not yet sent to the venue
+	OrderStatusPendingCancel OrderStatus = "PendingCancel" // cancel requested, not yet confirmed
+	OrderStatusPreSubmitted  OrderStatus = "PreSubmitted"  // held by IBKR pending a trigger or market open
+	OrderStatusSubmitted     OrderStatus = "Submitted"     // working at the venue
+	OrderStatusApiCancelled  OrderStatus = "ApiCancelled"  // cancelled by an API request
+	OrderStatusCancelled     OrderStatus = "Cancelled"     // cancelled
+	OrderStatusFilled        OrderStatus = "Filled"        // fully filled
+	OrderStatusInactive      OrderStatus = "Inactive"      // rejected or deactivated by IBKR
 )
 
+// TimeInForce controls how long an [Order] stays active before it is
+// automatically cancelled.
 type TimeInForce string
 
 const (
-	TIFDay TimeInForce = "DAY"
-	TIFGTC TimeInForce = "GTC"
-	TIFIOC TimeInForce = "IOC"
-	TIFGTD TimeInForce = "GTD"
-	TIFOPG TimeInForce = "OPG"
-	TIFFOK TimeInForce = "FOK"
-	TIFDTC TimeInForce = "DTC"
+	TIFDay TimeInForce = "DAY" // valid for the current trading day
+	TIFGTC TimeInForce = "GTC" // good till cancelled
+	TIFIOC TimeInForce = "IOC" // immediate or cancel
+	TIFGTD TimeInForce = "GTD" // good till date (see Order.GoodTillDate)
+	TIFOPG TimeInForce = "OPG" // at the market open only
+	TIFFOK TimeInForce = "FOK" // fill or kill
+	TIFDTC TimeInForce = "DTC" // day till cancelled
 )
 
+// OpenOrdersScope selects which orders an open-orders request returns.
 type OpenOrdersScope string
 
 const (
-	OpenOrdersScopeAll    OpenOrdersScope = "all"
-	OpenOrdersScopeClient OpenOrdersScope = "client"
-	OpenOrdersScopeAuto   OpenOrdersScope = "auto"
+	OpenOrdersScopeAll    OpenOrdersScope = "all"    // all open orders across every client
+	OpenOrdersScopeClient OpenOrdersScope = "client" // only orders placed by this client ID
+	OpenOrdersScopeAuto   OpenOrdersScope = "auto"   // bind manual TWS orders to this client; requires client ID 0
 )
 
 // OpenOrder is the typed open_order echo from the Gateway. Live open_order
@@ -143,6 +153,8 @@ type OpenOrderUpdate struct {
 	Status *OrderStatusUpdate
 }
 
+// ExecutionsRequest filters an [OrdersClient.Executions] query. Empty fields
+// match everything.
 type ExecutionsRequest struct {
 	Account string
 	Symbol  string
@@ -173,23 +185,26 @@ type Execution struct {
 	Time    time.Time
 }
 
+// ExecutionUpdate is a union item from [OrdersClient.Executions]. Exactly one
+// field is non-nil: an Execution fill report or its later CommissionReport.
 type ExecutionUpdate struct {
 	Execution  *Execution
 	Commission *CommissionReport
 }
 
+// OrderStatusUpdate reports a change in an order's fill progress or state.
 type OrderStatusUpdate struct {
 	OrderID       int64
 	Status        OrderStatus
-	Filled        decimal.Decimal
-	Remaining     decimal.Decimal
-	AvgFillPrice  decimal.Decimal
-	PermID        int64
-	ParentID      int64
-	LastFillPrice decimal.Decimal
-	ClientID      int
-	WhyHeld       string
-	MktCapPrice   decimal.Decimal
+	Filled        decimal.Decimal // quantity filled so far
+	Remaining     decimal.Decimal // quantity still working
+	AvgFillPrice  decimal.Decimal // average price across all fills
+	PermID        int64           // IBKR permanent order ID, stable across sessions
+	ParentID      int64           // parent order ID for bracket/child orders, else 0
+	LastFillPrice decimal.Decimal // price of the most recent fill
+	ClientID      int             // client ID that owns the order
+	WhyHeld       string          // reason the order is held (e.g. "locate"), else empty
+	MktCapPrice   decimal.Decimal // capped price for price-capped orders
 }
 
 // OrderEvent is a union event dispatched to per-order handles. Exactly one field is non-nil.
@@ -200,61 +215,82 @@ type OrderEvent struct {
 	Commission *CommissionReport
 }
 
+// Order is the instruction a user fills in to place or modify an order via
+// [OrdersClient.Place], [OrdersClient.Preview], or [OrderHandle.Modify]. Only a
+// handful of fields are needed for a common order; the rest cover advanced
+// order types and are left at their zero value.
+//
+// Zero-value conventions, derived from the wire encoder:
+//
+//   - decimal fields: a zero decimal encodes as "unset" and is omitted, so a
+//     genuine price or quantity of zero is not sent. Set the fields the
+//     [OrderType] requires (Quantity always; LmtPrice for LMT and STP LMT;
+//     AuxPrice for STP, STP LMT, and as the trailing amount for TRAIL).
+//   - *bool fields are tri-state: nil sends the server default, while a
+//     non-nil pointer forces true or false. Transmit is the exception — nil
+//     defaults to true (transmit immediately); set it to false to stage an
+//     untransmitted parent for a bracket.
+//   - int and string fields default to their empty value, which the Gateway
+//     reads as "not specified".
+//
+// A minimal market order needs only Action, OrderType, and Quantity. A limit
+// order additionally sets LmtPrice.
 type Order struct {
-	OrderID                  int64 // 0 = auto-allocate
-	Action                   OrderAction
-	OrderType                OrderType
-	Quantity                 decimal.Decimal
-	LmtPrice                 decimal.Decimal
-	AuxPrice                 decimal.Decimal
-	TIF                      TimeInForce
-	Account                  string
-	Transmit                 *bool // nil = true (default)
-	ParentID                 int64 // 0 = no parent
-	OcaGroup                 string
-	OcaType                  int
-	OutsideRTH               bool
-	TriggerMethod            int
-	DisplaySize              int
-	OrderRef                 string
-	GoodAfterTime            string
-	GoodTillDate             string
-	AllOrNone                *bool
-	MinQty                   decimal.Decimal
-	PercentOffset            decimal.Decimal
-	TrailStopPrice           decimal.Decimal
-	TrailingPercent          decimal.Decimal
-	ScaleInitLevelSize       int
-	ScaleSubsLevelSize       int
-	ScalePriceIncrement      decimal.Decimal
-	ScaleTable               string
-	ActiveStartTime          string
-	ActiveStopTime           string
-	HedgeType                string
-	HedgeParam               string
-	ComboLegs                []ComboLeg
-	OrderComboLegPrices      []string
-	SmartComboRoutingParams  []TagValue
-	AlgoStrategy             string
-	AlgoParams               []TagValue
-	WhatIf                   *bool
-	Conditions               []OrderCondition
-	ConditionsIgnoreRTH      bool
-	ConditionsCancelOrder    bool
-	AdjustedOrderType        OrderType
-	TriggerPrice             decimal.Decimal
-	LmtPriceOffset           decimal.Decimal
-	AdjustedStopPrice        decimal.Decimal
-	AdjustedStopLimitPrice   decimal.Decimal
-	AdjustedTrailingAmount   decimal.Decimal
-	AdjustableTrailingUnit   int
-	CashQty                  decimal.Decimal
-	DontUseAutoPriceForHedge *bool
-	UsePriceMgmtAlgo         *bool
-	AdvancedErrorOverride    string
-	ManualOrderTime          string
+	OrderID                  int64            // 0 = auto-allocate the next valid ID
+	Action                   OrderAction      // BUY or SELL (required)
+	OrderType                OrderType        // execution instruction (required); selects which price fields apply
+	Quantity                 decimal.Decimal  // order size (required); zero is treated as unset
+	LmtPrice                 decimal.Decimal  // limit price for LMT / STP LMT; zero means unset
+	AuxPrice                 decimal.Decimal  // stop trigger for STP / STP LMT, trailing amount for TRAIL; zero means unset
+	TIF                      TimeInForce      // time in force; empty defaults to DAY at the server
+	Account                  string           // account to place under; required only for multi-account logins
+	Transmit                 *bool            // nil = transmit (true); false stages an untransmitted order
+	ParentID                 int64            // parent order ID for a bracket child; 0 = no parent
+	OcaGroup                 string           // one-cancels-all group name
+	OcaType                  int              // OCA cancellation behavior; 0 = unset
+	OutsideRTH               bool             // allow execution outside regular trading hours
+	TriggerMethod            int              // stop-trigger method; 0 = default
+	DisplaySize              int              // iceberg display size; 0 = show full size
+	OrderRef                 string           // free-form client order reference/tag
+	GoodAfterTime            string           // activate at this time; "YYYYMMDD HH:MM:SS tz"
+	GoodTillDate             string           // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
+	AllOrNone                *bool            // nil = server default; require the whole quantity to fill at once
+	MinQty                   decimal.Decimal  // minimum fill quantity; zero means unset
+	PercentOffset            decimal.Decimal  // offset percent for REL/pegged orders; zero means unset
+	TrailStopPrice           decimal.Decimal  // trailing-stop trigger price; zero means unset
+	TrailingPercent          decimal.Decimal  // trailing amount as a percent; zero means unset
+	ScaleInitLevelSize       int              // scale order first-level size; 0 = unset
+	ScaleSubsLevelSize       int              // scale order subsequent-level size; 0 = unset
+	ScalePriceIncrement      decimal.Decimal  // scale order price increment; zero means unset
+	ScaleTable               string           // scale table identifier
+	ActiveStartTime          string           // start of the order's active window
+	ActiveStopTime           string           // end of the order's active window
+	HedgeType                string           // hedge type for delta-hedge orders
+	HedgeParam               string           // hedge parameter paired with HedgeType
+	ComboLegs                []ComboLeg       // legs for a BAG (combo) contract order
+	OrderComboLegPrices      []string         // per-leg limit prices for a combo order
+	SmartComboRoutingParams  []TagValue       // smart-routing parameters for combo orders
+	AlgoStrategy             string           // IB algo strategy name
+	AlgoParams               []TagValue       // parameters for AlgoStrategy
+	WhatIf                   *bool            // nil = live order; true requests a margin preview (rejected by Place, use Preview)
+	Conditions               []OrderCondition // conditional triggers gating the order
+	ConditionsIgnoreRTH      bool             // evaluate conditions outside regular trading hours
+	ConditionsCancelOrder    bool             // cancel (rather than submit) when conditions are met
+	AdjustedOrderType        OrderType        // order type to adjust to for adjustable-stop orders
+	TriggerPrice             decimal.Decimal  // price that triggers the adjustment; zero means unset
+	LmtPriceOffset           decimal.Decimal  // limit-price offset for adjustable orders; zero means unset
+	AdjustedStopPrice        decimal.Decimal  // adjusted stop price; zero means unset
+	AdjustedStopLimitPrice   decimal.Decimal  // adjusted stop-limit price; zero means unset
+	AdjustedTrailingAmount   decimal.Decimal  // adjusted trailing amount; zero means unset
+	AdjustableTrailingUnit   int              // unit for AdjustedTrailingAmount; 0 = unset
+	CashQty                  decimal.Decimal  // cash quantity for cash-quantity orders; zero means unset
+	DontUseAutoPriceForHedge *bool            // nil = server default; disable auto price for the hedge leg
+	UsePriceMgmtAlgo         *bool            // nil = server default; enable IB's price management algo
+	AdvancedErrorOverride    string           // override token for advanced-order warnings
+	ManualOrderTime          string           // manual order entry time for compliance
 }
 
+// PlaceOrderRequest pairs the [Contract] to trade with the [Order] instruction.
 type PlaceOrderRequest struct {
 	Contract Contract
 	Order    Order
@@ -299,6 +335,8 @@ func orderStateFromOpenOrder(o OpenOrder) OrderState {
 	}
 }
 
+// CompletedOrderResult is one entry from [OrdersClient.Completed]: a terminal
+// order the Gateway has finished processing this session.
 type CompletedOrderResult struct {
 	Contract  Contract
 	Action    OrderAction
@@ -309,17 +347,22 @@ type CompletedOrderResult struct {
 	Remaining decimal.Decimal
 }
 
+// SoftDollarTier is a soft-dollar commission tier from
+// [AdvisorsClient.SoftDollarTiers]. Name is the wire identifier; DisplayName is
+// the human-readable label.
 type SoftDollarTier struct {
 	Name        string
 	Value       string
 	DisplayName string
 }
 
+// ExerciseAction selects whether to exercise or lapse an option in an
+// [ExerciseOptionsRequest].
 type ExerciseAction int
 
 const (
-	Exercise ExerciseAction = 1
-	Lapse    ExerciseAction = 2
+	Exercise ExerciseAction = 1 // exercise the option
+	Lapse    ExerciseAction = 2 // let the option lapse
 )
 
 func (a ExerciseAction) String() string {
@@ -333,10 +376,12 @@ func (a ExerciseAction) String() string {
 	}
 }
 
+// ExerciseOptionsRequest instructs the Gateway to exercise or lapse an option
+// position via [OptionsClient.Exercise].
 type ExerciseOptionsRequest struct {
 	Contract         Contract
 	ExerciseAction   ExerciseAction
 	ExerciseQuantity int
 	Account          string
-	Override         bool
+	Override         bool // override IBKR's default handling for an out-of-the-money exercise
 }

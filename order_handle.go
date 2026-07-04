@@ -39,13 +39,25 @@ func newOrderHandle(orderID int64) *OrderHandle {
 	}
 }
 
-func (h *OrderHandle) OrderID() int64            { return h.orderID }
+// OrderID returns the order ID bound to this handle.
+func (h *OrderHandle) OrderID() int64 { return h.orderID }
+
+// Events returns the channel of order events (open-order echoes, status
+// updates, executions, commissions). It closes when the handle closes.
 func (h *OrderHandle) Events() <-chan OrderEvent { return h.events }
+
+// Lifecycle returns the channel of lifecycle transitions (gap, resume, close)
+// for this order handle, distinct from the business events on Events.
 func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent {
 	return h.state.Chan()
 }
+
+// Done returns a channel closed when the handle has terminated. After it is
+// closed, Wait reports the terminal error.
 func (h *OrderHandle) Done() <-chan struct{} { return h.done }
 
+// Wait blocks until the handle terminates and returns its terminal error, or
+// nil on a clean close.
 func (h *OrderHandle) Wait() error {
 	<-h.done
 	h.errMu.Lock()

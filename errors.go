@@ -5,17 +5,18 @@ import (
 	"fmt"
 )
 
+// Sentinel errors returned across the package. Match them with [errors.Is].
 var (
-	ErrNotReady                 = errors.New("ibkr: session not ready")
-	ErrInterrupted              = errors.New("ibkr: request interrupted")
-	ErrResumeRequired           = errors.New("ibkr: subscription resume required")
-	ErrNoSnapshot               = errors.New("ibkr: subscription has no snapshot boundary")
-	ErrSlowConsumer             = errors.New("ibkr: slow consumer")
-	ErrUnsupportedServerVersion = errors.New("ibkr: unsupported server version")
-	ErrClosed                   = errors.New("ibkr: closed")
-	ErrNoMatch                  = errors.New("ibkr: no contract match")
-	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")
-	ErrNoSubscription           = errors.New("ibkr: no active subscription")
+	ErrNotReady                 = errors.New("ibkr: session not ready")                     // request issued before the session reached Ready
+	ErrInterrupted              = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
+	ErrResumeRequired           = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
+	ErrNoSnapshot               = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
+	ErrSlowConsumer             = errors.New("ibkr: slow consumer")                         // consumer fell behind and the queue overflowed under SlowConsumerClose
+	ErrUnsupportedServerVersion = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
+	ErrClosed                   = errors.New("ibkr: closed")                                // operation on a closed client
+	ErrNoMatch                  = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
+	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")                    // Qualify matched more than one contract
+	ErrNoSubscription           = errors.New("ibkr: no active subscription")                // RefreshOpen with no active open-orders subscription
 )
 
 // ConnectError wraps a failure during the connection phase (dial, TLS
