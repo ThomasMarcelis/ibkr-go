@@ -1,19 +1,85 @@
 package codec
 
 import (
+	"bytes"
 	"fmt"
 	"math"
 	"strconv"
+	"unsafe"
 )
 
+// fieldReader reads NUL-delimited fields directly out of the frame byte slice.
+// It never copies the payload: numeric and boolean fields are parsed straight
+// from the backing bytes, and only fields the decoder retains (via ReadString
+// or ReadDecimal) allocate a string. buf holds the reader's field region, each
+// field terminated by a NUL; off is the byte offset of the next field, pos its
+// field index.
 type fieldReader struct {
-	fields []string
-	pos    int
-	err    error
+	buf   []byte
+	off   int
+	pos   int
+	total int // total field count in buf; cached so Remaining/Len stay O(1)
+	err   error
 }
 
+// newFieldReaderBytes wraps a frame's NUL-terminated field region. total is
+// scanned once here so per-field Remaining/Len calls in the decoders — some
+// invoked inside per-entry loops — cost O(1) rather than re-scanning the tail.
+func newFieldReaderBytes(buf []byte) *fieldReader {
+	return &fieldReader{buf: buf, total: bytes.Count(buf, nulSep)}
+}
+
+var nulSep = []byte{0}
+
+// newFieldReader builds a reader over the NUL-joined encoding of fields. It is
+// the convenience constructor used by unit tests; production decode wraps the
+// live frame bytes directly (see DecodeBatch).
 func newFieldReader(fields []string) *fieldReader {
-	return &fieldReader{fields: fields}
+	if len(fields) == 0 {
+		return &fieldReader{}
+	}
+	n := 0
+	for _, f := range fields {
+		n += len(f) + 1
+	}
+	buf := make([]byte, 0, n)
+	for _, f := range fields {
+		buf = append(buf, f...)
+		buf = append(buf, 0)
+	}
+	return &fieldReader{buf: buf, total: len(fields)}
+}
+
+// asString aliases b as a string without copying. The result is a transient
+// argument for strconv over the immutable frame buffer; it must never be
+// retained, since it shares b's backing array.
+func asString(b []byte) string {
+	return unsafe.String(unsafe.SliceData(b), len(b))
+}
+
+// field returns the bytes of the current field (excluding its NUL) and
+// advances past it. ok is false once the reader is past the end; a genuinely
+// empty field returns (empty, true). The frame is NUL-terminated per field, so
+// a NUL always exists while off is in range.
+func (r *fieldReader) field() ([]byte, bool) {
+	if r.off >= len(r.buf) {
+		return nil, false
+	}
+	rel := bytes.IndexByte(r.buf[r.off:], 0)
+	f := r.buf[r.off : r.off+rel]
+	r.off += rel + 1
+	r.pos++
+	return f, true
+}
+
+// peek returns the current field's bytes without advancing. It returns nil
+// once past the end.
+func (r *fieldReader) peek() []byte {
+	if r.off >= len(r.buf) {
+		return nil
+	}
+	rel := bytes.IndexByte(r.buf[r.off:], 0)
+	return r.buf[r.off : r.off+rel]
 }
 
 func (r *fieldReader) setErr(err error) {
@@ -27,13 +93,13 @@ func (r *fieldReader) Err() error {
 }
 
 func (r *fieldReader) ReadInt() (int, error) {
-	s := r.ReadString()
-	if s == "" {
+	f, ok := r.field()
+	if !ok || len(f) == 0 {
 		return 0, nil
 	}
-	v, err := strconv.Atoi(s)
+	v, err := strconv.Atoi(asString(f))
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
@@ -41,13 +107,13 @@ func (r *fieldReader) ReadInt() (int, error) {
 }
 
 func (r *fieldReader) ReadInt64() (int64, error) {
-	s := r.ReadString()
-	if s == "" {
+	f, ok := r.field()
+	if !ok || len(f) == 0 {
 		return 0, nil
 	}
-	v, err := strconv.ParseInt(s, 10, 64)
+	v, err := strconv.ParseInt(asString(f), 10, 64)
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse int64 %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse int64 %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
@@ -55,13 +121,13 @@ func (r *fieldReader) ReadInt64() (int64, error) {
 }
 
 func (r *fieldReader) ReadFloat() (float64, error) {
-	s := r.ReadString()
-	if s == "" {
+	f, ok := r.field()
+	if !ok || len(f) == 0 {
 		return 0, nil
 	}
-	v, err := strconv.ParseFloat(s, 64)
+	v, err := strconv.ParseFloat(asString(f), 64)
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
@@ -70,13 +136,13 @@ func (r *fieldReader) ReadFloat() (float64, error) {
 
 // ReadMaxFloat reads a float, returning math.MaxFloat64 for empty string (TWS sentinel).
 func (r *fieldReader) ReadMaxFloat() (float64, error) {
-	s := r.ReadString()
-	if s == "" {
+	f, ok := r.field()
+	if !ok || len(f) == 0 {
 		return math.MaxFloat64, nil
 	}
-	v, err := strconv.ParseFloat(s, 64)
+	v, err := strconv.ParseFloat(asString(f), 64)
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
@@ -85,13 +151,13 @@ func (r *fieldReader) ReadMaxFloat() (float64, error) {
 
 // ReadMaxInt reads an int, returning math.MaxInt32 for empty string (TWS sentinel).
 func (r *fieldReader) ReadMaxInt() (int, error) {
-	s := r.ReadString()
-	if s == "" {
+	f, ok := r.field()
+	if !ok || len(f) == 0 {
 		return math.MaxInt32, nil
 	}
-	v, err := strconv.Atoi(s)
+	v, err := strconv.Atoi(asString(f))
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
@@ -100,23 +166,24 @@ func (r *fieldReader) ReadMaxInt() (int, error) {
 
 // ReadString returns the next field as a string. Returns "" if past end.
 func (r *fieldReader) ReadString() string {
-	if r.pos >= len(r.fields) {
+	f, ok := r.field()
+	if !ok {
 		return ""
 	}
-	s := r.fields[r.pos]
-	r.pos++
-	return s
+	return string(f)
 }
 
 func (r *fieldReader) ReadBool() (bool, error) {
-	s := r.ReadString()
-	switch s {
+	f, _ := r.field()
+	// switch string(f) is compiled without allocating; nil past-end bytes
+	// compare equal to "" and read as false, matching ReadString semantics.
+	switch string(f) {
 	case "1", "true":
 		return true, nil
 	case "0", "false", "":
 		return false, nil
 	default:
-		parseErr := fmt.Errorf("codec: field %d: parse bool %q", r.pos-1, s)
+		parseErr := fmt.Errorf("codec: field %d: parse bool %q", r.pos-1, f)
 		r.setErr(parseErr)
 		return false, parseErr
 	}
@@ -127,23 +194,29 @@ func (r *fieldReader) ReadDecimal() string {
 	return r.ReadString()
 }
 
-// Skip advances past n fields.
+// Skip advances past n fields. Advancing past the end still increments the
+// field index, so Pos reflects the total number of skipped fields.
 func (r *fieldReader) Skip(n int) {
-	r.pos += n
+	for range n {
+		if r.off < len(r.buf) {
+			rel := bytes.IndexByte(r.buf[r.off:], 0)
+			r.off += rel + 1
+		}
+		r.pos++
+	}
 }
 
 // Len returns the total number of fields.
 func (r *fieldReader) Len() int {
-	return len(r.fields)
+	return r.total
 }
 
 // Remaining returns how many unread fields remain.
 func (r *fieldReader) Remaining() int {
-	rem := len(r.fields) - r.pos
-	if rem < 0 {
+	if r.pos >= r.total {
 		return 0
 	}
-	return rem
+	return r.total - r.pos
 }
 
 // Pos returns the current read position.
@@ -152,20 +225,20 @@ func (r *fieldReader) Pos() int {
 }
 
 func (r *fieldReader) ReadCount(label string) (int, error) {
-	if r.pos >= len(r.fields) {
+	if r.off >= len(r.buf) {
 		parseErr := fmt.Errorf("codec: field %d: missing %s", r.pos, label)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
-	s := r.ReadString()
-	if s == "" {
+	f, _ := r.field()
+	if len(f) == 0 {
 		parseErr := fmt.Errorf("codec: field %d: empty %s", r.pos-1, label)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
-	count, err := strconv.Atoi(s)
+	count, err := strconv.Atoi(asString(f))
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
@@ -178,16 +251,16 @@ func (r *fieldReader) ReadCount(label string) (int, error) {
 }
 
 func (r *fieldReader) ReadOptionalCount(label string) (int, error) {
-	if r.pos >= len(r.fields) {
+	if r.off >= len(r.buf) {
 		return 0, nil
 	}
-	s := r.ReadString()
-	if s == "" {
+	f, _ := r.field()
+	if len(f) == 0 {
 		return 0, nil
 	}
-	count, err := strconv.Atoi(s)
+	count, err := strconv.Atoi(asString(f))
 	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, s, err)
+		parseErr := fmt.Errorf("codec: field %d: parse %s %q: %w", r.pos-1, label, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}

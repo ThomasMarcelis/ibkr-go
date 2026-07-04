@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,34 +21,50 @@ func EncodeVersionRange(minVer, maxVer int) []byte {
 
 // DecodeServerInfo parses the server info frame returned during the handshake.
 func DecodeServerInfo(payload []byte) (ServerInfo, error) {
-	fields, err := wire.ParseFields(payload)
+	if len(payload) == 0 {
+		return ServerInfo{}, wire.ErrEmptyMessage
+	}
+	if payload[len(payload)-1] != 0 {
+		return ServerInfo{}, wire.ErrMalformedFrame
+	}
+	r := newFieldReaderBytes(payload)
+	if got := r.Remaining(); got < 2 {
+		return ServerInfo{}, fmt.Errorf("codec: server info: want >= 2 fields, got %d", got)
+	}
+	verStr := r.ReadString()
+	version, err := strconv.Atoi(verStr)
 	if err != nil {
-		return ServerInfo{}, err
+		return ServerInfo{}, fmt.Errorf("codec: server info: parse version %q: %w", verStr, err)
 	}
-	if len(fields) < 2 {
-		return ServerInfo{}, fmt.Errorf("codec: server info: want >= 2 fields, got %d", len(fields))
-	}
-	version, err := strconv.Atoi(fields[0])
-	if err != nil {
-		return ServerInfo{}, fmt.Errorf("codec: server info: parse version %q: %w", fields[0], err)
-	}
-	return ServerInfo{ServerVersion: version, ConnectionTime: fields[1]}, nil
+	return ServerInfo{ServerVersion: version, ConnectionTime: r.ReadString()}, nil
 }
 
 // DecodeBatch decodes a framed payload into one or more messages keyed by integer msg_id.
 func DecodeBatch(sv int, payload []byte) ([]Message, error) {
-	fields, err := wire.ParseFields(payload)
+	if len(payload) == 0 {
+		return nil, wire.ErrEmptyMessage
+	}
+	if payload[len(payload)-1] != 0 {
+		return nil, wire.ErrMalformedFrame
+	}
+	// Peek the msg_id straight from the raw bytes, before splitting fields.
+	// This is the future protobuf branch point: msg_ids above 200 carry
+	// protobuf payloads whose bodies contain embedded NUL bytes, so a
+	// parse-fields-first (NUL-split) approach would corrupt them. Today every
+	// frame is classic NUL-delimited, so we only take that path.
+	nul := bytes.IndexByte(payload, 0)
+	if nul <= 0 {
+		return nil, wire.ErrMalformedFrame
+	}
+	msgID, err := strconv.Atoi(asString(payload[:nul]))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("codec: parse msg_id %q: %w", payload[:nul], err)
 	}
-	if len(fields) == 0 {
-		return nil, fmt.Errorf("codec: empty message")
-	}
-	msgID, err := strconv.Atoi(fields[0])
-	if err != nil {
-		return nil, fmt.Errorf("codec: parse msg_id %q: %w", fields[0], err)
-	}
-	msgs, err := decodeByMsgID(sv, msgID, fields)
+	// Reader positioned just past the msg_id field.
+	r := newFieldReaderBytes(payload)
+	r.off = nul + 1
+	r.pos = 1
+	msgs, err := decodeByMsgID(sv, msgID, r)
 	if err != nil {
 		return nil, fmt.Errorf("codec: msg_id %d: %w", msgID, err)
 	}
@@ -81,9 +98,12 @@ func isHistoricalRangeBoundary(value string) bool {
 	return strings.Contains(value, " ") && strings.Contains(value, "/")
 }
 
-func completedOrderTail(fields []string, statusIndex int, orderType string) (string, bool) {
-	r := newFieldReader(fields[statusIndex+1:])
-	if err := skipCompletedOrderPostStatusPrefix(r, orderType); err != nil {
+// completedOrderTail probes the fields following a candidate status field. r is
+// a value copy positioned just past the status field, so the probe never
+// disturbs the caller's cursor. It returns the filled quantity when the tail
+// matches the live completed-order layout.
+func completedOrderTail(r fieldReader, orderType string) (string, bool) {
+	if err := skipCompletedOrderPostStatusPrefix(&r, orderType); err != nil {
 		return "", false
 	}
 	filled := r.ReadString()
@@ -101,21 +121,34 @@ func completedOrderTail(fields []string, statusIndex int, orderType string) (str
 	return filled, true
 }
 
-func completedOrderStatusTail(fields []string, orderType string) (string, string, error) {
-	for i := 15; i < len(fields); i++ {
-		if !isOrderStatusField(fields[i]) {
-			continue
+// completedOrderStatusTail scans forward from the reader's current position
+// (anchored right after orderType) for an order-status field whose trailing
+// fields match the completed-order layout, returning the status and filled
+// quantity. It walks a byte-view copy so the caller's reader is untouched.
+func completedOrderStatusTail(r *fieldReader, orderType string) (string, string, error) {
+	probe := *r
+	probe.err = nil
+	for probe.off < len(probe.buf) {
+		field := probe.peek()
+		if isOrderStatusField(field) {
+			if filled, ok := completedOrderTail(probe.after(), orderType); ok {
+				return string(field), filled, nil
+			}
 		}
-		filled, ok := completedOrderTail(fields, i, orderType)
-		if ok {
-			return fields[i], filled, nil
-		}
+		probe.Skip(1)
 	}
 	return "", "", fmt.Errorf("codec: completed order status tail not found")
 }
 
-func isOrderStatusField(value string) bool {
-	switch value {
+// after returns a value copy of the reader advanced past the current field,
+// used to probe a candidate tail without consuming the outer scan cursor.
+func (r fieldReader) after() fieldReader {
+	r.Skip(1)
+	return r
+}
+
+func isOrderStatusField(value []byte) bool {
+	switch string(value) {
 	case "PendingSubmit", "PendingCancel", "PreSubmitted", "Submitted",
 		"ApiPending", "ApiCancelled", "Cancelled", "Filled", "Inactive":
 		return true
@@ -240,12 +273,12 @@ var inboundDecoders = map[int]decodeFunc{
 
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
 // Returns []Message because historical data packs multiple bars into one frame.
-func decodeByMsgID(sv int, msgID int, fields []string) ([]Message, error) {
+// r is positioned just past the msg_id field.
+func decodeByMsgID(sv int, msgID int, r *fieldReader) ([]Message, error) {
 	dec, ok := inboundDecoders[msgID]
 	if !ok {
 		return nil, fmt.Errorf("codec: unknown msg_id %d", msgID)
 	}
-	r := newFieldReader(fields[1:]) // skip msg_id
 	msgs, err := dec(r, sv)
 	if err == nil && r.Err() != nil {
 		return nil, r.Err()

@@ -459,9 +459,14 @@ func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
 	//   [108, reqID, startDateTime, endDateTime]
 	// Older captures also show [108, reqID, startDateTime]. The range
 	// shapes are terminal markers for the preceding historical data batch.
-	if (len(r.fields) == 2 || len(r.fields) == 3) && isWireInt(r.fields[0]) && isHistoricalRangeBoundary(r.fields[1]) {
-		reqID, _ := strconv.Atoi(r.fields[0])
-		return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
+	if rem := r.Remaining(); rem == 2 || rem == 3 {
+		probe := *r
+		f0, _ := probe.field()
+		f1, _ := probe.field()
+		if isWireInt(string(f0)) && isHistoricalRangeBoundary(string(f1)) {
+			reqID, _ := strconv.Atoi(string(f0))
+			return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
+		}
 	}
 	reqID, err := r.ReadInt()
 	if err != nil {

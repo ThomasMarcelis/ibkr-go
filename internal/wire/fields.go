@@ -3,17 +3,23 @@ package wire
 import "strings"
 
 // EncodeFields encodes null-delimited string fields with a trailing terminator.
+// The exact frame length is known up front, so it fills a single right-sized
+// buffer in one pass — no builder growth, no string-to-[]byte round trip.
 func EncodeFields(fields []string) []byte {
 	if len(fields) == 0 {
 		return nil
 	}
 
-	var b strings.Builder
+	size := 0
 	for _, field := range fields {
-		b.WriteString(field)
-		b.WriteByte(0)
+		size += len(field) + 1
 	}
-	return []byte(b.String())
+	buf := make([]byte, 0, size)
+	for _, field := range fields {
+		buf = append(buf, field...)
+		buf = append(buf, 0)
+	}
+	return buf
 }
 
 // ParseFields parses a null-delimited payload.

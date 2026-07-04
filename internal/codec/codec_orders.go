@@ -1316,10 +1316,9 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	action := r.ReadString()
 	quantity := r.ReadString()
 	orderType := r.ReadString()
-	// completedOrderStatusTail scans absolute field indices anchored at the
-	// msg_id prefix that newFieldReader dropped; restore that view.
-	fields := append([]string{itoa(InCompletedOrder)}, r.fields...)
-	status, filled, err := completedOrderStatusTail(fields, orderType)
+	// The reader now sits just past orderType. completedOrderStatusTail scans
+	// forward from here over the frame byte-view for the status field.
+	status, filled, err := completedOrderStatusTail(r, orderType)
 	if err != nil {
 		return nil, err
 	}

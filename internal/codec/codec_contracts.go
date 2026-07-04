@@ -317,7 +317,7 @@ func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 		}
 		description := ""
 		issuerID := ""
-		if r.Remaining() >= 2 && !isWireInt(r.fields[r.pos]) {
+		if r.Remaining() >= 2 && !isWireInt(string(r.peek())) {
 			description = r.ReadString()
 			issuerID = r.ReadString()
 		}
