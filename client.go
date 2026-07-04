@@ -416,6 +416,9 @@ func (c AdvisorsClient) Config(ctx context.Context, dataType FADataType) (XMLDoc
 }
 
 // ReplaceConfig replaces an FA configuration document with the given raw XML.
+// The call is fire-and-forget: the Gateway's replaceFAEnd acknowledgement is
+// decoded but not awaited, since only financial-advisor accounts can verify
+// the round trip.
 func (c AdvisorsClient) ReplaceConfig(ctx context.Context, dataType FADataType, data XMLDocument) error {
 	return c.engine.ReplaceFA(ctx, dataType, string(data))
 }

@@ -9,6 +9,7 @@ import (
 
 	ibkr "github.com/ThomasMarcelis/ibkr-go"
 	"github.com/ThomasMarcelis/ibkr-go/testing/ibkrlive"
+	"github.com/shopspring/decimal"
 )
 
 // TestLiveDownNegotiatedVersions forces the gateway onto older wire layouts
@@ -109,4 +110,51 @@ var barSizes = map[int]ibkr.BarSize{
 
 func versionName(sv int) string {
 	return "sv" + strconv.Itoa(sv)
+}
+
+// TestLiveDownNegotiatedPreview validates the OpenOrder inbound gates with
+// real down-negotiated echoes: the what-if open_order reply crosses the
+// FULL_ORDER_PREVIEW block gate (195) and the width-gated tail
+// (183..199), the two positional decodes the deterministic boundary tests
+// can only mirror. A what-if computes margin and leaves nothing resting on
+// the server. Requires the trading role; not parallel (advertised max is
+// package state).
+func TestLiveDownNegotiatedPreview(t *testing.T) {
+	ibkrlive.RequireTrading(t)
+	for _, sv := range []int{193, 195, 198, 200} {
+		t.Run(versionName(sv), func(t *testing.T) {
+			restore := ibkr.SetAdvertisedServerVersionMaxForTest(sv)
+			defer restore()
+
+			client, _, cancel := ibkrlive.DialTradingContext(t, 15*time.Second)
+			defer cancel()
+			defer client.Close()
+
+			if got := client.Session().ServerVersion; got != sv {
+				t.Fatalf("negotiated ServerVersion = %d, want %d", got, sv)
+			}
+			ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancelReq()
+
+			state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+				Contract: aaplContract,
+				Order: ibkr.Order{
+					Action:    ibkr.ActionBuy,
+					OrderType: ibkr.OrderTypeMarket,
+					Quantity:  decimal.NewFromInt(100),
+				},
+			})
+			if err != nil {
+				t.Fatalf("Preview at sv%d: %v", sv, err)
+			}
+			// The core margin fields predate every gate in range and must
+			// decode at all four versions; a desync in the preview block or
+			// tail would corrupt or truncate them.
+			if state.InitMarginAfter.IsZero() && state.MaintMarginAfter.IsZero() {
+				t.Fatalf("Preview at sv%d returned no margin data: %+v", sv, state)
+			}
+			t.Logf("sv%d: initAfter=%s maintAfter=%s commission=%s warning=%q",
+				sv, state.InitMarginAfter, state.MaintMarginAfter, state.Commission, state.WarningText)
+		})
+	}
 }

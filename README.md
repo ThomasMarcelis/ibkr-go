@@ -24,7 +24,7 @@ sub, _ := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
 })
 defer sub.Close()
-for update := range sub.Events() {
+for update := range sub.All(ctx) {
     fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
 }
 ```

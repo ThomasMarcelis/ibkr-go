@@ -342,6 +342,12 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		}
 
 		handle.modifyFn = func(ctx context.Context, order Order) error {
+			if order.WhatIf != nil && *order.WhatIf {
+				return &ValidationError{
+					Field:   "Order.WhatIf",
+					Message: "what-if orders are margin previews, not trades; use Orders().Preview",
+				}
+			}
 			return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 				if !e.isReady() {
 					return ErrNotReady
@@ -618,6 +624,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		Action:                OrderAction(m.Action),
 		OrderType:             OrderType(m.OrderType),
 		Status:                OrderStatus(m.Status),
+		WarningText:           m.WarningText,
 		Quantity:              quantity,
 		LmtPrice:              lmtPrice,
 		AuxPrice:              auxPrice,

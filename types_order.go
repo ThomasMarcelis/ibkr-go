@@ -138,6 +138,10 @@ type OpenOrder struct {
 	MaxCommission      decimal.Decimal
 	CommissionCurrency string
 
+	// WarningText carries the Gateway's advisory for this order, e.g. price
+	// cap adjustments; empty when the server sent none.
+	WarningText string
+
 	// Partial reports that an advanced or unattested order layout degraded to
 	// a partial parse: the core order fields above are populated, but Status
 	// and the margin/commission section are empty.
@@ -315,6 +319,10 @@ type OrderState struct {
 	CommissionMin decimal.Decimal
 	CommissionMax decimal.Decimal
 	Currency      string
+
+	// WarningText carries the Gateway's advisory attached to the preview,
+	// e.g. price cap adjustments; empty when the server sent none.
+	WarningText string
 }
 
 func orderStateFromOpenOrder(o OpenOrder) OrderState {
@@ -332,6 +340,7 @@ func orderStateFromOpenOrder(o OpenOrder) OrderState {
 		CommissionMin:        o.MinCommission,
 		CommissionMax:        o.MaxCommission,
 		Currency:             o.CommissionCurrency,
+		WarningText:          o.WarningText,
 	}
 }
 
