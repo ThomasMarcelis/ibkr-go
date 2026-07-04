@@ -18,6 +18,7 @@ linters:
     - misspell
     - unconvert
     - unparam
+    - gosec
   settings:
     errcheck:
       exclude-functions:
@@ -45,3 +46,51 @@ linters:
       - linters: [unparam]
         path: internal/codec/
         text: 'sv is unused'
+      # gosec targets the production import path (root package plus
+      # internal/codec, internal/wire, internal/transport per AGENTS.md).
+      # These paths are excluded wholesale because they sit outside that
+      # surface, not because individual findings were reviewed away:
+      #   - cmd/ and _test.go: developer tooling and test/fuzz harnesses,
+      #     never part of `go install github.com/ThomasMarcelis/ibkr-go`.
+      #   - internal/capturelog: imported only by cmd/ibkr-recorder and
+      #     cmd/ibkr-normalize (capture-tooling support code, not the client).
+      #   - testing/testhost: imported only by _test.go files; it cannot be
+      #     named *_test.go itself because Go requires cross-package test
+      #     helpers to live in ordinary source files.
+      - linters: [gosec]
+        path: cmd/
+      - linters: [gosec]
+        path: _test\.go
+      - linters: [gosec]
+        path: internal/capturelog/
+      - linters: [gosec]
+        path: testing/testhost/
+      # False positive: G115 flags the uint32(len(payload)) narrowing, but
+      # WriteFrame already rejects payloads above MaxFrameSize (64 MiB) and
+      # above uint32 range two lines earlier, so the cast cannot overflow.
+      - linters: [gosec]
+        path: internal/wire/frame\.go
+        source: 'binary\.BigEndian\.PutUint32\(header\[:\], uint32\(len\(payload\)\)\)'
+      # False positive: G101's hardcoded-credentials heuristic misfires on
+      # these OpKind string constants ("wsh_meta_data"/"wsh_event_data" are
+      # IBKR Wall Street Horizon operation-kind tags, not secrets).
+      - linters: [gosec]
+        path: types\.go
+        source: 'OpWSH(MetaData|EventData)\s+OpKind'
+      # Not a false positive, but a deliberate policy match: G104 flags
+      # these bare conn.Close() calls in the handshake's error-return path
+      # as unhandled errors. errcheck already exempts (net.Conn).Close
+      # globally (see errcheck.exclude-functions above) because a close
+      # error on a socket already being abandoned after another error is
+      # not actionable; this mirrors that existing, human-decided policy
+      # for the same call sites rather than introducing a new exemption.
+      - linters: [gosec]
+        path: engine_connect\.go
+        source: '^\s*conn\.Close\(\)$'
+      # Audited (2026-07-04): asString aliases frame bytes only as transient
+      # strconv arguments over the immutable per-frame buffer; every call
+      # site feeds strconv directly and nothing retains the view. Retained
+      # strings go through ReadString, which copies.
+      - linters: [gosec]
+        path: internal/codec/decoder\.go
+        source: 'return unsafe\.String\(unsafe\.SliceData\(b\), len\(b\)\)'

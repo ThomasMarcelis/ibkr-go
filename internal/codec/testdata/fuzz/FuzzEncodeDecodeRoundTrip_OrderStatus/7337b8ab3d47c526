@@ -1,0 +1,12 @@
+go test fuzz v1
+int64(0)
+string("")
+string("0")
+string("")
+string("\x00")
+string("")
+string("")
+string("")
+string("")
+string("")
+string("")

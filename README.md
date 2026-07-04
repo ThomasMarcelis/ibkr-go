@@ -1,6 +1,7 @@
 # ibkr-go
 
 [![CI](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/ThomasMarcelis/ibkr-go/graph/badge.svg)](https://codecov.io/gh/ThomasMarcelis/ibkr-go)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go)
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)

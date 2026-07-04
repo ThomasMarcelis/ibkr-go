@@ -1,0 +1,6 @@
+go test fuzz v1
+int(999910)
+int(30)
+string("0")
+string("\x00")
+int(255)

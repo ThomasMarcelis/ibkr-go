@@ -53,6 +53,12 @@ jobs:
           go test -race -count=1 -coverprofile=coverage.out ./...
           go tool cover -func=coverage.out | tail -1
 
+      - name: upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.out
+          fail_ci_if_error: false
+
       - name: benchmarks compile and smoke
         run: go test -run='^$' -bench=. -benchtime=1x ./...
 
