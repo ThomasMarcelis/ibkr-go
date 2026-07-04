@@ -1,18 +1,24 @@
 package codec
 
+import "strings"
+
 type AccountSummaryRequest struct {
 	ReqID   int
 	Account string
 	Tags    []string
 }
 
-func (AccountSummaryRequest) messageName() string { return "req_account_summary" }
+func (m AccountSummaryRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqAccountSummary), "1", itoa(m.ReqID), m.Account, strings.Join(m.Tags, ",")}, nil
+}
 
 type CancelAccountSummary struct {
 	ReqID int
 }
 
-func (CancelAccountSummary) messageName() string { return "cancel_account_summary" }
+func (m CancelAccountSummary) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelAccountSummary), "1", itoa(m.ReqID)}, nil
+}
 
 type AccountSummaryValue struct {
 	ReqID    int
@@ -22,21 +28,21 @@ type AccountSummaryValue struct {
 	Currency string
 }
 
-func (AccountSummaryValue) messageName() string { return "account_summary" }
-
 type AccountSummaryEnd struct {
 	ReqID int
 }
 
-func (AccountSummaryEnd) messageName() string { return "account_summary_end" }
-
 type PositionsRequest struct{}
 
-func (PositionsRequest) messageName() string { return "req_positions" }
+func (m PositionsRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqPositions), "1"}, nil
+}
 
 type CancelPositions struct{}
 
-func (CancelPositions) messageName() string { return "cancel_positions" }
+func (m CancelPositions) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelPositions), "1"}, nil
+}
 
 type Position struct {
 	Account  string
@@ -45,21 +51,17 @@ type Position struct {
 	AvgCost  string
 }
 
-func (Position) messageName() string { return "position" }
-
 type PositionEnd struct{}
-
-func (PositionEnd) messageName() string { return "position_end" }
 
 type FamilyCodesRequest struct{}
 
-func (FamilyCodesRequest) messageName() string { return "req_family_codes" }
+func (m FamilyCodesRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqFamilyCodes)}, nil
+}
 
 type FamilyCodes struct {
 	Codes []FamilyCodeEntry
 }
-
-func (FamilyCodes) messageName() string { return "family_codes" }
 
 type FamilyCodeEntry struct {
 	AccountID  string
@@ -73,7 +75,9 @@ type AccountUpdatesRequest struct {
 	Account   string
 }
 
-func (AccountUpdatesRequest) messageName() string { return "req_account_updates" }
+func (m AccountUpdatesRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqAccountUpdates), "2", btoa(m.Subscribe), m.Account}, nil
+}
 
 type UpdateAccountValue struct {
 	Key      string
@@ -81,8 +85,6 @@ type UpdateAccountValue struct {
 	Currency string
 	Account  string
 }
-
-func (UpdateAccountValue) messageName() string { return "update_account_value" }
 
 type UpdatePortfolio struct {
 	Contract      Contract
@@ -95,19 +97,13 @@ type UpdatePortfolio struct {
 	Account       string
 }
 
-func (UpdatePortfolio) messageName() string { return "update_portfolio" }
-
 type UpdateAccountTime struct {
 	Timestamp string
 }
 
-func (UpdateAccountTime) messageName() string { return "update_account_time" }
-
 type AccountDownloadEnd struct {
 	Account string
 }
-
-func (AccountDownloadEnd) messageName() string { return "account_download_end" }
 
 // Account updates multi (OUT 76, cancel OUT 77 / IN 73, 74)
 
@@ -117,13 +113,17 @@ type AccountUpdatesMultiRequest struct {
 	ModelCode string
 }
 
-func (AccountUpdatesMultiRequest) messageName() string { return "req_account_updates_multi" }
+func (m AccountUpdatesMultiRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqAccountUpdatesMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode, "1"}, nil
+}
 
 type CancelAccountUpdatesMulti struct {
 	ReqID int
 }
 
-func (CancelAccountUpdatesMulti) messageName() string { return "cancel_account_updates_multi" }
+func (m CancelAccountUpdatesMulti) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelAccountUpdatesMulti), "1", itoa(m.ReqID)}, nil
+}
 
 type AccountUpdateMultiValue struct {
 	ReqID     int
@@ -134,13 +134,9 @@ type AccountUpdateMultiValue struct {
 	Currency  string
 }
 
-func (AccountUpdateMultiValue) messageName() string { return "account_update_multi" }
-
 type AccountUpdateMultiEnd struct {
 	ReqID int
 }
-
-func (AccountUpdateMultiEnd) messageName() string { return "account_update_multi_end" }
 
 // Positions multi (OUT 74, cancel OUT 75 / IN 71, 72)
 
@@ -150,13 +146,17 @@ type PositionsMultiRequest struct {
 	ModelCode string
 }
 
-func (PositionsMultiRequest) messageName() string { return "req_positions_multi" }
+func (m PositionsMultiRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqPositionsMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode}, nil
+}
 
 type CancelPositionsMulti struct {
 	ReqID int
 }
 
-func (CancelPositionsMulti) messageName() string { return "cancel_positions_multi" }
+func (m CancelPositionsMulti) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelPositionsMulti), "1", itoa(m.ReqID)}, nil
+}
 
 type PositionMulti struct {
 	ReqID     int
@@ -167,13 +167,9 @@ type PositionMulti struct {
 	AvgCost   string
 }
 
-func (PositionMulti) messageName() string { return "position_multi" }
-
 type PositionMultiEnd struct {
 	ReqID int
 }
-
-func (PositionMultiEnd) messageName() string { return "position_multi_end" }
 
 // PnL (OUT 92, cancel OUT 93 / IN 94)
 
@@ -183,13 +179,17 @@ type PnLRequest struct {
 	ModelCode string
 }
 
-func (PnLRequest) messageName() string { return "req_pnl" }
+func (m PnLRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqPnL), itoa(m.ReqID), m.Account, m.ModelCode}, nil
+}
 
 type CancelPnL struct {
 	ReqID int
 }
 
-func (CancelPnL) messageName() string { return "cancel_pnl" }
+func (m CancelPnL) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelPnL), itoa(m.ReqID)}, nil
+}
 
 type PnLValue struct {
 	ReqID         int
@@ -197,8 +197,6 @@ type PnLValue struct {
 	UnrealizedPnL string
 	RealizedPnL   string
 }
-
-func (PnLValue) messageName() string { return "pnl" }
 
 // PnL single (OUT 94, cancel OUT 95 / IN 95)
 
@@ -209,13 +207,17 @@ type PnLSingleRequest struct {
 	ConID     int
 }
 
-func (PnLSingleRequest) messageName() string { return "req_pnl_single" }
+func (m PnLSingleRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqPnLSingle), itoa(m.ReqID), m.Account, m.ModelCode, itoa(m.ConID)}, nil
+}
 
 type CancelPnLSingle struct {
 	ReqID int
 }
 
-func (CancelPnLSingle) messageName() string { return "cancel_pnl_single" }
+func (m CancelPnLSingle) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelPnLSingle), itoa(m.ReqID)}, nil
+}
 
 type PnLSingleValue struct {
 	ReqID         int
@@ -225,8 +227,6 @@ type PnLSingleValue struct {
 	RealizedPnL   string
 	Value         string
 }
-
-func (PnLSingleValue) messageName() string { return "pnl_single" }
 
 // [61, version, account, contract(11), position, avgCost]
 func decodePositionData(r *fieldReader) ([]Message, error) {
@@ -238,8 +238,40 @@ func decodePositionData(r *fieldReader) ([]Message, error) {
 	return []Message{Position{Account: account, Contract: contract, Position: position, AvgCost: avgCost}}, nil
 }
 
+func (m Position) encodeWire() ([]string, error) {
+	// Encode in server→client wire format matching readWireContract:
+	// [conID, symbol, secType, expiry, strike, right, multiplier,
+	//  exchange, currency, localSymbol, tradingClass]
+	w := fieldWriter{}
+	w.WriteInt(InPositionData)
+	w.WriteInt(3) // version
+	w.WriteString(m.Account)
+	w.WriteInt(m.Contract.ConID)
+	w.WriteString(m.Contract.Symbol)
+	w.WriteString(m.Contract.SecType)
+	w.WriteString(m.Contract.Expiry)
+	if m.Contract.Strike == "" {
+		w.WriteString("0")
+	} else {
+		w.WriteString(m.Contract.Strike)
+	}
+	w.WriteString(m.Contract.Right)
+	w.WriteString(m.Contract.Multiplier)
+	w.WriteString(m.Contract.Exchange)
+	w.WriteString(m.Contract.Currency)
+	w.WriteString(m.Contract.LocalSymbol)
+	w.WriteString(m.Contract.TradingClass)
+	w.WriteString(m.Position)
+	w.WriteString(m.AvgCost)
+	return w.Fields(), nil
+}
+
 func decodePositionEnd(r *fieldReader) ([]Message, error) {
 	return []Message{PositionEnd{}}, nil
+}
+
+func (m PositionEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InPositionEnd), "1"}, nil
 }
 
 // [63, version, reqID, account, tag, value, currency]
@@ -253,11 +285,19 @@ func decodeAccountSummary(r *fieldReader) ([]Message, error) {
 	return []Message{AccountSummaryValue{ReqID: reqID, Account: account, Tag: tag, Value: value, Currency: currency}}, nil
 }
 
+func (m AccountSummaryValue) encodeWire() ([]string, error) {
+	return []string{itoa(InAccountSummary), "1", itoa(m.ReqID), m.Account, m.Tag, m.Value, m.Currency}, nil
+}
+
 // [64, version, reqID]
 func decodeAccountSummaryEnd(r *fieldReader) ([]Message, error) {
 	r.Skip(1)
 	reqID, _ := r.ReadInt()
 	return []Message{AccountSummaryEnd{ReqID: reqID}}, nil
+}
+
+func (m AccountSummaryEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InAccountSummaryEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [78, count, repeated(accountID, familyCode)] — no version
@@ -276,6 +316,17 @@ func decodeFamilyCodes(r *fieldReader) ([]Message, error) {
 	return []Message{FamilyCodes{Codes: entries}}, nil
 }
 
+func (m FamilyCodes) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InFamilyCodes)
+	w.WriteInt(len(m.Codes))
+	for _, c := range m.Codes {
+		w.WriteString(c.AccountID)
+		w.WriteString(c.FamilyCode)
+	}
+	return w.Fields(), nil
+}
+
 // [6, version=2, key, value, currency, accountName]
 func decodeUpdateAccountValue(r *fieldReader) ([]Message, error) {
 	r.Skip(1) // version
@@ -284,6 +335,10 @@ func decodeUpdateAccountValue(r *fieldReader) ([]Message, error) {
 	currency := r.ReadString()
 	account := r.ReadString()
 	return []Message{UpdateAccountValue{Key: key, Value: value, Currency: currency, Account: account}}, nil
+}
+
+func (m UpdateAccountValue) encodeWire() ([]string, error) {
+	return []string{itoa(InUpdateAccountValue), "2", m.Key, m.Value, m.Currency, m.Account}, nil
 }
 
 // [7, version=8, conID, symbol, secType, expiry, strike, right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice, marketValue, avgCost, unrealizedPNL, realizedPNL, accountName]
@@ -320,6 +375,35 @@ func decodeUpdatePortfolio(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
+func (m UpdatePortfolio) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InUpdatePortfolio)
+	w.WriteInt(8) // version
+	w.WriteInt(m.Contract.ConID)
+	w.WriteString(m.Contract.Symbol)
+	w.WriteString(m.Contract.SecType)
+	w.WriteString(m.Contract.Expiry)
+	if m.Contract.Strike == "" {
+		w.WriteString("0")
+	} else {
+		w.WriteString(m.Contract.Strike)
+	}
+	w.WriteString(m.Contract.Right)
+	w.WriteString(m.Contract.Multiplier)
+	w.WriteString(m.Contract.PrimaryExchange)
+	w.WriteString(m.Contract.Currency)
+	w.WriteString(m.Contract.LocalSymbol)
+	w.WriteString(m.Contract.TradingClass)
+	w.WriteString(m.Position)
+	w.WriteString(m.MarketPrice)
+	w.WriteString(m.MarketValue)
+	w.WriteString(m.AvgCost)
+	w.WriteString(m.UnrealizedPNL)
+	w.WriteString(m.RealizedPNL)
+	w.WriteString(m.Account)
+	return w.Fields(), nil
+}
+
 // [8, version=1, timestamp]
 func decodeUpdateAccountTime(r *fieldReader) ([]Message, error) {
 	r.Skip(1) // version
@@ -327,11 +411,19 @@ func decodeUpdateAccountTime(r *fieldReader) ([]Message, error) {
 	return []Message{UpdateAccountTime{Timestamp: timestamp}}, nil
 }
 
+func (m UpdateAccountTime) encodeWire() ([]string, error) {
+	return []string{itoa(InUpdateAccountTime), "1", m.Timestamp}, nil
+}
+
 // [54, version=1, accountName]
 func decodeAccountDownloadEnd(r *fieldReader) ([]Message, error) {
 	r.Skip(1) // version
 	account := r.ReadString()
 	return []Message{AccountDownloadEnd{Account: account}}, nil
+}
+
+func (m AccountDownloadEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InAccountDownloadEnd), "1", m.Account}, nil
 }
 
 // [71, version=1, reqID, account, modelCode, contract(11), position, avgCost]
@@ -346,11 +438,42 @@ func decodePositionMulti(r *fieldReader) ([]Message, error) {
 	return []Message{PositionMulti{ReqID: reqID, Account: account, ModelCode: modelCode, Contract: contract, Position: position, AvgCost: avgCost}}, nil
 }
 
+func (m PositionMulti) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InPositionMulti)
+	w.WriteInt(1) // version
+	w.WriteInt(m.ReqID)
+	w.WriteString(m.Account)
+	w.WriteString(m.ModelCode)
+	w.WriteInt(m.Contract.ConID)
+	w.WriteString(m.Contract.Symbol)
+	w.WriteString(m.Contract.SecType)
+	w.WriteString(m.Contract.Expiry)
+	if m.Contract.Strike == "" {
+		w.WriteString("0")
+	} else {
+		w.WriteString(m.Contract.Strike)
+	}
+	w.WriteString(m.Contract.Right)
+	w.WriteString(m.Contract.Multiplier)
+	w.WriteString(m.Contract.Exchange)
+	w.WriteString(m.Contract.Currency)
+	w.WriteString(m.Contract.LocalSymbol)
+	w.WriteString(m.Contract.TradingClass)
+	w.WriteString(m.Position)
+	w.WriteString(m.AvgCost)
+	return w.Fields(), nil
+}
+
 // [72, version=1, reqID]
 func decodePositionMultiEnd(r *fieldReader) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	return []Message{PositionMultiEnd{ReqID: reqID}}, nil
+}
+
+func (m PositionMultiEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InPositionMultiEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [73, version=1, reqID, account, modelCode, key, value, currency]
@@ -365,11 +488,19 @@ func decodeAccountUpdateMulti(r *fieldReader) ([]Message, error) {
 	return []Message{AccountUpdateMultiValue{ReqID: reqID, Account: account, ModelCode: modelCode, Key: key, Value: value, Currency: currency}}, nil
 }
 
+func (m AccountUpdateMultiValue) encodeWire() ([]string, error) {
+	return []string{itoa(InAccountUpdateMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode, m.Key, m.Value, m.Currency}, nil
+}
+
 // [74, version=1, reqID]
 func decodeAccountUpdateMultiEnd(r *fieldReader) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	return []Message{AccountUpdateMultiEnd{ReqID: reqID}}, nil
+}
+
+func (m AccountUpdateMultiEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InAccountUpdateMultiEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [94, reqID, dailyPnL, unrealizedPnL, realizedPnL] — no version
@@ -381,6 +512,10 @@ func decodePnL(r *fieldReader) ([]Message, error) {
 	return []Message{PnLValue{ReqID: reqID, DailyPnL: dailyPnL, UnrealizedPnL: unrealizedPnL, RealizedPnL: realizedPnL}}, nil
 }
 
+func (m PnLValue) encodeWire() ([]string, error) {
+	return []string{itoa(InPnL), itoa(m.ReqID), m.DailyPnL, m.UnrealizedPnL, m.RealizedPnL}, nil
+}
+
 // [95, reqID, pos, dailyPnL, unrealizedPnL, realizedPnL, value] — no version
 func decodePnLSingle(r *fieldReader) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -390,4 +525,8 @@ func decodePnLSingle(r *fieldReader) ([]Message, error) {
 	realizedPnL := r.ReadString()
 	value := r.ReadString()
 	return []Message{PnLSingleValue{ReqID: reqID, Position: position, DailyPnL: dailyPnL, UnrealizedPnL: unrealizedPnL, RealizedPnL: realizedPnL, Value: value}}, nil
+}
+
+func (m PnLSingleValue) encodeWire() ([]string, error) {
+	return []string{itoa(InPnLSingle), itoa(m.ReqID), m.Position, m.DailyPnL, m.UnrealizedPnL, m.RealizedPnL, m.Value}, nil
 }

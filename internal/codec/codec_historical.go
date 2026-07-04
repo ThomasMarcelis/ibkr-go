@@ -15,7 +15,23 @@ type HistoricalBarsRequest struct {
 	KeepUpToDate bool
 }
 
-func (HistoricalBarsRequest) messageName() string { return "req_historical_bars" }
+func (m HistoricalBarsRequest) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(OutReqHistoricalData)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(m.Contract.ConID)
+	writeWireContract(&w, m.Contract)
+	w.WriteBool(false) // includeExpired
+	w.WriteString(m.EndDateTime)
+	w.WriteString(m.BarSize)
+	w.WriteString(m.Duration)
+	w.WriteBool(m.UseRTH)
+	w.WriteString(m.WhatToShow)
+	w.WriteInt(1) // formatDate
+	w.WriteBool(m.KeepUpToDate)
+	w.WriteString("") // chartOptions
+	return w.Fields(), nil
+}
 
 type HistoricalBar struct {
 	ReqID  int
@@ -29,19 +45,17 @@ type HistoricalBar struct {
 	Count  string
 }
 
-func (HistoricalBar) messageName() string { return "historical_bar" }
-
 type HistoricalBarsEnd struct {
 	ReqID int
 }
-
-func (HistoricalBarsEnd) messageName() string { return "historical_bars_end" }
 
 type CancelHistoricalData struct {
 	ReqID int
 }
 
-func (CancelHistoricalData) messageName() string { return "cancel_historical_data" }
+func (m CancelHistoricalData) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelHistoricalData), "1", itoa(m.ReqID)}, nil
+}
 
 type HeadTimestampRequest struct {
 	ReqID      int
@@ -50,20 +64,31 @@ type HeadTimestampRequest struct {
 	UseRTH     bool
 }
 
-func (HeadTimestampRequest) messageName() string { return "req_head_timestamp" }
+func (m HeadTimestampRequest) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(OutReqHeadTimestamp)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(m.Contract.ConID)
+	writeWireContract(&w, m.Contract)
+	w.WriteBool(false) // includeExpired
+	w.WriteBool(m.UseRTH)
+	w.WriteString(m.WhatToShow)
+	w.WriteInt(1) // formatDate
+	return w.Fields(), nil
+}
 
 type HeadTimestamp struct {
 	ReqID     int
 	Timestamp string
 }
 
-func (HeadTimestamp) messageName() string { return "head_timestamp" }
-
 type CancelHeadTimestamp struct {
 	ReqID int
 }
 
-func (CancelHeadTimestamp) messageName() string { return "cancel_head_timestamp" }
+func (m CancelHeadTimestamp) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelHeadTimestamp), itoa(m.ReqID)}, nil
+}
 
 // HistogramData (OUT 88 / cancel OUT 89 / IN 89)
 
@@ -74,13 +99,25 @@ type HistogramDataRequest struct {
 	Period   string
 }
 
-func (HistogramDataRequest) messageName() string { return "req_histogram_data" }
+func (m HistogramDataRequest) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(OutReqHistogramData)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(m.Contract.ConID)
+	writeWireContract(&w, m.Contract)
+	w.WriteBool(false) // includeExpired
+	w.WriteBool(m.UseRTH)
+	w.WriteString(m.Period)
+	return w.Fields(), nil
+}
 
 type CancelHistogramData struct {
 	ReqID int
 }
 
-func (CancelHistogramData) messageName() string { return "cancel_histogram_data" }
+func (m CancelHistogramData) encodeWire() ([]string, error) {
+	return []string{itoa(OutCancelHistogramData), itoa(m.ReqID)}, nil
+}
 
 type HistogramDataEntry struct {
 	Price string
@@ -91,8 +128,6 @@ type HistogramDataResponse struct {
 	ReqID   int
 	Entries []HistogramDataEntry
 }
-
-func (HistogramDataResponse) messageName() string { return "histogram_data" }
 
 // HistoricalTicks (OUT 96 / IN 96,97,98)
 
@@ -107,7 +142,22 @@ type HistoricalTicksRequest struct {
 	IgnoreSize    bool
 }
 
-func (HistoricalTicksRequest) messageName() string { return "req_historical_ticks" }
+func (m HistoricalTicksRequest) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(OutReqHistoricalTicks)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(m.Contract.ConID)
+	writeWireContract(&w, m.Contract)
+	w.WriteBool(false) // includeExpired
+	w.WriteString(m.StartDateTime)
+	w.WriteString(m.EndDateTime)
+	w.WriteInt(m.NumberOfTicks)
+	w.WriteString(m.WhatToShow)
+	w.WriteBool(m.UseRTH)
+	w.WriteBool(m.IgnoreSize)
+	w.WriteString("") // miscOptions
+	return w.Fields(), nil
+}
 
 type HistoricalTickEntry struct {
 	Time  string
@@ -120,8 +170,6 @@ type HistoricalTicksResponse struct {
 	Ticks []HistoricalTickEntry
 	Done  bool
 }
-
-func (HistoricalTicksResponse) messageName() string { return "historical_ticks" }
 
 type HistoricalTickBidAskEntry struct {
 	TickAttrib int
@@ -138,8 +186,6 @@ type HistoricalTicksBidAskResponse struct {
 	Done  bool
 }
 
-func (HistoricalTicksBidAskResponse) messageName() string { return "historical_ticks_bid_ask" }
-
 type HistoricalTickLastEntry struct {
 	TickAttrib        int
 	Time              string
@@ -155,8 +201,6 @@ type HistoricalTicksLastResponse struct {
 	Done  bool
 }
 
-func (HistoricalTicksLastResponse) messageName() string { return "historical_ticks_last" }
-
 // HistoricalScheduleResponse is the decoded inbound response to a
 // REQ_HISTORICAL_DATA request with whatToShow=SCHEDULE. Each session entry
 // describes one contiguous trading window inside the requested duration.
@@ -170,8 +214,6 @@ type HistoricalScheduleResponse struct {
 	TimeZone      string
 	Sessions      []HistoricalScheduleSession
 }
-
-func (HistoricalScheduleResponse) messageName() string { return "historical_schedule" }
 
 // HistoricalScheduleSession describes one trading session entry inside a
 // HistoricalScheduleResponse. IBKR emits three string fields per session:
@@ -197,8 +239,6 @@ type HistoricalDataUpdate struct {
 	WAP      string
 	Count    string
 }
-
-func (HistoricalDataUpdate) messageName() string { return "historical_data_update" }
 
 // [17, reqID, barCount, time, O, H, L, C, vol, wap, count, ...]
 func decodeHistoricalData(r *fieldReader) ([]Message, error) {
@@ -229,11 +269,26 @@ func decodeHistoricalData(r *fieldReader) ([]Message, error) {
 	return msgs, nil
 }
 
+func (m HistoricalBar) encodeWire() ([]string, error) {
+	return []string{
+		itoa(InHistoricalData), itoa(m.ReqID), "1",
+		m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count,
+	}, nil
+}
+
+func (m HistoricalBarsEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InHistoricalData), itoa(m.ReqID), "0"}, nil
+}
+
 // [88, reqId, headTimestamp] — no version
 func decodeHeadTimestamp(r *fieldReader) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	timestamp := r.ReadString()
 	return []Message{HeadTimestamp{ReqID: reqID, Timestamp: timestamp}}, nil
+}
+
+func (m HeadTimestamp) encodeWire() ([]string, error) {
+	return []string{itoa(InHeadTimestamp), itoa(m.ReqID), m.Timestamp}, nil
 }
 
 // [89, reqID, count, entries(price, size)] — no version
@@ -251,6 +306,18 @@ func decodeHistogramData(r *fieldReader) ([]Message, error) {
 		entries[i] = HistogramDataEntry{Price: r.ReadString(), Size: r.ReadString()}
 	}
 	return []Message{HistogramDataResponse{ReqID: reqID, Entries: entries}}, nil
+}
+
+func (m HistogramDataResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InHistogramData)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(len(m.Entries))
+	for _, e := range m.Entries {
+		w.WriteString(e.Price)
+		w.WriteString(e.Size)
+	}
+	return w.Fields(), nil
 }
 
 // [96, reqID, count, entries(time, unused, price, size), done] — MIDPOINT
@@ -273,6 +340,21 @@ func decodeHistoricalTicks(r *fieldReader) ([]Message, error) {
 	}
 	done, _ := r.ReadBool()
 	return []Message{HistoricalTicksResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
+}
+
+func (m HistoricalTicksResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InHistoricalTicks)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(len(m.Ticks))
+	for _, t := range m.Ticks {
+		w.WriteString(t.Time)
+		w.WriteString("") // unused
+		w.WriteString(t.Price)
+		w.WriteString(t.Size)
+	}
+	w.WriteBool(m.Done)
+	return w.Fields(), nil
 }
 
 // [97, reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done] — BID_ASK
@@ -299,6 +381,23 @@ func decodeHistoricalTicksBidAsk(r *fieldReader) ([]Message, error) {
 	return []Message{HistoricalTicksBidAskResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
 }
 
+func (m HistoricalTicksBidAskResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InHistoricalTicksBidAsk)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(len(m.Ticks))
+	for _, t := range m.Ticks {
+		w.WriteString(t.Time)
+		w.WriteInt(t.TickAttrib)
+		w.WriteString(t.BidPrice)
+		w.WriteString(t.AskPrice)
+		w.WriteString(t.BidSize)
+		w.WriteString(t.AskSize)
+	}
+	w.WriteBool(m.Done)
+	return w.Fields(), nil
+}
+
 // [98, reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done] — TRADES
 func decodeHistoricalTicksLast(r *fieldReader) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -321,6 +420,23 @@ func decodeHistoricalTicksLast(r *fieldReader) ([]Message, error) {
 	}
 	done, _ := r.ReadBool()
 	return []Message{HistoricalTicksLastResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
+}
+
+func (m HistoricalTicksLastResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InHistoricalTicksLast)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(len(m.Ticks))
+	for _, t := range m.Ticks {
+		w.WriteString(t.Time)
+		w.WriteInt(t.TickAttrib)
+		w.WriteString(t.Price)
+		w.WriteString(t.Size)
+		w.WriteString(t.Exchange)
+		w.WriteString(t.SpecialConditions)
+	}
+	w.WriteBool(m.Done)
+	return w.Fields(), nil
 }
 
 func decodeHistoricalDataUpdate(r *fieldReader) ([]Message, error) {
@@ -352,6 +468,22 @@ func decodeHistoricalDataUpdate(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
+func (m HistoricalDataUpdate) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InHistoricalDataUpdate)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(m.BarCount)
+	w.WriteString(m.Time)
+	w.WriteString(m.Open)
+	w.WriteString(m.High)
+	w.WriteString(m.Low)
+	w.WriteString(m.Close)
+	w.WriteString(m.Volume)
+	w.WriteString(m.WAP)
+	w.WriteString(m.Count)
+	return w.Fields(), nil
+}
+
 // [106, reqId, startDateTime, endDateTime, timeZone, sessionCount, (startDateTime,endDateTime,refDate)*count]
 func decodeHistoricalSchedule(r *fieldReader) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -380,4 +512,20 @@ func decodeHistoricalSchedule(r *fieldReader) ([]Message, error) {
 		TimeZone:      timeZone,
 		Sessions:      sessions,
 	}}, nil
+}
+
+func (m HistoricalScheduleResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InHistoricalSchedule)
+	w.WriteInt(m.ReqID)
+	w.WriteString(m.StartDateTime)
+	w.WriteString(m.EndDateTime)
+	w.WriteString(m.TimeZone)
+	w.WriteInt(len(m.Sessions))
+	for _, s := range m.Sessions {
+		w.WriteString(s.StartDateTime)
+		w.WriteString(s.EndDateTime)
+		w.WriteString(s.RefDate)
+	}
+	return w.Fields(), nil
 }

@@ -219,13 +219,13 @@ func TestFieldWriterFieldsEmpty(t *testing.T) {
 func TestEncodeExecutionsRequestServer200Layout(t *testing.T) {
 	t.Parallel()
 
-	fields, err := encodeFields(ExecutionsRequest{
+	fields, err := ExecutionsRequest{
 		ReqID:   3,
 		Account: "DU9000001",
 		Symbol:  "AAPL",
-	})
+	}.encodeWire()
 	if err != nil {
-		t.Fatalf("encodeFields(ExecutionsRequest) error = %v", err)
+		t.Fatalf("encodeWire(ExecutionsRequest) error = %v", err)
 	}
 
 	want := []string{"7", "3", "3", "0", "DU9000001", "", "AAPL", "", "", "", "2147483647", "0"}

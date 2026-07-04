@@ -170,9 +170,9 @@ func BenchmarkDecodeHistoricalBars(b *testing.B) {
 	fields := []string{strconv.Itoa(InHistoricalData), "1001", strconv.Itoa(len(bars) * repeats)}
 	for range repeats {
 		for _, bar := range bars {
-			barFields, err := encodeFields(bar)
+			barFields, err := bar.encodeWire()
 			if err != nil {
-				b.Fatalf("encodeFields(HistoricalBar) error = %v", err)
+				b.Fatalf("encodeWire(HistoricalBar) error = %v", err)
 			}
 			if len(barFields) != 11 || barFields[2] != "1" {
 				b.Fatalf("unexpected HistoricalBar encode shape: %q", barFields)

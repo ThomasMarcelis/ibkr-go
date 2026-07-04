@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -13,7 +14,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		msg  Message
 		// skip indicates the message cannot DeepEqual after roundtrip due to
 		// known encode/decode asymmetries (documented per case). For these we
-		// verify only messageName() survives.
+		// verify only that the concrete message type survives.
 		skip string
 	}{
 		{
@@ -537,9 +538,9 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			}
 
 			if tt.skip != "" {
-				// Known asymmetry: verify messageName only.
-				if msgs[0].messageName() != tt.msg.messageName() {
-					t.Fatalf("messageName() = %q, want %q", msgs[0].messageName(), tt.msg.messageName())
+				// Known asymmetry: verify concrete message type only.
+				if fmt.Sprintf("%T", msgs[0]) != fmt.Sprintf("%T", tt.msg) {
+					t.Fatalf("message type = %T, want %T", msgs[0], tt.msg)
 				}
 				return
 			}

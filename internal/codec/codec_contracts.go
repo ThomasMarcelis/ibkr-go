@@ -28,7 +28,19 @@ type ContractDetailsRequest struct {
 	Contract Contract
 }
 
-func (ContractDetailsRequest) messageName() string { return "req_contract_details" }
+func (m ContractDetailsRequest) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(OutReqContractData)
+	w.WriteInt(8) // version
+	w.WriteInt(m.ReqID)
+	w.WriteInt(m.Contract.ConID)
+	writeWireContract(&w, m.Contract)
+	w.WriteBool(false) // includeExpired
+	w.WriteString("")  // secIdType
+	w.WriteString("")  // secId
+	w.WriteString("")  // issuerId (v>=MinServerVersionBondIssuerId)
+	return w.Fields(), nil
+}
 
 type ContractDetails struct {
 	ReqID      int
@@ -39,20 +51,18 @@ type ContractDetails struct {
 	TimeZoneID string
 }
 
-func (ContractDetails) messageName() string { return "contract_details" }
-
 type ContractDetailsEnd struct {
 	ReqID int
 }
-
-func (ContractDetailsEnd) messageName() string { return "contract_details_end" }
 
 type MatchingSymbolsRequest struct {
 	ReqID   int
 	Pattern string
 }
 
-func (MatchingSymbolsRequest) messageName() string { return "req_matching_symbols" }
+func (m MatchingSymbolsRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqMatchingSymbols), itoa(m.ReqID), m.Pattern}, nil
+}
 
 type SymbolSample struct {
 	ConID              int
@@ -70,13 +80,13 @@ type MatchingSymbols struct {
 	Symbols []SymbolSample
 }
 
-func (MatchingSymbols) messageName() string { return "matching_symbols" }
-
 type MarketRuleRequest struct {
 	MarketRuleID int
 }
 
-func (MarketRuleRequest) messageName() string { return "req_market_rule" }
+func (m MarketRuleRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqMarketRule), itoa(m.MarketRuleID)}, nil
+}
 
 type PriceIncrement struct {
 	LowEdge   string
@@ -88,8 +98,6 @@ type MarketRule struct {
 	Increments   []PriceIncrement
 }
 
-func (MarketRule) messageName() string { return "market_rule" }
-
 // SecDefOptParams (OUT 78 / IN 75+76)
 
 type SecDefOptParamsRequest struct {
@@ -100,7 +108,9 @@ type SecDefOptParamsRequest struct {
 	UnderlyingConID   int
 }
 
-func (SecDefOptParamsRequest) messageName() string { return "req_sec_def_opt_params" }
+func (m SecDefOptParamsRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqSecDefOptParams), itoa(m.ReqID), m.UnderlyingSymbol, m.FutFopExchange, m.UnderlyingSecType, itoa(m.UnderlyingConID)}, nil
+}
 
 type SecDefOptParamsResponse struct {
 	ReqID           int
@@ -112,13 +122,9 @@ type SecDefOptParamsResponse struct {
 	Strikes         []string
 }
 
-func (SecDefOptParamsResponse) messageName() string { return "sec_def_opt_params" }
-
 type SecDefOptParamsEnd struct {
 	ReqID int
 }
-
-func (SecDefOptParamsEnd) messageName() string { return "sec_def_opt_params_end" }
 
 // SmartComponents (OUT 83 / IN 82)
 
@@ -127,7 +133,9 @@ type SmartComponentsRequest struct {
 	BBOExchange string
 }
 
-func (SmartComponentsRequest) messageName() string { return "req_smart_components" }
+func (m SmartComponentsRequest) encodeWire() ([]string, error) {
+	return []string{itoa(OutReqSmartComponents), itoa(m.ReqID), m.BBOExchange}, nil
+}
 
 type SmartComponentEntry struct {
 	BitNumber      int
@@ -139,8 +147,6 @@ type SmartComponentsResponse struct {
 	ReqID      int
 	Components []SmartComponentEntry
 }
-
-func (SmartComponentsResponse) messageName() string { return "smart_components" }
 
 // v200 wire layout verified against live IB Gateway capture.
 func decodeContractData(r *fieldReader) ([]Message, error) {
@@ -189,11 +195,31 @@ func decodeContractData(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
+func (m ContractDetails) encodeWire() ([]string, error) {
+	return []string{
+		itoa(InContractData), itoa(m.ReqID),
+		m.Contract.Symbol, m.Contract.SecType, m.Contract.Expiry,
+		m.Contract.Expiry, // lastTradeDateOrContractMonth (duplicate)
+		m.Contract.Strike, m.Contract.Right,
+		m.Contract.Exchange, m.Contract.Currency,
+		m.Contract.LocalSymbol, m.MarketName, m.Contract.TradingClass,
+		itoa(m.Contract.ConID), m.MinTick,
+		m.Contract.Multiplier, "", "", "", "",
+		m.LongName, m.Contract.PrimaryExchange,
+		"", "", "", "",
+		m.TimeZoneID,
+	}, nil
+}
+
 // [52, version, reqID]
 func decodeContractDataEnd(r *fieldReader) ([]Message, error) {
 	r.Skip(1)
 	reqID, _ := r.ReadInt()
 	return []Message{ContractDetailsEnd{ReqID: reqID}}, nil
+}
+
+func (m ContractDetailsEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InContractDataEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, expirationsCount, expirations..., strikesCount, strikes...] — no version
@@ -236,10 +262,33 @@ func decodeSecDefOptParams(r *fieldReader) ([]Message, error) {
 	}}, nil
 }
 
+func (m SecDefOptParamsResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InSecDefOptParams)
+	w.WriteInt(m.ReqID)
+	w.WriteString(m.Exchange)
+	w.WriteInt(m.UnderlyingConID)
+	w.WriteString(m.TradingClass)
+	w.WriteString(m.Multiplier)
+	w.WriteInt(len(m.Expirations))
+	for _, exp := range m.Expirations {
+		w.WriteString(exp)
+	}
+	w.WriteInt(len(m.Strikes))
+	for _, strike := range m.Strikes {
+		w.WriteString(strike)
+	}
+	return w.Fields(), nil
+}
+
 // [76, reqID] — no version
 func decodeSecDefOptParamsEnd(r *fieldReader) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	return []Message{SecDefOptParamsEnd{ReqID: reqID}}, nil
+}
+
+func (m SecDefOptParamsEnd) encodeWire() ([]string, error) {
+	return []string{itoa(InSecDefOptParamsEnd), itoa(m.ReqID)}, nil
 }
 
 // [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)]
@@ -280,6 +329,27 @@ func decodeSymbolSamples(r *fieldReader) ([]Message, error) {
 	return []Message{MatchingSymbols{ReqID: reqID, Symbols: symbols}}, nil
 }
 
+func (m MatchingSymbols) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InSymbolSamples)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(len(m.Symbols))
+	for _, s := range m.Symbols {
+		w.WriteInt(s.ConID)
+		w.WriteString(s.Symbol)
+		w.WriteString(s.SecType)
+		w.WriteString(s.PrimaryExchange)
+		w.WriteString(s.Currency)
+		w.WriteInt(len(s.DerivativeSecTypes))
+		for _, dt := range s.DerivativeSecTypes {
+			w.WriteString(dt)
+		}
+		w.WriteString(s.Description)
+		w.WriteString(s.IssuerID)
+	}
+	return w.Fields(), nil
+}
+
 // [82, reqID, count, repeated(bitNumber, exchangeName, exchangeLetter)]
 func decodeSmartComponents(r *fieldReader) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -300,6 +370,19 @@ func decodeSmartComponents(r *fieldReader) ([]Message, error) {
 	return []Message{SmartComponentsResponse{ReqID: reqID, Components: components}}, nil
 }
 
+func (m SmartComponentsResponse) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InSmartComponents)
+	w.WriteInt(m.ReqID)
+	w.WriteInt(len(m.Components))
+	for _, c := range m.Components {
+		w.WriteInt(c.BitNumber)
+		w.WriteString(c.ExchangeName)
+		w.WriteString(c.ExchangeLetter)
+	}
+	return w.Fields(), nil
+}
+
 // [92, marketRuleId, count, repeated(lowEdge, increment)] — no version
 func decodeMarketRule(r *fieldReader) ([]Message, error) {
 	marketRuleID, _ := r.ReadInt()
@@ -315,4 +398,16 @@ func decodeMarketRule(r *fieldReader) ([]Message, error) {
 		increments[i] = PriceIncrement{LowEdge: r.ReadString(), Increment: r.ReadString()}
 	}
 	return []Message{MarketRule{MarketRuleID: marketRuleID, Increments: increments}}, nil
+}
+
+func (m MarketRule) encodeWire() ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InMarketRule)
+	w.WriteInt(m.MarketRuleID)
+	w.WriteInt(len(m.Increments))
+	for _, inc := range m.Increments {
+		w.WriteString(inc.LowEdge)
+		w.WriteString(inc.Increment)
+	}
+	return w.Fields(), nil
 }

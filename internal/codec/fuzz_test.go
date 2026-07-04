@@ -1090,10 +1090,10 @@ func TestDecodeHistoricalNewsEndAndMktDepthExchanges(t *testing.T) {
 		fields   []string
 		wantName string
 	}{
-		{"HistoricalNewsEnd", []string{"87", "1", "1"}, "historical_news_end"},
-		{"HistoricalNewsEnd/false", []string{"87", "42", "0"}, "historical_news_end"},
+		{"HistoricalNewsEnd", []string{"87", "1", "1"}, "codec.HistoricalNewsEnd"},
+		{"HistoricalNewsEnd/false", []string{"87", "42", "0"}, "codec.HistoricalNewsEnd"},
 
-		{"MktDepthExchanges/empty", []string{"80", "0", "0", "0", "0"}, "mkt_depth_exchanges"},
+		{"MktDepthExchanges/empty", []string{"80", "0", "0", "0", "0"}, "codec.MktDepthExchanges"},
 
 		{"OneField", []string{"80", "1"}, ""},
 		{"NoFields", []string{"80"}, ""},
@@ -1115,8 +1115,8 @@ func TestDecodeHistoricalNewsEndAndMktDepthExchanges(t *testing.T) {
 			if len(msgs) != 1 {
 				t.Fatalf("got %d messages, want 1", len(msgs))
 			}
-			if msgs[0].messageName() != tc.wantName {
-				t.Errorf("messageName() = %q, want %q", msgs[0].messageName(), tc.wantName)
+			if got := fmt.Sprintf("%T", msgs[0]); got != tc.wantName {
+				t.Errorf("message type = %q, want %q", got, tc.wantName)
 			}
 		})
 	}
@@ -1130,11 +1130,11 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 		fields   []string
 		wantName string
 	}{
-		{"SmartComponents/1entry", []string{"82", "1", "1", "0", "ARCA", "P"}, "smart_components"},
-		{"SmartComponents/empty", []string{"82", "1", "0"}, "smart_components"},
+		{"SmartComponents/1entry", []string{"82", "1", "1", "0", "ARCA", "P"}, "codec.SmartComponentsResponse"},
+		{"SmartComponents/empty", []string{"82", "1", "0"}, "codec.SmartComponentsResponse"},
 
-		{"SymbolSamples/1entry", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0"}, "matching_symbols"},
-		{"SymbolSamples/empty", []string{"79", "1", "0"}, "matching_symbols"},
+		{"SymbolSamples/1entry", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0"}, "codec.MatchingSymbols"},
+		{"SymbolSamples/empty", []string{"79", "1", "0"}, "codec.MatchingSymbols"},
 
 		// Degenerate
 		{"NoCount", []string{"82", "1"}, ""},
@@ -1155,8 +1155,8 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 			if len(msgs) != 1 {
 				t.Fatalf("got %d messages, want 1", len(msgs))
 			}
-			if msgs[0].messageName() != tc.wantName {
-				t.Errorf("messageName() = %q, want %q", msgs[0].messageName(), tc.wantName)
+			if got := fmt.Sprintf("%T", msgs[0]); got != tc.wantName {
+				t.Errorf("message type = %q, want %q", got, tc.wantName)
 			}
 		})
 	}

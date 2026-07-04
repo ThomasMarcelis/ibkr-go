@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"fmt"
 	"slices"
 	"testing"
 
@@ -16,25 +17,25 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		msg  Message
 		name string
 	}{
-		{ManagedAccounts{Accounts: []string{"DU12345", "DU67890"}}, "managed_accounts"},
-		{NextValidID{OrderID: 1001}, "next_valid_id"},
-		{CurrentTime{Time: "1712345678"}, "current_time"},
-		{CurrentTimeMillis{TimeMs: "1781169286652"}, "current_time_millis"},
-		{APIError{ReqID: -1, Code: 2104, Message: "Market data farm OK", AdvancedOrderRejectJSON: "", ErrorTimeMs: "1712345678000"}, "api_error"},
-		{ContractDetailsEnd{ReqID: 42}, "contract_details_end"},
-		{AccountSummaryValue{ReqID: 1, Account: "DU12345", Tag: "NetLiquidation", Value: "100000.00", Currency: "USD"}, "account_summary"},
-		{AccountSummaryEnd{ReqID: 1}, "account_summary_end"},
-		{TickPrice{ReqID: 1, TickType: 1, Price: "189.10", Size: "400", AttrMask: 0}, "tick_price"},
-		{TickSize{ReqID: 1, TickType: 0, Size: "400"}, "tick_size"},
-		{MarketDataType{ReqID: 1, DataType: 3}, "market_data_type"},
-		{TickSnapshotEnd{ReqID: 1}, "tick_snapshot_end"},
-		{RealTimeBar{ReqID: 1, Time: "1712345678", Open: "100.0", High: "101.0", Low: "99.5", Close: "100.5", Volume: "1000", WAP: "100.5", Count: "50"}, "realtime_bar"},
-		{CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"}, "commission_report"},
-		{TickGeneric{ReqID: 1, TickType: 49, Value: "0"}, "tick_generic"},
-		{TickString{ReqID: 1, TickType: 45, Value: "1712300400"}, "tick_string"},
-		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3}, "tick_req_params"},
-		{ExecutionDetail{ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345", Symbol: "AAPL", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "execution_detail"},
-		{ExecutionsEnd{ReqID: 1}, "executions_end"},
+		{ManagedAccounts{Accounts: []string{"DU12345", "DU67890"}}, "codec.ManagedAccounts"},
+		{NextValidID{OrderID: 1001}, "codec.NextValidID"},
+		{CurrentTime{Time: "1712345678"}, "codec.CurrentTime"},
+		{CurrentTimeMillis{TimeMs: "1781169286652"}, "codec.CurrentTimeMillis"},
+		{APIError{ReqID: -1, Code: 2104, Message: "Market data farm OK", AdvancedOrderRejectJSON: "", ErrorTimeMs: "1712345678000"}, "codec.APIError"},
+		{ContractDetailsEnd{ReqID: 42}, "codec.ContractDetailsEnd"},
+		{AccountSummaryValue{ReqID: 1, Account: "DU12345", Tag: "NetLiquidation", Value: "100000.00", Currency: "USD"}, "codec.AccountSummaryValue"},
+		{AccountSummaryEnd{ReqID: 1}, "codec.AccountSummaryEnd"},
+		{TickPrice{ReqID: 1, TickType: 1, Price: "189.10", Size: "400", AttrMask: 0}, "codec.TickPrice"},
+		{TickSize{ReqID: 1, TickType: 0, Size: "400"}, "codec.TickSize"},
+		{MarketDataType{ReqID: 1, DataType: 3}, "codec.MarketDataType"},
+		{TickSnapshotEnd{ReqID: 1}, "codec.TickSnapshotEnd"},
+		{RealTimeBar{ReqID: 1, Time: "1712345678", Open: "100.0", High: "101.0", Low: "99.5", Close: "100.5", Volume: "1000", WAP: "100.5", Count: "50"}, "codec.RealTimeBar"},
+		{CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"}, "codec.CommissionReport"},
+		{TickGeneric{ReqID: 1, TickType: 49, Value: "0"}, "codec.TickGeneric"},
+		{TickString{ReqID: 1, TickType: 45, Value: "1712300400"}, "codec.TickString"},
+		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3}, "codec.TickReqParams"},
+		{ExecutionDetail{ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345", Symbol: "AAPL", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "codec.ExecutionDetail"},
+		{ExecutionsEnd{ReqID: 1}, "codec.ExecutionsEnd"},
 		{OpenOrder{
 			OrderID: 42, Account: "DU12345",
 			Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
@@ -46,14 +47,14 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 			Status:           "Submitted",
 			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
 			ParentID: "99",
-		}, "open_order"},
-		{OpenOrderEnd{}, "open_order_end"},
-		{PositionEnd{}, "position_end"},
+		}, "codec.OpenOrder"},
+		{OpenOrderEnd{}, "codec.OpenOrderEnd"},
+		{PositionEnd{}, "codec.PositionEnd"},
 		{OrderStatus{
 			OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0",
 			AvgFillPrice: "150.50", PermID: "123456", ParentID: "0",
 			LastFillPrice: "150.50", ClientID: "99", WhyHeld: "", MktCapPrice: "0",
-		}, "order_status"},
+		}, "codec.OrderStatus"},
 	}
 
 	for _, tt := range tests {
@@ -72,8 +73,8 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 			if len(msgs) == 0 {
 				t.Fatal("DecodeBatch() returned 0 messages")
 			}
-			if msgs[0].messageName() != tt.name {
-				t.Fatalf("messageName() = %q, want %q", msgs[0].messageName(), tt.name)
+			if got := fmt.Sprintf("%T", msgs[0]); got != tt.name {
+				t.Fatalf("message type = %q, want %q", got, tt.name)
 			}
 		})
 	}
@@ -142,13 +143,13 @@ func TestDecodeByMsgID(t *testing.T) {
 		fields []string
 		want   string
 	}{
-		{"managed_accounts", []string{"15", "1", "DU12345,DU67890"}, "managed_accounts"},
-		{"next_valid_id", []string{"9", "1", "1001"}, "next_valid_id"},
-		{"current_time", []string{"49", "1", "1712345678"}, "current_time"},
-		{"api_error", []string{"4", "-1", "2104", "Market data farm connected", "", "1712345678000"}, "api_error"},
-		{"tick_generic", []string{"45", "6", "1", "49", "0"}, "tick_generic"},
-		{"tick_string", []string{"46", "6", "1", "45", "1712300400"}, "tick_string"},
-		{"tick_req_params", []string{"81", "1", "0.01", "SMART", "3"}, "tick_req_params"},
+		{"managed_accounts", []string{"15", "1", "DU12345,DU67890"}, "codec.ManagedAccounts"},
+		{"next_valid_id", []string{"9", "1", "1001"}, "codec.NextValidID"},
+		{"current_time", []string{"49", "1", "1712345678"}, "codec.CurrentTime"},
+		{"api_error", []string{"4", "-1", "2104", "Market data farm connected", "", "1712345678000"}, "codec.APIError"},
+		{"tick_generic", []string{"45", "6", "1", "49", "0"}, "codec.TickGeneric"},
+		{"tick_string", []string{"46", "6", "1", "45", "1712300400"}, "codec.TickString"},
+		{"tick_req_params", []string{"81", "1", "0.01", "SMART", "3"}, "codec.TickReqParams"},
 	}
 
 	for _, tt := range tests {
@@ -164,8 +165,8 @@ func TestDecodeByMsgID(t *testing.T) {
 			if len(msgs) != 1 {
 				t.Fatalf("DecodeBatch() len = %d, want 1", len(msgs))
 			}
-			if msgs[0].messageName() != tt.want {
-				t.Fatalf("messageName() = %q, want %q", msgs[0].messageName(), tt.want)
+			if got := fmt.Sprintf("%T", msgs[0]); got != tt.want {
+				t.Fatalf("message type = %q, want %q", got, tt.want)
 			}
 		})
 	}
