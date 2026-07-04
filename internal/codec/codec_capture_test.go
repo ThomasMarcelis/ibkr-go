@@ -1376,3 +1376,27 @@ func TestCaptureDecode_OpenOrderLiveParentID(t *testing.T) {
 		t.Errorf("status empty: live frame fell back to the partial path")
 	}
 }
+
+// TestDecodeUserInfoLiveFrame freezes the userInfo msg id against the live
+// gateway. The response to reqUserInfo arrives as msg_id 107 (official
+// USER_INFO), not 103 (REPLACE_FA_END): the mis-numbered constant replayed
+// green through the DSL testhost (which encodes with the same constant) and
+// killed live sessions with ErrInterrupted on the unknown id. Captured
+// 2026-07-04, server_version 200, capture 014d470efb662e72.
+func TestDecodeUserInfoLiveFrame(t *testing.T) {
+	payload := []byte("107\x001\x00\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("DecodeBatch() returned %d messages, want 1", len(msgs))
+	}
+	info, ok := msgs[0].(UserInfo)
+	if !ok {
+		t.Fatalf("DecodeBatch() message type = %T, want UserInfo", msgs[0])
+	}
+	if info.ReqID != 1 || info.WhiteBrandingID != "" {
+		t.Fatalf("UserInfo = %+v, want ReqID=1 empty branding", info)
+	}
+}

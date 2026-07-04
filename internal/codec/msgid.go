@@ -140,7 +140,7 @@ const (
 	InTickByTick            = 99
 	InCompletedOrder        = 101
 	InCompletedOrderEnd     = 102
-	InUserInfo              = 103
+	InUserInfo              = 107
 	InHistoricalTicks       = 96
 	InHistoricalTicksBidAsk = 97
 	InHistoricalTicksLast   = 98
