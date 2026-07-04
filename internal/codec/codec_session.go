@@ -1,5 +1,9 @@
 package codec
 
+import (
+	"strings"
+)
+
 type StartAPI struct {
 	ClientID             int
 	OptionalCapabilities string
@@ -85,3 +89,52 @@ type UserInfo struct {
 }
 
 func (UserInfo) messageName() string { return "user_info" }
+
+// [4, reqId, code, message, advancedJson, errorTimeMs]
+func decodeErrMsg(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	code, _ := r.ReadInt()
+	message := r.ReadString()
+	advJSON := r.ReadString()
+	errTime := r.ReadString()
+	return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
+}
+
+// [109, timeMs] — no version
+func decodeCurrentTimeInMillis(r *fieldReader) ([]Message, error) {
+	return []Message{CurrentTimeMillis{TimeMs: r.ReadString()}}, nil
+}
+
+// [9, version, orderID]
+func decodeNextValidID(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	orderID, err := r.ReadInt64()
+	if err != nil {
+		return nil, err
+	}
+	return []Message{NextValidID{OrderID: orderID}}, nil
+}
+
+// [15, version, accountsList]
+func decodeManagedAccounts(r *fieldReader) ([]Message, error) {
+	r.Skip(1)
+	raw := r.ReadString()
+	accounts := []string{}
+	if raw != "" {
+		accounts = strings.Split(strings.TrimRight(raw, ","), ",")
+	}
+	return []Message{ManagedAccounts{Accounts: accounts}}, nil
+}
+
+// [49, version, time]
+func decodeCurrentTime(r *fieldReader) ([]Message, error) {
+	r.Skip(1)
+	return []Message{CurrentTime{Time: r.ReadString()}}, nil
+}
+
+// [103, reqId, whiteBrandingId] — no version
+func decodeUserInfo(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	whiteBrandingID := r.ReadString()
+	return []Message{UserInfo{ReqID: reqID, WhiteBrandingID: whiteBrandingID}}, nil
+}

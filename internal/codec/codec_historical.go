@@ -1,5 +1,9 @@
 package codec
 
+import (
+	"strconv"
+)
+
 type HistoricalBarsRequest struct {
 	ReqID        int
 	Contract     Contract
@@ -195,3 +199,185 @@ type HistoricalDataUpdate struct {
 }
 
 func (HistoricalDataUpdate) messageName() string { return "historical_data_update" }
+
+// [17, reqID, barCount, time, O, H, L, C, vol, wap, count, ...]
+func decodeHistoricalData(r *fieldReader) ([]Message, error) {
+	reqID, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	barCount, err := r.ReadCount("bar count")
+	if err != nil {
+		return nil, err
+	}
+	if barCount <= 0 {
+		return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
+	}
+	if err := r.RequireFixedEntryFields("historical data", barCount, 8, 0); err != nil {
+		return nil, err
+	}
+	msgs := make([]Message, 0, barCount+1)
+	for i := 0; i < barCount; i++ {
+		msgs = append(msgs, HistoricalBar{
+			ReqID: reqID, Time: r.ReadString(),
+			Open: r.ReadString(), High: r.ReadString(),
+			Low: r.ReadString(), Close: r.ReadString(),
+			Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
+		})
+	}
+	msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID})
+	return msgs, nil
+}
+
+// [88, reqId, headTimestamp] — no version
+func decodeHeadTimestamp(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	timestamp := r.ReadString()
+	return []Message{HeadTimestamp{ReqID: reqID, Timestamp: timestamp}}, nil
+}
+
+// [89, reqID, count, entries(price, size)] — no version
+func decodeHistogramData(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	count, err := r.ReadCount("histogram entry count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("histogram data", count, 2, 0); err != nil {
+		return nil, err
+	}
+	entries := make([]HistogramDataEntry, count)
+	for i := range entries {
+		entries[i] = HistogramDataEntry{Price: r.ReadString(), Size: r.ReadString()}
+	}
+	return []Message{HistogramDataResponse{ReqID: reqID, Entries: entries}}, nil
+}
+
+// [96, reqID, count, entries(time, unused, price, size), done] — MIDPOINT
+func decodeHistoricalTicks(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	count, err := r.ReadCount("historical midpoint tick count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("historical midpoint ticks", count, 4, 1); err != nil {
+		return nil, err
+	}
+	ticks := make([]HistoricalTickEntry, count)
+	for i := range ticks {
+		timeStr := r.ReadString()
+		r.Skip(1) // unused
+		price := r.ReadString()
+		size := r.ReadString()
+		ticks[i] = HistoricalTickEntry{Time: timeStr, Price: price, Size: size}
+	}
+	done, _ := r.ReadBool()
+	return []Message{HistoricalTicksResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
+}
+
+// [97, reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done] — BID_ASK
+func decodeHistoricalTicksBidAsk(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	count, err := r.ReadCount("historical bid/ask tick count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("historical bid/ask ticks", count, 6, 1); err != nil {
+		return nil, err
+	}
+	ticks := make([]HistoricalTickBidAskEntry, count)
+	for i := range ticks {
+		timeStr := r.ReadString()
+		tickAttrib, _ := r.ReadInt()
+		bidPrice := r.ReadString()
+		askPrice := r.ReadString()
+		bidSize := r.ReadString()
+		askSize := r.ReadString()
+		ticks[i] = HistoricalTickBidAskEntry{Time: timeStr, TickAttrib: tickAttrib, BidPrice: bidPrice, AskPrice: askPrice, BidSize: bidSize, AskSize: askSize}
+	}
+	done, _ := r.ReadBool()
+	return []Message{HistoricalTicksBidAskResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
+}
+
+// [98, reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done] — TRADES
+func decodeHistoricalTicksLast(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	count, err := r.ReadCount("historical trade tick count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("historical trade ticks", count, 6, 1); err != nil {
+		return nil, err
+	}
+	ticks := make([]HistoricalTickLastEntry, count)
+	for i := range ticks {
+		timeStr := r.ReadString()
+		tickAttrib, _ := r.ReadInt()
+		price := r.ReadString()
+		size := r.ReadString()
+		exchange := r.ReadString()
+		specialConditions := r.ReadString()
+		ticks[i] = HistoricalTickLastEntry{Time: timeStr, TickAttrib: tickAttrib, Price: price, Size: size, Exchange: exchange, SpecialConditions: specialConditions}
+	}
+	done, _ := r.ReadBool()
+	return []Message{HistoricalTicksLastResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
+}
+
+func decodeHistoricalDataUpdate(r *fieldReader) ([]Message, error) {
+	// Live Gateway v200 sends two distinct msg_id 108 shapes:
+	//   [108, reqID, barCount, time, O, H, L, C, vol, wap, count]
+	//   [108, reqID, startDateTime, endDateTime]
+	// Older captures also show [108, reqID, startDateTime]. The range
+	// shapes are terminal markers for the preceding historical data batch.
+	if (len(r.fields) == 2 || len(r.fields) == 3) && isWireInt(r.fields[0]) && isHistoricalRangeBoundary(r.fields[1]) {
+		reqID, _ := strconv.Atoi(r.fields[0])
+		return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
+	}
+	reqID, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	barCount, err := r.ReadCount("historical data update bar count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("historical data update", 1, 8, 0); err != nil {
+		return nil, err
+	}
+	return []Message{HistoricalDataUpdate{
+		ReqID: reqID, BarCount: barCount,
+		Time: r.ReadString(), Open: r.ReadString(), High: r.ReadString(),
+		Low: r.ReadString(), Close: r.ReadString(), Volume: r.ReadString(),
+		WAP: r.ReadString(), Count: r.ReadString(),
+	}}, nil
+}
+
+// [106, reqId, startDateTime, endDateTime, timeZone, sessionCount, (startDateTime,endDateTime,refDate)*count]
+func decodeHistoricalSchedule(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	startDateTime := r.ReadString()
+	endDateTime := r.ReadString()
+	timeZone := r.ReadString()
+	sessionCount, err := r.ReadCount("historical schedule session count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("historical schedule", sessionCount, 3, 0); err != nil {
+		return nil, err
+	}
+	sessions := make([]HistoricalScheduleSession, sessionCount)
+	for i := 0; i < sessionCount; i++ {
+		sessions[i] = HistoricalScheduleSession{
+			StartDateTime: r.ReadString(),
+			EndDateTime:   r.ReadString(),
+			RefDate:       r.ReadString(),
+		}
+	}
+	return []Message{HistoricalScheduleResponse{
+		ReqID:         reqID,
+		StartDateTime: startDateTime,
+		EndDateTime:   endDateTime,
+		TimeZone:      timeZone,
+		Sessions:      sessions,
+	}}, nil
+}

@@ -183,3 +183,80 @@ type FundamentalDataResponse struct {
 }
 
 func (FundamentalDataResponse) messageName() string { return "fundamental_data" }
+
+// [19, version=1, xml]
+func decodeScannerParameters(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	xml := r.ReadString()
+	return []Message{ScannerParameters{XML: xml}}, nil
+}
+
+// [20, version=3, reqID, numberOfElements, entries(rank, contract(11), distance, benchmark, projection, legsStr)]
+func decodeScannerData(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	count, err := r.ReadCount("scanner entry count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("scanner data", count, 16, 0); err != nil {
+		return nil, err
+	}
+	entries := make([]ScannerDataEntry, count)
+	for i := range entries {
+		rank, _ := r.ReadInt()
+		contract := readWireContract(r)
+		distance := r.ReadString()
+		benchmark := r.ReadString()
+		projection := r.ReadString()
+		legsStr := r.ReadString()
+		entries[i] = ScannerDataEntry{Rank: rank, Contract: contract, Distance: distance, Benchmark: benchmark, Projection: projection, LegsStr: legsStr}
+	}
+	return []Message{ScannerDataResponse{ReqID: reqID, Entries: entries}}, nil
+}
+
+// [51, version, reqID, data]
+func decodeFundamentalData(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	data := r.ReadString()
+	return []Message{FundamentalDataResponse{ReqID: reqID, Data: data}}, nil
+}
+
+// [16, version, faDataType, xml]
+func decodeReceiveFA(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	faDataType, _ := r.ReadInt()
+	xml := r.ReadString()
+	return []Message{ReceiveFA{FADataType: faDataType, XML: xml}}, nil
+}
+
+// [104, reqId, dataJson]
+func decodeWSHMetaData(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	dataJSON := r.ReadString()
+	return []Message{WSHMetaDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
+}
+
+// [105, reqId, dataJson]
+func decodeWSHEventData(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	dataJSON := r.ReadString()
+	return []Message{WSHEventDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
+}
+
+// [67, version, reqId, groups]
+func decodeDisplayGroupList(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	groups := r.ReadString()
+	return []Message{DisplayGroupList{ReqID: reqID, Groups: groups}}, nil
+}
+
+// [68, version, reqId, contractInfo]
+func decodeDisplayGroupUpdated(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	contractInfo := r.ReadString()
+	return []Message{DisplayGroupUpdated{ReqID: reqID, ContractInfo: contractInfo}}, nil
+}

@@ -250,3 +250,172 @@ type MarketDepthL2Update struct {
 }
 
 func (MarketDepthL2Update) messageName() string { return "market_depth_l2" }
+
+// [1, version, reqID, tickType, price, size, attrMask]
+func decodeTickPrice(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	price := r.ReadString()
+	size := r.ReadString()
+	attrMask, _ := r.ReadInt()
+	return []Message{TickPrice{ReqID: reqID, TickType: tickType, Price: price, Size: size, AttrMask: attrMask}}, nil
+}
+
+// [2, version, reqID, tickType, size]
+func decodeTickSize(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	size := r.ReadString()
+	return []Message{TickSize{ReqID: reqID, TickType: tickType, Size: size}}, nil
+}
+
+// [12, version, reqID, position, operation, side, price, size]
+func decodeMarketDepth(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	position, _ := r.ReadInt()
+	operation, _ := r.ReadInt()
+	side, _ := r.ReadInt()
+	price := r.ReadString()
+	size := r.ReadString()
+	return []Message{MarketDepthUpdate{ReqID: reqID, Position: position, Operation: operation, Side: side, Price: price, Size: size}}, nil
+}
+
+// [13, version, reqID, position, marketMaker, operation, side, price, size, isSmartDepth]
+func decodeMarketDepthL2(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	position, _ := r.ReadInt()
+	marketMaker := r.ReadString()
+	operation, _ := r.ReadInt()
+	side, _ := r.ReadInt()
+	price := r.ReadString()
+	size := r.ReadString()
+	isSmartDepth, _ := r.ReadBool()
+	return []Message{MarketDepthL2Update{ReqID: reqID, Position: position, MarketMaker: marketMaker, Operation: operation, Side: side, Price: price, Size: size, IsSmartDepth: isSmartDepth}}, nil
+}
+
+// [21, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice]
+func decodeTickOptionComputation(r *fieldReader) ([]Message, error) {
+	// No version field on the live sv200 wire; the legacy version skip
+	// consumed the request id and killed the session on the first real
+	// greeks reply (capture 20260611T075300Z-api_option_campaign_aapl).
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	tickAttrib, _ := r.ReadInt()
+	impliedVol := r.ReadString()
+	delta := r.ReadString()
+	optPrice := r.ReadString()
+	pvDividend := r.ReadString()
+	gamma := r.ReadString()
+	vega := r.ReadString()
+	theta := r.ReadString()
+	undPrice := r.ReadString()
+	return []Message{TickOptionComputation{
+		ReqID: reqID, TickType: tickType, TickAttrib: tickAttrib,
+		ImpliedVol: impliedVol, Delta: delta, OptPrice: optPrice,
+		PvDividend: pvDividend, Gamma: gamma, Vega: vega,
+		Theta: theta, UndPrice: undPrice,
+	}}, nil
+}
+
+// [45, version, reqID, tickType, value]
+func decodeTickGeneric(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	value := r.ReadString()
+	return []Message{TickGeneric{ReqID: reqID, TickType: tickType, Value: value}}, nil
+}
+
+// [46, version, reqID, tickType, value]
+func decodeTickString(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	value := r.ReadString()
+	return []Message{TickString{ReqID: reqID, TickType: tickType, Value: value}}, nil
+}
+
+// [81, reqID, minTick, bboExchange, snapshotPermissions] — no version
+func decodeTickReqParams(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	minTick := r.ReadString()
+	bboExchange := r.ReadString()
+	snapshotPermissions, _ := r.ReadInt()
+	return []Message{TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: snapshotPermissions}}, nil
+}
+
+// [50, version, reqID, time, O, H, L, C, vol, wap, count]
+func decodeRealTimeBars(r *fieldReader) ([]Message, error) {
+	r.Skip(1)
+	reqID, _ := r.ReadInt()
+	return []Message{RealTimeBar{
+		ReqID: reqID, Time: r.ReadString(),
+		Open: r.ReadString(), High: r.ReadString(), Low: r.ReadString(),
+		Close: r.ReadString(), Volume: r.ReadString(),
+		WAP: r.ReadString(), Count: r.ReadString(),
+	}}, nil
+}
+
+// [57, version, reqID]
+func decodeTickSnapshotEnd(r *fieldReader) ([]Message, error) {
+	r.Skip(1)
+	reqID, _ := r.ReadInt()
+	return []Message{TickSnapshotEnd{ReqID: reqID}}, nil
+}
+
+// [58, version, reqID, dataType]
+func decodeMarketDataType(r *fieldReader) ([]Message, error) {
+	r.Skip(1)
+	reqID, _ := r.ReadInt()
+	dataType, _ := r.ReadInt()
+	return []Message{MarketDataType{ReqID: reqID, DataType: dataType}}, nil
+}
+
+func decodeMktDepthExchanges(r *fieldReader) ([]Message, error) {
+	// MktDepthExchanges: [80, count, repeated(exchange, secType, listingExch, serviceDataType, aggGroup)] — no version
+	count, err := r.ReadCount("depth exchange count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("market depth exchanges", count, 5, 0); err != nil {
+		return nil, err
+	}
+	entries := make([]DepthExchangeEntry, count)
+	for i := range entries {
+		entries[i] = DepthExchangeEntry{
+			Exchange: r.ReadString(), SecType: r.ReadString(),
+			ListingExch: r.ReadString(), ServiceDataType: r.ReadString(),
+		}
+		entries[i].AggGroup, _ = r.ReadInt()
+	}
+	return []Message{MktDepthExchanges{Exchanges: entries}}, nil
+}
+
+// [99, reqID, tickType, time, ...]
+func decodeTickByTick(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	timeStr := r.ReadString()
+	tick := TickByTickData{ReqID: reqID, TickType: tickType, Time: timeStr}
+	switch tickType {
+	case 1, 2: // Last, AllLast
+		tick.Price = r.ReadString()
+		tick.Size = r.ReadString()
+		tick.TickAttribLast, _ = r.ReadInt()
+		tick.Exchange = r.ReadString()
+		tick.SpecialConditions = r.ReadString()
+	case 3: // BidAsk
+		tick.BidPrice = r.ReadString()
+		tick.AskPrice = r.ReadString()
+		tick.BidSize = r.ReadString()
+		tick.AskSize = r.ReadString()
+		tick.TickAttribBidAsk, _ = r.ReadInt()
+	case 4: // MidPoint
+		tick.MidPoint = r.ReadString()
+	}
+	return []Message{tick}, nil
+}

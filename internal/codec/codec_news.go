@@ -83,3 +83,54 @@ type HistoricalNewsEnd struct {
 }
 
 func (HistoricalNewsEnd) messageName() string { return "historical_news_end" }
+
+// [83, reqID, articleType, articleText] — no version
+func decodeNewsArticle(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	articleType, _ := r.ReadInt()
+	articleText := r.ReadString()
+	return []Message{NewsArticleResponse{ReqID: reqID, ArticleType: articleType, ArticleText: articleText}}, nil
+}
+
+// [85, count, repeated(code, name)] — no version
+func decodeNewsProviders(r *fieldReader) ([]Message, error) {
+	count, err := r.ReadCount("news provider count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("news providers", count, 2, 0); err != nil {
+		return nil, err
+	}
+	entries := make([]NewsProviderEntry, count)
+	for i := range entries {
+		entries[i] = NewsProviderEntry{Code: r.ReadString(), Name: r.ReadString()}
+	}
+	return []Message{NewsProviders{Providers: entries}}, nil
+}
+
+// [86, reqID, time, providerCode, articleId, headline] — no version
+func decodeHistoricalNews(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	timeStr := r.ReadString()
+	providerCode := r.ReadString()
+	articleID := r.ReadString()
+	headline := r.ReadString()
+	return []Message{HistoricalNewsItem{ReqID: reqID, Time: timeStr, ProviderCode: providerCode, ArticleID: articleID, Headline: headline}}, nil
+}
+
+// [87, reqID, hasMore]
+func decodeHistoricalNewsEnd(r *fieldReader) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	hasMore, _ := r.ReadBool()
+	return []Message{HistoricalNewsEnd{ReqID: reqID, HasMore: hasMore}}, nil
+}
+
+// [14, version=1, msgId, msgType, headline, source]
+func decodeNewsBulletins(r *fieldReader) ([]Message, error) {
+	r.Skip(1) // version
+	msgId, _ := r.ReadInt()
+	msgType, _ := r.ReadInt()
+	headline := r.ReadString()
+	source := r.ReadString()
+	return []Message{NewsBulletin{MsgID: msgId, MsgType: msgType, Headline: headline, Source: source}}, nil
+}
