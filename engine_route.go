@@ -70,8 +70,8 @@ func (e *engine) handleIncoming(msg any) {
 		return
 	}
 
-	if reqID, ok := messageReqID(msg); ok {
-		if route, found := e.keyed[reqID]; found {
+	if keyed, ok := msg.(codec.ReqIDer); ok {
+		if route, found := e.keyed[keyed.RequestID()]; found {
 			route.handle(msg, e)
 			// ExecutionDetail needs dual dispatch: keyed subscription + order handle.
 			if m, ok := msg.(codec.ExecutionDetail); ok {
@@ -382,107 +382,4 @@ func (e *engine) emitUndeliveredExecutionCommissions(reqID int, execID string, s
 		sub.emit(ExecutionUpdate{Commission: &report})
 	}
 	return true
-}
-
-func messageReqID(msg any) (int, bool) {
-	switch m := msg.(type) {
-	case codec.ContractDetails:
-		return m.ReqID, true
-	case codec.ContractDetailsEnd:
-		return m.ReqID, true
-	case codec.HistoricalBar:
-		return m.ReqID, true
-	case codec.HistoricalBarsEnd:
-		return m.ReqID, true
-	case codec.AccountSummaryValue:
-		return m.ReqID, true
-	case codec.AccountSummaryEnd:
-		return m.ReqID, true
-	case codec.TickPrice:
-		return m.ReqID, true
-	case codec.TickSize:
-		return m.ReqID, true
-	case codec.TickGeneric:
-		return m.ReqID, true
-	case codec.TickString:
-		return m.ReqID, true
-	case codec.TickReqParams:
-		return m.ReqID, true
-	case codec.MarketDataType:
-		return m.ReqID, true
-	case codec.TickSnapshotEnd:
-		return m.ReqID, true
-	case codec.RealTimeBar:
-		return m.ReqID, true
-	case codec.ExecutionDetail:
-		return m.ReqID, true
-	case codec.ExecutionsEnd:
-		return m.ReqID, true
-	case codec.UserInfo:
-		return m.ReqID, true
-	case codec.MatchingSymbols:
-		return m.ReqID, true
-	case codec.HeadTimestamp:
-		return m.ReqID, true
-	case codec.AccountUpdateMultiValue:
-		return m.ReqID, true
-	case codec.AccountUpdateMultiEnd:
-		return m.ReqID, true
-	case codec.PositionMulti:
-		return m.ReqID, true
-	case codec.PositionMultiEnd:
-		return m.ReqID, true
-	case codec.PnLValue:
-		return m.ReqID, true
-	case codec.PnLSingleValue:
-		return m.ReqID, true
-	case codec.TickByTickData:
-		return m.ReqID, true
-	case codec.HistoricalDataUpdate:
-		return m.ReqID, true
-	case codec.HistoricalScheduleResponse:
-		return m.ReqID, true
-	case codec.SecDefOptParamsResponse:
-		return m.ReqID, true
-	case codec.SecDefOptParamsEnd:
-		return m.ReqID, true
-	case codec.SmartComponentsResponse:
-		return m.ReqID, true
-	case codec.TickOptionComputation:
-		return m.ReqID, true
-	case codec.HistogramDataResponse:
-		return m.ReqID, true
-	case codec.HistoricalTicksResponse:
-		return m.ReqID, true
-	case codec.HistoricalTicksBidAskResponse:
-		return m.ReqID, true
-	case codec.HistoricalTicksLastResponse:
-		return m.ReqID, true
-	case codec.NewsArticleResponse:
-		return m.ReqID, true
-	case codec.HistoricalNewsItem:
-		return m.ReqID, true
-	case codec.HistoricalNewsEnd:
-		return m.ReqID, true
-	case codec.ScannerDataResponse:
-		return m.ReqID, true
-	case codec.SoftDollarTiersResponse:
-		return m.ReqID, true
-	case codec.WSHMetaDataResponse:
-		return m.ReqID, true
-	case codec.WSHEventDataResponse:
-		return m.ReqID, true
-	case codec.DisplayGroupList:
-		return m.ReqID, true
-	case codec.DisplayGroupUpdated:
-		return m.ReqID, true
-	case codec.MarketDepthUpdate:
-		return m.ReqID, true
-	case codec.MarketDepthL2Update:
-		return m.ReqID, true
-	case codec.FundamentalDataResponse:
-		return m.ReqID, true
-	default:
-		return 0, false
-	}
 }
