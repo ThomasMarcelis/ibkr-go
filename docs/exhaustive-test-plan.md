@@ -126,7 +126,8 @@ All are exercised through the outbound scenarios above. Individual gaps:
 | 21 | tickOptionComputation | live calc scenarios exist; streaming OPT tick untested |
 | 83 | newsArticle | captured through `api_news_article_aapl`; invalid article/provider variants remain |
 | 101 | completedOrder | full field extraction deferred |
-| 108 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
+| 90 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
+| 108 | historicalDataEnd | standalone end marker at server_version >= 196; edge cases untested |
 
 ### 1.3 Unimplemented official callbacks
 

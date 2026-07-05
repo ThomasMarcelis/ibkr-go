@@ -253,8 +253,8 @@ func TestContractDetailsVersionGate(t *testing.T) {
 
 // TestHistoricalDataVersionGate freezes the inline start/end dates gate at
 // HISTORICAL_DATA_END (196): below it the terminal frame inlines start/end
-// dates before the bar count and echoes them on the end marker; at/above it
-// they are absent (decoder.py:897-922). The bars decode identically.
+// dates before the bar count and synthesizes an end marker; at/above it the
+// packed IN 17 frame carries bars only and standalone IN 108 owns completion.
 func TestHistoricalDataVersionGate(t *testing.T) {
 	t.Parallel()
 
@@ -272,8 +272,8 @@ func TestHistoricalDataVersionGate(t *testing.T) {
 	oldMsgs := decodeBatch(t, 195, oldFields)
 	newMsgs := decodeBatch(t, 196, newFields)
 
-	if len(oldMsgs) != 2 || len(newMsgs) != 2 {
-		t.Fatalf("want [bar, end] both versions, got old=%d new=%d", len(oldMsgs), len(newMsgs))
+	if len(oldMsgs) != 2 || len(newMsgs) != 1 {
+		t.Fatalf("want sv195 [bar, end] and sv196 [bar], got old=%d new=%d", len(oldMsgs), len(newMsgs))
 	}
 	oldBar, ok := oldMsgs[0].(HistoricalBar)
 	if !ok {
@@ -284,15 +284,8 @@ func TestHistoricalDataVersionGate(t *testing.T) {
 		t.Fatalf("bar mismatch across gate: old=%+v new=%+v", oldBar, newBar)
 	}
 	oldEnd := oldMsgs[1].(HistoricalBarsEnd)
-	newEnd := newMsgs[1].(HistoricalBarsEnd)
 	if oldEnd.StartDate != "20260101" || oldEnd.EndDate != "20260102" {
 		t.Fatalf("sv195 end marker start/end = %q/%q, want 20260101/20260102", oldEnd.StartDate, oldEnd.EndDate)
-	}
-	if newEnd.StartDate != "" || newEnd.EndDate != "" {
-		t.Fatalf("sv196 end marker should not inline dates, got %q/%q", newEnd.StartDate, newEnd.EndDate)
-	}
-	if oldEnd.ReqID != newEnd.ReqID {
-		t.Fatalf("end marker reqId mismatch: old=%d new=%d", oldEnd.ReqID, newEnd.ReqID)
 	}
 }
 

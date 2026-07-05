@@ -186,15 +186,15 @@ func BenchmarkDecodeHistoricalBars(b *testing.B) {
 	if err != nil {
 		b.Fatalf("DecodeBatch() error = %v", err)
 	}
-	if want := len(bars)*repeats + 1; len(msgs) != want {
-		b.Fatalf("got %d messages, want %d (49 bars + end)", len(msgs), want)
+	if want := len(bars) * repeats; len(msgs) != want {
+		b.Fatalf("got %d messages, want %d bars", len(msgs), want)
 	}
 	first, ok := msgs[0].(HistoricalBar)
 	if !ok || first.ReqID != 1001 || first.Open != "254.20" || first.Count != "13633" {
 		b.Fatalf("msgs[0] = %#v, want first live bar", msgs[0])
 	}
-	if _, ok := msgs[len(msgs)-1].(HistoricalBarsEnd); !ok {
-		b.Fatalf("msgs[%d] = %T, want HistoricalBarsEnd", len(msgs)-1, msgs[len(msgs)-1])
+	if _, ok := msgs[len(msgs)-1].(HistoricalBar); !ok {
+		b.Fatalf("msgs[%d] = %T, want HistoricalBar", len(msgs)-1, msgs[len(msgs)-1])
 	}
 
 	b.ReportAllocs()

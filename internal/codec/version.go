@@ -3,10 +3,11 @@ package codec
 // MinServerVersion constants gate conditional fields in the wire protocol.
 // Each constant is the minimum negotiated server_version at which a field or
 // feature is present on the wire, named after the official IBKR client's
-// server_versions.py constant. The library negotiates 176..200, so only gates
-// inside that window can fire; fields introduced at or below 176 are always
-// present and need no constant here.
+// server_versions.py constant. The library negotiates 176..200, so gates below
+// 176 are always enabled in production but may still appear where tests or
+// codec helpers need the official boundary.
 const (
+	MinServerVersionSmartDepth                     = 146 // MIN_SERVER_VER_SMART_DEPTH
 	MinServerVersionFAProfileDesupport             = 177 // MIN_SERVER_VER_FA_PROFILE_DESUPPORT
 	MinServerVersionManualOrderTimeExerciseOptions = 180 // MIN_SERVER_VER_MANUAL_ORDER_TIME_EXERCISE_OPTIONS
 	MinServerVersionLastTradeDate                  = 182 // MIN_SERVER_VER_LAST_TRADE_DATE

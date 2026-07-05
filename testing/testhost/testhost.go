@@ -209,6 +209,10 @@ func (h *Host) run() {
 			// matching the real IBKR protocol where msg 17 carries all bars
 			// in one batch: [17, reqID, N, bar1_fields..., bar2_fields...].
 			if cur.name == "historical_bar" {
+				if serverVersion != defaultServerVersion {
+					h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames; DSL historical_bar re-encodes through the codec under test and would mask version-gated layout bugs", defaultServerVersion))
+					return
+				}
 				bars := []step{cur}
 				reqID := asString(resolveBindings(cur.body["req_id"], bindings))
 				for j := i + 1; j < len(h.steps); j++ {
@@ -233,14 +237,6 @@ func (h *Host) run() {
 				}
 				// Advance past consumed bar steps (current step is bars[0])
 				i += len(bars) - 1
-				// Skip a trailing historical_bars_end step if present, since
-				// the packed frame already causes the decoder to emit one.
-				if i+1 < len(h.steps) {
-					next := h.steps[i+1]
-					if next.kind == "server" && next.name == "historical_bars_end" {
-						i++
-					}
-				}
 				continue
 			}
 
@@ -1011,10 +1007,13 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["is_smart_depth"] = fields[15]
 		}
 		return "req_market_depth", body, nil
-	case 11: // OutCancelMktDepth: [11, version=1, reqId]
+	case 11: // OutCancelMktDepth: [11, version=1, reqId, isSmartDepth?]
 		body := map[string]any{}
 		if len(fields) >= 3 {
 			body["req_id"] = fields[2]
+		}
+		if len(fields) >= 4 {
+			body["is_smart_depth"] = fields[3]
 		}
 		return "cancel_market_depth", body, nil
 	case 18: // OutRequestFA: [18, version=1, faDataType]

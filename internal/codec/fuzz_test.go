@@ -1058,7 +1058,7 @@ func TestDecodeFieldParseErrors(t *testing.T) {
 		// PnL with non-numeric reqID
 		{"PnL/bad_reqID", []string{"94", "bad", "100", "200", "300"}},
 		// HistoricalDataUpdate with non-numeric reqID
-		{"HistoricalDataUpdate/bad_reqID", []string{"108", "bad", "1", "t", "o", "h", "l", "c", "v", "w", "n"}},
+		{"HistoricalDataUpdate/bad_reqID", []string{"90", "bad", "1", "t", "o", "h", "l", "c", "v", "w", "n"}},
 	}
 
 	for _, tc := range cases {

@@ -306,6 +306,34 @@ func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 	}
 }
 
+func TestEncodeCancelMarketDepthSmartDepthGate(t *testing.T) {
+	t.Parallel()
+
+	oldPayload, err := Encode(MinServerVersionSmartDepth-1, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
+	if err != nil {
+		t.Fatalf("Encode(old CancelMarketDepth) error = %v", err)
+	}
+	oldFields, err := wire.ParseFields(oldPayload)
+	if err != nil {
+		t.Fatalf("ParseFields(old) error = %v", err)
+	}
+	if want := []string{"11", "1", "77"}; !slices.Equal(oldFields, want) {
+		t.Fatalf("old CancelMarketDepth fields = %v, want %v", oldFields, want)
+	}
+
+	newPayload, err := Encode(MinServerVersionSmartDepth, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
+	if err != nil {
+		t.Fatalf("Encode(new CancelMarketDepth) error = %v", err)
+	}
+	newFields, err := wire.ParseFields(newPayload)
+	if err != nil {
+		t.Fatalf("ParseFields(new) error = %v", err)
+	}
+	if want := []string{"11", "1", "77", "1"}; !slices.Equal(newFields, want) {
+		t.Fatalf("new CancelMarketDepth fields = %v, want %v", newFields, want)
+	}
+}
+
 // TestDecodeOpenOrderNonSimple verifies that an OpenOrder payload whose
 // variable sections do not follow the live sv200 layout (here: an empty
 // DeltaNeutralOrderType instead of the live "None" sentinel) produces a

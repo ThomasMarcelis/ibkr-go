@@ -44,8 +44,8 @@ type HistoricalBar struct {
 type HistoricalBarsEnd struct {
 	ReqID int
 	// StartDate and EndDate carry the dataset bounds echoed by the terminal
-	// marker below HISTORICAL_DATA_END (196). At sv>=196 the server no longer
-	// inlines them and both stay empty.
+	// marker. Below HISTORICAL_DATA_END (196) that marker is synthesized from
+	// the packed IN 17 frame; at sv>=196 it arrives as standalone IN 108.
 	StartDate string
 	EndDate   string
 }
@@ -261,6 +261,9 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 		return nil, err
 	}
 	if barCount <= 0 {
+		if sv >= MinServerVersionHistoricalDataEnd {
+			return nil, nil
+		}
 		return []Message{HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate}}, nil
 	}
 	if err := r.RequireFixedEntryFields("historical data", barCount, 8, 0); err != nil {
@@ -275,7 +278,9 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 			Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
 		})
 	}
-	msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate})
+	if sv < MinServerVersionHistoricalDataEnd {
+		msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate})
+	}
 	return msgs, nil
 }
 

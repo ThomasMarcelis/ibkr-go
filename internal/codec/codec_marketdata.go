@@ -292,11 +292,19 @@ func (m MarketDepthRequest) encodeWire(sv int) ([]string, error) {
 }
 
 type CancelMarketDepth struct {
-	ReqID int
+	ReqID        int
+	IsSmartDepth bool
 }
 
 func (m CancelMarketDepth) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelMktDepth), "1", itoa(m.ReqID)}, nil
+	w := fieldWriter{}
+	w.WriteInt(OutCancelMktDepth)
+	w.WriteInt(1)
+	w.WriteInt(m.ReqID)
+	if sv >= MinServerVersionSmartDepth {
+		w.WriteBool(m.IsSmartDepth)
+	}
+	return w.Fields(), nil
 }
 
 type MarketDepthUpdate struct {

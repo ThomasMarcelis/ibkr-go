@@ -33,7 +33,7 @@ server version and managed-account bootstrap fields are known.
 | out | 81 | reqMatchingSymbols | landed |
 | in | 79 | SymbolSamples | landed |
 | out | 91 | reqMarketRule | landed |
-| in | 92 | MarketRule | landed |
+| in | 93 | MarketRule | landed |
 | out | 78 | reqSecDefOptParams | landed |
 | in | 75 | SecurityDefinitionOptionParameter | landed |
 | in | 76 | SecurityDefinitionOptionParameterEnd | landed |
@@ -106,9 +106,10 @@ server version and managed-account bootstrap fields are known.
 | in | 50 | RealTimeBar | landed |
 | out | 20 | HistoricalBarsRequest | landed |
 | out | 25 | cancelHistoricalData | landed |
-| in | 17 | HistoricalBar / HistoricalBarsEnd | landed |
+| in | 17 | HistoricalBar | landed |
 | — | 20 | keepUpToDate flag | landed |
-| in | 108 | HistoricalDataUpdate | landed |
+| in | 90 | HistoricalDataUpdate | landed |
+| in | 108 | HistoricalDataEnd | landed |
 
 ## Historical Data Extensions
 

@@ -538,9 +538,10 @@ func TestCaptureDecode_HistoricalData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeBatch: %v", err)
 	}
-	// 7 bars + 1 HistoricalBarsEnd = 8 messages
-	if len(msgs) != 8 {
-		t.Fatalf("got %d messages, want 8", len(msgs))
+	// At server_version 200 the packed IN 17 frame carries bars only; the
+	// terminal range arrives separately as IN 108.
+	if len(msgs) != 7 {
+		t.Fatalf("got %d messages, want 7 bars", len(msgs))
 	}
 
 	// First bar
@@ -579,13 +580,10 @@ func TestCaptureDecode_HistoricalData(t *testing.T) {
 		t.Errorf("bar6.Open = %q, want 255.29", bar6.Open)
 	}
 
-	// HistoricalBarsEnd sentinel
-	end, ok := msgs[7].(HistoricalBarsEnd)
-	if !ok {
-		t.Fatalf("msgs[7] type = %T, want HistoricalBarsEnd", msgs[7])
-	}
-	if end.ReqID != 1001 {
-		t.Errorf("end.ReqID = %d, want 1001", end.ReqID)
+	for i, msg := range msgs {
+		if _, ok := msg.(HistoricalBarsEnd); ok {
+			t.Fatalf("msgs[%d] is a synthetic HistoricalBarsEnd from sv200 IN 17", i)
+		}
 	}
 }
 
