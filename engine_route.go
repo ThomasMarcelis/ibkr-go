@@ -595,7 +595,9 @@ func (e *engine) emitUndeliveredExecutionCommissions(reqID int, execID string, s
 			sub.closeWithErr(err)
 			return false
 		}
-		sub.emit(ExecutionUpdate{Commission: &report})
+		if !emitSubscription(sub, ExecutionUpdate{Commission: &report}) {
+			return false
+		}
 	}
 	return true
 }

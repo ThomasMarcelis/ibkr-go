@@ -292,7 +292,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 							LegsStr:    entry.LegsStr,
 						}
 					}
-					sub.emit(results)
+					emitSubscription(sub, results)
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
@@ -672,7 +672,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			request:      codec.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: int(groupID)},
 			handle: func(msg any, e *engine) {
 				if m, ok := msg.(codec.DisplayGroupUpdated); ok {
-					sub.emit(DisplayGroupUpdate{ContractInfo: m.ContractInfo})
+					emitSubscription(sub, DisplayGroupUpdate{ContractInfo: m.ContractInfo})
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {

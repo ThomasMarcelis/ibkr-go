@@ -64,6 +64,48 @@ func TestSubscriptionSlowConsumerClose(t *testing.T) {
 	}
 }
 
+func TestEmitKeyedSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{keyed: map[int]*route{7: {}}}
+	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+		e.deleteKeyedRoute(7)
+	})
+	if !emitSubscription(sub, 1) {
+		t.Fatal("first emit returned false, want true")
+	}
+	if emitSubscription(sub, 2) {
+		t.Fatal("second emit returned true, want slow-consumer close")
+	}
+	if _, ok := e.keyed[7]; ok {
+		t.Fatal("keyed route retained after slow-consumer close")
+	}
+	if err := sub.Wait(); !errors.Is(err, ErrSlowConsumer) {
+		t.Fatalf("Wait() = %v, want ErrSlowConsumer", err)
+	}
+}
+
+func TestEmitSingletonSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{singletons: map[string]*route{singletonOpenOrders: {}}}
+	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+		delete(e.singletons, singletonOpenOrders)
+	})
+	if !emitSubscription(sub, 1) {
+		t.Fatal("first emit returned false, want true")
+	}
+	if emitSubscription(sub, 2) {
+		t.Fatal("second emit returned true, want slow-consumer close")
+	}
+	if _, ok := e.singletons[singletonOpenOrders]; ok {
+		t.Fatal("singleton route retained after slow-consumer close")
+	}
+	if err := sub.Wait(); !errors.Is(err, ErrSlowConsumer) {
+		t.Fatalf("Wait() = %v, want ErrSlowConsumer", err)
+	}
+}
+
 func TestSubscriptionSlowConsumerDropOldest(t *testing.T) {
 	t.Parallel()
 

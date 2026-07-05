@@ -127,7 +127,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
+					emitSubscription(sub, QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
 				case codec.TickSize:
 					changed, err := applyTickSize(&quote, m.TickType, m.Size)
 					if err != nil {
@@ -135,11 +135,11 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
+					emitSubscription(sub, QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
 				case codec.MarketDataType:
 					quote.MarketDataType = MarketDataType(m.DataType)
 					quote.Available |= QuoteFieldMarketDataType
-					sub.emit(QuoteUpdate{Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
+					emitSubscription(sub, QuoteUpdate{Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
 				case codec.TickGeneric:
 					// Generic ticks carry informational data (e.g. halted status).
 					// Silently consumed — no standard quote field mapping.
@@ -280,7 +280,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 					sub.closeWithErr(err)
 					return
 				}
-				sub.emit(bar)
+				emitSubscription(sub, bar)
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
 				if m.Code == 10167 {
@@ -370,7 +370,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelMarketDepth{ReqID: reqID})
+				_ = e.send(codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: req.IsSmartDepth})
 				sub.closeWithErr(nil)
 			})
 		})
@@ -394,7 +394,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(row)
+					emitSubscription(sub, row)
 				case codec.MarketDepthL2Update:
 					row, err := fromCodecMarketDepthL2(m)
 					if err != nil {
@@ -402,7 +402,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(row)
+					emitSubscription(sub, row)
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
@@ -618,7 +618,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 							return
 						}
 					}
-					sub.emit(tick)
+					emitSubscription(sub, tick)
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {

@@ -107,7 +107,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			request:      codec.NewsBulletinsRequest{AllMessages: allMessages},
 			handle: func(msg any, e *engine) {
 				if m, ok := msg.(codec.NewsBulletin); ok {
-					sub.emit(NewsBulletin{MsgID: m.MsgID, MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
+					emitSubscription(sub, NewsBulletin{MsgID: m.MsgID, MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
 				}
 			},
 			onDisconnect: func(e *engine, err error) bool {

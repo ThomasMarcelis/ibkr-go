@@ -285,7 +285,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(bar)
+					emitSubscription(sub, bar)
 				case codec.HistoricalBarsEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				case codec.HistoricalDataUpdate:
@@ -299,7 +299,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(bar)
+					emitSubscription(sub, bar)
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {

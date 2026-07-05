@@ -69,7 +69,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 					if !plan.matches(m.Account) {
 						return
 					}
-					sub.emit(AccountSummaryUpdate{
+					emitSubscription(sub, AccountSummaryUpdate{
 						Value: AccountValue{
 							Account:  m.Account,
 							Tag:      m.Tag,
@@ -182,7 +182,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(PositionUpdate{Position: position})
+					emitSubscription(sub, PositionUpdate{Position: position})
 				case codec.PositionEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
@@ -331,9 +331,11 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.UpdateAccountValue:
-					sub.emit(AccountUpdate{AccountValue: &AccountUpdateValue{
+					if !emitSubscription(sub, AccountUpdate{AccountValue: &AccountUpdateValue{
 						Key: m.Key, Value: m.Value, Currency: m.Currency, Account: m.Account,
-					}})
+					}}) {
+						return
+					}
 				case codec.UpdatePortfolio:
 					position, err := parseOptionalDecimal(m.Position, "account updates position")
 					if err != nil {
@@ -371,7 +373,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(AccountUpdate{Portfolio: &PortfolioUpdate{
+					emitSubscription(sub, AccountUpdate{Portfolio: &PortfolioUpdate{
 						Account:       m.Account,
 						Contract:      fromCodecContract(m.Contract),
 						Position:      position,
@@ -471,7 +473,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.AccountUpdateMultiValue:
-					sub.emit(AccountUpdateMultiValue{
+					emitSubscription(sub, AccountUpdateMultiValue{
 						Account: m.Account, ModelCode: m.ModelCode,
 						Key: m.Key, Value: m.Value, Currency: m.Currency,
 					})
@@ -579,7 +581,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(PositionMulti{
+					emitSubscription(sub, PositionMulti{
 						Account: m.Account, ModelCode: m.ModelCode,
 						Contract: fromCodecContract(m.Contract),
 						Position: position, AvgCost: avgCost,
@@ -682,7 +684,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
+					emitSubscription(sub, PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
@@ -791,7 +793,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 						sub.closeWithErr(err)
 						return
 					}
-					sub.emit(PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
+					emitSubscription(sub, PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
