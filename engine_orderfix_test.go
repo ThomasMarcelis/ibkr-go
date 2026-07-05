@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -260,5 +261,36 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 		}
 	default:
 		t.Fatal("exercise refusal did not surface as a session event")
+	}
+}
+
+// TestHandleAPIErrorRejectionDropsOrderRoute freezes the rejection-path half
+// of the retention fix: a terminal placement rejection (code 201) must close
+// the handle AND drop the route and its execution correlations. Pre-fix only
+// status-terminal closes (via the drain window) deleted the route, so every
+// rejected order leaked a route until reconnect.
+func TestHandleAPIErrorRejectionDropsOrderRoute(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	handle := newOrderHandle(42)
+	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
+	e.execDeliveries["exec-42"] = &execDelivery{orderID: 42}
+
+	e.handleAPIError(codec.APIError{
+		ReqID:   42,
+		Code:    ErrCodeOrderRejected,
+		Message: "Order rejected - reason:",
+	})
+
+	apiErr, ok := errors.AsType[*APIError](handle.Wait())
+	if !ok || apiErr.Code != ErrCodeOrderRejected {
+		t.Fatalf("handle.Wait() = %v, want *APIError code %d", handle.Wait(), ErrCodeOrderRejected)
+	}
+	if _, retained := e.orders[42]; retained {
+		t.Fatal("rejected order's route retained; want deleted with the rejection")
+	}
+	if _, retained := e.execDeliveries["exec-42"]; retained {
+		t.Fatal("rejected order's execution correlations retained; want forgotten")
 	}
 }

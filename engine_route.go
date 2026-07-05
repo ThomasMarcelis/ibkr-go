@@ -209,7 +209,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				// Order-targeted notices (10147/10148 cancel replies) stay
 				// session events; the handle already holds its real state.
 				if isOrderPlacementRejection(msg.Code) {
-					or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
+					e.closeOrderRoute(int64(msg.ReqID), or, e.apiErr(OpPlaceOrder, msg))
 					return
 				}
 			}
@@ -243,11 +243,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			// deferral) leaves the order working at IB and still cancellable,
 			// so it is delivered non-terminally and the handle stays open.
 			// Only genuine failures close the handle.
-			if apiErr, ok := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg)); ok && apiErr.IsWarning() {
-				or.handle.emitWarning(apiErr)
+			orderErr, isAPIErr := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
+			if isAPIErr && orderErr.IsWarning() {
+				if !or.handle.emitWarning(orderErr) {
+					e.closeOrderRoute(int64(msg.ReqID), or, nil)
+				}
 				return
 			}
-			or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
+			// A terminal rejection ends the order at the Gateway; no further
+			// traffic for this id is legitimate, so the route goes with it.
+			e.closeOrderRoute(int64(msg.ReqID), or, orderErr)
 			return
 		}
 		// A reqID-targeted error that matches no keyed route and no order
@@ -313,8 +318,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	order, err := fromCodecOpenOrder(msg)
 	if err != nil {
 		if orderObserved && !orderRoute.closed {
-			orderRoute.closed = true
-			orderRoute.handle.emitOrderError(err)
+			e.closeOrderRoute(msg.OrderID, orderRoute, err)
 		}
 		if singletonObserved {
 			delete(e.singletons, singletonOpenOrders)
@@ -325,7 +329,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 
 	if orderObserved && !orderRoute.closed {
 		if !orderRoute.handle.emitOrder(order) {
-			orderRoute.closed = true
+			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 		}
 	}
 	if singletonObserved {
@@ -348,8 +352,7 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	status, err := fromCodecOrderStatus(msg)
 	if err != nil {
 		if orderObserved && !orderRoute.closed {
-			orderRoute.closed = true
-			orderRoute.handle.emitOrderError(err)
+			e.closeOrderRoute(msg.OrderID, orderRoute, err)
 		}
 		if singletonObserved {
 			delete(e.singletons, singletonOpenOrders)
@@ -360,7 +363,7 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 
 	if orderObserved && !orderRoute.closed {
 		if !orderRoute.handle.emitStatus(status) {
-			orderRoute.closed = true
+			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 		} else if IsTerminalOrderStatus(status.Status) {
 			e.scheduleTerminalOrderClose(msg.OrderID, orderRoute)
 		}
@@ -368,6 +371,22 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	if singletonObserved {
 		singletonRoute.handle(status, e)
 	}
+}
+
+// closeOrderRoute finishes an order route outside the terminal drain window:
+// rejection, decode-failure, and slow-consumer paths where no further
+// legitimate traffic can reach the handle. It closes the handle (idempotent),
+// drops the route, and forgets the order's execution correlations — without
+// this, rejected orders accumulated routes for the connection lifetime the
+// same way filled ones once did. Frames that straggle in after the deletion
+// drop at the missing-route check, identical to the closed-route behavior.
+func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
+	or.closed = true
+	if or.handle != nil {
+		or.handle.closeWithErr(err)
+	}
+	delete(e.orders, orderID)
+	e.forgetOrderExecutions(orderID)
 }
 
 const orderTerminalDrainWindow = 750 * time.Millisecond
@@ -506,7 +525,7 @@ func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.Commiss
 		return
 	}
 	if !or.handle.emitCommission(cr) {
-		or.closed = true
+		e.closeOrderRoute(st.orderID, or, nil)
 		return
 	}
 	st.delivered = &report
@@ -541,7 +560,7 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 		return
 	}
 	if !or.handle.emitExecution(*exec.Execution) {
-		or.closed = true
+		e.closeOrderRoute(m.OrderID, or, nil)
 		return
 	}
 	if st == nil {

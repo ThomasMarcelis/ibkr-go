@@ -411,9 +411,12 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 // on context cancellation. The setup guarantees resp receives exactly one
 // result; draining it in a background goroutine lets the caller return at once.
 // If the result carries a handle, the order reached the wire with no owner, so
-// the engine best-effort cancels it under a bounded background context and then
-// detaches the handle with the caller's cancellation cause. Cancel and detach
-// both route through the actor, keeping every handle teardown serialized.
+// the engine best-effort cancels it under a bounded background context and
+// tears the route down with the caller's cancellation cause — all inside one
+// actor turn, so the cancel only goes out while the route is still live (an
+// order that was rejected or filled inside the cancellation window draws no
+// spurious cancel_order). The Gateway's acknowledgements for the auto-cancel
+// arrive after the route is gone and surface as session events.
 func (e *engine) resolveOrphanedPlaceOrder(resp <-chan placeOrderResult, cause error) {
 	go func() {
 		var out placeOrderResult
@@ -425,15 +428,16 @@ func (e *engine) resolveOrphanedPlaceOrder(resp <-chan placeOrderResult, cause e
 		if out.handle == nil {
 			return
 		}
-		cancelCtx, cancel := context.WithTimeout(context.Background(), orphanCancelTimeout)
-		defer cancel()
-		_ = out.handle.Cancel(cancelCtx)
 		e.enqueue(func() {
-			if or, ok := e.orders[out.handle.orderID]; ok && !or.closed {
-				or.closed = true
-				delete(e.orders, out.handle.orderID)
+			or, ok := e.orders[out.handle.orderID]
+			if !ok || or.closed {
+				out.handle.closeWithErr(cause)
+				return
 			}
-			out.handle.closeWithErr(cause)
+			cancelCtx, cancel := context.WithTimeout(context.Background(), orphanCancelTimeout)
+			defer cancel()
+			_ = e.sendContext(cancelCtx, codec.CancelOrderRequest{OrderID: out.handle.orderID})
+			e.closeOrderRoute(out.handle.orderID, or, cause)
 		})
 	}()
 }
