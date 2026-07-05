@@ -217,6 +217,11 @@ type OrderEvent struct {
 	Status     *OrderStatusUpdate
 	Execution  *Execution
 	Commission *CommissionReport
+	// Warning is a non-terminal, order-targeted notice (e.g. code 399, the
+	// off-hours deferral). The order stays working at IB and the handle stays
+	// open; contrast with a terminal failure, which closes the handle and is
+	// reported via Wait rather than as an event.
+	Warning *APIError
 }
 
 // Order is the instruction a user fills in to place or modify an order via

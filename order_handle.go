@@ -152,6 +152,12 @@ func (h *OrderHandle) emitCommission(cr CommissionReport) bool {
 	return h.emitEvent(OrderEvent{Commission: &cr})
 }
 
+// emitWarning delivers a non-terminal, order-targeted notice without closing
+// the handle. The order stays working at IB; the caller keeps consuming events.
+func (h *OrderHandle) emitWarning(w *APIError) bool {
+	return h.emitEvent(OrderEvent{Warning: w})
+}
+
 func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
 	if h.isDone() {
 		return

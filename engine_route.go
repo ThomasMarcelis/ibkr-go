@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -218,8 +219,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 	}
 
 	// Request-specific errors (200, 420, etc.) are routed to the keyed
-	// subscription that owns the reqID. If the route is already gone
-	// (e.g., stale cancel response like code 300), the message is dropped.
+	// subscription that owns the reqID.
 	if msg.ReqID > 0 {
 		if route, ok := e.keyed[msg.ReqID]; ok && route.handleAPIErr != nil {
 			route.handleAPIErr(msg, e)
@@ -239,9 +239,23 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				delete(e.orders, int64(msg.ReqID))
 				return
 			}
+			// A warning targeting a live order (e.g. code 399, the off-hours
+			// deferral) leaves the order working at IB and still cancellable,
+			// so it is delivered non-terminally and the handle stays open.
+			// Only genuine failures close the handle.
+			if apiErr, ok := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg)); ok && apiErr.IsWarning() {
+				or.handle.emitWarning(apiErr)
+				return
+			}
 			or.handle.emitOrderError(e.apiErr(OpPlaceOrder, msg))
 			return
 		}
+		// A reqID-targeted error that matches no keyed route and no order
+		// route is surfaced as a session event rather than dropped: it is the
+		// only trace of failures on fire-and-forget request ids (e.g. an
+		// option-exercise refusal on an id whose route is already gone).
+		e.emitEvent(msg.Code, msg.Message)
+		return
 	}
 }
 
@@ -429,6 +443,13 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	}
 	or, ok := e.orders[m.OrderID]
 	if !ok || or.closed {
+		return
+	}
+	// A fill already delivered to this handle must not be re-emitted when a
+	// later Executions() snapshot query replays the same ExecID. execToOrder
+	// records exactly the fills the handle has seen, so it is the dedupe key;
+	// the keyed subscription leg (dispatched separately) is untouched.
+	if _, seen := e.execToOrder[m.ExecID]; seen {
 		return
 	}
 	// Per-order dispatch: the order is live on the server, so a decode

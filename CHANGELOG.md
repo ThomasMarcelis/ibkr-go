@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Order warnings no longer close the handle.** An order-targeted `api_error`
+  whose `(&APIError{Code: …}).IsWarning()` is true — notably code 399, the
+  off-hours "will not be placed at the exchange until …" deferral — is now
+  delivered non-terminally as a new `OrderEvent.Warning` field instead of
+  closing the `OrderHandle` with that code as its terminal error. The order
+  stays working at IB (live replays show it still cancellable), and the
+  handle's real lifecycle continues to its actual terminal status. Code paths
+  that read the 399 off `OrderHandle.Wait()` must move to consuming the
+  `Warning` event from `Events()`.
+
+  ```go
+  // Before: the handle terminated on the 399 warning
+  err := handle.Wait() // *APIError{Code: 399}, order still working at IB
+
+  // After: the warning is an event; the handle stays open
+  for evt := range handle.Events() {
+      if evt.Warning != nil { /* code 399, non-terminal */ }
+  }
+  err := handle.Wait() // nil (or the real terminal status/error)
+  ```
+
 - **`Buy`/`Sell` renamed to `ActionBuy`/`ActionSell`.** The old names remain
   as deprecated aliases (`Buy = ActionBuy`, `Sell = ActionSell`) for one
   release and are removed in the next.
@@ -102,6 +123,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **`Orders().Place` no longer orphans a live order when its context is
+  cancelled.** If the context fires in the window after the `place_order`
+  frame reached the wire but before the caller received the handle,
+  `Place` now best-effort cancels the now-ownerless order (bounded background
+  context) and detaches the handle with the caller's cancellation cause,
+  instead of returning the error and leaving a live order resting at IB with
+  no handle to reach it.
+- **Request-targeted `api_error` codes below 10000 with no matching route now
+  surface as session events instead of vanishing.** Previously a `req_id`
+  that matched no keyed route and no order route fell off the end of the
+  error handler and was dropped; this is the path that carries option-exercise
+  refusals (code 322) and stale request replies.
+- **`Options().Exercise` now registers a keyed route for its request id.**
+  Exercise is fire-and-forget on the wire, but its request-id-targeted replies
+  (refusals like 322, the 10349 TIF-preset acknowledgement, the 202 that
+  cancels a working instruction) were dropped, and the bare request id could
+  be mistaken for a live order id — misdelivering an exercise error to an
+  unrelated order handle. The route surfaces every notice as a session event
+  and keeps the request id out of the order-id space until disconnect.
+- **A one-shot `Executions()` snapshot no longer double-delivers fills to a
+  live `OrderHandle`.** Executions already seen live are deduped by `ExecID`
+  on the order-handle leg, so a snapshot query that replays historical fills
+  emits each fill to the handle exactly once. The query's own snapshot result
+  still carries every row.
 - **Order-targeted `api_error` codes in the 10xxx band now reach the order
   routes instead of unconditionally becoming session events.** A what-if
   rejected with such a code (live-reproduced 2026-07-05: code 10255 on a

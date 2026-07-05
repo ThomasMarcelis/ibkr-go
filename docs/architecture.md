@@ -136,7 +136,9 @@ order IDs manually.
 `Orders().Place` returns an `OrderHandle` that tracks a single order's lifecycle:
 
 - **Events()** delivers `OrderEvent` values (union of OpenOrder, OrderStatus,
-  Execution, CommissionReport — exactly one field non-nil per event).
+  Execution, CommissionReport, Warning — exactly one field non-nil per event).
+  A `Warning` is a non-terminal, order-targeted notice (e.g. code 399, the
+  off-hours deferral): the order stays working at IB and the handle stays open.
 - **Lifecycle()** delivers bounded observational `SubscriptionStateEvent` values
   (Gap, Resumed). If unread, older queued lifecycle events may be dropped in
   favor of the latest one.

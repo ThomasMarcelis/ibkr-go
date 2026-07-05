@@ -302,20 +302,38 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 	return out.orders, out.err
 }
 
+// orphanCancelTimeout bounds the best-effort cancel of an order that reached
+// the wire just as its PlaceOrder caller's context was canceled.
+const orphanCancelTimeout = 15 * time.Second
+
+// placeOrderResult is the single value the PlaceOrder setup delivers on resp.
+// Exactly one is sent on every path (drop-on-cancel, not-ready, send error, or
+// success), so the orphan resolver's drain always completes.
+type placeOrderResult struct {
+	handle *OrderHandle
+	err    error
+}
+
 // PlaceOrder submits a new order and returns an OrderHandle that tracks its
 // lifecycle. The handle receives OpenOrder, OrderStatus, Execution, and
 // Commission events via dual dispatch. The order can be modified or cancelled
 // through the returned handle.
+//
+// If ctx is canceled after the order already reached the wire — the window
+// between the actor sending place_order and the caller receiving the handle —
+// PlaceOrder returns ctx.Err() and the engine best-effort cancels the now
+// ownerless order (bounded background context) and detaches its handle, so a
+// canceled call cannot leave a live order resting with no way to reach it.
 func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
-	type result struct {
-		handle *OrderHandle
-		err    error
-	}
-
-	resp := make(chan result, 1)
-	enqueueOneShotSetup(ctx, e, func() {
+	resp := make(chan placeOrderResult, 1)
+	// enqueueReadySetup with a drop callback guarantees resp receives exactly
+	// one result even when ctx is canceled before the actor runs the setup;
+	// nothing reached the wire on that path, so a plain error is correct.
+	enqueueReadySetup(ctx, e, func() {
+		resp <- placeOrderResult{err: ctx.Err()}
+	}, func() {
 		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
+			resp <- placeOrderResult{err: ErrNotReady}
 			return
 		}
 
@@ -373,18 +391,51 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, req)); err != nil {
 			delete(e.orders, orderID)
 			handle.closeWithErr(err)
-			resp <- result{err: err}
+			resp <- placeOrderResult{err: err}
 			return
 		}
 
-		resp <- result{handle: handle}
+		resp <- placeOrderResult{handle: handle}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.resolveOrphanedPlaceOrder(resp, ctx.Err())
+	})
 	if err != nil {
 		return nil, err
 	}
 	return out.handle, out.err
+}
+
+// resolveOrphanedPlaceOrder runs after a PlaceOrder caller abandoned the call
+// on context cancellation. The setup guarantees resp receives exactly one
+// result; draining it in a background goroutine lets the caller return at once.
+// If the result carries a handle, the order reached the wire with no owner, so
+// the engine best-effort cancels it under a bounded background context and then
+// detaches the handle with the caller's cancellation cause. Cancel and detach
+// both route through the actor, keeping every handle teardown serialized.
+func (e *engine) resolveOrphanedPlaceOrder(resp <-chan placeOrderResult, cause error) {
+	go func() {
+		var out placeOrderResult
+		select {
+		case out = <-resp:
+		case <-e.done:
+			return
+		}
+		if out.handle == nil {
+			return
+		}
+		cancelCtx, cancel := context.WithTimeout(context.Background(), orphanCancelTimeout)
+		defer cancel()
+		_ = out.handle.Cancel(cancelCtx)
+		e.enqueue(func() {
+			if or, ok := e.orders[out.handle.orderID]; ok && !or.closed {
+				or.closed = true
+				delete(e.orders, out.handle.orderID)
+			}
+			out.handle.closeWithErr(cause)
+		})
+	}()
 }
 
 // PreviewOrder submits a what-if order and returns the margin-and-commission
@@ -521,14 +572,41 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 			override = 1
 		}
 		reqID := e.allocReqID()
-		return e.sendContext(ctx, codec.ExerciseOptionsRequest{
+		// Register a keyed route for the exercise request id. Exercise is
+		// fire-and-forget on the wire, but its request-id-targeted replies —
+		// refusals (322), the TIF-preset acknowledgement (10349), and the 202
+		// that cancels a working instruction — would otherwise be dropped, and
+		// the bare request id could be mistaken for a live order id in the
+		// order fallback. The route surfaces every notice as a session event
+		// and is not torn down on the first one, because several can arrive.
+		// Exercise is rare, so holding the route until disconnect is fine. The
+		// no-op handle guards against a stray ReqIDer frame on this id; no such
+		// frame is expected (the pseudo-order echoes are keyed by order id, not
+		// request id, so they route through the order map and drop as before).
+		e.keyed[reqID] = &route{
+			opKind: OpExerciseOptions,
+			handle: func(any, *engine) {},
+			handleAPIErr: func(m codec.APIError, e *engine) {
+				e.emitEvent(m.Code, m.Message)
+			},
+			onDisconnect: func(e *engine, err error) bool {
+				e.deleteKeyedRoute(reqID)
+				return false
+			},
+			close: func(error) {},
+		}
+		if err := e.sendContext(ctx, codec.ExerciseOptionsRequest{
 			ReqID:            reqID,
 			Contract:         toCodecContract(req.Contract),
 			ExerciseAction:   int(req.ExerciseAction),
 			ExerciseQuantity: req.ExerciseQuantity,
 			Account:          req.Account,
 			Override:         override,
-		})
+		}); err != nil {
+			e.deleteKeyedRoute(reqID)
+			return err
+		}
+		return nil
 	})
 }
 

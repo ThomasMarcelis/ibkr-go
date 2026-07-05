@@ -42,8 +42,10 @@ const (
 	ErrCodeUnsupportedOrderType = 387
 	// ErrCodeOrderMessage: order held with a warning, e.g. an off-hours
 	// order deferred until the next session ("will not be placed at the
-	// exchange until ..."). The order stays working at IB; the engine
-	// surfaces the warning as the order handle's terminal error.
+	// exchange until ..."). The order stays working at IB and remains
+	// cancellable, so the engine delivers it non-terminally as an
+	// [OrderEvent].Warning; the handle stays open and its real lifecycle
+	// (later status updates, the eventual terminal close) continues.
 	ErrCodeOrderMessage = 399
 	// ErrCodeInvalidRealTimeQuery: invalid real-time bars query. The live
 	// attested instance was permission-flavored ("No market data permissions

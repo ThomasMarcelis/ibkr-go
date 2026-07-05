@@ -11,23 +11,21 @@ import (
 
 // The two replays below freeze the option-exercise family (matrix row
 // OPT-002) captured live on 2026-06-11 against paper Gateway server_version
-// 200. Exercise (msg 21) is fire-and-forget: the engine allocates a request
-// id, sends the frame with the sv200 manual-order-time/customer-account/
-// professional-customer tail, and registers no route. How the Gateway's
-// answers surface therefore depends entirely on handleAPIError's range
-// rules for an unrouted req id:
+// 200. Exercise (msg 21) is fire-and-forget on the wire: the engine allocates
+// a request id, sends the frame with the sv200 manual-order-time/customer-
+// account/professional-customer tail, and registers a keyed route so the
+// request-id-targeted replies are not lost. How the Gateway's answers surface:
 //
-//   - 10xxx codes (10349 "Order TIF was set to DAY based on order preset.")
-//     fall through to a session event;
-//   - request-range codes (322 exercise refusals, the 202 cancellation of
-//     the exercise instruction) match no keyed route and no order route and
-//     are dropped silently;
+//   - api_error replies on the exercise request id (322 exercise refusals,
+//     the 10349 TIF-preset acknowledgement, and the 202 that cancels a
+//     working instruction) route to the exercise route and surface as
+//     session events;
 //   - the open_order/order_status frames for the pseudo-order the Gateway
-//     materializes under the exercise request id match no order route and
-//     are dropped too.
+//     materializes under the exercise request id are keyed by order id, not
+//     request id, so they match no order route and are dropped.
 //
 // Each replay asserts that surface exactly; the host completing (waitHost)
-// proves the dropped frames were really delivered and absorbed.
+// proves the dropped pseudo-order frames were really delivered and absorbed.
 
 var exerciseAAPLJun12Call2925 = ibkr.Contract{
 	ConID:        886441502,
@@ -76,28 +74,6 @@ func requireNoMoreOrderEvents(t *testing.T, ctx context.Context, name string, ha
 	}
 }
 
-// requireNoSessionEventCodes drains the session events channel until the
-// engine closes it, failing if any of the given codes surfaces.
-func requireNoSessionEventCodes(t *testing.T, ctx context.Context, events <-chan ibkr.Event, codes ...int) {
-	t.Helper()
-
-	for {
-		select {
-		case evt, ok := <-events:
-			if !ok {
-				return
-			}
-			for _, code := range codes {
-				if evt.Code == code {
-					t.Errorf("code %d leaked to session events: %+v", code, evt)
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout draining session events")
-		}
-	}
-}
-
 // waitOptionFill drains handle events until the Filled status, the
 // execution, and the commission report have all arrived, returning them for
 // field-level assertions.
@@ -135,9 +111,8 @@ func waitOptionFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle)
 // MKT BUY 1 of the barely-ITM AAPL Jun-12 292.5 call fills at 2.11 with one
 // execution and its commission report, then Exercise draws code 322
 // "Exercise ignored because option is not in-the-money." on the exercise
-// request id. That id belongs to no order route, so the engine drops the
-// refusal: the Exercise call itself returns nil and nothing surfaces on the
-// order handle or the session events channel.
+// request id. The exercise route surfaces that refusal as a session event;
+// the Exercise call itself returns nil and nothing touches the order handle.
 func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 	t.Parallel()
 
@@ -206,18 +181,20 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 		t.Fatalf("Exercise: %v", err)
 	}
 
-	// The code-322 refusal targets the exercise request id, which has no
-	// route: the engine drops it. The handle saw the terminal Filled status,
+	// The code-322 refusal targets the exercise request id, which now carries
+	// a keyed route: it surfaces as a session event instead of being dropped.
+	refusal := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeServerErrorProcessingRequest)
+	if refusal.Message != "Error processing request.Exercise ignored because option is not in-the-money." {
+		t.Fatalf("322 message = %q", refusal.Message)
+	}
+
+	// The handle saw the terminal Filled status; no exercise reply touches it,
 	// so it closes clean (nil) on the transcript disconnect with no further
 	// business events.
 	requireNoMoreOrderEvents(t, ctx, "exercise buy", handle)
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("handle.Wait() = %v, want nil (terminal Filled before disconnect)", err)
 	}
-
-	// Session events: nothing may carry the dropped 322. The channel closes
-	// when the disconnect shuts the engine down.
-	requireNoSessionEventCodes(t, ctx, events, ibkr.ErrCodeServerErrorProcessingRequest)
 }
 
 // TestAPIOptionExerciseServerRejectReplay freezes the deep-ITM exercise
@@ -225,14 +202,15 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 // (captures/20260611T133636Z-api_option_exercise_aapl, events.jsonl sha256
 // prefix 267e7806669f2d5c): MKT BUY 1 of the AAPL Jun-12 282.5 call fills
 // at 8.90, Exercise is acknowledged as a working DAY instruction via code
-// 10349 on the exercise request id (a session event: 10xxx with no keyed
-// route), and the Gateway materializes the instruction as a pseudo-order
-// keyed by that same id, which this client has no route for and drops.
-// When the teardown global cancel runs, the paper Gateway kills the
-// instruction: code 322 "Exercise/Lapse failed due to server rejection.",
-// the pseudo-order's Cancelled status, and its code-202 notice all target
-// the exercise request id and are dropped, while the code-161 reply for the
-// filled buy order routes to its handle and becomes the terminal error.
+// 10349 on the exercise request id (a session event via the exercise route),
+// and the Gateway materializes the instruction as a pseudo-order keyed by
+// that same id, which this client has no order route for and drops. When the
+// teardown global cancel runs, the paper Gateway kills the instruction: code
+// 322 "Exercise/Lapse failed due to server rejection." and its code-202
+// notice both target the exercise request id and surface as session events,
+// the pseudo-order's Cancelled status between them is keyed by order id and
+// drops, and the code-161 reply for the filled buy order routes to its handle
+// and becomes the terminal error.
 func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	t.Parallel()
 
@@ -300,18 +278,23 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 
 	// The pseudo-order open_order/order_status under the exercise request id
 	// are delivered next and dropped (no order route); the global cancel
-	// then kills the instruction live. The only routed reply is the code-161
-	// for the already-filled buy order.
+	// then kills the instruction live. The code-161 for the already-filled
+	// buy order routes to its handle as the terminal error.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
 	requireOrderAPIError(t, "exercise buy", handle, ibkr.ErrCodeCancelNotCancellableState,
 		"Order permId =900407")
 
-	// Neither the 322 server rejection nor the 202 cancellation of the
-	// exercise instruction surfaces anywhere: both target the unrouted
-	// exercise request id. Drain the session channel to engine close and
-	// assert their absence; waitHost proves they were delivered.
-	requireNoSessionEventCodes(t, ctx, events,
-		ibkr.ErrCodeServerErrorProcessingRequest, ibkr.ErrCodeOrderCanceled)
+	// The 322 server rejection and the 202 that cancels the exercise
+	// instruction both target the exercise request id, which carries the
+	// exercise route: both now surface as session events. (The pseudo-order's
+	// Cancelled status between them is keyed by order id and still drops.)
+	rejection := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeServerErrorProcessingRequest)
+	if rejection.Message != "Error processing request.Exercise/Lapse failed due to server rejection." {
+		t.Fatalf("322 message = %q", rejection.Message)
+	}
+	if canceled := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled); canceled.Message != "Order Canceled - reason:" {
+		t.Fatalf("202 message = %q", canceled.Message)
+	}
 }

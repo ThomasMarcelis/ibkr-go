@@ -130,8 +130,8 @@ func (h *OrderHandle) Modify(ctx context.Context, order Order) error
 
 `Orders().Place` returns an `OrderHandle` that tracks a single order's
 lifecycle. `Events()` delivers `OrderEvent` values. `OrderEvent` is a union:
-exactly one of `OpenOrder`, `Status`, `Execution`, or `Commission` is non-nil
-per event.
+exactly one of `OpenOrder`, `Status`, `Execution`, `Commission`, or `Warning`
+is non-nil per event.
 
 `Lifecycle()` delivers Gap and Resumed events across reconnect boundaries. It is
 bounded and observational. `Close()` detaches the handle without cancelling the
@@ -150,6 +150,12 @@ this covers both the sub-10000 rejection codes and the 10xxx codes
 live-attested as outright placement rejections (10063, 10255). Order-targeted
 10xxx notices for live orders — cancel replies such as 10147/10148 — stay
 session events, because the handle already carries the order's real state.
+
+An order-targeted api_error whose `(&APIError{Code: ...}).IsWarning()` is true —
+notably code 399, the off-hours deferral — is delivered non-terminally as an
+`OrderEvent.Warning`. The order stays working at IB and the handle stays open;
+its real lifecycle (later status updates, the eventual terminal close)
+continues.
 
 ## Completion and Reconnect
 
