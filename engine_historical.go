@@ -289,9 +289,10 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				case codec.HistoricalBarsEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				case codec.HistoricalDataUpdate:
+					// Streaming updates carry no per-bar trade count on the wire.
 					bar, err := fromCodecBar(codec.HistoricalBar{
 						ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
-						Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP, Count: m.Count,
+						Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP,
 					})
 					if err != nil {
 						e.deleteKeyedRoute(reqID)

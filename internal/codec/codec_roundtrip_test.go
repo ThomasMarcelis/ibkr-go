@@ -318,7 +318,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg: HistoricalDataUpdate{
 				ReqID: 1, BarCount: 5, Time: "20260407 10:00:00",
 				Open: "150.00", High: "151.50", Low: "149.80",
-				Close: "151.20", Volume: "123456", WAP: "150.75", Count: "5432",
+				Close: "151.20", Volume: "123456", WAP: "150.75",
 			},
 		},
 		{

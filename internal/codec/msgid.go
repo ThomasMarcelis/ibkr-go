@@ -134,7 +134,7 @@ const (
 	InHistoricalNewsEnd     = 87
 	InHistogramData         = 89
 	InHeadTimestamp         = 88
-	InMarketRule            = 92
+	InMarketRule            = 93
 	InPnL                   = 94
 	InPnLSingle             = 95
 	InTickByTick            = 99
@@ -145,7 +145,8 @@ const (
 	InHistoricalTicks       = 96
 	InHistoricalTicksBidAsk = 97
 	InHistoricalTicksLast   = 98
-	InHistoricalDataUpdate  = 108
+	InHistoricalDataUpdate  = 90
+	InHistoricalDataEnd     = 108
 	InReceiveFA             = 16
 	InSoftDollarTiers       = 77
 	InDisplayGroupList      = 67

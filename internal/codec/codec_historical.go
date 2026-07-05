@@ -1,8 +1,5 @@
 package codec
 
-import (
-	"strconv"
-)
 
 type HistoricalBarsRequest struct {
 	ReqID        int
@@ -230,7 +227,8 @@ type HistoricalScheduleSession struct {
 	RefDate       string
 }
 
-// Historical data update (IN 108) — streaming bar for keepUpToDate
+// Historical data update (IN 90) — streaming bar for keepUpToDate. Unlike
+// the packed IN 17 bars there is no per-bar trade count on the wire.
 
 type HistoricalDataUpdate struct {
 	ReqID    int
@@ -242,7 +240,6 @@ type HistoricalDataUpdate struct {
 	Close    string
 	Volume   string
 	WAP      string
-	Count    string
 }
 
 // [17, reqID, barCount, time, O, H, L, C, vol, wap, count, ...]
@@ -291,7 +288,13 @@ func (m HistoricalBar) encodeWire(sv int) ([]string, error) {
 }
 
 func (m HistoricalBarsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InHistoricalData), itoa(m.ReqID), "0"}, nil
+	// At sv >= 196 the live Gateway ends a batch with a standalone
+	// HISTORICAL_DATA_END frame; below that the range rides the packed IN 17
+	// frame, so a bare zero-bar batch is the only faithful representation.
+	if sv >= MinServerVersionHistoricalDataEnd {
+		return []string{itoa(InHistoricalDataEnd), itoa(m.ReqID), m.StartDate, m.EndDate}, nil
+	}
+	return []string{itoa(InHistoricalData), itoa(m.ReqID), m.StartDate, m.EndDate, "0"}, nil
 }
 
 // [88, reqId, headTimestamp] — no version
@@ -453,21 +456,12 @@ func (m HistoricalTicksLastResponse) encodeWire(sv int) ([]string, error) {
 	return w.Fields(), nil
 }
 
+// [90, reqID, barCount, time, open, close, high, low, WAP, volume]
+// Official HISTORICAL_DATA_UPDATE layout (note the open/close/high/low field
+// order, unlike the packed IN 17 bars). Source-referenced from the official
+// client library; live attestation against Gateway v200 keepUpToDate pending
+// (markets closed at time of writing — WIRE_TRUTH.md records the gap).
 func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
-	// Live Gateway v200 sends two distinct msg_id 108 shapes:
-	//   [108, reqID, barCount, time, O, H, L, C, vol, wap, count]
-	//   [108, reqID, startDateTime, endDateTime]
-	// Older captures also show [108, reqID, startDateTime]. The range
-	// shapes are terminal markers for the preceding historical data batch.
-	if rem := r.Remaining(); rem == 2 || rem == 3 {
-		probe := *r
-		f0, _ := probe.field()
-		f1, _ := probe.field()
-		if isWireInt(string(f0)) && isHistoricalRangeBoundary(string(f1)) {
-			reqID, _ := strconv.Atoi(string(f0))
-			return []Message{HistoricalBarsEnd{ReqID: reqID}}, nil
-		}
-	}
 	reqID, err := r.ReadInt()
 	if err != nil {
 		return nil, err
@@ -476,15 +470,17 @@ func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := r.RequireFixedEntryFields("historical data update", 1, 8, 0); err != nil {
+	if err := r.RequireFixedEntryFields("historical data update", 1, 7, 0); err != nil {
 		return nil, err
 	}
-	return []Message{HistoricalDataUpdate{
-		ReqID: reqID, BarCount: barCount,
-		Time: r.ReadString(), Open: r.ReadString(), High: r.ReadString(),
-		Low: r.ReadString(), Close: r.ReadString(), Volume: r.ReadString(),
-		WAP: r.ReadString(), Count: r.ReadString(),
-	}}, nil
+	update := HistoricalDataUpdate{ReqID: reqID, BarCount: barCount, Time: r.ReadString()}
+	update.Open = r.ReadString()
+	update.Close = r.ReadString()
+	update.High = r.ReadString()
+	update.Low = r.ReadString()
+	update.WAP = r.ReadString()
+	update.Volume = r.ReadString()
+	return []Message{update}, nil
 }
 
 func (m HistoricalDataUpdate) encodeWire(sv int) ([]string, error) {
@@ -494,13 +490,27 @@ func (m HistoricalDataUpdate) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.BarCount)
 	w.WriteString(m.Time)
 	w.WriteString(m.Open)
+	w.WriteString(m.Close)
 	w.WriteString(m.High)
 	w.WriteString(m.Low)
-	w.WriteString(m.Close)
-	w.WriteString(m.Volume)
 	w.WriteString(m.WAP)
-	w.WriteString(m.Count)
+	w.WriteString(m.Volume)
 	return w.Fields(), nil
+}
+
+// [108, reqID, startDateTime, endDateTime]
+// Official HISTORICAL_DATA_END, live-attested against Gateway v200
+// (captures/v1/historical_bars_keepup.log). Sent after the packed IN 17 batch
+// at sv >= MinServerVersionHistoricalDataEnd. Older captures also show a
+// 2-field [reqID, startDateTime] shape, so the end date stays optional.
+func decodeHistoricalDataEnd(r *fieldReader, sv int) ([]Message, error) {
+	reqID, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	return []Message{HistoricalBarsEnd{
+		ReqID: reqID, StartDate: r.ReadString(), EndDate: r.ReadString(),
+	}}, nil
 }
 
 // [106, reqId, startDateTime, endDateTime, timeZone, sessionCount, (startDateTime,endDateTime,refDate)*count]

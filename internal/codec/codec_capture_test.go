@@ -1400,3 +1400,57 @@ func TestDecodeUserInfoLiveFrame(t *testing.T) {
 		t.Fatalf("UserInfo = %+v, want ReqID=1 empty branding", info)
 	}
 }
+
+func TestCaptureDecode_MarketRuleLive(t *testing.T) {
+	t.Parallel()
+	// captures/v1/market_rule.log line 7 (IB Gateway paper account,
+	// server_version 200, captured 2026-04-06): live MarketRule replies
+	// arrive on msg_id 93, not the 92 the codec shipped with. The wrong
+	// constant made every live reply an unknown frame; this freezes the
+	// live id and layout [93, marketRuleId, count, pairs(lowEdge, increment)].
+	payload := []byte("93\x0026\x001\x000\x000.01\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(MarketRule)
+	if !ok {
+		t.Fatalf("type = %T, want MarketRule", msgs[0])
+	}
+	if m.MarketRuleID != 26 {
+		t.Errorf("MarketRuleID = %d, want 26", m.MarketRuleID)
+	}
+	if len(m.Increments) != 1 || m.Increments[0].LowEdge != "0" || m.Increments[0].Increment != "0.01" {
+		t.Errorf("Increments = %+v, want [{0 0.01}]", m.Increments)
+	}
+}
+
+func TestCaptureDecode_HistoricalDataEndLive(t *testing.T) {
+	t.Parallel()
+	// captures/v1/historical_bars_keepup.log line 8 (IB Gateway paper
+	// account, server_version 200, captured 2026-04-06): the standalone
+	// HISTORICAL_DATA_END frame that follows the packed IN 17 batch at
+	// sv >= 196. Shape is [108, reqID, startDateTime, endDateTime]; the
+	// codec previously misread 108 as the streaming-update id.
+	payload := []byte("108\x001001\x0020260406 07:37:52 US/Eastern\x0020260406 08:37:52 US/Eastern\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(HistoricalBarsEnd)
+	if !ok {
+		t.Fatalf("type = %T, want HistoricalBarsEnd", msgs[0])
+	}
+	if m.ReqID != 1001 {
+		t.Errorf("ReqID = %d, want 1001", m.ReqID)
+	}
+	if m.StartDate != "20260406 07:37:52 US/Eastern" || m.EndDate != "20260406 08:37:52 US/Eastern" {
+		t.Errorf("range = %q..%q, want live capture range", m.StartDate, m.EndDate)
+	}
+}

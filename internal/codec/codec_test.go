@@ -221,9 +221,9 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 		{"HistoricalData/bad_reqID", []string{"17", "bad", "0"}},
 		{"HistoricalData/missing_count", []string{"17", "1"}},
 		{"HistoricalData/empty_count", []string{"17", "1", ""}},
-		{"HistoricalDataUpdate/missing_count", []string{"108", "1"}},
-		{"HistoricalDataUpdate/empty_count", []string{"108", "1", ""}},
-		{"HistoricalDataUpdate/bad_count", []string{"108", "1", "bad", "t", "o", "h", "l", "c", "v", "w", "n"}},
+		{"HistoricalDataUpdate/missing_count", []string{"90", "1"}},
+		{"HistoricalDataUpdate/empty_count", []string{"90", "1", ""}},
+		{"HistoricalDataUpdate/bad_count", []string{"90", "1", "bad", "t", "o", "c", "h", "l", "w", "v"}},
 		{"ScannerData/missing_count", []string{"20", "3", "1"}},
 		{"ScannerData/empty_count", []string{"20", "3", "1", ""}},
 		{"FamilyCodes/missing_count", []string{"78"}},
@@ -245,18 +245,17 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 	}
 }
 
-func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
+func TestDecodeHistoricalDataEnd(t *testing.T) {
 	t.Parallel()
 
-	// Live Gateway v200 can send a trailing historical-data terminal frame
-	// after the packed bar payload. Its first payload field is the start
-	// timestamp rather than a bar count.
+	// HISTORICAL_DATA_END (IN 108) terminates a historical batch at sv >= 196.
+	// Live shape is [108, reqID, startDateTime, endDateTime]; older captures
+	// also show a 2-field variant without the end timestamp.
 	tests := [][]string{
 		{"108", "1", "20260407 08:52:59 US/Eastern"},
 		{"108", "1", "20260407 10:23:05 US/Eastern", "20260412 10:23:05 US/Eastern"},
 	}
 	for _, fields := range tests {
-		fields := fields
 		t.Run(fields[len(fields)-1], func(t *testing.T) {
 			t.Parallel()
 
@@ -274,6 +273,9 @@ func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
 			if end.ReqID != 1 {
 				t.Fatalf("HistoricalBarsEnd.ReqID = %d, want request id from terminal frame", end.ReqID)
 			}
+			if end.StartDate != fields[2] {
+				t.Fatalf("HistoricalBarsEnd.StartDate = %q, want %q", end.StartDate, fields[2])
+			}
 		})
 	}
 }
@@ -281,9 +283,12 @@ func TestDecodeHistoricalDataUpdateTrailingEndPreservesReqID(t *testing.T) {
 func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 	t.Parallel()
 
+	// HISTORICAL_DATA_UPDATE (IN 90) streaming bar, official layout:
+	// [90, reqID, barCount, time, open, close, high, low, WAP, volume].
+	// Source-referenced; live attestation pending (see WIRE_TRUTH.md).
 	msgs, err := DecodeBatch(200, wire.EncodeFields([]string{
-		"108", "42", "1",
-		"20260412 10:30:00 US/Eastern", "100.00", "101.00", "99.50", "100.50", "1500", "100.25", "37",
+		"90", "42", "1",
+		"20260412 10:30:00 US/Eastern", "100.00", "100.50", "101.00", "99.50", "100.25", "1500",
 	}))
 	if err != nil {
 		t.Fatalf("DecodeBatch() error = %v", err)
@@ -295,7 +300,8 @@ func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 	if !ok {
 		t.Fatalf("message = %T, want HistoricalDataUpdate", msgs[0])
 	}
-	if update.ReqID != 42 || update.BarCount != 1 || update.Close != "100.50" {
+	if update.ReqID != 42 || update.BarCount != 1 || update.Close != "100.50" ||
+		update.High != "101.00" || update.Low != "99.50" || update.WAP != "100.25" || update.Volume != "1500" {
 		t.Fatalf("HistoricalDataUpdate = %#v", update)
 	}
 }

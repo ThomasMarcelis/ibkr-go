@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
@@ -67,6 +68,14 @@ func (e *engine) handleIncoming(msg any) {
 		return
 	case codec.APIError:
 		e.handleAPIError(m)
+		return
+	case codec.UnknownInbound:
+		// An unmapped msg id used to surface as a ProtocolError and close the
+		// transport — a session kill over a message nobody asked for. Keep the
+		// session and make the drift observable instead.
+		e.cfg.logger.Warn("ibkr: dropped inbound frame with unknown msg_id",
+			"msg_id", m.MsgID, "field_count", len(m.Fields))
+		e.emitEvent(0, fmt.Sprintf("dropped inbound frame with unknown msg_id %d (%d fields)", m.MsgID, len(m.Fields)))
 		return
 	}
 

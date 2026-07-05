@@ -236,7 +236,7 @@ Inbound message IDs:
 | `InHistoricalNewsEnd` | 87 | Historical news end |
 | `InHeadTimestamp` | 88 | Head timestamp |
 | `InHistogramData` | 89 | Histogram data |
-| `InMarketRule` | 92 | Market rule |
+| `InMarketRule` | 93 | Market rule |
 | `InPnL` | 94 | Account PnL |
 | `InPnLSingle` | 95 | Single-position PnL |
 | `InHistoricalTicks` | 96 | Historical midpoint ticks |
@@ -250,7 +250,8 @@ Inbound message IDs:
 | `InWSHMetaData` | 104 | WSH metadata |
 | `InWSHEventData` | 105 | WSH event data |
 | `InHistoricalSchedule` | 106 | Historical schedule (whatToShow=SCHEDULE) |
-| `InHistoricalDataUpdate` | 108 | Historical bar updates |
+| `InHistoricalDataUpdate` | 90 | Historical bar updates (keepUpToDate) |
+| `InHistoricalDataEnd` | 108 | Historical batch end marker |
 
 ## Known Official Gaps Or Deferred Branches
 

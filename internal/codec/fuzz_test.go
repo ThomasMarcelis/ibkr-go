@@ -1,7 +1,9 @@
 package codec
 
 import (
+	"bytes"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -86,7 +88,7 @@ var allInboundMsgIDs = []int{
 	InHistoricalNewsEnd,     // 87
 	InHeadTimestamp,         // 88
 	InHistogramData,         // 89
-	InMarketRule,            // 92
+	InMarketRule,            // 93
 	InPnL,                   // 94
 	InPnLSingle,             // 95
 	InHistoricalTicks,       // 96
@@ -97,7 +99,8 @@ var allInboundMsgIDs = []int{
 	InCompletedOrderEnd,     // 102
 	InReplaceFAEnd,          // 103
 	InUserInfo,              // 107
-	InHistoricalDataUpdate,  // 108
+	InHistoricalDataUpdate,  // 90
+	InHistoricalDataEnd,     // 108
 	InReceiveFA,             // 16
 	InSoftDollarTiers,       // 77
 	InDisplayGroupList,      // 67
@@ -165,7 +168,7 @@ func FuzzDecodeBatch(f *testing.F) {
 		MarketRule{MarketRuleID: 26, Increments: []PriceIncrement{{LowEdge: "0", Increment: "0.01"}}},
 		TickOptionComputation{ReqID: 1, TickType: 13, TickAttrib: 1, ImpliedVol: "0.25", Delta: "0.5", OptPrice: "3.50", PvDividend: "0.10", Gamma: "0.02", Vega: "0.15", Theta: "-0.05", UndPrice: "150.00"},
 		NewsBulletin{MsgID: 1, MsgType: 1, Headline: "Test Headline", Source: "TestSource"},
-		HistoricalDataUpdate{ReqID: 1, BarCount: 1, Time: "20260101", Open: "100", High: "101", Low: "99", Close: "100.5", Volume: "1000", WAP: "100.25", Count: "50"},
+		HistoricalDataUpdate{ReqID: 1, BarCount: 1, Time: "20260101", Open: "100", High: "101", Low: "99", Close: "100.5", Volume: "1000", WAP: "100.25"},
 		TickByTickData{ReqID: 1, TickType: 1, Time: "1712345678", Price: "100.50", Size: "200", TickAttribLast: 0, Exchange: "SMART", SpecialConditions: ""},
 		TickByTickData{ReqID: 2, TickType: 3, Time: "1712345678", BidPrice: "100.0", AskPrice: "100.5", BidSize: "100", AskSize: "200", TickAttribBidAsk: 0},
 		TickByTickData{ReqID: 3, TickType: 4, Time: "1712345678", MidPoint: "100.25"},
@@ -504,7 +507,8 @@ func TestDecodeShortFields(t *testing.T) {
 		{"CompletedOrderEnd", InCompletedOrderEnd, 0},          // no fields after msg_id
 		{"UserInfo", InUserInfo, 2},                            // reqID, whiteBrandingId
 		{"HistoricalSchedule", InHistoricalSchedule, 5},        // reqID, start, end, timezone, session count
-		{"HistoricalDataUpdate", InHistoricalDataUpdate, 10},   // reqID, barCount, time, O, H, L, C, vol, wap, count
+		{"HistoricalDataUpdate", InHistoricalDataUpdate, 9},    // reqID, barCount, time, O, C, H, L, wap, vol
+		{"HistoricalDataEnd", InHistoricalDataEnd, 3},          // reqID, startDateTime, endDateTime
 	}
 
 	for _, tc := range cases {
@@ -523,7 +527,8 @@ func TestDecodeShortFields(t *testing.T) {
 }
 
 // TestDecodeUnknownMsgID verifies that every integer 0-255 that is NOT a known
-// inbound msg ID returns an error from DecodeBatch (not a panic).
+// inbound msg ID decodes to UnknownInbound with the raw fields preserved —
+// never an error (which would tear down the session) and never a panic.
 func TestDecodeUnknownMsgID(t *testing.T) {
 	t.Parallel()
 
@@ -536,13 +541,33 @@ func TestDecodeUnknownMsgID(t *testing.T) {
 		if known[id] {
 			continue
 		}
-		id := id
 		t.Run(strconv.Itoa(id), func(t *testing.T) {
 			t.Parallel()
-			payload := wire.EncodeFields([]string{strconv.Itoa(id), "0", "0", "0"})
-			_, err := DecodeBatch(200, payload)
-			if err == nil {
-				t.Errorf("msg_id %d: expected error for unknown msg ID, got nil", id)
+			payload := wire.EncodeFields([]string{strconv.Itoa(id), "0", "1", "abc"})
+			msgs, err := DecodeBatch(200, payload)
+			if err != nil {
+				t.Fatalf("msg_id %d: unknown msg ID must not error (it would kill the session): %v", id, err)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("msg_id %d: got %d messages, want 1", id, len(msgs))
+			}
+			unknown, ok := msgs[0].(UnknownInbound)
+			if !ok {
+				t.Fatalf("msg_id %d: got %T, want UnknownInbound", id, msgs[0])
+			}
+			if unknown.MsgID != id {
+				t.Errorf("MsgID = %d, want %d", unknown.MsgID, id)
+			}
+			if want := []string{"0", "1", "abc"}; !slices.Equal(unknown.Fields, want) {
+				t.Errorf("Fields = %q, want %q", unknown.Fields, want)
+			}
+			// The raw frame re-encodes verbatim for diagnosis fidelity.
+			reencoded, err := Encode(200, unknown)
+			if err != nil {
+				t.Fatalf("re-encode: %v", err)
+			}
+			if !bytes.Equal(reencoded, payload) {
+				t.Errorf("re-encode = %q, want %q", reencoded, payload)
 			}
 		})
 	}
@@ -584,9 +609,9 @@ func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 		{"HistogramData/negative_count", []string{"89", "1", "-1"}},
 		{"HistogramData/zero_count", []string{"89", "1", "0"}},
 
-		// MarketRule: [92, ruleID, count, ...]
-		{"MarketRule/negative_count", []string{"92", "1", "-1"}},
-		{"MarketRule/zero_count", []string{"92", "1", "0"}},
+		// MarketRule: [93, ruleID, count, ...]
+		{"MarketRule/negative_count", []string{"93", "1", "-1"}},
+		{"MarketRule/zero_count", []string{"93", "1", "0"}},
 
 		// HistoricalTicks: [96, reqID, count, ...]
 		{"HistoricalTicks/negative_count", []string{"96", "1", "-1"}},
@@ -947,15 +972,15 @@ func FuzzEncodeDecodeRoundTrip_FundamentalDataResponse(f *testing.F) {
 
 // FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate proves encode-decode round-trip for HistoricalDataUpdate.
 func FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate(f *testing.F) {
-	f.Add(1, 1, "20260101", "100", "101", "99", "100.5", "1000", "100.25", "50")
-	f.Add(0, 0, "", "", "", "", "", "", "", "")
-	f.Add(-1, 10, "20250615 15:30:00", "200.5", "205.0", "198.0", "202.0", "5000", "201.5", "120")
+	f.Add(1, 1, "20260101", "100", "101", "99", "100.5", "1000", "100.25")
+	f.Add(0, 0, "", "", "", "", "", "", "")
+	f.Add(-1, 10, "20250615 15:30:00", "200.5", "205.0", "198.0", "202.0", "5000", "201.5")
 
-	f.Fuzz(func(t *testing.T, reqID int, barCount int, ts string, open string, high string, low string, close_ string, volume string, wap string, count string) {
-		if containsNull(ts, open, high, low, close_, volume, wap, count) {
+	f.Fuzz(func(t *testing.T, reqID int, barCount int, ts string, open string, high string, low string, close_ string, volume string, wap string) {
+		if containsNull(ts, open, high, low, close_, volume, wap) {
 			return
 		}
-		original := HistoricalDataUpdate{ReqID: reqID, BarCount: barCount, Time: ts, Open: open, High: high, Low: low, Close: close_, Volume: volume, WAP: wap, Count: count}
+		original := HistoricalDataUpdate{ReqID: reqID, BarCount: barCount, Time: ts, Open: open, High: high, Low: low, Close: close_, Volume: volume, WAP: wap}
 		encoded, err := Encode(200, original)
 		if err != nil {
 			return
@@ -997,9 +1022,6 @@ func FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate(f *testing.F) {
 		}
 		if hdu.WAP != wap {
 			t.Errorf("WAP: got %q, want %q", hdu.WAP, wap)
-		}
-		if hdu.Count != count {
-			t.Errorf("Count: got %q, want %q", hdu.Count, count)
 		}
 	})
 }

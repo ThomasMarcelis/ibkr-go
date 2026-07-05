@@ -222,7 +222,7 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "news_bulletin":
 		return codec.NewsBulletin{MsgID: asInt(resolve(body["msg_id"])), MsgType: asInt(resolve(body["msg_type"])), Headline: asString(resolve(body["headline"])), Source: asString(resolve(body["source"]))}, nil
 	case "historical_data_update":
-		return codec.HistoricalDataUpdate{ReqID: asInt(resolve(body["req_id"])), BarCount: asInt(resolve(body["bar_count"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"])), WAP: asString(resolve(body["wap"])), Count: asString(resolve(body["count"]))}, nil
+		return codec.HistoricalDataUpdate{ReqID: asInt(resolve(body["req_id"])), BarCount: asInt(resolve(body["bar_count"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"])), WAP: asString(resolve(body["wap"]))}, nil
 	case "sec_def_opt_params":
 		return codec.SecDefOptParamsResponse{
 			ReqID: asInt(resolve(body["req_id"])), Exchange: asString(resolve(body["exchange"])),

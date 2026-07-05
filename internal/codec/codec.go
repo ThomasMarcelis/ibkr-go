@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
@@ -89,13 +88,6 @@ func isWireInt(value string) bool {
 	}
 	_, err := strconv.Atoi(value)
 	return err == nil
-}
-
-func isHistoricalRangeBoundary(value string) bool {
-	if value == "" || isWireInt(value) {
-		return false
-	}
-	return strings.Contains(value, " ") && strings.Contains(value, "/")
 }
 
 // completedOrderTail probes the fields following a candidate status field. r is
@@ -262,6 +254,7 @@ var inboundDecoders = map[int]decodeFunc{
 	InHistoricalTicksLast:   decodeHistoricalTicksLast,
 	InTickByTick:            decodeTickByTick,
 	InHistoricalDataUpdate:  decodeHistoricalDataUpdate,
+	InHistoricalDataEnd:     decodeHistoricalDataEnd,
 	InReceiveFA:             decodeReceiveFA,
 	InSoftDollarTiers:       decodeSoftDollarTiers,
 	InWSHMetaData:           decodeWSHMetaData,
@@ -271,13 +264,32 @@ var inboundDecoders = map[int]decodeFunc{
 	InDisplayGroupUpdated:   decodeDisplayGroupUpdated,
 }
 
+// UnknownInbound carries a frame whose msg_id has no registered decoder. An
+// unmapped id is not a protocol violation: the Gateway grows new message ids
+// over time, and killing the session over one (the pre-fix failure mode) tears
+// down every subscription and order handle. The engine surfaces these as
+// session events so drift stays observable; the raw fields are preserved for
+// diagnosis and re-encode verbatim.
+type UnknownInbound struct {
+	MsgID  int
+	Fields []string
+}
+
+func (m UnknownInbound) encodeWire(sv int) ([]string, error) {
+	return append([]string{itoa(m.MsgID)}, m.Fields...), nil
+}
+
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
 // Returns []Message because historical data packs multiple bars into one frame.
 // r is positioned just past the msg_id field.
 func decodeByMsgID(sv int, msgID int, r *fieldReader) ([]Message, error) {
 	dec, ok := inboundDecoders[msgID]
 	if !ok {
-		return nil, fmt.Errorf("codec: unknown msg_id %d", msgID)
+		fields := make([]string, 0, r.Remaining())
+		for r.Remaining() > 0 {
+			fields = append(fields, r.ReadString())
+		}
+		return []Message{UnknownInbound{MsgID: msgID, Fields: fields}}, nil
 	}
 	msgs, err := dec(r, sv)
 	if err == nil && r.Err() != nil {
