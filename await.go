@@ -132,7 +132,7 @@ func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context)
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-e.done:
-		return ErrClosed
+		return e.Wait()
 	}
 }
 

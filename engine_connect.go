@@ -141,7 +141,7 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 				// e.transportErr, so an unguarded send on a hot feed wedges
 				// this goroutine forever. Bail on e.done instead.
 				select {
-				case e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}:
+				case e.transportErr <- transportLoss{transport: tr, err: &ProtocolError{Direction: "inbound", Err: err}}:
 				case <-e.done:
 				}
 				return
@@ -164,7 +164,7 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 		// gated on decodedDone, and the decode goroutine only closes it after
 		// its final incoming send or an e.done bail-out.
 		select {
-		case e.transportErr <- tr.Wait():
+		case e.transportErr <- transportLoss{transport: tr, err: tr.Wait()}:
 		case <-e.done:
 		}
 	}()

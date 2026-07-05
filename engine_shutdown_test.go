@@ -25,8 +25,8 @@ func TestAttachTransportPumpUnblocksOnEngineShutdown(t *testing.T) {
 		tr := transport.New(clientConn, nil, 0)
 
 		e := &engine{
-			incoming:      make(chan any),   // unbuffered: no run loop, so one decode wedges the pump
-			transportErr:  make(chan error), // unbuffered: same for the error forwarder
+			incoming:      make(chan any),           // unbuffered: no run loop, so one decode wedges the pump
+			transportErr:  make(chan transportLoss), // unbuffered: same for the error forwarder
 			done:          make(chan struct{}),
 			serverVersion: 200,
 		}
@@ -69,7 +69,7 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 		cfg:          config{logger: slog.Default()},
 		cmds:         make(chan func(), 1),
 		incoming:     make(chan any, 256),
-		transportErr: make(chan error, 1),
+		transportErr: make(chan transportLoss, 1),
 		done:         make(chan struct{}),
 		keyed:        make(map[int]*route),
 		snapshot:     Snapshot{State: StateReady},
@@ -116,7 +116,7 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 			cfg:            config{logger: slog.Default()},
 			cmds:           make(chan func(), 8),
 			incoming:       make(chan any, 8),
-			transportErr:   make(chan error, 1),
+			transportErr:   make(chan transportLoss, 1),
 			done:           make(chan struct{}),
 			events:         newObserver[Event](8),
 			keyed:          make(map[int]*route),

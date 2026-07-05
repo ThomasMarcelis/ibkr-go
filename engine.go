@@ -16,7 +16,7 @@ type engine struct {
 
 	cmds         chan func()
 	incoming     chan any
-	transportErr chan error
+	transportErr chan transportLoss
 	ready        chan error
 	done         chan struct{}
 	events       *observer[Event]
@@ -57,6 +57,11 @@ type engine struct {
 	closed    bool
 
 	reconnectAttempt int
+}
+
+type transportLoss struct {
+	transport *transport.Conn
+	err       error
 }
 
 type bootstrapState struct {
@@ -154,7 +159,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		cfg:                      cfg,
 		cmds:                     make(chan func(), 256),
 		incoming:                 make(chan any, 256),
-		transportErr:             make(chan error, 8),
+		transportErr:             make(chan transportLoss, 8),
 		ready:                    make(chan error, 1),
 		done:                     make(chan struct{}),
 		events:                   newObserver[Event](cfg.eventBuffer),
@@ -258,6 +263,10 @@ func (e *engine) setState(next State, code int, message string, err error) {
 // emitEvent publishes an informational session event (e.g. farm-status
 // or market-data warnings) without changing session state.
 func (e *engine) emitEvent(code int, message string) {
+	e.emitSessionEvent(code, message, nil)
+}
+
+func (e *engine) emitSessionEvent(code int, message string, err error) {
 	e.snapshotMu.RLock()
 	state := e.snapshot.State
 	connSeq := e.snapshot.ConnectionSeq
@@ -269,6 +278,7 @@ func (e *engine) emitEvent(code int, message string) {
 		ConnectionSeq: connSeq,
 		Code:          code,
 		Message:       message,
+		Err:           err,
 	})
 }
 

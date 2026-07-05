@@ -5,14 +5,17 @@ import (
 	"time"
 )
 
-func (e *engine) handleTransportLoss(err error) {
+func (e *engine) handleTransportLoss(loss transportLoss) {
 	if e.closed {
 		return
 	}
 	if e.transport == nil {
 		return
 	}
-	err = normalizeTransportErr(err)
+	if loss.transport != nil && e.transport != loss.transport {
+		return
+	}
+	err := normalizeTransportErr(loss.err)
 	e.transport = nil
 	e.executions.reset()
 	if e.cfg.reconnect == ReconnectOff {

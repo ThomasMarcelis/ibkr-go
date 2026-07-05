@@ -15,9 +15,9 @@ func (e *engine) run() {
 			}
 		case msg := <-e.incoming:
 			e.handleIncoming(msg)
-		case err := <-e.transportErr:
+		case loss := <-e.transportErr:
 			e.drainIncoming()
-			e.handleTransportLoss(err)
+			e.handleTransportLoss(loss)
 		case <-e.done:
 			return
 		}
