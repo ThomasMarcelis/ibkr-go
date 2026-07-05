@@ -96,6 +96,9 @@ func (h *OrderHandle) Modify(ctx context.Context, order Order) error {
 	if h.modifyFn == nil {
 		return fmt.Errorf("ibkr: order handle not connected")
 	}
+	if h.isDone() {
+		return ErrClosed
+	}
 	if order.OrderID != 0 && order.OrderID != h.orderID {
 		return fmt.Errorf("ibkr: modify order: order.OrderID %d does not match handle %d", order.OrderID, h.orderID)
 	}
@@ -167,10 +170,6 @@ func (h *OrderHandle) emitState(evt SubscriptionStateEvent) {
 		evt.At = time.Now().UTC()
 	}
 	h.state.EmitLatest(evt)
-}
-
-func (h *OrderHandle) emitOrderError(err error) {
-	h.closeWithErr(err)
 }
 
 func (h *OrderHandle) closeWithErr(err error) {

@@ -71,9 +71,9 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case parsedOpenOrder:
-					sub.emit(OpenOrderUpdate{Order: &m.order})
+					emitSubscription(sub, OpenOrderUpdate{Order: &m.order})
 				case OrderStatusUpdate:
-					sub.emit(OpenOrderUpdate{Status: &m})
+					emitSubscription(sub, OpenOrderUpdate{Status: &m})
 				case codec.OpenOrderEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
@@ -173,7 +173,9 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 						return
 					}
 					e.executions.observeExecution(reqID, m)
-					sub.emit(update)
+					if !emitSubscription(sub, update) {
+						return
+					}
 					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
 						return
 					}
@@ -370,6 +372,10 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 				if !e.isReady() {
 					return ErrNotReady
 				}
+				or, ok := e.orders[orderID]
+				if !ok || or.closed || or.handle == nil || or.handle.isDone() {
+					return ErrClosed
+				}
 				return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
 					Contract: req.Contract,
 					Order:    order,
@@ -379,8 +385,9 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 
 		handle.detachFn = func() {
 			e.enqueue(func() {
-				if or, ok := e.orders[orderID]; ok && !or.closed {
-					or.closed = true
+				if or, ok := e.orders[orderID]; ok {
+					e.closeOrderRoute(orderID, or, nil)
+					return
 				}
 				handle.closeWithErr(nil)
 			})
@@ -566,6 +573,37 @@ func (e *engine) GlobalCancel(ctx context.Context) error {
 	})
 }
 
+const exerciseRouteTTL = 2 * time.Minute
+
+func (e *engine) installExerciseRoute(reqID int) {
+	route := &route{
+		opKind: OpExerciseOptions,
+		handle: func(any, *engine) {},
+		handleAPIErr: func(m codec.APIError, e *engine) {
+			e.emitSessionEvent(m.Code, m.Message, e.apiErr(OpExerciseOptions, m))
+			if isTerminalExerciseNotice(m.Code) {
+				e.deleteKeyedRoute(reqID)
+			}
+		},
+		onDisconnect: func(e *engine, err error) bool {
+			e.deleteKeyedRoute(reqID)
+			return false
+		},
+		close: func(error) {},
+	}
+	e.keyed[reqID] = route
+	if e.cmds == nil {
+		return
+	}
+	time.AfterFunc(exerciseRouteTTL, func() {
+		e.enqueue(func() {
+			if e.keyed[reqID] == route {
+				e.deleteKeyedRoute(reqID)
+			}
+		})
+	})
+}
+
 func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
@@ -577,31 +615,13 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 		}
 		reqID := e.allocReqID()
 		// Register a keyed route for the exercise request id. Exercise is
-		// fire-and-forget on the wire, but its request-id-targeted replies —
+		// fire-and-forget on the wire, but request-id-targeted replies —
 		// refusals (322), the TIF-preset acknowledgement (10349), and the 202
-		// that cancels a working instruction — would otherwise be dropped, and
-		// the bare request id could be mistaken for a live order id in the
-		// order fallback. The route surfaces every notice as a session event
-		// and is not torn down on the first one, because several can arrive.
-		// Exercise is rare, so holding the route until disconnect is fine —
-		// it cannot shadow a later order's errors because allocOrderID skips
-		// ids with a live keyed route, just as allocReqID skipped live order
-		// ids to pick this one. The no-op handle guards against a stray
-		// ReqIDer frame on this id; no such frame is expected (the
-		// pseudo-order echoes are keyed by order id, not request id, so they
-		// route through the order map and drop as before).
-		e.keyed[reqID] = &route{
-			opKind: OpExerciseOptions,
-			handle: func(any, *engine) {},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.emitEvent(m.Code, m.Message)
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				return false
-			},
-			close: func(error) {},
-		}
+		// that cancels a working instruction — must remain observable and must
+		// not be mistaken for an unrelated order with the same numeric id.
+		// There is no success-end callback, so terminal errors retire the route
+		// immediately and a bounded TTL retires quiet/successful instructions.
+		e.installExerciseRoute(reqID)
 		if err := e.sendContext(ctx, codec.ExerciseOptionsRequest{
 			ReqID:            reqID,
 			Contract:         toCodecContract(req.Contract),
@@ -615,6 +635,10 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 		}
 		return nil
 	})
+}
+
+func isTerminalExerciseNotice(code int) bool {
+	return code == ErrCodeServerErrorProcessingRequest || code == ErrCodeOrderCanceled
 }
 
 func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {

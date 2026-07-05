@@ -149,7 +149,7 @@ func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 		cfg:            cfg,
 		cmds:           make(chan func(), 256),
 		incoming:       make(chan any, 256),
-		transportErr:   make(chan error, 8),
+		transportErr:   make(chan transportLoss, 8),
 		ready:          make(chan error, 1),
 		done:           make(chan struct{}),
 		events:         newObserver[Event](cfg.eventBuffer),
@@ -186,8 +186,9 @@ func bindOrderHandleForEngineTest(t *testing.T, e *engine, handle *OrderHandle) 
 	e.enqueue(func() {
 		handle.detachFn = func() {
 			e.enqueue(func() {
-				if or, ok := e.orders[orderID]; ok && !or.closed {
-					or.closed = true
+				if or, ok := e.orders[orderID]; ok {
+					e.closeOrderRoute(orderID, or, nil)
+					return
 				}
 				handle.closeWithErr(nil)
 			})
@@ -282,6 +283,67 @@ func TestOrderHandleModifyAllowsZeroOrderID(t *testing.T) {
 	if gotOrder.OrderID != 0 {
 		t.Errorf("modifyFn received OrderID = %d, want 0 (handler will inject real ID downstream)", gotOrder.OrderID)
 	}
+}
+
+func TestOrderHandleModifyAfterCloseReturnsErrClosed(t *testing.T) {
+	t.Parallel()
+
+	handle := newOrderHandle(100)
+	handle.modifyFn = func(ctx context.Context, order Order) error {
+		t.Fatal("Modify invoked modifyFn after handle close")
+		return nil
+	}
+	handle.closeWithErr(nil)
+
+	if err := handle.Modify(context.Background(), Order{Action: ActionBuy, OrderType: OrderTypeLimit}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Modify() after close = %v, want ErrClosed", err)
+	}
+}
+
+func TestOrderHandleCloseDropsRouteAndExecMappings(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := newRunningEngineForOrderHandleTest(t)
+		handle := newOrderHandle(100)
+		bindOrderHandleForEngineTest(t, e, handle)
+
+		closed := make(chan struct{})
+		e.enqueue(func() {
+			e.execDeliveries["exec-100"] = &execDelivery{orderID: 100}
+			close(closed)
+		})
+		synctest.Wait()
+		<-closed
+
+		if err := handle.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+		synctest.Wait()
+
+		got := make(chan struct {
+			route bool
+			exec  bool
+		}, 1)
+		e.enqueue(func() {
+			_, route := e.orders[100]
+			_, exec := e.execDeliveries["exec-100"]
+			got <- struct {
+				route bool
+				exec  bool
+			}{route: route, exec: exec}
+		})
+		synctest.Wait()
+
+		state := <-got
+		if state.route {
+			t.Fatal("OrderHandle.Close retained e.orders route")
+		}
+		if state.exec {
+			t.Fatal("OrderHandle.Close retained execution mapping")
+		}
+		if err := handle.Wait(); err != nil {
+			t.Fatalf("handle.Wait() = %v, want nil", err)
+		}
+	})
 }
 
 // TestPlaceRejectsWhatIfOrder freezes the v1.6.0 Place guard: a what-if order

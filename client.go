@@ -359,7 +359,8 @@ func (c OptionsClient) Price(ctx context.Context, req CalcOptionPriceRequest) (O
 	return c.engine.CalcOptionPrice(ctx, req)
 }
 
-// Exercise exercises or lapses an option position.
+// Exercise exercises or lapses an option position. Gateway accept/reject
+// notices are emitted through the client's session event stream.
 func (c OptionsClient) Exercise(ctx context.Context, req ExerciseOptionsRequest) error {
 	return c.engine.ExerciseOptions(ctx, req)
 }

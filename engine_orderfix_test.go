@@ -240,10 +240,7 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 	e := newEngineForErrorTest()
 	handle := newOrderHandle(5)
 	e.orders[5] = &orderRoute{orderID: 5, handle: handle}
-	e.keyed[5] = &route{
-		opKind:       OpExerciseOptions,
-		handleAPIErr: func(m codec.APIError, e *engine) { e.emitEvent(m.Code, m.Message) },
-	}
+	e.installExerciseRoute(5)
 
 	e.handleAPIError(codec.APIError{
 		ReqID:   5,
@@ -259,8 +256,46 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 		if evt.Code != ErrCodeServerErrorProcessingRequest {
 			t.Fatalf("session event code = %d, want %d", evt.Code, ErrCodeServerErrorProcessingRequest)
 		}
+		apiErr, ok := errors.AsType[*APIError](evt.Err)
+		if !ok || apiErr.OpKind != OpExerciseOptions {
+			t.Fatalf("session event err = %v, want exercise *APIError", evt.Err)
+		}
 	default:
 		t.Fatal("exercise refusal did not surface as a session event")
+	}
+}
+
+func TestExerciseRouteTerminalErrorDeletesKeyedRoute(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	e.installExerciseRoute(77)
+
+	e.handleAPIError(codec.APIError{
+		ReqID:   77,
+		Code:    ErrCodeServerErrorProcessingRequest,
+		Message: "Error processing request.Exercise ignored because option is not in-the-money.",
+	})
+
+	if _, ok := e.keyed[77]; ok {
+		t.Fatal("exercise route retained after terminal exercise refusal")
+	}
+}
+
+func TestExerciseRoutePresetNoticeStaysActive(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	e.installExerciseRoute(77)
+
+	e.handleAPIError(codec.APIError{
+		ReqID:   77,
+		Code:    ErrCodeOrderTIFSetFromPreset,
+		Message: "Order TIF was set to DAY based on order preset.",
+	})
+
+	if _, ok := e.keyed[77]; !ok {
+		t.Fatal("exercise route deleted after non-terminal preset notice")
 	}
 }
 
