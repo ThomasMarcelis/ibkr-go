@@ -24,8 +24,7 @@ func newEngineForDispatchTest() (*engine, *bytes.Buffer) {
 		singletons:              make(map[string]*route),
 		orders:                  make(map[int64]*orderRoute),
 		executions:              newExecutionCorrelator(),
-		execToOrder:             make(map[string]int64),
-		execCommissionDelivered: make(map[string]struct{}),
+		execDeliveries:          make(map[string]*execDelivery),
 	}
 	return e, buf
 }
@@ -40,7 +39,7 @@ func TestRouteCommissionReportLogsAndDropsOnDecodeError(t *testing.T) {
 	e, logs := newEngineForDispatchTest()
 	handle := newOrderHandle(42)
 	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
-	e.execToOrder["exec-bad"] = 42
+	e.execDeliveries["exec-bad"] = &execDelivery{orderID: 42}
 
 	// A malformed decimal (not the sentinel, not empty) is the one case
 	// that can still reach the engine after W1: the codec accepted it but
@@ -82,7 +81,7 @@ func TestRouteCommissionReportDeliversValidReport(t *testing.T) {
 	e, logs := newEngineForDispatchTest()
 	handle := newOrderHandle(42)
 	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
-	e.execToOrder["exec-ok"] = 42
+	e.execDeliveries["exec-ok"] = &execDelivery{orderID: 42}
 
 	e.routeCommissionReport(codec.CommissionReport{
 		ExecID:      "exec-ok",
@@ -142,8 +141,8 @@ func TestDispatchExecutionToOrderLogsAndDropsOnDecodeError(t *testing.T) {
 		// expected: no event emitted.
 	}
 
-	if _, ok := e.execToOrder["exec-bad-time"]; ok {
-		t.Error("execToOrder mapping was populated despite decode failure")
+	if st, ok := e.execDeliveries["exec-bad-time"]; ok && st.orderID != 0 {
+		t.Error("delivery record was claimed despite decode failure")
 	}
 
 	got := logs.String()

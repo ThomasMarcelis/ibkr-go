@@ -398,17 +398,39 @@ func (e *engine) scheduleTerminalOrderClose(orderID int64, route *orderRoute) {
 	})
 }
 
+// execDelivery is the order-handle leg's delivery record for one ExecID.
+// See the engine.execDeliveries field comment for the full contract.
+type execDelivery struct {
+	orderID   int64
+	delivered *codec.CommissionReport
+	pending   []codec.CommissionReport
+}
+
 // forgetOrderExecutions drops every execution correlation owned by orderID.
 // It runs once per terminal order (after the drain window), so the linear
-// scan is bounded by the session's fills. execToOrder and
-// execCommissionDelivered share a key space and are cleared together.
+// scan is bounded by the session's fills. Pending-only entries (orderID 0)
+// are not touched; their eviction timer owns them.
 func (e *engine) forgetOrderExecutions(orderID int64) {
-	for execID, oid := range e.execToOrder {
-		if oid == orderID {
-			delete(e.execToOrder, execID)
-			delete(e.execCommissionDelivered, execID)
+	for execID, st := range e.execDeliveries {
+		if st.orderID == orderID {
+			delete(e.execDeliveries, execID)
 		}
 	}
+}
+
+// scheduleUnclaimedExecEviction drops a pending-only delivery record that no
+// execution detail claimed within the drain window. Commissions for fills
+// owned by other clients (or orders this client never tracked) arrive with no
+// claiming execution, so without the timer they would accumulate for the
+// connection lifetime.
+func (e *engine) scheduleUnclaimedExecEviction(execID string) {
+	time.AfterFunc(orderTerminalDrainWindow, func() {
+		e.enqueue(func() {
+			if st, ok := e.execDeliveries[execID]; ok && st.orderID == 0 {
+				delete(e.execDeliveries, execID)
+			}
+		})
+	})
 }
 
 func (e *engine) activeAccountSummarySubscriptions() int {
@@ -440,34 +462,54 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 		}
 		route.handle(report, e)
 	}
-	// Also dispatch to the order handle that owns this execution. The order
-	// is live on the server, so a decode failure must not tear down the
-	// handle — drop the event and log so the problem is observable.
-	if orderID, ok := e.execToOrder[report.ExecID]; ok {
-		// A commission already delivered to this handle must not be re-emitted
-		// when a later Executions() snapshot query replays the same ExecID.
-		// This mirrors the execution dedupe (execToOrder presence); the keyed
-		// subscription leg above tracks its own delivery and is untouched.
-		if _, delivered := e.execCommissionDelivered[report.ExecID]; delivered {
-			return
-		}
-		if or, ok := e.orders[orderID]; ok && !or.closed {
-			cr, err := fromCodecCommission(report)
-			if err != nil {
-				e.cfg.logger.Warn("ibkr: drop commission report on decode error",
-					"order_id", orderID, "exec_id", report.ExecID, "err", err)
-				return
-			}
-			if or.handle == nil {
-				return
-			}
-			if !or.handle.emitCommission(cr) {
-				or.closed = true
-				return
-			}
-			e.execCommissionDelivered[report.ExecID] = struct{}{}
-		}
+	// Also dispatch to the order handle that owns this execution.
+	st, ok := e.execDeliveries[report.ExecID]
+	if !ok {
+		// No execution detail has claimed this ExecID yet: the Gateway can
+		// send the commission ahead of the execution (the keyed leg buffers
+		// the same race in the correlator). Buffer it for the claim; the
+		// eviction timer reclaims entries no execution ever claims.
+		st = &execDelivery{pending: []codec.CommissionReport{report}}
+		e.execDeliveries[report.ExecID] = st
+		e.scheduleUnclaimedExecEviction(report.ExecID)
+		return
 	}
+	if st.orderID == 0 {
+		st.pending = append(st.pending, report)
+		return
+	}
+	e.deliverCommissionToOrder(st, report)
+}
+
+// deliverCommissionToOrder emits one commission report to the handle that owns
+// the execution. An identical re-send (an Executions() snapshot replaying a
+// commission the handle already saw live) is deduped; a re-send with changed
+// content (e.g. a realizedPNL update) goes through and becomes the new
+// delivered record. The order is live on the server, so a decode failure must
+// not tear down the handle — drop the event and log so the problem is
+// observable.
+func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.CommissionReport) {
+	if st.delivered != nil && *st.delivered == report {
+		return
+	}
+	or, ok := e.orders[st.orderID]
+	if !ok || or.closed {
+		return
+	}
+	cr, err := fromCodecCommission(report)
+	if err != nil {
+		e.cfg.logger.Warn("ibkr: drop commission report on decode error",
+			"order_id", st.orderID, "exec_id", report.ExecID, "err", err)
+		return
+	}
+	if or.handle == nil {
+		return
+	}
+	if !or.handle.emitCommission(cr) {
+		or.closed = true
+		return
+	}
+	st.delivered = &report
 }
 
 func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
@@ -479,10 +521,11 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 		return
 	}
 	// A fill already delivered to this handle must not be re-emitted when a
-	// later Executions() snapshot query replays the same ExecID. execToOrder
-	// records exactly the fills the handle has seen, so it is the dedupe key;
-	// the keyed subscription leg (dispatched separately) is untouched.
-	if _, seen := e.execToOrder[m.ExecID]; seen {
+	// later Executions() snapshot query replays the same ExecID. A claimed
+	// delivery record (orderID set) marks exactly the fills the handle has
+	// seen; the keyed subscription leg (dispatched separately) is untouched.
+	st := e.execDeliveries[m.ExecID]
+	if st != nil && st.orderID != 0 {
 		return
 	}
 	// Per-order dispatch: the order is live on the server, so a decode
@@ -501,7 +544,18 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 		or.closed = true
 		return
 	}
-	e.execToOrder[m.ExecID] = m.OrderID
+	if st == nil {
+		st = &execDelivery{}
+		e.execDeliveries[m.ExecID] = st
+	}
+	st.orderID = m.OrderID
+	// Flush any commissions that raced ahead of this execution: without the
+	// claim they had no owning handle and would otherwise be lost.
+	pending := st.pending
+	st.pending = nil
+	for _, buffered := range pending {
+		e.deliverCommissionToOrder(st, buffered)
+	}
 }
 
 func (e *engine) undeliveredCommissions(reqID int, execID string) []codec.CommissionReport {

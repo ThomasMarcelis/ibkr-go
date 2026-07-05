@@ -30,17 +30,21 @@ type engine struct {
 	transport     *transport.Conn
 	serverVersion int
 
-	keyed       map[int]*route
-	singletons  map[string]*route
-	orders      map[int64]*orderRoute
-	executions  executionCorrelator
-	execToOrder map[string]int64 // execID → orderID for commission routing to order handles
-	// execCommissionDelivered records the execIDs whose commission has already
-	// reached the owning order handle. It dedupes the order-handle leg on an
-	// Executions() snapshot replay the same way execToOrder's presence dedupes
-	// executions. Its lifecycle mirrors execToOrder: entries are dropped
-	// together when a terminal order's route is forgotten (forgetOrderExecutions).
-	execCommissionDelivered map[string]struct{}
+	keyed      map[int]*route
+	singletons map[string]*route
+	orders     map[int64]*orderRoute
+	executions executionCorrelator
+	// execDeliveries is the order-handle leg's per-ExecID delivery record.
+	// orderID routes commissions to the owning handle and its presence dedupes
+	// an Executions() snapshot replaying a fill the handle already saw live.
+	// delivered dedupes an identical commission re-send while letting a
+	// re-send with changed content (e.g. a realizedPNL update) through.
+	// pending buffers commissions that arrived before their execution detail;
+	// they flush when the execution claims the ExecID, and an entry no
+	// execution ever claims (another client's fill) evicts itself after the
+	// drain window. Entries are dropped with their order's route
+	// (forgetOrderExecutions).
+	execDeliveries map[string]*execDelivery
 
 	nextReqID                int
 	nextHistoricalRequest    time.Time
@@ -155,8 +159,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		singletons:               make(map[string]*route),
 		orders:                   make(map[int64]*orderRoute),
 		executions:               newExecutionCorrelator(),
-		execToOrder:              make(map[string]int64),
-		execCommissionDelivered:  make(map[string]struct{}),
+		execDeliveries:           make(map[string]*execDelivery),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
 		snapshot: Snapshot{

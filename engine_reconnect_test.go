@@ -21,7 +21,7 @@ func TestHandleTransportLossPreservesReconnectAttempt(t *testing.T) {
 		singletons:       make(map[string]*route),
 		orders:           make(map[int64]*orderRoute),
 		executions:       newExecutionCorrelator(),
-		execToOrder:      make(map[string]int64),
+		execDeliveries:   make(map[string]*execDelivery),
 		reconnectAttempt: 2,
 		snapshot: Snapshot{
 			State:         StateHandshaking,

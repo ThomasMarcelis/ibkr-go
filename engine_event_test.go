@@ -14,7 +14,7 @@ func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {
 			keyed:       make(map[int]*route),
 			singletons:  make(map[string]*route),
 			orders:      make(map[int64]*orderRoute),
-			execToOrder: make(map[string]int64),
+			execDeliveries: make(map[string]*execDelivery),
 			snapshot: Snapshot{
 				State: StateConnecting,
 			},

@@ -107,9 +107,9 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 
 // TestTerminalOrderCloseForgetsRouteAndExecMappings freezes the state-retention
 // fix. After a terminal order's drain window elapses the engine closes the
-// handle and must also drop e.orders[id] and every execToOrder /
-// execCommissionDelivered entry the order owned; unrelated orders' mappings
-// stay. Pre-fix those entries lived until the connection ended.
+// handle and must also drop e.orders[id] and every execDeliveries entry the
+// order owned; unrelated orders' records stay. Pre-fix those entries lived
+// until the connection ended.
 func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := &engine{
@@ -123,8 +123,7 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 			singletons:              make(map[string]*route),
 			orders:                  make(map[int64]*orderRoute),
 			executions:              newExecutionCorrelator(),
-			execToOrder:             make(map[string]int64),
-			execCommissionDelivered: make(map[string]struct{}),
+			execDeliveries:          make(map[string]*execDelivery),
 			snapshot:                Snapshot{State: StateReady},
 		}
 		go e.run()
@@ -133,24 +132,22 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 		route := &orderRoute{orderID: 50, handle: newOrderHandle(50)}
 		e.enqueue(func() {
 			e.orders[50] = route
-			e.execToOrder["exec-a"] = 50
-			e.execToOrder["exec-b"] = 50
-			e.execCommissionDelivered["exec-a"] = struct{}{}
-			e.execToOrder["exec-other"] = 99
+			e.execDeliveries["exec-a"] = &execDelivery{orderID: 50, delivered: &codec.CommissionReport{ExecID: "exec-a"}}
+			e.execDeliveries["exec-b"] = &execDelivery{orderID: 50}
+			e.execDeliveries["exec-other"] = &execDelivery{orderID: 99}
 			e.scheduleTerminalOrderClose(50, route)
 		})
 		synctest.Wait()
 
-		type mapState struct{ order50, execA, execB, execOther, commA bool }
+		type mapState struct{ order50, execA, execB, execOther bool }
 		read := func() mapState {
 			out := make(chan mapState, 1)
 			e.enqueue(func() {
 				_, o50 := e.orders[50]
-				_, ea := e.execToOrder["exec-a"]
-				_, eb := e.execToOrder["exec-b"]
-				_, eo := e.execToOrder["exec-other"]
-				_, ca := e.execCommissionDelivered["exec-a"]
-				out <- mapState{o50, ea, eb, eo, ca}
+				_, ea := e.execDeliveries["exec-a"]
+				_, eb := e.execDeliveries["exec-b"]
+				_, eo := e.execDeliveries["exec-other"]
+				out <- mapState{o50, ea, eb, eo}
 			})
 			return <-out
 		}
@@ -167,11 +164,11 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 		if got.order50 {
 			t.Error("e.orders[50] retained after terminal drain window")
 		}
-		if got.execA || got.execB || got.commA {
+		if got.execA || got.execB {
 			t.Errorf("order 50 exec mappings retained after terminal close: %+v", got)
 		}
 		if !got.execOther {
-			t.Error("unrelated order's execToOrder entry was dropped")
+			t.Error("unrelated order's delivery record was dropped")
 		}
 	})
 }

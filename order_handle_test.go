@@ -157,8 +157,7 @@ func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 		singletons:   make(map[string]*route),
 		orders:       make(map[int64]*orderRoute),
 		executions:              newExecutionCorrelator(),
-		execToOrder:             make(map[string]int64),
-		execCommissionDelivered: make(map[string]struct{}),
+		execDeliveries:          make(map[string]*execDelivery),
 		nextReqID:               1,
 		snapshot: Snapshot{
 			State: StateReady,

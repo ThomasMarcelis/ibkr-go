@@ -3,6 +3,8 @@ package ibkr
 import (
 	"testing"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 )
 
@@ -18,7 +20,7 @@ func newEngineForErrorTest() *engine {
 // TestDispatchExecutionToOrderDedupesReplayedFill freezes the snapshot-replay
 // dedupe fix: a fill delivered live to an OrderHandle must not be re-emitted
 // when a later Executions() snapshot query replays the same ExecID. The
-// execToOrder map records exactly the fills the handle has already seen, so a
+// claimed delivery record marks exactly the fills the handle has already seen, so a
 // second dispatch of the same ExecID drops.
 func TestDispatchExecutionToOrderDedupesReplayedFill(t *testing.T) {
 	t.Parallel()
@@ -103,6 +105,101 @@ func TestRouteCommissionReportDedupesReplayedCommission(t *testing.T) {
 	}
 	if execs != 1 || comms != 1 {
 		t.Fatalf("handle saw %d executions / %d commissions for one ExecID, want 1/1 (both deduped)", execs, comms)
+	}
+}
+
+// TestRouteCommissionBeforeExecutionReachesHandle freezes the racing-commission
+// fix: the Gateway can deliver a commission_report before its execution detail
+// (the keyed leg buffers the same race in the correlator). Pre-fix the
+// order-handle leg looked up the ExecID's owner, found none, and dropped the
+// commission permanently; nothing re-triggered it when the execution arrived.
+func TestRouteCommissionBeforeExecutionReachesHandle(t *testing.T) {
+	t.Parallel()
+
+	e, _ := newEngineForDispatchTest()
+	handle := newOrderHandle(90)
+	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
+
+	comm := codec.CommissionReport{ExecID: "exec-race-1", Commission: "1.25", Currency: "USD", RealizedPNL: "0"}
+	exec := codec.ExecutionDetail{
+		ReqID:   -1,
+		OrderID: 90,
+		ExecID:  "exec-race-1",
+		Shares:  "10",
+		Price:   "150",
+		Time:    "20260610-19:58:22",
+	}
+
+	// Commission first, then the execution it belongs to.
+	e.routeCommissionReport(comm)
+	e.dispatchExecutionToOrder(exec)
+
+	var events []OrderEvent
+	for {
+		select {
+		case evt := <-handle.Events():
+			events = append(events, evt)
+			continue
+		default:
+		}
+		break
+	}
+	if len(events) != 2 || events[0].Execution == nil || events[1].Commission == nil {
+		t.Fatalf("handle events = %+v, want execution then flushed commission", events)
+	}
+	if events[1].Commission.ExecID != "exec-race-1" {
+		t.Fatalf("flushed commission ExecID = %q, want exec-race-1", events[1].Commission.ExecID)
+	}
+}
+
+// TestRouteCommissionResendWithChangedContentReachesHandle freezes the
+// content-aware half of the commission dedupe: an identical re-send (a
+// snapshot replay) is dropped, but a re-send whose content changed — e.g. the
+// Gateway filling in realizedPNL after the fact — must reach the handle.
+// Pre-fix the dedupe keyed on ExecID presence alone and dropped the update.
+func TestRouteCommissionResendWithChangedContentReachesHandle(t *testing.T) {
+	t.Parallel()
+
+	e, _ := newEngineForDispatchTest()
+	handle := newOrderHandle(90)
+	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
+
+	exec := codec.ExecutionDetail{
+		ReqID:   -1,
+		OrderID: 90,
+		ExecID:  "exec-upd-1",
+		Shares:  "10",
+		Price:   "150",
+		Time:    "20260610-19:58:22",
+	}
+	initial := codec.CommissionReport{ExecID: "exec-upd-1", Commission: "1.25", Currency: "USD"}
+	updated := codec.CommissionReport{ExecID: "exec-upd-1", Commission: "1.25", Currency: "USD", RealizedPNL: "42.10"}
+
+	e.dispatchExecutionToOrder(exec)
+	e.routeCommissionReport(initial)
+	e.routeCommissionReport(initial) // identical replay: deduped
+	e.routeCommissionReport(updated) // changed content: delivered
+	e.routeCommissionReport(updated) // identical replay of the update: deduped
+
+	comms := 0
+	var last CommissionReport
+	for {
+		select {
+		case evt := <-handle.Events():
+			if evt.Commission != nil {
+				comms++
+				last = *evt.Commission
+			}
+			continue
+		default:
+		}
+		break
+	}
+	if comms != 2 {
+		t.Fatalf("handle saw %d commissions, want 2 (initial + changed re-send)", comms)
+	}
+	if !last.RealizedPNL.Equal(decimal.RequireFromString("42.10")) {
+		t.Fatalf("last commission realizedPNL = %s, want 42.10", last.RealizedPNL)
 	}
 }
 
