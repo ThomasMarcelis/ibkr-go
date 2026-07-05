@@ -45,11 +45,26 @@ type Config struct {
 }
 
 func Enabled() bool {
-	return os.Getenv(envLive) != ""
+	return envFlag(envLive)
 }
 
 func TradingEnabled() bool {
-	return os.Getenv(envLiveTrading) != ""
+	return envFlag(envLiveTrading)
+}
+
+// envFlag reads a boolean-ish gate variable. Empty is off; a value
+// strconv.ParseBool reads as false ("0", "false", "f", …) is off; any other
+// non-empty value (including "1", "true", and legacy "yes") is on. This keeps
+// IBKR_LIVE=0 from accidentally turning live mode on.
+func envFlag(name string) bool {
+	raw := os.Getenv(name)
+	if raw == "" {
+		return false
+	}
+	if b, err := strconv.ParseBool(raw); err == nil {
+		return b
+	}
+	return true
 }
 
 func Load() (Config, error) {

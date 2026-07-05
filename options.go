@@ -97,9 +97,12 @@ func WithClientID(clientID int) Option {
 
 // WithDialer sets a custom [Dialer] for the TCP connection, for example to
 // route through a proxy or an in-process pipe. Default: a standard [net.Dialer].
+// A nil dialer is ignored, leaving the default [net.Dialer] in place.
 func WithDialer(dialer Dialer) Option {
 	return func(cfg *config) {
-		cfg.dialer = dialer
+		if dialer != nil {
+			cfg.dialer = dialer
+		}
 	}
 }
 
@@ -131,7 +134,9 @@ func WithTCPKeepAlive(period time.Duration) Option {
 }
 
 // WithSendRate caps outbound requests per second to respect IBKR pacing.
-// Default: 50.
+// Default: 50. A non-positive rate disables pacing; rates above 1e9/s are
+// clamped to 1e9/s (the point where the pacing interval would round to zero),
+// so extreme values are safe rather than a panic.
 func WithSendRate(rate int) Option {
 	return func(cfg *config) {
 		cfg.sendRate = rate

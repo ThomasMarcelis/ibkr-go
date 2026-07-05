@@ -245,7 +245,7 @@ type OrderEvent struct {
 // A minimal market order needs only Action, OrderType, and Quantity. A limit
 // order additionally sets LmtPrice.
 type Order struct {
-	OrderID                  int64            // 0 = auto-allocate the next valid ID
+	OrderID                  int64            // assigned by the engine at placement; leave zero. Place always allocates internally and ignores any value set here; Modify accepts zero or the handle's own id
 	Action                   OrderAction      // BUY or SELL (required)
 	OrderType                OrderType        // execution instruction (required); selects which price fields apply
 	Quantity                 decimal.Decimal  // order size (required); zero is treated as unset

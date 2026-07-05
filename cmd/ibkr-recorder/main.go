@@ -8,6 +8,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,6 +38,15 @@ func main() {
 		log.Fatalf("create capture session: %v", err)
 	}
 	defer session.Close()
+
+	// The Gateway login rides the OpenOrder wire tail as an unlabeled token
+	// the recorder cannot discover on its own; the operator names it so it
+	// never reaches disk. Comma-separated to cover multiple logins.
+	for secret := range strings.SplitSeq(os.Getenv("IBKR_CAPTURE_REDACT"), ",") {
+		if secret = strings.TrimSpace(secret); secret != "" {
+			session.Redact(secret, "papertrader")
+		}
+	}
 
 	listener, err := net.Listen("tcp", *listenAddr)
 	if err != nil {

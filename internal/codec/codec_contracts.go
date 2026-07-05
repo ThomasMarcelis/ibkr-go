@@ -310,7 +310,13 @@ func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 		secType := r.ReadString()
 		primaryExch := r.ReadString()
 		currency := r.ReadString()
-		derivCount, _ := r.ReadInt()
+		derivCount, err := r.ReadCount("derivative sec type count")
+		if err != nil {
+			return nil, err
+		}
+		if derivCount > r.Remaining() {
+			return nil, fmt.Errorf("codec: symbol samples: derivative count %d exceeds remaining fields %d", derivCount, r.Remaining())
+		}
 		derivTypes := make([]string, derivCount)
 		for j := range derivTypes {
 			derivTypes[j] = r.ReadString()

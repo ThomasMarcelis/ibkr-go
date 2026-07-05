@@ -1,6 +1,7 @@
 package capturelog
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -36,12 +37,48 @@ type Event struct {
 }
 
 type Session struct {
-	dir       string
-	events    *os.File
-	meta      *os.File
-	enc       *json.Encoder
-	closeOnce sync.Once
-	mu        sync.Mutex
+	dir        string
+	events     *os.File
+	meta       *os.File
+	enc        *json.Encoder
+	closeOnce  sync.Once
+	mu         sync.Mutex
+	redactions []redaction
+}
+
+type redaction struct {
+	secret      []byte
+	placeholder []byte
+}
+
+// Redact registers an exact-literal replacement applied to every recorded chunk
+// before it is base64-encoded to disk, so a known secret never reaches the
+// capture files. The capture tool never learns the Gateway login from the wire
+// (bootstrap observes only ManagedAccounts), so the operator seeds this with the
+// login string it authenticated with, e.g. Redact(gatewayLogin, "papertrader").
+//
+// This is deliberately literal, not pattern-based: a generic username regex
+// would false-positive on ordinary tokens, and field-position parsing of
+// OpenOrder does not exist at this layer. It therefore redacts only secrets the
+// caller names, and cannot discover an unknown login on its own. Call it before
+// recording begins; it is not safe to call concurrently with Record.
+func (s *Session) Redact(secret, placeholder string) {
+	if secret == "" {
+		return
+	}
+	s.redactions = append(s.redactions, redaction{
+		secret:      []byte(secret),
+		placeholder: []byte(placeholder),
+	})
+}
+
+func (s *Session) applyRedactions(data []byte) []byte {
+	for _, r := range s.redactions {
+		if bytes.Contains(data, r.secret) {
+			data = bytes.ReplaceAll(data, r.secret, r.placeholder)
+		}
+	}
+	return data
 }
 
 func Create(root string, meta Meta) (*Session, error) {
@@ -52,17 +89,20 @@ func Create(root string, meta Meta) (*Session, error) {
 		meta.Scenario = "capture"
 	}
 
+	// Captures carry live account ids, order refs, and login tokens, so the
+	// session directory and its files are owner-only (0700/0600) rather than
+	// the world-readable default of MkdirAll/Create.
 	dir := filepath.Join(root, meta.StartedAt.Format("20060102T150405Z")+"-"+meta.Scenario)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("capturelog: create dir: %w", err)
 	}
 
-	metaFile, err := os.Create(filepath.Join(dir, "meta.json"))
+	metaFile, err := os.OpenFile(filepath.Join(dir, "meta.json"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("capturelog: create meta file: %w", err)
 	}
 
-	eventsFile, err := os.Create(filepath.Join(dir, "events.jsonl"))
+	eventsFile, err := os.OpenFile(filepath.Join(dir, "events.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		_ = metaFile.Close()
 		return nil, fmt.Errorf("capturelog: create events file: %w", err)
@@ -107,6 +147,7 @@ func (s *Session) RecordDisconnect(leg int) error {
 }
 
 func (s *Session) RecordChunk(leg int, direction string, data []byte) error {
+	data = s.applyRedactions(data)
 	return s.recordEvent(Event{
 		At:        time.Now().UTC(),
 		Kind:      EventChunk,

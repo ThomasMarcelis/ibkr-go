@@ -630,6 +630,12 @@ func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 		// SymbolSamples: [79, reqID, count, ...]
 		{"SymbolSamples/negative_count", []string{"79", "1", "-1"}},
 		{"SymbolSamples/zero_count", []string{"79", "1", "0"}},
+
+		// SymbolSamples nested derivative-type count: one entry whose
+		// per-entry derivCount is negative or absurd must error, not panic
+		// on make([]string, derivCount).
+		{"SymbolSamples/negative_deriv_count", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "-1"}},
+		{"SymbolSamples/overflow_deriv_count", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "2147483647"}},
 	}
 
 	for _, tc := range countMsgs {

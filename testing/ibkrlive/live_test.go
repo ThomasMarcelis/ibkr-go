@@ -122,3 +122,36 @@ func TestTradingEnabled(t *testing.T) {
 		t.Fatal("TradingEnabled() = false, want true")
 	}
 }
+
+func TestGateFlagParsing(t *testing.T) {
+	cases := []struct {
+		value string
+		want  bool
+	}{
+		{"", false},
+		{"0", false},
+		{"false", false},
+		{"FALSE", false},
+		{"f", false},
+		{"1", true},
+		{"true", true},
+		{"t", true},
+		{"yes", true},   // legacy truthy value, not ParseBool-recognized
+		{"on", true},    // any other non-empty value enables
+		{"enable", true},
+	}
+	for _, tc := range cases {
+		t.Run("IBKR_LIVE="+tc.value, func(t *testing.T) {
+			t.Setenv(envLive, tc.value)
+			if got := Enabled(); got != tc.want {
+				t.Fatalf("Enabled() with %s=%q = %v, want %v", envLive, tc.value, got, tc.want)
+			}
+		})
+		t.Run("IBKR_LIVE_TRADING="+tc.value, func(t *testing.T) {
+			t.Setenv(envLiveTrading, tc.value)
+			if got := TradingEnabled(); got != tc.want {
+				t.Fatalf("TradingEnabled() with %s=%q = %v, want %v", envLiveTrading, tc.value, got, tc.want)
+			}
+		})
+	}
+}

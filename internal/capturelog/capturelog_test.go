@@ -221,6 +221,77 @@ func TestNormalizeEventsSkipsClientHandshakePrefix(t *testing.T) {
 	}
 }
 
+// TestCreatePermissions asserts capture sessions are owner-only: captures carry
+// live account ids and login tokens, so the directory and its files must not be
+// world-readable. Modes are meaningful on this repo's Linux CI; the assertions
+// keep to the simple 0700/0600 contract Create promises.
+func TestCreatePermissions(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	session, err := Create(root, Meta{Scenario: "perms"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	defer session.Close()
+
+	dirInfo, err := os.Stat(session.Dir())
+	if err != nil {
+		t.Fatalf("stat dir: %v", err)
+	}
+	if got := dirInfo.Mode().Perm(); got != 0o700 {
+		t.Fatalf("dir mode = %o, want 700", got)
+	}
+
+	for _, name := range []string{"meta.json", "events.jsonl"} {
+		info, err := os.Stat(filepath.Join(session.Dir(), name))
+		if err != nil {
+			t.Fatalf("stat %s: %v", name, err)
+		}
+		if got := info.Mode().Perm(); got != 0o600 {
+			t.Fatalf("%s mode = %o, want 600", name, got)
+		}
+	}
+}
+
+// TestRedactChunk proves a registered login literal is replaced before the
+// chunk is base64-encoded to disk, so the raw secret never reaches the file.
+func TestRedactChunk(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	session, err := Create(root, Meta{Scenario: "redact"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	const login = "secretlogin"
+	session.Redact(login, "papertrader")
+
+	frame := []byte("OpenOrder\x00tail\x00" + login + "\x000\x00")
+	if err := session.Record("server", frame); err != nil {
+		t.Fatalf("Record() error = %v", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	eventsPath := filepath.Join(session.Dir(), "events.jsonl")
+	events, err := LoadEvents(eventsPath)
+	if err != nil {
+		t.Fatalf("LoadEvents() error = %v", err)
+	}
+	got, err := DecodeData(events[0])
+	if err != nil {
+		t.Fatalf("DecodeData() error = %v", err)
+	}
+	if bytes.Contains(got, []byte(login)) {
+		t.Fatalf("decoded chunk still contains login token: %q", got)
+	}
+	if !bytes.Contains(got, []byte("papertrader")) {
+		t.Fatalf("decoded chunk missing placeholder: %q", got)
+	}
+}
+
 func mustFrame(t *testing.T, payload []byte) []byte {
 	t.Helper()
 

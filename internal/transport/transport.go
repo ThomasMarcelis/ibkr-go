@@ -51,11 +51,21 @@ type Conn struct {
 
 const outgoingQueueCap = 256
 
+// maxSendRate is the largest per-second pacing rate the writeLoop ticker can
+// represent. The interval is time.Second/sendRate; at 1e9 the interval is 1ns,
+// and any higher rate would round the interval to 0, which time.NewTicker
+// panics on. Rates at or above this are effectively unbounded pacing anyway, so
+// clamping here loses nothing while making the panic unreachable.
+const maxSendRate = int(time.Second / time.Nanosecond) // 1_000_000_000
+
 var ErrSendQueueFull = errors.New("transport: outbound queue full")
 
 func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
+	if sendRate > maxSendRate {
+		sendRate = maxSendRate
 	}
 	c := &Conn{
 		conn:     conn,

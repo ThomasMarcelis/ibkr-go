@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"errors"
+	"math"
 	"net"
 	"testing"
 	"time"
@@ -169,5 +170,29 @@ func TestConnCloseDoesNotWaitForQueuedFrames(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Close() blocked with queued frames")
+	}
+}
+
+// TestNewExtremeSendRateNoPanic proves the writeLoop pacing ticker survives an
+// absurd send rate. Without the boundary clamp, time.Second/sendRate rounds to
+// a 0 interval and time.NewTicker(0) panics inside the write goroutine, killing
+// the process. The clamp makes the extreme safe and the connection still sends.
+func TestNewExtremeSendRateNoPanic(t *testing.T) {
+	t.Parallel()
+
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	// math.MaxInt would round the pacing interval to zero without the clamp.
+	conn := New(clientConn, nil, math.MaxInt)
+	defer conn.Close()
+
+	payload := wire.EncodeFields([]string{"hello", "1", "7"})
+	if err := conn.Send(context.Background(), payload); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	if _, err := wire.ReadFrame(serverConn); err != nil {
+		t.Fatalf("ReadFrame(server) error = %v", err)
 	}
 }
