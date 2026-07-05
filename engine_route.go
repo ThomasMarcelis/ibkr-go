@@ -73,10 +73,16 @@ func (e *engine) handleIncoming(msg any) {
 	case codec.UnknownInbound:
 		// An unmapped msg id used to surface as a ProtocolError and close the
 		// transport — a session kill over a message nobody asked for. Keep the
-		// session and make the drift observable instead.
-		e.cfg.logger.Warn("ibkr: dropped inbound frame with unknown msg_id",
-			"msg_id", m.MsgID, "field_count", len(m.Fields))
-		e.emitEvent(0, fmt.Sprintf("dropped inbound frame with unknown msg_id %d (%d fields)", m.MsgID, len(m.Fields)))
+		// session and make the drift observable instead. Report once per
+		// distinct msg_id: a hot misdecoded feed must not become per-frame
+		// allocations and event spam that evicts genuine session events from
+		// the drop-oldest observer, and once is enough to see the drift.
+		if _, seen := e.unknownInboundSeen[m.MsgID]; !seen {
+			e.unknownInboundSeen[m.MsgID] = struct{}{}
+			e.cfg.logger.Warn("ibkr: dropping inbound frames with unknown msg_id",
+				"msg_id", m.MsgID, "field_count", len(m.Fields))
+			e.emitEvent(0, fmt.Sprintf("dropping inbound frames with unknown msg_id %d (%d fields)", m.MsgID, len(m.Fields)))
+		}
 		return
 	}
 

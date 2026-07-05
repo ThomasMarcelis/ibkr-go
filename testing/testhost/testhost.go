@@ -244,18 +244,6 @@ func (h *Host) run() {
 				continue
 			}
 
-			if cur.name == "historical_bars_range_end" {
-				reqID := asString(resolveBindings(cur.body["req_id"], bindings))
-				start := asString(resolveBindings(cur.body["start"], bindings))
-				end := asString(resolveBindings(cur.body["end"], bindings))
-				payload := wire.EncodeFields([]string{"108", reqID, start, end})
-				if err := wire.WriteFrame(conn, payload); err != nil {
-					h.finish(err)
-					return
-				}
-				continue
-			}
-
 			if serverVersion != defaultServerVersion {
 				h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames; DSL-form frames re-encode through the codec under test and would mask version-gated layout bugs", defaultServerVersion))
 				return

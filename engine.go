@@ -45,6 +45,9 @@ type engine struct {
 	// drain window. Entries are dropped with their order's route
 	// (forgetOrderExecutions).
 	execDeliveries map[string]*execDelivery
+	// unknownInboundSeen records msg ids already reported as unknown, so a
+	// hot misdecoded feed logs and emits once instead of per frame.
+	unknownInboundSeen map[int]struct{}
 
 	nextReqID                int
 	nextHistoricalRequest    time.Time
@@ -160,6 +163,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		orders:                   make(map[int64]*orderRoute),
 		executions:               newExecutionCorrelator(),
 		execDeliveries:           make(map[string]*execDelivery),
+		unknownInboundSeen:       make(map[int]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
 		snapshot: Snapshot{

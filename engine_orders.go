@@ -583,10 +583,13 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 		// the bare request id could be mistaken for a live order id in the
 		// order fallback. The route surfaces every notice as a session event
 		// and is not torn down on the first one, because several can arrive.
-		// Exercise is rare, so holding the route until disconnect is fine. The
-		// no-op handle guards against a stray ReqIDer frame on this id; no such
-		// frame is expected (the pseudo-order echoes are keyed by order id, not
-		// request id, so they route through the order map and drop as before).
+		// Exercise is rare, so holding the route until disconnect is fine —
+		// it cannot shadow a later order's errors because allocOrderID skips
+		// ids with a live keyed route, just as allocReqID skipped live order
+		// ids to pick this one. The no-op handle guards against a stray
+		// ReqIDer frame on this id; no such frame is expected (the
+		// pseudo-order echoes are keyed by order id, not request id, so they
+		// route through the order map and drop as before).
 		e.keyed[reqID] = &route{
 			opKind: OpExerciseOptions,
 			handle: func(any, *engine) {},

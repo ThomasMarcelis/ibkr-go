@@ -40,6 +40,16 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.HistoricalBar{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"]))}, nil
 	case "historical_bars_end":
 		return codec.HistoricalBarsEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
+	case "historical_bars_range_end":
+		// Same message as historical_bars_end but with the dataset range and a
+		// distinct step name: the replay loop skips a trailing
+		// "historical_bars_end" after packed bars (the decoder synthesizes one),
+		// while this step always emits the standalone HISTORICAL_DATA_END frame.
+		return codec.HistoricalBarsEnd{
+			ReqID:     asInt(resolve(body["req_id"])),
+			StartDate: asString(resolve(body["start"])),
+			EndDate:   asString(resolve(body["end"])),
+		}, nil
 	case "account_summary":
 		return codec.AccountSummaryValue{ReqID: asInt(resolve(body["req_id"])), Account: asString(resolve(body["account"])), Tag: asString(resolve(body["tag"])), Value: asString(resolve(body["value"])), Currency: asString(resolve(body["currency"]))}, nil
 	case "account_summary_end":

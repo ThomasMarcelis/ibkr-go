@@ -113,18 +113,18 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := &engine{
-			cfg:                     config{logger: slog.Default()},
-			cmds:                    make(chan func(), 8),
-			incoming:                make(chan any, 8),
-			transportErr:            make(chan error, 1),
-			done:                    make(chan struct{}),
-			events:                  newObserver[Event](8),
-			keyed:                   make(map[int]*route),
-			singletons:              make(map[string]*route),
-			orders:                  make(map[int64]*orderRoute),
-			executions:              newExecutionCorrelator(),
-			execDeliveries:          make(map[string]*execDelivery),
-			snapshot:                Snapshot{State: StateReady},
+			cfg:            config{logger: slog.Default()},
+			cmds:           make(chan func(), 8),
+			incoming:       make(chan any, 8),
+			transportErr:   make(chan error, 1),
+			done:           make(chan struct{}),
+			events:         newObserver[Event](8),
+			keyed:          make(map[int]*route),
+			singletons:     make(map[string]*route),
+			orders:         make(map[int64]*orderRoute),
+			executions:     newExecutionCorrelator(),
+			execDeliveries: make(map[string]*execDelivery),
+			snapshot:       Snapshot{State: StateReady},
 		}
 		go e.run()
 		defer close(e.done)

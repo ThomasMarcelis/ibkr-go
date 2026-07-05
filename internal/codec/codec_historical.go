@@ -1,6 +1,5 @@
 package codec
 
-
 type HistoricalBarsRequest struct {
 	ReqID        int
 	Contract     Contract

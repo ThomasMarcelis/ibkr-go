@@ -173,6 +173,11 @@ func (e *APIError) IsFarmStatus() bool {
 // [ErrCodeDelayedMarketDataDisplayed] (the stream continues with delayed
 // ticks), and [ErrCodeOrderMessage] (the order stays working at IB; live
 // replays show it still cancellable after the warning).
+//
+// The engine consults this predicate for order-targeted sub-10000 codes to
+// deliver [OrderEvent].Warning without closing the handle; the 10xxx band's
+// order handling is attestation-gated separately, so a newly attested
+// order-targeted 10xxx warning needs its own wiring there.
 func (e *APIError) IsWarning() bool {
 	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed || e.Code == ErrCodeOrderMessage
 }

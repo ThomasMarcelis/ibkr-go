@@ -134,7 +134,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   surface as session events instead of vanishing.** Previously a `req_id`
   that matched no keyed route and no order route fell off the end of the
   error handler and was dropped; this is the path that carries option-exercise
-  refusals (code 322) and stale request replies.
+  refusals (code 322) and stale request replies. Deliberate consequence:
+  late replies for already-torn-down requests (a code 161 answering a cancel
+  of an already-terminal order, duplicate code 300 responses) are now visible
+  on `SessionEvents()` rather than silently discarded — session events are
+  informational, and the code is preserved for filtering.
+- **A commission report that raced ahead of its execution detail now reaches
+  the order handle.** The Gateway can deliver `commission_report` before the
+  `execution_detail` it belongs to; previously the handle leg dropped it with
+  no owner and nothing re-triggered delivery. It is now buffered and flushed
+  when the execution claims the ExecID (unclaimed buffers evict after the
+  drain window).
+- **A re-sent commission report with changed content reaches the order
+  handle.** The snapshot-replay dedupe now compares content instead of ExecID
+  presence, so an identical replay is still dropped but a report the Gateway
+  re-sends with updated fields (e.g. realized PnL filled in later) is
+  delivered.
+- **Rejected orders no longer retain their routes until reconnect.** A
+  terminal placement rejection, a decode failure, or a slow-consumer close
+  now tears down the order route and its execution correlations the same way
+  the post-fill drain window does.
 - **`Options().Exercise` now registers a keyed route for its request id.**
   Exercise is fire-and-forget on the wire, but its request-id-targeted replies
   (refusals like 322, the 10349 TIF-preset acknowledgement, the 202 that

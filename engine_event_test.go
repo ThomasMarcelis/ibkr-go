@@ -8,12 +8,12 @@ import (
 func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := &engine{
-			events:      newObserver[Event](1),
-			ready:       make(chan error, 1),
-			done:        make(chan struct{}),
-			keyed:       make(map[int]*route),
-			singletons:  make(map[string]*route),
-			orders:      make(map[int64]*orderRoute),
+			events:         newObserver[Event](1),
+			ready:          make(chan error, 1),
+			done:           make(chan struct{}),
+			keyed:          make(map[int]*route),
+			singletons:     make(map[string]*route),
+			orders:         make(map[int64]*orderRoute),
 			execDeliveries: make(map[string]*execDelivery),
 			snapshot: Snapshot{
 				State: StateConnecting,
