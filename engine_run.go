@@ -2,18 +2,12 @@ package ibkr
 
 func (e *engine) run() {
 	for {
-		e.drainIncoming()
-
-		// Give a pending transport error priority over cmds, but only
-		// after all decoded messages have been handled.
-		select {
-		case err := <-e.transportErr:
-			e.drainIncoming()
-			e.handleTransportLoss(err)
-			continue
-		default:
-		}
-
+		// One fair select per iteration. An earlier version drained e.incoming
+		// to empty at the top of every loop; under a sustained hot feed that
+		// drain never returned and control commands (subscribe/cancel/place)
+		// on e.cmds starved. The full drain is only required to satisfy the
+		// transport-loss ordering invariant, so it now lives on the
+		// transportErr arms alone.
 		select {
 		case fn := <-e.cmds:
 			if fn != nil {
@@ -36,7 +30,10 @@ func (e *engine) run() {
 // decoded messages are sent to e.incoming before its transportErr is
 // sent — the ProtocolError send happens on the decode goroutine after
 // its final incoming send, and the tr.Wait() send is gated on
-// decodedDone.
+// decodedDone. Because that transportErr send only happens after the last
+// incoming send, by the time this arm observes the error every one of the
+// connection's messages is already buffered on e.incoming, so this drain
+// handles all of them before handleTransportLoss tears the routes down.
 func (e *engine) drainIncoming() {
 	for {
 		select {

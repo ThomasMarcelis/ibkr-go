@@ -19,12 +19,13 @@ func newEngineForDispatchTest() (*engine, *bytes.Buffer) {
 	cfg.logger = slog.New(slog.NewTextHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
 	e := &engine{
-		cfg:         cfg,
-		keyed:       make(map[int]*route),
-		singletons:  make(map[string]*route),
-		orders:      make(map[int64]*orderRoute),
-		executions:  newExecutionCorrelator(),
-		execToOrder: make(map[string]int64),
+		cfg:                     cfg,
+		keyed:                   make(map[int]*route),
+		singletons:              make(map[string]*route),
+		orders:                  make(map[int64]*orderRoute),
+		executions:              newExecutionCorrelator(),
+		execToOrder:             make(map[string]int64),
+		execCommissionDelivered: make(map[string]struct{}),
 	}
 	return e, buf
 }

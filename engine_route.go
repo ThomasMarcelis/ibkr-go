@@ -383,8 +383,32 @@ func (e *engine) scheduleTerminalOrderClose(orderID int64, route *orderRoute) {
 			}
 			current.closed = true
 			current.handle.closeWithErr(nil)
+			// The drain window has elapsed and the handle is closing: drop the
+			// route and every execution correlation it owns. Retaining them
+			// only bounded the maps by connection lifetime. Deleting the
+			// execToOrder entries here is safe precisely because the route is
+			// gone — dispatchExecutionToOrder and routeCommissionReport both
+			// early-return on a missing route, and any commission that could
+			// still legitimately arrive for this order is exactly what the
+			// drain window existed to absorb; anything later is post-terminal
+			// noise the closed handle would drop anyway.
+			delete(e.orders, orderID)
+			e.forgetOrderExecutions(orderID)
 		})
 	})
+}
+
+// forgetOrderExecutions drops every execution correlation owned by orderID.
+// It runs once per terminal order (after the drain window), so the linear
+// scan is bounded by the session's fills. execToOrder and
+// execCommissionDelivered share a key space and are cleared together.
+func (e *engine) forgetOrderExecutions(orderID int64) {
+	for execID, oid := range e.execToOrder {
+		if oid == orderID {
+			delete(e.execToOrder, execID)
+			delete(e.execCommissionDelivered, execID)
+		}
+	}
 }
 
 func (e *engine) activeAccountSummarySubscriptions() int {
@@ -420,6 +444,13 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 	// is live on the server, so a decode failure must not tear down the
 	// handle — drop the event and log so the problem is observable.
 	if orderID, ok := e.execToOrder[report.ExecID]; ok {
+		// A commission already delivered to this handle must not be re-emitted
+		// when a later Executions() snapshot query replays the same ExecID.
+		// This mirrors the execution dedupe (execToOrder presence); the keyed
+		// subscription leg above tracks its own delivery and is untouched.
+		if _, delivered := e.execCommissionDelivered[report.ExecID]; delivered {
+			return
+		}
 		if or, ok := e.orders[orderID]; ok && !or.closed {
 			cr, err := fromCodecCommission(report)
 			if err != nil {
@@ -432,7 +463,9 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 			}
 			if !or.handle.emitCommission(cr) {
 				or.closed = true
+				return
 			}
+			e.execCommissionDelivered[report.ExecID] = struct{}{}
 		}
 	}
 }

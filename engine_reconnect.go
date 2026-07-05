@@ -226,6 +226,7 @@ func (e *engine) closeEngine(err error) {
 	}
 	e.executions.reset()
 	e.execToOrder = make(map[string]int64)
+	e.execCommissionDelivered = make(map[string]struct{})
 	e.setState(StateClosed, 0, "", err)
 	e.reportReady(err)
 	e.waitMu.Lock()

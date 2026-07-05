@@ -156,9 +156,10 @@ func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 		keyed:        make(map[int]*route),
 		singletons:   make(map[string]*route),
 		orders:       make(map[int64]*orderRoute),
-		executions:   newExecutionCorrelator(),
-		execToOrder:  make(map[string]int64),
-		nextReqID:    1,
+		executions:              newExecutionCorrelator(),
+		execToOrder:             make(map[string]int64),
+		execCommissionDelivered: make(map[string]struct{}),
+		nextReqID:               1,
 		snapshot: Snapshot{
 			State: StateReady,
 		},

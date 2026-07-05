@@ -136,11 +136,22 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 			msgs, err := codec.DecodeBatch(sv, payload)
 			if err != nil {
 				_ = tr.Close()
-				e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}
+				// Every send races engine shutdown: once run() has exited
+				// (e.done closed on Close) nothing drains e.incoming or
+				// e.transportErr, so an unguarded send on a hot feed wedges
+				// this goroutine forever. Bail on e.done instead.
+				select {
+				case e.transportErr <- &ProtocolError{Direction: "inbound", Err: err}:
+				case <-e.done:
+				}
 				return
 			}
 			for _, msg := range msgs {
-				e.incoming <- msg
+				select {
+				case e.incoming <- msg:
+				case <-e.done:
+					return
+				}
 			}
 		}
 	}()
@@ -148,7 +159,14 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 	go func() {
 		<-tr.Done()
 		<-decodedDone
-		e.transportErr <- tr.Wait()
+		// The ordering guarantee (all of this connection's decoded messages
+		// reach e.incoming before its transportErr) is preserved: this send is
+		// gated on decodedDone, and the decode goroutine only closes it after
+		// its final incoming send or an e.done bail-out.
+		select {
+		case e.transportErr <- tr.Wait():
+		case <-e.done:
+		}
 	}()
 }
 

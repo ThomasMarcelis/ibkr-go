@@ -1,10 +1,36 @@
 package ibkr
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 )
+
+// TestRecordCommissionDoesNotGrowWithoutRoutes freezes the leak fix: every
+// live fill's commission report reaches recordCommission (routeCommissionReport
+// calls it unconditionally), but with no registered Executions() route there is
+// nothing that could ever deliver it. Pre-fix, ensureExecState buffered each
+// one and c.execs grew by one entry per fill for the whole connection. The
+// correlator must retain nothing when it holds no routes.
+func TestRecordCommissionDoesNotGrowWithoutRoutes(t *testing.T) {
+	t.Parallel()
+
+	c := newExecutionCorrelator()
+	for i := 0; i < 500; i++ {
+		ready := c.recordCommission(codec.CommissionReport{
+			ExecID:     "exec-" + strconv.Itoa(i),
+			Commission: "1.25",
+			Currency:   "USD",
+		})
+		if len(ready) != 0 {
+			t.Fatalf("recordCommission returned ready routes %v with none registered", ready)
+		}
+	}
+	if got := len(c.execs); got != 0 {
+		t.Fatalf("c.execs grew to %d with no routes registered; commissions must not accumulate", got)
+	}
+}
 
 func TestExecutionCorrelatorDeliversBacklogToOverlappingRoutes(t *testing.T) {
 	t.Parallel()

@@ -641,16 +641,23 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		t.Fatalf("376 avg fill = %s, want 292.20", filled.AvgFillPrice)
 	}
 
-	// One-shot executions query: live it returned 41 updates — 15 executions
-	// (including the day's earlier orders 368/369, surfaced only here) and 26
-	// commission deliveries (12 history replays at execution arrival plus 14
-	// live re-emits; the last fill's commission arrives only after the end).
+	// One-shot executions query: the Gateway replays 15 executions (including
+	// the day's earlier orders 368/369, surfaced only here) and re-sends a
+	// commission frame for 14 of them (376's last fill commission arrives only
+	// after ExecutionsEnd, so its route is already gone). The correlator no
+	// longer buffers the streaming-phase commissions that predate this query —
+	// they had no registered route to deliver to — so the pre-query fills no
+	// longer double-deliver a history replay at execution arrival. Fill-012 is
+	// the exception: its streaming commission lands just after req_executions
+	// (the route is already registered), so it is buffered and history-replayed
+	// once in addition to its query re-emit. That yields 15 executions + 15
+	// commission deliveries = 30 updates.
 	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(updates) != 41 {
-		t.Fatalf("executions query updates = %d, want 41 (live-counted)", len(updates))
+	if len(updates) != 30 {
+		t.Fatalf("executions query updates = %d, want 30", len(updates))
 	}
 	var queryExecs []ibkr.Execution
 	commissionUpdates := 0
@@ -662,8 +669,8 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 			commissionUpdates++
 		}
 	}
-	if commissionUpdates != 26 {
-		t.Fatalf("executions query commissions = %d, want 26", commissionUpdates)
+	if commissionUpdates != 15 {
+		t.Fatalf("executions query commissions = %d, want 15", commissionUpdates)
 	}
 	wantRows := []struct {
 		orderID int64
@@ -713,12 +720,11 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		t.Fatalf("CancelAll: %v", err)
 	}
 
-	// Per-handle totals. Executions are deduped by ExecID on the order-handle
-	// leg: the one-shot query re-emits the same fills the handle already saw
-	// live, so each fill lands on the handle exactly once (the query's own
-	// snapshot result, asserted above, still carries every row). Commissions
-	// are not deduped, so the query's dual-dispatched commission repeats still
-	// tally. Every count and value below is fixed by the capture.
+	// Per-handle totals. Both executions and commissions are deduped by ExecID
+	// on the order-handle leg: the one-shot query re-emits the same fills and
+	// commissions the handle already saw live, so each lands on the handle
+	// exactly once (the query's own snapshot result, asserted above, still
+	// carries its rows). Every count and value below is fixed by the capture.
 	finals := []struct {
 		name      string
 		handle    *ibkr.OrderHandle
@@ -729,25 +735,26 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	}{
 		{"371", mktBuy, mktBuyLog, "900371",
 			[]wantExec{{"BOT", "100", "292.79"}},
-			[]string{"1.0003", "1.0003"}},
+			[]string{"1.0003"}},
 		{"372", mktSell, mktSellLog, "900372",
 			[]wantExec{{"SLD", "40", "292.33"}, {"SLD", "40", "292.30"}, {"SLD", "20", "292.30"}},
-			[]string{"1.2488", "0.248775", "0.124388", "1.2488", "0.248775", "0.124388"}},
+			[]string{"1.2488", "0.248775", "0.124388"}},
 		{"373", mtl, mtlLog, "900373",
 			[]wantExec{{"BOT", "40", "292.44"}, {"BOT", "60", "292.44"}},
-			[]string{"1.00012", "1.8E-4", "1.00012", "1.8E-4"}},
+			[]string{"1.00012", "1.8E-4"}},
 		{"374", flatten374, flatten374Log, "900374",
 			[]wantExec{{"SLD", "40", "292.36"}, {"SLD", "40", "292.33"}, {"SLD", "20", "292.33"}},
-			[]string{"1.248825", "0.2488", "0.1244", "1.248825", "0.2488", "0.1244"}},
+			[]string{"1.248825", "0.2488", "0.1244"}},
 		{"375", modify, modifyLog, "900375",
 			[]wantExec{{"BOT", "100", "292.31"}},
-			[]string{"1.0003", "1.0003"}},
-		// 376's final fill commission streamed once only (its query-time
-		// snapshot predates the commission), so it tallies 3 deduped execs / 5
-		// comms.
+			[]string{"1.0003"}},
+		// 376's three fills each stream one commission live; the query re-emits
+		// 011/012's commissions (013's arrives after the query end) but the
+		// order-handle leg deduplicates them, so the handle tallies 3 execs / 3
+		// commissions.
 		{"376", flatten376, flatten376Log, "900376",
 			[]wantExec{{"SLD", "40", "292.20"}, {"SLD", "40", "292.20"}, {"SLD", "20", "292.20"}},
-			[]string{"1.248693", "0.248693", "1.248693", "0.248693", "0.124346"}},
+			[]string{"1.248693", "0.248693", "0.124346"}},
 	}
 	for _, f := range finals {
 		f.log.drain()

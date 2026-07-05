@@ -125,6 +125,7 @@ func newBenchEngine(tb testing.TB) *engine {
 		orders:                   make(map[int64]*orderRoute),
 		executions:               newExecutionCorrelator(),
 		execToOrder:              make(map[string]int64),
+		execCommissionDelivered:  make(map[string]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
 		serverVersion:            200,

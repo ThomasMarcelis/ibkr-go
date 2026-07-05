@@ -35,6 +35,12 @@ type engine struct {
 	orders      map[int64]*orderRoute
 	executions  executionCorrelator
 	execToOrder map[string]int64 // execID → orderID for commission routing to order handles
+	// execCommissionDelivered records the execIDs whose commission has already
+	// reached the owning order handle. It dedupes the order-handle leg on an
+	// Executions() snapshot replay the same way execToOrder's presence dedupes
+	// executions. Its lifecycle mirrors execToOrder: entries are dropped
+	// together when a terminal order's route is forgotten (forgetOrderExecutions).
+	execCommissionDelivered map[string]struct{}
 
 	nextReqID                int
 	nextHistoricalRequest    time.Time
@@ -150,6 +156,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		orders:                   make(map[int64]*orderRoute),
 		executions:               newExecutionCorrelator(),
 		execToOrder:              make(map[string]int64),
+		execCommissionDelivered:  make(map[string]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
 		snapshot: Snapshot{

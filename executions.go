@@ -59,6 +59,17 @@ func (c *executionCorrelator) observeExecution(reqID int, detail codec.Execution
 }
 
 func (c *executionCorrelator) recordCommission(report codec.CommissionReport) []int {
+	// With no registered Executions() route, no route can ever observe this
+	// execution, so buffering the commission only grows c.execs by one entry
+	// per live fill for the whole connection with nothing to consume it — the
+	// leak the caller hits when it places orders but never queries executions.
+	// Drop it: a later query re-observes the execution and the Gateway re-sends
+	// the commission frame then. When routes DO exist the commission is
+	// buffered even before its execution is observed, preserving the backlog
+	// contract for a report that races ahead of its execution detail.
+	if len(c.routes) == 0 {
+		return nil
+	}
 	state := c.ensureExecState(report.ExecID)
 	state.commissions = append(state.commissions, report)
 

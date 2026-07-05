@@ -57,6 +57,55 @@ func TestDispatchExecutionToOrderDedupesReplayedFill(t *testing.T) {
 	}
 }
 
+// TestRouteCommissionReportDedupesReplayedCommission freezes the commission
+// half of the snapshot-replay dedupe: a fill and its commission delivered live
+// to an OrderHandle must each land exactly once, even when a later Executions()
+// snapshot query replays the same ExecID for both. Pre-fix the execution was
+// deduped but the commission was not, so the handle double-counted it.
+func TestRouteCommissionReportDedupesReplayedCommission(t *testing.T) {
+	t.Parallel()
+
+	e, _ := newEngineForDispatchTest()
+	handle := newOrderHandle(90)
+	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
+
+	exec := codec.ExecutionDetail{
+		ReqID:   -1,
+		OrderID: 90,
+		ExecID:  "exec-live-1",
+		Shares:  "10",
+		Price:   "150",
+		Time:    "20260610-19:58:22",
+	}
+	comm := codec.CommissionReport{ExecID: "exec-live-1", Commission: "1.25", Currency: "USD", RealizedPNL: "0"}
+
+	// Live delivery: execution, then its commission.
+	e.dispatchExecutionToOrder(exec)
+	e.routeCommissionReport(comm)
+	// A later executions snapshot replays the identical fill and commission.
+	e.dispatchExecutionToOrder(exec)
+	e.routeCommissionReport(comm)
+
+	execs, comms := 0, 0
+	for {
+		select {
+		case evt := <-handle.Events():
+			if evt.Execution != nil {
+				execs++
+			}
+			if evt.Commission != nil {
+				comms++
+			}
+			continue
+		default:
+		}
+		break
+	}
+	if execs != 1 || comms != 1 {
+		t.Fatalf("handle saw %d executions / %d commissions for one ExecID, want 1/1 (both deduped)", execs, comms)
+	}
+}
+
 // TestHandleAPIErrorEmitsUnroutedRequestError freezes Bug 2: a request-range
 // (<10000) error carrying a reqID that matches no keyed route and no order
 // route must surface as a session event, not vanish. This is the path that
