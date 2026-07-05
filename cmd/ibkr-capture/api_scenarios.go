@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -193,7 +194,146 @@ func firstManagedAccount(client *ibkr.Client) (string, error) {
 	return snapshot.ManagedAccounts[0], nil
 }
 
+// paperAccountPrefix is IBKR's paper-trading account prefix. Every
+// order-mutating capture operation is refused on any account that lacks it, so
+// a global cancel can never reach a live real-money account (e.g. "U…").
+const paperAccountPrefix = "DU"
+
+// isPaperAccount reports whether account is an IBKR paper-trading account.
+func isPaperAccount(account string) bool {
+	return strings.HasPrefix(account, paperAccountPrefix)
+}
+
+// requirePaperAccount is the belt-and-braces guard that must precede every
+// order-mutating call the tool issues. It refuses with a hard error naming the
+// account and the attempted operation when the session is not a paper account.
+func requirePaperAccount(account, operation string) error {
+	if isPaperAccount(account) {
+		return nil
+	}
+	return fmt.Errorf("refusing %s on non-paper account %q: order-mutating capture operations require an IBKR paper account (%q prefix)", operation, account, paperAccountPrefix)
+}
+
+// guardedCancelAll is the only path through which this tool issues a TWS global
+// cancel. It refuses on a non-paper account before sending anything, so no
+// scenario — present or future — can cancel every open order on a live account.
+func guardedCancelAll(ctx context.Context, client *ibkr.Client, account, operation string) error {
+	if err := requirePaperAccount(account, operation); err != nil {
+		return err
+	}
+	return client.Orders().CancelAll(ctx)
+}
+
+// apiScenarioWrapper identifies which capture wrapper a run function selected.
+type apiScenarioWrapper int
+
+const (
+	wrapperReadOnly apiScenarioWrapper = iota
+	wrapperTrading
+)
+
+// currentScenarioName returns the name of the scenario being captured. main.go
+// always installs the driver recorder (named after -scenario) before invoking
+// an api run function, so this is the authoritative scenario identity.
+func currentScenarioName() string {
+	if apiDriver == nil {
+		return ""
+	}
+	return apiDriver.scenario
+}
+
+// verifyWrapperForScenario cross-checks the wrapper a run function chose against
+// the scenario's catalog RiskClass. The trading wrapper (pre/post global
+// cancels) is valid only for paper-trading risk classes; the read-only wrapper
+// is valid only for the rest. A mismatch is a wiring bug and is refused before
+// any connection is made, so a read-only scenario can never reach the cancel
+// path even if it is miswired.
+func verifyWrapperForScenario(name string, wrapper apiScenarioWrapper) error {
+	md, ok := scenarioMetadataByName[name]
+	if !ok {
+		return fmt.Errorf("scenario %q missing catalog metadata; cannot verify capture wrapper", name)
+	}
+	wantTrading := cancelsAllowedForRiskClass(md.RiskClass)
+	gotTrading := wrapper == wrapperTrading
+	if wantTrading != gotTrading {
+		return fmt.Errorf("scenario %q RiskClass %q wants trading-wrapper=%t but is wired to trading-wrapper=%t", name, md.RiskClass, wantTrading, gotTrading)
+	}
+	return nil
+}
+
+// apiScenario runs a read-only or entitlement-probe capture body. This path
+// contains no order-mutating code: there is no pre/post global cancel, so a
+// read-only scenario is structurally incapable of cancelling live orders even
+// if it is pointed at a real-money account. Paper-trading scenarios that need
+// pre/post isolation cancels must use apiTradingScenario instead.
 func apiScenario(ctx context.Context, addr string, clientID int, timeout time.Duration, run func(context.Context, *ibkr.Client, string) error) error {
+	if err := verifyWrapperForScenario(currentScenarioName(), wrapperReadOnly); err != nil {
+		recordAPIEvent("scenario_wrapper_mismatch", "", func(event *apiDriverEvent) {
+			event.Error = err.Error()
+		})
+		return err
+	}
+	return apiScenarioBase(ctx, addr, clientID, timeout, run)
+}
+
+// apiTradingScenario runs a paper-trading capture body with pre/post global
+// cancels for order isolation between scenarios. It is valid only for paper
+// risk classes (verifyWrapperForScenario) and every cancel is gated by
+// requirePaperAccount, so the scenario aborts before mutating any order state
+// when the session is not a paper account.
+func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout time.Duration, run func(context.Context, *ibkr.Client, string) error) error {
+	if err := verifyWrapperForScenario(currentScenarioName(), wrapperTrading); err != nil {
+		recordAPIEvent("scenario_wrapper_mismatch", "", func(event *apiDriverEvent) {
+			event.Error = err.Error()
+		})
+		return err
+	}
+	return apiScenarioBase(ctx, addr, clientID, timeout, func(ctx context.Context, client *ibkr.Client, account string) error {
+		// Hard refusal: never mutate order state on a non-paper account.
+		if err := requirePaperAccount(account, "pre-scenario global cancel"); err != nil {
+			log.Printf("%v", err)
+			recordAPIEvent("trading_scenario_refused_non_paper_account", "", func(event *apiDriverEvent) {
+				event.Account = account
+				event.Error = err.Error()
+			})
+			return err
+		}
+
+		preCleanCtx, preCleanCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		recordAPIEvent("pre_cleanup_global_cancel_start", "", nil)
+		if err := guardedCancelAll(preCleanCtx, client, account, "pre-scenario global cancel"); err != nil {
+			log.Printf("pre-scenario global cancel: %v", err)
+			recordAPIEvent("pre_cleanup_global_cancel_error", "", func(event *apiDriverEvent) {
+				event.Error = err.Error()
+			})
+		} else {
+			recordAPIEvent("pre_cleanup_global_cancel_sent", "", nil)
+		}
+		preCleanCancel()
+		time.Sleep(1 * time.Second)
+
+		runErr := run(ctx, client, account)
+
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cleanCancel()
+		recordAPIEvent("cleanup_global_cancel_start", "", nil)
+		if err := guardedCancelAll(cleanCtx, client, account, "cleanup global cancel"); err != nil {
+			log.Printf("cleanup global cancel: %v", err)
+			recordAPIEvent("cleanup_global_cancel_error", "", func(event *apiDriverEvent) {
+				event.Error = err.Error()
+			})
+		} else {
+			recordAPIEvent("cleanup_global_cancel_sent", "", nil)
+		}
+		time.Sleep(2 * time.Second)
+		return runErr
+	})
+}
+
+// apiScenarioBase is the shared dial/session/record spine for both wrappers. It
+// performs no order mutation of its own; the pre/post global cancels live only
+// in apiTradingScenario's body.
+func apiScenarioBase(ctx context.Context, addr string, clientID int, timeout time.Duration, run func(context.Context, *ibkr.Client, string) error) error {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
@@ -227,32 +367,9 @@ func apiScenario(ctx context.Context, addr string, clientID int, timeout time.Du
 		event.ServerVer = snapshot.ServerVersion
 		event.NextOrderID = snapshot.NextValidID
 	})
-	preCleanCtx, preCleanCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	recordAPIEvent("pre_cleanup_global_cancel_start", "", nil)
-	if err := client.Orders().CancelAll(preCleanCtx); err != nil {
-		log.Printf("pre-scenario global cancel: %v", err)
-		recordAPIEvent("pre_cleanup_global_cancel_error", "", func(event *apiDriverEvent) {
-			event.Error = err.Error()
-		})
-	} else {
-		recordAPIEvent("pre_cleanup_global_cancel_sent", "", nil)
-	}
-	preCleanCancel()
-	time.Sleep(1 * time.Second)
 
 	runErr := run(ctx, client, account)
-	cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cleanCancel()
-	recordAPIEvent("cleanup_global_cancel_start", "", nil)
-	if err := client.Orders().CancelAll(cleanCtx); err != nil {
-		log.Printf("cleanup global cancel: %v", err)
-		recordAPIEvent("cleanup_global_cancel_error", "", func(event *apiDriverEvent) {
-			event.Error = err.Error()
-		})
-	} else {
-		recordAPIEvent("cleanup_global_cancel_sent", "", nil)
-	}
-	time.Sleep(2 * time.Second)
+
 	recordAPIEvent("scenario_end", "", func(event *apiDriverEvent) {
 		if runErr != nil {
 			event.Error = runErr.Error()
@@ -262,7 +379,7 @@ func apiScenario(ctx context.Context, addr string, clientID int, timeout time.Du
 }
 
 func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL anchor price: %s", anchor)
 
@@ -340,7 +457,7 @@ func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) e
 }
 
 func runAPIOrderFillAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL fill anchor price: %s", anchor)
 
@@ -379,7 +496,7 @@ func runAPIOrderFillAAPL(ctx context.Context, addr string, clientID int) error {
 }
 
 func runAPIOrderRestCancelAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL rest/cancel anchor price: %s", anchor)
 
@@ -408,7 +525,7 @@ func runAPIOrderRestCancelAAPL(ctx context.Context, addr string, clientID int) e
 }
 
 func runAPIOrderRelativeCancelAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL relative/cancel anchor price: %s", anchor)
 
@@ -426,7 +543,7 @@ func runAPIOrderRelativeCancelAAPL(ctx context.Context, addr string, clientID in
 }
 
 func runAPIOrderTrailingCancelAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL trailing/cancel anchor price: %s", anchor)
 
@@ -456,7 +573,7 @@ func runAPIOrderTrailingCancelAAPL(ctx context.Context, addr string, clientID in
 }
 
 func runAPIOrderStopCancelAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL stop/cancel anchor price: %s", anchor)
 
@@ -486,7 +603,7 @@ func runAPIOrderStopCancelAAPL(ctx context.Context, addr string, clientID int) e
 }
 
 func runAPIOrderRejectsAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL reject anchor price: %s", anchor)
 
@@ -519,7 +636,7 @@ func runAPIOrderRejectsAAPL(ctx context.Context, addr string, clientID int) erro
 }
 
 func runAPIDelayedSuccessModifyAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		order := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		handle, err := placeAPIOrder(ctx, client, "delayed resting", apiAAPL, order)
@@ -542,7 +659,7 @@ func runAPIDelayedSuccessModifyAAPL(ctx context.Context, addr string, clientID i
 }
 
 func runAPIBracketTriggerAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 
 		parent, err := placeAPIOrder(ctx, client, "bracket parent", apiAAPL,
@@ -577,7 +694,7 @@ func runAPIBracketTriggerAAPL(ctx context.Context, addr string, clientID int) er
 }
 
 func runAPIOCATriggerAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		oca := "ibkr-go-api-oca-" + strconv.FormatInt(time.Now().Unix(), 10)
 
@@ -601,7 +718,7 @@ func runAPIOCATriggerAAPL(ctx context.Context, addr string, clientID int) error 
 }
 
 func runAPIConditionsMatrixAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		base := withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		conditions := []struct {
@@ -635,7 +752,7 @@ func runAPIConditionsMatrixAAPL(ctx context.Context, addr string, clientID int) 
 }
 
 func runAPITIFAttributeMatrixAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL TIF/attribute anchor: %s", anchor)
 
@@ -975,7 +1092,7 @@ func runAPIWSHVariantsAAPL(ctx context.Context, addr string, clientID int) error
 }
 
 func runAPIAlgoVariantsAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		start := orderTimestamp(time.Now().UTC().Add(3 * time.Minute))
 		end := orderTimestamp(time.Now().UTC().Add(20 * time.Minute))
@@ -1026,7 +1143,7 @@ func runAPIAlgoVariantsAAPL(ctx context.Context, addr string, clientID int) erro
 }
 
 func runAPIPairsTradingAAPLMSFT(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		_, _ = client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: apiAAPL})
 		_, _ = client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: apiMSFT})
 
@@ -1065,7 +1182,7 @@ func runAPIPairsTradingAAPLMSFT(ctx context.Context, addr string, clientID int) 
 }
 
 func runAPIDollarCostAveragingAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		filledQty := decimal.Zero
 		for i := 0; i < 3; i++ {
 			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
@@ -1091,7 +1208,7 @@ func runAPIDollarCostAveragingAAPL(ctx context.Context, addr string, clientID in
 }
 
 func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		buyOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		buy, err := placeAPIOrder(ctx, client, "stop-management buy", apiAAPL, buyOrder)
@@ -1129,7 +1246,7 @@ func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int
 }
 
 func runAPIBracketTrailingStopAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		parentOrder := withTransmit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket), false)
 		parent, err := placeAPIOrder(ctx, client, "trailing bracket parent", apiAAPL,
@@ -1156,7 +1273,7 @@ func runAPIBracketTrailingStopAAPL(ctx context.Context, addr string, clientID in
 		parentObs := observeOrder(ctx, parent, "trailing bracket parent", 30*time.Second)
 		_ = observeOrder(ctx, takeProfit, "trailing bracket take-profit", 8*time.Second)
 		_ = observeOrder(ctx, trailingStop, "trailing bracket stop", 8*time.Second)
-		if err := client.Orders().CancelAll(ctx); err != nil {
+		if err := guardedCancelAll(ctx, client, account, "trailing bracket global cancel"); err != nil {
 			log.Printf("trailing bracket global cancel: %v", err)
 		}
 		_ = observeOrder(ctx, takeProfit, "trailing bracket take-profit cancel", 10*time.Second)
@@ -1172,7 +1289,7 @@ func runAPIBracketTrailingStopAAPL(ctx context.Context, addr string, clientID in
 }
 
 func runAPIOptionCampaignAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		opt, err := qualifyAAPLCall(ctx, client, anchor)
 		if err != nil {
@@ -1217,7 +1334,7 @@ func runAPIOptionCampaignAAPL(ctx context.Context, addr string, clientID int) er
 }
 
 func runAPIFutureCampaignMES(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		fut, err := qualifyFrontFuture(ctx, client, "MES")
 		if err != nil {
 			log.Printf("qualify MES future: %v", err)
@@ -1249,7 +1366,7 @@ func runAPIFutureCampaignMES(ctx context.Context, addr string, clientID int) err
 }
 
 func runAPIComboOptionVerticalAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		lower, upper, err := qualifyAAPLCallVertical(ctx, client, anchor)
 		if err != nil {
@@ -1282,7 +1399,7 @@ func runAPIComboOptionVerticalAAPL(ctx context.Context, addr string, clientID in
 }
 
 func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("algorithmic campaign anchor=%s", anchor)
 
@@ -1350,7 +1467,7 @@ func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID in
 }
 
 func runAPICompletedOrdersVariantsAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		handle, err := placeAPIOrder(ctx, client, "completed seed buy", apiAAPL, order)
 		if err != nil {
@@ -1368,7 +1485,7 @@ func runAPICompletedOrdersVariantsAAPL(ctx context.Context, addr string, clientI
 }
 
 func runAPITransmitFalseThenTransmitAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		order := withTransmit(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), false)
 		handle, err := placeAPIOrder(ctx, client, "transmit false resting", apiAAPL, order)
@@ -1448,7 +1565,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 		return err
 	}
 	recordSessionReady(addr, clientID, account, first)
-	if err := first.Orders().CancelAll(ctx); err != nil {
+	if err := guardedCancelAll(ctx, first, account, "reconnect pre-cleanup global cancel"); err != nil {
 		log.Printf("reconnect pre-cleanup global cancel: %v", err)
 	}
 
@@ -1494,7 +1611,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 		})
 	}
 	time.Sleep(2 * time.Second)
-	if err := second.Orders().CancelAll(ctx); err != nil {
+	if err := guardedCancelAll(ctx, second, account, "reconnect cleanup global cancel"); err != nil {
 		log.Printf("reconnect cleanup global cancel: %v", err)
 	} else {
 		cleanup.MarkDone()
@@ -1524,7 +1641,7 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 		return err
 	}
 	recordSessionReady(addr, clientID, account, placer)
-	if err := placer.Orders().CancelAll(ctx); err != nil {
+	if err := guardedCancelAll(ctx, placer, account, "client0 pre-cleanup global cancel"); err != nil {
 		log.Printf("client0 pre-cleanup global cancel: %v", err)
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
@@ -1560,7 +1677,7 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 		})
 	}
 	time.Sleep(2 * time.Second)
-	if err := observer.Orders().CancelAll(ctx); err != nil {
+	if err := guardedCancelAll(ctx, observer, account, "client0 cleanup global cancel"); err != nil {
 		log.Printf("client0 cleanup global cancel: %v", err)
 	} else {
 		cleanup.MarkDone()
@@ -1590,7 +1707,7 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 		return err
 	}
 	recordSessionReady(addr, clientID, account, placer)
-	if err := placer.Orders().CancelAll(ctx); err != nil {
+	if err := guardedCancelAll(ctx, placer, account, "cross-client pre-cleanup global cancel"); err != nil {
 		log.Printf("cross-client pre-cleanup global cancel: %v", err)
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
@@ -1629,7 +1746,7 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 		})
 	}
 	time.Sleep(2 * time.Second)
-	if err := canceller.Orders().CancelAll(ctx); err != nil {
+	if err := guardedCancelAll(ctx, canceller, account, "cross-client cleanup global cancel"); err != nil {
 		log.Printf("cross-client cleanup global cancel: %v", err)
 	} else {
 		cleanup.MarkDone()
@@ -1673,6 +1790,15 @@ func (c *apiOrderCleanup) Run() {
 		return
 	}
 	defer client.Close()
+	account, err := firstManagedAccount(client)
+	if err != nil {
+		recordAPIEvent("tracked_order_cleanup_session_error", c.label, func(event *apiDriverEvent) {
+			event.ClientID = c.clientID
+			event.OrderID = c.orderID
+			event.Error = err.Error()
+		})
+		return
+	}
 	if err := client.Orders().Cancel(cleanupCtx, c.orderID); err != nil {
 		recordAPIEvent("tracked_order_cleanup_cancel_error", c.label, func(event *apiDriverEvent) {
 			event.ClientID = c.clientID
@@ -1685,7 +1811,7 @@ func (c *apiOrderCleanup) Run() {
 			event.OrderID = c.orderID
 		})
 	}
-	if err := client.Orders().CancelAll(cleanupCtx); err != nil {
+	if err := guardedCancelAll(cleanupCtx, client, account, "tracked order cleanup global cancel"); err != nil {
 		recordAPIEvent("tracked_order_cleanup_global_cancel_error", c.label, func(event *apiDriverEvent) {
 			event.ClientID = c.clientID
 			event.OrderID = c.orderID
@@ -2724,7 +2850,7 @@ var apiMSFT = ibkr.Contract{
 }
 
 func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiEURUSD, decimal.RequireFromString("1.10"))
 		log.Printf("EUR.USD anchor: %s", anchor)
 
@@ -2754,7 +2880,7 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 }
 
 func runAPIWhatIfMarginAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		order := baseAPIOrder(account, decimal.NewFromInt(100), ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		order.WhatIf = new(true)
 
@@ -2769,7 +2895,7 @@ func runAPIWhatIfMarginAAPL(ctx context.Context, addr string, clientID int) erro
 }
 
 func runAPIStressRapidFireAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL stress anchor: %s", anchor)
 
@@ -2792,7 +2918,7 @@ func runAPIStressRapidFireAAPL(ctx context.Context, addr string, clientID int) e
 		}
 
 		// Global cancel.
-		if err := client.Orders().CancelAll(ctx); err != nil {
+		if err := guardedCancelAll(ctx, client, account, "stress global cancel"); err != nil {
 			log.Printf("stress global cancel: %v", err)
 		}
 
@@ -2804,7 +2930,7 @@ func runAPIStressRapidFireAAPL(ctx context.Context, addr string, clientID int) e
 }
 
 func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL scale-in anchor: %s", anchor)
 
@@ -2851,7 +2977,7 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 }
 
 func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL IOC/FOK anchor: %s", anchor)
 
@@ -2904,7 +3030,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 }
 
 func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		// A barely in-the-money strike draws code 322 "Exercise ignored
 		// because option is not in-the-money" (capture 20260611T133444Z);
@@ -2947,7 +3073,7 @@ func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) er
 }
 
 func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		// Live rules frozen 2026-06-11: delta hedges hang off OPTION parents
 		// (stock parent drew 320 "parent order has to be option order",
@@ -3023,7 +3149,7 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 }
 
 func runAPIFAReplaceNonFA(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		groups := ibkr.XMLDocument(`<?xml version="1.0" encoding="UTF-8"?><ListOfGroups><Group><name>capture_probe</name><defaultMethod>EqualQuantity</defaultMethod><ListOfAccts varName="list"><Account><acct>` + account + `</acct></Account></ListOfAccts></Group></ListOfGroups>`)
 		if err := client.Advisors().ReplaceConfig(ctx, ibkr.FADataGroups, groups); err != nil {
 			log.Printf("fa replace response: %v", err)

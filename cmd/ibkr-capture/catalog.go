@@ -282,13 +282,26 @@ func writeScenarioRole(w io.Writer, scenarioNames []string) error {
 	return err
 }
 
-func scenarioCaptureRole(md scenarioMetadata) string {
-	switch md.RiskClass {
+// cancelsAllowedForRiskClass reports whether a scenario of the given catalog
+// RiskClass is a paper-trading class that mutates order state. Only these
+// classes run the pre/post global-cancel cleanup and route to the paper-dev
+// capture role; every other class (read_only, entitlement_probe, ...) must
+// never issue a global cancel because it may run against the real-money
+// readonly-live role. This is the single source of truth for that split.
+func cancelsAllowedForRiskClass(riskClass string) bool {
+	switch riskClass {
 	case "paper_order", "paper_marketable_order", "paper_trigger", "paper_destructive":
-		return captureRolePaperDev
+		return true
 	default:
-		return captureRoleReadOnlyLive
+		return false
 	}
+}
+
+func scenarioCaptureRole(md scenarioMetadata) string {
+	if cancelsAllowedForRiskClass(md.RiskClass) {
+		return captureRolePaperDev
+	}
+	return captureRoleReadOnlyLive
 }
 
 func (e scenarioCatalogEntry) inBatch(batch string) bool {
