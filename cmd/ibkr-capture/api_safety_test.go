@@ -39,13 +39,15 @@ func TestCancelsAllowedForRiskClass(t *testing.T) {
 func TestRequirePaperAccount(t *testing.T) {
 	t.Parallel()
 
-	for _, account := range []string{"DU1234567", "DUP770846", "DU0000000"} {
+	// Only the DU9000001 redaction token may carry a full account-id shape in
+	// tracked files (see sanitization_test.go); the other samples stay short.
+	for _, account := range []string{"DU9000001", "DU12345", "DUP12345"} {
 		if err := requirePaperAccount(account, "global cancel"); err != nil {
 			t.Errorf("requirePaperAccount(%q) = %v, want nil", account, err)
 		}
 	}
 
-	for _, account := range []string{"U10597365", "DF123456", "", "du-lowercase", "XU123"} {
+	for _, account := range []string{"U123456", "DF123456", "", "du-lowercase", "XU123"} {
 		err := requirePaperAccount(account, "pre-scenario global cancel")
 		if err == nil {
 			t.Errorf("requirePaperAccount(%q) = nil, want refusal", account)
@@ -67,11 +69,11 @@ func TestRequirePaperAccount(t *testing.T) {
 func TestGuardedCancelAllRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 	t.Parallel()
 
-	err := guardedCancelAll(context.Background(), nil, "U10597365", "cleanup global cancel")
+	err := guardedCancelAll(context.Background(), nil, "U123456", "cleanup global cancel")
 	if err == nil {
 		t.Fatal("guardedCancelAll on a non-paper account returned nil, want refusal")
 	}
-	if !strings.Contains(err.Error(), "U10597365") {
+	if !strings.Contains(err.Error(), "U123456") {
 		t.Errorf("guardedCancelAll error %q does not name the live account", err)
 	}
 }
