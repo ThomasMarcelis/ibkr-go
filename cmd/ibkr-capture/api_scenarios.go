@@ -99,7 +99,7 @@ func newAPIDriverRecorder(path string, scenario string) (*apiDriverRecorder, err
 	if path == "" {
 		return rec, nil
 	}
-	file, err := os.Create(path)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("create driver events: %w", err)
 	}
@@ -194,6 +194,14 @@ func firstManagedAccount(client *ibkr.Client) (string, error) {
 	return snapshot.ManagedAccounts[0], nil
 }
 
+func managedAccounts(client *ibkr.Client) ([]string, error) {
+	snapshot := client.Session()
+	if len(snapshot.ManagedAccounts) == 0 {
+		return nil, fmt.Errorf("session has no managed accounts")
+	}
+	return snapshot.ManagedAccounts, nil
+}
+
 // paperAccountPrefix is IBKR's paper-trading account prefix. Every
 // order-mutating capture operation is refused on any account that lacks it, so
 // a global cancel can never reach a live real-money account (e.g. "U…").
@@ -214,14 +222,44 @@ func requirePaperAccount(account, operation string) error {
 	return fmt.Errorf("refusing %s on non-paper account %q: order-mutating capture operations require an IBKR paper account (%q prefix)", operation, account, paperAccountPrefix)
 }
 
+func requirePaperAccounts(accounts []string, operation string) error {
+	if len(accounts) == 0 {
+		return fmt.Errorf("refusing %s: session has no managed accounts", operation)
+	}
+	for _, account := range accounts {
+		if err := requirePaperAccount(account, operation); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func requirePaperTradingSession(client *ibkr.Client, fallbackAccount string, operation string) error {
+	if client == nil {
+		return requirePaperAccount(fallbackAccount, operation)
+	}
+	accounts, err := managedAccounts(client)
+	if err != nil {
+		return err
+	}
+	return requirePaperAccounts(accounts, operation)
+}
+
 // guardedCancelAll is the only path through which this tool issues a TWS global
 // cancel. It refuses on a non-paper account before sending anything, so no
 // scenario — present or future — can cancel every open order on a live account.
 func guardedCancelAll(ctx context.Context, client *ibkr.Client, account, operation string) error {
-	if err := requirePaperAccount(account, operation); err != nil {
+	if err := requirePaperTradingSession(client, account, operation); err != nil {
 		return err
 	}
 	return client.Orders().CancelAll(ctx)
+}
+
+func guardedCancelOrder(ctx context.Context, client *ibkr.Client, account string, orderID int64, operation string) error {
+	if err := requirePaperTradingSession(client, account, operation); err != nil {
+		return err
+	}
+	return client.Orders().Cancel(ctx, orderID)
 }
 
 // apiScenarioWrapper identifies which capture wrapper a run function selected.
@@ -290,7 +328,7 @@ func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout 
 	}
 	return apiScenarioBase(ctx, addr, clientID, timeout, func(ctx context.Context, client *ibkr.Client, account string) error {
 		// Hard refusal: never mutate order state on a non-paper account.
-		if err := requirePaperAccount(account, "pre-scenario global cancel"); err != nil {
+		if err := requirePaperTradingSession(client, account, "pre-scenario global cancel"); err != nil {
 			log.Printf("%v", err)
 			recordAPIEvent("trading_scenario_refused_non_paper_account", "", func(event *apiDriverEvent) {
 				event.Account = account
@@ -628,7 +666,7 @@ func runAPIOrderRejectsAAPL(ctx context.Context, addr string, clientID int) erro
 				_ = observeOrder(ctx, handle, tc.label+" cancel", 8*time.Second)
 			}
 		}
-		if err := client.Orders().Cancel(ctx, 999999999); err != nil {
+		if err := guardedCancelOrder(ctx, client, account, 999999999, "reject unknown-order cancel"); err != nil {
 			log.Printf("reject cancel unknown order returned: %v", err)
 		}
 		return nil
@@ -1567,6 +1605,8 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 	recordSessionReady(addr, clientID, account, first)
 	if err := guardedCancelAll(ctx, first, account, "reconnect pre-cleanup global cancel"); err != nil {
 		log.Printf("reconnect pre-cleanup global cancel: %v", err)
+		_ = first.Close()
+		return err
 	}
 
 	anchor := quoteAnchor(ctx, first, apiAAPL, decimal.RequireFromString("200"))
@@ -1599,7 +1639,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 
 	orders, err := second.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
 	recordOpenOrdersResult("reconnect open client", orders, err)
-	if err := second.Orders().Cancel(ctx, orderID); err != nil {
+	if err := guardedCancelOrder(ctx, second, account, orderID, "reconnect direct cancel"); err != nil {
 		recordAPIEvent("direct_cancel_error", "reconnect resting", func(event *apiDriverEvent) {
 			event.OrderID = orderID
 			event.Error = err.Error()
@@ -1613,6 +1653,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 	time.Sleep(2 * time.Second)
 	if err := guardedCancelAll(ctx, second, account, "reconnect cleanup global cancel"); err != nil {
 		log.Printf("reconnect cleanup global cancel: %v", err)
+		return err
 	} else {
 		cleanup.MarkDone()
 	}
@@ -1643,6 +1684,8 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 	recordSessionReady(addr, clientID, account, placer)
 	if err := guardedCancelAll(ctx, placer, account, "client0 pre-cleanup global cancel"); err != nil {
 		log.Printf("client0 pre-cleanup global cancel: %v", err)
+		_ = placer.Close()
+		return err
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
 	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
@@ -1665,7 +1708,7 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 	recordSessionReady(addr, 0, account, observer)
 	orders, err := observer.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
 	recordOpenOrdersResult("client0 all open", orders, err)
-	if err := observer.Orders().Cancel(ctx, orderID); err != nil {
+	if err := guardedCancelOrder(ctx, observer, account, orderID, "client0 direct cancel"); err != nil {
 		recordAPIEvent("direct_cancel_error", "client0 observed resting", func(event *apiDriverEvent) {
 			event.OrderID = orderID
 			event.Error = err.Error()
@@ -1679,6 +1722,7 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 	time.Sleep(2 * time.Second)
 	if err := guardedCancelAll(ctx, observer, account, "client0 cleanup global cancel"); err != nil {
 		log.Printf("client0 cleanup global cancel: %v", err)
+		return err
 	} else {
 		cleanup.MarkDone()
 	}
@@ -1709,6 +1753,8 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 	recordSessionReady(addr, clientID, account, placer)
 	if err := guardedCancelAll(ctx, placer, account, "cross-client pre-cleanup global cancel"); err != nil {
 		log.Printf("cross-client pre-cleanup global cancel: %v", err)
+		_ = placer.Close()
+		return err
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
 	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
@@ -1732,7 +1778,7 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 	recordSessionReady(addr, cancellerID, account, canceller)
 	orders, err := canceller.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
 	recordOpenOrdersResult("cross-client all open", orders, err)
-	if err := canceller.Orders().Cancel(ctx, orderID); err != nil {
+	if err := guardedCancelOrder(ctx, canceller, account, orderID, "cross-client direct cancel"); err != nil {
 		recordAPIEvent("direct_cancel_error", "cross-client resting", func(event *apiDriverEvent) {
 			event.ClientID = cancellerID
 			event.OrderID = orderID
@@ -1748,6 +1794,7 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 	time.Sleep(2 * time.Second)
 	if err := guardedCancelAll(ctx, canceller, account, "cross-client cleanup global cancel"); err != nil {
 		log.Printf("cross-client cleanup global cancel: %v", err)
+		return err
 	} else {
 		cleanup.MarkDone()
 	}
@@ -1799,7 +1846,7 @@ func (c *apiOrderCleanup) Run() {
 		})
 		return
 	}
-	if err := client.Orders().Cancel(cleanupCtx, c.orderID); err != nil {
+	if err := guardedCancelOrder(cleanupCtx, client, account, c.orderID, "tracked order cleanup cancel"); err != nil {
 		recordAPIEvent("tracked_order_cleanup_cancel_error", c.label, func(event *apiDriverEvent) {
 			event.ClientID = c.clientID
 			event.OrderID = c.orderID

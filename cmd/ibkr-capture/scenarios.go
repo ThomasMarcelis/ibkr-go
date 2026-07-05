@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -77,6 +78,35 @@ func captureHistoricalTickTime(t time.Time) string {
 
 func captureHistoricalNewsTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05") + " UTC"
+}
+
+func rawScenarioManagedAccounts(sess *sessionInfo) []string {
+	if sess == nil || sess.ManagedAccounts == "" {
+		return nil
+	}
+	parts := strings.Split(sess.ManagedAccounts, ",")
+	accounts := parts[:0]
+	for _, part := range parts {
+		account := strings.TrimSpace(part)
+		if account != "" {
+			accounts = append(accounts, account)
+		}
+	}
+	return accounts
+}
+
+func verifyRawScenarioForSession(name string, sess *sessionInfo) error {
+	md, ok := scenarioMetadataByName[name]
+	if !ok {
+		return fmt.Errorf("missing catalog metadata; cannot verify capture safety")
+	}
+	if md.Driver != driverWire {
+		return nil
+	}
+	if !cancelsAllowedForRiskClass(md.RiskClass) {
+		return nil
+	}
+	return requirePaperAccounts(rawScenarioManagedAccounts(sess), "raw wire order-mutating scenario "+name)
 }
 
 var scenarios = map[string]scenario{
@@ -1058,13 +1088,13 @@ var scenarios = map[string]scenario{
 	},
 	"market_rule": {
 		name:        "market_rule",
-		description: "REQ_MARKET_RULE id=26 (common US equity rule), read response (msg 92)",
+		description: "REQ_MARKET_RULE id=26 (common US equity rule), read response (msg 93)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			// Market rule 26 is common for US equities on SMART/ISLAND.
 			if err := sendReqMarketRule(conn, 26); err != nil {
 				return err
 			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(92))
+			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(93))
 		},
 	},
 

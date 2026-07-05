@@ -39,7 +39,7 @@ func main() {
 		log.Fatalf("load meta: %v", err)
 	}
 
-	file, err := os.Create(*rawOut)
+	file, err := os.OpenFile(*rawOut, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		log.Fatalf("create output: %v", err)
 	}
@@ -84,7 +84,7 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	if err != nil {
 		return err
 	}
-	file, err := os.Create(path)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("create transcript skeleton: %w", err)
 	}

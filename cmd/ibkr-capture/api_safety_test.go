@@ -62,6 +62,18 @@ func TestRequirePaperAccount(t *testing.T) {
 	}
 }
 
+func TestRequirePaperAccountsRefusesMixedManagedSession(t *testing.T) {
+	t.Parallel()
+
+	err := requirePaperAccounts([]string{"DU9000001", "U123456"}, "global cancel")
+	if err == nil {
+		t.Fatal("requirePaperAccounts(mixed) = nil, want refusal")
+	}
+	if !strings.Contains(err.Error(), "U123456") {
+		t.Fatalf("mixed-account refusal %q does not name the live account", err)
+	}
+}
+
 // TestGuardedCancelAllRefusesNonPaperAccountBeforeMutating passes a nil client:
 // if the guard did not short-circuit on a non-paper account, calling CancelAll
 // on the nil client would panic. Returning the refusal error proves no order
@@ -75,6 +87,18 @@ func TestGuardedCancelAllRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "U123456") {
 		t.Errorf("guardedCancelAll error %q does not name the live account", err)
+	}
+}
+
+func TestGuardedCancelOrderRefusesNonPaperAccountBeforeMutating(t *testing.T) {
+	t.Parallel()
+
+	err := guardedCancelOrder(context.Background(), nil, "U123456", 99, "direct cancel")
+	if err == nil {
+		t.Fatal("guardedCancelOrder on a non-paper account returned nil, want refusal")
+	}
+	if !strings.Contains(err.Error(), "direct cancel") || !strings.Contains(err.Error(), "U123456") {
+		t.Fatalf("guardedCancelOrder error %q does not name operation and account", err)
 	}
 }
 
@@ -141,5 +165,34 @@ func TestScenarioCaptureRoleMatchesCancelPolicy(t *testing.T) {
 		if wantPaper != gotPaper {
 			t.Errorf("scenario %q: cancels=%t but capture role paper-dev=%t", name, wantPaper, gotPaper)
 		}
+	}
+}
+
+func TestVerifyRawScenarioForSessionRefusesTradingOnLiveAccount(t *testing.T) {
+	t.Parallel()
+
+	err := verifyRawScenarioForSession("global_cancel", &sessionInfo{ManagedAccounts: "U123456"})
+	if err == nil {
+		t.Fatal("verifyRawScenarioForSession(global_cancel live) = nil, want refusal")
+	}
+	if !strings.Contains(err.Error(), "global_cancel") || !strings.Contains(err.Error(), "U123456") {
+		t.Fatalf("raw trading refusal %q does not name scenario and account", err)
+	}
+}
+
+func TestVerifyRawScenarioForSessionRequiresEveryManagedAccountPaper(t *testing.T) {
+	t.Parallel()
+
+	err := verifyRawScenarioForSession("place_order_lmt_buy_aapl", &sessionInfo{ManagedAccounts: "DU9000001,U123456"})
+	if err == nil {
+		t.Fatal("verifyRawScenarioForSession(mixed accounts) = nil, want refusal")
+	}
+}
+
+func TestVerifyRawScenarioForSessionAllowsReadOnlyLiveAccount(t *testing.T) {
+	t.Parallel()
+
+	if err := verifyRawScenarioForSession("market_rule", &sessionInfo{ManagedAccounts: "U123456"}); err != nil {
+		t.Fatalf("verifyRawScenarioForSession(read-only live) = %v, want nil", err)
 	}
 }

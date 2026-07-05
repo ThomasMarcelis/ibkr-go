@@ -50,7 +50,7 @@ func TestNoAccountIdentifiersInTrackedFiles(t *testing.T) {
 				return nil
 			}
 			switch filepath.Ext(path) {
-			case ".go", ".md", ".txt", ".sh", ".yml", ".yaml", ".json":
+			case ".go", ".md", ".txt", ".sh", ".yml", ".yaml", ".json", ".jsonl":
 				files = append(files, path)
 			}
 			return nil

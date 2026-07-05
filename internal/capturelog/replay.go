@@ -55,11 +55,11 @@ func LoadMeta(path string) (Meta, error) {
 }
 
 func WriteReplay(dir string, sourceDir string, meta Meta, events []Event) error {
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("capturelog: create replay dir: %w", err)
 	}
 
-	metaFile, err := os.Create(filepath.Join(dir, "meta.json"))
+	metaFile, err := os.OpenFile(filepath.Join(dir, "meta.json"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("capturelog: create replay meta: %w", err)
 	}
@@ -81,7 +81,7 @@ func WriteReplay(dir string, sourceDir string, meta Meta, events []Event) error 
 		return fmt.Errorf("capturelog: write replay meta: %w", err)
 	}
 
-	replayFile, err := os.Create(filepath.Join(dir, "frames.jsonl"))
+	replayFile, err := os.OpenFile(filepath.Join(dir, "frames.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("capturelog: create replay frames: %w", err)
 	}

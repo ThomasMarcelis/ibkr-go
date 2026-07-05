@@ -19,14 +19,23 @@ TMPLOG=$(mktemp)
 TMPEVENTS=$(mktemp)
 trap "rm -f $TMPLOG $TMPEVENTS" EXIT
 
+scenario_entry() {
+    local scenario="$1"
+    if [[ "$scenario" == *"|"* ]]; then
+        echo "$scenario"
+        return
+    fi
+    "$CAPTURE" -list-batch all | awk -F'|' -v name="$scenario" '$1 == name { print; found = 1; exit } END { if (!found) exit 1 }'
+}
+
 if [ $# -gt 0 ]; then
     SCENARIOS=()
     for scenario in "$@"; do
-        if [[ "$scenario" == *"|"* ]]; then
-            SCENARIOS+=("$scenario")
-        else
-            SCENARIOS+=("$scenario|1")
+        if ! entry=$(scenario_entry "$scenario"); then
+            echo "unknown scenario $scenario"
+            exit 1
         fi
+        SCENARIOS+=("$entry")
     done
 else
     mapfile -t SCENARIOS < <("$CAPTURE" -list-batch "$BATCH")
@@ -69,6 +78,7 @@ upstream_for_role() {
 }
 
 mkdir -p "$OUTDIR"
+failures=0
 
 for entry in "${SCENARIOS[@]}"; do
     scenario="${entry%|*}"
@@ -111,6 +121,7 @@ for entry in "${SCENARIOS[@]}"; do
 
     # Wait for recorder to finish
     wait "$rpid" 2>/dev/null
+    recorder_rc=$?
 
     latest_dir=$(ls -dt "$OUTDIR"/20*-"$scenario" 2>/dev/null | head -1)
     if [ -n "$latest_dir" ]; then
@@ -121,10 +132,11 @@ for entry in "${SCENARIOS[@]}"; do
     fi
 
     last=$(tail -1 "$TMPLOG")
-    if [ $rc -eq 0 ] && echo "$last" | grep -q "complete"; then
+    if [ $rc -eq 0 ] && [ $recorder_rc -eq 0 ] && echo "$last" | grep -q "complete"; then
         echo "ok"
     else
-        echo "FAILED (rc=$rc, last: $last)"
+        echo "FAILED (rc=$rc, recorder_rc=$recorder_rc, last: $last)"
+        failures=$((failures + 1))
     fi
 
     sleep 0.5
@@ -133,3 +145,8 @@ done
 echo ""
 echo "done. new captures:"
 ls -dt "$OUTDIR"/20* 2>/dev/null | head -20
+
+if [ "$failures" -gt 0 ]; then
+    echo "$failures scenario(s) failed"
+    exit 1
+fi

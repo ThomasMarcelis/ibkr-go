@@ -49,6 +49,55 @@ func TestCreateAndLoadEvents(t *testing.T) {
 	}
 }
 
+func TestRedactionSpanningChunksPreservesLength(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	session, err := Create(root, Meta{Scenario: "redact"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	session.Redact("supersecret", "mask")
+
+	if err := session.RecordChunk(1, "server", []byte("prefix-super")); err != nil {
+		t.Fatalf("RecordChunk(first) error = %v", err)
+	}
+	if err := session.RecordChunk(1, "server", []byte("secret-suffix")); err != nil {
+		t.Fatalf("RecordChunk(second) error = %v", err)
+	}
+	if err := session.RecordDisconnect(1); err != nil {
+		t.Fatalf("RecordDisconnect() error = %v", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	events, err := LoadEvents(filepath.Join(session.Dir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("LoadEvents() error = %v", err)
+	}
+	var got []byte
+	for _, event := range events {
+		if event.Kind != EventChunk {
+			continue
+		}
+		chunk, err := DecodeData(event)
+		if err != nil {
+			t.Fatalf("DecodeData() error = %v", err)
+		}
+		if event.Length != len(chunk) {
+			t.Fatalf("event length = %d, decoded len = %d", event.Length, len(chunk))
+		}
+		got = append(got, chunk...)
+	}
+	if bytes.Contains(got, []byte("supersecret")) {
+		t.Fatalf("redacted stream still contains secret: %q", got)
+	}
+	if len(got) != len("prefix-supersecret-suffix") {
+		t.Fatalf("redacted stream len = %d, want original len", len(got))
+	}
+}
+
 func TestLoadMetaAndWriteReplay(t *testing.T) {
 	t.Parallel()
 
@@ -280,9 +329,16 @@ func TestRedactChunk(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEvents() error = %v", err)
 	}
-	got, err := DecodeData(events[0])
-	if err != nil {
-		t.Fatalf("DecodeData() error = %v", err)
+	var got []byte
+	for _, event := range events {
+		if event.Kind != EventChunk {
+			continue
+		}
+		chunk, err := DecodeData(event)
+		if err != nil {
+			t.Fatalf("DecodeData() error = %v", err)
+		}
+		got = append(got, chunk...)
 	}
 	if bytes.Contains(got, []byte(login)) {
 		t.Fatalf("decoded chunk still contains login token: %q", got)

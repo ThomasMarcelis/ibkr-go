@@ -44,6 +44,8 @@ type Session struct {
 	closeOnce  sync.Once
 	mu         sync.Mutex
 	redactions []redaction
+	maxSecret  int
+	pending    map[streamKey][]byte
 }
 
 type redaction struct {
@@ -66,10 +68,14 @@ func (s *Session) Redact(secret, placeholder string) {
 	if secret == "" {
 		return
 	}
+	secretBytes := []byte(secret)
 	s.redactions = append(s.redactions, redaction{
-		secret:      []byte(secret),
-		placeholder: []byte(placeholder),
+		secret:      secretBytes,
+		placeholder: lengthPreservingPlaceholder(len(secretBytes), placeholder),
 	})
+	if len(secretBytes) > s.maxSecret {
+		s.maxSecret = len(secretBytes)
+	}
 }
 
 func (s *Session) applyRedactions(data []byte) []byte {
@@ -79,6 +85,21 @@ func (s *Session) applyRedactions(data []byte) []byte {
 		}
 	}
 	return data
+}
+
+func lengthPreservingPlaceholder(n int, placeholder string) []byte {
+	if n <= 0 {
+		return nil
+	}
+	src := []byte(placeholder)
+	if len(src) == 0 {
+		src = []byte("x")
+	}
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = src[i%len(src)]
+	}
+	return out
 }
 
 func Create(root string, meta Meta) (*Session, error) {
@@ -139,7 +160,12 @@ func (s *Session) RecordConnect(leg int) error {
 }
 
 func (s *Session) RecordDisconnect(leg int) error {
-	return s.recordEvent(Event{
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.flushPendingLocked(func(key streamKey) bool { return key.leg == leg }); err != nil {
+		return err
+	}
+	return s.recordEventLocked(Event{
 		At:   time.Now().UTC(),
 		Kind: EventDisconnect,
 		Leg:  leg,
@@ -147,26 +173,95 @@ func (s *Session) RecordDisconnect(leg int) error {
 }
 
 func (s *Session) RecordChunk(leg int, direction string, data []byte) error {
-	data = s.applyRedactions(data)
-	return s.recordEvent(Event{
-		At:        time.Now().UTC(),
-		Kind:      EventChunk,
-		Leg:       leg,
-		Direction: direction,
-		Length:    len(data),
-		Data:      base64.StdEncoding.EncodeToString(data),
-	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	chunks := s.redactedChunksLocked(leg, direction, data, false)
+	for _, chunk := range chunks {
+		if err := s.recordEventLocked(Event{
+			At:        time.Now().UTC(),
+			Kind:      EventChunk,
+			Leg:       leg,
+			Direction: direction,
+			Length:    len(chunk),
+			Data:      base64.StdEncoding.EncodeToString(chunk),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Session) recordEvent(event Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.recordEventLocked(event)
+}
+
+func (s *Session) recordEventLocked(event Event) error {
 	return s.enc.Encode(event)
+}
+
+func (s *Session) redactedChunksLocked(leg int, direction string, data []byte, flush bool) [][]byte {
+	if len(s.redactions) == 0 {
+		if len(data) == 0 {
+			return nil
+		}
+		return [][]byte{append([]byte(nil), data...)}
+	}
+	if s.pending == nil {
+		s.pending = make(map[streamKey][]byte)
+	}
+	key := streamKey{leg: leg, direction: direction}
+	buf := append(append([]byte(nil), s.pending[key]...), data...)
+	buf = s.applyRedactions(buf)
+	keep := 0
+	if !flush && s.maxSecret > 1 && len(buf) > 0 {
+		keep = s.maxSecret - 1
+		if keep > len(buf) {
+			keep = len(buf)
+		}
+	}
+	ready := buf[:len(buf)-keep]
+	if keep == 0 {
+		delete(s.pending, key)
+	} else {
+		s.pending[key] = append(s.pending[key][:0], buf[len(buf)-keep:]...)
+	}
+	if len(ready) == 0 {
+		return nil
+	}
+	return [][]byte{append([]byte(nil), ready...)}
+}
+
+func (s *Session) flushPendingLocked(match func(streamKey) bool) error {
+	for key, pending := range s.pending {
+		if !match(key) || len(pending) == 0 {
+			continue
+		}
+		delete(s.pending, key)
+		chunk := s.applyRedactions(pending)
+		if err := s.recordEventLocked(Event{
+			At:        time.Now().UTC(),
+			Kind:      EventChunk,
+			Leg:       key.leg,
+			Direction: key.direction,
+			Length:    len(chunk),
+			Data:      base64.StdEncoding.EncodeToString(chunk),
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Session) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
+		s.mu.Lock()
+		if flushErr := s.flushPendingLocked(func(streamKey) bool { return true }); flushErr != nil && err == nil {
+			err = flushErr
+		}
+		s.mu.Unlock()
 		if syncErr := s.events.Sync(); syncErr != nil && err == nil {
 			err = syncErr
 		}

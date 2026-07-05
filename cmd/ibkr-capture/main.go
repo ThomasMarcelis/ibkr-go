@@ -105,6 +105,10 @@ func main() {
 	log.Printf("bootstrap complete: server_version=%d account=%s next_valid_id=%d",
 		sess.ServerVersion, sess.ManagedAccounts, sess.NextValidID)
 
+	if err := verifyRawScenarioForSession(*scenario, sess); err != nil {
+		log.Fatalf("scenario %q safety check: %v", *scenario, err)
+	}
+
 	if err := sc.run(ctx, conn, sess); err != nil {
 		log.Fatalf("scenario %q: %v", *scenario, err)
 	}
