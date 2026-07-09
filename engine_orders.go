@@ -306,26 +306,13 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.CompletedOrder:
-					qty, err := parseRequiredDecimal(m.Quantity, "completed order quantity")
+					order, err := fromCodecCompletedOrder(m)
 					if err != nil {
 						delete(eng.singletons, singletonCompletedOrders)
 						resp <- result{err: err}
 						return
 					}
-					filled, err := parseOptionalDecimal(m.Filled, "completed order filled")
-					if err != nil {
-						delete(eng.singletons, singletonCompletedOrders)
-						resp <- result{err: err}
-						return
-					}
-					collected = append(collected, CompletedOrderResult{
-						Contract:  fromCodecContract(m.Contract),
-						Action:    OrderAction(m.Action),
-						OrderType: OrderType(m.OrderType),
-						Status:    OrderStatus(m.Status),
-						Quantity:  qty,
-						Filled:    filled,
-					})
+					collected = append(collected, order)
 				case codec.CompletedOrderEnd:
 					delete(eng.singletons, singletonCompletedOrders)
 					resp <- result{orders: collected}

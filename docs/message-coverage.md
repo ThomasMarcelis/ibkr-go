@@ -178,7 +178,7 @@ layout, so replay fixtures exercise the production decode path.
 | in | 55 | ExecutionsEnd | landed | |
 | in | 59 | CommissionReport | landed | |
 | out | 99 | reqCompletedOrders | landed | |
-| in | 101 | CompletedOrder | landed | Exact sequential classic decoder preserves the complete version-gated order, algo, condition, compliance, and completion layout; the public facade still projects a smaller common subset |
+| in | 101 | CompletedOrder | landed | Exact sequential classic decoder and typed public projection preserve the complete version-gated order, algo, condition, compliance, and completion layout. The raw system-cancel replay freezes unset-sentinel handling; advanced branches without a nondefault live frame remain unattested. |
 | in | 102 | CompletedOrdersEnd | landed | |
 
 ## News

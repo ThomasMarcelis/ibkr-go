@@ -85,6 +85,15 @@ type ComboLeg struct {
 	ExemptCode         int         // short-sale exempt code; -1 when unset
 }
 
+// DeltaNeutralContract describes the delta-neutral underlier attached to a
+// contract. It is present only when IBKR echoes an explicit delta-neutral
+// contract block.
+type DeltaNeutralContract struct {
+	ConID int
+	Delta decimal.Decimal
+	Price decimal.Decimal
+}
+
 // TagValue is a generic name/value pair used for smart-routing and algo
 // parameters on orders.
 type TagValue struct {

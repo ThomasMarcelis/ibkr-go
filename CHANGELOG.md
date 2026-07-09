@@ -17,6 +17,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Completed orders now expose the full classic order echo as three explicit
+  facets:** `Contract`, `Order`, and `Completion`. The old six-field projection
+  discarded prices, timing, routing, advanced-order, completion, and compliance
+  metadata. `Remaining` is removed because IBKR message 101 does not carry it;
+  callers that need working quantity must use order-status or execution data.
+  Optional numeric fields use pointers so an explicit zero remains distinct
+  from IBKR's unset sentinels.
+
+  ```go
+  // Before
+  status, qty := completed.Status, completed.Quantity
+
+  // After
+  status, qty := completed.Completion.Status, completed.Order.Quantity
+  reason := completed.Completion.StatusText
+  ```
+
 - **Order warnings no longer close the handle.** An order-targeted `api_error`
   whose `(&APIError{Code: …}).IsWarning()` is true — notably code 399, the
   off-hours "will not be placed at the exchange until …" deferral — is now

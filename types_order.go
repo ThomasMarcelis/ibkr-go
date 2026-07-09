@@ -429,16 +429,190 @@ func orderStateFromOpenOrder(o OpenOrder) OrderState {
 	}
 }
 
-// CompletedOrderResult is one entry from [OrdersClient.Completed]: a terminal
-// order the Gateway has finished processing this session.
+// CompletedOrderResult is one entry from [OrdersClient.Completed]: the
+// contract, complete order snapshot, and terminal completion state returned by
+// IBKR. It intentionally does not derive order-status fields such as remaining
+// quantity that are absent from the completed-order message.
 type CompletedOrderResult struct {
-	Contract  Contract
-	Action    OrderAction
-	OrderType OrderType
-	Status    OrderStatus
-	Quantity  decimal.Decimal
-	Filled    decimal.Decimal
-	Remaining decimal.Decimal
+	Contract   Contract
+	Order      CompletedOrderDetails
+	Completion CompletedOrderCompletion
+}
+
+// CompletedOrderDetails is the complete order specification echoed by the
+// classic completed-order message. Pointer-valued numbers distinguish an
+// explicit zero from an IBKR unset sentinel.
+type CompletedOrderDetails struct {
+	Action        OrderAction
+	Quantity      decimal.Decimal
+	OrderType     OrderType
+	TIF           TimeInForce
+	Account       string
+	OpenClose     string
+	Origin        int
+	OrderRef      string
+	PermID        *int64
+	OutsideRTH    bool
+	Hidden        bool
+	GoodAfterTime string
+	GoodTillDate  string
+	ModelCode     string
+
+	Prices               CompletedOrderPrices
+	OCA                  OrderOCA
+	Allocation           CompletedOrderAllocation
+	Routing              CompletedOrderRouting
+	Auction              CompletedOrderAuction
+	Execution            CompletedOrderExecution
+	Volatility           CompletedOrderVolatility
+	Combo                CompletedOrderCombo
+	Scale                CompletedOrderScale
+	Hedge                OrderHedge
+	DeltaNeutralContract *DeltaNeutralContract
+	Algorithm            OrderAlgorithm
+	Conditions           OrderConditions
+	PeggedBenchmark      *CompletedOrderPeggedBenchmark
+	Compliance           CompletedOrderCompliance
+}
+
+// CompletedOrderCompletion is the terminal state returned with a completed
+// order. Time and StatusText preserve IBKR's exact strings; they can contain
+// named zones and free-form cancellation or rejection text.
+type CompletedOrderCompletion struct {
+	Status           OrderStatus
+	Filled           decimal.Decimal
+	AutoCancelDate   string
+	AutoCancelParent bool
+	ParentPermID     *int64
+	Time             string
+	StatusText       string
+}
+
+// CompletedOrderPrices contains price and quantity-like optional values from
+// a completed order.
+type CompletedOrderPrices struct {
+	LmtPrice            *decimal.Decimal
+	AuxPrice            *decimal.Decimal
+	DiscretionaryAmount *decimal.Decimal
+	PercentOffset       *decimal.Decimal
+	TrailStopPrice      *decimal.Decimal
+	TrailingPercent     *decimal.Decimal
+	StopPrice           *decimal.Decimal
+	LmtPriceOffset      *decimal.Decimal
+	CashQty             *decimal.Decimal
+}
+
+// CompletedOrderAllocation contains the financial-advisor allocation fields.
+type CompletedOrderAllocation struct {
+	Group      string
+	Method     string
+	Percentage string
+}
+
+// CompletedOrderRouting contains short-sale, clearing, and routing metadata.
+type CompletedOrderRouting struct {
+	Rule80A              string
+	SettlingFirm         string
+	ShortSaleSlot        int
+	DesignatedLocation   string
+	ExemptCode           *int
+	ClearingAccount      string
+	ClearingIntent       string
+	NotHeld              bool
+	ImbalanceOnly        bool
+	RouteMarketableToBBO bool
+}
+
+// CompletedOrderAuction contains BOX auction and pegged-to-stock price inputs.
+type CompletedOrderAuction struct {
+	StartingPrice   *decimal.Decimal
+	StockRefPrice   *decimal.Decimal
+	Delta           *decimal.Decimal
+	StockRangeLower *decimal.Decimal
+	StockRangeUpper *decimal.Decimal
+}
+
+// CompletedOrderExecution contains execution controls and venue competition
+// parameters from a completed order.
+type CompletedOrderExecution struct {
+	DisplaySize              *int
+	SweepToFill              bool
+	AllOrNone                bool
+	MinQty                   *int
+	TriggerMethod            int
+	RandomizeSize            bool
+	RandomizePrice           bool
+	RefFuturesConID          *int
+	MinTradeQty              *int
+	MinCompeteSize           *int
+	CompeteAgainstBestOffset *decimal.Decimal
+	MidOffsetAtWhole         *decimal.Decimal
+	MidOffsetAtHalf          *decimal.Decimal
+}
+
+// CompletedOrderVolatility contains volatility-order and delta-neutral hedge
+// parameters from a completed order.
+type CompletedOrderVolatility struct {
+	Value              *decimal.Decimal
+	Type               *int
+	DeltaNeutral       *CompletedOrderDeltaNeutral
+	ContinuousUpdate   bool
+	ReferencePriceType *int
+}
+
+// CompletedOrderDeltaNeutral contains the active delta-neutral order block of
+// a volatility order.
+type CompletedOrderDeltaNeutral struct {
+	OrderType          OrderType
+	AuxPrice           *decimal.Decimal
+	ConID              int
+	ShortSale          bool
+	ShortSaleSlot      int
+	DesignatedLocation string
+}
+
+// CompletedOrderCombo contains the contract legs and routing instructions
+// echoed for a completed combo order.
+type CompletedOrderCombo struct {
+	Description  string
+	Legs         []ComboLeg
+	LegPrices    []*decimal.Decimal
+	SmartRouting []TagValue
+}
+
+// CompletedOrderScale contains the full scale-order block echoed by IBKR.
+type CompletedOrderScale struct {
+	InitialLevelSize    *int
+	SubsequentLevelSize *int
+	PriceIncrement      *decimal.Decimal
+	PriceAdjustValue    *decimal.Decimal
+	PriceAdjustInterval *int
+	ProfitOffset        *decimal.Decimal
+	AutoReset           bool
+	InitialPosition     *int
+	InitialFillQty      *int
+	RandomPercent       bool
+}
+
+// CompletedOrderPeggedBenchmark contains PEG BENCH parameters from a
+// completed order.
+type CompletedOrderPeggedBenchmark struct {
+	ReferenceContractID   int
+	ChangeAmountDecrease  bool
+	ChangeAmount          decimal.Decimal
+	ReferenceChangeAmount *decimal.Decimal
+	ReferenceExchangeID   string
+}
+
+// CompletedOrderCompliance contains operator and account-classification
+// metadata attached to a completed order.
+type CompletedOrderCompliance struct {
+	Solicited            bool
+	OMSContainer         bool
+	Shareholder          string
+	CustomerAccount      string
+	ProfessionalCustomer bool
+	Submitter            string
 }
 
 // SoftDollarTier is a soft-dollar commission tier from

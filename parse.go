@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -36,6 +37,18 @@ func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 	return value, nil
 }
 
+func parseOptionalDecimalPointer(raw string, field string) (*decimal.Decimal, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) {
+		return nil, nil
+	}
+	value, err := decimal.NewFromString(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("ibkr: %s: %w", field, err)
+	}
+	return new(value), nil
+}
+
 func parseOptionalInt(raw string, field string) (int, error) {
 	if strings.TrimSpace(raw) == "" {
 		return 0, nil
@@ -56,6 +69,30 @@ func parseOptionalInt64(raw string, field string) (int64, error) {
 		return 0, fmt.Errorf("ibkr: %s: parse int64 %q: %w", field, raw, err)
 	}
 	return value, nil
+}
+
+func parseOptionalMaxIntPointer(raw string, field string) (*int, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == strconv.FormatInt(math.MaxInt32, 10) {
+		return nil, nil
+	}
+	value, err := strconv.Atoi(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("ibkr: %s: parse int %q: %w", field, raw, err)
+	}
+	return new(value), nil
+}
+
+func parseOptionalMaxInt64Pointer(raw string, field string) (*int64, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == strconv.FormatInt(math.MaxInt64, 10) {
+		return nil, nil
+	}
+	value, err := strconv.ParseInt(trimmed, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("ibkr: %s: parse int64 %q: %w", field, raw, err)
+	}
+	return new(value), nil
 }
 
 func parseOptionalBoolString(raw string, field string) (bool, error) {

@@ -1577,11 +1577,11 @@ func TestCompletedOrders(t *testing.T) {
 	if orders[0].Contract.Symbol != "AAPL" {
 		t.Fatalf("symbol = %q, want AAPL", orders[0].Contract.Symbol)
 	}
-	if orders[0].Status != "Filled" {
-		t.Fatalf("status = %q, want Filled", orders[0].Status)
+	if orders[0].Completion.Status != "Filled" {
+		t.Fatalf("status = %q, want Filled", orders[0].Completion.Status)
 	}
-	if orders[0].Quantity.String() != "100" {
-		t.Fatalf("quantity = %s, want 100", orders[0].Quantity.String())
+	if orders[0].Order.Quantity.String() != "100" {
+		t.Fatalf("quantity = %s, want 100", orders[0].Order.Quantity.String())
 	}
 }
 
@@ -1606,17 +1606,52 @@ func TestCompletedOrdersCancelledSystemLive(t *testing.T) {
 	if order.Contract.Symbol != "AAPL" {
 		t.Fatalf("symbol = %q, want AAPL", order.Contract.Symbol)
 	}
-	if order.Status != ibkr.OrderStatus("Cancelled") {
-		t.Fatalf("status = %q, want Cancelled", order.Status)
+	if order.Contract.ConID != 265598 || order.Contract.Right != "" {
+		t.Fatalf("contract = %+v, want AAPL contract with unset right", order.Contract)
 	}
-	if order.Quantity.String() != "1" {
-		t.Fatalf("quantity = %s, want 1", order.Quantity.String())
+	if order.Order.Action != ibkr.ActionSell || order.Order.OrderType != ibkr.OrderTypeLimit ||
+		order.Order.Quantity.String() != "1" || order.Order.TIF != ibkr.TIFGTC {
+		t.Fatalf("order = %+v, want SELL 1 LMT GTC", order.Order)
 	}
-	if !order.Filled.IsZero() {
-		t.Fatalf("filled = %s, want zero for non-filled completed order", order.Filled.String())
+	if order.Order.Prices.LmtPrice == nil || order.Order.Prices.LmtPrice.String() != "500" {
+		t.Fatalf("limit price = %v, want explicit 500", order.Order.Prices.LmtPrice)
 	}
-	if !order.Remaining.IsZero() {
-		t.Fatalf("remaining = %s, want zero for absent completed-order remaining", order.Remaining.String())
+	if order.Order.Prices.AuxPrice == nil || !order.Order.Prices.AuxPrice.IsZero() {
+		t.Fatalf("aux price = %v, want explicit zero", order.Order.Prices.AuxPrice)
+	}
+	if order.Order.OCA.Group != "1001" || order.Order.OCA.Type != ibkr.OCAReduceWithoutBlock {
+		t.Fatalf("OCA = %+v, want group 1001 type 3", order.Order.OCA)
+	}
+	if order.Order.PermID == nil || *order.Order.PermID != 1002 || order.Order.Account != "DU12345" {
+		t.Fatalf("identity = account %q perm %v, want DU12345/1002", order.Order.Account, order.Order.PermID)
+	}
+	if order.Order.Execution.DisplaySize != nil || order.Order.Scale.InitialLevelSize != nil ||
+		order.Order.Scale.SubsequentLevelSize != nil || order.Order.Execution.RefFuturesConID != nil {
+		t.Fatalf("integer sentinels were exposed as values: execution=%+v scale=%+v", order.Order.Execution, order.Order.Scale)
+	}
+	if order.Order.Prices.StopPrice != nil || order.Order.Prices.LmtPriceOffset != nil ||
+		order.Order.Routing.ExemptCode != nil {
+		t.Fatalf("numeric sentinels were exposed as values: prices=%+v routing=%+v", order.Order.Prices, order.Order.Routing)
+	}
+	if order.Order.Volatility.DeltaNeutral != nil || order.Order.DeltaNeutralContract != nil {
+		t.Fatalf("inactive delta-neutral blocks = %+v/%+v, want nil", order.Order.Volatility.DeltaNeutral, order.Order.DeltaNeutralContract)
+	}
+	if order.Order.Hedge.DisableAutomaticPrice == nil || !*order.Order.Hedge.DisableAutomaticPrice {
+		t.Fatalf("disable automatic hedge price = %v, want explicit true", order.Order.Hedge.DisableAutomaticPrice)
+	}
+	if order.Completion.Status != ibkr.OrderStatusCancelled || !order.Completion.Filled.IsZero() {
+		t.Fatalf("completion = %+v, want Cancelled with zero filled", order.Completion)
+	}
+	if order.Completion.ParentPermID == nil || *order.Completion.ParentPermID != 1001 {
+		t.Fatalf("parent perm id = %v, want 1001", order.Completion.ParentPermID)
+	}
+	if order.Completion.AutoCancelDate != "20260930 22:00:00 Central European Standard Time" ||
+		order.Completion.Time != "20260411 22:18:53 US/Eastern" ||
+		order.Completion.StatusText != "Cancelled by System:\n" {
+		t.Fatalf("completion metadata = %+v", order.Completion)
+	}
+	if order.Order.Compliance.Shareholder != "Not an insider or substantial shareholder" {
+		t.Fatalf("shareholder = %q", order.Order.Compliance.Shareholder)
 	}
 }
 
@@ -4645,7 +4680,7 @@ func TestAPICompletedOrdersVariantsAAPLReplay(t *testing.T) {
 	if len(allCompleted) != 1 {
 		t.Fatalf("Completed(false) len = %d, want 1", len(allCompleted))
 	}
-	if allCompleted[0].Contract.Symbol != "AAPL" || allCompleted[0].Status != ibkr.OrderStatusFilled {
+	if allCompleted[0].Contract.Symbol != "AAPL" || allCompleted[0].Completion.Status != ibkr.OrderStatusFilled {
 		t.Fatalf("Completed(false)[0] = %+v, want filled AAPL order", allCompleted[0])
 	}
 
@@ -4656,7 +4691,7 @@ func TestAPICompletedOrdersVariantsAAPLReplay(t *testing.T) {
 	if len(apiCompleted) != 1 {
 		t.Fatalf("Completed(true) len = %d, want 1", len(apiCompleted))
 	}
-	if apiCompleted[0].Contract.Symbol != "AAPL" || apiCompleted[0].Status != ibkr.OrderStatusFilled {
+	if apiCompleted[0].Contract.Symbol != "AAPL" || apiCompleted[0].Completion.Status != ibkr.OrderStatusFilled {
 		t.Fatalf("Completed(true)[0] = %+v, want filled AAPL order", apiCompleted[0])
 	}
 }

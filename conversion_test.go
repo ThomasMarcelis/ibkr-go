@@ -40,6 +40,72 @@ func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) 
 	}
 }
 
+func TestFromCodecCompletedOrderProjectsLiveTrailLimitFields(t *testing.T) {
+	t.Parallel()
+
+	// Live-derived values from
+	// captures/20260415T162637Z-api_completed_orders_variants_aapl,
+	// server_version=200, events SHA-256 prefix 6415ad97b4c9f33e.
+	order, err := fromCodecCompletedOrder(codec.CompletedOrder{
+		Contract:        codec.Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Strike: "0", Right: "?", Exchange: "SMART", Currency: "USD", LocalSymbol: "AAPL", TradingClass: "NMS"},
+		Action:          "BUY",
+		Quantity:        "1",
+		OrderType:       "TRAIL LIMIT",
+		LmtPrice:        "2000.05",
+		AuxPrice:        "1.0",
+		TIF:             "DAY",
+		PermID:          "1426085924",
+		TrailStopPrice:  "2000.0",
+		Status:          "Cancelled",
+		StopPrice:       "2000.0",
+		LmtPriceOffset:  "0.05",
+		Filled:          "0",
+		ParentPermID:    "9223372036854775807",
+		CompletedTime:   "20260415 11:00:11 US/Eastern",
+		CompletedStatus: "Cancelled by Trader",
+		Shareholder:     "Not an insider or substantial shareholder",
+		Submitter:       "paper-user",
+	})
+	if err != nil {
+		t.Fatalf("fromCodecCompletedOrder() error = %v", err)
+	}
+	if order.Contract.Right != "" || order.Order.OrderType != OrderTypeTrailingLimit {
+		t.Fatalf("contract/order = %+v/%+v", order.Contract, order.Order)
+	}
+	if order.Order.PermID == nil || *order.Order.PermID != 1426085924 {
+		t.Fatalf("permanent id = %v, want 1426085924", order.Order.PermID)
+	}
+	prices := order.Order.Prices
+	if prices.LmtPrice == nil || prices.LmtPrice.String() != "2000.05" ||
+		prices.AuxPrice == nil || prices.AuxPrice.String() != "1" ||
+		prices.TrailStopPrice == nil || prices.TrailStopPrice.String() != "2000" ||
+		prices.StopPrice == nil || prices.StopPrice.String() != "2000" ||
+		prices.LmtPriceOffset == nil || prices.LmtPriceOffset.String() != "0.05" {
+		t.Fatalf("prices = %+v", prices)
+	}
+	if order.Completion.ParentPermID != nil {
+		t.Fatalf("parent permanent id = %v, want unset sentinel normalized to nil", order.Completion.ParentPermID)
+	}
+	if order.Completion.Time != "20260415 11:00:11 US/Eastern" ||
+		order.Completion.StatusText != "Cancelled by Trader" ||
+		order.Order.Compliance.Submitter != "paper-user" {
+		t.Fatalf("completion/compliance = %+v/%+v", order.Completion, order.Order.Compliance)
+	}
+}
+
+func TestFromCodecCompletedOrderRejectsMalformedTypedField(t *testing.T) {
+	t.Parallel()
+
+	_, err := fromCodecCompletedOrder(codec.CompletedOrder{
+		Quantity:    "1",
+		Filled:      "0",
+		DisplaySize: "not-an-int",
+	})
+	if err == nil {
+		t.Fatal("fromCodecCompletedOrder() error = nil, want malformed display size rejection")
+	}
+}
+
 // TestFromCodecExecutionAcceptsNativeGatewayTime freezes the live Gateway
 // execution timestamp shape observed in ExecutionDetail msg_id=11:
 // "YYYYMMDD HH:MM:SS US/Eastern", not RFC3339.

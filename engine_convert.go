@@ -25,13 +25,17 @@ func fromCodecContract(c codec.Contract) Contract {
 	// comboLegsFromCodec precedent. Contract decode has no error return, and a
 	// live contract is never torn down over an unparsable strike.
 	strike, _ := parseOptionalDecimal(c.Strike, "contract strike")
+	right := Right(c.Right)
+	if c.Right == "?" {
+		right = ""
+	}
 	return Contract{
 		ConID:           c.ConID,
 		Symbol:          c.Symbol,
 		SecType:         SecType(c.SecType),
 		Expiry:          c.Expiry,
 		Strike:          strike,
-		Right:           Right(c.Right),
+		Right:           right,
 		Multiplier:      c.Multiplier,
 		Exchange:        c.Exchange,
 		Currency:        c.Currency,
