@@ -54,19 +54,16 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, sub.Close()) }()
 
-	timeout := time.After(10 * time.Second)
+	timeout := time.NewTimer(10 * time.Second)
+	defer timeout.Stop()
 	events := sub.Events()
 	lifecycle := sub.Lifecycle()
-	for events != nil {
+	for {
 		select {
 		case update, ok := <-events:
 			if !ok {
-				if err := sub.Wait(); err != nil {
-					return err
-				}
-				return nil
+				return errors.Join(ctx.Err(), sub.Wait())
 			}
 			fmt.Printf("bid=%-10s ask=%-10s last=%-10s\n",
 				update.Snapshot.Bid, update.Snapshot.Ask, update.Snapshot.Last)
@@ -76,10 +73,17 @@ func run() (err error) {
 				continue
 			}
 			fmt.Println("lifecycle:", state.Kind)
-		case <-timeout:
+		case <-timeout.C:
+			if err := sub.Close(); err != nil {
+				return err
+			}
+			if err := sub.Wait(); err != nil {
+				return err
+			}
 			fmt.Println("done")
 			return nil
+		case <-ctx.Done():
+			return errors.Join(ctx.Err(), sub.Close(), sub.Wait())
 		}
 	}
-	return nil
 }
