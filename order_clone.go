@@ -13,6 +13,21 @@ func clonePlaceBracketRequest(req PlaceBracketRequest) PlaceBracketRequest {
 }
 
 func cloneOrder(order Order) Order {
+	if order.Transmit != nil {
+		order.Transmit = new(*order.Transmit)
+	}
+	if order.AllOrNone != nil {
+		order.AllOrNone = new(*order.AllOrNone)
+	}
+	if order.Hedge.DisableAutomaticPrice != nil {
+		order.Hedge.DisableAutomaticPrice = new(*order.Hedge.DisableAutomaticPrice)
+	}
+	if order.WhatIf != nil {
+		order.WhatIf = new(*order.WhatIf)
+	}
+	if order.UsePriceMgmtAlgo != nil {
+		order.UsePriceMgmtAlgo = new(*order.UsePriceMgmtAlgo)
+	}
 	order.Combo.Legs = append([]ComboLeg(nil), order.Combo.Legs...)
 	order.Combo.LegPrices = append([]string(nil), order.Combo.LegPrices...)
 	order.Combo.SmartRouting = append([]TagValue(nil), order.Combo.SmartRouting...)

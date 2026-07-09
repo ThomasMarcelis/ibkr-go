@@ -193,6 +193,7 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 }
 
 func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) ([]HistoricalNewsItem, error) {
+	providerCodes := formatProviderCodes(req.ProviderCodes)
 	type result struct {
 		items []HistoricalNewsItem
 		err   error
@@ -240,7 +241,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 			},
 		}
 		if err := e.sendContext(ctx, codec.HistoricalNewsRequest{
-			ReqID: reqID, ConID: req.ConID, ProviderCodes: formatProviderCodes(req.ProviderCodes),
+			ReqID: reqID, ConID: req.ConID, ProviderCodes: providerCodes,
 			StartDate: formatHistoricalNewsTime(req.StartTime), EndDate: formatHistoricalNewsTime(req.EndTime), TotalResults: req.TotalResults,
 		}); err != nil {
 			e.deleteKeyedRoute(reqID)

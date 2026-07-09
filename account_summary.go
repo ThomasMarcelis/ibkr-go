@@ -8,6 +8,11 @@ type accountSummaryPlan struct {
 	account  string
 }
 
+func cloneAccountSummaryRequest(req AccountSummaryRequest) AccountSummaryRequest {
+	req.Tags = append([]string(nil), req.Tags...)
+	return req
+}
+
 func newAccountSummaryPlan(reqID int, req AccountSummaryRequest) accountSummaryPlan {
 	wildcard := req.Account == "" || req.Account == "All"
 	account := req.Account
@@ -18,7 +23,7 @@ func newAccountSummaryPlan(reqID int, req AccountSummaryRequest) accountSummaryP
 		request: codec.AccountSummaryRequest{
 			ReqID:   reqID,
 			Account: "All",
-			Tags:    append([]string(nil), req.Tags...),
+			Tags:    req.Tags,
 		},
 		wildcard: wildcard,
 		account:  account,

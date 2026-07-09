@@ -18,6 +18,7 @@ func (e *engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) 
 }
 
 func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountSummaryUpdate], error) {
+	req = cloneAccountSummaryRequest(req)
 	type result struct {
 		sub *Subscription[AccountSummaryUpdate]
 		err error

@@ -67,6 +67,7 @@ func (e *engine) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...
 }
 
 func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot bool, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
+	genericTicks := formatGenericTicks(req.GenericTicks)
 	type result struct {
 		sub *Subscription[QuoteUpdate]
 		err error
@@ -117,7 +118,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				ReqID:        reqID,
 				Contract:     toCodecContract(req.Contract),
 				Snapshot:     snapshot,
-				GenericTicks: formatGenericTicks(req.GenericTicks),
+				GenericTicks: genericTicks,
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {

@@ -269,16 +269,48 @@ func isValidationField(err error, field string) bool {
 	return ok && validationErr.Field == field
 }
 
-func TestFormatProviderCodes(t *testing.T) {
+func TestFormatProviderCodesOwnsCapturedRequest(t *testing.T) {
 	t.Parallel()
 
 	if got := formatProviderCodes(nil); got != "" {
 		t.Fatalf("formatProviderCodes(nil) = %q, want empty", got)
 	}
 
-	got := formatProviderCodes([]NewsProviderCode{"BZ", "FLY"})
-	if got != "BZ+FLY" {
-		t.Fatalf("formatProviderCodes() = %q, want %q", got, "BZ+FLY")
+	// captures/20260415T162244Z-api_news_article_aapl, server_version 200,
+	// events.jsonl sha256 3c6ef62da8d60e95ed8f05418ca218268d652fb6fc99bf1e6e90d7dcad20c8e3.
+	providers := []NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"}
+	got := formatProviderCodes(providers)
+	providers[0] = "mutated"
+	if got != "BRFG+BRFUPDN+DJNL" {
+		t.Fatalf("formatProviderCodes() = %q, want %q", got, "BRFG+BRFUPDN+DJNL")
+	}
+}
+
+func TestFormatGenericTicksOwnsCapturedRequest(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260405T215752Z-quote_stream_genericticks, server_version 200,
+	// raw.txt sha256 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee.
+	ticks := []GenericTick{"233", "236"}
+	formatted := formatGenericTicks(ticks)
+	ticks[0] = "mutated"
+	if len(formatted) != 2 || formatted[0] != "233" || formatted[1] != "236" {
+		t.Fatalf("formatGenericTicks() = %v, want [233 236]", formatted)
+	}
+}
+
+func TestCloneAccountSummaryRequestOwnsCapturedTags(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260405T215025Z-account_summary_snapshot, server_version 200,
+	// raw.txt sha256 fd89c530af30e530bdd2dd76de7637e7bb8cb9fcdbba45cf70e955f4e5b592fd.
+	req := AccountSummaryRequest{Tags: []string{
+		"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity",
+	}}
+	cloned := cloneAccountSummaryRequest(req)
+	req.Tags[0] = "mutated"
+	if got := cloned.Tags[0]; got != "NetLiquidation" {
+		t.Fatalf("cloned Tags[0] = %q, want NetLiquidation", got)
 	}
 }
 
