@@ -164,6 +164,12 @@ func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
 	if m.OrderID != 1 {
 		t.Errorf("OrderID = %d, want 1", m.OrderID)
 	}
+	if m.Contract.ConID != 265598 || m.Contract.Symbol != "AAPL" ||
+		m.Contract.SecType != "STK" || m.Contract.Exchange != "IEX" ||
+		m.Contract.Currency != "USD" || m.Contract.LocalSymbol != "AAPL" ||
+		m.Contract.TradingClass != "NMS" {
+		t.Errorf("Contract = %+v", m.Contract)
+	}
 	if m.ExecID != "sanitized-native-exec-001" {
 		t.Errorf("ExecID = %q", m.ExecID)
 	}
@@ -173,6 +179,9 @@ func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
 	if m.Account != "DU9000001" {
 		t.Errorf("Account = %q", m.Account)
 	}
+	if m.Exchange != "IEX" {
+		t.Errorf("Exchange = %q", m.Exchange)
+	}
 	if m.Side != "BOT" {
 		t.Errorf("Side = %q", m.Side)
 	}
@@ -181,6 +190,54 @@ func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
 	}
 	if m.Price != "257.95" {
 		t.Errorf("Price = %q", m.Price)
+	}
+	if m.PermID != "900001" || m.ClientID != "94" || m.Liquidation != "0" {
+		t.Errorf("identity/liquidation = %q/%q/%q", m.PermID, m.ClientID, m.Liquidation)
+	}
+	if m.CumulativeQuantity != "1" || m.AveragePrice != "257.95" {
+		t.Errorf("cumulative/average = %q/%q", m.CumulativeQuantity, m.AveragePrice)
+	}
+	if m.LastLiquidity != "2" || m.PendingPriceRevision != "0" || m.Submitter != "" {
+		t.Errorf("liquidity/revision/submitter = %q/%q/%q", m.LastLiquidity, m.PendingPriceRevision, m.Submitter)
+	}
+}
+
+func TestCaptureDecode_CommissionAndFeesLive(t *testing.T) {
+	t.Parallel()
+	// captures/20260611T133024Z-api_order_fill_aapl/replay/frames.jsonl:154,
+	// server_version=200, events sha256 4fa597ba1c4bc3690a076f44fe5b124f03c6849a580dc6e4edb7e872fc32c0a0,
+	// replay sha256 9a7507af48ee7d05a0aafee917372d559ae9a63c5abf6d3c891d553bbb893f3c.
+	// ExecID is sanitized; transformed payload sha256 is
+	// dbbb32d8e0d45d6e6e7846e81799e64d86f0be06ce9d633a39e6b115faf65f23.
+	payload := []byte("59\x001\x00sanitized-commission-exec-001\x001.0003\x00USD\x00-68.051912\x001.7976931348623157E308\x00\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(CommissionReport)
+	if !ok {
+		t.Fatalf("type = %T, want CommissionReport", msgs[0])
+	}
+	if m.ExecID != "sanitized-commission-exec-001" || m.Commission != "1.0003" ||
+		m.Currency != "USD" || m.RealizedPNL != "-68.051912" ||
+		m.Yield != "1.7976931348623157E308" || m.YieldRedemptionDate != "" {
+		t.Fatalf("report = %+v", m)
+	}
+}
+
+func TestCaptureDecode_ExecutionsEndLive(t *testing.T) {
+	t.Parallel()
+	// Same live capture as TestCaptureDecode_CommissionAndFeesLive,
+	// replay/frames.jsonl:166. The request ID is the capture's reqExecutions ID.
+	msgs, err := DecodeBatch(200, []byte("55\x001\x003\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 || msgs[0] != (ExecutionsEnd{ReqID: 3}) {
+		t.Fatalf("messages = %#v, want ExecutionsEnd{ReqID:3}", msgs)
 	}
 }
 

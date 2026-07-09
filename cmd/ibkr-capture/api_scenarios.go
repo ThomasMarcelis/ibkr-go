@@ -27,6 +27,13 @@ var apiAAPL = ibkr.Contract{
 	Currency: "USD",
 }
 
+func optionalDecimalString(value *decimal.Decimal) string {
+	if value == nil {
+		return ""
+	}
+	return value.String()
+}
+
 type apiDriverRecorder struct {
 	mu          sync.Mutex
 	file        *os.File
@@ -2386,9 +2393,9 @@ func logOrderEvent(label string, evt ibkr.OrderEvent) {
 		log.Printf("%s execution order_id=%d exec_id=%s side=%s shares=%s price=%s time=%s",
 			label, evt.Execution.OrderID, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price, evt.Execution.Time.Format(time.RFC3339))
 	}
-	if evt.Commission != nil {
+	if evt.CommissionAndFees != nil {
 		log.Printf("%s commission exec_id=%s commission=%s currency=%s pnl=%s",
-			label, evt.Commission.ExecID, evt.Commission.Commission, evt.Commission.Currency, evt.Commission.RealizedPNL)
+			label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPNL)
 	}
 }
 
@@ -2436,20 +2443,20 @@ func recordOrderEvent(label string, evt ibkr.OrderEvent) {
 			event.OrderID = exec.OrderID
 			event.ExecID = exec.ExecID
 			event.Account = exec.Account
-			event.Symbol = exec.Symbol
-			event.Side = exec.Side
+			event.Symbol = exec.Contract.Symbol
+			event.Side = string(exec.Side)
 			event.Quantity = exec.Shares.String()
 			event.Price = exec.Price.String()
 			event.EventTime = exec.Time.Format(time.RFC3339)
 		})
 	}
-	if evt.Commission != nil {
+	if evt.CommissionAndFees != nil {
 		recordAPIEvent("commission", label, func(event *apiDriverEvent) {
-			commission := evt.Commission
+			commission := evt.CommissionAndFees
 			event.ExecID = commission.ExecID
-			event.Commission = commission.Commission.String()
+			event.Commission = optionalDecimalString(commission.Amount)
 			event.Currency = commission.Currency
-			event.RealizedPNL = commission.RealizedPNL.String()
+			event.RealizedPNL = optionalDecimalString(commission.RealizedPNL)
 		})
 	}
 }

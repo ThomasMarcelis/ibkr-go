@@ -173,10 +173,10 @@ layout, so replay fixtures exercise the production decode path.
 | in | 5 | OpenOrder | landed | See Order Management notes |
 | in | 53 | OpenOrderEnd | landed | |
 | in | 3 | OrderStatus | landed | |
-| out | 7 | ExecutionsRequest | landed | |
-| in | 11 | ExecutionDetail | landed | |
-| in | 55 | ExecutionsEnd | landed | |
-| in | 59 | CommissionReport | landed | |
+| out | 7 | ExecutionsRequest | landed | Complete nine-field filter block plus the sv200 last-days/specific-dates tail; nondefault day filters are source-grounded and await live attestation. |
+| in | 11 | ExecutionDetail | landed | Complete version-gated classic result with a raw sv200 capture freeze. |
+| in | 55 | ExecutionsEnd | landed | Raw sv200 capture freeze. |
+| in | 59 | CommissionAndFeesReport | landed | Complete six-value payload with raw sv200 capture; meaningful bond yield/redemption remains unattested. |
 | out | 99 | reqCompletedOrders | landed | |
 | in | 101 | CompletedOrder | landed | Exact sequential classic decoder and typed public projection preserve the complete version-gated order, algo, condition, compliance, and completion layout. The raw system-cancel replay freezes unset-sentinel handling; advanced branches without a nondefault live frame remain unattested. |
 | in | 102 | CompletedOrdersEnd | landed | |

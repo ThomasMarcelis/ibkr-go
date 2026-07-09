@@ -178,6 +178,53 @@ func TestExecutionsRequestVersionGate(t *testing.T) {
 	}
 }
 
+func TestExecutionDetailVersionGates(t *testing.T) {
+	t.Parallel()
+
+	msg := ExecutionDetail{
+		ReqID: 1, OrderID: 2, Contract: Contract{Symbol: "AAPL"},
+		ExecID: "exec", Time: "20260709-12:00:00", Account: "DU1",
+		Side: "BOT", Shares: "1", Price: "200", CumulativeQuantity: "1",
+		AveragePrice: "200", LastLiquidity: "2", PendingPriceRevision: "1",
+		Submitter: "operator",
+	}
+	at177 := encFieldsAt(t, msg, 177)
+	at178 := encFieldsAt(t, msg, 178)
+	at197 := encFieldsAt(t, msg, 197)
+	at198 := encFieldsAt(t, msg, 198)
+	if len(at178)-len(at177) != 1 || at178[len(at178)-1] != "1" {
+		t.Fatalf("177->178 pending-revision gate: sv177=%v sv178=%v", at177, at178)
+	}
+	if len(at198)-len(at197) != 1 || at198[len(at198)-1] != "operator" {
+		t.Fatalf("197->198 submitter gate: sv197=%v sv198=%v", at197, at198)
+	}
+	if at177[len(at177)-1] != "2" {
+		t.Fatalf("sv177 last liquidity = %q, want 2", at177[len(at177)-1])
+	}
+}
+
+func TestExecutionAndCommissionRejectTrailingFields(t *testing.T) {
+	t.Parallel()
+
+	tests := []Message{
+		ExecutionDetail{
+			Contract: Contract{Symbol: "AAPL"}, ExecID: "exec", Time: "20260709-12:00:00",
+			Shares: "1", Price: "200", CumulativeQuantity: "1", AveragePrice: "200",
+		},
+		CommissionReport{ExecID: "exec", Commission: "1", Currency: "USD", RealizedPNL: "0"},
+	}
+	for _, msg := range tests {
+		payload, err := Encode(200, msg)
+		if err != nil {
+			t.Fatalf("Encode(%T): %v", msg, err)
+		}
+		payload = append(payload, []byte("unexpected\x00")...)
+		if _, err := DecodeBatch(200, payload); err == nil {
+			t.Errorf("DecodeBatch(%T with trailing field) error = nil", msg)
+		}
+	}
+}
+
 // TestErrMsgVersionGate freezes the error-message layout across ERROR_TIME
 // (194): below it a leading version int precedes reqId and no errorTime
 // trails; at/above it the version int is gone and errorTime trails

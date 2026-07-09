@@ -1081,8 +1081,8 @@ func TestExecutions(t *testing.T) {
 	if updates[0].Execution == nil || updates[0].Execution.ExecID != "exec-1" {
 		t.Fatalf("first execution = %#v", updates[0].Execution)
 	}
-	if updates[1].Commission == nil || updates[1].Commission.Commission.String() != "1.25" {
-		t.Fatalf("second commission = %#v", updates[1].Commission)
+	if updates[1].CommissionAndFees == nil || updates[1].CommissionAndFees.Amount.String() != "1.25" {
+		t.Fatalf("second commission = %#v", updates[1].CommissionAndFees)
 	}
 }
 
@@ -1109,7 +1109,7 @@ func TestExecutionsCompletesOnSnapshotEnd(t *testing.T) {
 	if updates[0].Execution == nil || updates[0].Execution.ExecID != "exec-1" {
 		t.Fatalf("execution = %#v, want exec-1", updates[0])
 	}
-	if updates[1].Commission == nil || updates[1].Commission.ExecID != "exec-1" {
+	if updates[1].CommissionAndFees == nil || updates[1].CommissionAndFees.ExecID != "exec-1" {
 		t.Fatalf("commission = %#v, want exec-1", updates[1])
 	}
 }
@@ -1179,16 +1179,16 @@ func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
 	msftExec := msftUpdates[0]
 	msftCommission := msftUpdates[1]
 
-	if aaplExec.Execution == nil || aaplExec.Execution.Symbol != "AAPL" {
+	if aaplExec.Execution == nil || aaplExec.Execution.Contract.Symbol != "AAPL" {
 		t.Fatalf("AAPL execution = %#v, want AAPL execution", aaplExec)
 	}
-	if aaplCommission.Commission == nil || aaplCommission.Commission.ExecID != "exec-aapl" {
+	if aaplCommission.CommissionAndFees == nil || aaplCommission.CommissionAndFees.ExecID != "exec-aapl" {
 		t.Fatalf("AAPL commission = %#v, want exec-aapl", aaplCommission)
 	}
-	if msftExec.Execution == nil || msftExec.Execution.Symbol != "MSFT" {
+	if msftExec.Execution == nil || msftExec.Execution.Contract.Symbol != "MSFT" {
 		t.Fatalf("MSFT execution = %#v, want MSFT execution", msftExec)
 	}
-	if msftCommission.Commission == nil || msftCommission.Commission.ExecID != "exec-msft" {
+	if msftCommission.CommissionAndFees == nil || msftCommission.CommissionAndFees.ExecID != "exec-msft" {
 		t.Fatalf("MSFT commission = %#v, want exec-msft", msftCommission)
 	}
 }
@@ -1245,13 +1245,13 @@ func TestExecutionsCorrelateCommissionForOverlappingSubscriptions(t *testing.T) 
 	if wideExec.Execution == nil || wideExec.Execution.ExecID != "exec-aapl" {
 		t.Fatalf("account-wide execution = %#v, want exec-aapl", wideExec)
 	}
-	if wideCommission.Commission == nil || wideCommission.Commission.ExecID != "exec-aapl" {
+	if wideCommission.CommissionAndFees == nil || wideCommission.CommissionAndFees.ExecID != "exec-aapl" {
 		t.Fatalf("account-wide commission = %#v, want exec-aapl", wideCommission)
 	}
 	if narrowExec.Execution == nil || narrowExec.Execution.ExecID != "exec-aapl" {
 		t.Fatalf("AAPL-only execution = %#v, want exec-aapl", narrowExec)
 	}
-	if narrowCommission.Commission == nil || narrowCommission.Commission.ExecID != "exec-aapl" {
+	if narrowCommission.CommissionAndFees == nil || narrowCommission.CommissionAndFees.ExecID != "exec-aapl" {
 		t.Fatalf("AAPL-only commission = %#v, want exec-aapl", narrowCommission)
 	}
 }
@@ -2232,10 +2232,10 @@ func TestPlaceOrderWithExecution(t *testing.T) {
 				t.Fatalf("execution price = %s, want 149.5", evt.Execution.Price.String())
 			}
 		}
-		if evt.Commission != nil {
+		if evt.CommissionAndFees != nil {
 			sawCommission = true
-			if evt.Commission.Commission.String() != "1" {
-				t.Fatalf("commission = %s, want 1", evt.Commission.Commission.String())
+			if evt.CommissionAndFees.Amount.String() != "1" {
+				t.Fatalf("commission = %s, want 1", evt.CommissionAndFees.Amount.String())
 			}
 		}
 	}
@@ -2307,7 +2307,7 @@ func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
 
 	var sawFilled bool
 	var execution *ibkr.Execution
-	var commission *ibkr.CommissionReport
+	var commission *ibkr.CommissionAndFeesReport
 	for {
 		select {
 		case evt, ok := <-handle.Events():
@@ -2320,8 +2320,8 @@ func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
 			if evt.Execution != nil {
 				execution = evt.Execution
 			}
-			if evt.Commission != nil {
-				commission = evt.Commission
+			if evt.CommissionAndFees != nil {
+				commission = evt.CommissionAndFees
 			}
 		case <-ctx.Done():
 			t.Fatal("timeout waiting for native execution-time order events")
@@ -3653,7 +3653,7 @@ func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
 					t.Fatalf("execution execID = %q, want late-exec-13", evt.Execution.ExecID)
 				}
 			}
-			if evt.Commission != nil {
+			if evt.CommissionAndFees != nil {
 				sawCommission = true
 			}
 		case <-handle.Done():
@@ -3669,7 +3669,7 @@ func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
 					if evt.Execution != nil {
 						sawExecution = true
 					}
-					if evt.Commission != nil {
+					if evt.CommissionAndFees != nil {
 						sawCommission = true
 					}
 				default:

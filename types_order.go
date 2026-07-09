@@ -154,43 +154,94 @@ type OpenOrderUpdate struct {
 	Status *OrderStatusUpdate
 }
 
-// ExecutionsRequest filters an [OrdersClient.Executions] query. Empty fields
-// match everything.
+// ExecutionFilterSide filters executions by the original order action. It is
+// distinct from [ExecutionSide], whose BOT and SLD values describe a fill.
+type ExecutionFilterSide string
+
+const (
+	ExecutionFilterBuy  ExecutionFilterSide = "BUY"
+	ExecutionFilterSell ExecutionFilterSide = "SELL"
+)
+
+// ExecutionSide describes which side of a fill executed.
+type ExecutionSide string
+
+const (
+	ExecutionSideBought ExecutionSide = "BOT"
+	ExecutionSideSold   ExecutionSide = "SLD"
+)
+
+// ExecutionLiquidity describes how a fill interacted with venue liquidity.
+// Unknown integer values are preserved when IBKR extends the protocol.
+type ExecutionLiquidity int
+
+const (
+	ExecutionLiquidityNone      ExecutionLiquidity = 0
+	ExecutionLiquidityAdded     ExecutionLiquidity = 1
+	ExecutionLiquidityRemoved   ExecutionLiquidity = 2
+	ExecutionLiquidityRoutedOut ExecutionLiquidity = 3
+)
+
+// ExecutionsRequest filters an [OrdersClient.Executions] query. The zero value
+// selects every execution visible to the current API session; it does not mean
+// the account's complete trade history. Since is transmitted in UTC as IBKR's
+// time lower bound. SpecificDates use only their calendar components.
 type ExecutionsRequest struct {
-	Account string
-	Symbol  string
+	ClientID      int // zero disables the client-ID filter
+	Account       string
+	Since         time.Time
+	Symbol        string
+	SecType       SecType
+	Exchange      string
+	Side          ExecutionFilterSide
+	LastDays      int         // zero disables the filter; IBKR accepts 1 through 7
+	SpecificDates []time.Time // explicit execution dates; requires server_version 200
 }
 
-// CommissionReport holds commission details for a trade execution. A zero
-// Commission or RealizedPNL is ambiguous: it can mean either a literal zero or
-// "not yet computed by the server" (the Java reference client sends an unset
-// double sentinel for fields that the server has not filled in). Consumers that
-// need to distinguish should correlate with order status or poll executions.
-type CommissionReport struct {
-	ExecID      string
-	Commission  decimal.Decimal
-	Currency    string
-	RealizedPNL decimal.Decimal
+// CommissionAndFeesReport holds IBKR's separate cost report for an execution.
+// Decimal pointers are nil when the Gateway sent its unset sentinel; a pointer
+// to zero is a computed literal zero. BondYield follows the current IBKR
+// protocol name; this package does not invent units the classic API omits.
+type CommissionAndFeesReport struct {
+	ExecID              string
+	Amount              *decimal.Decimal
+	Currency            string
+	RealizedPNL         *decimal.Decimal
+	BondYield           *decimal.Decimal
+	YieldRedemptionDate string // YYYYMMDD, or empty when unavailable
 }
 
 // Execution is a single trade execution report from the Gateway, carrying
 // the fill details for one leg of an order.
 type Execution struct {
-	OrderID int64
-	ExecID  string
-	Account string
-	Symbol  string
-	Side    string
-	Shares  decimal.Decimal
-	Price   decimal.Decimal
-	Time    time.Time
+	OrderID                 int64
+	Contract                Contract
+	ExecID                  string
+	Time                    time.Time
+	Account                 string
+	Exchange                string
+	Side                    ExecutionSide
+	Shares                  decimal.Decimal
+	Price                   decimal.Decimal
+	PermID                  int64
+	ClientID                int
+	Liquidation             int
+	CumulativeQuantity      decimal.Decimal
+	AveragePrice            decimal.Decimal
+	OrderRef                string
+	EconomicValueRule       string
+	EconomicValueMultiplier *decimal.Decimal
+	ModelCode               string
+	Liquidity               ExecutionLiquidity
+	PriceRevisionPending    bool
+	Submitter               string
 }
 
 // ExecutionUpdate is a union item from [OrdersClient.Executions]. Exactly one
-// field is non-nil: an Execution fill report or its later CommissionReport.
+// field is non-nil: an execution or a separately reported cost update.
 type ExecutionUpdate struct {
-	Execution  *Execution
-	Commission *CommissionReport
+	Execution         *Execution
+	CommissionAndFees *CommissionAndFeesReport
 }
 
 // OrderStatusUpdate reports a change in an order's fill progress or state.
@@ -210,10 +261,10 @@ type OrderStatusUpdate struct {
 
 // OrderEvent is a union event dispatched to per-order handles. Exactly one field is non-nil.
 type OrderEvent struct {
-	OpenOrder  *OpenOrder
-	Status     *OrderStatusUpdate
-	Execution  *Execution
-	Commission *CommissionReport
+	OpenOrder         *OpenOrder
+	Status            *OrderStatusUpdate
+	Execution         *Execution
+	CommissionAndFees *CommissionAndFeesReport
 	// Warning is a non-terminal, order-targeted notice (e.g. code 399, the
 	// off-hours deferral). The order stays working at IB and the handle stays
 	// open; contrast with a terminal failure, which closes the handle and is

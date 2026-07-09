@@ -95,11 +95,11 @@ func TestRouteCommissionReportDeliversValidReport(t *testing.T) {
 		if !ok {
 			t.Fatal("Events() closed unexpectedly")
 		}
-		if evt.Commission == nil {
+		if evt.CommissionAndFees == nil {
 			t.Fatal("expected Commission event, got nil")
 		}
-		if evt.Commission.ExecID != "exec-ok" {
-			t.Errorf("Commission.ExecID = %q, want %q", evt.Commission.ExecID, "exec-ok")
+		if evt.CommissionAndFees.ExecID != "exec-ok" {
+			t.Errorf("Commission.ExecID = %q, want %q", evt.CommissionAndFees.ExecID, "exec-ok")
 		}
 	default:
 		t.Fatal("handle received no commission event for a valid report")

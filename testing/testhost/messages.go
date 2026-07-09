@@ -131,11 +131,45 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			MktCapPrice:   asString(resolve(body["mkt_cap_price"])),
 		}, nil
 	case "execution_detail":
-		return codec.ExecutionDetail{ReqID: asInt(resolve(body["req_id"])), OrderID: int64(asInt(resolve(body["order_id"]))), ExecID: asString(resolve(body["exec_id"])), Account: asString(resolve(body["account"])), Symbol: asString(resolve(body["symbol"])), Side: asString(resolve(body["side"])), Shares: asString(resolve(body["shares"])), Price: asString(resolve(body["price"])), Time: asString(resolve(body["time"]))}, nil
+		contract := asContract(resolve(body["contract"]))
+		if contract.Symbol == "" {
+			contract.Symbol = asString(resolve(body["symbol"]))
+		}
+		return codec.ExecutionDetail{
+			ReqID:                   asInt(resolve(body["req_id"])),
+			OrderID:                 int64(asInt(resolve(body["order_id"]))),
+			Contract:                contract,
+			ExecID:                  asString(resolve(body["exec_id"])),
+			Time:                    asString(resolve(body["time"])),
+			Account:                 asString(resolve(body["account"])),
+			Exchange:                asString(resolve(body["exchange"])),
+			Side:                    asString(resolve(body["side"])),
+			Shares:                  asString(resolve(body["shares"])),
+			Price:                   asString(resolve(body["price"])),
+			PermID:                  asString(resolve(body["perm_id"])),
+			ClientID:                asString(resolve(body["client_id"])),
+			Liquidation:             asString(resolve(body["liquidation"])),
+			CumulativeQuantity:      asString(resolve(body["cumulative_quantity"])),
+			AveragePrice:            asString(resolve(body["average_price"])),
+			OrderRef:                asString(resolve(body["order_ref"])),
+			EconomicValueRule:       asString(resolve(body["economic_value_rule"])),
+			EconomicValueMultiplier: asString(resolve(body["economic_value_multiplier"])),
+			ModelCode:               asString(resolve(body["model_code"])),
+			LastLiquidity:           asString(resolve(body["last_liquidity"])),
+			PendingPriceRevision:    asString(resolve(body["pending_price_revision"])),
+			Submitter:               asString(resolve(body["submitter"])),
+		}, nil
 	case "executions_end":
 		return codec.ExecutionsEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
 	case "commission_report":
-		return codec.CommissionReport{ExecID: asString(resolve(body["exec_id"])), Commission: asString(resolve(body["commission"])), Currency: asString(resolve(body["currency"])), RealizedPNL: asString(resolve(body["realized_pnl"]))}, nil
+		return codec.CommissionReport{
+			ExecID:              asString(resolve(body["exec_id"])),
+			Commission:          asString(resolve(body["commission"])),
+			Currency:            asString(resolve(body["currency"])),
+			RealizedPNL:         asString(resolve(body["realized_pnl"])),
+			Yield:               asString(resolve(body["bond_yield"])),
+			YieldRedemptionDate: asString(resolve(body["yield_redemption_date"])),
+		}, nil
 	case "family_codes":
 		entries := asCodecEntries(resolve(body["codes"]), func(m map[string]any) codec.FamilyCodeEntry {
 			return codec.FamilyCodeEntry{AccountID: asString(m["account_id"]), FamilyCode: asString(m["family_code"])}

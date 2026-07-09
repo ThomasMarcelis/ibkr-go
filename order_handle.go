@@ -157,8 +157,8 @@ func (h *OrderHandle) emitExecution(exec Execution) bool {
 	return h.emitEvent(OrderEvent{Execution: &exec})
 }
 
-func (h *OrderHandle) emitCommission(cr CommissionReport) bool {
-	return h.emitEvent(OrderEvent{Commission: &cr})
+func (h *OrderHandle) emitCommissionAndFees(report CommissionAndFeesReport) bool {
+	return h.emitEvent(OrderEvent{CommissionAndFees: &report})
 }
 
 // emitWarning delivers a non-terminal, order-targeted notice without closing

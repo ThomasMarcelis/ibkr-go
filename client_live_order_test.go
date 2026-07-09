@@ -143,9 +143,9 @@ func liveObserveOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandl
 				label, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price, evt.Execution.Time.Format(time.RFC3339))
 			result.sawExecution = true
 		}
-		if evt.Commission != nil {
+		if evt.CommissionAndFees != nil {
 			t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s",
-				label, evt.Commission.ExecID, evt.Commission.Commission, evt.Commission.Currency, evt.Commission.RealizedPNL)
+				label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPNL)
 			result.sawCommission = true
 		}
 	}

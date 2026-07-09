@@ -77,11 +77,11 @@ func requireNoMoreOrderEvents(t *testing.T, ctx context.Context, name string, ha
 // waitOptionFill drains handle events until the Filled status, the
 // execution, and the commission report have all arrived, returning them for
 // field-level assertions.
-func waitOptionFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) (ibkr.Execution, ibkr.CommissionReport, ibkr.OrderStatusUpdate) {
+func waitOptionFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) (ibkr.Execution, ibkr.CommissionAndFeesReport, ibkr.OrderStatusUpdate) {
 	t.Helper()
 
 	var exec *ibkr.Execution
-	var comm *ibkr.CommissionReport
+	var comm *ibkr.CommissionAndFeesReport
 	var filled *ibkr.OrderStatusUpdate
 	for exec == nil || comm == nil || filled == nil {
 		select {
@@ -92,8 +92,8 @@ func waitOptionFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle)
 			if evt.Execution != nil {
 				exec = evt.Execution
 			}
-			if evt.Commission != nil {
-				comm = evt.Commission
+			if evt.CommissionAndFees != nil {
+				comm = evt.CommissionAndFees
 			}
 			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
 				filled = evt.Status
@@ -163,7 +163,7 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 	if !exec.Shares.Equal(decimal.NewFromInt(1)) || !exec.Price.Equal(decimal.RequireFromString("2.11")) {
 		t.Fatalf("execution shares/price = %s/%s, want 1/2.11", exec.Shares, exec.Price)
 	}
-	if comm.ExecID != exec.ExecID || !comm.Commission.Equal(decimal.RequireFromString("0.76825")) || comm.Currency != "USD" {
+	if comm.ExecID != exec.ExecID || !comm.Amount.Equal(decimal.RequireFromString("0.76825")) || comm.Currency != "USD" {
 		t.Fatalf("commission = %+v, want 0.76825 USD on %s", comm, exec.ExecID)
 	}
 	if !filled.Filled.Equal(decimal.NewFromInt(1)) || !filled.AvgFillPrice.Equal(decimal.RequireFromString("2.11")) {
@@ -252,8 +252,8 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	if !exec.Shares.Equal(decimal.NewFromInt(1)) || !exec.Price.Equal(decimal.RequireFromString("8.9")) {
 		t.Fatalf("execution shares/price = %s/%s, want 1/8.90", exec.Shares, exec.Price)
 	}
-	if !comm.Commission.Equal(decimal.RequireFromString("0.76825")) {
-		t.Fatalf("commission = %s, want 0.76825", comm.Commission)
+	if !comm.Amount.Equal(decimal.RequireFromString("0.76825")) {
+		t.Fatalf("commission = %s, want 0.76825", comm.Amount)
 	}
 	if !filled.AvgFillPrice.Equal(decimal.RequireFromString("8.9")) {
 		t.Fatalf("filled avg = %s, want 8.90", filled.AvgFillPrice)

@@ -106,9 +106,9 @@ func run() (err error) {
 		case evt.Execution != nil:
 			fmt.Printf("execution: %s shares @ %s\n",
 				evt.Execution.Shares, evt.Execution.Price)
-		case evt.Commission != nil:
+		case evt.CommissionAndFees != nil:
 			fmt.Printf("commission: %s %s\n",
-				evt.Commission.Commission, evt.Commission.Currency)
+				evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
 		}
 	}
 	cleanupNeeded = false

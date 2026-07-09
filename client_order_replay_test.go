@@ -368,7 +368,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 			if evt.Execution != nil {
 				executions++
 			}
-			if evt.Commission != nil {
+			if evt.CommissionAndFees != nil {
 				commissions++
 			}
 			if evt.Status != nil {
@@ -479,7 +479,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 				t.Errorf("execution price = %s, want 292.14", got)
 			}
 		}
-		if evt.Commission != nil {
+		if evt.CommissionAndFees != nil {
 			commissions++
 		}
 	}

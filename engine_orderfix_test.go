@@ -96,7 +96,7 @@ func TestRouteCommissionReportDedupesReplayedCommission(t *testing.T) {
 			if evt.Execution != nil {
 				execs++
 			}
-			if evt.Commission != nil {
+			if evt.CommissionAndFees != nil {
 				comms++
 			}
 			continue
@@ -145,11 +145,11 @@ func TestRouteCommissionBeforeExecutionReachesHandle(t *testing.T) {
 		}
 		break
 	}
-	if len(events) != 2 || events[0].Execution == nil || events[1].Commission == nil {
+	if len(events) != 2 || events[0].Execution == nil || events[1].CommissionAndFees == nil {
 		t.Fatalf("handle events = %+v, want execution then flushed commission", events)
 	}
-	if events[1].Commission.ExecID != "exec-race-1" {
-		t.Fatalf("flushed commission ExecID = %q, want exec-race-1", events[1].Commission.ExecID)
+	if events[1].CommissionAndFees.ExecID != "exec-race-1" {
+		t.Fatalf("flushed commission ExecID = %q, want exec-race-1", events[1].CommissionAndFees.ExecID)
 	}
 }
 
@@ -183,13 +183,13 @@ func TestRouteCommissionResendWithChangedContentReachesHandle(t *testing.T) {
 	e.routeCommissionReport(updated) // identical replay of the update: deduped
 
 	comms := 0
-	var last CommissionReport
+	var last CommissionAndFeesReport
 	for {
 		select {
 		case evt := <-handle.Events():
-			if evt.Commission != nil {
+			if evt.CommissionAndFees != nil {
 				comms++
-				last = *evt.Commission
+				last = *evt.CommissionAndFees
 			}
 			continue
 		default:

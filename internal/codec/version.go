@@ -5,7 +5,9 @@ import "github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 // Codec aliases keep field-layout decisions readable while the protocol
 // package remains the single owner of negotiated-version gates.
 const (
+	MinServerVersionLastLiquidity                  = protocol.MinServerVersionLastLiquidity
 	MinServerVersionSmartDepth                     = protocol.MinServerVersionSmartDepth
+	MinServerVersionPendingPriceRevision           = protocol.MinServerVersionPendingPriceRevision
 	MinServerVersionFAProfileDesupport             = protocol.MinServerVersionFAProfileDesupport
 	MinServerVersionManualOrderTimeExerciseOptions = protocol.MinServerVersionManualOrderTimeExerciseOptions
 	MinServerVersionLastTradeDate                  = protocol.MinServerVersionLastTradeDate

@@ -113,14 +113,14 @@ func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	t.Parallel()
 
 	update, err := fromCodecExecution(codec.ExecutionDetail{
-		OrderID: 42,
-		ExecID:  "0000e0d5.69dd4c37.01.01",
-		Account: "DU12345",
-		Symbol:  "AAPL",
-		Side:    "BOT",
-		Shares:  "1",
-		Price:   "257.69",
-		Time:    "20260413 13:35:50 US/Eastern",
+		OrderID:  42,
+		Contract: codec.Contract{Symbol: "AAPL"},
+		ExecID:   "0000e0d5.69dd4c37.01.01",
+		Account:  "DU12345",
+		Side:     "BOT",
+		Shares:   "1",
+		Price:    "257.69",
+		Time:     "20260413 13:35:50 US/Eastern",
 	})
 	if err != nil {
 		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
@@ -134,18 +134,60 @@ func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	}
 }
 
+func TestFromCodecExecutionProjectsCompleteClassicResult(t *testing.T) {
+	t.Parallel()
+
+	update, err := fromCodecExecution(codec.ExecutionDetail{
+		OrderID: 1,
+		Contract: codec.Contract{
+			ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "IEX",
+			Currency: "USD", LocalSymbol: "AAPL", TradingClass: "NMS",
+		},
+		ExecID: "sanitized-native-exec-001", Time: "20260413 15:27:04 US/Eastern",
+		Account: "DU9000001", Exchange: "IEX", Side: "BOT", Shares: "1", Price: "257.95",
+		PermID: "900001", ClientID: "94", Liquidation: "0", CumulativeQuantity: "1",
+		AveragePrice: "257.95", OrderRef: "capture-ref", EconomicValueRule: "",
+		EconomicValueMultiplier: "", ModelCode: "", LastLiquidity: "2",
+		PendingPriceRevision: "0", Submitter: "",
+	})
+	if err != nil {
+		t.Fatalf("fromCodecExecution() error = %v", err)
+	}
+	exec := update.Execution
+	if exec == nil {
+		t.Fatal("Execution = nil")
+	}
+	if exec.Contract.ConID != 265598 || exec.Contract.Symbol != "AAPL" ||
+		exec.Contract.SecType != SecTypeStock || exec.Exchange != "IEX" {
+		t.Errorf("contract/exchange = %+v/%q", exec.Contract, exec.Exchange)
+	}
+	if exec.Side != ExecutionSideBought || exec.PermID != 900001 || exec.ClientID != 94 || exec.Liquidation != 0 {
+		t.Errorf("side/identity/liquidation = %q/%d/%d/%d", exec.Side, exec.PermID, exec.ClientID, exec.Liquidation)
+	}
+	if !exec.Shares.Equal(decimal.RequireFromString("1")) ||
+		!exec.Price.Equal(decimal.RequireFromString("257.95")) ||
+		!exec.CumulativeQuantity.Equal(decimal.RequireFromString("1")) ||
+		!exec.AveragePrice.Equal(decimal.RequireFromString("257.95")) {
+		t.Errorf("execution quantities/prices = %+v", exec)
+	}
+	if exec.OrderRef != "capture-ref" || exec.EconomicValueMultiplier != nil ||
+		exec.Liquidity != ExecutionLiquidityRemoved || exec.PriceRevisionPending || exec.Submitter != "" {
+		t.Errorf("execution tail = %+v", exec)
+	}
+}
+
 func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 	t.Parallel()
 
 	update, err := fromCodecExecution(codec.ExecutionDetail{
-		OrderID: 42,
-		ExecID:  "exec-1",
-		Account: "DU12345",
-		Symbol:  "AAPL",
-		Side:    "BOT",
-		Shares:  "10",
-		Price:   "189.11",
-		Time:    "2026-04-05T12:01:00Z",
+		OrderID:  42,
+		Contract: codec.Contract{Symbol: "AAPL"},
+		ExecID:   "exec-1",
+		Account:  "DU12345",
+		Side:     "BOT",
+		Shares:   "10",
+		Price:    "189.11",
+		Time:     "2026-04-05T12:01:00Z",
 	})
 	if err != nil {
 		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
@@ -160,17 +202,21 @@ func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
 	t.Parallel()
 
 	_, err := fromCodecExecution(codec.ExecutionDetail{
-		OrderID: 42,
-		ExecID:  "exec-bad-time",
-		Account: "DU12345",
-		Symbol:  "AAPL",
-		Side:    "BOT",
-		Shares:  "1",
-		Price:   "150",
-		Time:    "not-a-timestamp",
+		OrderID:  42,
+		Contract: codec.Contract{Symbol: "AAPL"},
+		ExecID:   "exec-bad-time",
+		Account:  "DU12345",
+		Side:     "BOT",
+		Shares:   "1",
+		Price:    "150",
+		Time:     "not-a-timestamp",
 	})
 	if err == nil {
 		t.Fatal("fromCodecExecution() error = nil, want malformed execution time rejection")
+	}
+	_, err = parseExecutionTime("20260413 13:35:50 Not/AZone")
+	if err == nil {
+		t.Fatal("parseExecutionTime() accepted an unknown zone")
 	}
 }
 
@@ -279,25 +325,25 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 }
 
 // TestFromCodecCommissionAcceptsSentinelFields freezes the receive-path
-// contract for CommissionReport: live TWS emits the MAX_DOUBLE sentinel for
-// Commission and RealizedPNL when the server has not yet computed those
-// values, and the Go client must decode both forms to a zero decimal instead
-// of tearing down the executions subscription or silently dropping the report.
+// contract for commission-and-fees reports: unset sentinels remain nil while
+// literal zero remains a non-nil decimal.
 func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 	t.Parallel()
 
 	const sentinel = "1.7976931348623157E308"
 
 	tests := []struct {
-		name       string
-		commission string
-		realized   string
+		name               string
+		commission         string
+		realized           string
+		wantCommissionNil  bool
+		wantRealizedPNLNil bool
 	}{
-		{"sentinel_commission", sentinel, "0"},
-		{"sentinel_realized", "1.25", sentinel},
-		{"both_sentinel", sentinel, sentinel},
-		{"both_empty", "", ""},
-		{"mixed_empty_sentinel", "", sentinel},
+		{"sentinel_commission", sentinel, "0", true, false},
+		{"sentinel_realized", "1.25", sentinel, false, true},
+		{"both_sentinel", sentinel, sentinel, true, true},
+		{"both_empty", "", "", true, true},
+		{"mixed_empty_sentinel", "", sentinel, true, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -318,6 +364,15 @@ func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 			if report.Currency != "USD" {
 				t.Errorf("Currency = %q, want %q", report.Currency, "USD")
 			}
+			if (report.Amount == nil) != tt.wantCommissionNil {
+				t.Errorf("Amount = %v, want nil=%v", report.Amount, tt.wantCommissionNil)
+			}
+			if (report.RealizedPNL == nil) != tt.wantRealizedPNLNil {
+				t.Errorf("RealizedPNL = %v, want nil=%v", report.RealizedPNL, tt.wantRealizedPNLNil)
+			}
+			if tt.realized == "0" && (report.RealizedPNL == nil || !report.RealizedPNL.IsZero()) {
+				t.Errorf("literal zero RealizedPNL = %v, want non-nil zero", report.RealizedPNL)
+			}
 		})
 	}
 }
@@ -328,19 +383,20 @@ func TestFromCodecCommissionPreservesRealValues(t *testing.T) {
 	t.Parallel()
 
 	report, err := fromCodecCommission(codec.CommissionReport{
-		ExecID:      "exec-2",
-		Commission:  "1.25",
-		Currency:    "USD",
-		RealizedPNL: "-50.00",
+		ExecID: "exec-2", Commission: "1.25", Currency: "USD", RealizedPNL: "-50.00",
+		Yield: "2.75", YieldRedemptionDate: "20301231",
 	})
 	if err != nil {
 		t.Fatalf("fromCodecCommission() error = %v, want nil", err)
 	}
-	if got := report.Commission.String(); got != "1.25" {
+	if got := report.Amount.String(); got != "1.25" {
 		t.Errorf("Commission = %s, want 1.25", got)
 	}
 	if got := report.RealizedPNL.String(); got != "-50" {
 		t.Errorf("RealizedPNL = %s, want -50", got)
+	}
+	if report.BondYield == nil || report.BondYield.String() != "2.75" || report.YieldRedemptionDate != "20301231" {
+		t.Errorf("yield/date = %v/%q", report.BondYield, report.YieldRedemptionDate)
 	}
 }
 
@@ -358,6 +414,13 @@ func TestFromCodecCommissionRejectsMalformedField(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("fromCodecCommission() error = nil, want malformed commission rejection")
+	}
+	_, err = fromCodecCommission(codec.CommissionReport{
+		ExecID: "exec-4", Commission: "1", Currency: "USD", RealizedPNL: "0",
+		YieldRedemptionDate: "20260230",
+	})
+	if err == nil {
+		t.Fatal("fromCodecCommission() accepted an invalid redemption date")
 	}
 }
 

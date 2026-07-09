@@ -544,7 +544,7 @@ func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.Commiss
 	if or.handle == nil {
 		return
 	}
-	if !or.handle.emitCommission(cr) {
+	if !or.handle.emitCommissionAndFees(cr) {
 		e.closeOrderRoute(st.orderID, or, nil)
 		return
 	}
@@ -609,7 +609,7 @@ func (e *engine) emitUndeliveredExecutionCommissions(reqID int, execID string, s
 			sub.closeWithErr(err)
 			return false
 		}
-		if !emitSubscription(sub, ExecutionUpdate{Commission: &report}) {
+		if !emitSubscription(sub, ExecutionUpdate{CommissionAndFees: &report}) {
 			return false
 		}
 	}

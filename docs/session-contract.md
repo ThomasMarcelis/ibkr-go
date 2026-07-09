@@ -139,8 +139,8 @@ func (h *OrderHandle) Modify(ctx context.Context, order Order) error
 
 `Orders().Place` returns an `OrderHandle` that tracks a single order's
 lifecycle. `Events()` delivers `OrderEvent` values. `OrderEvent` is a union:
-exactly one of `OpenOrder`, `Status`, `Execution`, `Commission`, or `Warning`
-is non-nil per event.
+exactly one of `OpenOrder`, `Status`, `Execution`, `CommissionAndFees`, or
+`Warning` is non-nil per event.
 
 `Lifecycle()` delivers Gap and Resumed events across reconnect boundaries. It is
 bounded and observational. `Close()` detaches the handle without cancelling the
@@ -150,7 +150,7 @@ indicator through `CancelOption`. `Modify(ctx, order)` sends a modified order
 with the same OrderID.
 
 `Events()` closes before `Done()`. Consumers that need every order event,
-including late `Execution` or `Commission` callbacks after a terminal status,
+including late `Execution` or `CommissionAndFees` callbacks after a terminal status,
 must drain `Events()` until it closes, then call `Wait()`.
 
 Terminal states: when an OrderStatus arrives with status Filled, Cancelled,
@@ -174,7 +174,9 @@ continues.
 - Snapshot-style subscriptions surface completion through `Lifecycle()` and
   `AwaitSnapshot`.
 - Execution reports are modeled as `Orders().Executions(ctx, filter)`, a finite
-  query, not a public subscription.
+  query, not a public subscription. It completes on IBKR's execution-details
+  end marker; commission-and-fees reports are independent ExecID-correlated
+  messages and may be unset, revised, or arrive after that marker.
 - Reconnect boundaries are explicit through `Event` and
   `SubscriptionStateEvent`, never mixed into business event streams.
 - Calls submitted while the session is reconnecting wait for the next `Ready`

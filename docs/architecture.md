@@ -108,7 +108,7 @@ pattern:
 
 - **Orders (`map[int64]*orderRoute`)** — per-order lifecycle tracking. Each
   placed order registers a route keyed by `orderID`. OpenOrder, OrderStatus,
-  Execution, and CommissionReport messages dispatch to the matching order route.
+  Execution, and commission-and-fees messages dispatch to the matching order route.
 
 ### Open-order and order-handle routing
 
@@ -157,7 +157,7 @@ the final child is the only frame with `Transmit=true`.
 `Orders().Place` returns an `OrderHandle` that tracks a single order's lifecycle:
 
 - **Events()** delivers `OrderEvent` values (union of OpenOrder, OrderStatus,
-  Execution, CommissionReport, Warning — exactly one field non-nil per event).
+  Execution, CommissionAndFees, Warning — exactly one field non-nil per event).
   A `Warning` is a non-terminal, order-targeted notice (e.g. code 399, the
   off-hours deferral): the order stays working at IB and the handle stays open.
 - **Lifecycle()** delivers bounded observational `SubscriptionStateEvent` values

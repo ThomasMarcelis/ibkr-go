@@ -172,7 +172,9 @@ reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23).
 ### Order and execution observation
 
 Open orders snapshot and streaming (all three scopes), executions finite query,
-and commission reports.
+and commission-and-fees reports. The classic sv200 execution and fee payloads
+are fully projected; nondefault filters and meaningful bond yield/redemption
+remain live-attestation targets.
 
 ### Order management
 

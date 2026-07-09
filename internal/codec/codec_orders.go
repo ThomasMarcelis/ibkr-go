@@ -136,9 +136,16 @@ type OrderStatus struct {
 }
 
 type ExecutionsRequest struct {
-	ReqID   int
-	Account string
-	Symbol  string
+	ReqID         int
+	ClientID      int
+	Account       string
+	Time          string
+	Symbol        string
+	SecType       string
+	Exchange      string
+	Side          string
+	LastNDays     *int
+	SpecificDates []int
 }
 
 func (m ExecutionsRequest) encodeWire(sv int) ([]string, error) {
@@ -146,32 +153,53 @@ func (m ExecutionsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(OutReqExecutions)
 	w.WriteInt(3) // version
 	w.WriteInt(m.ReqID)
-	w.WriteInt(0) // clientId filter
+	w.WriteInt(m.ClientID)
 	w.WriteString(m.Account)
-	w.WriteString("") // time
+	w.WriteString(m.Time)
 	w.WriteString(m.Symbol)
-	w.WriteString("") // secType
-	w.WriteString("") // exchange
-	w.WriteString("") // side
+	w.WriteString(m.SecType)
+	w.WriteString(m.Exchange)
+	w.WriteString(m.Side)
 	if sv >= MinServerVersionParametrizedDaysOfExecutions {
-		// client.py:4085-4100: lastNDays UNSET_INTEGER (2^31-1) then a
-		// specificDates count of 0 when no dates are supplied.
-		w.WriteInt(2147483647)
-		w.WriteInt(0)
+		// The official clients encode an unset lastNDays as UNSET_INTEGER
+		// (2^31-1), followed by the specific YYYYMMDD dates.
+		if m.LastNDays == nil {
+			w.WriteInt(2147483647)
+		} else {
+			w.WriteInt(*m.LastNDays)
+		}
+		w.WriteInt(len(m.SpecificDates))
+		for _, date := range m.SpecificDates {
+			w.WriteInt(date)
+		}
 	}
 	return w.Fields(), nil
 }
 
 type ExecutionDetail struct {
-	ReqID   int
-	OrderID int64
-	ExecID  string
-	Account string
-	Symbol  string
-	Side    string
-	Shares  string
-	Price   string
-	Time    string
+	ReqID    int
+	OrderID  int64
+	Contract Contract
+
+	ExecID                  string
+	Time                    string
+	Account                 string
+	Exchange                string
+	Side                    string
+	Shares                  string
+	Price                   string
+	PermID                  string
+	ClientID                string
+	Liquidation             string
+	CumulativeQuantity      string
+	AveragePrice            string
+	OrderRef                string
+	EconomicValueRule       string
+	EconomicValueMultiplier string
+	ModelCode               string
+	LastLiquidity           string
+	PendingPriceRevision    string
+	Submitter               string
 }
 
 type ExecutionsEnd struct {
@@ -179,10 +207,12 @@ type ExecutionsEnd struct {
 }
 
 type CommissionReport struct {
-	ExecID      string
-	Commission  string
-	Currency    string
-	RealizedPNL string
+	ExecID              string
+	Commission          string
+	Currency            string
+	RealizedPNL         string
+	Yield               string
+	YieldRedemptionDate string
 }
 
 type CompletedOrdersRequest struct {
@@ -1359,31 +1389,86 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 // [11, reqID, orderId, conID, symbol, secType, expiry, strike,
 func decodeExecutionData(r *fieldReader, sv int) ([]Message, error) {
 	//   right, multiplier, exchange, currency, localSymbol, tradingClass,
-	//   execID, time, account, exchange(exec), side, shares, price, ...]
-	reqID, _ := r.ReadInt()
-	orderID, _ := r.ReadInt64()
-	r.Skip(1) // conID
-	symbol := r.ReadString()
-	r.Skip(9) // secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass
-	execID := r.ReadString()
-	execTime := r.ReadString()
-	account := r.ReadString()
-	r.Skip(1) // execution exchange
-	side := r.ReadString()
-	shares := r.ReadString()
-	price := r.ReadString()
-	return []Message{ExecutionDetail{ReqID: reqID, OrderID: orderID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}}, nil
+	//   execID, time, account, exchange(exec), side, shares, price, permID,
+	//   clientID, liquidation, cumQty, avgPrice, orderRef, evRule,
+	//   evMultiplier, modelCode, lastLiquidity, pendingRevision, submitter]
+	m := ExecutionDetail{}
+	m.ReqID, _ = r.ReadInt()
+	m.OrderID, _ = r.ReadInt64()
+	m.Contract = readWireContract(r)
+	m.ExecID = r.ReadString()
+	m.Time = r.ReadString()
+	m.Account = r.ReadString()
+	m.Exchange = r.ReadString()
+	m.Side = r.ReadString()
+	m.Shares = r.ReadString()
+	m.Price = r.ReadString()
+	m.PermID = r.ReadString()
+	m.ClientID = r.ReadString()
+	m.Liquidation = r.ReadString()
+	m.CumulativeQuantity = r.ReadString()
+	m.AveragePrice = r.ReadString()
+	m.OrderRef = r.ReadString()
+	m.EconomicValueRule = r.ReadString()
+	m.EconomicValueMultiplier = r.ReadString()
+	m.ModelCode = r.ReadString()
+	if sv >= MinServerVersionLastLiquidity {
+		m.LastLiquidity = r.ReadString()
+	}
+	if sv >= MinServerVersionPendingPriceRevision {
+		m.PendingPriceRevision = r.ReadString()
+	}
+	if sv >= MinServerVersionSubmitter {
+		m.Submitter = r.ReadString()
+	}
+	if remaining := r.Remaining(); remaining != 0 {
+		return nil, fmt.Errorf("ibkr codec: execution detail has %d trailing fields", remaining)
+	}
+	return []Message{m}, nil
 }
 
 func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
-	return []string{
-		itoa(InExecutionData), itoa(m.ReqID),
-		i64toa(m.OrderID), "0",
-		m.Symbol, "", "", "", "", "", "", "", "", "",
-		m.ExecID, m.Time, m.Account,
-		"",
-		m.Side, m.Shares, m.Price,
-	}, nil
+	w := fieldWriter{}
+	w.WriteInt(InExecutionData)
+	w.WriteInt(m.ReqID)
+	w.WriteString(i64toa(m.OrderID))
+	w.WriteInt(m.Contract.ConID)
+	w.WriteString(m.Contract.Symbol)
+	w.WriteString(m.Contract.SecType)
+	w.WriteString(m.Contract.Expiry)
+	w.WriteString(m.Contract.Strike)
+	w.WriteString(m.Contract.Right)
+	w.WriteString(m.Contract.Multiplier)
+	w.WriteString(m.Contract.Exchange)
+	w.WriteString(m.Contract.Currency)
+	w.WriteString(m.Contract.LocalSymbol)
+	w.WriteString(m.Contract.TradingClass)
+	w.WriteString(m.ExecID)
+	w.WriteString(m.Time)
+	w.WriteString(m.Account)
+	w.WriteString(m.Exchange)
+	w.WriteString(m.Side)
+	w.WriteString(m.Shares)
+	w.WriteString(m.Price)
+	w.WriteString(m.PermID)
+	w.WriteString(m.ClientID)
+	w.WriteString(m.Liquidation)
+	w.WriteString(m.CumulativeQuantity)
+	w.WriteString(m.AveragePrice)
+	w.WriteString(m.OrderRef)
+	w.WriteString(m.EconomicValueRule)
+	w.WriteString(m.EconomicValueMultiplier)
+	w.WriteString(m.ModelCode)
+	if sv >= MinServerVersionLastLiquidity {
+		w.WriteString(m.LastLiquidity)
+	}
+	if sv >= MinServerVersionPendingPriceRevision {
+		w.WriteString(m.PendingPriceRevision)
+	}
+	if sv >= MinServerVersionSubmitter {
+		w.WriteString(m.Submitter)
+	}
+	return w.Fields(), nil
 }
 
 func decodeOpenOrderEnd(r *fieldReader, sv int) ([]Message, error) {
@@ -1405,18 +1490,29 @@ func (m ExecutionsEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
 }
 
-// [59, version, execID, commission, currency, realizedPNL, ...]
+// [59, version, execID, commission, currency, realizedPNL, yield, redemptionDate]
 func decodeCommissionReport(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1)
 	execID := r.ReadString()
 	commission := r.ReadString()
 	currency := r.ReadString()
 	realizedPNL := r.ReadString()
-	return []Message{CommissionReport{ExecID: execID, Commission: commission, Currency: currency, RealizedPNL: realizedPNL}}, nil
+	yield := r.ReadString()
+	yieldRedemptionDate := r.ReadString()
+	if remaining := r.Remaining(); remaining != 0 {
+		return nil, fmt.Errorf("ibkr codec: commission and fees report has %d trailing fields", remaining)
+	}
+	return []Message{CommissionReport{
+		ExecID: execID, Commission: commission, Currency: currency,
+		RealizedPNL: realizedPNL, Yield: yield, YieldRedemptionDate: yieldRedemptionDate,
+	}}, nil
 }
 
 func (m CommissionReport) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency, m.RealizedPNL}, nil
+	return []string{
+		itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency,
+		m.RealizedPNL, m.Yield, m.YieldRedemptionDate,
+	}, nil
 }
 
 // [101, contract(11-field), action, totalQty, orderType, ...]

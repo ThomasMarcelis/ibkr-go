@@ -154,7 +154,7 @@ func FuzzDecodeBatch(f *testing.F) {
 		OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0", AvgFillPrice: "150.50", PermID: "123456", ParentID: "0", LastFillPrice: "150.50", ClientID: "99"},
 		OpenOrderEnd{},
 		PositionEnd{},
-		ExecutionDetail{ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345", Symbol: "AAPL", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"},
+		ExecutionDetail{ReqID: 1, OrderID: 42, Contract: Contract{Symbol: "AAPL"}, ExecID: "0001", Account: "DU12345", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"},
 		ExecutionsEnd{ReqID: 1},
 		ContractDetailsEnd{ReqID: 42},
 		CompletedOrderEnd{},
@@ -456,7 +456,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"UpdateAccountTime", InUpdateAccountTime, 2},          // version, timestamp
 		{"NextValidID", InNextValidID, 2},                      // version, orderID
 		{"ContractData", InContractData, 26},                   // reqID, symbol, secType, expiry, skip, strike, right, exchange, currency, localSymbol, marketName, tradingClass, conID, minTick, 5 skip, longName, primaryExchange, 4 skip, timeZoneID
-		{"ExecutionData", InExecutionData, 20},                 // reqID, 2 skip, symbol, 9 skip, execID, time, account, 1 skip, side, shares, price
+		{"ExecutionData", InExecutionData, 32},                 // complete classic sv200 execution detail
 		{"NewsBulletins", InNewsBulletins, 5},                  // version, msgId, msgType, headline, source
 		{"ManagedAccounts", InManagedAccounts, 2},              // version, accountsList
 		{"HistoricalData", InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end
@@ -474,7 +474,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"ExecutionDataEnd", InExecutionDataEnd, 2},            // version, reqID
 		{"TickSnapshotEnd", InTickSnapshotEnd, 2},              // version, reqID
 		{"MarketDataType", InMarketDataType, 3},                // version, reqID, dataType
-		{"CommissionReport", InCommissionReport, 5},            // version, execID, commission, currency, realizedPNL
+		{"CommissionReport", InCommissionReport, 7},            // version plus six report fields
 		{"PositionData", InPositionData, 15},                   // version, account, 11 contract, position, avgCost
 		{"PositionEnd", InPositionEnd, 1},                      // version
 		{"AccountSummary", InAccountSummary, 6},                // version, reqID, account, tag, value, currency
@@ -719,7 +719,7 @@ func FuzzEncodeDecodeRoundTrip_ExecutionDetail(f *testing.F) {
 		if containsNull(execID, account, symbol, side, shares, price, execTime) {
 			return
 		}
-		original := ExecutionDetail{ReqID: reqID, OrderID: orderID, ExecID: execID, Account: account, Symbol: symbol, Side: side, Shares: shares, Price: price, Time: execTime}
+		original := ExecutionDetail{ReqID: reqID, OrderID: orderID, Contract: Contract{Symbol: symbol}, ExecID: execID, Account: account, Side: side, Shares: shares, Price: price, Time: execTime}
 		encoded, err := Encode(200, original)
 		if err != nil {
 			return
@@ -747,8 +747,8 @@ func FuzzEncodeDecodeRoundTrip_ExecutionDetail(f *testing.F) {
 		if ed.Account != account {
 			t.Errorf("Account: got %q, want %q", ed.Account, account)
 		}
-		if ed.Symbol != symbol {
-			t.Errorf("Symbol: got %q, want %q", ed.Symbol, symbol)
+		if ed.Contract.Symbol != symbol {
+			t.Errorf("Symbol: got %q, want %q", ed.Contract.Symbol, symbol)
 		}
 		if ed.Side != side {
 			t.Errorf("Side: got %q, want %q", ed.Side, side)
@@ -802,6 +802,12 @@ func FuzzEncodeDecodeRoundTrip_CommissionReport(f *testing.F) {
 		}
 		if cr.RealizedPNL != realizedPNL {
 			t.Errorf("RealizedPNL: got %q, want %q", cr.RealizedPNL, realizedPNL)
+		}
+		if cr.Yield != "" {
+			t.Errorf("Yield: got %q, want empty", cr.Yield)
+		}
+		if cr.YieldRedemptionDate != "" {
+			t.Errorf("YieldRedemptionDate: got %q, want empty", cr.YieldRedemptionDate)
 		}
 	})
 }

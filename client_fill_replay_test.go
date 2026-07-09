@@ -117,11 +117,11 @@ func (l *orderEventLog) executions() []ibkr.Execution {
 	return out
 }
 
-func (l *orderEventLog) commissions() []ibkr.CommissionReport {
-	var out []ibkr.CommissionReport
+func (l *orderEventLog) commissions() []ibkr.CommissionAndFeesReport {
+	var out []ibkr.CommissionAndFeesReport
 	for _, evt := range l.events {
-		if evt.Commission != nil {
-			out = append(out, *evt.Commission)
+		if evt.CommissionAndFees != nil {
+			out = append(out, *evt.CommissionAndFees)
 		}
 	}
 	return out
@@ -138,7 +138,7 @@ func (l *orderEventLog) statuses() []ibkr.OrderStatus {
 }
 
 type wantExec struct {
-	side   string
+	side   ibkr.ExecutionSide
 	shares string
 	price  string
 }
@@ -162,7 +162,7 @@ func requireExecutions(t *testing.T, name string, got []ibkr.Execution, want []w
 // requireCommissions matches commission amounts as a multiset: the Gateway
 // interleaves commission reports with the next order's lifecycle, so only
 // the values are stable, not their positions.
-func requireCommissions(t *testing.T, name string, got []ibkr.CommissionReport, want []string) {
+func requireCommissions(t *testing.T, name string, got []ibkr.CommissionAndFeesReport, want []string) {
 	t.Helper()
 	if len(got) != len(want) {
 		t.Fatalf("%s commissions = %d, want %d (%v)", name, len(got), len(want), got)
@@ -172,9 +172,9 @@ func requireCommissions(t *testing.T, name string, got []ibkr.CommissionReport, 
 		remaining[i] = decimal.RequireFromString(w)
 	}
 	for _, g := range got {
-		idx := slices.IndexFunc(remaining, g.Commission.Equal)
+		idx := slices.IndexFunc(remaining, g.Amount.Equal)
 		if idx < 0 {
-			t.Fatalf("%s unexpected commission %s, want one of %v", name, g.Commission, want)
+			t.Fatalf("%s unexpected commission %s, want one of %v", name, g.Amount, want)
 		}
 		remaining = slices.Delete(remaining, idx, idx+1)
 	}
@@ -314,8 +314,8 @@ func TestPlaceOrderMktSellFillReplay(t *testing.T) {
 	}
 	comms := log.commissions()
 	requireCommissions(t, "mkt sell", comms, []string{"1.006228"})
-	if !comms[0].RealizedPNL.IsZero() {
-		t.Fatalf("realized PnL = %s, want zero (unset sentinel)", comms[0].RealizedPNL)
+	if comms[0].RealizedPNL != nil {
+		t.Fatalf("realized PnL = %s, want nil (unset sentinel)", comms[0].RealizedPNL)
 	}
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("Wait() = %v, want nil terminal close", err)
@@ -665,7 +665,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		if u.Execution != nil {
 			queryExecs = append(queryExecs, *u.Execution)
 		}
-		if u.Commission != nil {
+		if u.CommissionAndFees != nil {
 			commissionUpdates++
 		}
 	}

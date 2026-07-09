@@ -364,7 +364,10 @@ func (c OrdersClient) Completed(ctx context.Context, apiOnly bool) ([]CompletedO
 	return c.engine.CompletedOrders(ctx, apiOnly)
 }
 
-// Executions returns recent trade executions matching the request filter.
+// Executions returns trade executions visible to this API session that match
+// req. It completes when IBKR sends the execution-details end marker;
+// commission-and-fees reports are separate ExecID-correlated messages and are
+// not guaranteed to arrive before that marker.
 func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) ([]ExecutionUpdate, error) {
 	return c.engine.Executions(ctx, req)
 }

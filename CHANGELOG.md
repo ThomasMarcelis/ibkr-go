@@ -17,6 +17,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Executions now expose the complete classic server-version-200 result and
+  all nine official filters.** `Execution.Symbol` moves to
+  `Execution.Contract.Symbol`; the result adds the full contract, execution
+  exchange, permanent/client IDs, cumulative quantity, average price, order
+  reference, economic-value fields, model, liquidity, price-revision state,
+  and submitter. `ExecutionsRequest` adds client, time, security type,
+  exchange, side, last-days, and specific-date filters. The date filters fail
+  locally below server version 200 instead of disappearing from the wire.
+
+- **Execution costs use current commission-and-fees terminology and preserve
+  absence.** `CommissionReport` becomes `CommissionAndFeesReport`, and the
+  `Commission` union fields on `ExecutionUpdate` and `OrderEvent` become
+  `CommissionAndFees`. `Amount`, `RealizedPNL`, and `BondYield` are pointers:
+  nil means IBKR sent an unset sentinel, while a pointer to zero means a real
+  computed zero. Yield redemption dates are retained as validated `YYYYMMDD`
+  strings. The decoder no longer discards the classic yield/date tail.
+
 - **Completed orders now expose the full classic order echo as three explicit
   facets:** `Contract`, `Order`, and `Completion`. The old six-field projection
   discarded prices, timing, routing, advanced-order, completion, and compliance

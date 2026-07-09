@@ -36,15 +36,15 @@ func TestExecutionCorrelatorDeliversBacklogToOverlappingRoutes(t *testing.T) {
 	t.Parallel()
 
 	c := newExecutionCorrelator()
-	c.registerRoute(1, ExecutionsRequest{Account: "DU12345"})
-	c.registerRoute(2, ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+	c.registerRoute(1)
+	c.registerRoute(2)
 
 	ready := c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
 	if len(ready) != 0 {
 		t.Fatalf("recordCommission() ready len = %d, want 0", len(ready))
 	}
 
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Contract: codec.Contract{Symbol: "AAPL"}})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("undeliveredCommissions(route1) len = %d, want 1", len(got))
 	}
@@ -53,7 +53,7 @@ func TestExecutionCorrelatorDeliversBacklogToOverlappingRoutes(t *testing.T) {
 		t.Fatalf("undeliveredCommissions(route2 before execution) len = %d, want 0", len(got))
 	}
 
-	c.observeExecution(2, codec.ExecutionDetail{ReqID: 2, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(2, codec.ExecutionDetail{ReqID: 2, ExecID: "exec-aapl", Account: "DU12345", Contract: codec.Contract{Symbol: "AAPL"}})
 	if got := c.undeliveredCommissions(2, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("undeliveredCommissions(route2 after execution) len = %d, want 1", len(got))
 	}
@@ -63,9 +63,9 @@ func TestExecutionCorrelatorClearsDeliveredHistoryButPreservesRoutes(t *testing.
 	t.Parallel()
 
 	c := newExecutionCorrelator()
-	c.registerRoute(1, ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+	c.registerRoute(1)
 
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Contract: codec.Contract{Symbol: "AAPL"}})
 	c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("first undeliveredCommissions() len = %d, want 1", len(got))
@@ -96,11 +96,11 @@ func TestExecutionCorrelatorDropsClosedRoutesFromPendingBacklog(t *testing.T) {
 	t.Parallel()
 
 	c := newExecutionCorrelator()
-	c.registerRoute(1, ExecutionsRequest{Account: "DU12345"})
-	c.registerRoute(2, ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+	c.registerRoute(1)
+	c.registerRoute(2)
 
 	c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Contract: codec.Contract{Symbol: "AAPL"}})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("route1 undeliveredCommissions() len = %d, want 1", len(got))
 	}
@@ -120,13 +120,13 @@ func TestExecutionCorrelatorKeepsPreDetailBacklogWhenRouteCloses(t *testing.T) {
 	t.Parallel()
 
 	c := newExecutionCorrelator()
-	c.registerRoute(1, ExecutionsRequest{Account: "DU12345"})
-	c.registerRoute(2, ExecutionsRequest{Account: "DU12345", Symbol: "MSFT"})
+	c.registerRoute(1)
+	c.registerRoute(2)
 
 	c.recordCommission(codec.CommissionReport{ExecID: "exec-aapl", Commission: "1.25", Currency: "USD", RealizedPNL: "0"})
 	c.unregisterRoute(2)
 
-	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Symbol: "AAPL"})
+	c.observeExecution(1, codec.ExecutionDetail{ReqID: 1, ExecID: "exec-aapl", Account: "DU12345", Contract: codec.Contract{Symbol: "AAPL"}})
 	if got := c.undeliveredCommissions(1, "exec-aapl"); len(got) != 1 {
 		t.Fatalf("undeliveredCommissions(route1 after close) len = %d, want 1", len(got))
 	}

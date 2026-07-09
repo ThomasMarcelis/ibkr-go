@@ -149,9 +149,9 @@ for _, bar := range bars {
 ### Place an order and track its lifecycle
 
 `Place` returns an `OrderHandle` whose `Events()` channel carries a typed
-union — exactly one of `Status`, `Execution`, `Commission`, or `OpenOrder` is
-non-nil per event. The channel closes after the terminal status (`Filled`,
-`Cancelled`, or `Inactive`).
+union — exactly one of `Status`, `Execution`, `CommissionAndFees`, or
+`OpenOrder` is non-nil per event. The channel closes after the terminal status
+(`Filled`, `Cancelled`, or `Inactive`).
 
 ```go
 handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -168,8 +168,8 @@ for evt := range handle.Events() {
         fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
     case evt.Execution != nil:
         fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
-    case evt.Commission != nil:
-        fmt.Println("commission:", evt.Commission.Commission, evt.Commission.Currency)
+    case evt.CommissionAndFees != nil:
+        fmt.Println("commission and fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
     }
 }
 return handle.Wait() // nil when terminal status reached cleanly

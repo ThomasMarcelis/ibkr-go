@@ -674,10 +674,26 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["req_id"] = fields[2]
 		}
 		if len(fields) >= 5 {
+			body["client_id"] = fields[3]
 			body["account"] = fields[4]
 		}
 		if len(fields) >= 7 {
+			body["time"] = fields[5]
 			body["symbol"] = fields[6]
+		}
+		if len(fields) >= 10 {
+			body["sec_type"] = fields[7]
+			body["exchange"] = fields[8]
+			body["side"] = fields[9]
+		}
+		if len(fields) >= 12 {
+			body["last_days"] = fields[10]
+			count, _ := strconv.Atoi(fields[11])
+			dates := make([]any, 0, count)
+			for i := 0; i < count && 12+i < len(fields); i++ {
+				dates = append(dates, fields[12+i])
+			}
+			body["specific_dates"] = dates
 		}
 		return "req_executions", body, nil
 	case 59: // OutReqMarketDataType: [59, 1, dataType]

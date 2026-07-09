@@ -186,15 +186,13 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			},
 		},
 		{
-			// ExecutionDetail: the encoder writes conID as "0" and pads
-			// secType..tradingClass, including currency, with empty strings. The decoder skips
-			// those fields. The Symbol field is read at a specific position
-			// before the skipped block. All extracted fields roundtrip.
+			// ExecutionDetail round-trips the complete classic response.
 			name: "ExecutionDetail",
 			msg: ExecutionDetail{
-				ReqID: 1, OrderID: 42, ExecID: "0001", Account: "DU12345",
-				Symbol: "AAPL", Side: "BOT", Shares: "100",
-				Price: "150.50", Time: "20260407 10:30:00",
+				ReqID: 1, OrderID: 42, Contract: Contract{Symbol: "AAPL", SecType: "STK"},
+				ExecID: "0001", Account: "DU12345", Side: "BOT", Shares: "100",
+				Price: "150.50", Time: "20260407 10:30:00", CumulativeQuantity: "100",
+				AveragePrice: "150.50", LastLiquidity: "2", PendingPriceRevision: "0",
 			},
 		},
 		{
@@ -203,7 +201,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		},
 		{
 			name: "CommissionReport",
-			msg:  CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"},
+			msg:  CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00", Yield: "2.5", YieldRedemptionDate: "20300101"},
 		},
 		{
 			name: "TickGeneric",

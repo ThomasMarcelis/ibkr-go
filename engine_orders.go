@@ -177,6 +177,7 @@ func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) ([]Execu
 }
 
 func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
+	req.SpecificDates = append([]time.Time(nil), req.SpecificDates...)
 	type result struct {
 		sub *Subscription[ExecutionUpdate]
 		err error
@@ -198,7 +199,13 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			resp <- result{err: err}
 			return
 		}
+		wireReq, err := executionsRequest(req, e.serverVersion)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		reqID := e.allocReqID()
+		wireReq.ReqID = reqID
 		var sub *Subscription[ExecutionUpdate]
 		sub = newSubscription[ExecutionUpdate](cfg, func() {
 			e.enqueue(func() {
@@ -210,17 +217,13 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			})
 		})
 		sub.expectSnapshot()
-		e.executions.registerRoute(reqID, req)
+		e.executions.registerRoute(reqID)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpExecutions,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.ExecutionsRequest{
-				ReqID:   reqID,
-				Account: req.Account,
-				Symbol:  req.Symbol,
-			},
+			request:      wireReq,
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.ExecutionDetail:
@@ -993,16 +996,61 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 	if err != nil {
 		return ExecutionUpdate{}, err
 	}
+	permID, err := parseOptionalInt64(m.PermID, "execution permanent id")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	clientID, err := parseOptionalInt(m.ClientID, "execution client id")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	liquidation, err := parseOptionalInt(m.Liquidation, "execution liquidation")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	cumulativeQuantity, err := parseOptionalDecimal(m.CumulativeQuantity, "execution cumulative quantity")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	averagePrice, err := parseOptionalDecimal(m.AveragePrice, "execution average price")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	economicValueMultiplier, err := parseOptionalDecimalPointer(m.EconomicValueMultiplier, "execution economic value multiplier")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	lastLiquidity, err := parseOptionalInt(m.LastLiquidity, "execution last liquidity")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	pendingPriceRevision, err := parseOptionalBoolString(m.PendingPriceRevision, "execution pending price revision")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
 	return ExecutionUpdate{
 		Execution: &Execution{
-			OrderID: m.OrderID,
-			ExecID:  m.ExecID,
-			Account: m.Account,
-			Symbol:  m.Symbol,
-			Side:    m.Side,
-			Shares:  shares,
-			Price:   price,
-			Time:    ts,
+			OrderID:                 m.OrderID,
+			Contract:                fromCodecContract(m.Contract),
+			ExecID:                  m.ExecID,
+			Time:                    ts,
+			Account:                 m.Account,
+			Exchange:                m.Exchange,
+			Side:                    ExecutionSide(m.Side),
+			Shares:                  shares,
+			Price:                   price,
+			PermID:                  permID,
+			ClientID:                clientID,
+			Liquidation:             liquidation,
+			CumulativeQuantity:      cumulativeQuantity,
+			AveragePrice:            averagePrice,
+			OrderRef:                m.OrderRef,
+			EconomicValueRule:       m.EconomicValueRule,
+			EconomicValueMultiplier: economicValueMultiplier,
+			ModelCode:               m.ModelCode,
+			Liquidity:               ExecutionLiquidity(lastLiquidity),
+			PriceRevisionPending:    pendingPriceRevision,
+			Submitter:               m.Submitter,
 		},
 	}, nil
 }
@@ -1031,33 +1079,43 @@ func parseExecutionTime(raw string) (time.Time, error) {
 			}
 		}
 	}
-	// Fallback: parse without timezone.
-	if len(raw) >= 17 {
-		if ts, err := time.Parse("20060102 15:04:05", raw[:17]); err == nil {
-			return ts, nil
-		}
-	}
 	return time.Time{}, fmt.Errorf("ibkr: parse execution time %q", raw)
 }
 
-func fromCodecCommission(m codec.CommissionReport) (CommissionReport, error) {
-	// Commission and RealizedPNL are parsed as optional so that the Java
-	// reference encoding of "unset" — either an empty string or the literal
-	// Double.MAX_VALUE sentinel — decodes to a zero decimal instead of an error.
-	// RealizedPNL in particular arrives unset for trades whose position is not
-	// yet closed.
-	commission, err := parseOptionalDecimal(m.Commission, "commission amount")
+func fromCodecCommission(m codec.CommissionReport) (CommissionAndFeesReport, error) {
+	commissionAndFees, err := parseOptionalDecimalPointer(m.Commission, "commission and fees amount")
 	if err != nil {
-		return CommissionReport{}, err
+		return CommissionAndFeesReport{}, err
 	}
-	realized, err := parseOptionalDecimal(m.RealizedPNL, "commission realized pnl")
+	realized, err := parseOptionalDecimalPointer(m.RealizedPNL, "commission and fees realized pnl")
 	if err != nil {
-		return CommissionReport{}, err
+		return CommissionAndFeesReport{}, err
 	}
-	return CommissionReport{
-		ExecID:      m.ExecID,
-		Commission:  commission,
-		Currency:    m.Currency,
-		RealizedPNL: realized,
+	bondYield, err := parseOptionalDecimalPointer(m.Yield, "commission and fees bond yield")
+	if err != nil {
+		return CommissionAndFeesReport{}, err
+	}
+	yieldRedemptionDate, err := parseYieldRedemptionDate(m.YieldRedemptionDate)
+	if err != nil {
+		return CommissionAndFeesReport{}, err
+	}
+	return CommissionAndFeesReport{
+		ExecID:              m.ExecID,
+		Amount:              commissionAndFees,
+		Currency:            m.Currency,
+		RealizedPNL:         realized,
+		BondYield:           bondYield,
+		YieldRedemptionDate: yieldRedemptionDate,
 	}, nil
+}
+
+func parseYieldRedemptionDate(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "0" || trimmed == "2147483647" {
+		return "", nil
+	}
+	if _, err := time.Parse("20060102", trimmed); err != nil {
+		return "", fmt.Errorf("ibkr: parse commission and fees yield redemption date %q: %w", raw, err)
+	}
+	return trimmed, nil
 }

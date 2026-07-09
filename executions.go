@@ -3,7 +3,7 @@ package ibkr
 import "github.com/ThomasMarcelis/ibkr-go/internal/codec"
 
 type executionCorrelator struct {
-	routes map[int]ExecutionsRequest
+	routes map[int]struct{}
 	execs  map[string]*executionState
 }
 
@@ -19,13 +19,13 @@ type executionRouteState struct {
 
 func newExecutionCorrelator() executionCorrelator {
 	return executionCorrelator{
-		routes: make(map[int]ExecutionsRequest),
+		routes: make(map[int]struct{}),
 		execs:  make(map[string]*executionState),
 	}
 }
 
-func (c *executionCorrelator) registerRoute(reqID int, req ExecutionsRequest) {
-	c.routes[reqID] = req
+func (c *executionCorrelator) registerRoute(reqID int) {
+	c.routes[reqID] = struct{}{}
 }
 
 func (c *executionCorrelator) unregisterRoute(reqID int) {
@@ -44,10 +44,11 @@ func (c *executionCorrelator) unregisterRoute(reqID int) {
 
 func (c *executionCorrelator) observeExecution(reqID int, detail codec.ExecutionDetail) {
 	state := c.ensureExecState(detail.ExecID)
-	for routeID, req := range c.routes {
-		if !matchesExecutionRequest(req, detail) {
-			continue
-		}
+	// A commission report carries only ExecID, not reqID. Track every active
+	// route as a possible observer until the Gateway either delivers this
+	// execution on that route or closes the route. This preserves overlapping
+	// query delivery without duplicating IBKR's filter semantics locally.
+	for routeID := range c.routes {
 		if state.routes[routeID] == nil {
 			state.routes[routeID] = &executionRouteState{}
 		}
@@ -71,6 +72,11 @@ func (c *executionCorrelator) recordCommission(report codec.CommissionReport) []
 		return nil
 	}
 	state := c.ensureExecState(report.ExecID)
+	for routeID := range c.routes {
+		if state.routes[routeID] == nil {
+			state.routes[routeID] = &executionRouteState{}
+		}
+	}
 	state.commissions = append(state.commissions, report)
 
 	ready := make([]int, 0, len(state.routes))
@@ -102,7 +108,7 @@ func (c *executionCorrelator) undeliveredCommissions(reqID int, execID string) [
 }
 
 func (c *executionCorrelator) reset() {
-	c.routes = make(map[int]ExecutionsRequest)
+	c.routes = make(map[int]struct{})
 	c.execs = make(map[string]*executionState)
 }
 
@@ -135,14 +141,4 @@ func (c *executionCorrelator) maybeClearCommissionHistory(execID string) {
 	for _, routeState := range state.routes {
 		routeState.deliveredCommissions = 0
 	}
-}
-
-func matchesExecutionRequest(req ExecutionsRequest, detail codec.ExecutionDetail) bool {
-	if req.Account != "" && req.Account != detail.Account {
-		return false
-	}
-	if req.Symbol != "" && req.Symbol != detail.Symbol {
-		return false
-	}
-	return true
 }
