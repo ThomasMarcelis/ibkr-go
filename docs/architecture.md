@@ -93,11 +93,10 @@ staged protobuf migrations are implemented and live-attested.
   evidence ledger. Every registered decoder is either tied to a named test over
   a hardcoded live-derived frame or carries a concrete pending-capture reason.
 - `cmd/ibkr-capture -list-json` is the executable scenario ledger. Repository
-  audits require every scenario message ID to exist in the protocol registry
-  and every scenario name to appear in the live-coverage matrix.
+  audits require every scenario message ID to exist in the protocol registry.
 - `docs/ibkr-api-inventory.md` records the official and public surfaces. Its
-  numeric rows are checked exactly against the protocol registry; Markdown is
-  descriptive, never an independent source for message identities.
+  Markdown is descriptive, never an independent source for numeric message
+  identities.
 
 ## Routing Tables
 

@@ -11,8 +11,8 @@ from decisions:
 The matrix may decide a capability is implemented, deferred, blocked, or out of
 scope, but every current repo behavior must appear here and in the matrix.
 Numeric message identities and negotiated-version gates are owned by
-`internal/protocol`; the exact-row audit in `matrix_audit_test.go` prevents the
-tables below from drifting from that registry.
+`internal/protocol`; the tables below are descriptive rather than an
+independent protocol registry.
 
 ## Official Sources
 
@@ -48,13 +48,13 @@ committed.
 |-------|------------------|----------------|
 | Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is implemented as `Client.CurrentTime`; `reqIds` is `Orders().RefreshOrderID`. `reqManagedAccts`, server log level, redirect, and old connection toggles are matrix targets or explicit non-goals. |
 | Verification/internal auth | `verifyRequest`, `verifyMessage`, `verifyAndAuthRequest`, `verifyAndAuthMessage` | Officially internal-purpose. Matrix as out of public scope unless live Gateway emits callbacks. |
-| Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Quote streams preserve every classic price/size callback, including unmapped numeric tick types, price attributes, and optional companion size, while also delivering normalized fields plus generic, string, request-parameter, and option-computation callbacks. The remaining matrix needs live/frozen families, tickEFP, tickNews, and more generic tick IDs. |
+| Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Quote streams preserve every classic price/size callback, including unmapped numeric tick types, price attributes, and optional companion size, while also delivering normalized fields plus generic, string, request-parameter, option-computation, and contract-specific news callbacks. The remaining matrix needs live/frozen families, tickEFP, and more generic tick IDs. |
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
 | Real-time and historical bars | `reqRealTimeBars`, `cancelRealTimeBars`, `reqHistoricalData`, `cancelHistoricalData`, `reqHeadTimestamp`, `cancelHeadTimestamp`, `reqHistogramData`, `cancelHistogramData`, `reqHistoricalTicks` | Implemented, including historical schedule support through `History().Schedule`. Needs separate rows for keep-up updates, schedule, time zones, and pacing/errors. |
 | Market depth | `reqMarketDepth`, `cancelMktDepth`, `reqMktDepthExchanges` | Implemented. Needs regular depth, L2, smart depth, entitlement error, cancel, and depth metadata rows. |
 | Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. Regular contract details preserve the complete classic v200 response, including the FUND tail. Bond-specific details remain a separate gap. |
 | Accounts/portfolio | `reqAccountSummary`, `cancelAccountSummary`, `reqAccountUpdates`, `reqPositions`, `cancelPositions`, `reqPositionsMulti`, `cancelPositionsMulti`, `reqAccountUpdatesMulti`, `cancelAccountUpdatesMulti`, `reqFamilyCodes`, `reqPnL`, `cancelPnL`, `reqPnLSingle`, `cancelPnLSingle` | Implemented. Needs account/model/concurrent/streaming/trade-interaction rows. |
-| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Completed orders and classic sv200 execution/commission-and-fees results are fully projected; exact-sv201 empty and nonempty protobuf execution queries are live-attested. Nondefault execution filters, rare advanced-order branches, protobuf fee encoding, and bond yield/redemption still need live attestation. |
+| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Completed orders and classic sv200 execution/commission-and-fees results are fully projected; exact-sv201 empty and nonempty protobuf execution queries are live-attested. Exact sv202 additionally freezes a real execution Contract with conId and explicitly present zero strike; no message migrates at that boundary. Nondefault execution filters, rare advanced-order branches, protobuf fee encoding, and bond yield/redemption still need live attestation. |
 | Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Calc implemented. Exercise implemented fire-and-forget but needs live target rows. |
 | News | `reqNewsProviders`, `reqNewsBulletins`, `cancelNewsBulletins`, `reqNewsArticle`, `reqHistoricalNews` | Implemented. `api_news_article_aapl` captures the article follow-up path from a historical-news result; invalid article/provider variants remain matrix work. |
 | Scanner | `reqScannerParameters`, `reqScannerSubscription`, `cancelScannerSubscription` | Complete classic request implemented, including every legacy field and both generic option lists. The public request, ten-row `scannerData` response, and clean cancel are live-captured; an older permission-denied run also freezes codes 490 and 365. |
@@ -73,12 +73,12 @@ evidence; WSH is a separate API, not a replacement.
 | Group | Official Callbacks | ibkr-go Status |
 |-------|--------------------|----------------|
 | Errors/session | `error`, `connectionClosed`, `currentTime`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
-| Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | Most implemented. `tickEFP` and `tickNews` are official callbacks not currently represented as implemented message IDs. |
+| Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | All are implemented except `tickEFP`. `tickNews` is inbound message 84 and is delivered as `QuoteUpdateNewsTick`. |
 | Tick-by-tick | `tickByTickAllLast`, `tickByTickBidAsk`, `tickByTickMidPoint` | Implemented through unified tick-by-tick decode. Needs separate verification rows. |
 | Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Regular `contractDetails` is complete for the classic v200 shape. The distinct bond callback/message 18 is not implemented and has no successful checked-in capture. |
 | Historical | `historicalData`, `historicalDataEnd`, `historicalDataUpdate`, `historicalSchedule`, `headTimestamp`, `histogramData`, `historicalTicks`, `historicalTicksBidAsk`, `historicalTicksLast`, `historicalNews`, `historicalNewsEnd` | Implemented. |
 | Accounts/portfolio | `accountSummary`, `accountSummaryEnd`, `updateAccountValue`, `updatePortfolio`, `updateAccountTime`, `accountDownloadEnd`, `position`, `positionEnd`, `positionMulti`, `positionMultiEnd`, `accountUpdateMulti`, `accountUpdateMultiEnd`, `pnl`, `pnlSingle`, `familyCodes` | Implemented. Needs richer live scenarios. |
-| Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionAndFeesReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed-order and execution decoding preserve every classic v200 field; sv201 protobuf execution/end/fee schemas are implemented, with empty and nonempty execution flows live-attested. Advanced branches and protobuf-encoded fee reports remain explicitly unattested. |
+| Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionAndFeesReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed-order and execution decoding preserve every classic v200 field; sv201 protobuf execution/end/fee schemas are implemented, with empty and nonempty execution flows live-attested. The sv202 zero-strike semantic boundary is live-frozen without a new message migration. Advanced branches and protobuf-encoded fee reports remain explicitly unattested. |
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
 | News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has live capture coverage through `api_news_article_aapl`; invalid article/provider variants remain matrix work. |
 | FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented; `replaceFAEnd` decoded and routed by req_id (2026-07-04). |
@@ -236,6 +236,7 @@ Inbound message IDs:
 | `InTickReqParams` | 81 | Tick request params |
 | `InSmartComponents` | 82 | Smart components |
 | `InNewsArticle` | 83 | News article |
+| `InTickNews` | 84 | Contract-specific news tick |
 | `InNewsProviders` | 85 | News providers |
 | `InHistoricalNews` | 86 | Historical news |
 | `InHistoricalNewsEnd` | 87 | Historical news end |
@@ -265,7 +266,7 @@ and project scope decide whether to implement, defer, or mark out of scope.
 
 - `reqManagedAccts`, `setServerLogLevel`.
 - Verification/auth callbacks and redirect/reroute callbacks.
-- `tickEFP`, `tickNews`, and `deltaNeutralValidation`.
+- `tickEFP` and `deltaNeutralValidation`.
 - `bondContractDetails` as a distinct callback shape.
 - `orderBound` and rare OpenOrder branches.
 - Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual

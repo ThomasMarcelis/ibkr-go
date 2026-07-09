@@ -157,14 +157,15 @@ tick size, and market data type. TickGeneric (inbound 45), TickString
 (outbound 59), cancelHistoricalData encoder (outbound 25),
 reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag. Quote
 subscriptions deliver generic, string, request-parameter, and option-
-computation callbacks as discriminated `QuoteUpdate` values while keeping the
-normalized `Quote` snapshot small. Every classic price and size callback is
-also preserved with its numeric tick type, exact price-attribute mask, and
-optional companion size even when it has no normalized field. Live/delayed
-volume and matching companion sizes are normalized. The public path is frozen
+computation callbacks and contract-specific news headlines as discriminated
+`QuoteUpdate` values while keeping the normalized `Quote` snapshot small.
+Every classic price and size callback is also preserved with its numeric tick
+type, exact price-attribute mask, and optional companion size even when it has
+no normalized field. Live/delayed volume and matching companion sizes are
+normalized. The public path is frozen
 against exact server-version-200 frames from the April 5 generic-tick, June 11
-option campaign, and July 9 generic-tick-matrix captures; TickEFP and TickNews
-remain the classic L1 callback gaps.
+option campaign, July 9 generic-tick-matrix, and exact server-version-201 BRFG
+TickNews captures. TickEFP remains the classic L1 callback gap.
 
 ### Historical data extensions
 
@@ -268,13 +269,17 @@ against the local paper Gateway when applicable.
   families (price, time, margin, execution, volume, percent-change), IB algo
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
-- ~~Server-version coverage beyond exactly `server_version 200`~~ **Done.**
-  The client negotiates `server_version` 176..201 and gates every post-176
+- ~~Server-version coverage through exactly `server_version 202`~~ **Done.**
+  The client negotiates `server_version` 176..202 and gates every post-176
   wire field on the negotiated value; live-validated 2026-07-04/05 by
   down-negotiating the paper Gateway to 176/184/193/195/199/200 across
   contract details, historical bars, API-error frames, and the
   `CurrentTimeMillis` feature gate. Exact 201 is covered by the live-attested
-  envelope and executions slice below; 202+ remains the next gap.
+  envelope and executions slice below. Exact 202 is separately live-attested:
+  the official API 10.48.01 source names only its zero-strike gate, the
+  migration table contains no v202 message transition, and a live protobuf
+  execution contract carried both a nonzero conId and an explicitly present
+  zero strike. Version 203 is the next gap.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
@@ -293,18 +298,27 @@ one-share paper round trip live-attests non-empty execution details and classic
 commission reports at the same negotiated version. The classic bootstrap,
 request, detail, and end bytes are exact-vector tested.
 
-The production ceiling is 201. Server version 202 and later remain a deliberate
-wall: each later migration gate must add its encoder/decoder, live capture,
-and deterministic replay before the advertised maximum moves again. The
-migration table fails closed rather than sending a classic body after IBKR has
-retired it.
+Exact `server_version 202` is also implemented and live-attested. It introduces
+the official `ZERO_STRIKE` capability but no new protobuf message migration.
+The exact-202 public probe resolved an AAPL conId-only classic contract request
+and decoded a real protobuf execution whose Contract carried conId 265598 and
+an explicitly present fixed64 strike of zero. A sanitized non-empty replay
+freezes that same field-presence vector. This proves the negotiated semantic
+and codec boundary, not trading support for a zero-strike derivative; no such
+live product was available in the local paper session.
+
+The production ceiling is 202. Server version 203 and later remain a deliberate
+wall: each later migration gate must add its encoder/decoder, live capture, and
+deterministic replay before the advertised maximum moves again. The migration
+table fails closed rather than sending a classic body after IBKR has retired
+it.
 
 ## Ongoing
 
 - SDK conformance oracle workflow: capture reference traces from the official
   SDK against the local Gateway when adding or hardening a protocol area, and
   fold sanitized live-derived captures into deterministic replay fixtures.
-- Protobuf migrations for `server_version` 202+; see above.
+- Protobuf migrations for `server_version` 203+; see above.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
 

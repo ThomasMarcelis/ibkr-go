@@ -12,9 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `QuoteUpdate.Kind` preserves every classic price and size callback, including
   its numeric tick type, price attributes, and optional price-frame companion
   size, even when it has no normalized `Quote` field. Numeric generic ticks,
-  string ticks, request parameters, and option computations remain distinct
-  payloads; ancillary events retain the cumulative `Quote` without mutating
-  it. Option computations expose an availability bitmask so IBKR's
+  string ticks, request parameters, option computations, and contract-specific
+  news headlines remain distinct payloads; ancillary events retain the
+  cumulative `Quote` without mutating it. News ticks expose the provider time,
+  code, article ID, headline, and provider metadata. Option computations expose
+  an availability bitmask so IBKR's
   field-specific `-1`/`-2` sentinels no longer masquerade as real values.
   `Quote.Volume` normalizes live and delayed volume, and omitted request
   minimum ticks are represented by `nil` rather than terminating a stream.
@@ -40,6 +42,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   request, execution detail, end marker, and mixed classic bootstrap behavior;
   unknown protobuf frames retain their binary payload for protocol-drift
   diagnosis.
+
+- Exact `server_version 202` support freezes the official zero-strike-only
+  boundary. API 10.48.01 migrates no message at this version; a live public
+  conId-only contract lookup and a sanitized non-empty execution replay prove
+  that a protobuf Contract preserves both its conId and an explicitly present
+  strike of zero.
 
 ### Changed (breaking)
 
@@ -161,12 +169,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **The client negotiates IB Gateway `server_version` 176..201, with exact 201
-  adding raw message IDs and protobuf executions.** Fields are gated
+- **The client negotiates IB Gateway `server_version` 176..202, with exact 201
+  adding raw message IDs and protobuf executions and exact 202 adding the
+  zero-strike contract boundary.** Fields are gated
   on the version the Gateway actually returns instead of assuming the latest
-  layout. The classic sv200 and mixed-envelope sv201 layouts are live-attested;
-  versions 176..199 remain compatibility paths until independently evidenced,
-  and 202+ is not advertised. `CurrentTimeMillis` returns
+  layout. The classic sv200, mixed-envelope sv201, and zero-strike sv202
+  boundaries are live-attested; versions 176..199 remain compatibility paths
+  until independently evidenced, and 203+ is not advertised. The official API
+  10.48.01 migration table moves no message at 202; a sanitized live replay
+  freezes a protobuf execution Contract with both conId and explicit strike=0.
+  `CurrentTimeMillis` returns
   `ErrUnsupportedServerVersion` below 197, the version that introduced
   `reqCurrentTimeInMillis` on the wire.
 

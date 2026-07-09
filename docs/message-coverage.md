@@ -93,6 +93,7 @@ server version and managed-account bootstrap fields are known.
 | in | 81 | TickReqParams | landed |
 | in | 58 | MarketDataType | landed |
 | in | 57 | TickSnapshotEnd | landed |
+| in | 84 | TickNews | landed |
 | out | 59 | reqMarketDataType | landed |
 | out | 97 | reqTickByTickData | landed |
 | out | 98 | cancelTickByTickData | landed |
@@ -109,7 +110,10 @@ shortable ticks 46/89, volume-rate tick 56, delayed-timestamp string tick 88,
 and an omitted minimum tick are attested by
 `captures/20260709T223341Z-api_generic_tick_matrix_aapl`; a quote-subscription
 option computation is attested by
-`captures/20260611T080111Z-api_option_campaign_aapl`.
+`captures/20260611T080111Z-api_option_campaign_aapl`. Contract-specific BRFG
+TickNews is attested by the exact server-version-201 frames in
+`captures/20260709T230825Z-api_tick_news_aapl_probe` and frozen at the public
+API boundary by `tick_news_aapl_sv201_live.txt`.
 
 ## Real-Time and Historical Bars
 
@@ -186,9 +190,9 @@ layout, so replay fixtures exercise the production decode path.
 | in | 5 | OpenOrder | landed | See Order Management notes |
 | in | 53 | OpenOrderEnd | landed | |
 | in | 3 | OrderStatus | landed | |
-| out | 7 | ExecutionsRequest | landed | Complete classic filter plus sv200 day/date tail; exact-sv201 protobuf empty-filter request is live-frozen. Nondefault day filters await live attestation. |
-| in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. |
-| in | 55 | ExecutionsEnd | landed | Raw sv200 freeze and exact-sv201 protobuf live vector/public empty-query replay. |
+| out | 7 | ExecutionsRequest | landed | Complete classic filter plus sv200 day/date tail; exact-sv201 protobuf empty-filter request is live-frozen and unchanged at the zero-strike-only sv202 boundary. Nondefault day filters await live attestation. |
+| in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. Exact sv202 adds a live vector with both Contract.conId and explicitly present strike=0. |
+| in | 55 | ExecutionsEnd | landed | Raw sv200 freeze, exact-sv201 protobuf live vector/public empty-query replay, and exact-sv202 nonempty replay. |
 | in | 59 | CommissionAndFeesReport | landed | Complete classic and sv201 protobuf decoders; the live sv201 round trip sent classic fee reports. Meaningful bond yield/redemption and a protobuf-encoded fee report remain unattested. |
 | out | 99 | reqCompletedOrders | landed | |
 | in | 101 | CompletedOrder | landed | Exact sequential classic decoder and typed public projection preserve the complete version-gated order, algo, condition, compliance, and completion layout. The raw system-cancel replay freezes unset-sentinel handling; advanced branches without a nondefault live frame remain unattested. |
