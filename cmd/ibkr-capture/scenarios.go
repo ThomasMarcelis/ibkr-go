@@ -103,6 +103,9 @@ func verifyRawScenarioForSession(name string, sess *sessionInfo) error {
 	if md.Driver != driverWire {
 		return nil
 	}
+	if sess != nil && sess.ServerVersion > 200 && name != "bootstrap" && name != "bootstrap_client_id_0" && name != "executions_snapshot" {
+		return fmt.Errorf("raw scenario %s is not envelope-aware above server_version 200", name)
+	}
 	if !cancelsAllowedForRiskClass(md.RiskClass) {
 		return nil
 	}
@@ -117,14 +120,14 @@ var scenarios = map[string]scenario{
 		description: "clean handshake + START_API + farm-status drain (no feature request)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			// Already bootstrapped. Read a few more frames to catch any late farm-status info.
-			return readFrames(conn, 3*time.Second, logFrame, nil)
+			return readFramesAt(conn, sess.ServerVersion, 3*time.Second, logFrame, nil)
 		},
 	},
 	"bootstrap_client_id_0": {
 		name:        "bootstrap_client_id_0",
 		description: "same as bootstrap but client_id=0 (required for REQ_ALL_OPEN_ORDERS scope)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			return readFrames(conn, 3*time.Second, logFrame, nil)
+			return readFramesAt(conn, sess.ServerVersion, 3*time.Second, logFrame, nil)
 		},
 	},
 	"current_time": {
@@ -577,11 +580,11 @@ var scenarios = map[string]scenario{
 		description: "REQ_EXECUTIONS with empty filter drained to EXECUTION_DATA_END",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
-			if err := sendReqExecutions(conn, reqID); err != nil {
+			if err := sendReqExecutionsAt(conn, sess.ServerVersion, reqID); err != nil {
 				return err
 			}
 			// EXECUTION_DATA_END msg_id=55
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(55, strconv.Itoa(reqID), 1))
+			return readFramesAt(conn, sess.ServerVersion, 10*time.Second, logFrame, stopOnMsgIDWithReq(55, strconv.Itoa(reqID), 1))
 		},
 	},
 
