@@ -526,14 +526,19 @@ func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, cause error)
 // called on the actor goroutine before the corresponding place_order is sent.
 func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle {
 	handle := newOrderHandle(orderID)
-	handle.cancelFn = func(ctx context.Context) error {
+	handle.cancelFn = func(ctx context.Context, cfg cancelConfig) error {
 		ch := make(chan error, 1)
 		e.enqueue(func() {
 			if !e.isReady() {
 				ch <- ErrNotReady
 				return
 			}
-			ch <- e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
+			req, err := cancelOrderRequest(orderID, cfg, e.serverVersion)
+			if err != nil {
+				ch <- err
+				return
+			}
+			ch <- e.sendContext(ctx, req)
 		})
 		select {
 		case err := <-ch:
@@ -692,12 +697,16 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 // CancelOrder sends a cancel request for the given order ID. This is
 // fire-and-forget; the cancellation result arrives via the OrderHandle's
 // events channel as an OrderStatus with Status "Cancelled".
-func (e *engine) CancelOrder(ctx context.Context, orderID int64) error {
+func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
+		req, err := cancelOrderRequest(orderID, cfg, e.serverVersion)
+		if err != nil {
+			return err
+		}
+		return e.sendContext(ctx, req)
 	})
 }
 
@@ -730,12 +739,16 @@ func (e *engine) RefreshOpenOrders(ctx context.Context) error {
 // GlobalCancel requests cancellation of all open orders. This is
 // fire-and-forget; individual cancellation results arrive via any active
 // OrderHandle events channels.
-func (e *engine) GlobalCancel(ctx context.Context) error {
+func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
 		}
-		return e.sendContext(ctx, codec.GlobalCancelRequest{})
+		req, err := globalCancelRequest(cfg, e.serverVersion)
+		if err != nil {
+			return err
+		}
+		return e.sendContext(ctx, req)
 	})
 }
 

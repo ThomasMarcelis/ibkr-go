@@ -133,7 +133,7 @@ func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent
 func (h *OrderHandle) Done() <-chan struct{}
 func (h *OrderHandle) Wait() error
 func (h *OrderHandle) Close() error
-func (h *OrderHandle) Cancel(ctx context.Context) error
+func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error
 func (h *OrderHandle) Modify(ctx context.Context, order Order) error
 ```
 
@@ -144,8 +144,10 @@ is non-nil per event.
 
 `Lifecycle()` delivers Gap and Resumed events across reconnect boundaries. It is
 bounded and observational. `Close()` detaches the handle without cancelling the
-server-side order. `Cancel(ctx)` sends a cancel request. `Modify(ctx, order)`
-sends a modified order with the same OrderID.
+server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
+can attach the manual cancel time, external operator, and manual-order
+indicator through `CancelOption`. `Modify(ctx, order)` sends a modified order
+with the same OrderID.
 
 `Events()` closes before `Done()`. Consumers that need every order event,
 including late `Execution` or `Commission` callbacks after a terminal status,

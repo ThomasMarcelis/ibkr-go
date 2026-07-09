@@ -320,14 +320,24 @@ func (c OrdersClient) Preview(ctx context.Context, req PlaceOrderRequest) (Order
 	return c.engine.PreviewOrder(ctx, req)
 }
 
-// Cancel requests cancellation of a single order by ID.
-func (c OrdersClient) Cancel(ctx context.Context, orderID int64) error {
-	return c.engine.CancelOrder(ctx, orderID)
+// Cancel requests cancellation of a single order by ID. Options are only
+// needed for operator-entered compliance metadata.
+func (c OrdersClient) Cancel(ctx context.Context, orderID int64, opts ...CancelOption) error {
+	cfg, err := applyCancelOptions(opts)
+	if err != nil {
+		return err
+	}
+	return c.engine.CancelOrder(ctx, orderID, cfg)
 }
 
-// CancelAll issues a global cancel for all open orders.
-func (c OrdersClient) CancelAll(ctx context.Context) error {
-	return c.engine.GlobalCancel(ctx)
+// CancelAll issues a global cancel for all open orders. External-operator and
+// manual-order-indicator options are supported; manual cancel time is not.
+func (c OrdersClient) CancelAll(ctx context.Context, opts ...CancelOption) error {
+	cfg, err := applyCancelOptions(opts)
+	if err != nil {
+		return err
+	}
+	return c.engine.GlobalCancel(ctx, cfg)
 }
 
 // Open returns a one-shot snapshot of open orders in the given scope.

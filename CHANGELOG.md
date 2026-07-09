@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## [Unreleased]
 
+### Added
+
+- Order cancellation accepts optional, locally validated compliance metadata:
+  `WithManualCancelTime`, `WithCancelExternalOperator`, and
+  `WithCancelManualOrderIndicator`. The options work through both direct and
+  handle cancellation; the two CME tagging fields also apply to global
+  cancellation. Unsupported negotiated versions fail before any frame is
+  sent.
+
 ### Changed (breaking)
 
 - **Order warnings no longer close the handle.** An order-targeted `api_error`

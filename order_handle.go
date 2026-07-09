@@ -25,9 +25,9 @@ type OrderHandle struct {
 	err       error
 	errMu     sync.Mutex
 
-	cancelFn func(context.Context) error        // set by engine, sends CancelOrder
-	modifyFn func(context.Context, Order) error // set by engine, sends PlaceOrder with same ID
-	detachFn func()                             // set by engine, routes Close through the actor loop
+	cancelFn func(context.Context, cancelConfig) error // set by engine, sends CancelOrder
+	modifyFn func(context.Context, Order) error        // set by engine, sends PlaceOrder with same ID
+	detachFn func()                                    // set by engine, routes Close through the actor loop
 }
 
 func newOrderHandle(orderID int64) *OrderHandle {
@@ -80,12 +80,17 @@ func (h *OrderHandle) Close() error {
 	return nil
 }
 
-// Cancel sends a cancel request for this order to the server.
-func (h *OrderHandle) Cancel(ctx context.Context) error {
+// Cancel sends a cancel request for this order to the server. Options are only
+// needed for operator-entered compliance metadata.
+func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 	if h.cancelFn == nil {
 		return fmt.Errorf("ibkr: order handle not connected")
 	}
-	return h.cancelFn(ctx)
+	cfg, err := applyCancelOptions(opts)
+	if err != nil {
+		return err
+	}
+	return h.cancelFn(ctx, cfg)
 }
 
 // Modify sends a modified order to the server. The order is re-sent with the
