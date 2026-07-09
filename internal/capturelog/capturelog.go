@@ -46,12 +46,21 @@ type Session struct {
 	mu         sync.Mutex
 	redactions []redaction
 	maxSecret  int
-	pending    map[streamKey][]byte
+	// queue keeps cross-direction chronology while each stream retains the
+	// small suffix needed to find a secret split across socket reads.
+	queue   []*queuedEvent
+	streams map[streamKey][]*queuedEvent
 }
 
 type redaction struct {
 	secret      []byte
 	placeholder []byte
+}
+
+type queuedEvent struct {
+	event Event
+	data  []byte
+	safe  int
 }
 
 // Redact registers an exact-literal replacement applied to every recorded chunk
@@ -175,7 +184,7 @@ func (s *Session) Record(direction string, data []byte) error {
 }
 
 func (s *Session) RecordConnect(leg int) error {
-	return s.recordEvent(Event{
+	return s.enqueueEvent(Event{
 		At:   time.Now().UTC(),
 		Kind: EventConnect,
 		Leg:  leg,
@@ -185,93 +194,145 @@ func (s *Session) RecordConnect(leg int) error {
 func (s *Session) RecordDisconnect(leg int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.flushPendingLocked(func(key streamKey) bool { return key.leg == leg }); err != nil {
+	if err := s.finishStreamsLocked(func(key streamKey) bool { return key.leg == leg }); err != nil {
 		return err
 	}
-	return s.recordEventLocked(Event{
+	s.queue = append(s.queue, &queuedEvent{event: Event{
 		At:   time.Now().UTC(),
 		Kind: EventDisconnect,
 		Leg:  leg,
-	})
+	}})
+	return s.flushQueueLocked()
 }
 
 func (s *Session) RecordChunk(leg int, direction string, data []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	chunks := s.redactedChunksLocked(leg, direction, data, false)
-	for _, chunk := range chunks {
-		if err := s.recordEventLocked(Event{
+	if len(data) == 0 {
+		return nil
+	}
+	if len(s.redactions) == 0 {
+		return s.recordChunkLocked(time.Now().UTC(), leg, direction, data)
+	}
+
+	if s.streams == nil {
+		s.streams = make(map[streamKey][]*queuedEvent)
+	}
+	key := streamKey{leg: leg, direction: direction}
+	record := &queuedEvent{
+		event: Event{
 			At:        time.Now().UTC(),
 			Kind:      EventChunk,
 			Leg:       leg,
 			Direction: direction,
-			Length:    len(chunk),
-			Data:      base64.StdEncoding.EncodeToString(chunk),
-		}); err != nil {
-			return err
-		}
+		},
+		data: append([]byte(nil), data...),
 	}
-	return nil
+	s.queue = append(s.queue, record)
+	s.streams[key] = append(s.streams[key], record)
+	s.redactStreamLocked(key)
+	return s.flushQueueLocked()
 }
 
-func (s *Session) recordEvent(event Event) error {
+func (s *Session) enqueueEvent(event Event) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.recordEventLocked(event)
+	if len(s.redactions) == 0 {
+		return s.recordEventLocked(event)
+	}
+	s.queue = append(s.queue, &queuedEvent{event: event})
+	return s.flushQueueLocked()
 }
 
 func (s *Session) recordEventLocked(event Event) error {
 	return s.enc.Encode(event)
 }
 
-func (s *Session) redactedChunksLocked(leg int, direction string, data []byte, flush bool) [][]byte {
-	if len(s.redactions) == 0 {
-		if len(data) == 0 {
-			return nil
-		}
-		return [][]byte{append([]byte(nil), data...)}
-	}
-	if s.pending == nil {
-		s.pending = make(map[streamKey][]byte)
-	}
-	key := streamKey{leg: leg, direction: direction}
-	buf := append(append([]byte(nil), s.pending[key]...), data...)
-	buf = s.applyRedactions(buf)
-	keep := 0
-	if !flush && s.maxSecret > 1 && len(buf) > 0 {
-		keep = s.maxSecret - 1
-		if keep > len(buf) {
-			keep = len(buf)
-		}
-	}
-	ready := buf[:len(buf)-keep]
-	if keep == 0 {
-		delete(s.pending, key)
-	} else {
-		s.pending[key] = append(s.pending[key][:0], buf[len(buf)-keep:]...)
-	}
-	if len(ready) == 0 {
-		return nil
-	}
-	return [][]byte{append([]byte(nil), ready...)}
+func (s *Session) recordChunkLocked(at time.Time, leg int, direction string, data []byte) error {
+	chunk := append([]byte(nil), data...)
+	return s.recordEventLocked(Event{
+		At:        at,
+		Kind:      EventChunk,
+		Leg:       leg,
+		Direction: direction,
+		Length:    len(chunk),
+		Data:      base64.StdEncoding.EncodeToString(chunk),
+	})
 }
 
-func (s *Session) flushPendingLocked(match func(streamKey) bool) error {
-	for key, pending := range s.pending {
-		if !match(key) || len(pending) == 0 {
+func (s *Session) redactStreamLocked(key streamKey) {
+	records := s.streams[key]
+	unsafeLen := 0
+	for _, record := range records {
+		unsafeLen += len(record.data) - record.safe
+	}
+	unsafe := make([]byte, 0, unsafeLen)
+	for _, record := range records {
+		unsafe = append(unsafe, record.data[record.safe:]...)
+	}
+	unsafe = s.applyRedactions(unsafe)
+	offset := 0
+	for _, record := range records {
+		n := len(record.data) - record.safe
+		copy(record.data[record.safe:], unsafe[offset:offset+n])
+		offset += n
+	}
+
+	keep := min(s.maxSecret-1, len(unsafe))
+	ready := len(unsafe) - keep
+	for _, record := range records {
+		if ready == 0 {
+			break
+		}
+		n := min(ready, len(record.data)-record.safe)
+		record.safe += n
+		ready -= n
+	}
+}
+
+func (s *Session) finishStreamsLocked(match func(streamKey) bool) error {
+	for key, records := range s.streams {
+		if !match(key) {
 			continue
 		}
-		delete(s.pending, key)
-		chunk := s.applyRedactions(pending)
-		if err := s.recordEventLocked(Event{
-			At:        time.Now().UTC(),
-			Kind:      EventChunk,
-			Leg:       key.leg,
-			Direction: key.direction,
-			Length:    len(chunk),
-			Data:      base64.StdEncoding.EncodeToString(chunk),
-		}); err != nil {
+		for _, record := range records {
+			record.safe = len(record.data)
+		}
+	}
+	return s.flushQueueLocked()
+}
+
+func (s *Session) flushQueueLocked() error {
+	for len(s.queue) > 0 {
+		record := s.queue[0]
+		if record.event.Kind != EventChunk {
+			if err := s.recordEventLocked(record.event); err != nil {
+				return err
+			}
+			s.queue = s.queue[1:]
+			continue
+		}
+		if record.safe == 0 {
+			return nil
+		}
+
+		if err := s.recordChunkLocked(record.event.At, record.event.Leg, record.event.Direction, record.data[:record.safe]); err != nil {
 			return err
+		}
+		key := streamKey{leg: record.event.Leg, direction: record.event.Direction}
+		if record.safe < len(record.data) {
+			record.data = append([]byte(nil), record.data[record.safe:]...)
+			record.safe = 0
+			return nil
+		}
+
+		s.queue = s.queue[1:]
+		records := s.streams[key]
+		records = records[1:]
+		if len(records) == 0 {
+			delete(s.streams, key)
+		} else {
+			s.streams[key] = records
 		}
 	}
 	return nil
@@ -281,7 +342,7 @@ func (s *Session) Close() error {
 	var err error
 	s.closeOnce.Do(func() {
 		s.mu.Lock()
-		if flushErr := s.flushPendingLocked(func(streamKey) bool { return true }); flushErr != nil && err == nil {
+		if flushErr := s.finishStreamsLocked(func(streamKey) bool { return true }); flushErr != nil && err == nil {
 			err = flushErr
 		}
 		s.mu.Unlock()

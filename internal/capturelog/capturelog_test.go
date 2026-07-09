@@ -98,6 +98,38 @@ func TestRedactionSpanningChunksPreservesLength(t *testing.T) {
 	}
 }
 
+func TestRedactionPreservesCrossDirectionOrder(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	session, err := Create(root, Meta{Scenario: "redact-order"})
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	session.Redact("supersecret", "mask")
+
+	if err := session.RecordChunk(1, "client", []byte("c")); err != nil {
+		t.Fatalf("RecordChunk(client) error = %v", err)
+	}
+	if err := session.RecordChunk(1, "server", []byte("server-payload")); err != nil {
+		t.Fatalf("RecordChunk(server) error = %v", err)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	events, err := LoadEvents(filepath.Join(session.Dir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("LoadEvents() error = %v", err)
+	}
+	if len(events) != 2 {
+		t.Fatalf("events len = %d, want 2", len(events))
+	}
+	if events[0].Direction != "client" || events[1].Direction != "server" {
+		t.Fatalf("directions = %q, %q; want client, server", events[0].Direction, events[1].Direction)
+	}
+}
+
 func TestLoadMetaAndWriteReplay(t *testing.T) {
 	t.Parallel()
 
