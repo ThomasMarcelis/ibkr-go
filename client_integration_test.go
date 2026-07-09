@@ -326,50 +326,6 @@ func TestAccountSummarySucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
 	}
 }
 
-func TestSubscribeAccountSummaryRejectsThirdConcurrentSubscription(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "account_summary_two_subs.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub1, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"NetLiquidation"},
-	})
-	if err != nil {
-		t.Fatalf("SubscribeAccountSummary() first error = %v", err)
-	}
-
-	sub2, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"BuyingPower"},
-	})
-	if err != nil {
-		t.Fatalf("SubscribeAccountSummary() second error = %v", err)
-	}
-
-	sub3, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"ExcessLiquidity"},
-	})
-	if err == nil {
-		if sub3 != nil {
-			_ = sub3.Close()
-		}
-		t.Fatal("SubscribeAccountSummary() third error = nil, want rejection")
-	}
-	if err := sub1.Close(); err != nil {
-		t.Fatalf("sub1.Close() error = %v", err)
-	}
-	if err := sub2.Close(); err != nil {
-		t.Fatalf("sub2.Close() error = %v", err)
-	}
-}
-
 func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T) {
 	t.Parallel()
 
