@@ -2236,6 +2236,8 @@ func TestLiveAlgoScaleInWithStopLoss(t *testing.T) {
 
 func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	ibkrlive.RequireTrading(t)
+	restoreVersion := ibkr.SetAdvertisedServerVersionMaxForTest(201)
+	defer restoreVersion()
 	client, _, cancel := ibkrlive.DialTradingContext(t, 60*time.Second)
 	defer cancel()
 	defer client.Close()
@@ -2245,9 +2247,16 @@ func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	defer cancelReq()
 
 	account := liveAccount(t, client)
+	if got := client.Session().ServerVersion; got != 201 {
+		t.Fatalf("server version = %d, want exact 201", got)
+	}
+	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	// Buy.
-	buyOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeMarket)
+	// Marketable limits with OutsideRTH cover both regular and extended
+	// sessions without leaving a queued market order when regular hours close.
+	buyOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
+	buyOrder.LmtPrice = liveMarketableBuy(anchor)
+	buyOrder.OutsideRTH = true
 	buyHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: buyOrder})
 	if err != nil {
 		t.Fatalf("buy: %v", err)
@@ -2259,7 +2268,9 @@ func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	}
 
 	// Immediate sell.
-	sellOrder := liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeMarket)
+	sellOrder := liveBaseOrder(account, ibkr.ActionSell, ibkr.OrderTypeLimit)
+	sellOrder.LmtPrice = liveMarketableSell(anchor)
+	sellOrder.OutsideRTH = true
 	sellHandle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: sellOrder})
 	if err != nil {
 		t.Fatalf("sell: %v", err)

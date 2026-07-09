@@ -1,8 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"net"
 	"strconv"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
 type comboLegSpec struct {
@@ -279,6 +283,17 @@ func sendReqAllOpenOrders(conn net.Conn) error {
 // parsing on the server and causes the request to be silently dropped.
 func sendReqExecutions(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"7", "3", strconv.Itoa(reqID), "0", "", "", "", "", "", "", "2147483647", "0"})
+}
+
+func sendReqExecutionsAt(conn net.Conn, serverVersion, reqID int) error {
+	payload, err := codec.Encode(serverVersion, codec.ExecutionsRequest{ReqID: reqID})
+	if err != nil {
+		return fmt.Errorf("encode executions request: %w", err)
+	}
+	if err := wire.WriteFrame(conn, payload); err != nil {
+		return fmt.Errorf("write executions request: %w", err)
+	}
+	return nil
 }
 
 // --- Market data type (msg_id=59) ---

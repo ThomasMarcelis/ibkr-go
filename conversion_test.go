@@ -250,6 +250,32 @@ func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 	}
 }
 
+func TestFromCodecExecutionOptionExerciseType(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		raw  string
+		want OptionExerciseType
+	}{
+		{"gateway none sentinel", "-1", OptionExerciseTypeNone},
+		{"future value is preserved", "444", OptionExerciseType(444)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			update, err := fromCodecExecution(codec.ExecutionDetail{
+				Shares: "1", Price: "315.48", Time: "20260709 18:55:05 US/Eastern",
+				OptExerciseOrLapseType: tc.raw,
+			})
+			if err != nil {
+				t.Fatalf("fromCodecExecution() error = %v", err)
+			}
+			if got := update.Execution.OptionExerciseType; got != tc.want {
+				t.Fatalf("OptionExerciseType = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
 	t.Parallel()
 

@@ -4,12 +4,13 @@
 not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
 The library currently exposes a broad read-only surface plus order management,
-market depth, and option exercise. Its supported and
-live-attested classic baseline is IB Gateway `server_version 200`. The session
-handshake can negotiate 176..200 and gates fields on the returned version, but
-176..199 remain compatibility paths rather than advertised support until each
-has independent evidence. Server versions above 200 require the raw-ID and
-protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
+market depth, and option exercise. Its classic baseline is live-attested at IB
+Gateway `server_version 200`; exact `server_version 201` adds the negotiated
+raw-ID envelope and protobuf executions flow. The session handshake can
+negotiate 176..201 and gates fields on the returned version, but 176..199
+remain compatibility paths rather than advertised support until each has
+independent evidence. Versions 202 and newer remain unsupported until their
+next staged protobuf migrations are implemented and live-attested.
 
 ## Layers
 
@@ -20,8 +21,9 @@ protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
   subscription management
 - `internal/transport/`: socket dial, buffered frame read loop, write loop,
   pacing
-- `internal/protocol/`: dependency-free classic message identity, direction,
-  supported-version bounds, and field-layout version gates
+- `internal/protocol/`: dependency-free message identity, direction,
+  negotiated classic/protobuf envelope, migration gates, and supported-version
+  bounds
 - `internal/codec/`: typed message encode/decode, split into per-domain files
   (`codec_orders.go`, `codec_marketdata.go`, etc.), the inbound decode
   registry, and protocol-owned version-gate aliases
@@ -48,19 +50,24 @@ protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
 
 ## Codec Dispatch
 
-- **Decode.** `codec.DecodeBatch` peeks the msg-id from the raw frame bytes
-  (`bytes.IndexByte` up to the first NUL) before parsing any fields, then
-  looks it up in `inboundDecoders`, an explicit `map[int]decodeFunc` with one
-  decode function per message placed next to its struct in the relevant
-  per-domain codec file. This byte-level peek is the deliberate branch point
-  for a future protobuf path: msg-ids above 200 will carry protobuf payloads
-  whose bodies can contain embedded NUL bytes, so decoding must be able to
-  choose classic NUL-delimited parsing versus protobuf unmarshalling before
-  touching the field data. Today every frame takes the classic path.
+- **Envelope.** Below server version 201, the message ID is the first classic
+  NUL-delimited ASCII field. At 201, every normal frame starts with a raw
+  four-byte big-endian wire ID. Wire IDs 1..200 have a classic field body;
+  wire IDs above 200 select protobuf and map to base ID `wireID-200`. The
+  pre-session server-info frame remains classic and has no message envelope.
+- **Decode.** `codec.DecodeBatch` separates this negotiated envelope before
+  inspecting the body. Classic bodies go through `inboundDecoders`, an
+  explicit `map[int]decodeFunc`; protobuf bodies go through the equally
+  explicit `inboundProtobufDecoders`. Unknown classic messages preserve their
+  fields, while unknown protobuf messages preserve their binary body without
+  interpreting embedded NUL bytes.
 - **Encode.** Every message struct implements `encodeWire(sv int) ([]string,
   error)` directly; the `Message` interface is that encode capability, so a
   struct without `encodeWire` does not compile as a `Message` and encode
-  coverage is checked at compile time.
+  coverage is checked at compile time. Migrated requests additionally
+  implement the local protobuf encoder capability. The protocol migration
+  table rejects a request once its protobuf gate is reached unless that
+  encoder exists; it never falls back to an invalid classic body.
 - **Field parsing.** `fieldReader` is a lazy cursor over the frame's backing
   byte slice, not a pre-split `[]string`. Numeric and boolean fields parse in
   place through transient `unsafe.String` views handed to `strconv`; only
@@ -138,7 +145,7 @@ singleton open-orders observer.
 - `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
   boundary it could not fully resolve, so a degraded parse is observable
   instead of silently dropping fields.
-- The advertised handshake maximum (`maxServerVersion`, currently 200) is a
+- The advertised handshake maximum (`maxServerVersion`, currently 201) is a
   package-level override point used only by the version-matrix live tests to
   force a session onto an older wire layout for verification; production
   code always advertises the maximum.

@@ -1037,6 +1037,14 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 	if err != nil {
 		return ExecutionUpdate{}, err
 	}
+	optExerciseOrLapseType, err := parseOptionalInt(m.OptExerciseOrLapseType, "execution option exercise or lapse type")
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
+	optionExerciseType := OptionExerciseType(optExerciseOrLapseType)
+	if optExerciseOrLapseType == -1 {
+		optionExerciseType = OptionExerciseTypeNone
+	}
 	return ExecutionUpdate{
 		Execution: &Execution{
 			OrderID:                 m.OrderID,
@@ -1060,6 +1068,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 			Liquidity:               ExecutionLiquidity(lastLiquidity),
 			PriceRevisionPending:    pendingPriceRevision,
 			Submitter:               m.Submitter,
+			OptionExerciseType:      optionExerciseType,
 		},
 	}, nil
 }

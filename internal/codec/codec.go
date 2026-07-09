@@ -1,10 +1,10 @@
 package codec
 
 import (
-	"bytes"
 	"fmt"
 	"strconv"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -40,32 +40,38 @@ func DecodeServerInfo(payload []byte) (ServerInfo, error) {
 
 // DecodeBatch decodes a framed payload into one or more messages keyed by integer msg_id.
 func DecodeBatch(sv int, payload []byte) ([]Message, error) {
-	if len(payload) == 0 {
-		return nil, wire.ErrEmptyMessage
-	}
-	if payload[len(payload)-1] != 0 {
-		return nil, wire.ErrMalformedFrame
-	}
-	// Peek the msg_id straight from the raw bytes, before splitting fields.
-	// This is the future protobuf branch point: msg_ids above 200 carry
-	// protobuf payloads whose bodies contain embedded NUL bytes, so a
-	// parse-fields-first (NUL-split) approach would corrupt them. Today every
-	// frame is classic NUL-delimited, so we only take that path.
-	nul := bytes.IndexByte(payload, 0)
-	if nul <= 0 {
-		return nil, wire.ErrMalformedFrame
-	}
-	msgID, err := strconv.Atoi(asString(payload[:nul]))
+	envelope, err := protocol.DecodeEnvelope(sv, payload)
 	if err != nil {
-		return nil, fmt.Errorf("codec: parse msg_id %q: %w", payload[:nul], err)
+		return nil, err
 	}
-	// Reader positioned just past the msg_id field.
-	r := newFieldReaderBytes(payload)
-	r.off = nul + 1
+	if envelope.Encoding == protocol.ProtobufBody {
+		dec, ok := inboundProtobufDecoders[envelope.MsgID]
+		if !ok {
+			return []Message{UnknownInbound{
+				MsgID:    envelope.MsgID,
+				Encoding: protocol.ProtobufBody,
+				Payload:  append([]byte(nil), envelope.Body...),
+			}}, nil
+		}
+		msgs, err := dec(envelope.Body, sv)
+		if err != nil {
+			return nil, fmt.Errorf("codec: protobuf msg_id %d: %w", envelope.MsgID, err)
+		}
+		return msgs, nil
+	}
+
+	if len(envelope.Body) > 0 && envelope.Body[len(envelope.Body)-1] != 0 {
+		return nil, wire.ErrMalformedFrame
+	}
+	r := newFieldReaderBytes(envelope.Body)
+	// Decoder field positions include the message ID. The negotiated envelope
+	// has already consumed it, so retain that logical position while keeping
+	// Remaining based on the full original field count.
 	r.pos = 1
-	msgs, err := decodeByMsgID(sv, msgID, r)
+	r.total++
+	msgs, err := decodeByMsgID(sv, envelope.MsgID, r)
 	if err != nil {
-		return nil, fmt.Errorf("codec: msg_id %d: %w", msgID, err)
+		return nil, fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err)
 	}
 	return msgs, nil
 }
@@ -96,10 +102,36 @@ func Encode(sv int, msg Message) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return wire.EncodeFields(fields), nil
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("codec: message encoded no fields")
+	}
+	msgID, err := strconv.Atoi(fields[0])
+	if err != nil || msgID < 0 {
+		return nil, fmt.Errorf("codec: invalid outbound msg_id %q", fields[0])
+	}
+	if unknown, ok := msg.(UnknownInbound); ok && unknown.Encoding == protocol.ProtobufBody {
+		return protocol.EncodeProtobufEnvelope(sv, msgID, unknown.Payload)
+	}
+	if proto, ok := msg.(protobufEncoder); ok && sv >= proto.protobufVersion() {
+		body, err := proto.encodeProto(sv)
+		if err != nil {
+			return nil, err
+		}
+		return protocol.EncodeProtobufEnvelope(sv, msgID, body)
+	}
+	if version, ok := protocol.OutboundProtobufVersion(msgID); ok && sv >= version {
+		return nil, fmt.Errorf("codec: msg_id %d protobuf encoding is not implemented for server_version %d", msgID, sv)
+	}
+	return protocol.EncodeClassicEnvelope(sv, msgID, fields[1:])
 }
 
 type decodeFunc func(r *fieldReader, sv int) ([]Message, error)
+type protobufDecodeFunc func(body []byte, sv int) ([]Message, error)
+
+type protobufEncoder interface {
+	protobufVersion() int
+	encodeProto(sv int) ([]byte, error)
+}
 
 // inboundDecoders maps msg_id to its decoder. One explicit table, no
 // init() registration.
@@ -185,8 +217,10 @@ var inboundDecoders = map[int]decodeFunc{
 // session events so drift stays observable; the raw fields are preserved for
 // diagnosis and re-encode verbatim.
 type UnknownInbound struct {
-	MsgID  int
-	Fields []string
+	MsgID    int
+	Encoding protocol.BodyEncoding
+	Fields   []string
+	Payload  []byte
 }
 
 func (m UnknownInbound) encodeWire(sv int) ([]string, error) {
@@ -203,7 +237,7 @@ func decodeByMsgID(sv int, msgID int, r *fieldReader) ([]Message, error) {
 		for r.Remaining() > 0 {
 			fields = append(fields, r.ReadString())
 		}
-		return []Message{UnknownInbound{MsgID: msgID, Fields: fields}}, nil
+		return []Message{UnknownInbound{MsgID: msgID, Encoding: protocol.ClassicBody, Fields: fields}}, nil
 	}
 	msgs, err := dec(r, sv)
 	if err == nil && r.Err() != nil {

@@ -178,15 +178,15 @@ header should say that account-specific identifiers are sanitized.
 - prefer complex live scenarios over one-request smoke captures when adding
   new coverage, especially for order, execution, account, PnL, historical
   window, and multi-subscription behavior
-- broaden live capture coverage beyond `server_version 200`
+- broaden live capture coverage beyond the exact `server_version 201`
 - use the recorder and normalization tooling to derive new scenarios from
   contributor-owned Gateway or TWS sessions
 
 ## Raw frames are the canonical server-side representation
 
-Server frames in transcripts below `server_version 200` MUST use `raw server`
-steps carrying live-captured bytes; the testhost rejects DSL-form server
-frames for such transcripts. DSL-form frames re-encode through the codec
+Server frames in transcripts at any version other than the default
+`server_version 200` MUST use `raw server` steps carrying live-captured bytes;
+the testhost rejects DSL-form server frames for such transcripts. DSL-form frames re-encode through the codec
 under test, so a version-gated layout bug would replay green and only fail
 live — the symmetric-codec-bug class. New captures land raw by default (the
 capture pipeline already produces the raw bytes); the JSON message form is a

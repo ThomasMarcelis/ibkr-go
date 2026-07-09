@@ -14,7 +14,9 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 // defaultServerVersion is the wire layout used to encode server frames for a
@@ -146,21 +148,25 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: handshake: read start_api: %w", err))
 				return
 			}
-			startFields, err := wire.ParseFields(startPayload)
+			startEnvelope, err := protocol.DecodeEnvelope(serverVersion, startPayload)
 			if err != nil {
-				h.finish(fmt.Errorf("testhost: handshake: parse start_api: %w", err))
+				h.finish(fmt.Errorf("testhost: handshake: decode start_api envelope: %w", err))
 				return
 			}
-			wantStartAPI := strconv.Itoa(codec.OutStartAPI)
-			if len(startFields) < 1 || startFields[0] != wantStartAPI {
-				h.finish(fmt.Errorf("testhost: handshake: start_api msg_id = %v, want %s", startFields[0], wantStartAPI))
+			if startEnvelope.MsgID != codec.OutStartAPI || startEnvelope.Encoding != protocol.ClassicBody {
+				h.finish(fmt.Errorf("testhost: handshake: start_api envelope = {msg_id:%d encoding:%d}, want classic msg_id %d", startEnvelope.MsgID, startEnvelope.Encoding, codec.OutStartAPI))
+				return
+			}
+			startFields, err := parseClassicEnvelopeBody(startEnvelope.Body)
+			if err != nil {
+				h.finish(fmt.Errorf("testhost: handshake: parse start_api: %w", err))
 				return
 			}
 			// Store client_id in bindings if body requests it
 			if cid, ok := cur.body["client_id"]; ok {
 				if s, ok := cid.(string); ok && strings.HasPrefix(s, "$") {
-					if len(startFields) >= 3 {
-						bindings[s] = startFields[2]
+					if len(startFields) >= 2 {
+						bindings[s] = startFields[1]
 					}
 				}
 			}
@@ -183,7 +189,7 @@ func (h *Host) run() {
 				h.finish(err)
 				return
 			}
-			name, body, err := decodeClientMessage(payload)
+			name, body, err := decodeClientMessageAt(serverVersion, payload)
 			if err != nil {
 				h.finish(err)
 				return
@@ -502,17 +508,30 @@ func readChunked(r io.Reader, total int, sizes []int) ([]byte, error) {
 // decodeClientMessage decodes a real wire format client message into
 // a name and body map for transcript matching.
 func decodeClientMessage(payload []byte) (string, map[string]any, error) {
-	fields, err := wire.ParseFields(payload)
+	return decodeClientMessageAt(defaultServerVersion, payload)
+}
+
+func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[string]any, error) {
+	envelope, err := protocol.DecodeEnvelope(serverVersion, payload)
 	if err != nil {
 		return "", nil, err
 	}
+	if envelope.Encoding == protocol.ProtobufBody {
+		if envelope.MsgID != codec.OutReqExecutions {
+			return "", nil, fmt.Errorf("testhost: protobuf client msg_id %d is not supported", envelope.MsgID)
+		}
+		body, err := decodeProtoExecutionsRequest(envelope.Body)
+		return "req_executions", body, err
+	}
+	fields, err := parseClassicEnvelopeBody(envelope.Body)
+	if err != nil {
+		return "", nil, err
+	}
+	fields = append([]string{strconv.Itoa(envelope.MsgID)}, fields...)
 	if len(fields) == 0 {
 		return "", nil, fmt.Errorf("testhost: empty client message")
 	}
-	msgID, err := strconv.Atoi(fields[0])
-	if err != nil {
-		return "", nil, fmt.Errorf("testhost: parse client msg_id %q: %w", fields[0], err)
-	}
+	msgID := envelope.MsgID
 
 	switch msgID {
 	case 71: // OutStartAPI
@@ -1203,6 +1222,122 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 	default:
 		return "", nil, fmt.Errorf("testhost: unsupported client msg_id %d", msgID)
 	}
+}
+
+func parseClassicEnvelopeBody(body []byte) ([]string, error) {
+	if len(body) == 0 {
+		return nil, nil
+	}
+	if body[len(body)-1] != 0 {
+		return nil, wire.ErrMalformedFrame
+	}
+	return strings.Split(string(body[:len(body)-1]), "\x00"), nil
+}
+
+func decodeProtoExecutionsRequest(payload []byte) (map[string]any, error) {
+	body := map[string]any{}
+	for len(payload) > 0 {
+		number, typ, n := protowire.ConsumeTag(payload)
+		if n < 0 {
+			return nil, fmt.Errorf("testhost: executions protobuf tag: %w", protowire.ParseError(n))
+		}
+		payload = payload[n:]
+		switch number {
+		case 1:
+			value, n := protowire.ConsumeVarint(payload)
+			if typ != protowire.VarintType || n < 0 {
+				return nil, fmt.Errorf("testhost: executions protobuf req_id is malformed")
+			}
+			payload = payload[n:]
+			body["req_id"] = strconv.Itoa(decodeProtoInt32(value))
+		case 2:
+			filter, n := protowire.ConsumeBytes(payload)
+			if typ != protowire.BytesType || n < 0 {
+				return nil, fmt.Errorf("testhost: executions protobuf filter is malformed")
+			}
+			payload = payload[n:]
+			if err := decodeProtoExecutionFilter(filter, body); err != nil {
+				return nil, err
+			}
+		default:
+			n := protowire.ConsumeFieldValue(number, typ, payload)
+			if n < 0 {
+				return nil, fmt.Errorf("testhost: executions protobuf field %d: %w", number, protowire.ParseError(n))
+			}
+			payload = payload[n:]
+		}
+	}
+	return body, nil
+}
+
+func decodeProtoExecutionFilter(payload []byte, body map[string]any) error {
+	for len(payload) > 0 {
+		number, typ, n := protowire.ConsumeTag(payload)
+		if n < 0 {
+			return fmt.Errorf("testhost: execution filter protobuf tag: %w", protowire.ParseError(n))
+		}
+		payload = payload[n:]
+		switch number {
+		case 1, 8:
+			value, n := protowire.ConsumeVarint(payload)
+			if typ != protowire.VarintType || n < 0 {
+				return fmt.Errorf("testhost: execution filter protobuf field %d is malformed", number)
+			}
+			payload = payload[n:]
+			key := "client_id"
+			if number == 8 {
+				key = "last_days"
+			}
+			body[key] = strconv.Itoa(decodeProtoInt32(value))
+		case 2, 3, 4, 5, 6, 7:
+			value, n := protowire.ConsumeBytes(payload)
+			if typ != protowire.BytesType || n < 0 {
+				return fmt.Errorf("testhost: execution filter protobuf field %d is malformed", number)
+			}
+			payload = payload[n:]
+			key := map[protowire.Number]string{2: "account", 3: "time", 4: "symbol", 5: "sec_type", 6: "exchange", 7: "side"}[number]
+			body[key] = string(value)
+		case 9:
+			if typ == protowire.VarintType {
+				value, n := protowire.ConsumeVarint(payload)
+				if n < 0 {
+					return fmt.Errorf("testhost: execution filter protobuf specific_dates is malformed")
+				}
+				payload = payload[n:]
+				body["specific_dates"] = appendAny(body["specific_dates"], strconv.Itoa(decodeProtoInt32(value)))
+				continue
+			}
+			packed, n := protowire.ConsumeBytes(payload)
+			if typ != protowire.BytesType || n < 0 {
+				return fmt.Errorf("testhost: execution filter protobuf specific_dates is malformed")
+			}
+			payload = payload[n:]
+			for len(packed) > 0 {
+				value, n := protowire.ConsumeVarint(packed)
+				if n < 0 {
+					return fmt.Errorf("testhost: execution filter protobuf specific_dates value is malformed")
+				}
+				packed = packed[n:]
+				body["specific_dates"] = appendAny(body["specific_dates"], strconv.Itoa(decodeProtoInt32(value)))
+			}
+		default:
+			n := protowire.ConsumeFieldValue(number, typ, payload)
+			if n < 0 {
+				return fmt.Errorf("testhost: execution filter protobuf field %d: %w", number, protowire.ParseError(n))
+			}
+			payload = payload[n:]
+		}
+	}
+	return nil
+}
+
+func appendAny(current any, value any) []any {
+	values, _ := current.([]any)
+	return append(values, value)
+}
+
+func decodeProtoInt32(value uint64) int {
+	return int(int32(value)) // #nosec G115 -- protobuf int32 wire semantics
 }
 
 func decodePlaceOrderClientBody(fields []string) map[string]any {

@@ -201,6 +201,10 @@ func FuzzDecodeBatch(f *testing.F) {
 	f.Add(wire.EncodeFields([]string{"1", "", "", "", "", "", "", ""})) // empty fields for TickPrice
 	f.Add([]byte("not\x00a\x00number\x00"))                             // non-numeric msg ID
 	f.Add(wire.EncodeFields([]string{"17", "1", "999999"}))             // HistoricalData with huge barCount
+	// Exact sv201 live vectors cover both negotiated body encodings: raw-ID
+	// classic NextValidID and protobuf ExecutionDetailsEnd.
+	f.Add([]byte{0, 0, 0, 9, '1', 0, '2', 0})
+	f.Add([]byte{0, 0, 0, 255, 0x08, 0xe9, 0x07})
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// Cap input size to avoid OOM from unbounded make([]T, hugeCount)
@@ -221,6 +225,7 @@ func FuzzDecodeBatch(f *testing.F) {
 			}
 		}()
 		_, _ = DecodeBatch(200, data)
+		_, _ = DecodeBatch(201, data)
 	})
 }
 

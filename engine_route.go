@@ -84,8 +84,8 @@ func (e *engine) handleIncoming(msg any) {
 		if _, seen := e.unknownInboundSeen[m.MsgID]; !seen {
 			e.unknownInboundSeen[m.MsgID] = struct{}{}
 			e.cfg.logger.Warn("ibkr: dropping inbound frames with unknown msg_id",
-				"msg_id", m.MsgID, "field_count", len(m.Fields))
-			e.emitEvent(0, fmt.Sprintf("dropping inbound frames with unknown msg_id %d (%d fields)", m.MsgID, len(m.Fields)))
+				"msg_id", m.MsgID, "field_count", len(m.Fields), "binary_body_bytes", len(m.Payload))
+			e.emitEvent(0, fmt.Sprintf("dropping inbound frames with unknown msg_id %d (%d fields, %d binary body bytes)", m.MsgID, len(m.Fields), len(m.Payload)))
 		}
 		return
 	}

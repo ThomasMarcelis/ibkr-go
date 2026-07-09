@@ -1,10 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
@@ -33,6 +37,55 @@ func TestBootstrapDecodesTypedMessages(t *testing.T) {
 	if info.NextValidID != 1001 {
 		t.Fatalf("NextValidID = %d, want 1001", info.NextValidID)
 	}
+}
+
+func TestExecutionsCaptureServer201ExactVectors(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer server.Close()
+	defer client.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- sendReqExecutionsAt(client, 201, 1001)
+	}()
+	payload, err := wire.ReadFrame(server)
+	if err != nil {
+		t.Fatalf("ReadFrame(request) error = %v", err)
+	}
+	if want := decodeHex(t, "000000cf08e9071200"); !bytes.Equal(payload, want) {
+		t.Fatalf("request = %x, want live vector %x", payload, want)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("sendReqExecutionsAt() error = %v", err)
+	}
+
+	go func() {
+		errCh <- wire.WriteFrame(server, decodeHex(t, "000000ff08e907"))
+	}()
+	var gotFields []string
+	err = readFramesAt(client, 201, time.Second, func(_ int, fields []string) {
+		gotFields = append([]string(nil), fields...)
+	}, stopOnMsgIDWithReq(55, "1001", 1))
+	if err != nil {
+		t.Fatalf("readFramesAt() error = %v", err)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("WriteFrame(response) error = %v", err)
+	}
+	if want := []string{"55", "1001"}; !slices.Equal(gotFields, want) {
+		t.Fatalf("fields = %q, want %q", gotFields, want)
+	}
+}
+
+func decodeHex(t *testing.T, value string) []byte {
+	t.Helper()
+	decoded, err := hex.DecodeString(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return decoded
 }
 
 func TestBootstrapFailsFastOnMalformedFrame(t *testing.T) {

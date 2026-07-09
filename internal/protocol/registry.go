@@ -1,13 +1,13 @@
-// Package protocol owns the classic TWS socket protocol vocabulary used by
-// ibkr-go. Codecs and audit tooling consume this package; it has no transport
-// or public API dependencies.
+// Package protocol owns the TWS socket protocol vocabulary and negotiated
+// envelope used by ibkr-go. Codecs and audit tooling consume this package; it
+// has no transport or public API dependencies.
 package protocol
 
 import "slices"
 
 const (
-	ClassicMinServerVersion = 176
-	ClassicMaxServerVersion = 200
+	SupportedMinServerVersion = 176
+	SupportedMaxServerVersion = 201
 )
 
 // Direction identifies which peer sends a message.
@@ -29,7 +29,8 @@ func (d Direction) String() string {
 	}
 }
 
-// Message identifies one classic, NUL-delimited socket message.
+// Message identifies one base message independently of its negotiated body
+// encoding.
 type Message struct {
 	Name      string
 	ID        int
@@ -51,8 +52,10 @@ const (
 	OutCancelMktDepth              = 11
 	OutReqNewsBulletins            = 12
 	OutCancelNewsBulletins         = 13
+	OutSetServerLogLevel           = 14
 	OutReqAutoOpenOrders           = 15
 	OutReqAllOpenOrders            = 16
+	OutReqManagedAccounts          = 17
 	OutRequestFA                   = 18
 	OutReplaceFA                   = 19
 	OutReqHistoricalData           = 20
@@ -74,6 +77,8 @@ const (
 	OutReqAccountSummary           = 62
 	OutCancelAccountSummary        = 63
 	OutCancelPositions             = 64
+	OutVerifyRequest               = 65
+	OutVerifyMessage               = 66
 	OutQueryDisplayGroups          = 67
 	OutSubscribeToGroupEvents      = 68
 	OutUpdateDisplayGroup          = 69
@@ -111,6 +116,10 @@ const (
 	OutCancelWSHEventData          = 103
 	OutReqUserInfo                 = 104
 	OutReqCurrentTimeInMillis      = 105
+	OutCancelContractData          = 106
+	OutCancelHistoricalTicks       = 107
+	OutReqConfig                   = 108
+	OutUpdateConfig                = 109
 )
 
 // Inbound message IDs (server to client).
@@ -337,13 +346,13 @@ var messages = [...]Message{
 	{"InCurrentTimeInMillis", InCurrentTimeInMillis, ServerToClient},
 }
 
-// Messages returns the complete classic message registry in ID-independent
+// Messages returns the implemented base-message registry in ID-independent
 // declaration order. The returned slice can be mutated by the caller.
 func Messages() []Message {
 	return slices.Clone(messages[:])
 }
 
-// Lookup finds a classic message by direction and numeric ID.
+// Lookup finds an implemented base message by direction and numeric ID.
 func Lookup(direction Direction, id int) (Message, bool) {
 	for _, message := range messages {
 		if message.Direction == direction && message.ID == id {

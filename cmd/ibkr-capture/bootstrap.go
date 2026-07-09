@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
@@ -105,6 +106,10 @@ func bootstrap(conn net.Conn, clientID, minVer, maxVer int) (*sessionInfo, error
 // The predicate is evaluated AFTER onFrame is called so the caller can
 // observe the terminating frame.
 func readFrames(conn net.Conn, duration time.Duration, onFrame func(msgID int, fields []string), stop func(msgID int, fields []string) bool) error {
+	return readFramesAt(conn, 200, duration, onFrame, stop)
+}
+
+func readFramesAt(conn net.Conn, serverVersion int, duration time.Duration, onFrame func(msgID int, fields []string), stop func(msgID int, fields []string) bool) error {
 	deadline := time.Now().Add(duration)
 	for {
 		remaining := time.Until(deadline)
@@ -128,15 +133,38 @@ func readFrames(conn net.Conn, duration time.Duration, onFrame func(msgID int, f
 			}
 			return fmt.Errorf("read frame: %w", err)
 		}
-		fields, parseErr := wire.ParseFields(payload)
+		envelope, parseErr := protocol.DecodeEnvelope(serverVersion, payload)
 		if parseErr != nil {
-			log.Printf("unparseable frame (%d bytes): %v", len(payload), parseErr)
+			log.Printf("unparseable frame envelope (%d bytes): %v", len(payload), parseErr)
 			continue
 		}
-		if len(fields) == 0 {
-			continue
+		fields := []string{strconv.Itoa(envelope.MsgID)}
+		if envelope.Encoding == protocol.ClassicBody {
+			if len(envelope.Body) > 0 {
+				if envelope.Body[len(envelope.Body)-1] != 0 {
+					log.Printf("unparseable classic frame body (%d bytes): %v", len(envelope.Body), wire.ErrMalformedFrame)
+					continue
+				}
+				fields = append(fields, strings.Split(string(envelope.Body[:len(envelope.Body)-1]), "\x00")...)
+			}
+		} else {
+			msgs, err := codec.DecodeBatch(serverVersion, payload)
+			if err != nil {
+				log.Printf("unparseable protobuf frame body (%d bytes): %v", len(envelope.Body), err)
+				continue
+			}
+			for _, msg := range msgs {
+				switch m := msg.(type) {
+				case codec.ExecutionDetail:
+					fields = append(fields, strconv.Itoa(m.ReqID))
+				case codec.ExecutionsEnd:
+					fields = append(fields, strconv.Itoa(m.ReqID))
+				case codec.APIError:
+					fields = append(fields, strconv.Itoa(m.ReqID), strconv.Itoa(m.Code), m.Message)
+				}
+			}
 		}
-		msgID, _ := strconv.Atoi(fields[0])
+		msgID := envelope.MsgID
 		if onFrame != nil {
 			onFrame(msgID, fields)
 		}

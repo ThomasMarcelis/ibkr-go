@@ -1,0 +1,16 @@
+# Live-derived from local paper IB Gateway at exact server_version 201.
+# Private capture: 20260709T222913Z-protobuf-sv201-executions-empty.
+# replay/frames.jsonl sha256: 12acc13563c916952c99bb9b32d09ddf8a47fd76e74273ac4992ba54ad31c637
+# events.jsonl sha256: a3610dc87dbe654d8fd86ca65e552be706ab3d814244ce941208ac49dfcd819d
+#
+# The live empty-filter request was protobuf wire ID 207 and the terminating
+# response was protobuf wire ID 255. The private 9-byte paper account token is
+# replaced with the length-preserving 9-byte token DU9000001. Request ID 1001
+# is normalized to the public client's deterministic first request ID, 1.
+# Farm-status frames are trimmed; no execution rows were returned live.
+handshake {"server_version":201,"connection_time":"20260710 00:29:21 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADIA
+client req_executions {"req_id":"1"}
+raw server AAAABgAAAP8IAQ==
+disconnect

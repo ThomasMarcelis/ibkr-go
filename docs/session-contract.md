@@ -7,10 +7,11 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates `server_version` 176..200; the Gateway's answer below
+The client negotiates `server_version` 176..201; the Gateway's answer below
 176 is rejected during handshake, and wire fields introduced above 176 are
 gated on whatever version the Gateway actually negotiates. `sv200` remains
-the primary live-validated layout.
+the classic live-validated layout; exact `sv201` adds the raw-ID envelope and
+protobuf executions family. Versions 202 and newer are not advertised.
 
 ```go
 type Client struct{ /* opaque */ }

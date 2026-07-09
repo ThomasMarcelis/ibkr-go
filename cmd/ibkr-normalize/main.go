@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -98,6 +100,7 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	if _, err := fmt.Fprintln(file, "# Curate raw steps into typed client/server lines before promotion."); err != nil {
 		return err
 	}
+	frameState := transcriptFrameState{serverVersions: make(map[int]int)}
 	for _, event := range replayEvents {
 		switch event.Kind {
 		case capturelog.EventConnect:
@@ -113,12 +116,11 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 			if err != nil {
 				return fmt.Errorf("decode replay frame: %w", err)
 			}
-			msgID := "server_info"
-			fields := splitPayloadFields(payload)
-			if len(fields) > 0 {
-				msgID = fields[0]
+			msgID, encoding, err := frameState.describe(event, payload)
+			if err != nil {
+				return err
 			}
-			if _, err := fmt.Fprintf(file, "# leg=%d direction=%s msg_id=%s payload_len=%d\n", event.Leg, event.Direction, msgID, len(payload)); err != nil {
+			if _, err := fmt.Fprintf(file, "# leg=%d direction=%s msg_id=%s encoding=%s payload_len=%d\n", event.Leg, event.Direction, msgID, encoding, len(payload)); err != nil {
 				return err
 			}
 			frame, err := frameBytes(payload)
@@ -133,26 +135,39 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	return nil
 }
 
+type transcriptFrameState struct {
+	serverVersions map[int]int
+}
+
+func (s *transcriptFrameState) describe(event capturelog.ReplayEvent, payload []byte) (string, string, error) {
+	serverVersion := s.serverVersions[event.Leg]
+	if serverVersion == 0 {
+		if event.Direction == "client" {
+			return "version_range", "pre_session", nil
+		}
+		info, err := codec.DecodeServerInfo(payload)
+		if err != nil {
+			return "", "", fmt.Errorf("describe leg %d server-info frame: %w", event.Leg, err)
+		}
+		s.serverVersions[event.Leg] = info.ServerVersion
+		return "server_info", "pre_session", nil
+	}
+
+	envelope, err := protocol.DecodeEnvelope(serverVersion, payload)
+	if err != nil {
+		return "", "", fmt.Errorf("describe leg %d %s frame: %w", event.Leg, event.Direction, err)
+	}
+	encoding := "classic"
+	if envelope.Encoding == protocol.ProtobufBody {
+		encoding = "protobuf"
+	}
+	return fmt.Sprintf("%d", envelope.MsgID), encoding, nil
+}
+
 func frameBytes(payload []byte) ([]byte, error) {
 	var out bytes.Buffer
 	if err := wire.WriteFrame(&out, payload); err != nil {
 		return nil, err
 	}
 	return out.Bytes(), nil
-}
-
-func splitPayloadFields(payload []byte) []string {
-	var fields []string
-	start := 0
-	for i, b := range payload {
-		if b != 0 {
-			continue
-		}
-		fields = append(fields, string(payload[start:i]))
-		start = i + 1
-	}
-	if start < len(payload) {
-		fields = append(fields, string(payload[start:]))
-	}
-	return fields
 }

@@ -200,6 +200,7 @@ type ExecutionDetail struct {
 	LastLiquidity           string
 	PendingPriceRevision    string
 	Submitter               string
+	OptExerciseOrLapseType  string
 }
 
 type ExecutionsEnd struct {

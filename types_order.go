@@ -182,6 +182,22 @@ const (
 	ExecutionLiquidityRoutedOut ExecutionLiquidity = 3
 )
 
+// OptionExerciseType reports how an option execution originated. Unknown
+// integer values are preserved when IBKR extends the wire enum.
+type OptionExerciseType int
+
+const (
+	OptionExerciseTypeNone                 OptionExerciseType = 0
+	OptionExerciseTypeExercise             OptionExerciseType = 1
+	OptionExerciseTypeLapse                OptionExerciseType = 2
+	OptionExerciseTypeDoNothing            OptionExerciseType = 3
+	OptionExerciseTypeAssigned             OptionExerciseType = 100
+	OptionExerciseTypeAutoexerciseClearing OptionExerciseType = 101
+	OptionExerciseTypeExpired              OptionExerciseType = 102
+	OptionExerciseTypeNetting              OptionExerciseType = 103
+	OptionExerciseTypeAutoexerciseTrading  OptionExerciseType = 200
+)
+
 // ExecutionsRequest filters an [OrdersClient.Executions] query. The zero value
 // selects every execution visible to the current API session; it does not mean
 // the account's complete trade history. Since is transmitted in UTC as IBKR's
@@ -235,6 +251,7 @@ type Execution struct {
 	Liquidity               ExecutionLiquidity
 	PriceRevisionPending    bool
 	Submitter               string
+	OptionExerciseType      OptionExerciseType
 }
 
 // ExecutionUpdate is a union item from [OrdersClient.Executions]. Exactly one
