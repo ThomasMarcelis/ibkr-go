@@ -164,6 +164,7 @@ const (
 	QuoteFieldLow
 	QuoteFieldClose
 	QuoteFieldMarketDataType
+	QuoteFieldVolume
 )
 
 // MarketDataType selects live, frozen, delayed, or delayed-frozen market data.
@@ -204,6 +205,7 @@ type Quote struct {
 	BidSize        decimal.Decimal
 	AskSize        decimal.Decimal
 	LastSize       decimal.Decimal
+	Volume         decimal.Decimal
 	Open           decimal.Decimal
 	High           decimal.Decimal
 	Low            decimal.Decimal
@@ -223,14 +225,82 @@ type QuoteRequest struct {
 	GenericTicks []GenericTick // extra generic tick types; unsupported for one-shot snapshots
 }
 
-// QuoteUpdate is one event from a quote subscription. Snapshot is the full,
-// accumulated [Quote] after applying this tick; Changed reports only the fields
-// this update touched, so consumers can react to a single moved field without
-// diffing the whole snapshot.
+// QuoteUpdateKind identifies which payload a [QuoteUpdate] carries.
+type QuoteUpdateKind uint8
+
+const (
+	// QuoteUpdateFields reports a price, size, or market-data-type update in
+	// QuoteUpdate.Snapshot and QuoteUpdate.Changed.
+	QuoteUpdateFields QuoteUpdateKind = iota
+	QuoteUpdateGenericTick
+	QuoteUpdateStringTick
+	QuoteUpdateParameters
+	QuoteUpdateOptionComputation
+)
+
+func (k QuoteUpdateKind) String() string {
+	switch k {
+	case QuoteUpdateFields:
+		return "Fields"
+	case QuoteUpdateGenericTick:
+		return "GenericTick"
+	case QuoteUpdateStringTick:
+		return "StringTick"
+	case QuoteUpdateParameters:
+		return "Parameters"
+	case QuoteUpdateOptionComputation:
+		return "OptionComputation"
+	default:
+		return fmt.Sprintf("QuoteUpdateKind(%d)", k)
+	}
+}
+
+// QuoteGenericTick is one numeric IBKR tick that has no normalized [Quote]
+// field. TickType is IBKR's numeric tick-type ID.
+type QuoteGenericTick struct {
+	TickType int
+	Value    decimal.Decimal
+}
+
+// QuoteStringTick is one textual IBKR tick that has no normalized [Quote]
+// field. TickType is IBKR's numeric tick-type ID.
+type QuoteStringTick struct {
+	TickType int
+	Value    string
+}
+
+// QuoteParameters describes the market-data rules attached to a quote
+// request. BBOExchange is IBKR's exchange bit field, not an exchange name.
+type QuoteParameters struct {
+	MinTick             decimal.Decimal
+	BBOExchange         string
+	SnapshotPermissions int
+}
+
+// QuoteOptionComputation is one option-price or greeks tick. TickType selects
+// bid, ask, last, model, or a delayed equivalent; TickAttrib is the IBKR option
+// computation attribute bitmask.
+type QuoteOptionComputation struct {
+	TickType    int
+	TickAttrib  int
+	Computation OptionComputation
+}
+
+// QuoteUpdate is one event from a quote subscription. Kind selects exactly one
+// payload. Snapshot is always the full accumulated [Quote]; ancillary ticks do
+// not mutate it. For [QuoteUpdateFields], Changed reports only the normalized
+// fields touched by this event. The other kinds set exactly one of GenericTick,
+// StringTick, Parameters, or OptionComputation; unrelated payload pointers are
+// nil.
 type QuoteUpdate struct {
-	Snapshot   Quote       // cumulative quote state after this update
-	Changed    QuoteFields // fields changed by this update
-	ReceivedAt time.Time   // client receive time
+	Kind              QuoteUpdateKind
+	Snapshot          Quote       // cumulative quote state after this update
+	Changed           QuoteFields // fields changed by this update
+	GenericTick       *QuoteGenericTick
+	StringTick        *QuoteStringTick
+	Parameters        *QuoteParameters
+	OptionComputation *QuoteOptionComputation
+	ReceivedAt        time.Time // client receive time
 }
 
 // RealTimeBarsRequest describes a 5-second real-time bar subscription for
@@ -310,9 +380,27 @@ type CalcOptionPriceRequest struct {
 	UnderPrice decimal.Decimal
 }
 
-// OptionComputation is an option pricing/greeks result returned by the option
-// calculation requests.
+// OptionComputationFields is a bitmask of values IBKR actually computed. A
+// missing value remains zero in [OptionComputation] and is absent from
+// OptionComputation.Available.
+type OptionComputationFields uint16
+
+const (
+	OptionComputationImpliedVol OptionComputationFields = 1 << iota
+	OptionComputationDelta
+	OptionComputationPrice
+	OptionComputationPvDividend
+	OptionComputationGamma
+	OptionComputationVega
+	OptionComputationTheta
+	OptionComputationUnderlyingPrice
+)
+
+// OptionComputation is an option pricing/greeks result returned by option
+// calculation requests and quote subscriptions. Available distinguishes a
+// computed zero from IBKR's field-specific "not computed" wire sentinels.
 type OptionComputation struct {
+	Available  OptionComputationFields
 	ImpliedVol decimal.Decimal
 	Delta      decimal.Decimal
 	OptPrice   decimal.Decimal

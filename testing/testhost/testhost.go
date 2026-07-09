@@ -869,10 +869,35 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["req_id"] = fields[1]
 		}
 		return "cancel_tick_by_tick", body, nil
-	case 22: // OutReqScannerSubscription: [22, reqId, ...]
-		body := map[string]any{}
-		if len(fields) >= 2 {
-			body["req_id"] = fields[1]
+	case 22: // OutReqScannerSubscription: [22, reqId, subscription fields..., filterOptions, options]
+		if len(fields) != 25 {
+			return "", nil, fmt.Errorf("testhost: req_scanner_subscription field count = %d, want 25", len(fields))
+		}
+		body := map[string]any{
+			"req_id":                      fields[1],
+			"number_of_rows":              fields[2],
+			"instrument":                  fields[3],
+			"location_code":               fields[4],
+			"scan_code":                   fields[5],
+			"above_price":                 fields[6],
+			"below_price":                 fields[7],
+			"above_volume":                fields[8],
+			"market_cap_above":            fields[9],
+			"market_cap_below":            fields[10],
+			"moody_rating_above":          fields[11],
+			"moody_rating_below":          fields[12],
+			"sp_rating_above":             fields[13],
+			"sp_rating_below":             fields[14],
+			"maturity_date_above":         fields[15],
+			"maturity_date_below":         fields[16],
+			"coupon_rate_above":           fields[17],
+			"coupon_rate_below":           fields[18],
+			"exclude_convertible":         fields[19],
+			"average_option_volume_above": fields[20],
+			"scanner_setting_pairs":       fields[21],
+			"stock_type_filter":           fields[22],
+			"filter_options":              fields[23],
+			"subscription_options":        fields[24],
 		}
 		return "req_scanner_subscription", body, nil
 	case 23: // OutCancelScannerSubscription: [23, 1, reqId]

@@ -988,6 +988,49 @@ func runAPIMarketDataCompletenessAAPL(ctx context.Context, addr string, clientID
 	})
 }
 
+func runAPIScannerSubscription(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 45*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
+		_ = account
+		caseCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+
+		sub, err := client.Scanner().SubscribeResults(caseCtx, ibkr.ScannerSubscriptionRequest{
+			NumberOfRows: 10,
+			Instrument:   ibkr.ScannerInstrument("STK"),
+			LocationCode: ibkr.ScannerLocationCode("STK.US.MAJOR"),
+			ScanCode:     ibkr.ScannerCode("HOT_BY_VOLUME"),
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			recordProbeResult("scanner_subscription", "hot_by_volume", 0, err)
+			log.Printf("scanner subscription setup: %v", err)
+			return nil
+		}
+		defer func() { _ = sub.Close() }()
+
+		select {
+		case rows, ok := <-sub.Events():
+			if !ok {
+				err = sub.Wait()
+				recordProbeResult("scanner_subscription", "hot_by_volume", 0, err)
+				log.Printf("scanner subscription closed: %v", err)
+				return nil
+			}
+			recordProbeResult("scanner_subscription", "hot_by_volume", len(rows), nil)
+			log.Printf("scanner subscription rows=%d", len(rows))
+			_ = sub.Close()
+			return sub.Wait()
+		case <-sub.Done():
+			err = sub.Wait()
+			recordProbeResult("scanner_subscription", "hot_by_volume", 0, err)
+			log.Printf("scanner subscription: %v", err)
+			return nil
+		case <-caseCtx.Done():
+			recordProbeResult("scanner_subscription", "hot_by_volume", 0, caseCtx.Err())
+			return nil
+		}
+	})
+}
+
 func runAPIHistoricalMatrixAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 9*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		_ = account

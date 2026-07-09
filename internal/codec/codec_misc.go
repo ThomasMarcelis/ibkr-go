@@ -20,11 +20,30 @@ type ScannerParameters struct {
 // ScannerSubscription (OUT 22 / cancel OUT 23 / IN 20)
 
 type ScannerSubscriptionRequest struct {
-	ReqID        int
-	NumberOfRows int
-	Instrument   string
-	LocationCode string
-	ScanCode     string
+	ReqID                    int
+	NumberOfRows             int
+	Instrument               string
+	LocationCode             string
+	ScanCode                 string
+	AbovePrice               string
+	BelowPrice               string
+	AboveVolume              string
+	MarketCapAbove           string
+	MarketCapBelow           string
+	MoodyRatingAbove         string
+	MoodyRatingBelow         string
+	SPRatingAbove            string
+	SPRatingBelow            string
+	MaturityDateAbove        string
+	MaturityDateBelow        string
+	CouponRateAbove          string
+	CouponRateBelow          string
+	ExcludeConvertible       string
+	AverageOptionVolumeAbove string
+	ScannerSettingPairs      string
+	StockTypeFilter          string
+	FilterOptions            []TagValue
+	SubscriptionOptions      []TagValue
 }
 
 func (m ScannerSubscriptionRequest) encodeWire(sv int) ([]string, error) {
@@ -35,14 +54,37 @@ func (m ScannerSubscriptionRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.Instrument)
 	w.WriteString(m.LocationCode)
 	w.WriteString(m.ScanCode)
-	for range 14 { // abovePrice, belowPrice, aboveVolume, marketCapAbove/Below, moody/sp ratings, maturityDates, couponRates, excludeConvertible, averageOptionVolumeAbove
-		w.WriteString("")
-	}
-	w.WriteString("") // scannerSettingPairs
-	w.WriteString("") // stockTypeFilter
-	w.WriteString("") // scannerSubscriptionFilterOptions
-	w.WriteString("") // scannerSubscriptionOptions
+	w.WriteString(m.AbovePrice)
+	w.WriteString(m.BelowPrice)
+	w.WriteString(m.AboveVolume)
+	w.WriteString(m.MarketCapAbove)
+	w.WriteString(m.MarketCapBelow)
+	w.WriteString(m.MoodyRatingAbove)
+	w.WriteString(m.MoodyRatingBelow)
+	w.WriteString(m.SPRatingAbove)
+	w.WriteString(m.SPRatingBelow)
+	w.WriteString(m.MaturityDateAbove)
+	w.WriteString(m.MaturityDateBelow)
+	w.WriteString(m.CouponRateAbove)
+	w.WriteString(m.CouponRateBelow)
+	w.WriteString(m.ExcludeConvertible)
+	w.WriteString(m.AverageOptionVolumeAbove)
+	w.WriteString(m.ScannerSettingPairs)
+	w.WriteString(m.StockTypeFilter)
+	w.WriteString(encodeScannerTagValues(m.FilterOptions))
+	w.WriteString(encodeScannerTagValues(m.SubscriptionOptions))
 	return w.Fields(), nil
+}
+
+func encodeScannerTagValues(values []TagValue) string {
+	var encoded strings.Builder
+	for _, value := range values {
+		encoded.WriteString(value.Tag)
+		encoded.WriteByte('=')
+		encoded.WriteString(value.Value)
+		encoded.WriteByte(';')
+	}
+	return encoded.String()
 }
 
 type CancelScannerSubscription struct {

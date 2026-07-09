@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+
+	"github.com/shopspring/decimal"
 )
 
 // NewsProviderCode is a news provider identifier (for example "BRFG"), as
@@ -70,10 +72,31 @@ type ScannerCode string
 // [ScannerClient.SubscribeResults]. Valid Instrument, LocationCode, and
 // ScanCode values come from [ScannerClient.Parameters].
 type ScannerSubscriptionRequest struct {
-	NumberOfRows int // maximum ranked rows to return
+	NumberOfRows int // maximum ranked rows to return; zero lets IBKR choose the default
 	Instrument   ScannerInstrument
 	LocationCode ScannerLocationCode
 	ScanCode     ScannerCode
+
+	AbovePrice               *decimal.Decimal // minimum instrument price; nil leaves the filter unset
+	BelowPrice               *decimal.Decimal // maximum instrument price; nil leaves the filter unset
+	AboveVolume              *int             // minimum volume; nil leaves the filter unset
+	MarketCapAbove           *decimal.Decimal // minimum market capitalization; nil leaves the filter unset
+	MarketCapBelow           *decimal.Decimal // maximum market capitalization; nil leaves the filter unset
+	MoodyRatingAbove         string
+	MoodyRatingBelow         string
+	SPRatingAbove            string
+	SPRatingBelow            string
+	MaturityDateAbove        string // minimum maturity date in IBKR scanner format
+	MaturityDateBelow        string // maximum maturity date in IBKR scanner format
+	CouponRateAbove          *decimal.Decimal
+	CouponRateBelow          *decimal.Decimal
+	ExcludeConvertible       *bool
+	AverageOptionVolumeAbove *int
+	ScannerSettingPairs      string
+	StockTypeFilter          string
+
+	FilterOptions       []TagValue // generic scanner filters advertised by Parameters
+	SubscriptionOptions []TagValue // IBKR scanner subscription options
 }
 
 // ScannerResult is one ranked contract from a scanner subscription.

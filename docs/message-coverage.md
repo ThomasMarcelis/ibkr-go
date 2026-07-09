@@ -98,6 +98,13 @@ server version and managed-account bootstrap fields are known.
 | out | 98 | cancelTickByTickData | landed |
 | in | 99 | TickByTick | landed |
 
+`QuoteUpdate.Kind` publicly delivers the classic TickGeneric, TickString,
+TickReqParams, and TickOptionComputation callbacks without expanding the
+normalized `Quote` snapshot. The first three are raw-frame-attested by
+`captures/20260405T215752Z-quote_stream_genericticks`; a quote-subscription
+option computation is attested by
+`captures/20260611T080111Z-api_option_campaign_aapl`.
+
 ## Real-Time and Historical Bars
 
 | Direction | Msg ID | Name | Status |
@@ -205,6 +212,11 @@ layout, so replay fixtures exercise the production decode path.
 | out | 22 | reqScannerSubscription | landed |
 | out | 23 | cancelScannerSubscription | landed |
 | in | 20 | ScannerData | landed |
+
+The complete outbound subscription shape, a ten-row `ScannerData` response,
+and clean cancellation are live-attested through the public API. The curated
+replay retains the exact captured result frame; an older run freezes the real
+permission-denied codes 490 and 365.
 
 ## Market Depth (Level 2)
 

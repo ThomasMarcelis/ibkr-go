@@ -191,6 +191,7 @@ func TestExhaustivePlanScenariosAreCatalogued(t *testing.T) {
 		"api_tif_attribute_matrix_aapl",
 		"api_security_type_probe_matrix",
 		"api_market_data_completeness_aapl",
+		"api_scanner_subscription",
 		"api_historical_matrix_aapl",
 		"api_news_article_aapl",
 		"api_wsh_variants_aapl",

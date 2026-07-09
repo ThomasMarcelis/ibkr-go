@@ -309,7 +309,9 @@ against the role-aware `paper-dev` Gateway.
 
 | Scenario | Date | Status |
 |----------|------|--------|
+| api_scanner_subscription | 2026-07-09 | recorded, verified, replay-promoted; public API against server_version=200 returned ten ranked HOT_BY_VOLUME rows and sent a clean cancel; events sha256 prefix `c84c81b3ee772bcc`, exact result frame retained in `scanner_subscription_live.txt` |
 | api_fundamental_reports_aapl | 2026-07-09 | final retirement evidence; all seven legacy requests returned code 10358 on both server_version=200 roles; readonly-live events sha256 prefix `89db59e9e5abf7b7`, paper-dev prefix `c326f314cbc4f1de`; ignored capture directories retained as historical evidence only |
+| scanner_subscription | 2026-04-07 | recorded, candidate; server_version=200 events sha256 prefix `740b5dfb138df2a4`; exact 25-field outbound request is frozen, then the Gateway returned real code 490 for missing scanner permissions and code 365 after cancel; no successful scanner-data rows were observed, so the untraceable success replay was removed |
 | api_whatif_margin_aapl | 2026-04-14 | recorded, not promoted; `20260414T164207Z` produced no usable preview callback and cleanup timed out (`ac70de98ef2c239a`); `20260414T182608Z` returned live code 320 after the WhatIf place request (`e431bf7f0b84abd1`) |
 | api_forex_lifecycle_eurusd | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `641eab5c0e6909f7`; real paper-account code 201 leverage rejection |
 | api_stress_rapid_fire_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `69ee6be4cdf7d577` |

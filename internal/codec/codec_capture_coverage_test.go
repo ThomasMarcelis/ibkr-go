@@ -104,6 +104,10 @@ var rawFrameAttested = map[int]string{
 	InHistoricalSchedule:    "TestCaptureDecode_HistoricalSchedule",
 	InUserInfo:              "TestDecodeUserInfoLiveFrame",
 	InHistoricalDataEnd:     "TestCaptureDecode_HistoricalDataEndLive",
+	InTickGeneric:           "TestCaptureDecode_QuoteAncillaryTicksLive",
+	InTickString:            "TestCaptureDecode_QuoteAncillaryTicksLive",
+	InTickReqParams:         "TestCaptureDecode_QuoteAncillaryTicksLive",
+	InScannerData:           "TestCaptureDecode_ScannerDataLive",
 }
 
 // pendingLiveAttestation maps a decoder's msg_id to a one-line reason it has no
@@ -120,10 +124,6 @@ var pendingLiveAttestation = map[int]string{
 	InNewsBulletins:         "needs a reqNewsBulletins capture",
 	InReceiveFA:             "needs a requestFA capture (FA account entitlement)",
 	InScannerParameters:     "needs a reqScannerParameters capture (large XML frame)",
-	InScannerData:           "needs a reqScannerSubscription result capture",
-	InTickGeneric:           "only synthetic dispatch-table coverage — needs a live tick_generic capture",
-	InTickString:            "only synthetic dispatch-table coverage — needs a live tick_string capture",
-	InTickReqParams:         "only synthetic dispatch-table coverage — needs a live tickReqParams capture",
 	InCurrentTime:           "only synthetic dispatch-table coverage — needs a live reqCurrentTime capture",
 	InRealTimeBars:          "needs a reqRealTimeBars 5s-bar capture (market hours)",
 	InAccountDownloadEnd:    "needs a reqAccountUpdates end-of-download capture",

@@ -234,6 +234,8 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 }
 
 func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscriptionRequest, opts ...SubscriptionOption) (*Subscription[[]ScannerResult], error) {
+	req = cloneScannerSubscriptionRequest(req)
+
 	type result struct {
 		sub *Subscription[[]ScannerResult]
 		err error
@@ -272,13 +274,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			opKind:       OpScannerSubscription,
 			subscription: true,
 			resume:       cfg.resume,
-			request: codec.ScannerSubscriptionRequest{
-				ReqID:        reqID,
-				NumberOfRows: req.NumberOfRows,
-				Instrument:   string(req.Instrument),
-				LocationCode: string(req.LocationCode),
-				ScanCode:     string(req.ScanCode),
-			},
+			request:      toCodecScannerSubscriptionRequest(reqID, req),
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.ScannerDataResponse:

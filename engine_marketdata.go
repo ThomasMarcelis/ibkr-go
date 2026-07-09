@@ -128,7 +128,16 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						sub.closeWithErr(err)
 						return
 					}
-					emitSubscription(sub, QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
+					if sizeField, ok := companionSizeTickType(m.TickType); ok && m.Size != "" {
+						sizeChanged, err := applyTickSize(&quote, sizeField, m.Size)
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
+						changed |= sizeChanged
+					}
+					emitSubscription(sub, QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
 				case codec.TickSize:
 					changed, err := applyTickSize(&quote, m.TickType, m.Size)
 					if err != nil {
@@ -136,20 +145,65 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						sub.closeWithErr(err)
 						return
 					}
-					emitSubscription(sub, QuoteUpdate{Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
+					emitSubscription(sub, QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
 				case codec.MarketDataType:
 					quote.MarketDataType = MarketDataType(m.DataType)
 					quote.Available |= QuoteFieldMarketDataType
-					emitSubscription(sub, QuoteUpdate{Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
+					emitSubscription(sub, QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
 				case codec.TickGeneric:
-					// Generic ticks carry informational data (e.g. halted status).
-					// Silently consumed — no standard quote field mapping.
+					value, err := parseRequiredDecimal(m.Value, "generic tick value")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					emitSubscription(sub, QuoteUpdate{
+						Kind:        QuoteUpdateGenericTick,
+						Snapshot:    quote,
+						GenericTick: new(QuoteGenericTick{TickType: m.TickType, Value: value}),
+						ReceivedAt:  time.Now().UTC(),
+					})
 				case codec.TickString:
-					// String ticks carry informational data (e.g. last timestamp).
-					// Silently consumed — no standard quote field mapping.
+					emitSubscription(sub, QuoteUpdate{
+						Kind:       QuoteUpdateStringTick,
+						Snapshot:   quote,
+						StringTick: new(QuoteStringTick{TickType: m.TickType, Value: m.Value}),
+						ReceivedAt: time.Now().UTC(),
+					})
 				case codec.TickReqParams:
-					// Tick request params are informational (minTick, BBO exchange).
-					// Silently consumed.
+					minTick, err := parseRequiredDecimal(m.MinTick, "quote parameters minimum tick")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					emitSubscription(sub, QuoteUpdate{
+						Kind:     QuoteUpdateParameters,
+						Snapshot: quote,
+						Parameters: new(QuoteParameters{
+							MinTick:             minTick,
+							BBOExchange:         m.BBOExchange,
+							SnapshotPermissions: m.SnapshotPermissions,
+						}),
+						ReceivedAt: time.Now().UTC(),
+					})
+				case codec.TickOptionComputation:
+					computation, err := fromCodecOptionComputation(m)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					emitSubscription(sub, QuoteUpdate{
+						Kind:     QuoteUpdateOptionComputation,
+						Snapshot: quote,
+						OptionComputation: new(QuoteOptionComputation{
+							TickType:    m.TickType,
+							TickAttrib:  m.TickAttrib,
+							Computation: computation,
+						}),
+						ReceivedAt: time.Now().UTC(),
+					})
 				case codec.TickSnapshotEnd:
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 					if snapshot {
@@ -795,39 +849,56 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 }
 
 func fromCodecOptionComputation(m codec.TickOptionComputation) (OptionComputation, error) {
-	iv, err := parseOptionalDecimal(m.ImpliedVol, "option computation implied vol")
+	var available OptionComputationFields
+	parse := func(raw, unavailable, field string, bit OptionComputationFields) (decimal.Decimal, error) {
+		if raw == unavailable {
+			return decimal.Decimal{}, nil
+		}
+		value, err := parseOptionalDecimalPointer(raw, field)
+		if err != nil {
+			return decimal.Decimal{}, err
+		}
+		if value == nil {
+			return decimal.Decimal{}, nil
+		}
+		available |= bit
+		return *value, nil
+	}
+
+	iv, err := parse(m.ImpliedVol, "-1", "option computation implied vol", OptionComputationImpliedVol)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	delta, err := parseOptionalDecimal(m.Delta, "option computation delta")
+	delta, err := parse(m.Delta, "-2", "option computation delta", OptionComputationDelta)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	optPrice, err := parseOptionalDecimal(m.OptPrice, "option computation option price")
+	optPrice, err := parse(m.OptPrice, "-1", "option computation option price", OptionComputationPrice)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	pvDiv, err := parseOptionalDecimal(m.PvDividend, "option computation pv dividend")
+	pvDiv, err := parse(m.PvDividend, "-1", "option computation pv dividend", OptionComputationPvDividend)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	gamma, err := parseOptionalDecimal(m.Gamma, "option computation gamma")
+	gamma, err := parse(m.Gamma, "-2", "option computation gamma", OptionComputationGamma)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	vega, err := parseOptionalDecimal(m.Vega, "option computation vega")
+	vega, err := parse(m.Vega, "-2", "option computation vega", OptionComputationVega)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	theta, err := parseOptionalDecimal(m.Theta, "option computation theta")
+	theta, err := parse(m.Theta, "-2", "option computation theta", OptionComputationTheta)
 	if err != nil {
 		return OptionComputation{}, err
 	}
-	undPrice, err := parseOptionalDecimal(m.UndPrice, "option computation underlying price")
+	undPrice, err := parse(m.UndPrice, "-1", "option computation underlying price", OptionComputationUnderlyingPrice)
 	if err != nil {
 		return OptionComputation{}, err
 	}
 	return OptionComputation{
+		Available:  available,
 		ImpliedVol: iv, Delta: delta, OptPrice: optPrice,
 		PvDividend: pvDiv, Gamma: gamma, Vega: vega,
 		Theta: theta, UndPrice: undPrice,
@@ -975,8 +1046,33 @@ func applyTickSize(quote *Quote, field int, raw string) (QuoteFields, error) {
 		quote.Available |= QuoteFieldLastSize
 		return QuoteFieldLastSize, nil
 	case 8, 74: // volume
-		return 0, nil
+		value, err := parseRequiredDecimal(raw, "quote volume")
+		if err != nil {
+			return 0, err
+		}
+		quote.Volume = value
+		quote.Available |= QuoteFieldVolume
+		return QuoteFieldVolume, nil
 	default:
 		return 0, nil
+	}
+}
+
+func companionSizeTickType(priceTickType int) (int, bool) {
+	switch priceTickType {
+	case 1: // bid
+		return 0, true
+	case 2: // ask
+		return 3, true
+	case 4: // last
+		return 5, true
+	case 66: // delayed_bid
+		return 69, true
+	case 67: // delayed_ask
+		return 70, true
+	case 68: // delayed_last
+		return 71, true
+	default:
+		return 0, false
 	}
 }

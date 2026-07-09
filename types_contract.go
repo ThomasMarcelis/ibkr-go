@@ -94,8 +94,8 @@ type DeltaNeutralContract struct {
 	Price decimal.Decimal
 }
 
-// TagValue is a generic name/value pair used for contract security identifiers
-// and for smart-routing and algo parameters on orders.
+// TagValue is a generic name/value pair used for contract security identifiers,
+// scanner options, and smart-routing and algo parameters on orders.
 type TagValue struct {
 	Tag   string
 	Value string

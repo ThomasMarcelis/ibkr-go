@@ -36,7 +36,7 @@ sets an explicit override.
 Every outbound and inbound message ID must have at least one live-grounded
 scenario.
 
-### 1.1 Outbound (client → server): 56 message IDs
+### 1.1 Outbound (client → server): 72 message IDs
 
 | ID | Name | Live | Capture | Transcript | Gap |
 |----|------|------|---------|------------|-----|
@@ -59,8 +59,8 @@ scenario.
 | 19 | replaceFA | no | no | no | **target** — needs FA account |
 | 20 | reqHistoricalData | yes | yes | yes | schedule variant, more bar sizes |
 | 21 | exerciseOptions | no | no | no | **target** — needs option position + OPT permissions |
-| 22 | reqScannerSubscription | yes | yes | yes | |
-| 23 | cancelScannerSubscription | yes | yes | yes | |
+| 22 | reqScannerSubscription | yes | yes | yes | complete 25-field public request and ten-row result are live-captured |
+| 23 | cancelScannerSubscription | yes | yes | yes | clean cancel after live results plus rejected-request code 365 path |
 | 24 | reqScannerParameters | yes | yes | yes | |
 | 25 | cancelHistoricalData | yes | yes | yes | |
 | 49 | reqCurrentTime | yes | yes | yes | |
@@ -113,7 +113,7 @@ scenario.
 | 103 | cancelWSHEventData | partial | partial | no | |
 | 104 | reqUserInfo | yes | yes | yes | |
 
-### 1.2 Inbound (server → client): 52 message IDs
+### 1.2 Inbound (server → client): 72 message IDs
 
 All are exercised through the outbound scenarios above. Individual gaps:
 

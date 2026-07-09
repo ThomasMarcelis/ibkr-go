@@ -229,26 +229,44 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		t.Fatalf("update 1 MarketDataType = %v, want %v", update.Snapshot.MarketDataType, ibkr.MarketDataDelayed)
 	}
 
-	// 2. Delayed volume (tick 74) has no quote-field mapping: the update
-	// carries no changed fields.
+	// 2. The live tickReqParams callback is an ancillary event and does not
+	// mutate the accumulated quote.
 	update = waitForEvent(t, sub.Events())
-	if update.Changed != 0 {
-		t.Fatalf("update 2 Changed = %v, want 0 (delayed volume tick)", update.Changed)
+	if update.Kind != ibkr.QuoteUpdateParameters {
+		t.Fatalf("update 2 Kind = %v, want QuoteUpdateParameters", update.Kind)
+	}
+	if update.Parameters == nil {
+		t.Fatal("update 2 Parameters = nil")
+	}
+	if update.Parameters.MinTick.String() != "0.01" ||
+		update.Parameters.BBOExchange != "9c0001" ||
+		update.Parameters.SnapshotPermissions != 4 {
+		t.Fatalf("update 2 Parameters = %+v", update.Parameters)
 	}
 
-	// 3. Delayed close (tick 75) lands in the normalized Close field.
+	// 3. Delayed volume (tick 74) lands in the normalized Volume field, just
+	// like live volume (tick 8).
+	update = waitForEvent(t, sub.Events())
+	if update.Kind != ibkr.QuoteUpdateFields || update.Changed != ibkr.QuoteFieldVolume {
+		t.Fatalf("update 3 = Kind %v Changed %v, want QuoteFieldVolume", update.Kind, update.Changed)
+	}
+	if !update.Snapshot.Volume.IsZero() {
+		t.Fatalf("update 3 Volume = %s, want 0", update.Snapshot.Volume)
+	}
+
+	// 4. Delayed close (tick 75) lands in the normalized Close field.
 	update = waitForEvent(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldClose {
-		t.Fatalf("update 3 Changed = %v, want QuoteFieldClose", update.Changed)
+		t.Fatalf("update 4 Changed = %v, want QuoteFieldClose", update.Changed)
 	}
 	if update.Snapshot.Close.String() != "291.58" {
 		t.Fatalf("close = %s, want 291.58", update.Snapshot.Close.String())
 	}
 
-	// 4. Delayed last (tick 68) lands in the normalized Last field.
+	// 5. Delayed last (tick 68) lands in the normalized Last field.
 	update = waitForEvent(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldLast {
-		t.Fatalf("update 4 Changed = %v, want QuoteFieldLast", update.Changed)
+		t.Fatalf("update 5 Changed = %v, want QuoteFieldLast", update.Changed)
 	}
 	if update.Snapshot.Last.String() != "0" {
 		t.Fatalf("last = %s, want 0", update.Snapshot.Last.String())
@@ -259,23 +277,23 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		t.Fatalf("SetType(MarketDataLive) error = %v", err)
 	}
 
-	// 5-7. ...but sent no marketDataType(1) re-ack in the captured window:
+	// 6-8. ...but sent no marketDataType(1) re-ack in the captured window:
 	// the stream continues with delayed open/bid/ask ticks (wire value -1.00
 	// = no delayed quote available outside market hours).
 	update = waitForEvent(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldOpen {
-		t.Fatalf("update 5 Changed = %v, want QuoteFieldOpen", update.Changed)
+		t.Fatalf("update 6 Changed = %v, want QuoteFieldOpen", update.Changed)
 	}
 	update = waitForEvent(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldBid {
-		t.Fatalf("update 6 Changed = %v, want QuoteFieldBid", update.Changed)
+		t.Fatalf("update 7 Changed = %v, want QuoteFieldBid", update.Changed)
 	}
 	if update.Snapshot.Bid.String() != "-1" {
 		t.Fatalf("bid = %s, want -1", update.Snapshot.Bid.String())
 	}
 	update = waitForEvent(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldAsk {
-		t.Fatalf("update 7 Changed = %v, want QuoteFieldAsk", update.Changed)
+		t.Fatalf("update 8 Changed = %v, want QuoteFieldAsk", update.Changed)
 	}
 	if update.Snapshot.Ask.String() != "-1" {
 		t.Fatalf("ask = %s, want -1", update.Snapshot.Ask.String())

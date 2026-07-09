@@ -155,7 +155,14 @@ Quote snapshot and streaming, real-time bars, historical bars, tick price,
 tick size, and market data type. TickGeneric (inbound 45), TickString
 (inbound 46), TickReqParams (inbound 81), reqMarketDataType encoder
 (outbound 59), cancelHistoricalData encoder (outbound 25),
-reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag.
+reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag. Quote
+subscriptions deliver generic, string, request-parameter, and option-
+computation callbacks as discriminated `QuoteUpdate` values while keeping the
+normalized `Quote` snapshot small. Live/delayed volume and the companion size
+inside classic price frames are also normalized. The public path is frozen
+against exact server-version-200 frames from the April 5 generic-tick and June
+11 option campaign captures; TickEFP and TickNews remain the classic L1
+callback gaps.
 
 ### Historical data extensions
 
@@ -175,7 +182,11 @@ reqNewsProviders (msg 85), reqNewsBulletins (msg 12/13), reqNewsArticle
 
 ### Scanner
 
-reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23).
+reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23). The public
+subscription request covers the complete classic field set and both generic
+option lists. A public-API server-version-200 capture freezes its exact request,
+ten ranked scanner-data rows, and clean cancellation. An older capture retains
+the real code 490 permission response and code 365 rejected-cancel path.
 
 ### Order and execution observation
 

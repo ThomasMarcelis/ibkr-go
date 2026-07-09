@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Quote subscriptions now deliver every implemented classic L1 callback.
+  `QuoteUpdate.Kind` discriminates normalized snapshot fields from numeric
+  generic ticks, string ticks, request parameters, and option computations;
+  ancillary events retain the cumulative `Quote` without mutating it. Option
+  computations also expose an availability bitmask so IBKR's field-specific
+  `-1`/`-2` sentinels no longer masquerade as real values. `Quote.Volume` now
+  normalizes live and delayed volume, and classic price-frame companion sizes
+  populate the matching bid, ask, or last size.
+
+- Scanner subscriptions now expose the complete classic request: every legacy
+  numeric, rating, maturity, and stock filter plus generic filter and
+  subscription options. Optional scalar filters distinguish unset from an
+  explicit zero, and scanner tag values use IBKR's `tag=value;` wire format.
+  The previous one-field-short encoder and untraceable success replay are
+  removed. A fresh public-API capture now freezes the exact server-version-200
+  request, ten ranked `scannerData` results, and clean cancellation.
+
 - Order cancellation accepts optional, locally validated compliance metadata:
   `WithManualCancelTime`, `WithCancelExternalOperator`, and
   `WithCancelManualOrderIndicator`. The options work through both direct and

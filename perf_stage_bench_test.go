@@ -137,14 +137,13 @@ func newBenchEngine(tb testing.TB) *engine {
 // installQuoteRoute registers a real production quote route by running the
 // subscribeQuotes setup closure synchronously (the closure the actor would
 // run), so route.handle is the exact shipped code path.
-func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], int) {
+func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) *Subscription[QuoteUpdate] {
 	tb.Helper()
 	type result struct {
 		sub *Subscription[QuoteUpdate]
 		err error
 	}
 	res := make(chan result, 1)
-	reqID := e.nextReqID
 	go func() {
 		sub, err := e.subscribeQuotes(context.Background(), QuoteRequest{Contract: benchContract}, false, opts...)
 		res <- result{sub, err}
@@ -155,7 +154,7 @@ func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) (*S
 	if r.err != nil {
 		tb.Fatalf("subscribeQuotes: %v", r.err)
 	}
-	return r.sub, reqID
+	return r.sub
 }
 
 func installDepthRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) (*Subscription[DepthRow], int) {
@@ -209,7 +208,7 @@ func depthL2Frame(tb testing.TB, reqID int) []byte {
 
 func benchActorTick(b *testing.B, drain bool) {
 	e := newBenchEngine(b)
-	sub, _ := installQuoteRoute(b, e, WithSlowConsumerPolicy(SlowConsumerDropOldest))
+	sub := installQuoteRoute(b, e, WithSlowConsumerPolicy(SlowConsumerDropOldest))
 	if drain {
 		go func() {
 			for range sub.Events() {

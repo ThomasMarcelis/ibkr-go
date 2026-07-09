@@ -1,0 +1,13 @@
+# Live-derived from local IB Gateway 127.0.0.1:4001.
+# Scenario: api_scanner_subscription, server_version=200.
+# Raw evidence kept local:
+# captures/20260709T221545Z-api_scanner_subscription
+# events.jsonl sha256 prefix: c84c81b3ee772bcc
+# The server frame is the exact captured ten-row HOT_BY_VOLUME response.
+handshake {"server_version":200,"connection_time":"20260710 00:15:46 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_scanner_subscription {"req_id":"$req","number_of_rows":"10","instrument":"STK","location_code":"STK.US.MAJOR","scan_code":"HOT_BY_VOLUME","filter_options":"","subscription_options":""}
+raw server AAACETIwADMAMQAxMAAwADg4ODg3MjExNwBCR0lBAFNUSwAAMAAAU01BUlQAVVNEAEJHSUEATk1TAE5NUwAAAAAAMQA4NjMyNzI1ODMARU5ISQBTVEsAADAAAFNNQVJUAFVTRABFTkhJAE5NUwBOTVMAAAAAADIANzk0OTIyOTYwAEpMSEwAU1RLAAAwAABTTUFSVABVU0QASkxITABTQ00AU0NNAAAAAAAzADg5NTgxMTczMQBWUkFYAFNUSwAAMAAAU01BUlQAVVNEAFZSQVgAU0NNAFNDTQAAAAAANAAzMTk4MDg0NDMAV1JBUABTVEsAADAAAFNNQVJUAFVTRABXUkFQAFNDTQBTQ00AAAAAADUANjk0NjI1NzA5AFpCQU8AU1RLAAAwAABTTUFSVABVU0QAWkJBTwBTQ00AU0NNAAAAAAA2ADc5MTExMzg1MwBDQ0FRAFNUSwAAMAAAU01BUlQAVVNEAENDQVEATk1TAE5NUwAAAAAANwA4OTU1MDcwMjQAVFBUUwBTVEsAADAAAFNNQVJUAFVTRABUUFRTAFRQVFMAVFBUUwAAAAAAOAA4MzQyNjA0OTMATEdITABTVEsAADAAAFNNQVJUAFVTRABMR0hMAFNDTQBTQ00AAAAAADkANDQwMDAyOTIARkFCAFNUSwAAMAAAU01BUlQAVVNEAEZBQgBOTVMATk1TAAAAAAA=
+client cancel_scanner_subscription {"req_id":"$req"}
+disconnect

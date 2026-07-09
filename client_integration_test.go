@@ -489,35 +489,6 @@ func TestQuoteSnapshot(t *testing.T) {
 	}
 }
 
-func TestQuoteSnapshotWithGenericTicks(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "quote_with_generic_ticks.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	})
-	if err != nil {
-		t.Fatalf("QuoteSnapshot() error = %v", err)
-	}
-	if quote.Bid.String() != "189.1" {
-		t.Fatalf("bid = %s, want 189.1", quote.Bid.String())
-	}
-	if quote.Ask.String() != "189.15" {
-		t.Fatalf("ask = %s, want 189.15", quote.Ask.String())
-	}
-}
-
 func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 	t.Parallel()
 
@@ -1448,6 +1419,50 @@ func TestScannerParameters(t *testing.T) {
 	}
 }
 
+func TestScannerSubscriptionReturnsLiveRankedResults(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "scanner_subscription_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	sub, err := client.Scanner().SubscribeResults(ctx, ibkr.ScannerSubscriptionRequest{
+		NumberOfRows: 10,
+		Instrument:   "STK",
+		LocationCode: "STK.US.MAJOR",
+		ScanCode:     "HOT_BY_VOLUME",
+	})
+	if err != nil {
+		t.Fatalf("SubscribeResults() error = %v", err)
+	}
+
+	var results []ibkr.ScannerResult
+	select {
+	case results = <-sub.Events():
+	case <-ctx.Done():
+		t.Fatalf("scanner results: %v", ctx.Err())
+	}
+	if len(results) != 10 {
+		t.Fatalf("results len = %d, want 10", len(results))
+	}
+	if got := results[0]; got.Rank != 0 || got.Contract.ConID != 888872117 || got.Contract.Symbol != "BGIA" {
+		t.Fatalf("first result = %+v, want live rank 0 BGIA contract 888872117", got)
+	}
+	if got := results[9]; got.Rank != 9 || got.Contract.Symbol != "FAB" {
+		t.Fatalf("last result = %+v, want live rank 9 FAB", got)
+	}
+
+	if err := sub.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+}
+
 func TestUserInfo(t *testing.T) {
 	t.Parallel()
 
@@ -2060,45 +2075,6 @@ func TestHistoricalNewsPreserveExplicitTimeZone(t *testing.T) {
 	}
 	if len(items) != 1 {
 		t.Fatalf("items len = %d, want 1", len(items))
-	}
-}
-
-func TestSubscribeScannerResults(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "scanner_subscription.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.Scanner().SubscribeResults(ctx, ibkr.ScannerSubscriptionRequest{
-		NumberOfRows: 10,
-		Instrument:   "STK",
-		LocationCode: "STK.US.MAJOR",
-		ScanCode:     "TOP_PERC_GAIN",
-	})
-	if err != nil {
-		t.Fatalf("SubscribeScannerResults() error = %v", err)
-	}
-
-	results := waitForEvent(t, sub.Events())
-	if len(results) != 2 {
-		t.Fatalf("results len = %d, want 2", len(results))
-	}
-	if results[0].Contract.Symbol != "AAPL" {
-		t.Fatalf("first symbol = %q, want AAPL", results[0].Contract.Symbol)
-	}
-	if results[1].Contract.Symbol != "MSFT" {
-		t.Fatalf("second symbol = %q, want MSFT", results[1].Contract.Symbol)
-	}
-	if results[0].Rank != 0 {
-		t.Fatalf("first rank = %d, want 0", results[0].Rank)
-	}
-
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
 	}
 }
 

@@ -1067,6 +1067,74 @@ func TestCaptureDecode_TickOptionComputationLive(t *testing.T) {
 	}
 }
 
+func TestCaptureDecode_QuoteAncillaryTicksLive(t *testing.T) {
+	t.Parallel()
+	// captures/20260405T215752Z-quote_stream_genericticks, IB Gateway
+	// server_version 200. raw.txt sha256
+	// 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee;
+	// events.jsonl sha256
+	// 3a280d5f1d165d85f16d009ef7bec253937f58483a908e9c2f8b5b1a599ba7f2.
+	// Each payload is copied from the live request for generic ticks 233 and
+	// 236 with only its four-byte frame length removed.
+	tests := []struct {
+		name    string
+		payload []byte
+		assert  func(*testing.T, Message)
+	}{
+		{
+			name:    "tick request parameters",
+			payload: []byte("81\x001001\x000.01\x009c0001\x004\x00"),
+			assert: func(t *testing.T, message Message) {
+				m, ok := message.(TickReqParams)
+				if !ok {
+					t.Fatalf("type = %T, want TickReqParams", message)
+				}
+				if m.ReqID != 1001 || m.MinTick != "0.01" || m.BBOExchange != "9c0001" || m.SnapshotPermissions != 4 {
+					t.Fatalf("message = %+v", m)
+				}
+			},
+		},
+		{
+			name:    "generic tick",
+			payload: []byte("45\x006\x001001\x0046\x003.0\x00"),
+			assert: func(t *testing.T, message Message) {
+				m, ok := message.(TickGeneric)
+				if !ok {
+					t.Fatalf("type = %T, want TickGeneric", message)
+				}
+				if m.ReqID != 1001 || m.TickType != 46 || m.Value != "3.0" {
+					t.Fatalf("message = %+v", m)
+				}
+			},
+		},
+		{
+			name:    "string tick",
+			payload: []byte("46\x006\x001001\x0088\x001775174157\x00"),
+			assert: func(t *testing.T, message Message) {
+				m, ok := message.(TickString)
+				if !ok {
+					t.Fatalf("type = %T, want TickString", message)
+				}
+				if m.ReqID != 1001 || m.TickType != 88 || m.Value != "1775174157" {
+					t.Fatalf("message = %+v", m)
+				}
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			messages, err := DecodeBatch(200, test.payload)
+			if err != nil {
+				t.Fatalf("DecodeBatch: %v", err)
+			}
+			if len(messages) != 1 {
+				t.Fatalf("messages = %d, want 1", len(messages))
+			}
+			test.assert(t, messages[0])
+		})
+	}
+}
+
 func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 	t.Parallel()
 
