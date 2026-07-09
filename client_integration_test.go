@@ -880,6 +880,52 @@ func TestOpenOrdersSnapshot(t *testing.T) {
 	}
 }
 
+// TestOpenOrdersSnapshotBurstExceedsSubscriptionBuffer uses the first
+// open-order snapshot from the live capture frozen in
+// open_orders_snapshot_burst_live.txt. The Gateway sent an open-order echo and
+// its paired status before open_order_end; a one-shot must retain the complete
+// snapshot even when the configured live-stream buffer cannot hold that burst.
+func TestOpenOrdersSnapshotBurstExceedsSubscriptionBuffer(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "open_orders_snapshot_burst_live.txt", ibkr.WithClientID(0), ibkr.WithSubscriptionBuffer(1))
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.ActionBuy,
+			OrderType: ibkr.OrderTypeLimit,
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  decimal.RequireFromString("50"),
+			TIF:       ibkr.TIFGTC,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Place: %v", err)
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+
+	orders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	if len(orders) != 1 || orders[0].OrderID != handle.OrderID() {
+		t.Fatalf("orders = %+v, want order %d", orders, handle.OrderID())
+	}
+}
+
 func TestOpenOrdersSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
 	t.Parallel()
 
@@ -1010,6 +1056,28 @@ func TestExecutions(t *testing.T) {
 	}
 	if updates[1].CommissionAndFees == nil || updates[1].CommissionAndFees.Amount.String() != "1.25" {
 		t.Fatalf("second commission = %#v", updates[1].CommissionAndFees)
+	}
+}
+
+// TestExecutionsBurstExceedsSubscriptionBuffer freezes the live-derived
+// execution-detail plus commission burst in executions.txt. One-shot queries
+// promise every row, independently of the bounded live-stream buffer.
+func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "executions.txt", ibkr.WithSubscriptionBuffer(1))
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+	if err != nil {
+		t.Fatalf("Executions: %v", err)
+	}
+	if len(updates) != 2 || updates[0].Execution == nil || updates[1].CommissionAndFees == nil {
+		t.Fatalf("updates = %#v, want execution and commission", updates)
 	}
 }
 

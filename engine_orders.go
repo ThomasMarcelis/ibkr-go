@@ -69,7 +69,7 @@ func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 	if scope == OpenOrdersScopeAuto {
 		return nil, fmt.Errorf("%w: auto-scope open orders", ErrNoSnapshot)
 	}
-	sub, err := e.SubscribeOpenOrders(ctx, scope)
+	sub, err := e.SubscribeOpenOrders(ctx, scope, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
@@ -180,7 +180,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 }
 
 func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) ([]ExecutionUpdate, error) {
-	sub, err := e.subscribeExecutions(ctx, req)
+	sub, err := e.subscribeExecutions(ctx, req, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
