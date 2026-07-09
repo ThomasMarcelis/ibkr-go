@@ -237,6 +237,32 @@ func sendReqMktData(conn net.Conn, reqID, _ int, c contractSpec, genericTicks st
 	return sendMessage(conn, fields)
 }
 
+// sendReqEFPMarketData sends the BAG shape used by IBKR's EFP sample: one
+// single-stock future leg against the future multiplier's number of shares.
+// EFP tick IDs 38-44 are default outputs for this contract, not values for the
+// genericTickList request field.
+func sendReqEFPMarketData(conn net.Conn, reqID int, c contractSpec, legs []comboLegSpec) error {
+	fields := []string{"1", "11", strconv.Itoa(reqID)}
+	fields = append(fields, contractRequestFieldsNoExpired(c)...)
+	fields = append(fields, strconv.Itoa(len(legs)))
+	for _, leg := range legs {
+		fields = append(fields,
+			strconv.Itoa(leg.ConID),
+			strconv.Itoa(leg.Ratio),
+			leg.Action,
+			leg.Exchange,
+		)
+	}
+	fields = append(fields,
+		"0", // deltaNeutralContract present bool = false
+		"",  // genericTickList; EFP ticks are automatic
+		"0", // snapshot=false
+		"0", // regulatorySnapshot=false
+		"",  // mktDataOptions
+	)
+	return sendMessage(conn, fields)
+}
+
 func sendCancelMktData(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"2", "2", strconv.Itoa(reqID)})
 }

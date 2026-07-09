@@ -579,7 +579,7 @@ rejections or no-status cleanup evidence.
 - [ ] Tick-by-tick AllLast
 - [ ] All generic tick families
 - [ ] Regulatory snapshot
-- [ ] tickEFP probe
+- [ ] tickEFP callback (`tick_efp_probe` now sends live-derived DTE/EUREX and Tencent/HKFE EFP BAGs; repeat during an active single-stock-future session)
 
 ### Phase 8: Complete error catalog
 

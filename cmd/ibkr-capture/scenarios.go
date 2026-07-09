@@ -846,6 +846,44 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 1*time.Second, logFrame, nil)
 		},
 	},
+	"tick_efp_probe": {
+		name:        "tick_efp_probe",
+		description: "live EFP market-data probe using DTE/EUREX and Tencent/HKFE single-stock-future BAGs",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			if err := sendReqMarketDataType(conn, 1); err != nil {
+				return err
+			}
+			dteReqID := nextReqID()
+			if err := sendReqEFPMarketData(conn, dteReqID,
+				contractSpec{Symbol: "DTE", SecType: "BAG", Exchange: "SMART", Currency: "EUR"},
+				[]comboLegSpec{
+					{ConID: 667336572, Ratio: 1, Action: "BUY", Exchange: "EUREX"},
+					{ConID: 2254332, Ratio: 100, Action: "SELL", Exchange: "SMART"},
+				}); err != nil {
+				return err
+			}
+			tencentReqID := nextReqID()
+			if err := sendReqEFPMarketData(conn, tencentReqID,
+				contractSpec{Symbol: "700", SecType: "BAG", Exchange: "SMART", Currency: "HKD"},
+				[]comboLegSpec{
+					{ConID: 842557048, Ratio: 1, Action: "BUY", Exchange: "HKFE"},
+					{ConID: 152791428, Ratio: 100, Action: "SELL", Exchange: "SEHK"},
+				}); err != nil {
+				return err
+			}
+
+			if err := readFrames(conn, 20*time.Second, logFrame, stopOnMsgID(47)); err != nil {
+				return err
+			}
+			if err := sendCancelMktData(conn, dteReqID); err != nil {
+				return err
+			}
+			if err := sendCancelMktData(conn, tencentReqID); err != nil {
+				return err
+			}
+			return readFrames(conn, time.Second, logFrame, nil)
+		},
+	},
 	"quote_stream_multi_asset": {
 		name:        "quote_stream_multi_asset",
 		description: "concurrent delayed REQ_MKT_DATA streams for AAPL stock and EUR.USD cash, then cancel both",
