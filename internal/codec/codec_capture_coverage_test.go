@@ -4,9 +4,11 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
-// Raw-frame capture-coverage gate.
+// Raw-frame capture-coverage gate and inbound evidence ledger.
 //
 // Every decoder registered in inboundDecoders must be attested by at least one
 // "capture-decode" test: a test that feeds a HARDCODED raw wire frame (a
@@ -45,6 +47,31 @@ import (
 // rawFrameAttested) or add a justified pending entry. This is a deliberate
 // static catalog, not reflection over test names: the membership set is the
 // contract.
+
+// TestInboundDecoderRegistryCoverage keeps the decoder table and canonical
+// protocol registry in lockstep. A classic inbound message is either decoded
+// deliberately or absent from the implemented registry; silent half-support
+// is not allowed.
+func TestInboundDecoderRegistryCoverage(t *testing.T) {
+	t.Parallel()
+
+	registered := make(map[int]protocol.Message)
+	for _, message := range protocol.Messages() {
+		if message.Direction == protocol.ServerToClient {
+			registered[message.ID] = message
+		}
+	}
+	for id := range inboundDecoders {
+		if _, ok := registered[id]; !ok {
+			t.Errorf("decoder for inbound message ID %d is absent from protocol registry", id)
+		}
+	}
+	for id, message := range registered {
+		if _, ok := inboundDecoders[id]; !ok {
+			t.Errorf("protocol registry claims %s (%d), but no decoder is registered", message.Name, id)
+		}
+	}
+}
 
 // rawFrameAttested maps a decoder's msg_id to one existing test that decodes a
 // hardcoded live wire frame for it and asserts the typed result. Where several

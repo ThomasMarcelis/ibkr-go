@@ -10,6 +10,9 @@ from decisions:
 
 The matrix may decide a capability is implemented, deferred, blocked, or out of
 scope, but every current repo behavior must appear here and in the matrix.
+Numeric message identities and negotiated-version gates are owned by
+`internal/protocol`; the exact-row audit in `matrix_audit_test.go` prevents the
+tables below from drifting from that registry.
 
 ## Official Sources
 
@@ -93,7 +96,7 @@ committed.
 | `WSH()` | `MetaData`, `EventData` |
 | `TWS()` | `UserInfo`, `DisplayGroups`, `SubscribeDisplayGroup` |
 
-## Current Codec Message Inventory
+## Current Classic Message Inventory
 
 Outbound message IDs:
 

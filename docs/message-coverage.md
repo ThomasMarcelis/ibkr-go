@@ -1,8 +1,9 @@
 # Message Coverage
 
-This matrix tracks the implemented message surface. The codec uses real IBKR
-integer message IDs and field layouts validated against server_version 200
-captures.
+This matrix tracks the implemented message surface. The canonical
+`internal/protocol` registry owns numeric identities and version gates; the
+codec consumes aliases from it. Field layouts are validated against
+server_version 200 captures.
 
 ## Bootstrap
 

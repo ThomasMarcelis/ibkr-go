@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
 
@@ -75,8 +76,8 @@ const (
 	// The codec gates post-176 wire fields on the negotiated version. The
 	// sv200 layout is live-validated; 176..199 are covered by version-gated
 	// encode/decode paths.
-	minServerVersion = 176
-	maxServerVersion = 200
+	minServerVersion = protocol.ClassicMinServerVersion
+	maxServerVersion = protocol.ClassicMaxServerVersion
 	bootstrapTimeout = 5 * time.Second
 
 	reconnectBackoff    = time.Second

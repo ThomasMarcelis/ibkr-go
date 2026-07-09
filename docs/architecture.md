@@ -20,9 +20,11 @@ protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
   subscription management
 - `internal/transport/`: socket dial, buffered frame read loop, write loop,
   pacing
+- `internal/protocol/`: dependency-free classic message identity, direction,
+  supported-version bounds, and field-layout version gates
 - `internal/codec/`: typed message encode/decode, split into per-domain files
   (`codec_orders.go`, `codec_marketdata.go`, etc.), the inbound decode
-  registry, and version-gate logic
+  registry, and protocol-owned version-gate aliases
 - `internal/wire/`: frame and field framing
 - `testing/testhost/`: deterministic replay and fault-injection harness for
   checked-in fixtures
@@ -70,6 +72,20 @@ protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
   implement it — they carry an order ID and route through order-handle
   dispatch instead — and `APIError` is routed ahead of keyed dispatch because
   its `ReqID` can be `-1` for unsolicited errors.
+
+## Protocol Evidence
+
+- `internal/protocol` is the numeric source of truth. Registry invariants reject
+  duplicate names and duplicate IDs within a direction.
+- `internal/codec/codec_capture_coverage_test.go` is the machine-checked inbound
+  evidence ledger. Every registered decoder is either tied to a named test over
+  a hardcoded live-derived frame or carries a concrete pending-capture reason.
+- `cmd/ibkr-capture -list-json` is the executable scenario ledger. Repository
+  audits require every scenario message ID to exist in the protocol registry
+  and every scenario name to appear in the live-coverage matrix.
+- `docs/ibkr-api-inventory.md` records the official and public surfaces. Its
+  numeric rows are checked exactly against the protocol registry; Markdown is
+  descriptive, never an independent source for message identities.
 
 ## Routing Tables
 
