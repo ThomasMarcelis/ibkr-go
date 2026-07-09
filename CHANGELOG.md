@@ -9,13 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 ### Added
 
 - Quote subscriptions now deliver every implemented classic L1 callback.
-  `QuoteUpdate.Kind` discriminates normalized snapshot fields from numeric
-  generic ticks, string ticks, request parameters, and option computations;
-  ancillary events retain the cumulative `Quote` without mutating it. Option
-  computations also expose an availability bitmask so IBKR's field-specific
-  `-1`/`-2` sentinels no longer masquerade as real values. `Quote.Volume` now
-  normalizes live and delayed volume, and classic price-frame companion sizes
-  populate the matching bid, ask, or last size.
+  `QuoteUpdate.Kind` preserves every classic price and size callback, including
+  its numeric tick type, price attributes, and optional price-frame companion
+  size, even when it has no normalized `Quote` field. Numeric generic ticks,
+  string ticks, request parameters, and option computations remain distinct
+  payloads; ancillary events retain the cumulative `Quote` without mutating
+  it. Option computations expose an availability bitmask so IBKR's
+  field-specific `-1`/`-2` sentinels no longer masquerade as real values.
+  `Quote.Volume` normalizes live and delayed volume, and omitted request
+  minimum ticks are represented by `nil` rather than terminating a stream.
 
 - Scanner subscriptions now expose the complete classic request: every legacy
   numeric, rating, maturity, and stock filter plus generic filter and
@@ -31,6 +33,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   handle cancellation; the two CME tagging fields also apply to global
   cancellation. Unsupported negotiated versions fail before any frame is
   sent.
+
+- Exact `server_version 201` support adds the raw-ID envelope and the first
+  protobuf family, `Orders().Executions`, implemented directly with Go's
+  protobuf wire primitives. Live empty and non-empty paper queries freeze the
+  request, execution detail, end marker, and mixed classic bootstrap behavior;
+  unknown protobuf frames retain their binary payload for protocol-drift
+  diagnosis.
 
 ### Changed (breaking)
 
@@ -152,11 +161,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **The client negotiates classic IB Gateway `server_version` 176..200 while
-  retaining 200 as the supported, live-attested baseline.** Fields are gated
+- **The client negotiates IB Gateway `server_version` 176..201, with exact 201
+  adding raw message IDs and protobuf executions.** Fields are gated
   on the version the Gateway actually returns instead of assuming the latest
-  layout. Versions 176..199 remain compatibility paths until independently
-  evidenced. `CurrentTimeMillis` returns
+  layout. The classic sv200 and mixed-envelope sv201 layouts are live-attested;
+  versions 176..199 remain compatibility paths until independently evidenced,
+  and 202+ is not advertised. `CurrentTimeMillis` returns
   `ErrUnsupportedServerVersion` below 197, the version that introduced
   `reqCurrentTimeInMillis` on the wire.
 

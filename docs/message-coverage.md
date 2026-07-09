@@ -98,10 +98,16 @@ server version and managed-account bootstrap fields are known.
 | out | 98 | cancelTickByTickData | landed |
 | in | 99 | TickByTick | landed |
 
-`QuoteUpdate.Kind` publicly delivers the classic TickGeneric, TickString,
-TickReqParams, and TickOptionComputation callbacks without expanding the
-normalized `Quote` snapshot. The first three are raw-frame-attested by
-`captures/20260405T215752Z-quote_stream_genericticks`; a quote-subscription
+`QuoteUpdate.Kind` publicly preserves every TickPrice and TickSize callback,
+including unmapped numeric tick types, the exact price-attribute mask, and an
+optional price-frame companion size, without expanding the normalized `Quote`
+snapshot. TickGeneric, TickString, TickReqParams, and TickOptionComputation are
+also distinct public payloads. The first generic/string/parameter frames and a
+companion size are attested by
+`captures/20260405T215752Z-quote_stream_genericticks`; mark-price tick 37,
+shortable ticks 46/89, volume-rate tick 56, delayed-timestamp string tick 88,
+and an omitted minimum tick are attested by
+`captures/20260709T223341Z-api_generic_tick_matrix_aapl`; a quote-subscription
 option computation is attested by
 `captures/20260611T080111Z-api_option_campaign_aapl`.
 
@@ -180,10 +186,10 @@ layout, so replay fixtures exercise the production decode path.
 | in | 5 | OpenOrder | landed | See Order Management notes |
 | in | 53 | OpenOrderEnd | landed | |
 | in | 3 | OrderStatus | landed | |
-| out | 7 | ExecutionsRequest | landed | Complete nine-field filter block plus the sv200 last-days/specific-dates tail; nondefault day filters are source-grounded and await live attestation. |
-| in | 11 | ExecutionDetail | landed | Complete version-gated classic result with a raw sv200 capture freeze. |
-| in | 55 | ExecutionsEnd | landed | Raw sv200 capture freeze. |
-| in | 59 | CommissionAndFeesReport | landed | Complete six-value payload with raw sv200 capture; meaningful bond yield/redemption remains unattested. |
+| out | 7 | ExecutionsRequest | landed | Complete classic filter plus sv200 day/date tail; exact-sv201 protobuf empty-filter request is live-frozen. Nondefault day filters await live attestation. |
+| in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. |
+| in | 55 | ExecutionsEnd | landed | Raw sv200 freeze and exact-sv201 protobuf live vector/public empty-query replay. |
+| in | 59 | CommissionAndFeesReport | landed | Complete classic and sv201 protobuf decoders; the live sv201 round trip sent classic fee reports. Meaningful bond yield/redemption and a protobuf-encoded fee report remain unattested. |
 | out | 99 | reqCompletedOrders | landed | |
 | in | 101 | CompletedOrder | landed | Exact sequential classic decoder and typed public projection preserve the complete version-gated order, algo, condition, compliance, and completion layout. The raw system-cancel replay freezes unset-sentinel handling; advanced branches without a nondefault live frame remain unattested. |
 | in | 102 | CompletedOrdersEnd | landed | |

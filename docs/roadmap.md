@@ -158,11 +158,13 @@ tick size, and market data type. TickGeneric (inbound 45), TickString
 reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag. Quote
 subscriptions deliver generic, string, request-parameter, and option-
 computation callbacks as discriminated `QuoteUpdate` values while keeping the
-normalized `Quote` snapshot small. Live/delayed volume and the companion size
-inside classic price frames are also normalized. The public path is frozen
-against exact server-version-200 frames from the April 5 generic-tick and June
-11 option campaign captures; TickEFP and TickNews remain the classic L1
-callback gaps.
+normalized `Quote` snapshot small. Every classic price and size callback is
+also preserved with its numeric tick type, exact price-attribute mask, and
+optional companion size even when it has no normalized field. Live/delayed
+volume and matching companion sizes are normalized. The public path is frozen
+against exact server-version-200 frames from the April 5 generic-tick, June 11
+option campaign, and July 9 generic-tick-matrix captures; TickEFP and TickNews
+remain the classic L1 callback gaps.
 
 ### Historical data extensions
 
@@ -267,12 +269,12 @@ against the local paper Gateway when applicable.
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
 - ~~Server-version coverage beyond exactly `server_version 200`~~ **Done.**
-  The client negotiates `server_version` 176..200 and gates every post-176
+  The client negotiates `server_version` 176..201 and gates every post-176
   wire field on the negotiated value; live-validated 2026-07-04/05 by
   down-negotiating the paper Gateway to 176/184/193/195/199/200 across
   contract details, historical bars, API-error frames, and the
-  `CurrentTimeMillis` feature gate. The remaining server-version gap is
-  crossing into `server_version` 201+ (protobuf), tracked separately below.
+  `CurrentTimeMillis` feature gate. Exact 201 is covered by the live-attested
+  envelope and executions slice below; 202+ remains the next gap.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
@@ -280,26 +282,29 @@ trackers; new gaps land there first, then graduate here.
 
 ## Protobuf era (sv 201+)
 
-IBKR's later Gateway/TWS releases move part of the wire protocol to
-protobuf-framed messages at `server_version` 201 and above. `ibkr-go`
-advertises a maximum of 200 (`maxServerVersion` in `engine.go`) and does not
-negotiate higher — this ceiling is a deliberate wall, not an oversight.
-`codec.DecodeBatch` already peeks the msg-id from raw frame bytes before
-parsing any fields (see [`docs/architecture.md`](architecture.md#codec-dispatch)),
-which is exactly the dispatch seam a mixed classic/protobuf wire needs: it
-can choose NUL-delimited versus protobuf decoding per frame before the field
-data, which may contain embedded NULs, is touched. Crossing the wall means
-new protobuf message definitions, decode/encode paths for whichever messages
-IBKR has migrated, and a fresh live-capture and replay campaign — scoped as
-one coordinated future project, not a series of piecemeal codec changes
-layered onto the classic path.
+Exact `server_version 201` is implemented and live-attested. At this boundary
+every normal message uses a raw four-byte big-endian ID; IDs above 200 select a
+protobuf body and map back to base ID `wireID-200`. `reqExecutions` is the
+first migrated outbound family. Its request, `execDetails`,
+`execDetailsEnd`, commission-and-fees, and error protobuf schemas are owned by
+the Go codec through `protowire`, with no generated SDK artifact or runtime
+dependency. A sanitized public replay freezes the exact-201 empty query; a
+one-share paper round trip live-attests non-empty execution details and classic
+commission reports at the same negotiated version. The classic bootstrap,
+request, detail, and end bytes are exact-vector tested.
+
+The production ceiling is 201. Server version 202 and later remain a deliberate
+wall: each later migration gate must add its encoder/decoder, live capture,
+and deterministic replay before the advertised maximum moves again. The
+migration table fails closed rather than sending a classic body after IBKR has
+retired it.
 
 ## Ongoing
 
 - SDK conformance oracle workflow: capture reference traces from the official
   SDK against the local Gateway when adding or hardening a protocol area, and
   fold sanitized live-derived captures into deterministic replay fixtures.
-- Protobuf era (`server_version` 201+); see above.
+- Protobuf migrations for `server_version` 202+; see above.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
 
