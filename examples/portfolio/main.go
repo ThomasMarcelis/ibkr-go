@@ -7,28 +7,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/ThomasMarcelis/ibkr-go/examples/internal/exampleutil"
 )
 
 func main() {
-	host, port := "127.0.0.1", 4002
-	if addr := os.Getenv("IBKR_ADDR"); addr != "" {
-		parts := strings.SplitN(addr, ":", 2)
-		host = parts[0]
-		if len(parts) == 2 {
-			p, err := strconv.Atoi(parts[1])
-			if err != nil {
-				log.Fatalf("invalid port in IBKR_ADDR: %v", err)
-			}
-			port = p
-		}
+	exampleutil.Run(run)
+}
+
+func run() (err error) {
+	host, port, err := exampleutil.GatewayAddress()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -39,11 +33,14 @@ func main() {
 		ibkr.WithPort(port),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { err = errors.Join(err, client.Close()) }()
 
-	account := client.Session().ManagedAccounts[0]
+	account, err := exampleutil.FirstAccount(client.Session().ManagedAccounts)
+	if err != nil {
+		return err
+	}
 
 	// Account summary — one-shot.
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
@@ -51,7 +48,7 @@ func main() {
 		Tags:    []string{"NetLiquidation", "TotalCashValue", "UnrealizedPnL"},
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	fmt.Println("=== account summary ===")
 	for _, v := range values {
@@ -61,7 +58,7 @@ func main() {
 	// Positions — one-shot.
 	positions, err := client.Accounts().Positions(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	fmt.Println("\n=== positions ===")
 	if len(positions) == 0 {
@@ -77,9 +74,9 @@ func main() {
 		Account: account,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = pnl.Close() }()
+	defer func() { err = errors.Join(err, pnl.Close()) }()
 
 	fmt.Println("\n=== streaming P&L (30s) ===")
 	timeout := time.After(30 * time.Second)
@@ -88,15 +85,15 @@ func main() {
 		case update, ok := <-pnl.Events():
 			if !ok {
 				if err := pnl.Wait(); err != nil {
-					log.Fatal(err)
+					return err
 				}
-				return
+				return nil
 			}
 			fmt.Printf("  daily=%s unrealized=%s realized=%s\n",
 				update.DailyPnL, update.UnrealizedPnL, update.RealizedPnL)
 		case <-timeout:
 			fmt.Println("done")
-			return
+			return nil
 		}
 	}
 }

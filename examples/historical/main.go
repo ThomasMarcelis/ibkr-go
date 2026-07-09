@@ -7,28 +7,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/ThomasMarcelis/ibkr-go/examples/internal/exampleutil"
 )
 
 func main() {
-	host, port := "127.0.0.1", 4002
-	if addr := os.Getenv("IBKR_ADDR"); addr != "" {
-		parts := strings.SplitN(addr, ":", 2)
-		host = parts[0]
-		if len(parts) == 2 {
-			p, err := strconv.Atoi(parts[1])
-			if err != nil {
-				log.Fatalf("invalid port in IBKR_ADDR: %v", err)
-			}
-			port = p
-		}
+	exampleutil.Run(run)
+}
+
+func run() (err error) {
+	host, port, err := exampleutil.GatewayAddress()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -39,9 +33,9 @@ func main() {
 		ibkr.WithPort(port),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { err = errors.Join(err, client.Close()) }()
 
 	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
@@ -56,7 +50,7 @@ func main() {
 		UseRTH:     true,
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	fmt.Printf("%-20s %10s %10s %10s %10s %12s\n",
@@ -66,4 +60,5 @@ func main() {
 			bar.Time.Format("2006-01-02 15:04"),
 			bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)
 	}
+	return nil
 }

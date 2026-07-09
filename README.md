@@ -1,32 +1,42 @@
 # ibkr-go
 
 [![CI](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/ThomasMarcelis/ibkr-go/graph/badge.svg)](https://codecov.io/gh/ThomasMarcelis/ibkr-go)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go)
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
 An idiomatic Go client for the Interactive Brokers TWS and IB Gateway socket
-protocol. Typed methods for snapshots. Typed subscriptions for streams. Full
-order management with lifecycle tracking. Exact decimal arithmetic for all
-financial values.
+protocol. Typed methods for snapshots. Typed subscriptions for streams. Typed
+order lifecycle tracking across the currently implemented surface. Exact
+decimal arithmetic for prices, quantities, and money.
 
 ```go
-client, _ := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4002))
-defer client.Close()
+client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4002))
+if err != nil {
+    return err
+}
+defer func() { _ = client.Close() }()
 
 // one-shot — typed result, blocks until done
-positions, _ := client.Accounts().Positions(ctx)
+positions, err := client.Accounts().Positions(ctx)
+if err != nil {
+    return err
+}
+fmt.Println("positions:", len(positions))
 
 // streaming — typed subscription with lifecycle events
-sub, _ := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
 })
-defer sub.Close()
+if err != nil {
+    return err
+}
+defer func() { _ = sub.Close() }()
 for update := range sub.All(ctx) {
     fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
 }
+return sub.Err()
 ```
 
 ## Install
@@ -46,13 +56,16 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
   `EClient` callback surface.
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
-  configuration, WSH, display groups, and more, with remaining official gaps
-  tracked in the roadmap and coverage matrix.
+  configuration, WSH, display groups, and more. The supported baseline is
+  `server_version 200`; remaining and partially decoded official branches are
+  tracked explicitly in the roadmap and coverage matrix.
 - **Reconnects are explicit.** Session transitions and subscription lifecycle
   events — `Gap`, `Resumed`, `SnapshotComplete`, `Closed` — are part of the
   contract, not hidden behind callbacks.
 - **Exact financial values.** [`decimal.Decimal`](https://github.com/shopspring/decimal)
-  for prices, quantities, and money throughout the API — no float64 rounding.
+  for typed prices, quantities, and money — no float64 rounding. Heterogeneous
+  IBKR values and extensible tag payloads remain strings where the protocol
+  does not define a single numeric meaning.
 - **Protocol work backed by evidence.** Replay scenarios derived from live IB
   Gateway traffic, wire and codec fuzzing, and deterministic CI.
 
@@ -165,8 +178,12 @@ return handle.Wait() // nil when terminal status reached cleanly
 Cancel or modify a working order at any time:
 
 ```go
-handle.Cancel(ctx)               // request cancellation
-handle.Modify(ctx, revisedOrder) // amend price, quantity, etc.
+if err := handle.Cancel(ctx); err != nil { // request cancellation
+    return err
+}
+if err := handle.Modify(ctx, revisedOrder); err != nil { // amend price, quantity, etc.
+    return err
+}
 ```
 
 The events channel keeps delivering until the server confirms the terminal
@@ -176,21 +193,34 @@ state.
 
 ```go
 // snapshot
-values, _ := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
+values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
     Account: "All",
     Tags:    []string{"NetLiquidation", "TotalCashValue"},
 })
+if err != nil {
+    return err
+}
+fmt.Println("account values:", len(values))
 
 // streaming positions
-sub, _ := client.Accounts().SubscribePositions(ctx)
-defer sub.Close()
+sub, err := client.Accounts().SubscribePositions(ctx)
+if err != nil {
+    return err
+}
+defer func() { _ = sub.Close() }()
 for pos := range sub.Events() {
     fmt.Println(pos.Position.Contract.Symbol, pos.Position.Position, pos.Position.AvgCost)
 }
+if err := sub.Wait(); err != nil {
+    return err
+}
 
 // real-time P&L
-pnl, _ := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: "DU12345"})
-defer pnl.Close()
+pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: "DU9000001"})
+if err != nil {
+    return err
+}
+defer func() { _ = pnl.Close() }()
 ```
 
 ## API Shape
@@ -226,7 +256,7 @@ IBKR_ADDR=127.0.0.1:4002 go run ./examples/connect       # session info
 IBKR_ADDR=127.0.0.1:4002 go run ./examples/quotes         # live quote stream
 IBKR_ADDR=127.0.0.1:4002 go run ./examples/historical     # historical bars
 IBKR_ADDR=127.0.0.1:4002 go run ./examples/portfolio      # account + positions + P&L stream
-IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=1 go run ./examples/order  # place, observe, cancel
+IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=paper go run ./examples/order  # place, observe, cancel
 ```
 
 Each example demonstrates real error handling, context cancellation, and
@@ -234,7 +264,9 @@ graceful shutdown.
 
 ## Testing and Verification
 
-Every protocol behavior this library claims has a test pinning it down.
+Supported behavior is frozen through deterministic tests; the coverage matrix
+distinguishes implementation, replay, live attestation, partial branches, and
+entitlement blockers rather than treating them as equivalent proof.
 
 - Checked-in replay transcripts under
   [`testdata/transcripts`](testdata/transcripts)
@@ -252,9 +284,11 @@ stressed, and extended without guessing. For more on that approach, see
 ## Status
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
-domains through an idiomatic Go facade. Ongoing work focuses on closing the
-remaining official edge branches, keeping pace with new Gateway versions,
-expanding replay coverage, and tightening API ergonomics.
+domains through an idiomatic Go facade. The supported and live-attested
+classic baseline is `server_version 200`. The client does not yet implement
+the raw-ID/protobuf protocol used above 200, and some advanced v200 response
+layouts remain explicitly partial. See the coverage matrix for the evidence
+behind each claim.
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full

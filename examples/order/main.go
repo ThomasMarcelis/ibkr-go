@@ -3,41 +3,35 @@
 //
 // Usage:
 //
-//	IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=1 go run ./examples/order
+//	IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=paper go run ./examples/order
 //
-// The IBKR_TRADING=1 environment variable is a safety gate — the example
-// refuses to run without it to prevent accidental order placement.
+// The example also verifies that every managed account has IBKR's paper
+// account prefix before sending an order.
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
 	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/ThomasMarcelis/ibkr-go/examples/internal/exampleutil"
 	"github.com/shopspring/decimal"
 )
 
 func main() {
-	if os.Getenv("IBKR_TRADING") != "1" {
-		log.Fatal("set IBKR_TRADING=1 to confirm you want to place a paper order")
-	}
+	exampleutil.Run(run)
+}
 
-	host, port := "127.0.0.1", 4002
-	if addr := os.Getenv("IBKR_ADDR"); addr != "" {
-		parts := strings.SplitN(addr, ":", 2)
-		host = parts[0]
-		if len(parts) == 2 {
-			p, err := strconv.Atoi(parts[1])
-			if err != nil {
-				log.Fatalf("invalid port in IBKR_ADDR: %v", err)
-			}
-			port = p
-		}
+func run() (err error) {
+	if os.Getenv("IBKR_TRADING") != "paper" {
+		return fmt.Errorf("set IBKR_TRADING=paper to confirm paper-only order placement")
+	}
+	host, port, err := exampleutil.GatewayAddress()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -48,11 +42,14 @@ func main() {
 		ibkr.WithPort(port),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { err = errors.Join(err, client.Close()) }()
 
-	account := client.Session().ManagedAccounts[0]
+	account, err := exampleutil.PaperAccount(client.Session().ManagedAccounts)
+	if err != nil {
+		return err
+	}
 
 	// Place a far-from-market limit buy so it won't fill.
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -72,8 +69,17 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
+	cleanupNeeded := true
+	defer func() {
+		if cleanupNeeded {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err = errors.Join(err, handle.Cancel(cleanupCtx))
+		}
+		err = errors.Join(err, handle.Close())
+	}()
 
 	fmt.Println("placed order", handle.OrderID())
 
@@ -89,7 +95,7 @@ func main() {
 			if !cancelled && !ibkr.IsTerminalOrderStatus(evt.Status.Status) {
 				fmt.Println("cancelling order...")
 				if err := handle.Cancel(ctx); err != nil {
-					log.Fatal(err)
+					return err
 				}
 				cancelled = true
 			}
@@ -105,11 +111,11 @@ func main() {
 				evt.Commission.Commission, evt.Commission.Currency)
 		}
 	}
+	cleanupNeeded = false
 
-	err = handle.Wait()
-	if err != nil {
-		fmt.Println("order error:", err)
-	} else {
-		fmt.Println("order done")
+	if err := handle.Wait(); err != nil {
+		return err
 	}
+	fmt.Println("order done")
+	return nil
 }

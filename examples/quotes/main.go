@@ -7,28 +7,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/ThomasMarcelis/ibkr-go/examples/internal/exampleutil"
 )
 
 func main() {
-	host, port := "127.0.0.1", 4002
-	if addr := os.Getenv("IBKR_ADDR"); addr != "" {
-		parts := strings.SplitN(addr, ":", 2)
-		host = parts[0]
-		if len(parts) == 2 {
-			p, err := strconv.Atoi(parts[1])
-			if err != nil {
-				log.Fatalf("invalid port in IBKR_ADDR: %v", err)
-			}
-			port = p
-		}
+	exampleutil.Run(run)
+}
+
+func run() (err error) {
+	host, port, err := exampleutil.GatewayAddress()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -39,14 +33,14 @@ func main() {
 		ibkr.WithPort(port),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { err = errors.Join(err, client.Close()) }()
 
 	// Request delayed data so the example works without a live market data
 	// subscription. Remove this line if you have real-time entitlements.
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
@@ -58,9 +52,9 @@ func main() {
 		},
 	})
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = sub.Close() }()
+	defer func() { err = errors.Join(err, sub.Close()) }()
 
 	timeout := time.After(10 * time.Second)
 	events := sub.Events()
@@ -70,9 +64,9 @@ func main() {
 		case update, ok := <-events:
 			if !ok {
 				if err := sub.Wait(); err != nil {
-					log.Fatal(err)
+					return err
 				}
-				return
+				return nil
 			}
 			fmt.Printf("bid=%-10s ask=%-10s last=%-10s\n",
 				update.Snapshot.Bid, update.Snapshot.Ask, update.Snapshot.Last)
@@ -84,7 +78,8 @@ func main() {
 			fmt.Println("lifecycle:", state.Kind)
 		case <-timeout:
 			fmt.Println("done")
-			return
+			return nil
 		}
 	}
+	return nil
 }

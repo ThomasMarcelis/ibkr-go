@@ -1,6 +1,9 @@
 // Package ibkr is a Go client for the Interactive Brokers TWS/Gateway socket
-// protocol. It covers the full TWS API surface through typed methods and generic
-// subscriptions with explicit lifecycle semantics.
+// protocol. It exposes broad account, contract, market-data, historical, order,
+// option, news, scanner, advisor, and TWS functionality through typed methods
+// and generic subscriptions with explicit lifecycle semantics. The supported
+// and live-attested classic baseline is server_version 200; the project
+// coverage matrix records partial, blocked, and future protocol areas.
 //
 // # Connecting
 //

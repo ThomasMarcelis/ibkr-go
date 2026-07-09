@@ -3,14 +3,13 @@
 `ibkr-go` is built as a session engine with a typed facade. The library does
 not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
-The library covers the full free read-only TWS API surface plus order
-management, market depth, fundamental data, and option exercise. Public
-contracts, codec, and replay fixtures are validated against live IB Gateway
-server_version 200. The session handshake negotiates `server_version` in the
-range 176..200; wire fields introduced after 176 are gated on the negotiated
-value the Gateway actually returns rather than assuming the latest layout.
-Server versions above 200 (the protobuf era) are out of scope until a
-coordinated future project — see [`docs/roadmap.md`](roadmap.md).
+The library currently exposes a broad read-only surface plus order management,
+market depth, fundamental data, and option exercise. Its supported and
+live-attested classic baseline is IB Gateway `server_version 200`. The session
+handshake can negotiate 176..200 and gates fields on the returned version, but
+176..199 remain compatibility paths rather than advertised support until each
+has independent evidence. Server versions above 200 require the raw-ID and
+protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
 
 ## Layers
 

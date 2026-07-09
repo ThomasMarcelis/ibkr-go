@@ -7,28 +7,22 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
-	"os"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/ThomasMarcelis/ibkr-go/examples/internal/exampleutil"
 )
 
 func main() {
-	host, port := "127.0.0.1", 4002
-	if addr := os.Getenv("IBKR_ADDR"); addr != "" {
-		parts := strings.SplitN(addr, ":", 2)
-		host = parts[0]
-		if len(parts) == 2 {
-			p, err := strconv.Atoi(parts[1])
-			if err != nil {
-				log.Fatalf("invalid port in IBKR_ADDR: %v", err)
-			}
-			port = p
-		}
+	exampleutil.Run(run)
+}
+
+func run() (err error) {
+	host, port, err := exampleutil.GatewayAddress()
+	if err != nil {
+		return err
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -39,9 +33,9 @@ func main() {
 		ibkr.WithPort(port),
 	)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	defer func() { _ = client.Close() }()
+	defer func() { err = errors.Join(err, client.Close()) }()
 
 	snap := client.Session()
 	fmt.Println("state:           ", snap.State)
@@ -51,7 +45,8 @@ func main() {
 
 	serverTime, err := client.CurrentTime(ctx)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	fmt.Println("server time:     ", serverTime.Format(time.RFC3339))
+	return nil
 }

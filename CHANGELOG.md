@@ -76,10 +76,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **Minimum supported IB Gateway `server_version` is 176 (was exactly
-  200).** The client now negotiates the range 176..200 and gates every
-  post-176 wire field on the version the Gateway actually returns, rather
-  than requiring the latest one. `CurrentTimeMillis` returns
+- **The client negotiates classic IB Gateway `server_version` 176..200 while
+  retaining 200 as the supported, live-attested baseline.** Fields are gated
+  on the version the Gateway actually returns instead of assuming the latest
+  layout. Versions 176..199 remain compatibility paths until independently
+  evidenced. `CurrentTimeMillis` returns
   `ErrUnsupportedServerVersion` below 197, the version that introduced
   `reqCurrentTimeInMillis` on the wire.
 
@@ -105,7 +106,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   order or version-gated layout, so a partial decode is observable
   instead of silently dropping fields.
 - **Public `Dialer` interface** (see Changed above).
-- **Widened server-version support: 176..200**, live-validated by
+- **Widened classic-version compatibility: 176..200**, exercised by
   down-negotiating the paper Gateway (`server_version 200` capped to
   176/184/193/195/199 via the v100+ handshake) across contract details,
   historical bars, API-error frames, and the `CurrentTimeMillis` feature
