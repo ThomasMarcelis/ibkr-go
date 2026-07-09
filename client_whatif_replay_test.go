@@ -161,20 +161,22 @@ func TestPreviewRejected10xxxReplay(t *testing.T) {
 	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:       ibkr.ActionBuy,
-			OrderType:    ibkr.OrderTypeLimit,
-			Quantity:     decimal.RequireFromString("1"),
-			LmtPrice:     decimal.RequireFromString("150"),
-			TIF:          ibkr.TIFDay,
-			Account:      "DU9000001",
-			OrderRef:     "ibkrgo-sanitized-20260705T011725Z-001",
-			DisplaySize:  1,
-			AlgoStrategy: "DarkIce",
-			AlgoParams: []ibkr.TagValue{
-				{Tag: "displaySize", Value: "1"},
-				{Tag: "startTime", Value: "20260704 23:17:26 UTC"},
-				{Tag: "endTime", Value: "20260704 23:37:26 UTC"},
-				{Tag: "allowPastEndTime", Value: "1"},
+			Action:      ibkr.ActionBuy,
+			OrderType:   ibkr.OrderTypeLimit,
+			Quantity:    decimal.RequireFromString("1"),
+			LmtPrice:    decimal.RequireFromString("150"),
+			TIF:         ibkr.TIFDay,
+			Account:     "DU9000001",
+			OrderRef:    "ibkrgo-sanitized-20260705T011725Z-001",
+			DisplaySize: 1,
+			Algorithm: ibkr.OrderAlgorithm{
+				Strategy: "DarkIce",
+				Params: []ibkr.TagValue{
+					{Tag: "displaySize", Value: "1"},
+					{Tag: "startTime", Value: "20260704 23:17:26 UTC"},
+					{Tag: "endTime", Value: "20260704 23:37:26 UTC"},
+					{Tag: "allowPastEndTime", Value: "1"},
+				},
 			},
 		},
 	})

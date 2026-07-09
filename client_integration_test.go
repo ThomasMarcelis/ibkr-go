@@ -4450,8 +4450,7 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("12.9"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OcaGroup:  group,
-			OcaType:   1,
+			OCA:       ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock},
 		},
 	})
 	if err != nil {
@@ -4472,8 +4471,7 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("309.48"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OcaGroup:  group,
-			OcaType:   1,
+			OCA:       ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock},
 		},
 	})
 	if err != nil {

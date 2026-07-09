@@ -118,15 +118,17 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: contract,
 			Order: ibkr.Order{
-				Action:              ibkr.ActionBuy,
-				OrderType:           ibkr.OrderTypeLimit,
-				Quantity:            decimal.RequireFromString("100"),
-				LmtPrice:            decimal.RequireFromString("14.59"),
-				TIF:                 ibkr.TIFDay,
-				Account:             "DU9000001",
-				OrderRef:            "ibkrgo-sanitized-20260610T200935Z-001",
-				Conditions:          []ibkr.OrderCondition{tc.condition},
-				ConditionsIgnoreRTH: true,
+				Action:    ibkr.ActionBuy,
+				OrderType: ibkr.OrderTypeLimit,
+				Quantity:  decimal.RequireFromString("100"),
+				LmtPrice:  decimal.RequireFromString("14.59"),
+				TIF:       ibkr.TIFDay,
+				Account:   "DU9000001",
+				OrderRef:  "ibkrgo-sanitized-20260610T200935Z-001",
+				Conditions: ibkr.OrderConditions{
+					Values:    []ibkr.OrderCondition{tc.condition},
+					IgnoreRTH: true,
+				},
 			},
 		})
 		if err != nil {

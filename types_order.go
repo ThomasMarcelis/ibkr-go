@@ -13,11 +13,6 @@ type OrderAction string
 const (
 	ActionBuy  OrderAction = "BUY"
 	ActionSell OrderAction = "SELL"
-
-	// Deprecated: use ActionBuy.
-	Buy OrderAction = ActionBuy
-	// Deprecated: use ActionSell.
-	Sell OrderAction = ActionSell
 )
 
 // OrderType is the execution instruction for an [Order]. The type determines
@@ -224,6 +219,89 @@ type OrderEvent struct {
 	Warning *APIError
 }
 
+// OCAType controls how IBKR handles the remaining orders in a one-cancels-all
+// group after one member executes.
+type OCAType int
+
+const (
+	OCACancelWithBlock    OCAType = 1
+	OCAReduceWithBlock    OCAType = 2
+	OCAReduceWithoutBlock OCAType = 3
+)
+
+// OrderOCA configures membership in a one-cancels-all group. The zero value
+// disables OCA behavior.
+type OrderOCA struct {
+	Group string
+	Type  OCAType
+}
+
+// OrderCombo holds the leg definitions and execution instructions for a
+// BAG/combo contract order. LegPrices and SmartRouting are optional.
+type OrderCombo struct {
+	Legs         []ComboLeg
+	LegPrices    []string
+	SmartRouting []TagValue
+}
+
+// OrderScale configures scale-order sizing, price increments, and its active
+// window. The zero value disables scale behavior.
+type OrderScale struct {
+	InitialLevelSize    int
+	SubsequentLevelSize int
+	PriceIncrement      decimal.Decimal
+	Table               string
+	ActiveStartTime     string
+	ActiveStopTime      string
+}
+
+// HedgeType selects the relationship between a child hedge order and its
+// parent.
+type HedgeType string
+
+const (
+	HedgeDelta HedgeType = "D"
+	HedgeBeta  HedgeType = "B"
+	HedgeFX    HedgeType = "F"
+	HedgePair  HedgeType = "P"
+)
+
+// OrderHedge configures a hedge child. A hedge child commonly has zero
+// Quantity because IBKR derives its size from the parent.
+type OrderHedge struct {
+	Type                  HedgeType
+	Param                 string
+	DisableAutomaticPrice *bool
+}
+
+// OrderAlgorithm configures an IB algorithm and its strategy-specific
+// parameters. Strategy is intentionally open-ended because IBKR adds and
+// entitlement-gates algorithms independently of socket protocol releases.
+type OrderAlgorithm struct {
+	Strategy string
+	Params   []TagValue
+}
+
+// OrderConditions configures the triggers that submit or cancel an order.
+// The zero value means the order is unconditional.
+type OrderConditions struct {
+	Values      []OrderCondition
+	IgnoreRTH   bool
+	CancelOrder bool
+}
+
+// OrderAdjustment configures an adjustable order transition. The zero value
+// disables adjustment behavior.
+type OrderAdjustment struct {
+	OrderType      OrderType
+	TriggerPrice   decimal.Decimal
+	LmtPriceOffset decimal.Decimal
+	StopPrice      decimal.Decimal
+	StopLimitPrice decimal.Decimal
+	TrailingAmount decimal.Decimal
+	TrailingUnit   int
+}
+
 // Order is the instruction a user fills in to place or modify an order via
 // [OrdersClient.Place], [OrdersClient.Preview], or [OrderHandle.Modify]. Only a
 // handful of fields are needed for a common order; the rest cover advanced
@@ -245,58 +323,39 @@ type OrderEvent struct {
 // A minimal market order needs only Action, OrderType, and Quantity. A limit
 // order additionally sets LmtPrice.
 type Order struct {
-	OrderID                  int64            // assigned by the engine at placement; leave zero. Place always allocates internally and ignores any value set here; Modify accepts zero or the handle's own id
-	Action                   OrderAction      // BUY or SELL (required)
-	OrderType                OrderType        // execution instruction (required); selects which price fields apply
-	Quantity                 decimal.Decimal  // order size (required); zero is treated as unset
-	LmtPrice                 decimal.Decimal  // limit price for LMT / STP LMT; zero means unset
-	AuxPrice                 decimal.Decimal  // stop trigger for STP / STP LMT, trailing amount for TRAIL; zero means unset
-	TIF                      TimeInForce      // time in force; empty defaults to DAY at the server
-	Account                  string           // account to place under; required only for multi-account logins
-	Transmit                 *bool            // nil = transmit (true); false stages an untransmitted order
-	ParentID                 int64            // parent order ID for a bracket child; 0 = no parent
-	OcaGroup                 string           // one-cancels-all group name
-	OcaType                  int              // OCA cancellation behavior; 0 = unset
-	OutsideRTH               bool             // allow execution outside regular trading hours
-	TriggerMethod            int              // stop-trigger method; 0 = default
-	DisplaySize              int              // iceberg display size; 0 = show full size
-	OrderRef                 string           // free-form client order reference/tag
-	GoodAfterTime            string           // activate at this time; "YYYYMMDD HH:MM:SS tz"
-	GoodTillDate             string           // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
-	AllOrNone                *bool            // nil = server default; require the whole quantity to fill at once
-	MinQty                   decimal.Decimal  // minimum fill quantity; zero means unset
-	PercentOffset            decimal.Decimal  // offset percent for REL/pegged orders; zero means unset
-	TrailStopPrice           decimal.Decimal  // trailing-stop trigger price; zero means unset
-	TrailingPercent          decimal.Decimal  // trailing amount as a percent; zero means unset
-	ScaleInitLevelSize       int              // scale order first-level size; 0 = unset
-	ScaleSubsLevelSize       int              // scale order subsequent-level size; 0 = unset
-	ScalePriceIncrement      decimal.Decimal  // scale order price increment; zero means unset
-	ScaleTable               string           // scale table identifier
-	ActiveStartTime          string           // start of the order's active window
-	ActiveStopTime           string           // end of the order's active window
-	HedgeType                string           // hedge type for delta-hedge orders
-	HedgeParam               string           // hedge parameter paired with HedgeType
-	ComboLegs                []ComboLeg       // legs for a BAG (combo) contract order
-	OrderComboLegPrices      []string         // per-leg limit prices for a combo order
-	SmartComboRoutingParams  []TagValue       // smart-routing parameters for combo orders
-	AlgoStrategy             string           // IB algo strategy name
-	AlgoParams               []TagValue       // parameters for AlgoStrategy
-	WhatIf                   *bool            // nil = live order; true requests a margin preview (rejected by Place, use Preview)
-	Conditions               []OrderCondition // conditional triggers gating the order
-	ConditionsIgnoreRTH      bool             // evaluate conditions outside regular trading hours
-	ConditionsCancelOrder    bool             // cancel (rather than submit) when conditions are met
-	AdjustedOrderType        OrderType        // order type to adjust to for adjustable-stop orders
-	TriggerPrice             decimal.Decimal  // price that triggers the adjustment; zero means unset
-	LmtPriceOffset           decimal.Decimal  // limit-price offset for adjustable orders; zero means unset
-	AdjustedStopPrice        decimal.Decimal  // adjusted stop price; zero means unset
-	AdjustedStopLimitPrice   decimal.Decimal  // adjusted stop-limit price; zero means unset
-	AdjustedTrailingAmount   decimal.Decimal  // adjusted trailing amount; zero means unset
-	AdjustableTrailingUnit   int              // unit for AdjustedTrailingAmount; 0 = unset
-	CashQty                  decimal.Decimal  // cash quantity for cash-quantity orders; zero means unset
-	DontUseAutoPriceForHedge *bool            // nil = server default; disable auto price for the hedge leg
-	UsePriceMgmtAlgo         *bool            // nil = server default; enable IB's price management algo
-	AdvancedErrorOverride    string           // override token for advanced-order warnings
-	ManualOrderTime          string           // manual order entry time for compliance
+	OrderID               int64           // assigned by the engine at placement; leave zero. Place always allocates internally and ignores any value set here; Modify accepts zero or the handle's own id
+	Action                OrderAction     // BUY or SELL (required)
+	OrderType             OrderType       // execution instruction (required); selects which price fields apply
+	Quantity              decimal.Decimal // order size (required); zero is treated as unset
+	LmtPrice              decimal.Decimal // limit price for LMT / STP LMT; zero means unset
+	AuxPrice              decimal.Decimal // stop trigger for STP / STP LMT, trailing amount for TRAIL; zero means unset
+	TIF                   TimeInForce     // time in force; empty defaults to DAY at the server
+	Account               string          // account to place under; required only for multi-account logins
+	Transmit              *bool           // nil = transmit (true); false stages an untransmitted order
+	ParentID              int64           // parent order ID for a bracket child; 0 = no parent
+	OCA                   OrderOCA        // one-cancels-all behavior; zero value disables it
+	OutsideRTH            bool            // allow execution outside regular trading hours
+	TriggerMethod         int             // stop-trigger method; 0 = default
+	DisplaySize           int             // iceberg display size; 0 = show full size
+	OrderRef              string          // free-form client order reference/tag
+	GoodAfterTime         string          // activate at this time; "YYYYMMDD HH:MM:SS tz"
+	GoodTillDate          string          // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
+	AllOrNone             *bool           // nil = server default; require the whole quantity to fill at once
+	MinQty                decimal.Decimal // minimum fill quantity; zero means unset
+	PercentOffset         decimal.Decimal // offset percent for REL/pegged orders; zero means unset
+	TrailStopPrice        decimal.Decimal // trailing-stop trigger price; zero means unset
+	TrailingPercent       decimal.Decimal // trailing amount as a percent; zero means unset
+	Scale                 OrderScale      // scale-order sizing and active window
+	Hedge                 OrderHedge      // hedge-child behavior
+	Combo                 OrderCombo      // BAG legs, per-leg prices, and smart routing
+	Algorithm             OrderAlgorithm  // IB algo strategy and parameters
+	WhatIf                *bool           // nil = live order; true requests a margin preview (rejected by Place, use Preview)
+	Conditions            OrderConditions // conditional submission/cancellation triggers
+	Adjustment            OrderAdjustment // adjustable-stop transition
+	CashQty               decimal.Decimal // cash quantity for cash-quantity orders; zero means unset
+	UsePriceMgmtAlgo      *bool           // nil = server default; enable IB's price management algo
+	AdvancedErrorOverride string          // override token for advanced-order warnings
+	ManualOrderTime       string          // manual order entry time for compliance
 }
 
 // PlaceOrderRequest pairs the [Contract] to trade with the [Order] instruction.

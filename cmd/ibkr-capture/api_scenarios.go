@@ -776,8 +776,10 @@ func runAPIConditionsMatrixAAPL(ctx context.Context, addr string, clientID int) 
 		}
 		for _, tc := range conditions {
 			order := base
-			order.Conditions = []ibkr.OrderCondition{tc.cond}
-			order.ConditionsIgnoreRTH = true
+			order.Conditions = ibkr.OrderConditions{
+				Values:    []ibkr.OrderCondition{tc.cond},
+				IgnoreRTH: true,
+			}
 			handle, err := placeAPIOrder(ctx, client, tc.label, apiAAPL, order)
 			if err != nil {
 				log.Printf("%s place error: %v", tc.label, err)
@@ -1420,11 +1422,13 @@ func runAPIComboOptionVerticalAAPL(ctx context.Context, addr string, clientID in
 		}
 		bag := ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "USD"}
 		order := withLimit(baseAPIOrder(account, apiOptionContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), decimal.RequireFromString("0.05"))
-		order.ComboLegs = []ibkr.ComboLeg{
-			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
-			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
+		order.Combo = ibkr.OrderCombo{
+			Legs: []ibkr.ComboLeg{
+				{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
+				{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
+			},
+			SmartRouting: []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		}
-		order.SmartComboRoutingParams = []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}}
 		handle, err := placeAPIOrder(ctx, client, "option vertical BAG", bag, order)
 		if err != nil {
 			log.Printf("option vertical BAG place error: %v", err)
@@ -1910,7 +1914,7 @@ func placeAPIOrder(ctx context.Context, client *ibkr.Client, label string, contr
 		event.LmtPrice = order.LmtPrice.String()
 		event.AuxPrice = order.AuxPrice.String()
 		event.ParentID = order.ParentID
-		event.OCAGroup = order.OcaGroup
+		event.OCAGroup = order.OCA.Group
 	})
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: contract, Order: order})
 	if err != nil {
@@ -1987,8 +1991,7 @@ func withTransmit(order ibkr.Order, transmit bool) ibkr.Order {
 }
 
 func withOCA(order ibkr.Order, group string) ibkr.Order {
-	order.OcaGroup = group
-	order.OcaType = 1
+	order.OCA = ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock}
 	return order
 }
 
@@ -2001,7 +2004,7 @@ func withTrailing(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
 func withTrailingLimit(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
 	order.TrailStopPrice = farSell(anchor)
 	order.AuxPrice = decimal.RequireFromString("1")
-	order.LmtPriceOffset = decimal.RequireFromString("0.05")
+	order.Adjustment.LmtPriceOffset = decimal.RequireFromString("0.05")
 	return order
 }
 
@@ -2053,15 +2056,15 @@ func withOrderRef(order ibkr.Order, ref string) ibkr.Order {
 }
 
 func withScale(order ibkr.Order) ibkr.Order {
-	order.ScaleInitLevelSize = 1
-	order.ScaleSubsLevelSize = 1
-	order.ScalePriceIncrement = decimal.RequireFromString("0.05")
+	order.Scale.InitialLevelSize = 1
+	order.Scale.SubsequentLevelSize = 1
+	order.Scale.PriceIncrement = decimal.RequireFromString("0.05")
 	return order
 }
 
 func withActiveWindow(order ibkr.Order, start string, stop string) ibkr.Order {
-	order.ActiveStartTime = start
-	order.ActiveStopTime = stop
+	order.Scale.ActiveStartTime = start
+	order.Scale.ActiveStopTime = stop
 	return order
 }
 
@@ -2071,12 +2074,13 @@ func withPriceManagement(order ibkr.Order) ibkr.Order {
 }
 
 func withAdjustedStop(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
-	order.AdjustedOrderType = ibkr.OrderTypeStopLimit
-	order.TriggerPrice = farBuy(anchor)
-	order.AdjustedStopPrice = farBuy(anchor).Sub(decimal.NewFromInt(1))
-	order.AdjustedStopLimitPrice = farBuy(anchor).Sub(decimal.RequireFromString("0.50"))
-	order.AdjustedTrailingAmount = decimal.RequireFromString("1")
-	order.AdjustableTrailingUnit = 0
+	order.Adjustment = ibkr.OrderAdjustment{
+		OrderType:      ibkr.OrderTypeStopLimit,
+		TriggerPrice:   farBuy(anchor),
+		StopPrice:      farBuy(anchor).Sub(decimal.NewFromInt(1)),
+		StopLimitPrice: farBuy(anchor).Sub(decimal.RequireFromString("0.50")),
+		TrailingAmount: decimal.RequireFromString("1"),
+	}
 	return order
 }
 
@@ -2091,8 +2095,10 @@ func withAdvancedErrorOverride(order ibkr.Order, value string) ibkr.Order {
 }
 
 func withAlgo(order ibkr.Order, strategy string, params []ibkr.TagValue) ibkr.Order {
-	order.AlgoStrategy = strategy
-	order.AlgoParams = append([]ibkr.TagValue(nil), params...)
+	order.Algorithm = ibkr.OrderAlgorithm{
+		Strategy: strategy,
+		Params:   append([]ibkr.TagValue(nil), params...),
+	}
 	return order
 }
 
@@ -3140,8 +3146,7 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 			} else {
 				child := withLimit(baseAPIOrder(account, decimal.Zero, ibkr.ActionSell, ibkr.OrderTypeLimit), farSell(anchor))
 				child.ParentID = parentHandle.OrderID()
-				child.HedgeType = "D"
-				child.HedgeParam = "0.5"
+				child.Hedge = ibkr.OrderHedge{Type: ibkr.HedgeDelta, Param: "0.5"}
 				child.Transmit = new(true)
 				handle, err := placeAPIOrder(ctx, client, "delta_hedge_compliant", apiAAPL, child)
 				if err != nil {
@@ -3165,23 +3170,22 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 		}
 		hedges := []struct {
 			label string
-			typ   string
+			typ   ibkr.HedgeType
 			param string
 		}{
-			{label: "delta_hedge_stock_parent", typ: "D", param: "0.5"},
-			{label: "beta_hedge_zero_size", typ: "B", param: "1.0"},
-			{label: "fx_hedge_zero_size", typ: "F", param: ""},
-			{label: "pair_hedge_zero_size", typ: "P", param: "0.8"},
+			{label: "delta_hedge_stock_parent", typ: ibkr.HedgeDelta, param: "0.5"},
+			{label: "beta_hedge_zero_size", typ: ibkr.HedgeBeta, param: "1.0"},
+			{label: "fx_hedge_zero_size", typ: ibkr.HedgeFX, param: ""},
+			{label: "pair_hedge_zero_size", typ: ibkr.HedgePair, param: "0.8"},
 		}
 		for _, h := range hedges {
 			qty := decimal.Zero
-			if h.typ == "D" {
+			if h.typ == ibkr.HedgeDelta {
 				qty = apiStockOrderQuantity
 			}
 			child := withLimit(baseAPIOrder(account, qty, ibkr.ActionSell, ibkr.OrderTypeLimit), farSell(anchor))
 			child.ParentID = parentHandle.OrderID()
-			child.HedgeType = h.typ
-			child.HedgeParam = h.param
+			child.Hedge = ibkr.OrderHedge{Type: h.typ, Param: h.param}
 			child.Transmit = new(true)
 			handle, err := placeAPIOrder(ctx, client, h.label, apiAAPL, child)
 			if err != nil {

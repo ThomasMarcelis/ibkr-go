@@ -585,7 +585,7 @@ func TestLiveOrderTrailingLimitRestCancel(t *testing.T) {
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeTrailingLimit)
 	order.TrailStopPrice = liveFarSell(anchor) // far above market; BUY TRAIL triggers on rise, won't reach
 	order.AuxPrice = decimal.RequireFromString("1")
-	order.LmtPriceOffset = decimal.RequireFromString("0.05")
+	order.Adjustment.LmtPriceOffset = decimal.RequireFromString("0.05")
 
 	livePlaceAndCancel(t, ctx, client, aaplContract, order)
 }
@@ -1517,8 +1517,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 	// Marketable: should fill immediately.
 	marketableOrder := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	marketableOrder.LmtPrice = liveMarketableBuy(anchor)
-	marketableOrder.OcaGroup = ocaGroup
-	marketableOrder.OcaType = 1
+	marketableOrder.OCA = ibkr.OrderOCA{Group: ocaGroup, Type: ibkr.OCACancelWithBlock}
 
 	h1, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: marketableOrder})
 	if err != nil {
@@ -1528,8 +1527,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 	// Resting: should be cancelled by OCA.
 	resting1 := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	resting1.LmtPrice = liveFarBuy(anchor)
-	resting1.OcaGroup = ocaGroup
-	resting1.OcaType = 1
+	resting1.OCA = ibkr.OrderOCA{Group: ocaGroup, Type: ibkr.OCACancelWithBlock}
 
 	h2, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: resting1})
 	if err != nil {
@@ -1538,8 +1536,7 @@ func TestLiveOCAFillCancelsOthers(t *testing.T) {
 
 	resting2 := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	resting2.LmtPrice = liveFarBuy(anchor).Sub(decimal.NewFromInt(1))
-	resting2.OcaGroup = ocaGroup
-	resting2.OcaType = 1
+	resting2.OCA = ibkr.OrderOCA{Group: ocaGroup, Type: ibkr.OCACancelWithBlock}
 
 	h3, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: resting2})
 	if err != nil {
@@ -1594,8 +1591,7 @@ func TestLiveOCACancelAll(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		order.LmtPrice = liveFarBuy(anchor).Add(decimal.NewFromInt(int64(i)))
-		order.OcaGroup = ocaGroup
-		order.OcaType = 1
+		order.OCA = ibkr.OrderOCA{Group: ocaGroup, Type: ibkr.OCACancelWithBlock}
 
 		h, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
 		if err != nil {
@@ -1794,11 +1790,13 @@ func TestLiveComboVerticalRestCancel(t *testing.T) {
 
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = decimal.RequireFromString("0.05")
-	order.ComboLegs = []ibkr.ComboLeg{
-		{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART"},
-		{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART"},
+	order.Combo = ibkr.OrderCombo{
+		Legs: []ibkr.ComboLeg{
+			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART"},
+			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART"},
+		},
+		SmartRouting: []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 	}
-	order.SmartComboRoutingParams = []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}}
 
 	livePlaceAndCancel(t, ctx, client, bag, order)
 }
@@ -1855,8 +1853,10 @@ func TestLiveOrderAdaptiveAlgo(t *testing.T) {
 
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
-	order.AlgoStrategy = "Adaptive"
-	order.AlgoParams = []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Normal"}}
+	order.Algorithm = ibkr.OrderAlgorithm{
+		Strategy: "Adaptive",
+		Params:   []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
+	}
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order})
 	if err != nil {
@@ -1949,7 +1949,7 @@ func TestLiveOrderConditionPrice(t *testing.T) {
 
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
-	order.Conditions = []ibkr.OrderCondition{{
+	order.Conditions.Values = []ibkr.OrderCondition{{
 		Type:          1, // Price condition
 		Conjunction:   "AND",
 		ConID:         265598,

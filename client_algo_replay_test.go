@@ -343,16 +343,15 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 			handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 				Contract: orderReplayAAPL,
 				Order: ibkr.Order{
-					Action:       ibkr.ActionBuy,
-					OrderType:    ibkr.OrderTypeLimit,
-					Quantity:     decimal.RequireFromString("1"),
-					LmtPrice:     decimal.RequireFromString("13.15"),
-					TIF:          ibkr.TIFDay,
-					Account:      "DU9000001",
-					OrderRef:     ref,
-					DisplaySize:  v.displaySize,
-					AlgoStrategy: v.strategy,
-					AlgoParams:   v.params,
+					Action:      ibkr.ActionBuy,
+					OrderType:   ibkr.OrderTypeLimit,
+					Quantity:    decimal.RequireFromString("1"),
+					LmtPrice:    decimal.RequireFromString("13.15"),
+					TIF:         ibkr.TIFDay,
+					Account:     "DU9000001",
+					OrderRef:    ref,
+					DisplaySize: v.displaySize,
+					Algorithm:   ibkr.OrderAlgorithm{Strategy: v.strategy, Params: v.params},
 				},
 			})
 			if err != nil {

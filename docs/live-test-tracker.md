@@ -417,9 +417,9 @@ against the role-aware `paper-dev` Gateway.
 | MinQty | live probe attempted in `api_tif_attribute_matrix_aapl` | inspect driver events and promote real accept/reject |
 | PercentOffset | live probe in `api_tif_attribute_matrix_aapl` | promote focused replay |
 | TrailingPercent | live capture + replay promoted | covered by `api_tif_attribute_matrix_aapl.txt` |
-| HedgeType | none | Delta/beta/FX/pair hedge |
-| ScaleInitLevelSize | live probe attempted in `api_tif_attribute_matrix_aapl` | inspect driver events and promote real accept/reject |
-| DontUseAutoPriceForHedge | none | Hedge pricing override |
+| Hedge.Type | live capture + replay promoted | delta/beta/FX/pair outcomes covered by `api_hedge_matrix_aapl.txt` |
+| Scale.InitialLevelSize | live probe attempted in `api_tif_attribute_matrix_aapl` | inspect driver events and promote real accept/reject |
+| Hedge.DisableAutomaticPrice | none | hedge pricing override |
 | UsePriceMgmtAlgo | live probe in `api_tif_attribute_matrix_aapl` | promote focused replay |
 | CashQty | none | Forex cash quantity |
 | ManualOrderTime | live probe in `api_tif_attribute_matrix_aapl` | promote focused replay |

@@ -204,8 +204,8 @@ Every `Order` struct field must be exercised in at least one scenario.
 ### 3.1 Core fields (tested)
 
 OrderID, Action, OrderType, Quantity, LmtPrice, AuxPrice, TIF, Account,
-Transmit, ParentID, OcaGroup, OcaType, DisplaySize, OutsideRTH, WhatIf,
-AlgoStrategy, AlgoParams, Conditions.
+Transmit, ParentID, OCA, DisplaySize, OutsideRTH, WhatIf, Algorithm, and
+Conditions.
 
 ### 3.2 Untested fields
 
@@ -219,34 +219,34 @@ AlgoStrategy, AlgoParams, Conditions.
 | TrailingPercent | decimal | TRAIL with percent instead of dollar |
 | TriggerMethod | int | explicit trigger method override |
 | OrderRef | string | custom ref string echo in OpenOrder |
-| ScaleInitLevelSize | int | scale order: initial level |
-| ScaleSubsLevelSize | int | scale order: subsequent levels |
-| ScalePriceIncrement | decimal | scale order: price steps |
-| ScaleTable | string | predefined scale table |
-| ActiveStartTime | string | time-activated order |
-| ActiveStopTime | string | time-deactivated order |
-| HedgeType | string | delta/beta/FX/pair hedge |
-| HedgeParam | string | hedge parameter value |
+| Scale.InitialLevelSize | int | scale order: initial level |
+| Scale.SubsequentLevelSize | int | scale order: subsequent levels |
+| Scale.PriceIncrement | decimal | scale order: price steps |
+| Scale.Table | string | predefined scale table |
+| Scale.ActiveStartTime | string | time-activated order |
+| Scale.ActiveStopTime | string | time-deactivated order |
+| Hedge.Type | HedgeType | delta/beta/FX/pair hedge |
+| Hedge.Param | string | hedge parameter value |
 | CashQty | decimal | forex cash quantity mode |
-| DontUseAutoPriceForHedge | *bool | hedge pricing override |
+| Hedge.DisableAutomaticPrice | *bool | hedge pricing override |
 | UsePriceMgmtAlgo | *bool | IB price management |
 | ManualOrderTime | string | regulatory compliance |
 | AdvancedErrorOverride | string | override advanced order validation |
-| AdjustedOrderType | OrderType | volatility order adjustment |
-| TriggerPrice | decimal | adjusted order trigger |
-| LmtPriceOffset | decimal | adjusted limit offset |
-| AdjustedStopPrice | decimal | adjusted stop price |
-| AdjustedStopLimitPrice | decimal | adjusted stop-limit price |
-| AdjustedTrailingAmount | decimal | adjusted trailing amount |
-| AdjustableTrailingUnit | int | dollar vs percent unit |
+| Adjustment.OrderType | OrderType | volatility order adjustment |
+| Adjustment.TriggerPrice | decimal | adjusted order trigger |
+| Adjustment.LmtPriceOffset | decimal | adjusted limit offset |
+| Adjustment.StopPrice | decimal | adjusted stop price |
+| Adjustment.StopLimitPrice | decimal | adjusted stop-limit price |
+| Adjustment.TrailingAmount | decimal | adjusted trailing amount |
+| Adjustment.TrailingUnit | int | dollar vs percent unit |
 
 ### 3.3 Combo/multi-leg fields
 
 | Field | Scenario Needed |
 |-------|-----------------|
-| ComboLegs | vertical spread, iron condor, calendar |
-| OrderComboLegPrices | per-leg pricing |
-| SmartComboRoutingParams | NonGuaranteed execution |
+| Combo.Legs | vertical spread, iron condor, calendar |
+| Combo.LegPrices | per-leg pricing |
+| Combo.SmartRouting | NonGuaranteed execution |
 
 ## 4. Order Conditions
 

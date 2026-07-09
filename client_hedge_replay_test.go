@@ -78,16 +78,15 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		return ibkr.PlaceOrderRequest{
 			Contract: orderReplayAAPL,
 			Order: ibkr.Order{
-				Action:     ibkr.ActionSell,
-				OrderType:  ibkr.OrderTypeLimit,
-				Quantity:   quantity,
-				LmtPrice:   decimal.RequireFromString("2922.4"),
-				TIF:        ibkr.TIFDay,
-				Account:    "DU9000001",
-				OrderRef:   orderRef,
-				ParentID:   parentID,
-				HedgeType:  hedgeType,
-				HedgeParam: hedgeParam,
+				Action:    ibkr.ActionSell,
+				OrderType: ibkr.OrderTypeLimit,
+				Quantity:  quantity,
+				LmtPrice:  decimal.RequireFromString("2922.4"),
+				TIF:       ibkr.TIFDay,
+				Account:   "DU9000001",
+				OrderRef:  orderRef,
+				ParentID:  parentID,
+				Hedge:     ibkr.OrderHedge{Type: ibkr.HedgeType(hedgeType), Param: hedgeParam},
 			},
 		}
 	}

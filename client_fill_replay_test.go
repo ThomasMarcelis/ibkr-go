@@ -945,7 +945,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("trail_limit_sell_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, AuxPrice: decimal.RequireFromString("1"), TrailStopPrice: decimal.RequireFromString("2921.8"), LmtPriceOffset: decimal.RequireFromString("0.05")}, 7, 387)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, AuxPrice: decimal.RequireFromString("1"), TrailStopPrice: decimal.RequireFromString("2921.8"), Adjustment: ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")}}, 7, 387)
 		open := log.nextOpen(t, ctx)
 		if !open.LmtPrice.Equal(decimal.RequireFromString("2921.75")) {
 			t.Fatalf("trail-limit echoed lmt = %s, want 2921.75", open.LmtPrice)

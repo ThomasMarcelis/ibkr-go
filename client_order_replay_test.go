@@ -422,7 +422,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 			Quantity:       decimal.RequireFromString("100"),
 			AuxPrice:       decimal.RequireFromString("1"),
 			TrailStopPrice: decimal.RequireFromString("2921"),
-			LmtPriceOffset: decimal.RequireFromString("0.05"),
+			Adjustment:     ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")},
 			TIF:            ibkr.TIFDay,
 			Account:        "DU9000001",
 			OrderRef:       "ibkrgo-sanitized-20260610T195819Z-002",
