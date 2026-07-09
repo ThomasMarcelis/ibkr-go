@@ -107,6 +107,7 @@ var rawFrameAttested = map[int]string{
 	InTickGeneric:           "TestCaptureDecode_QuoteAncillaryTicksLive",
 	InTickString:            "TestCaptureDecode_QuoteAncillaryTicksLive",
 	InTickReqParams:         "TestCaptureDecode_QuoteAncillaryTicksLive",
+	InTickNews:              "TestCaptureDecode_TickNewsLive",
 	InScannerData:           "TestCaptureDecode_ScannerDataLive",
 }
 

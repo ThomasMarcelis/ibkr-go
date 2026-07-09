@@ -190,6 +190,25 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						StringTick: new(QuoteStringTick{TickType: m.TickType, Value: m.Value}),
 						ReceivedAt: time.Now().UTC(),
 					})
+				case codec.TickNews:
+					timestamp, err := parseEpochMilliseconds(m.Time)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					emitSubscription(sub, QuoteUpdate{
+						Kind:     QuoteUpdateNewsTick,
+						Snapshot: quote,
+						NewsTick: new(QuoteNewsTick{
+							Time:         timestamp,
+							ProviderCode: NewsProviderCode(m.ProviderCode),
+							ArticleID:    m.ArticleID,
+							Headline:     m.Headline,
+							ExtraData:    m.ExtraData,
+						}),
+						ReceivedAt: time.Now().UTC(),
+					})
 				case codec.TickReqParams:
 					minTick, err := parseOptionalDecimalPointer(m.MinTick, "quote parameters minimum tick")
 					if err != nil {

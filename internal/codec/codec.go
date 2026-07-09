@@ -172,6 +172,7 @@ var inboundDecoders = map[int]decodeFunc{
 	InFamilyCodes:           decodeFamilyCodes,
 	InMktDepthExchanges:     decodeMktDepthExchanges,
 	InNewsArticle:           decodeNewsArticle,
+	InTickNews:              decodeTickNews,
 	InNewsProviders:         decodeNewsProviders,
 	InSymbolSamples:         decodeSymbolSamples,
 	InSmartComponents:       decodeSmartComponents,

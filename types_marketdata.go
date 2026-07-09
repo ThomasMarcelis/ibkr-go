@@ -238,6 +238,7 @@ const (
 	QuoteUpdateOptionComputation
 	QuoteUpdatePriceTick
 	QuoteUpdateSizeTick
+	QuoteUpdateNewsTick
 )
 
 func (k QuoteUpdateKind) String() string {
@@ -256,6 +257,8 @@ func (k QuoteUpdateKind) String() string {
 		return "PriceTick"
 	case QuoteUpdateSizeTick:
 		return "SizeTick"
+	case QuoteUpdateNewsTick:
+		return "NewsTick"
 	default:
 		return fmt.Sprintf("QuoteUpdateKind(%d)", k)
 	}
@@ -306,6 +309,17 @@ type QuoteStringTick struct {
 	Value    string
 }
 
+// QuoteNewsTick is one contract-specific news headline. Time is the provider
+// timestamp carried by IBKR; ExtraData preserves the provider metadata string
+// verbatim.
+type QuoteNewsTick struct {
+	Time         time.Time
+	ProviderCode NewsProviderCode
+	ArticleID    string
+	Headline     string
+	ExtraData    string
+}
+
 // QuoteParameters describes the market-data rules attached to a quote
 // request. BBOExchange is IBKR's exchange bit field, not an exchange name.
 type QuoteParameters struct {
@@ -337,6 +351,7 @@ type QuoteUpdate struct {
 	SizeTick          *QuoteSizeTick
 	GenericTick       *QuoteGenericTick
 	StringTick        *QuoteStringTick
+	NewsTick          *QuoteNewsTick
 	Parameters        *QuoteParameters
 	OptionComputation *QuoteOptionComputation
 	ReceivedAt        time.Time // client receive time

@@ -56,6 +56,17 @@ type NewsArticleResponse struct {
 	ArticleText string
 }
 
+// TickNews is one contract-specific news headline delivered through a market
+// data subscription. Time preserves IBKR's epoch-millisecond wire value.
+type TickNews struct {
+	ReqID        int
+	Time         string
+	ProviderCode string
+	ArticleID    string
+	Headline     string
+	ExtraData    string
+}
+
 // HistoricalNews (OUT 86 / IN 87+80)
 
 type HistoricalNewsRequest struct {
@@ -94,6 +105,23 @@ func decodeNewsArticle(r *fieldReader, sv int) ([]Message, error) {
 
 func (m NewsArticleResponse) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InNewsArticle), itoa(m.ReqID), itoa(m.ArticleType), m.ArticleText}, nil
+}
+
+// [84, reqID, time, providerCode, articleId, headline, extraData] — no version
+func decodeTickNews(r *fieldReader, sv int) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	return []Message{TickNews{
+		ReqID:        reqID,
+		Time:         r.ReadString(),
+		ProviderCode: r.ReadString(),
+		ArticleID:    r.ReadString(),
+		Headline:     r.ReadString(),
+		ExtraData:    r.ReadString(),
+	}}, nil
+}
+
+func (m TickNews) encodeWire(sv int) ([]string, error) {
+	return []string{itoa(InTickNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline, m.ExtraData}, nil
 }
 
 // [85, count, repeated(code, name)] — no version

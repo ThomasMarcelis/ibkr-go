@@ -82,6 +82,7 @@ var allInboundMsgIDs = []int{
 	InTickReqParams,         // 81
 	InSmartComponents,       // 82
 	InNewsArticle,           // 83
+	InTickNews,              // 84
 	InNewsProviders,         // 85
 	InHistoricalNews,        // 86
 	InHistoricalNewsEnd,     // 87
@@ -148,6 +149,7 @@ func FuzzDecodeBatch(f *testing.F) {
 		CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"},
 		TickGeneric{ReqID: 1, TickType: 49, Value: "0"},
 		TickString{ReqID: 1, TickType: 45, Value: "1712300400"},
+		TickNews{ReqID: 1, Time: "1758294759000", ProviderCode: "BRFG", ArticleID: "BRFG$1c2d5728", Headline: "Headline", ExtraData: "L:en"},
 		MarketDataType{ReqID: 1, DataType: 3},
 		TickSnapshotEnd{ReqID: 1},
 		OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0", AvgFillPrice: "150.50", PermID: "123456", ParentID: "0", LastFillPrice: "150.50", ClientID: "99"},
@@ -494,6 +496,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"SymbolSamples", InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)
 		{"SmartComponents", InSmartComponents, 5},              // reqID, count, entries(bitNumber, exchangeName, exchangeLetter)
 		{"NewsArticle", InNewsArticle, 3},                      // reqID, articleType, articleText
+		{"TickNews", InTickNews, 6},                            // reqID, time, providerCode, articleId, headline, extraData
 		{"NewsProviders", InNewsProviders, 5},                  // count, then pairs
 		{"HistoricalNews", InHistoricalNews, 5},                // reqID, time, providerCode, articleId, headline
 		{"HistoricalNewsEnd", InHistoricalNewsEnd, 2},          // reqID, hasMore

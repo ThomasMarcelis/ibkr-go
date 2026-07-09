@@ -68,6 +68,16 @@ Latest API 10.48 (released 2026-07-07), Stable API 10.45 (released
   TickReqParams minimum tick; its raw hash
   `bd284e22771394b3baf7b827d62ed22d45f15e401dd478f430e18f4e715b0377`
   now grounds the nil-minimum regression test.
+- A delayed AAPL quote request for generic ticks `mdoff,292:BRFG` produced five
+  exact contract-specific TickNews frames at server version 201 in
+  `captures/20260709T230825Z-api_tick_news_aapl_probe` (events sha256
+  `a0784d2eddda74681cc301befb98440a96bb76242efd43aec88a9f177a5411df`,
+  normalized frames sha256
+  `e3e1901503f7d1dc52489bccb2bce64467e35bad48bc025e438b916a5c639e60`).
+  The first frame is frozen byte-for-byte in the codec and public transcript;
+  its timestamp, provider code, article ID, headline, and extra-data string are
+  projected without mutating the accumulated quote. Repeat probes may return
+  no headlines when the Gateway has no new provider item for that session.
 
 ### 2026-07-04
 

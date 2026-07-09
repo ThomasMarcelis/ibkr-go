@@ -232,6 +232,10 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  TickString{ReqID: 1, TickType: 45, Value: "1712300400"},
 		},
 		{
+			name: "TickNews",
+			msg:  TickNews{ReqID: 1, Time: "1758294759000", ProviderCode: "BRFG", ArticleID: "BRFG$1c2d5728", Headline: "Headline", ExtraData: "L:en"},
+		},
+		{
 			name: "TickReqParams",
 			msg:  TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3},
 		},

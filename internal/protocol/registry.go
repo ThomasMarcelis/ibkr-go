@@ -174,6 +174,7 @@ const (
 	InTickReqParams         = 81
 	InSmartComponents       = 82
 	InNewsArticle           = 83
+	InTickNews              = 84
 	InNewsProviders         = 85
 	InHistoricalNews        = 86
 	InHistoricalNewsEnd     = 87
@@ -322,6 +323,7 @@ var messages = [...]Message{
 	{"InTickReqParams", InTickReqParams, ServerToClient},
 	{"InSmartComponents", InSmartComponents, ServerToClient},
 	{"InNewsArticle", InNewsArticle, ServerToClient},
+	{"InTickNews", InTickNews, ServerToClient},
 	{"InNewsProviders", InNewsProviders, ServerToClient},
 	{"InHistoricalNews", InHistoricalNews, ServerToClient},
 	{"InHistoricalNewsEnd", InHistoricalNewsEnd, ServerToClient},

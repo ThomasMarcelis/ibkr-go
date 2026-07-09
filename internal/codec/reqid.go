@@ -45,6 +45,7 @@ func (m SmartComponentsResponse) RequestID() int       { return m.ReqID }
 func (m SoftDollarTiersResponse) RequestID() int       { return m.ReqID }
 func (m TickByTickData) RequestID() int                { return m.ReqID }
 func (m TickGeneric) RequestID() int                   { return m.ReqID }
+func (m TickNews) RequestID() int                      { return m.ReqID }
 func (m TickOptionComputation) RequestID() int         { return m.ReqID }
 func (m TickPrice) RequestID() int                     { return m.ReqID }
 func (m TickReqParams) RequestID() int                 { return m.ReqID }

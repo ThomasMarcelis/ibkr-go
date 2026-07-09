@@ -1,0 +1,18 @@
+# Live-derived from local read-only IB Gateway at exact server_version 201.
+# Capture: captures/20260709T230825Z-api_tick_news_aapl_probe.
+# events.jsonl sha256: a0784d2eddda74681cc301befb98440a96bb76242efd43aec88a9f177a5411df
+# replay/frames.jsonl sha256: e3e1901503f7d1dc52489bccb2bce64467e35bad48bc025e438b916a5c639e60
+#
+# The account token is replaced with DU9000001. Farm-status frames and four
+# additional BRFG headlines are trimmed; the retained msg-84 frame is exact.
+handshake {"server_version":201,"connection_time":"20260710 01:08:25 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+
+client req_market_data_type {"data_type":3}
+client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":["mdoff","292:BRFG"]}
+raw server AAAACgAAADoxADEAMwA=
+raw server AAAAFAAAAFExADAuMDEAOWMwMDAxADQA
+raw server AAAArAAAAFQxADE3NTgyOTQ3NTkwMDAAQlJGRwBCUkZHJDFjMmQ1NzI4AEFwcGxlJ3MgaVBob25lIDE3IGRlYnV0cyB0byBsb25nIGxpbmVzIGFuZCBoaWdoIGRlbWFuZCBhcyBjb21wYW55IGV5ZXMgdXBncmFkZSBjeWNsZSBib29zdABBOjgwMDAxNTpMOmVuOks6MS4wMDpDOjAuOTk5OTUzMzI5NTYzMTQwOQA=
+client cancel_quote {"req_id":"$req1"}
+disconnect

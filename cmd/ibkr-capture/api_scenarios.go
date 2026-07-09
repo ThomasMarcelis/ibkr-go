@@ -1118,6 +1118,14 @@ func quoteUpdateValues(update ibkr.QuoteUpdate) map[string]string {
 			values["tick_type"] = strconv.Itoa(update.StringTick.TickType)
 			values["value"] = update.StringTick.Value
 		}
+	case ibkr.QuoteUpdateNewsTick:
+		if update.NewsTick != nil {
+			values["time"] = strconv.FormatInt(update.NewsTick.Time.UnixMilli(), 10)
+			values["provider_code"] = string(update.NewsTick.ProviderCode)
+			values["article_id"] = update.NewsTick.ArticleID
+			values["headline"] = update.NewsTick.Headline
+			values["extra_data"] = update.NewsTick.ExtraData
+		}
 	case ibkr.QuoteUpdateParameters:
 		if update.Parameters != nil {
 			if update.Parameters.MinTick != nil {
@@ -1133,6 +1141,56 @@ func quoteUpdateValues(update ibkr.QuoteUpdate) map[string]string {
 		}
 	}
 	return values
+}
+
+func runAPITickNewsAAPLProbe(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		_ = account
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			recordProbeResult("tick_news_set_delayed", "aapl_brfg", 0, err)
+		}
+		sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+			Contract:     apiAAPL,
+			GenericTicks: []ibkr.GenericTick{"mdoff", "292:BRFG"},
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			recordProbeResult("tick_news_subscribe", "aapl_brfg", 0, err)
+			return nil
+		}
+		defer sub.Close()
+
+		timer := time.NewTimer(30 * time.Second)
+		defer timer.Stop()
+		count := 0
+		for {
+			select {
+			case update, ok := <-sub.Events():
+				if !ok {
+					recordProbeResult("tick_news", "aapl_brfg", count, sub.Err())
+					return nil
+				}
+				count++
+				recordAPIEvent("quote_update", update.Kind.String(), func(event *apiDriverEvent) {
+					event.Symbol = apiAAPL.Symbol
+					event.SecType = string(apiAAPL.SecType)
+					event.Values = quoteUpdateValues(update)
+				})
+				if update.Kind == ibkr.QuoteUpdateNewsTick {
+					recordProbeResult("tick_news", "aapl_brfg", count, nil)
+					return nil
+				}
+			case <-sub.Done():
+				recordProbeResult("tick_news", "aapl_brfg", count, sub.Err())
+				return nil
+			case <-timer.C:
+				recordProbeResult("tick_news", "aapl_brfg", count, nil)
+				return nil
+			case <-ctx.Done():
+				recordProbeResult("tick_news", "aapl_brfg", count, ctx.Err())
+				return nil
+			}
+		}
+	})
 }
 
 func runAPIHistoricalMatrixAAPL(ctx context.Context, addr string, clientID int) error {

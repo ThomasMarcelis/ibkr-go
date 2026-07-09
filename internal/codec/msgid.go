@@ -129,6 +129,7 @@ const (
 	InTickReqParams         = protocol.InTickReqParams
 	InSmartComponents       = protocol.InSmartComponents
 	InNewsArticle           = protocol.InNewsArticle
+	InTickNews              = protocol.InTickNews
 	InNewsProviders         = protocol.InNewsProviders
 	InHistoricalNews        = protocol.InHistoricalNews
 	InHistoricalNewsEnd     = protocol.InHistoricalNewsEnd

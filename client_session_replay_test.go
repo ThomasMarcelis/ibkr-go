@@ -325,6 +325,60 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 }
 
+func TestTickNewsReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "tick_news_aapl_sv201_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType(MarketDataDelayed) error = %v", err)
+	}
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		GenericTicks: []ibkr.GenericTick{"mdoff", "292:BRFG"},
+	})
+	if err != nil {
+		t.Fatalf("SubscribeQuotes() error = %v", err)
+	}
+	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+
+	if update := waitForEvent(t, sub.Events()); update.Kind != ibkr.QuoteUpdateFields || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
+		t.Fatalf("market-data-type update = %+v", update)
+	}
+	if update := waitForEvent(t, sub.Events()); update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
+		t.Fatalf("quote-parameters update = %+v", update)
+	}
+	update := waitForEvent(t, sub.Events())
+	if update.Kind != ibkr.QuoteUpdateNewsTick || update.NewsTick == nil {
+		t.Fatalf("news update = %+v", update)
+	}
+	wantTime := time.UnixMilli(1758294759000).UTC()
+	if !update.NewsTick.Time.Equal(wantTime) ||
+		update.NewsTick.ProviderCode != "BRFG" ||
+		update.NewsTick.ArticleID != "BRFG$1c2d5728" ||
+		update.NewsTick.Headline != "Apple's iPhone 17 debuts to long lines and high demand as company eyes upgrade cycle boost" ||
+		update.NewsTick.ExtraData != "A:800015:L:en:K:1.00:C:0.9999533295631409" {
+		t.Fatalf("NewsTick = %+v", update.NewsTick)
+	}
+	if update.Changed != 0 || update.Snapshot.Available != ibkr.QuoteFieldMarketDataType || update.ReceivedAt.IsZero() {
+		t.Fatalf("news update mutated snapshot or lacked receive time: %+v", update)
+	}
+	if err := sub.Close(); err != nil {
+		t.Fatalf("Subscription.Close() error = %v", err)
+	}
+}
+
 // TestCurrentTimeMillisReplay freezes explicit reqCurrentTimeInMillis
 // (OUT 105) answered by the live epoch-millisecond reply (IN 109), both
 // versionless, captured 2026-06-11 against the paper Gateway

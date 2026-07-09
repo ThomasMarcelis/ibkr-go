@@ -1719,6 +1719,11 @@ var scenarios = map[string]scenario{
 		description: "public API probe for exact price, size, generic, string, and parameter tick delivery",
 		runAPI:      runAPIGenericTickMatrixAAPL,
 	},
+	"api_tick_news_aapl_probe": {
+		name:        "api_tick_news_aapl_probe",
+		description: "public API probe for contract-specific BRFG news ticks",
+		runAPI:      runAPITickNewsAAPLProbe,
+	},
 	"api_scanner_subscription": {
 		name:        "api_scanner_subscription",
 		description: "public API probe for a complete HOT_BY_VOLUME scanner subscription request",
