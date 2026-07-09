@@ -29,6 +29,7 @@ type Subscription[T any] struct {
 	snapshotWant   bool
 	snapshotDone   chan struct{}
 	snapshotOnce   sync.Once
+	snapshotEvents []T
 	cfg            subscriptionConfig
 }
 
@@ -172,6 +173,14 @@ func (s *Subscription[T]) emit(value T) bool {
 		return false
 	default:
 	}
+	if s.cfg.collectSnapshot {
+		s.snapshotMu.Lock()
+		if !s.snapshotClosed {
+			s.snapshotEvents = append(s.snapshotEvents, value)
+		}
+		s.snapshotMu.Unlock()
+		return true
+	}
 
 	select {
 	case s.events <- value:
@@ -231,6 +240,14 @@ func (s *Subscription[T]) expectSnapshot() {
 	s.snapshotMu.Lock()
 	s.snapshotWant = true
 	s.snapshotMu.Unlock()
+}
+
+func (s *Subscription[T]) takeSnapshotEvents() []T {
+	s.snapshotMu.Lock()
+	defer s.snapshotMu.Unlock()
+	events := s.snapshotEvents
+	s.snapshotEvents = nil
+	return events
 }
 
 func (s *Subscription[T]) closeWithErr(err error) {

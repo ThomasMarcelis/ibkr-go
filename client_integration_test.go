@@ -2833,10 +2833,10 @@ func TestGroundedContractDetailsAAPL(t *testing.T) {
 	}
 }
 
-func TestGroundedAccountSummary(t *testing.T) {
+func TestGroundedAccountSummaryBurstExceedsSubscriptionBuffer(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "grounded_account_summary.txt")
+	client, host := newClient(t, "grounded_account_summary.txt", ibkr.WithSubscriptionBuffer(1))
 	defer client.Close()
 	defer waitHost(t, host)
 

@@ -43,9 +43,10 @@ type config struct {
 }
 
 type subscriptionConfig struct {
-	resume       ResumePolicy
-	slowConsumer SlowConsumerPolicy
-	buffer       int
+	resume          ResumePolicy
+	slowConsumer    SlowConsumerPolicy
+	buffer          int
+	collectSnapshot bool
 }
 
 func defaultConfig() config {

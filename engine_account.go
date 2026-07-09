@@ -9,7 +9,7 @@ import (
 )
 
 func (e *engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) ([]AccountValue, error) {
-	sub, err := e.SubscribeAccountSummary(ctx, req)
+	sub, err := e.SubscribeAccountSummary(ctx, req, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 }
 
 func (e *engine) PositionsSnapshot(ctx context.Context) ([]Position, error) {
-	sub, err := e.SubscribePositions(ctx)
+	sub, err := e.SubscribePositions(ctx, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
@@ -278,7 +278,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 
 // AccountUpdatesSnapshot subscribes, collects to AccountDownloadEnd, and closes.
 func (e *engine) AccountUpdatesSnapshot(ctx context.Context, account string) ([]AccountUpdate, error) {
-	sub, err := e.SubscribeAccountUpdates(ctx, account)
+	sub, err := e.SubscribeAccountUpdates(ctx, account, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
@@ -425,7 +425,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 
 // AccountUpdatesMultiSnapshot subscribes, collects to end marker, and closes.
 func (e *engine) AccountUpdatesMultiSnapshot(ctx context.Context, req AccountUpdatesMultiRequest) ([]AccountUpdateMultiValue, error) {
-	sub, err := e.SubscribeAccountUpdatesMulti(ctx, req)
+	sub, err := e.SubscribeAccountUpdatesMulti(ctx, req, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
@@ -522,7 +522,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 
 // PositionsMultiSnapshot subscribes, collects to end marker, and closes.
 func (e *engine) PositionsMultiSnapshot(ctx context.Context, req PositionsMultiRequest) ([]PositionMulti, error) {
-	sub, err := e.SubscribePositionsMulti(ctx, req)
+	sub, err := e.SubscribePositionsMulti(ctx, req, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
