@@ -1,6 +1,67 @@
 package ibkr
 
-import "testing"
+import (
+	"errors"
+	"testing"
+)
+
+func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
+	// captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl,
+	// server_version 200, events.jsonl sha256 prefix 84f1e78a18616e0f.
+	// These exact frames were delivered to two independent AAPL subscriptions.
+	// One stalled consumer must close only its own route while its sibling still
+	// receives the complete delayed bid/ask sequence.
+	e := newBenchEngine(t)
+	e.cfg.subscriptionBuffer = 1
+	first := installQuoteRoute(t, e)
+	e.cfg.subscriptionBuffer = 8
+	second := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, second)
+
+	frames := [][]byte{
+		[]byte("81\x001\x000.01\x009c0001\x004\x00"),
+		[]byte("81\x002\x000.01\x009c0001\x004\x00"),
+		[]byte("58\x001\x001\x003\x00"),
+	}
+	for _, frame := range frames {
+		e.handleIncoming(decodeOne(t, frame))
+	}
+
+	select {
+	case closeRoute := <-e.cmds:
+		closeRoute()
+	default:
+		t.Fatalf("slow consumer did not enqueue its route cancellation: len=%d cap=%d err=%v", len(first.events), cap(first.events), first.Err())
+	}
+	if err := first.Wait(); !errors.Is(err, ErrSlowConsumer) {
+		t.Fatalf("first Wait() = %v, want ErrSlowConsumer", err)
+	}
+	if _, ok := e.keyed[1]; ok {
+		t.Fatal("slow consumer route 1 remains registered")
+	}
+
+	for _, frame := range [][]byte{
+		[]byte("58\x001\x002\x003\x00"),
+		[]byte("1\x006\x001\x0066\x00263.45\x000\x000\x00"),
+		[]byte("1\x006\x002\x0066\x00263.45\x000\x000\x00"),
+		[]byte("1\x006\x001\x0067\x00263.48\x000\x000\x00"),
+		[]byte("1\x006\x002\x0067\x00263.48\x000\x000\x00"),
+	} {
+		e.handleIncoming(decodeOne(t, frame))
+	}
+
+	var latest Quote
+	for range 4 {
+		latest = nextQuoteUpdate(t, second).Snapshot
+	}
+	want := QuoteFieldBid | QuoteFieldAsk | QuoteFieldMarketDataType
+	if latest.Available&want != want || latest.Bid.String() != "263.45" || latest.Ask.String() != "263.48" {
+		t.Fatalf("sibling quote = %+v, want delayed bid 263.45 ask 263.48", latest)
+	}
+	if err := second.Err(); err != nil {
+		t.Fatalf("sibling Err() = %v", err)
+	}
+}
 
 func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
 	// captures/20260405T215752Z-quote_stream_genericticks, IB Gateway
