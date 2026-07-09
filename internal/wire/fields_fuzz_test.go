@@ -13,7 +13,7 @@ func FuzzParseFields(f *testing.F) {
 	f.Add([]byte{})
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		ParseFields(data) // must not panic
+		_, _ = ParseFields(data) // must not panic
 	})
 }
 

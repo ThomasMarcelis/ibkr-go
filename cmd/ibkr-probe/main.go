@@ -29,12 +29,16 @@ func main() {
 	lengthPrefix := flag.Bool("length-prefix", false, "prefix the payload with a 4-byte big-endian length")
 	bootstrapExtra := flag.String("bootstrap-extra", "", "escaped suffix appended to the bootstrap payload")
 	useTLS := flag.Bool("tls", false, "dial the target using TLS")
+	insecureTLS := flag.Bool("tls-insecure", false, "skip TLS certificate verification (diagnostic use only; requires -tls)")
 	nullTerminate := flag.Bool("null-terminate", false, "deprecated alias for -terminator=null")
 	newline := flag.Bool("newline", false, "deprecated alias for -terminator=newline")
 	asciiPayload := flag.String("ascii", "", "escaped payload for mode=ascii")
 	hexPayload := flag.String("hex", "", "hex payload for mode=hex")
 	readTimeout := flag.Duration("read-timeout", 1500*time.Millisecond, "read timeout after the final write")
 	flag.Parse()
+	if *insecureTLS && !*useTLS {
+		log.Fatal("-tls-insecure requires -tls")
+	}
 
 	if *nullTerminate && *newline {
 		*terminator = "null-newline"
@@ -54,11 +58,11 @@ func main() {
 		if err != nil {
 			log.Fatalf("build bootstrap payload: %v", err)
 		}
-		if err := runSingle(*addr, payload, *readTimeout, *useTLS); err != nil {
+		if err := runSingle(*addr, payload, *readTimeout, *useTLS, *insecureTLS); err != nil {
 			log.Fatal(err)
 		}
 	case "bootstrap-scan":
-		if err := runScan(*addr, bootstrapVariants(*minVersion, *maxVersion), *readTimeout, *useTLS); err != nil {
+		if err := runScan(*addr, bootstrapVariants(*minVersion, *maxVersion), *readTimeout, *useTLS, *insecureTLS); err != nil {
 			log.Fatal(err)
 		}
 	case "ascii":
@@ -66,7 +70,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("parse ascii payload: %v", err)
 		}
-		if err := runSingle(*addr, payload, *readTimeout, *useTLS); err != nil {
+		if err := runSingle(*addr, payload, *readTimeout, *useTLS, *insecureTLS); err != nil {
 			log.Fatal(err)
 		}
 	case "hex":
@@ -74,7 +78,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("decode hex payload: %v", err)
 		}
-		if err := runSingle(*addr, payload, *readTimeout, *useTLS); err != nil {
+		if err := runSingle(*addr, payload, *readTimeout, *useTLS, *insecureTLS); err != nil {
 			log.Fatal(err)
 		}
 	default:
@@ -82,17 +86,17 @@ func main() {
 	}
 }
 
-func runScan(addr string, variants []probeVariant, readTimeout time.Duration, useTLS bool) error {
+func runScan(addr string, variants []probeVariant, readTimeout time.Duration, useTLS, insecureTLS bool) error {
 	return scanVariants(variants, func(variant probeVariant) error {
-		return runVariant(addr, variant, readTimeout, useTLS)
+		return runVariant(addr, variant, readTimeout, useTLS, insecureTLS)
 	})
 }
 
-func runSingle(addr string, payload []byte, readTimeout time.Duration, useTLS bool) error {
+func runSingle(addr string, payload []byte, readTimeout time.Duration, useTLS, insecureTLS bool) error {
 	return runVariant(addr, probeVariant{
 		Name:   "single",
 		Chunks: [][]byte{payload},
-	}, readTimeout, useTLS)
+	}, readTimeout, useTLS, insecureTLS)
 }
 
 func scanVariants(variants []probeVariant, run func(probeVariant) error) error {
@@ -113,8 +117,8 @@ func scanVariants(variants []probeVariant, run func(probeVariant) error) error {
 	return nil
 }
 
-func runVariant(addr string, variant probeVariant, readTimeout time.Duration, useTLS bool) error {
-	response, readState, err := probeOnce(addr, variant.Chunks, variant.Gap, readTimeout, useTLS)
+func runVariant(addr string, variant probeVariant, readTimeout time.Duration, useTLS, insecureTLS bool) error {
+	response, readState, err := probeOnce(addr, variant.Chunks, variant.Gap, readTimeout, useTLS, insecureTLS)
 	if err != nil {
 		return fmt.Errorf("probe: %w", err)
 	}
@@ -143,8 +147,8 @@ func runVariant(addr string, variant probeVariant, readTimeout time.Duration, us
 	return nil
 }
 
-func probeOnce(addr string, chunks [][]byte, gap time.Duration, readTimeout time.Duration, useTLS bool) ([]byte, string, error) {
-	conn, err := dialTarget(addr, useTLS)
+func probeOnce(addr string, chunks [][]byte, gap time.Duration, readTimeout time.Duration, useTLS, insecureTLS bool) ([]byte, string, error) {
+	conn, err := dialTarget(addr, useTLS, insecureTLS)
 	if err != nil {
 		return nil, "", fmt.Errorf("dial: %w", err)
 	}
@@ -168,19 +172,29 @@ func probeOnce(addr string, chunks [][]byte, gap time.Duration, readTimeout time
 	return response, readState, nil
 }
 
-func dialTarget(addr string, useTLS bool) (net.Conn, error) {
+func dialTarget(addr string, useTLS, insecureTLS bool) (net.Conn, error) {
 	if !useTLS {
 		return net.Dial("tcp", addr)
 	}
+	config, err := targetTLSConfig(addr, insecureTLS)
+	if err != nil {
+		return nil, err
+	}
+	return tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", addr, config)
+}
+
+func targetTLSConfig(addr string, insecure bool) (*tls.Config, error) {
 	host, _, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	return tls.DialWithDialer(dialer, "tcp", addr, &tls.Config{
+	// #nosec G402 -- insecure is false by default and available only through
+	// the explicitly named -tls-insecure diagnostic flag.
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS12,
 		ServerName:         host,
-		InsecureSkipVerify: true,
-	})
+		InsecureSkipVerify: insecure,
+	}, nil
 }
 
 type probeVariant struct {
@@ -252,7 +266,11 @@ func buildBootstrapPayload(minVersion, maxVersion int, extra []byte, terminator 
 	payload = append(payload, versionChunk...)
 
 	if lengthPrefix {
+		if uint64(len(payload)) > uint64(^uint32(0)) {
+			return nil, fmt.Errorf("bootstrap payload too large: %d bytes", len(payload))
+		}
 		var header [4]byte
+		// #nosec G115 -- the uint32 range is checked immediately above.
 		binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
 		payload = append(header[:], payload...)
 	}

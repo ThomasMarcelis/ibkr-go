@@ -3465,7 +3465,9 @@ func TestSubscribeDisplayGroupIntegration(t *testing.T) {
 		t.Fatalf("updated ContractInfo = %q, want %q", updated.ContractInfo, "265598@SMART")
 	}
 
-	handle.Close()
+	if err := handle.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 }
 
 func TestPlaceOrderModifyIntegration(t *testing.T) {

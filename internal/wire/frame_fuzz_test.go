@@ -8,7 +8,9 @@ import (
 func FuzzReadFrame(f *testing.F) {
 	// Valid frame: 4-byte big-endian length header + payload.
 	var valid bytes.Buffer
-	WriteFrame(&valid, []byte("hello\x00"))
+	if err := WriteFrame(&valid, []byte("hello\x00")); err != nil {
+		f.Fatalf("seed frame: %v", err)
+	}
 	f.Add(valid.Bytes())
 
 	// Zero-length header (triggers ErrEmptyMessage).
@@ -27,7 +29,7 @@ func FuzzReadFrame(f *testing.F) {
 	f.Add([]byte{0xFF, 0xFF, 0xFF, 0xFF, 0x00})
 
 	f.Fuzz(func(t *testing.T, data []byte) {
-		ReadFrame(bytes.NewReader(data)) // must not panic
+		_, _ = ReadFrame(bytes.NewReader(data)) // must not panic
 	})
 }
 

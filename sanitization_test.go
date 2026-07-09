@@ -74,6 +74,7 @@ func TestNoAccountIdentifiersInTrackedFiles(t *testing.T) {
 	}
 
 	for _, path := range files {
+		// #nosec G304 -- paths are root entries selected by the extension allowlist above.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("ReadFile(%s) error = %v", path, err)

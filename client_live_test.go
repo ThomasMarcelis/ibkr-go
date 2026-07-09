@@ -1369,7 +1369,7 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 		},
 	})
 	if err != nil {
-		placer.Close()
+		_ = placer.Close()
 		t.Fatalf("PlaceOrder: %v", err)
 	}
 	orderID := handle.OrderID()
@@ -1385,7 +1385,7 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 				resting = true
 			}
 		case <-ctx.Done():
-			placer.Close()
+			_ = placer.Close()
 			t.Fatal("timeout waiting for resting status")
 		}
 	}

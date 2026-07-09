@@ -41,6 +41,8 @@ type streamKey struct {
 }
 
 func LoadMeta(path string) (Meta, error) {
+	// #nosec G304 -- LoadMeta is a file-reading API; its caller explicitly
+	// selects the private capture path to normalize.
 	file, err := os.Open(path)
 	if err != nil {
 		return Meta{}, fmt.Errorf("capturelog: open meta: %w", err)
@@ -55,10 +57,17 @@ func LoadMeta(path string) (Meta, error) {
 }
 
 func WriteReplay(dir string, sourceDir string, meta Meta, events []Event) error {
+	if dir == "" {
+		return fmt.Errorf("capturelog: replay dir is required")
+	}
+	if err := validateScenario(meta.Scenario); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("capturelog: create replay dir: %w", err)
 	}
 
+	// #nosec G304 -- dir is the operator-selected private replay directory.
 	metaFile, err := os.OpenFile(filepath.Join(dir, "meta.json"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("capturelog: create replay meta: %w", err)
@@ -81,6 +90,7 @@ func WriteReplay(dir string, sourceDir string, meta Meta, events []Event) error 
 		return fmt.Errorf("capturelog: write replay meta: %w", err)
 	}
 
+	// #nosec G304 -- same operator-selected replay directory as metaFile.
 	replayFile, err := os.OpenFile(filepath.Join(dir, "frames.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("capturelog: create replay frames: %w", err)

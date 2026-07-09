@@ -221,7 +221,7 @@ func FuzzDecodeBatch(f *testing.F) {
 				t.Errorf("unexpected panic: %v", r)
 			}
 		}()
-		DecodeBatch(200, data)
+		_, _ = DecodeBatch(200, data)
 	})
 }
 
@@ -520,7 +520,7 @@ func TestDecodeShortFields(t *testing.T) {
 			t.Run(fmt.Sprintf("%s/%d_fields", tc.name, n), func(t *testing.T) {
 				payload := wire.EncodeFields(append([]string{strconv.Itoa(tc.msgID)}, fields...))
 				// Must not panic. Errors are acceptable.
-				mustNotPanic(t, func() { DecodeBatch(200, payload) })
+				mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
 			})
 		}
 	}
@@ -642,7 +642,7 @@ func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			payload := wire.EncodeFields(tc.fields)
 			// Must not panic.
-			mustNotPanic(t, func() { DecodeBatch(200, payload) })
+			mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
 		})
 	}
 }
@@ -1066,7 +1066,7 @@ func TestDecodeFieldParseErrors(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields(tc.fields)
 			// Must not panic. Errors are acceptable.
-			mustNotPanic(t, func() { DecodeBatch(200, payload) })
+			mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
 		})
 	}
 }
@@ -1106,7 +1106,7 @@ func TestDecodeTickByTickVariants(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields(tc.fields)
 			// Must not panic.
-			mustNotPanic(t, func() { DecodeBatch(200, payload) })
+			mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
 		})
 	}
 }
@@ -1134,7 +1134,7 @@ func TestDecodeHistoricalNewsEndAndMktDepthExchanges(t *testing.T) {
 			payload := wire.EncodeFields(tc.fields)
 			if tc.wantName == "" {
 				// We just verify no panic; error or weird result is acceptable.
-				mustNotPanic(t, func() { DecodeBatch(200, payload) })
+				mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
 				return
 			}
 			msgs, err := DecodeBatch(200, payload)
@@ -1174,7 +1174,7 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 			t.Parallel()
 			payload := wire.EncodeFields(tc.fields)
 			if tc.wantName == "" {
-				mustNotPanic(t, func() { DecodeBatch(200, payload) })
+				mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
 				return
 			}
 			msgs, err := DecodeBatch(200, payload)

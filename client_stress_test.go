@@ -145,7 +145,9 @@ func TestStressSlowConsumerDropOldest(t *testing.T) {
 		}
 	}
 done:
-	sub.Close()
+	if err := sub.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	t.Logf("received %d of 50 events (drop_oldest)", received)
 	if received >= 50 {
@@ -374,12 +376,16 @@ func TestStressRapidSubscriptionCycling(t *testing.T) {
 			}
 		}
 	closeIt:
-		sub.Close()
+		if err := sub.Close(); err != nil {
+			t.Fatalf("cycle %d Close() error = %v", i, err)
+		}
 	}
 
 	// Close client and host, then measure goroutines to detect leaks from
 	// the cycling itself (not from other concurrent tests).
-	client.Close()
+	if err := client.Close(); err != nil {
+		t.Fatalf("client Close() error = %v", err)
+	}
 	_ = host.Wait()
 
 	// Snapshot goroutine count after full cleanup.
@@ -452,7 +458,9 @@ func TestStressHighThroughputMarketDepth(t *testing.T) {
 		}
 	}
 done:
-	sub.Close()
+	if err := sub.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
 
 	t.Logf("received %d of %d depth rows", received, rows)
 	if received == 0 {

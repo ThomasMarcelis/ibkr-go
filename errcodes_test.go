@@ -107,6 +107,7 @@ func transcriptAPIErrorCodes(t *testing.T) map[int][]string {
 
 	codes := map[int][]string{}
 	for _, path := range paths {
+		// #nosec G304 -- paths come exclusively from the fixed transcript glob above.
 		data, err := os.ReadFile(path)
 		if err != nil {
 			t.Fatalf("ReadFile(%s) error = %v", path, err)

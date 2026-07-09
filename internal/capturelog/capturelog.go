@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -103,11 +104,17 @@ func lengthPreservingPlaceholder(n int, placeholder string) []byte {
 }
 
 func Create(root string, meta Meta) (*Session, error) {
+	if root == "" {
+		return nil, fmt.Errorf("capturelog: root is required")
+	}
 	if meta.StartedAt.IsZero() {
 		meta.StartedAt = time.Now().UTC()
 	}
 	if meta.Scenario == "" {
 		meta.Scenario = "capture"
+	}
+	if err := validateScenario(meta.Scenario); err != nil {
+		return nil, err
 	}
 
 	// Captures carry live account ids, order refs, and login tokens, so the
@@ -118,11 +125,14 @@ func Create(root string, meta Meta) (*Session, error) {
 		return nil, fmt.Errorf("capturelog: create dir: %w", err)
 	}
 
+	// #nosec G304 -- dir is rooted under the caller-selected capture root and
+	// the scenario suffix is restricted by validateScenario.
 	metaFile, err := os.OpenFile(filepath.Join(dir, "meta.json"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("capturelog: create meta file: %w", err)
 	}
 
+	// #nosec G304 -- same validated capture directory as metaFile.
 	eventsFile, err := os.OpenFile(filepath.Join(dir, "events.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		_ = metaFile.Close()
@@ -141,6 +151,19 @@ func Create(root string, meta Meta) (*Session, error) {
 		meta:   metaFile,
 		enc:    json.NewEncoder(eventsFile),
 	}, nil
+}
+
+func validateScenario(scenario string) error {
+	if scenario == "." || scenario == ".." || strings.ContainsAny(scenario, `/\\`) {
+		return fmt.Errorf("capturelog: invalid scenario %q", scenario)
+	}
+	for _, r := range scenario {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' || r == '.' {
+			continue
+		}
+		return fmt.Errorf("capturelog: invalid scenario %q", scenario)
+	}
+	return nil
 }
 
 func (s *Session) Dir() string {
@@ -279,6 +302,8 @@ func (s *Session) Close() error {
 }
 
 func LoadEvents(path string) ([]Event, error) {
+	// #nosec G304 -- LoadEvents is a file-reading API; its caller explicitly
+	// selects the private capture path to normalize.
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("capturelog: open events: %w", err)

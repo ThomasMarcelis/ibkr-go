@@ -64,6 +64,7 @@ func New(script string) (*Host, error) {
 }
 
 func NewFromFile(path string) (*Host, error) {
+	// #nosec G304 -- test callers explicitly select the replay transcript.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
@@ -452,13 +453,11 @@ func parseSizes(raw string) []int {
 }
 
 func appendLengthPrefix(payload []byte) []byte {
-	header := []byte{0, 0, 0, 0}
-	size := len(payload)
-	header[0] = byte(size >> 24)
-	header[1] = byte(size >> 16)
-	header[2] = byte(size >> 8)
-	header[3] = byte(size)
-	return append(header, payload...)
+	var frame bytes.Buffer
+	if err := wire.WriteFrame(&frame, payload); err != nil {
+		panic(fmt.Sprintf("testhost: frame server payload: %v", err))
+	}
+	return frame.Bytes()
 }
 
 func readExact(r io.Reader, size int) ([]byte, error) {

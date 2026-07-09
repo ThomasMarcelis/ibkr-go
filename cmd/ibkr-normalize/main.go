@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bytes"
 	"encoding/base64"
-	"encoding/binary"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
+	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
 func main() {
@@ -84,6 +85,7 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	if err != nil {
 		return err
 	}
+	// #nosec G304 -- path is the operator-selected transcript output.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("create transcript skeleton: %w", err)
@@ -119,7 +121,11 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 			if _, err := fmt.Fprintf(file, "# leg=%d direction=%s msg_id=%s payload_len=%d\n", event.Leg, event.Direction, msgID, len(payload)); err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintf(file, "raw %s %s\n", event.Direction, base64.StdEncoding.EncodeToString(frameBytes(payload))); err != nil {
+			frame, err := frameBytes(payload)
+			if err != nil {
+				return fmt.Errorf("frame replay payload: %w", err)
+			}
+			if _, err := fmt.Fprintf(file, "raw %s %s\n", event.Direction, base64.StdEncoding.EncodeToString(frame)); err != nil {
 				return err
 			}
 		}
@@ -127,11 +133,12 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	return nil
 }
 
-func frameBytes(payload []byte) []byte {
-	out := make([]byte, 4+len(payload))
-	binary.BigEndian.PutUint32(out[:4], uint32(len(payload)))
-	copy(out[4:], payload)
-	return out
+func frameBytes(payload []byte) ([]byte, error) {
+	var out bytes.Buffer
+	if err := wire.WriteFrame(&out, payload); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func splitPayloadFields(payload []byte) []string {

@@ -98,6 +98,8 @@ func socketKeepAlive(t *testing.T, conn *net.TCPConn) int {
 	var value int
 	var sockErr error
 	if err := raw.Control(func(fd uintptr) {
+		// #nosec G115 -- the kernel supplies a valid process file descriptor;
+		// syscall.GetsockoptInt follows the platform API and requires int.
 		value, sockErr = syscall.GetsockoptInt(int(fd), syscall.SOL_SOCKET, syscall.SO_KEEPALIVE)
 	}); err != nil {
 		t.Fatalf("Control() error = %v", err)

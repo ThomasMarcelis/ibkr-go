@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -99,6 +99,8 @@ func newAPIDriverRecorder(path string, scenario string) (*apiDriverRecorder, err
 	if path == "" {
 		return rec, nil
 	}
+	// #nosec G304,G703 -- path is the operator-selected private driver-event output;
+	// it does not incorporate data received from Gateway/TWS.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return nil, fmt.Errorf("create driver events: %w", err)
@@ -109,7 +111,7 @@ func newAPIDriverRecorder(path string, scenario string) (*apiDriverRecorder, err
 }
 
 func scenarioHash(scenario string) string {
-	sum := sha1.Sum([]byte(scenario))
+	sum := sha256.Sum256([]byte(scenario))
 	return hex.EncodeToString(sum[:4])
 }
 

@@ -171,6 +171,7 @@ func captureScenarioNames(t *testing.T) []string {
 func readText(t *testing.T, path string) string {
 	t.Helper()
 
+	// #nosec G304 -- callers pass repository-owned audit inputs.
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("ReadFile(%s) error = %v", path, err)

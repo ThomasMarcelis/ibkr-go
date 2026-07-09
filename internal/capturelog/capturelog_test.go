@@ -303,6 +303,14 @@ func TestCreatePermissions(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsScenarioPathTraversal(t *testing.T) {
+	t.Parallel()
+
+	if _, err := Create(t.TempDir(), Meta{Scenario: "../../outside"}); err == nil {
+		t.Fatal("Create() error = nil, want invalid-scenario error")
+	}
+}
+
 // TestRedactChunk proves a registered login literal is replaced before the
 // chunk is base64-encoded to disk, so the raw secret never reaches the file.
 func TestRedactChunk(t *testing.T) {

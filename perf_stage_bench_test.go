@@ -342,11 +342,12 @@ func BenchmarkE2EQuoteStreamTCP(b *testing.B) {
 	var stream []byte
 	frames := [][]byte{frameTickPriceLast, frameTickPriceBid, frameTickPriceLast, frameTickSizeVol}
 	for i := range nMsgs {
-		var hdr [4]byte
 		f := frames[i%len(frames)]
-		hdr[0], hdr[1], hdr[2], hdr[3] = byte(len(f)>>24), byte(len(f)>>16), byte(len(f)>>8), byte(len(f))
-		stream = append(stream, hdr[:]...)
-		stream = append(stream, f...)
+		var frame bytes.Buffer
+		if err := wire.WriteFrame(&frame, f); err != nil {
+			b.Fatalf("frame benchmark tick: %v", err)
+		}
+		stream = append(stream, frame.Bytes()...)
 	}
 
 	// ns/op includes dial+subscribe setup; the reported msgs/sec and ns/msg
