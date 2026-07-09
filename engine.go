@@ -74,8 +74,9 @@ type bootstrapState struct {
 
 const (
 	// The codec gates post-176 wire fields and the sv201 envelope on the
-	// negotiated version. The classic sv200 layout and exact-sv201 executions
-	// slice are live-validated; 176..199 are compatibility paths.
+	// negotiated version. The classic sv200 layout, exact-sv201 executions
+	// migration, and exact-sv202 zero-strike boundary are live-validated;
+	// 176..199 are compatibility paths.
 	minServerVersion = protocol.SupportedMinServerVersion
 	maxServerVersion = protocol.SupportedMaxServerVersion
 	bootstrapTimeout = 5 * time.Second

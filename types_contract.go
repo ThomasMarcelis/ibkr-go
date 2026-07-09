@@ -54,16 +54,19 @@ const (
 //     Exchange "IDEALPRO".
 //
 // Setting ConID alone unambiguously identifies a contract the client has
-// already qualified; the descriptive fields can then be left zero. A zero
-// Strike, empty Expiry, empty Right, or empty Multiplier all mean "unset" and
-// are omitted from the request. Use [ContractsClient.Qualify] to resolve a
-// partial contract to a fully specified one.
+// already qualified; the descriptive fields can then be left zero. Through
+// the supported server_version 202 boundary, contract-bearing requests remain
+// classic and transmit a zero Strike in the numeric slot. The Gateway accepts
+// that value for conID-only lookup, and may also return an explicitly present
+// zero strike for a resolved contract. Empty Expiry, Right, and Multiplier
+// mean unset. Use [ContractsClient.Qualify] to resolve a partial contract to a
+// fully specified one.
 type Contract struct {
 	ConID           int             // IBKR contract ID; nonzero pins an exact contract
 	Symbol          string          // underlying symbol (ticker); base currency for forex
 	SecType         SecType         // instrument class; drives which other fields matter
 	Expiry          string          // YYYYMMDD (or YYYYMM) for derivatives; empty for cash instruments
-	Strike          decimal.Decimal // option strike; zero means unset
+	Strike          decimal.Decimal // option strike; zero is valid and is also the zero value for an unspecified classic request
 	Right           Right           // option right; empty means unset
 	Multiplier      string          // contract multiplier as a string, e.g. "100"; empty means default
 	Exchange        string          // routing/listing exchange, commonly "SMART"

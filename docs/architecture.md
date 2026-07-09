@@ -6,11 +6,12 @@ not expose an `EWrapper` / `EClient` callback surface as its primary model.
 The library currently exposes a broad read-only surface plus order management,
 market depth, and option exercise. Its classic baseline is live-attested at IB
 Gateway `server_version 200`; exact `server_version 201` adds the negotiated
-raw-ID envelope and protobuf executions flow. The session handshake can
-negotiate 176..201 and gates fields on the returned version, but 176..199
+raw-ID envelope and protobuf executions flow. Exact `server_version 202` adds
+zero-strike contract semantics but no message migration. The session handshake
+can negotiate 176..202 and gates fields on the returned version, but 176..199
 remain compatibility paths rather than advertised support until each has
-independent evidence. Versions 202 and newer remain unsupported until their
-next staged protobuf migrations are implemented and live-attested.
+independent evidence. Version 203 and newer remain unsupported until their
+staged protobuf migrations are implemented and live-attested.
 
 ## Layers
 
@@ -145,7 +146,7 @@ singleton open-orders observer.
 - `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
   boundary it could not fully resolve, so a degraded parse is observable
   instead of silently dropping fields.
-- The advertised handshake maximum (`maxServerVersion`, currently 201) is a
+- The advertised handshake maximum (`maxServerVersion`, currently 202) is a
   package-level override point used only by the version-matrix live tests to
   force a session onto an older wire layout for verification; production
   code always advertises the maximum.

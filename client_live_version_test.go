@@ -112,6 +112,48 @@ func versionName(sv int) string {
 	return "sv" + strconv.Itoa(sv)
 }
 
+// TestLiveServer202ZeroStrikeBoundary freezes the only named API 10.48.01
+// boundary at server_version 202. No message family migrates at this version:
+// a conId-only contract request stays raw-ID classic, while executions stay on
+// the protobuf family introduced at 201. The exact-202 Gateway must resolve the
+// classic request and preserve an explicitly present zero strike on protobuf
+// execution contracts without losing the conId.
+func TestLiveServer202ZeroStrikeBoundary(t *testing.T) {
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(202)
+	defer restore()
+
+	client, _, cancel := ibkrlive.DialTradingContext(t, 15*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	if got := client.Session().ServerVersion; got != 202 {
+		t.Fatalf("negotiated ServerVersion = %d, want 202", got)
+	}
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelReq()
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{ConID: 265598})
+	if err != nil {
+		t.Fatalf("conId-only ContractDetails() at sv202 error = %v", err)
+	}
+	if len(details) != 1 || details[0].ConID != 265598 || !details[0].Strike.IsZero() {
+		t.Fatalf("conId-only ContractDetails() at sv202 = %+v, want AAPL conId 265598 with zero strike", details)
+	}
+
+	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
+	if err != nil {
+		t.Fatalf("Executions() at sv202 error = %v", err)
+	}
+	for _, update := range updates {
+		if update.Execution != nil && update.Execution.Contract.ConID != 0 && update.Execution.Contract.Strike.IsZero() {
+			t.Logf("sv202 execution attested: exec_id=%s con_id=%d strike=%s",
+				update.Execution.ExecID, update.Execution.Contract.ConID, update.Execution.Contract.Strike)
+			return
+		}
+	}
+	t.Log("sv202 execution query returned no present-zero-strike execution; deterministic live replay covers the non-empty callback")
+}
+
 // TestLiveDownNegotiatedPreview validates the OpenOrder inbound gates with
 // real down-negotiated echoes: the what-if open_order reply crosses the
 // FULL_ORDER_PREVIEW block gate (195) and the width-gated tail

@@ -1,0 +1,20 @@
+# Live-derived from local paper IB Gateway at exact server_version 202.
+# Private capture: 20260709T230646Z-protobuf_sv202_executions.
+# replay/frames.jsonl sha256: 3cddf301f80c16dd019979cf3617d1c2b17215c58d89fd35d10fb832714a37e4
+# events.jsonl sha256: 9ba7a2499ab54282994c97bd0be4e8115a2765c1c2363f3bb410d599e52d2828
+#
+# The source query returned two real AAPL executions. This bounded replay keeps
+# the first detail and the end marker needed to prove the v202 boundary: the
+# protobuf Contract carries conId=265598 and an explicitly present fixed64
+# strike=0. The recorder had already replaced the private account token; this
+# replay uses DU9000001. Request ID 1001 is normalized to 1, the execution ID
+# is replaced length-for-length, and permanent ID 910154039 is replaced by the
+# same-width value 900000001. Farm-status, the second execution, and unchanged
+# classic commission reports are intentionally trimmed.
+handshake {"server_version":202,"connection_time":"20260710 01:06:50 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+client req_executions {"req_id":"1"}
+raw server AAAAvAAAANMIARIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGoEBCAESF3Nhbml0aXplZC1zdjIwMi1idXktMDAxGhwyMDI2MDcwOSAxODo1NTowNSBVUy9FYXN0ZXJuIglEVTkwMDAwMDEqBk5BU0RBUTIDQk9UOgExQUjhehSut3NASIHSk60DUMMBYgExaUjhehSut3NAkAECqAH///////////8B
+raw server AAAABgAAAP8IAQ==
+disconnect

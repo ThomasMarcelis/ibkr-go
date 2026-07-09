@@ -23,4 +23,9 @@ func TestOutboundProtobufMigrationGates(t *testing.T) {
 	if _, ok := OutboundProtobufVersion(10_000); ok {
 		t.Fatal("unknown outbound ID has a protobuf migration gate")
 	}
+	for msgID, version := range outboundProtobufVersion {
+		if version == MinServerVersionZeroStrike {
+			t.Fatalf("outbound message %d migrates at zero-strike-only server_version 202", msgID)
+		}
+	}
 }

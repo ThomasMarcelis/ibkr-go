@@ -138,6 +138,35 @@ func TestDecodeServer201ExecutionDetailLiveVector(t *testing.T) {
 	}
 }
 
+func TestDecodeServer202ExecutionDetailPreservesPresentZeroStrike(t *testing.T) {
+	t.Parallel()
+
+	// Exact-sv202 paper Gateway capture, 2026-07-10. The Contract protobuf
+	// carries both conId=265598 and an explicitly present fixed64 strike=0.
+	// Request, account, execution, and permanent IDs are deterministic,
+	// length-preserving substitutions where possible. Private source
+	// replay/frames.jsonl sha256:
+	// 3cddf301f80c16dd019979cf3617d1c2b17215c58d89fd35d10fb832714a37e4
+	payload := decodeHex(t, "000000d30801123008fe9a1012044141504c1a0353544b29000000000000000042064e415344415152035553445a044141504c62034e4d531a81010801121773616e6974697a65642d73763230322d6275792d3030311a1c32303236303730392031383a35353a30352055532f4561737465726e22094455393030303030312a064e41534441513203424f543a01314148e17a14aeb773404881d293ad0350c3016201316948e17a14aeb77340900102a801ffffffffffffffffff01")
+	msg, err := Decode(202, payload)
+	if err != nil {
+		t.Fatalf("Decode() error = %v", err)
+	}
+	detail, ok := msg.(ExecutionDetail)
+	if !ok {
+		t.Fatalf("Decode() = %T, want ExecutionDetail", msg)
+	}
+	if detail.ReqID != 1 {
+		t.Fatalf("ReqID = %d, want 1", detail.ReqID)
+	}
+	if detail.Contract.ConID != 265598 || detail.Contract.Strike != "0" {
+		t.Fatalf("Contract = %+v, want conId 265598 with explicit zero strike", detail.Contract)
+	}
+	if detail.ExecID != "sanitized-sv202-buy-001" || detail.Account != "DU9000001" {
+		t.Fatalf("execution identity = %q/%q, want sanitized live identity", detail.ExecID, detail.Account)
+	}
+}
+
 func TestDecodeProtobufCommissionAndErrorSchemas(t *testing.T) {
 	t.Parallel()
 
