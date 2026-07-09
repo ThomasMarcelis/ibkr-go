@@ -344,7 +344,8 @@ func (c OrdersClient) Open(ctx context.Context, scope OpenOrdersScope) ([]OpenOr
 
 // SubscribeOpen streams open-order echoes and status updates in the given
 // scope. An [OpenOrdersScopeAuto] subscription is persistent and has no
-// snapshot phase, so [Subscription.AwaitSnapshot] returns [ErrNoSnapshot].
+// snapshot phase, so [Subscription.AwaitSnapshot] returns [ErrNoSnapshot];
+// closing it disables the automatic binding of future manual orders.
 func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
 	return c.engine.SubscribeOpenOrders(ctx, scope, opts...)
 }

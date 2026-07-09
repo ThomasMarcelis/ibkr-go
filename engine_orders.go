@@ -118,6 +118,9 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 					return
 				}
 				delete(e.singletons, singletonOpenOrders)
+				if scope == OpenOrdersScopeAuto {
+					_ = e.send(codec.CancelOpenOrders{})
+				}
 				sub.closeWithErr(nil)
 			})
 		})
