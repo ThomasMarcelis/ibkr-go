@@ -202,12 +202,6 @@ func (c ContractsClient) DepthExchanges(ctx context.Context) ([]DepthExchange, e
 	return c.engine.MktDepthExchanges(ctx)
 }
 
-// FundamentalData returns a fundamental data report as a raw XML document.
-func (c ContractsClient) FundamentalData(ctx context.Context, req FundamentalDataRequest) (XMLDocument, error) {
-	data, err := c.engine.FundamentalData(ctx, req)
-	return XMLDocument(data), err
-}
-
 // MarketDataClient groups live quote, tick, and market-depth requests. Obtain
 // one from [Client.MarketData].
 type MarketDataClient struct{ engine *engine }

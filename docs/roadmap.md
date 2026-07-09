@@ -47,18 +47,26 @@ target in one place. Every promoted behavior must still follow the
 live-evidence path: live run, capture verification, sanitized transcript,
 public replay test, and updates to the coverage matrix and tracker.
 
-Current IBKR drift to check first:
+Current IBKR baseline and drift to check first:
 
-- The public [IBKR API Software](https://interactivebrokers.github.io/) page
-  listed API Latest 10.47, released 2026-05-20, and recommended TWS or IB
-  Gateway 1045+ when checked on 2026-05-25; the download page was unchanged
-  on a 2026-06-10 re-check and both local Gateway roles still negotiated
-  `server_version 200`, so the pinned codec baseline holds. The official
-  [production release notes](https://www.ibkrguides.com/releasenotes/prod-2026.htm)
-  already document a 10.48 change — `reqOpenOrders` will include
-  de-activated orders — to re-verify against `Orders().Open` expectations
-  once the local Gateways update.
-- Fundamental data de-support or replacement behavior.
+- As of 2026-07-09, the public
+  [IBKR API Software](https://interactivebrokers.github.io/) page lists API
+  Latest 10.48, released 2026-07-07, and Stable 10.45, released 2026-03-30,
+  and recommends TWS or IB Gateway 1045+ for comprehensive feature support.
+  Both local Gateway roles were live-confirmed at `server_version 200` on
+  2026-07-09; that remains the classic-wire evidence baseline.
+- API 10.47 removed `reqFundamentalData`, its cancellation and callback, and
+  fundamental-ratios tick type 47. The corresponding ibkr-go surface and
+  classic message IDs have been retired. A final 2026-07-09 probe sent all
+  seven legacy report requests through both local roles; every request
+  returned code 10358. The readonly-live capture has event hash prefix
+  `89db59e9e5abf7b7`, and paper-dev has `c326f314cbc4f1de`. Those captures and
+  earlier sv200 captures remain historical evidence only. WSH is a separate
+  API, not a replacement.
+- API 10.48 changes `reqOpenOrders` results to include de-activated orders.
+  This is not an announced wire-shape change, but `Orders().Open` and
+  `Orders().SubscribeOpen` result sets need a fresh live capture once the
+  local Gateways run the updated release.
 - `$LEDGER-` account-value prefixes from the new account-value setting.
 - Fractional `tickSize` values and newer generic tick families. Concrete
   probe target: odd-lot ticks 105-110 behind generic tick 787 (official docs
@@ -103,7 +111,7 @@ The next high-value workstreams are:
 |----------|------------|----------------|-------------|
 | 1 | Promote captured order campaigns | Raises deterministic CI confidence without more market dependency | what-if margin preview now has a usable API (`Orders().Preview`/`OrderState`); scale-in campaign promoted from `63db2db7cba21b68`; forex lifecycle promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c` |
 | 2 | Market-open trading-basic captures | Grounds fill, modify-to-fill, order-type matrix, and rejection paths under regular-session behavior | `trading-basic` batch through `paper-dev`, then verify and triage |
-| 3 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10358 fundamentals, 10276 WSH |
+| 3 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10276 WSH, option-data permissions |
 | 4 | Protocol drift and version edges | Keeps the pure-Go codec current with IBKR releases | current-time millis, `$LEDGER-` account values, fractional tick sizes, order/completed-order tail fields |
 | 5 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, BOND identifier, CFD/CRYPTO/FUND probes |
 | 6 | Public ergonomics and examples | Helps users trust and adopt the library | examples for live roles, error handling, replay-backed behavior notes, pkg.go.dev polish |
@@ -192,10 +200,16 @@ reqMktDepth (msg 10), cancelMktDepth (msg 11), inbound MarketDepth (12) /
 MarketDepthL2 (13) — full order book depth as a keyed subscription. Requires a
 paid L2 market data subscription.
 
-### Fundamental data
+### Retired fundamental data (historical)
 
-FundamentalData (msg 52/53, inbound 51) — Reuters fundamental data as a keyed
-one-shot returning the XML payload. Requires a subscription.
+IBKR API 10.47 removed the Reuters fundamental-data request, cancellation,
+callback, and fundamental-ratios tick type. ibkr-go no longer exposes that
+surface; classic outbound message IDs 52 and 53 and inbound message ID 51
+remain unused gaps. Earlier `server_version 200` captures document behavior
+before removal but are not current coverage targets. Final 2026-07-09 captures
+against both local roles sent all seven legacy report requests and received
+code 10358 for every request (`89db59e9e5abf7b7` readonly-live,
+`c326f314cbc4f1de` paper-dev). WSH is a separate API, not a replacement.
 
 ### Exercise options
 

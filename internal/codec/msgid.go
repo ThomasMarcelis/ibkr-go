@@ -31,8 +31,6 @@ const (
 	OutReqCurrentTime              = protocol.OutReqCurrentTime
 	OutReqRealTimeBars             = protocol.OutReqRealTimeBars
 	OutCancelRealTimeBars          = protocol.OutCancelRealTimeBars
-	OutReqFundamentalData          = protocol.OutReqFundamentalData
-	OutCancelFundamentalData       = protocol.OutCancelFundamentalData
 	OutReqCalcImpliedVolatility    = protocol.OutReqCalcImpliedVolatility
 	OutReqCalcOptionPrice          = protocol.OutReqCalcOptionPrice
 	OutCancelCalcImpliedVolatility = protocol.OutCancelCalcImpliedVolatility
@@ -105,7 +103,6 @@ const (
 	InTickString            = protocol.InTickString
 	InCurrentTime           = protocol.InCurrentTime
 	InRealTimeBars          = protocol.InRealTimeBars
-	InFundamentalData       = protocol.InFundamentalData
 	InContractDataEnd       = protocol.InContractDataEnd
 	InOpenOrderEnd          = protocol.InOpenOrderEnd
 	InAccountDownloadEnd    = protocol.InAccountDownloadEnd

@@ -916,29 +916,6 @@ func sendCancelMktDepth(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"11", "1", strconv.Itoa(reqID)})
 }
 
-// --- Fundamental data (msg_id=52) / cancel (msg_id=53) ---
-//
-//	[52, version=2, reqId, conId, symbol, secType, exchange, primaryExchange,
-//	 currency, localSymbol, reportType]
-//	[53, version=1, reqId]
-func sendReqFundamentalData(conn net.Conn, reqID int, c contractSpec, reportType string) error {
-	return sendMessage(conn, []string{
-		"52", "2", strconv.Itoa(reqID),
-		strconv.Itoa(c.ConID),
-		c.Symbol,
-		c.SecType,
-		c.Exchange,
-		c.PrimaryExchange,
-		c.Currency,
-		c.LocalSymbol,
-		reportType,
-	})
-}
-
-func sendCancelFundamentalData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"53", "1", strconv.Itoa(reqID)})
-}
-
 // --- Exercise options (msg_id=21) ---
 //
 //	[21, version=2, reqId, conId, symbol, secType, expiry, strike, right,

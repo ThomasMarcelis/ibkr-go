@@ -18,7 +18,7 @@ tables below from drifting from that registry.
 
 | Source | What It Contributes |
 |--------|---------------------|
-| [IBKR API Software](https://interactivebrokers.github.io/) | Latest downloadable API package, current release, license, and recommended TWS/IB Gateway version. As of 2026-05-25 it lists API 10.47, released 2026-05-20, and recommends TWS or IB Gateway 1045 or higher for comprehensive feature support. |
+| [IBKR API Software](https://interactivebrokers.github.io/) | Latest downloadable API package, current release, license, and recommended TWS/IB Gateway version. As of 2026-07-09 it lists Latest API 10.48, released 2026-07-07, Stable API 10.45, released 2026-03-30, and recommends TWS or IB Gateway 1045 or higher for comprehensive feature support. |
 | [IBKR Campus TWS API docs](https://www.interactivebrokers.com/campus/ibkr-api-page/twsapi-doc/) | Current documentation hub and warning that the official API source is distributed through IBKR's MSI/ZIP package, not package registries. |
 | [EClientSocket reference](https://interactivebrokers.github.io/tws-api/classIBApi_1_1EClientSocket.html) | Official client request/control method inventory. The page states this client class contains methods used to communicate with TWS/Gateway. |
 | [EWrapper reference](https://interactivebrokers.github.io/tws-api/interfaceIBApi_1_1EWrapper.html) | Official callback/event inventory. The page states almost every EClientSocket call results in at least one EWrapper event. |
@@ -61,7 +61,12 @@ committed.
 | FA/advisor | `requestFA`, `replaceFA`, `reqSoftDollarTiers` | Implemented. `replaceFA` lacks executable capture scenario and should usually freeze non-FA error or read-back/restore behavior. |
 | WSH | `reqWshMetaData`, `cancelWshMetaData`, `reqWshEventData`, `cancelWshEventData` | Implemented. Needs metadata, event, cancel, filter/date/portfolio/watchlist variants. |
 | Display groups/TWS | `queryDisplayGroups`, `subscribeToGroupEvents`, `updateDisplayGroup`, `unsubscribeFromGroupEvents`, `reqUserInfo` | Implemented. Needs invalid group/update cases and TWS vs Gateway differences. |
-| Fundamental data | `reqFundamentalData`, `cancelFundamentalData` | Implemented though official docs mark it legacy/deprecated. Needs every report type plus entitlement/error rows. |
+
+Historical note: IBKR API 10.47 removed `reqFundamentalData`,
+`cancelFundamentalData`, the matching callback, and fundamental-ratios tick
+type 47. They are intentionally absent from the current official and ibkr-go
+surface inventories. Earlier live captures are retained only as historical
+evidence; WSH is a separate API, not a replacement.
 
 ## Official EWrapper Callback Families
 
@@ -85,7 +90,7 @@ committed.
 |--------|----------------|
 | `Client` | `Close`, `Done`, `Wait`, `Session`, `SessionEvents`, `CurrentTime`, `Accounts`, `Contracts`, `MarketData`, `History`, `Orders`, `Options`, `News`, `Scanner`, `Advisors`, `WSH`, `TWS` |
 | `Accounts()` | `Summary`, `SubscribeSummary`, `Positions`, `SubscribePositions`, `Updates`, `SubscribeUpdates`, `UpdatesMulti`, `SubscribeUpdatesMulti`, `PositionsMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle`, `FamilyCodes` |
-| `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges`, `FundamentalData` |
+| `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` |
 | `MarketData()` | `SetType`, `Quote`, `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `History()` | `Bars`, `SubscribeBars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` |
 | `Orders()` | `RefreshOrderID`, `Place`, `PlaceBracket`, `Preview`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen`, `RefreshOpen`, `Completed`, `Executions` |
@@ -126,8 +131,6 @@ Outbound message IDs:
 | `OutCancelHistoricalData` | 25 | Historical bars cancel |
 | `OutReqRealTimeBars` | 50 | Real-time bars |
 | `OutCancelRealTimeBars` | 51 | Real-time bars cancel |
-| `OutReqFundamentalData` | 52 | Fundamental data |
-| `OutCancelFundamentalData` | 53 | Fundamental data cancel |
 | `OutReqCalcImpliedVolatility` | 54 | Option calculation |
 | `OutReqCalcOptionPrice` | 55 | Option calculation |
 | `OutCancelCalcImpliedVolatility` | 56 | Option calculation cancel |
@@ -207,7 +210,6 @@ Inbound message IDs:
 | `InCurrentTime` | 49 | Current time |
 | `InCurrentTimeInMillis` | 109 | Current time in milliseconds |
 | `InRealTimeBars` | 50 | Real-time bars |
-| `InFundamentalData` | 51 | Fundamental data |
 | `InContractDataEnd` | 52 | Contract details end |
 | `InOpenOrderEnd` | 53 | Open order end |
 | `InAccountDownloadEnd` | 54 | Account download end |

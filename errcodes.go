@@ -53,9 +53,6 @@ const (
 	// for ISLAND STK"), but the official meaning is the generic invalid
 	// query, so it stays out of the entitlement class.
 	ErrCodeInvalidRealTimeQuery = 420
-	// ErrCodeFundamentalsNotAvailable: fundamentals data for the specified
-	// security is not available.
-	ErrCodeFundamentalsNotAvailable = 430
 	// ErrCodeAlgoDefinitionNotFound: order processing failed because the
 	// Gateway has no algorithm definition for the requested algo strategy;
 	// the placement is rejected outright with no order_status.

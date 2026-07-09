@@ -4,8 +4,8 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-06-11 (readonly-live gateway 127.0.0.1:4001 and paper-dev
-gateway 127.0.0.1:4002, both server_version 200).
+Last updated: 2026-07-09. Both readonly-live gateway 127.0.0.1:4001 and
+paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 200`.
 
 ## Current Campaign Contract
 
@@ -28,6 +28,30 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-07-09
+
+Official SDK/source drift audit and live fundamental-data retirement check.
+Both Gateway roles connected at `server_version 200`. The public
+[IBKR API Software](https://interactivebrokers.github.io/) page now lists
+Latest API 10.48 (released 2026-07-07), Stable API 10.45 (released
+2026-03-30), and recommends TWS or IB Gateway 1045+.
+
+- API 10.47 removed `reqFundamentalData`, its cancellation and callback, and
+  fundamental-ratios tick type 47. A final live probe sent all seven legacy
+  report requests through both roles; every request returned code 10358. The
+  readonly-live capture is
+  `captures/20260709T214833Z-api_fundamental_reports_aapl` (events sha256
+  prefix `89db59e9e5abf7b7`); paper-dev is
+  `captures/20260709T214857Z-api_fundamental_reports_aapl` (prefix
+  `c326f314cbc4f1de`). The ibkr-go surface, active capture scenarios, replay
+  transcripts, and classic message IDs are retired. These ignored capture
+  directories and earlier sv200 records remain historical evidence only; WSH
+  is a separate API, not a replacement.
+- API 10.48 changes `reqOpenOrders` results to include de-activated orders.
+  No wire-shape change is announced. Re-run open-order snapshot and
+  subscription captures when a local Gateway is on the updated release before
+  changing result-set expectations.
 
 ### 2026-07-04
 
@@ -114,7 +138,9 @@ Campaign preflight drift gate. Both local Gateway roles connected with
   orders. That is a pending behavioral change to `Orders().Open` result
   sets, not a wire-shape change, and both local Gateways still negotiate
   `server_version 200`, so capture work proceeds on the pinned baseline
-  with 10.48 recorded as a drift watch item.
+  with 10.48 recorded as a drift watch item. Superseded on 2026-07-09 when
+  API 10.48 became the published Latest release; the live observations in
+  this dated entry remain valid for that campaign.
 
 ### 2026-05-25
 
@@ -127,7 +153,8 @@ Both local Gateway roles connected with `server_version=200`.
   logged current account/session blockers instead of treating them as library
   regressions: completed-orders silence until context deadline, historical
   ticks code 10187 for missing ISLAND market-data permission, fundamentals
-  code 10358, WSH code 10276, and market-depth timeout with no rows.
+  code 10358 (historical; the API was removed in official API 10.47), WSH code
+  10276, and market-depth timeout with no rows.
 - `paper-dev` diagnostic connected, requested delayed data, and received an
   AAPL delayed quote.
 - `paper-dev` order smoke passed for limit rest/cancel, invalid order type,
@@ -282,6 +309,7 @@ against the role-aware `paper-dev` Gateway.
 
 | Scenario | Date | Status |
 |----------|------|--------|
+| api_fundamental_reports_aapl | 2026-07-09 | final retirement evidence; all seven legacy requests returned code 10358 on both server_version=200 roles; readonly-live events sha256 prefix `89db59e9e5abf7b7`, paper-dev prefix `c326f314cbc4f1de`; ignored capture directories retained as historical evidence only |
 | api_whatif_margin_aapl | 2026-04-14 | recorded, not promoted; `20260414T164207Z` produced no usable preview callback and cleanup timed out (`ac70de98ef2c239a`); `20260414T182608Z` returned live code 320 after the WhatIf place request (`e431bf7f0b84abd1`) |
 | api_forex_lifecycle_eurusd | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `641eab5c0e6909f7`; real paper-account code 201 leverage rejection |
 | api_stress_rapid_fire_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `69ee6be4cdf7d577` |
@@ -302,7 +330,7 @@ against the role-aware `paper-dev` Gateway.
 | api_market_data_completeness_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `f692fc168a53da9d`; bare SetType cycle, real-time-bars errors, and tick-by-tick code 10089 variants replay-promoted |
 | api_historical_matrix_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `366075c3b171c44d` |
 | api_news_article_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `3c6ef62da8d60e95`; fetched article from historical-news ID |
-| api_fundamental_reports_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `02649216ff69f306`; mixed XML success and real 430 errors, with the `ReportRatios`/`ReportsFinStatements` errors replay-promoted |
+| api_fundamental_reports_aapl | 2026-04-15 | historical, retired 2026-07-09 after official API 10.47 removed the feature; the original server_version=200 capture remains traceable by events sha256 prefix `02649216ff69f306` and contained mixed XML success and real 430 errors |
 | api_wsh_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `65aeb0a3b716e4b6`; real 10276 entitlement errors |
 | api_completed_orders_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `6415ad97b4c9f33e`; exposed completed-order TRAIL LIMIT decode interruption |
 | api_completed_orders_variants_aapl | 2026-04-15 | recorded, verified after fix; server_version=200, events sha256 prefix `6ac84daaf4084436`; apiOnly=false and apiOnly=true returned completed orders |
@@ -339,7 +367,7 @@ against the role-aware `paper-dev` Gateway.
 | api_whatif_margin_aapl.txt | 20260610T200009Z | promoted; covers the complete WhatIf margin preview (nine margin decimals plus commission 1.0003 USD) on the public OpenOrder, the no-lifecycle handle semantics, and the io.EOF teardown; the 2026-04-14 no-preview/code-320 attempts were the pre-v1.4.6 default-int placement bug |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
 | api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
-| api_fundamental_report_errors_aapl.txt | 20260415T162248Z | promoted; covers live code 430 `ReportRatios` and `ReportsFinStatements` errors without checking in large XML report payloads |
+| api_fundamental_report_errors_aapl.txt | 20260415T162248Z | retired and removed from the active replay suite on 2026-07-09 after official API 10.47 removed the feature; formerly covered live code 430 `ReportRatios` and `ReportsFinStatements` errors without checking in large XML report payloads |
 | api_security_type_probe_errors.txt | 20260415T150322Z | promoted; covers live code 200 BOND and BILL contract-detail errors without checking in large successful contract-detail payloads |
 | api_market_data_type_cycle.txt | 20260415T162200Z | promoted; covers bare SetType(1/2/3/4) requests accepted silently before later market-data entitlement probes |
 | api_realtime_bars_request_errors_aapl.txt | 20260415T162200Z | promoted; covers TRADES code 420, BID_ASK code 321, and MIDPOINT code 10089 request-scoped errors |

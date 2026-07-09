@@ -126,7 +126,6 @@ var pendingLiveAttestation = map[int]string{
 	InTickReqParams:         "only synthetic dispatch-table coverage — needs a live tickReqParams capture",
 	InCurrentTime:           "only synthetic dispatch-table coverage — needs a live reqCurrentTime capture",
 	InRealTimeBars:          "needs a reqRealTimeBars 5s-bar capture (market hours)",
-	InFundamentalData:       "needs a reqFundamentalData capture (fundamental-data entitlement)",
 	InAccountDownloadEnd:    "needs a reqAccountUpdates end-of-download capture",
 	InDisplayGroupList:      "needs a queryDisplayGroups capture",
 	InDisplayGroupUpdated:   "needs a subscribeToGroupEvents update capture",

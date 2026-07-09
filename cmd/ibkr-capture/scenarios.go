@@ -1501,25 +1501,6 @@ var scenarios = map[string]scenario{
 
 	// --- Reference data ---
 
-	"fundamental_data_aapl": {
-		name:        "fundamental_data_aapl",
-		description: "REQ_FUNDAMENTAL_DATA ReportSnapshot for AAPL (may error without subscription)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqFundamentalData(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "ReportSnapshot"); err != nil {
-				return err
-			}
-			// FUNDAMENTAL_DATA: [51, version, reqID, data] — reqID at fields[2].
-			// ERR_MSG: [4, reqID, code, msg, ...] — reqID at fields[1].
-			stop := func(msgID int, fields []string) bool {
-				if msgID == 51 && len(fields) >= 3 && fields[2] == strconv.Itoa(reqID) {
-					return true
-				}
-				return msgID == 4 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stop)
-		},
-	},
 	"soft_dollar_tiers": {
 		name:        "soft_dollar_tiers",
 		description: "REQ_SOFT_DOLLAR_TIERS, read response (msg 77)",
@@ -1739,11 +1720,6 @@ var scenarios = map[string]scenario{
 		name:        "api_news_article_aapl",
 		description: "public API campaign that requests a real news article ID from historical news, then fetches the article",
 		runAPI:      runAPINewsArticleAAPL,
-	},
-	"api_fundamental_reports_aapl": {
-		name:        "api_fundamental_reports_aapl",
-		description: "public API probe for every fundamental report type on AAPL",
-		runAPI:      runAPIFundamentalReportsAAPL,
 	},
 	"api_wsh_variants_aapl": {
 		name:        "api_wsh_variants_aapl",

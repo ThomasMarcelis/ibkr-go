@@ -4,7 +4,7 @@
 not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
 The library currently exposes a broad read-only surface plus order management,
-market depth, fundamental data, and option exercise. Its supported and
+market depth, and option exercise. Its supported and
 live-attested classic baseline is IB Gateway `server_version 200`. The session
 handshake can negotiate 176..200 and gates fields on the returned version, but
 176..199 remain compatibility paths rather than advertised support until each
@@ -98,7 +98,7 @@ pattern:
 
 - **Keyed (`map[int]*route`)** — request-ID-correlated flows. One-shots and
   keyed subscriptions (account summary, quotes, historical bars, market depth,
-  fundamental data, etc.) register a route keyed by `reqID`. Inbound messages
+  etc.) register a route keyed by `reqID`. Inbound messages
   carry the same `reqID` and dispatch directly to the registered handler.
 
 - **Singleton (`map[string]*route`)** — flows that have at most one active

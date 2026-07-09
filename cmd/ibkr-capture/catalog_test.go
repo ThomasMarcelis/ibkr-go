@@ -193,7 +193,6 @@ func TestExhaustivePlanScenariosAreCatalogued(t *testing.T) {
 		"api_market_data_completeness_aapl",
 		"api_historical_matrix_aapl",
 		"api_news_article_aapl",
-		"api_fundamental_reports_aapl",
 		"api_wsh_variants_aapl",
 		"api_algo_variants_aapl",
 		"api_completed_orders_variants_aapl",

@@ -3437,36 +3437,6 @@ func TestQueryDisplayGroupsIntegration(t *testing.T) {
 	}
 }
 
-func TestFundamentalDataIntegration(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "fundamental_data.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	data, err := client.Contracts().FundamentalData(ctx, ibkr.FundamentalDataRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		ReportType: "ReportSnapshot",
-	})
-	if err != nil {
-		t.Fatalf("FundamentalData() error = %v", err)
-	}
-	if len(data) == 0 {
-		t.Fatal("FundamentalData() returned empty document")
-	}
-	if !strings.Contains(string(data), "AAPL") {
-		t.Fatalf("FundamentalData() does not contain AAPL: %s", string(data[:min(len(data), 200)]))
-	}
-}
-
 func TestSubscribeDisplayGroupIntegration(t *testing.T) {
 	t.Parallel()
 

@@ -86,25 +86,6 @@ type ScannerResult struct {
 	LegsStr    string
 }
 
-// FundamentalReportType selects which fundamental data report
-// [ContractsClient.FundamentalData] returns.
-type FundamentalReportType string
-
-const (
-	FundamentalReportSnapshot       FundamentalReportType = "ReportSnapshot"       // company overview snapshot
-	FundamentalReportsFinSummary    FundamentalReportType = "ReportsFinSummary"    // financial summary
-	FundamentalReportsOwnership     FundamentalReportType = "ReportsOwnership"     // ownership report
-	FundamentalReportRatios         FundamentalReportType = "ReportRatios"         // financial ratios
-	FundamentalReportsFinStatements FundamentalReportType = "ReportsFinStatements" // financial statements
-	FundamentalRESC                 FundamentalReportType = "RESC"                 // analyst estimates
-)
-
-// FundamentalDataRequest asks for a fundamental data report on a contract.
-type FundamentalDataRequest struct {
-	Contract   Contract
-	ReportType FundamentalReportType
-}
-
 // FADataType selects which Financial Advisor configuration document
 // [AdvisorsClient.Config] and [AdvisorsClient.ReplaceConfig] operate on.
 type FADataType int

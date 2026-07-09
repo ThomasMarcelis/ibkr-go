@@ -1085,29 +1085,6 @@ func runAPINewsArticleAAPL(ctx context.Context, addr string, clientID int) error
 	})
 }
 
-func runAPIFundamentalReportsAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
-		_ = account
-		for _, reportType := range []ibkr.FundamentalReportType{
-			ibkr.FundamentalReportSnapshot,
-			ibkr.FundamentalReportsFinSummary,
-			ibkr.FundamentalReportsOwnership,
-			ibkr.FundamentalReportRatios,
-			ibkr.FundamentalReportsFinStatements,
-			ibkr.FundamentalRESC,
-		} {
-			caseCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
-			data, err := client.Contracts().FundamentalData(caseCtx, ibkr.FundamentalDataRequest{Contract: apiAAPL, ReportType: reportType})
-			cancel()
-			recordProbeResult("fundamental_report", string(reportType), len(data), err)
-			if err != nil {
-				log.Printf("fundamental %s: %v", reportType, err)
-			}
-		}
-		return nil
-	})
-}
-
 func runAPIWSHVariantsAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		_ = account

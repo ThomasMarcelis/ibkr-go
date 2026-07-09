@@ -71,7 +71,6 @@ handled through dimensions rather than duplicate rows:
 | REF-003 | Option chain metadata | `Contracts().SecDefOptParams`, official `reqSecDefOptParams`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd` | `sec_def_opt_params_aapl`, `sec_def_opt_params.txt` | promoted | STK underlyings, FUT/FOP underlyings, empty exchange, invalid underlying |
 | REF-004 | Market rules and smart components | `Contracts().MarketRule`, `Contracts().SmartComponents`, official `reqMarketRule`, `reqSmartComponents`, `marketRule`, `smartComponents` | `market_rule`, `smart_components`, `market_rule.txt`, `smart_components.txt` | promoted | US equity, option, future, invalid market rule, invalid BBO exchange |
 | REF-005 | Market-depth exchanges | `Contracts().DepthExchanges`, official `reqMktDepthExchanges`, `mktDepthExchanges` | `mkt_depth_exchanges`, `mkt_depth_exchanges.txt` | promoted | all returned service data types, SMART support, invalid routing implication |
-| REF-006 | Fundamental data | `Contracts().FundamentalData`, official `reqFundamentalData`, `cancelFundamentalData`, `fundamentalData` | `fundamental_data_aapl`, `api_fundamental_reports_aapl`, `fundamental_data.txt`, `api_fundamental_report_errors_aapl.txt` | candidate | all `FundamentalReportType` values, entitlement error, invalid report type, cancel path. `ReportRatios` and `ReportsFinStatements` code 430 responses are replay-promoted from 2026-04-15 capture `02649216ff69f306`; large successful XML report payloads remain capture evidence only. |
 
 ## Market Data L1
 
@@ -79,7 +78,7 @@ handled through dimensions rather than duplicate rows:
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | MD1-001 | Market data type control | `MarketData().SetType`, official `reqMarketDataType`, `marketDataType` | `set_type_live`, `set_type_frozen`, `set_type_delayed`, `set_type_delayed_frozen`, `set_type_invalid`, `set_type_switch_while_streaming`, `api_market_data_completeness_aapl`, `api_market_data_type_cycle.txt`, `quote_delayed_data.txt`, `lifecycle_set_mdt_after_close.txt`, `set_type_switch_while_streaming.txt` | promoted | Bare SetType(1/2/3/4) accepted silently (2026-04-15 capture `f692fc168a53da9d`); the 2026-06-11 readonly-live captures confirm the four bare variants stay ack-less and add the stream-tied push: marketDataType(3) arrives before the first tick, mid-stream SetType(Live) is accepted with the stream staying delayed in the captured window, and 10167 surfaces as a session event (`e244cae7f5eb7d57`). Invalid type 99 never reaches the wire from the public API (client-side validation, frozen by unit test); the 2026-06-11 invalid capture is inconclusive on Gateway behavior and is not promoted. Real-time (type 1) success pushes still need a market-hours entitled stream. |
 | MD1-002 | Quote snapshots | `MarketData().Quote`, official `reqMktData`, `cancelMktData`, `tickSnapshotEnd` | `quote_snapshot_aapl`, `api_market_data_completeness_aapl`, `quote_snapshot.txt`, `quote_delayed_data.txt` | promoted | STK/OPT/FUT/CASH snapshots, entitlement error, no data, regulatory snapshot where applicable |
-| MD1-003 | Quote streams and generic ticks | `MarketData().SubscribeQuotes`, official tick callbacks | `quote_stream_aapl`, `quote_stream_genericticks`, `quote_with_generic_ticks`, `quote_stream_multi_asset`, `api_market_data_completeness_aapl`, `api_duplicate_quote_subscriptions_aapl`, `api_duplicate_quote_subscriptions_aapl.txt`, `quote_with_generic_ticks.txt` | candidate | price/size/string/generic/option/EFP/news/dividend/shortable/RTVolume/fundamental-ratio generic tick families; duplicate same-contract subscriptions replay-promoted from 2026-04-15 capture `84f1e78a18616e0f` with SetType(Delayed) and independent delayed bid/ask streams |
+| MD1-003 | Quote streams and generic ticks | `MarketData().SubscribeQuotes`, official tick callbacks | `quote_stream_aapl`, `quote_stream_genericticks`, `quote_with_generic_ticks`, `quote_stream_multi_asset`, `api_market_data_completeness_aapl`, `api_duplicate_quote_subscriptions_aapl`, `api_duplicate_quote_subscriptions_aapl.txt`, `quote_with_generic_ticks.txt` | candidate | price/size/string/generic/option/EFP/news/dividend/shortable/RTVolume generic tick families; duplicate same-contract subscriptions replay-promoted from 2026-04-15 capture `84f1e78a18616e0f` with SetType(Delayed) and independent delayed bid/ask streams |
 | MD1-004 | Tick callback edge shapes | official `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickNews`, `tickReqParams` | `calc_implied_volatility.txt`, `calc_option_price.txt`, quote fixtures | target | tickEFP, tickNews, tickReqParams, option computation live success/error |
 | MD1-005 | Real-time bars | `MarketData().SubscribeRealTimeBars`, official `reqRealTimeBars`, `cancelRealTimeBars`, `realtimeBar` | `realtime_bars_aapl`, `api_market_data_completeness_aapl`, `api_realtime_bars_request_errors_aapl.txt`, `realtime_bars_reconnect.txt` | promoted | TRADES/MIDPOINT/BID_ASK, RTH true/false, cancel, reconnect. AAPL TRADES/BID_ASK/MIDPOINT request-scoped error variants are replay-promoted from 2026-04-15 capture `f692fc168a53da9d`; live success streams still need live-derived grounding. |
 
@@ -161,7 +160,7 @@ handled through dimensions rather than duplicate rows:
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | ERR-001 | API errors and farm status | official `error` callback, system status codes | `error_api_error_oneshot.txt`, `error_api_error_subscription.txt`, `error_empty_results.txt`, `error_market_data_warning.txt`, `error_farm_status_codes.txt` | promoted | request-scoped, subscription-scoped, session-scoped, warning-only, advanced order reject JSON |
 | ERR-002 | Disconnect during operations | transport and protocol disconnects | `error_disconnect_during_snapshot.txt`, `error_disconnect_during_oneshot.txt`, `quote_stream_disconnect.txt` | promoted | every one-shot and every stream family has at least one disconnect behavior row |
-| ERR-003 | Entitlement and account-type failures | market data, fundamentals, WSH, FA, scanner, orders | `market_depth_error.txt`, `wsh_meta_data_error.txt`, `api_wsh_variants_aapl.txt`, entitlement candidate captures | candidate | freeze real paper-account blocked responses instead of inventing mocks; WSH metadata/event variants replay-promoted from 2026-04-15 capture `65aeb0a3b716e4b6` |
+| ERR-003 | Entitlement and account-type failures | market data, WSH, FA, scanner, orders | `market_depth_error.txt`, `wsh_meta_data_error.txt`, `api_wsh_variants_aapl.txt`, entitlement candidate captures | candidate | freeze real paper-account blocked responses instead of inventing mocks; WSH metadata/event variants replay-promoted from 2026-04-15 capture `65aeb0a3b716e4b6` |
 
 ## Non-Goals
 
@@ -197,8 +196,6 @@ one primary matrix row above.
 | `api_dollar_cost_averaging_aapl` | ORD-009 |
 | `api_duplicate_quote_subscriptions_aapl` | MD1-003 |
 | `api_duplicate_quote_subscriptions_aapl.txt` | MD1-003 |
-| `api_fundamental_report_errors_aapl.txt` | REF-006 |
-| `api_fundamental_reports_aapl` | REF-006 |
 | `api_forex_lifecycle_eurusd` | ORD-001 |
 | `api_forex_lifecycle_eurusd.txt` | ORD-001 |
 | `api_future_campaign_mes` | ORD-001 |
@@ -247,7 +244,6 @@ one primary matrix row above.
 | `display_groups` | TWS-002 |
 | `executions_snapshot` | ORD-007 |
 | `family_codes` | ACCT-007 |
-| `fundamental_data_aapl` | REF-006 |
 | `global_cancel` | ORD-004 |
 | `head_timestamp_aapl` | HIST-004 |
 | `histogram_data_aapl` | HIST-004 |
@@ -316,6 +312,19 @@ one primary matrix row above.
 | `user_info` | TWS-001 |
 | `wsh_event_data_aapl` | WSH-002 |
 | `wsh_meta_data` | WSH-001 |
+
+### Retired Historical Evidence
+
+The `fundamental_data_aapl` and `api_fundamental_reports_aapl` scenarios and
+the `fundamental_data.txt` and `api_fundamental_report_errors_aapl.txt`
+replays covered live `server_version 200` behavior before IBKR API 10.47
+removed the feature. The 2026-04-15 report campaign remains traceable to
+capture hash prefix `02649216ff69f306`, including mixed XML success and real
+code 430 responses. Final 2026-07-09 captures sent all seven legacy reports
+through both local roles and received code 10358 for every request:
+readonly-live hash prefix `89db59e9e5abf7b7`, paper-dev hash prefix
+`c326f314cbc4f1de`. These artifacts are historical evidence, not executable
+scenarios, active replays, or current coverage targets.
 
 ## Immediate Target Scenario Gaps
 

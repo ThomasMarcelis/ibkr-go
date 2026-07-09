@@ -452,31 +452,6 @@ func TestLiveQualifyContractAAPL(t *testing.T) {
 		details.MinTick.String())
 }
 
-func TestLiveFundamentalData(t *testing.T) {
-	t.Parallel()
-
-	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancelReq()
-
-	data, err := client.Contracts().FundamentalData(ctx, ibkr.FundamentalDataRequest{
-		Contract:   aaplContract,
-		ReportType: "ReportSnapshot",
-	})
-	if err != nil {
-		// Fundamental data may require a subscription not available on paper accounts.
-		t.Logf("FundamentalData() returned: %v (may need subscription)", err)
-		return
-	}
-	if len(data) == 0 {
-		t.Fatal("FundamentalData() returned empty document")
-	}
-	t.Logf("FundamentalData: %d bytes", len(data))
-}
-
 func TestLiveWSHMetaData(t *testing.T) {
 	t.Parallel()
 

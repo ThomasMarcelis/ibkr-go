@@ -215,13 +215,12 @@ layout, so replay fixtures exercise the production decode path.
 | in | 12 | MarketDepth | landed |
 | in | 13 | MarketDepthL2 | landed |
 
-## Fundamental Data
+## Retired Message IDs
 
-| Direction | Msg ID | Name | Status |
-|-----------|--------|------|--------|
-| out | 52 | reqFundamentalData | landed |
-| out | 53 | cancelFundamentalData | landed |
-| in | 51 | FundamentalData | landed |
+Official API 10.47 removed the fundamental-data request, cancellation, and
+callback. Classic outbound IDs 52 and 53 and inbound ID 51 therefore remain
+unused gaps rather than current coverage rows. Historical capture evidence is
+recorded in [`live-test-tracker.md`](live-test-tracker.md).
 
 ## Exercise Options
 

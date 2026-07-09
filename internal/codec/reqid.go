@@ -16,7 +16,6 @@ func (m DisplayGroupList) RequestID() int              { return m.ReqID }
 func (m DisplayGroupUpdated) RequestID() int           { return m.ReqID }
 func (m ExecutionDetail) RequestID() int               { return m.ReqID }
 func (m ExecutionsEnd) RequestID() int                 { return m.ReqID }
-func (m FundamentalDataResponse) RequestID() int       { return m.ReqID }
 func (m HeadTimestamp) RequestID() int                 { return m.ReqID }
 func (m HistogramDataResponse) RequestID() int         { return m.ReqID }
 func (m HistoricalBar) RequestID() int                 { return m.ReqID }

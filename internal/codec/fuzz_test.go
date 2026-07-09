@@ -59,7 +59,6 @@ var allInboundMsgIDs = []int{
 	InTickString,            // 46
 	InCurrentTime,           // 49
 	InRealTimeBars,          // 50
-	InFundamentalData,       // 51
 	InContractDataEnd,       // 52
 	InOpenOrderEnd,          // 53
 	InAccountDownloadEnd,    // 54
@@ -467,7 +466,6 @@ func TestDecodeShortFields(t *testing.T) {
 		{"TickString", InTickString, 4},                        // version, reqID, tickType, value
 		{"CurrentTime", InCurrentTime, 2},                      // version, time
 		{"RealTimeBars", InRealTimeBars, 10},                   // version, reqID, time, O, H, L, C, vol, wap, count
-		{"FundamentalData", InFundamentalData, 3},              // version, reqID, data
 		{"ContractDataEnd", InContractDataEnd, 2},              // version, reqID
 		{"OpenOrderEnd", InOpenOrderEnd, 1},                    // version
 		{"AccountDownloadEnd", InAccountDownloadEnd, 2},        // version, account
@@ -943,41 +941,6 @@ func FuzzEncodeDecodeRoundTrip_DisplayGroupList(f *testing.F) {
 		}
 		if dg.Groups != groups {
 			t.Errorf("Groups: got %q, want %q", dg.Groups, groups)
-		}
-	})
-}
-
-// FuzzEncodeDecodeRoundTrip_FundamentalDataResponse proves encode-decode round-trip for FundamentalDataResponse.
-func FuzzEncodeDecodeRoundTrip_FundamentalDataResponse(f *testing.F) {
-	f.Add(1, "<FundamentalData/>")
-	f.Add(0, "")
-	f.Add(-1, "<ReportSnapshot><Company>AAPL</Company></ReportSnapshot>")
-
-	f.Fuzz(func(t *testing.T, reqID int, data string) {
-		if containsNull(data) {
-			return
-		}
-		original := FundamentalDataResponse{ReqID: reqID, Data: data}
-		encoded, err := Encode(200, original)
-		if err != nil {
-			return
-		}
-		decoded, err := DecodeBatch(200, encoded)
-		if err != nil {
-			return
-		}
-		if len(decoded) != 1 {
-			t.Fatalf("expected 1 message, got %d", len(decoded))
-		}
-		fd, ok := decoded[0].(FundamentalDataResponse)
-		if !ok {
-			t.Fatalf("expected FundamentalDataResponse, got %T", decoded[0])
-		}
-		if fd.ReqID != reqID {
-			t.Errorf("ReqID: got %d, want %d", fd.ReqID, reqID)
-		}
-		if fd.Data != data {
-			t.Errorf("Data: got %q, want %q", fd.Data, data)
 		}
 	})
 }

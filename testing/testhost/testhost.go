@@ -1091,30 +1091,6 @@ func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 			body["professional_customer"] = fields[20]
 		}
 		return "exercise_options", body, nil
-	case 52: // OutReqFundamentalData: [52, version=2, reqId, conId, symbol, secType, exchange, primaryExchange, currency, localSymbol, reportType]
-		body := map[string]any{}
-		if len(fields) >= 3 {
-			body["req_id"] = fields[2]
-		}
-		if len(fields) >= 7 {
-			body["contract"] = map[string]any{
-				"con_id":   fields[3],
-				"symbol":   fields[4],
-				"sec_type": fields[5],
-				"exchange": safeField(fields, 6),
-				"currency": safeField(fields, 8),
-			}
-		}
-		if len(fields) >= 11 {
-			body["report_type"] = fields[10]
-		}
-		return "req_fundamental_data", body, nil
-	case 53: // OutCancelFundamentalData: [53, version=1, reqId]
-		body := map[string]any{}
-		if len(fields) >= 3 {
-			body["req_id"] = fields[2]
-		}
-		return "cancel_fundamental_data", body, nil
 	case 67: // OutQueryDisplayGroups: [67, version=1, reqId]
 		body := map[string]any{}
 		if len(fields) >= 3 {

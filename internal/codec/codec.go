@@ -125,7 +125,6 @@ var inboundDecoders = map[int]decodeFunc{
 	InTickReqParams:         decodeTickReqParams,
 	InCurrentTime:           decodeCurrentTime,
 	InRealTimeBars:          decodeRealTimeBars,
-	InFundamentalData:       decodeFundamentalData,
 	InContractDataEnd:       decodeContractDataEnd,
 	InOpenOrderEnd:          decodeOpenOrderEnd,
 	InExecutionDataEnd:      decodeExecutionDataEnd,

@@ -64,8 +64,6 @@ const (
 	OutReqCurrentTime              = 49
 	OutReqRealTimeBars             = 50
 	OutCancelRealTimeBars          = 51
-	OutReqFundamentalData          = 52
-	OutCancelFundamentalData       = 53
 	OutReqCalcImpliedVolatility    = 54
 	OutReqCalcOptionPrice          = 55
 	OutCancelCalcImpliedVolatility = 56
@@ -141,7 +139,6 @@ const (
 	InTickString            = 46
 	InCurrentTime           = 49
 	InRealTimeBars          = 50
-	InFundamentalData       = 51
 	InContractDataEnd       = 52
 	InOpenOrderEnd          = 53
 	InAccountDownloadEnd    = 54
@@ -219,8 +216,6 @@ var messages = [...]Message{
 	{"OutReqCurrentTime", OutReqCurrentTime, ClientToServer},
 	{"OutReqRealTimeBars", OutReqRealTimeBars, ClientToServer},
 	{"OutCancelRealTimeBars", OutCancelRealTimeBars, ClientToServer},
-	{"OutReqFundamentalData", OutReqFundamentalData, ClientToServer},
-	{"OutCancelFundamentalData", OutCancelFundamentalData, ClientToServer},
 	{"OutReqCalcImpliedVolatility", OutReqCalcImpliedVolatility, ClientToServer},
 	{"OutReqCalcOptionPrice", OutReqCalcOptionPrice, ClientToServer},
 	{"OutCancelCalcImpliedVolatility", OutCancelCalcImpliedVolatility, ClientToServer},
@@ -292,7 +287,6 @@ var messages = [...]Message{
 	{"InTickString", InTickString, ServerToClient},
 	{"InCurrentTime", InCurrentTime, ServerToClient},
 	{"InRealTimeBars", InRealTimeBars, ServerToClient},
-	{"InFundamentalData", InFundamentalData, ServerToClient},
 	{"InContractDataEnd", InContractDataEnd, ServerToClient},
 	{"InOpenOrderEnd", InOpenOrderEnd, ServerToClient},
 	{"InAccountDownloadEnd", InAccountDownloadEnd, ServerToClient},

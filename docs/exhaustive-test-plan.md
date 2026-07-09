@@ -66,8 +66,6 @@ scenario.
 | 49 | reqCurrentTime | yes | yes | yes | |
 | 50 | reqRealTimeBars | yes | yes | yes | BID_ASK, MIDPOINT variants |
 | 51 | cancelRealTimeBars | yes | yes | yes | |
-| 52 | reqFundamentalData | yes | yes | partial | all report types, entitlement error |
-| 53 | cancelFundamentalData | yes | partial | no | cancel mid-request |
 | 54 | reqCalcImpliedVolatility | yes | yes | yes | |
 | 55 | reqCalcOptionPrice | yes | yes | yes | |
 | 56 | cancelCalcImpliedVolatility | yes | yes | yes | |
@@ -372,7 +370,7 @@ tests.
 | Frozen (type 2) | set_type capture | no stream observed |
 | Delayed (type 3) | yes | |
 | Delayed-Frozen (type 4) | set_type capture | no stream observed |
-| Generic ticks (all families) | partial | RTVolume, shortable, news, dividend, fundamental ratio |
+| Generic ticks (all families) | partial | RTVolume, shortable, news, dividend |
 | Option computation ticks | calc tests | streaming option ticks on OPT quotes |
 
 ### 8.2 Historical data

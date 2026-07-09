@@ -17,6 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Legacy Reuters fundamental data has been removed.** IBKR API 10.47
+  de-supported the request, cancellation, callback, and fundamental-ratios
+  tick type. `Contracts().FundamentalData`, `FundamentalReportType`, and the
+  associated XML result surface are removed; classic outbound message IDs 52
+  and 53 and inbound message ID 51 remain unused gaps. WSH is a separate API,
+  not a replacement. Earlier changelog and capture records remain historical
+  evidence only.
+
 - **Contract details now preserve the complete classic response.** The public
   result adds order capabilities, valid exchanges paired with market-rule IDs,
   trading and liquid hours, security IDs, underlier/classification metadata,
@@ -372,7 +380,8 @@ Every breaking change in this release, before → after:
   (duplicate quote subscriptions, market-data type cycle, tick-by-tick and
   real-time bars request/entitlement errors), reference-data replays
   (contract-details asset matrix: option chain, forex, futures ladder,
-  not-found, ambiguous qualify; security-type probes, fundamental reports,
+  not-found, ambiguous qualify; security-type probes, fundamental reports
+  later retired after IBKR API 10.47 de-support,
   WSH entitlement), and the order-conditions matrix (all six condition
   families accepted live) are public replay tests, each traceable to a
   capture hash.
@@ -584,11 +593,12 @@ Every breaking change in this release, before → after:
 - **Strengthened public vocabulary types.** Stable protocol vocabularies now
   use named types/constants, including market data type, what-to-show, bar size,
   tick-by-tick type, order type/status, FA data type, exercise action, market
-  depth operation/side, fundamental report type, news provider code, and display
-  group IDs.
+  depth operation/side, fundamental report type (since removed after official
+  de-support), news provider code, and display group IDs.
 - **Reworked historical and raw payload boundaries.** Historical bars use
   `HistoricalDuration` and `BarSize`; historical tick/news windows use
-  `time.Time` (zero time means unset). Scanner, FA, and fundamental XML return `XMLDocument`;
+  `time.Time` (zero time means unset). Scanner, FA, and the since-removed
+  fundamental-data surface return `XMLDocument`;
   WSH payloads return `JSONDocument`; display groups return `[]DisplayGroupID`.
 - **Renamed lifecycle APIs.** `Subscription.State()` and `OrderHandle.State()`
   are now `Lifecycle()`. `Subscription.AwaitSnapshot(ctx)` provides a durable
@@ -606,7 +616,8 @@ Every breaking change in this release, before → after:
   `Orders().CancelAll` with `OrderHandle` lifecycle tracking.
   Auto-closes on terminal status (Filled, Cancelled, Inactive).
 - **Market depth (Level 2)**: `MarketData().SubscribeDepth` for full order book depth.
-- **Fundamental data**: `Contracts().FundamentalData` for Reuters XML reports.
+- **Fundamental data**: `Contracts().FundamentalData` for Reuters XML reports
+  (removed in Unreleased after IBKR API 10.47 de-support).
 - **Exercise options**: `Options().Exercise` fire-and-forget request.
 - **FA configuration**: `Advisors().Config`, `Advisors().ReplaceConfig`,
   `Advisors().SoftDollarTiers`.

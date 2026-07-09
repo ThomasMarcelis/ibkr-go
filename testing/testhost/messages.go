@@ -367,8 +367,6 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			Price: asString(resolve(body["price"])), Size: asString(resolve(body["size"])),
 			IsSmartDepth: asBool(resolve(body["is_smart_depth"])),
 		}, nil
-	case "fundamental_data":
-		return codec.FundamentalDataResponse{ReqID: asInt(resolve(body["req_id"])), Data: asString(resolve(body["data"]))}, nil
 	case "scanner_data":
 		entries := asCodecEntries(resolve(body["entries"]), func(m map[string]any) codec.ScannerDataEntry {
 			return codec.ScannerDataEntry{

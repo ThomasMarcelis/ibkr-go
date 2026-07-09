@@ -38,54 +38,6 @@ func TestAPIErrorOnOneShot(t *testing.T) {
 	}
 }
 
-func TestAPIFundamentalReportErrorsAAPLReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_fundamental_report_errors_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	const wantMessage = "The fundamentals data for the security specified is not available.Missing reportType"
-	cases := []struct {
-		label      string
-		reportType ibkr.FundamentalReportType
-	}{
-		{label: "ReportRatios", reportType: ibkr.FundamentalReportRatios},
-		{label: "ReportsFinStatements", reportType: ibkr.FundamentalReportsFinStatements},
-	}
-	for _, tc := range cases {
-		_, err := client.Contracts().FundamentalData(ctx, ibkr.FundamentalDataRequest{
-			Contract: ibkr.Contract{
-				ConID:    265598,
-				Symbol:   "AAPL",
-				SecType:  ibkr.SecTypeStock,
-				Exchange: "SMART",
-				Currency: "USD",
-			},
-			ReportType: tc.reportType,
-		})
-		if err == nil {
-			t.Fatalf("%s FundamentalData() error = nil, want API error 430", tc.label)
-		}
-		apiErr, ok := errors.AsType[*ibkr.APIError](err)
-		if !ok {
-			t.Fatalf("%s error type = %T, want *ibkr.APIError", tc.label, err)
-		}
-		if apiErr.Code != 430 {
-			t.Fatalf("%s APIError.Code = %d, want 430", tc.label, apiErr.Code)
-		}
-		if apiErr.OpKind != ibkr.OpFundamentalData {
-			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpFundamentalData)
-		}
-		if apiErr.Message != wantMessage {
-			t.Fatalf("%s APIError.Message = %q, want %q", tc.label, apiErr.Message, wantMessage)
-		}
-	}
-}
-
 func TestAPISecurityTypeProbeErrorsReplay(t *testing.T) {
 	t.Parallel()
 

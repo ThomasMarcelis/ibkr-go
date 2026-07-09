@@ -68,7 +68,6 @@ const (
 	OpDisplayGroups        OpKind = "display_groups"
 	OpDisplayGroupEvents   OpKind = "display_group_events"
 	OpMarketDepth          OpKind = "market_depth"
-	OpFundamentalData      OpKind = "fundamental_data"
 	OpExerciseOptions      OpKind = "exercise_options"
 	OpPlaceOrder           OpKind = "place_order"
 	OpCancelOrder          OpKind = "cancel_order"
@@ -169,8 +168,8 @@ func (p SlowConsumerPolicy) valid() bool {
 	return p == SlowConsumerClose || p == SlowConsumerDropOldest
 }
 
-// XMLDocument is a raw XML payload returned by the Gateway (fundamental data,
-// scanner parameters, and FA configuration), passed through unparsed.
+// XMLDocument is a raw XML payload returned by the Gateway (scanner parameters
+// and FA configuration), passed through unparsed.
 type XMLDocument []byte
 
 // JSONDocument is a raw JSON payload returned by the Gateway (Wall Street

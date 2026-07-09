@@ -730,67 +730,6 @@ func (e *engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo
 	})
 }
 
-func (e *engine) FundamentalData(ctx context.Context, req FundamentalDataRequest) (string, error) {
-	type result struct {
-		data string
-		err  error
-	}
-	resp := make(chan result, 1)
-
-	var reqID int
-	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpFundamentalData,
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.FundamentalDataResponse:
-					delete(e.keyed, reqID)
-					resp <- result{data: m.Data}
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
-				resp <- result{err: e.apiErr(OpFundamentalData, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
-				resp <- result{err: err}
-			},
-		}
-		if err := e.sendContext(ctx, codec.FundamentalDataRequest{
-			ReqID:      reqID,
-			Contract:   toCodecContract(req.Contract),
-			ReportType: string(req.ReportType),
-		}); err != nil {
-			delete(e.keyed, reqID)
-			resp <- result{err: err}
-			return
-		}
-	})
-
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() {
-			if _, ok := e.keyed[reqID]; ok {
-				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelFundamentalData{ReqID: reqID})
-			}
-		})
-	})
-	if err != nil {
-		return "", err
-	}
-	return out.data, out.err
-}
-
 func parseEpochSeconds(raw string) (time.Time, error) {
 	epoch, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {

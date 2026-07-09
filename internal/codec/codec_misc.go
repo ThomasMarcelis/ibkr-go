@@ -221,43 +221,6 @@ type DisplayGroupUpdated struct {
 	ContractInfo string
 }
 
-// FundamentalData (OUT 52, cancel OUT 53 / IN 51)
-
-type FundamentalDataRequest struct {
-	ReqID      int
-	Contract   Contract
-	ReportType string
-}
-
-func (m FundamentalDataRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(OutReqFundamentalData)
-	w.WriteInt(2) // version
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	w.WriteString(m.Contract.Symbol)
-	w.WriteString(m.Contract.SecType)
-	w.WriteString(m.Contract.Exchange)
-	w.WriteString(m.Contract.PrimaryExchange)
-	w.WriteString(m.Contract.Currency)
-	w.WriteString(m.Contract.LocalSymbol)
-	w.WriteString(m.ReportType)
-	return w.Fields(), nil
-}
-
-type CancelFundamentalData struct {
-	ReqID int
-}
-
-func (m CancelFundamentalData) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelFundamentalData), "1", itoa(m.ReqID)}, nil
-}
-
-type FundamentalDataResponse struct {
-	ReqID int
-	Data  string
-}
-
 // [19, version=1, xml]
 func decodeScannerParameters(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
@@ -323,18 +286,6 @@ func (m ScannerDataResponse) encodeWire(sv int) ([]string, error) {
 		w.WriteString(e.LegsStr)
 	}
 	return w.Fields(), nil
-}
-
-// [51, version, reqID, data]
-func decodeFundamentalData(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	data := r.ReadString()
-	return []Message{FundamentalDataResponse{ReqID: reqID, Data: data}}, nil
-}
-
-func (m FundamentalDataResponse) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InFundamentalData), "1", itoa(m.ReqID), m.Data}, nil
 }
 
 // [16, version, faDataType, xml]

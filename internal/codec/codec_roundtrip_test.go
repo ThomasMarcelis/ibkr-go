@@ -528,10 +528,6 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  MarketDepthL2Update{ReqID: 1, Position: 0, MarketMaker: "ARCA", Operation: 0, Side: 1, Price: "150.00", Size: "100", IsSmartDepth: true},
 		},
 		{
-			name: "FundamentalDataResponse",
-			msg:  FundamentalDataResponse{ReqID: 1, Data: "<FundamentalData/>"},
-		},
-		{
 			name: "FamilyCodes",
 			msg: FamilyCodes{
 				Codes: []FamilyCodeEntry{{AccountID: "DU12345", FamilyCode: "FAM1"}},
