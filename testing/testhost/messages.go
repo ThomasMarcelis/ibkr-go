@@ -2,6 +2,7 @@ package testhost
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
@@ -26,13 +27,43 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "api_error":
 		return codec.APIError{ReqID: asInt(resolve(body["req_id"])), Code: asInt(resolve(body["code"])), Message: asString(resolve(body["message"])), AdvancedOrderRejectJSON: asString(resolve(body["advanced_order_reject_json"])), ErrorTimeMs: asString(resolve(body["error_time_ms"]))}, nil
 	case "contract_details":
+		aggGroup := math.MaxInt32
+		if value, ok := body["agg_group"]; ok {
+			aggGroup = asInt(resolve(value))
+		}
 		return codec.ContractDetails{
-			ReqID:      asInt(resolve(body["req_id"])),
-			Contract:   asContract(resolve(body["contract"])),
-			MarketName: asString(resolve(body["market_name"])),
-			MinTick:    asString(resolve(body["min_tick"])),
-			LongName:   asString(resolve(body["long_name"])),
-			TimeZoneID: asString(resolve(body["time_zone_id"])),
+			ReqID:                   asInt(resolve(body["req_id"])),
+			Contract:                asContract(resolve(body["contract"])),
+			MarketName:              asString(resolve(body["market_name"])),
+			MinTick:                 asString(resolve(body["min_tick"])),
+			PriceMagnifier:          asInt(resolve(body["price_magnifier"])),
+			OrderTypes:              asString(resolve(body["order_types"])),
+			ValidExchanges:          asString(resolve(body["valid_exchanges"])),
+			UnderConID:              asInt(resolve(body["under_con_id"])),
+			LongName:                asString(resolve(body["long_name"])),
+			ContractMonth:           asString(resolve(body["contract_month"])),
+			Industry:                asString(resolve(body["industry"])),
+			Category:                asString(resolve(body["category"])),
+			Subcategory:             asString(resolve(body["subcategory"])),
+			TimeZoneID:              asString(resolve(body["time_zone_id"])),
+			TradingHours:            asString(resolve(body["trading_hours"])),
+			LiquidHours:             asString(resolve(body["liquid_hours"])),
+			EconomicValueRule:       asString(resolve(body["economic_value_rule"])),
+			EconomicValueMultiplier: asString(resolve(body["economic_value_multiplier"])),
+			SecurityIDs:             asCodecTagValues(resolve(body["security_ids"])),
+			AggGroup:                aggGroup,
+			UnderSymbol:             asString(resolve(body["under_symbol"])),
+			UnderSecType:            asString(resolve(body["under_sec_type"])),
+			MarketRuleIDs:           asString(resolve(body["market_rule_ids"])),
+			RealExpirationDate:      asString(resolve(body["real_expiration_date"])),
+			LastTradeDate:           asString(resolve(body["last_trade_date"])),
+			LastTradeTime:           asString(resolve(body["last_trade_time"])),
+			StockType:               asString(resolve(body["stock_type"])),
+			MinSize:                 asString(resolve(body["min_size"])),
+			SizeIncrement:           asString(resolve(body["size_increment"])),
+			SuggestedSizeIncrement:  asString(resolve(body["suggested_size_increment"])),
+			Fund:                    asCodecFundDetails(resolve(body["fund"])),
+			IneligibilityReasons:    asCodecIneligibilityReasons(resolve(body["ineligibility_reasons"])),
 		}, nil
 	case "contract_details_end":
 		return codec.ContractDetailsEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
@@ -523,6 +554,38 @@ func asCodecComboLegs(value any) []codec.ComboLeg {
 func asCodecTagValues(value any) []codec.TagValue {
 	return asCodecEntries(value, func(m map[string]any) codec.TagValue {
 		return codec.TagValue{Tag: asString(m["tag"]), Value: asString(m["value"])}
+	})
+}
+
+func asCodecFundDetails(value any) *codec.FundDetails {
+	m, ok := value.(map[string]any)
+	if !ok {
+		return nil
+	}
+	return &codec.FundDetails{
+		Name:                      asString(m["name"]),
+		Family:                    asString(m["family"]),
+		Type:                      asString(m["type"]),
+		FrontLoad:                 asString(m["front_load"]),
+		BackLoad:                  asString(m["back_load"]),
+		BackLoadTimeInterval:      asString(m["back_load_time_interval"]),
+		ManagementFee:             asString(m["management_fee"]),
+		Closed:                    asBool(m["closed"]),
+		ClosedForNewInvestors:     asBool(m["closed_for_new_investors"]),
+		ClosedForNewMoney:         asBool(m["closed_for_new_money"]),
+		NotifyAmount:              asString(m["notify_amount"]),
+		MinimumInitialPurchase:    asString(m["minimum_initial_purchase"]),
+		MinimumSubsequentPurchase: asString(m["minimum_subsequent_purchase"]),
+		BlueSkyStates:             asString(m["blue_sky_states"]),
+		BlueSkyTerritories:        asString(m["blue_sky_territories"]),
+		DistributionPolicy:        asString(m["distribution_policy"]),
+		AssetType:                 asString(m["asset_type"]),
+	}
+}
+
+func asCodecIneligibilityReasons(value any) []codec.IneligibilityReason {
+	return asCodecEntries(value, func(m map[string]any) codec.IneligibilityReason {
+		return codec.IneligibilityReason{ID: asString(m["id"]), Description: asString(m["description"])}
 	})
 }
 

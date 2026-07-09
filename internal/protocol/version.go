@@ -7,11 +7,13 @@ const (
 	MinServerVersionSmartDepth                     = 146
 	MinServerVersionPendingPriceRevision           = 178
 	MinServerVersionFAProfileDesupport             = 177
+	MinServerVersionFundDataFields                 = 179
 	MinServerVersionManualOrderTimeExerciseOptions = 180
 	MinServerVersionLastTradeDate                  = 182
 	MinServerVersionCustomerAccount                = 183
 	MinServerVersionProfessionalCustomer           = 184
 	MinServerVersionBondAccruedInterest            = 185
+	MinServerVersionIneligibilityReasons           = 186
 	MinServerVersionRFQFields                      = 187
 	MinServerVersionIncludeOvernight               = 189
 	MinServerVersionUndoRFQFields                  = 190

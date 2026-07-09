@@ -94,8 +94,8 @@ type DeltaNeutralContract struct {
 	Price decimal.Decimal
 }
 
-// TagValue is a generic name/value pair used for smart-routing and algo
-// parameters on orders.
+// TagValue is a generic name/value pair used for contract security identifiers
+// and for smart-routing and algo parameters on orders.
 type TagValue struct {
 	Tag   string
 	Value string
@@ -149,10 +149,73 @@ type OrderCondition struct {
 // canonical [Contract] plus descriptive metadata.
 type ContractDetails struct {
 	Contract
-	MarketName string
-	LongName   string
-	MinTick    decimal.Decimal // smallest price increment
-	TimeZoneID string          // trading-hours time zone
+	MarketName              string
+	LongName                string
+	MinTick                 decimal.Decimal // smallest price increment
+	PriceMagnifier          int
+	OrderTypes              []string // IBKR order capabilities; includes order types and modifiers
+	ValidExchanges          []ContractExchange
+	UnderConID              int
+	ContractMonth           string
+	Industry                string
+	Category                string
+	Subcategory             string
+	TimeZoneID              string // trading-hours time zone
+	TradingHours            string // raw IBKR trading-hours calendar
+	LiquidHours             string // raw IBKR liquid-hours calendar
+	EconomicValueRule       string
+	EconomicValueMultiplier *decimal.Decimal
+	SecurityIDs             []TagValue
+	AggGroup                *int
+	UnderSymbol             string
+	UnderSecType            SecType
+	RealExpirationDate      string
+	LastTradeDate           string // explicit YYYYMMDD date supplied by server versions 182+
+	LastTradeTime           string // local HH:MM:SS component; use TimeZoneID for its zone
+	StockType               string
+	MinSize                 *decimal.Decimal // nil when IBKR omits the size rule
+	SizeIncrement           *decimal.Decimal // nil when IBKR omits the size rule
+	SuggestedSizeIncrement  *decimal.Decimal // nil when IBKR omits the size rule
+	Fund                    *FundDetails
+	IneligibilityReasons    []IneligibilityReason
+}
+
+// ContractExchange is a venue on which a contract is valid and the market
+// rule that defines its price increments. Pass MarketRuleID to
+// [ContractsClient.MarketRule] to resolve the complete tick-size schedule.
+type ContractExchange struct {
+	Exchange     string
+	MarketRuleID int
+}
+
+// FundDetails carries the mutual-fund-only tail of [ContractDetails]. IBKR
+// represents loads, fees, notification thresholds, and minimum purchases as
+// strings; they remain strings because their formatting and units vary by
+// fund family.
+type FundDetails struct {
+	Name                      string
+	Family                    string
+	Type                      string
+	FrontLoad                 string
+	BackLoad                  string
+	BackLoadTimeInterval      string
+	ManagementFee             string
+	Closed                    bool
+	ClosedForNewInvestors     bool
+	ClosedForNewMoney         bool
+	NotifyAmount              string
+	MinimumInitialPurchase    string
+	MinimumSubsequentPurchase string
+	BlueSkyStates             string
+	BlueSkyTerritories        string
+	DistributionPolicy        string
+	AssetType                 string
+}
+
+// IneligibilityReason explains why an account cannot trade a contract.
+type IneligibilityReason struct {
+	ID          string
+	Description string
 }
 
 // MatchingSymbol is one hit from a [ContractsClient.Search] symbol lookup.

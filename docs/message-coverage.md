@@ -29,7 +29,7 @@ server version and managed-account bootstrap fields are known.
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
 | out | 9 | ContractDetailsRequest | landed |
-| in | 10 | ContractDetails | landed |
+| in | 10 | ContractDetails | landed; complete classic v200 common and FUND shapes |
 | in | 52 | ContractDetailsEnd | landed |
 | out | 81 | reqMatchingSymbols | landed |
 | in | 79 | SymbolSamples | landed |

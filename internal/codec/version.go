@@ -9,11 +9,13 @@ const (
 	MinServerVersionSmartDepth                     = protocol.MinServerVersionSmartDepth
 	MinServerVersionPendingPriceRevision           = protocol.MinServerVersionPendingPriceRevision
 	MinServerVersionFAProfileDesupport             = protocol.MinServerVersionFAProfileDesupport
+	MinServerVersionFundDataFields                 = protocol.MinServerVersionFundDataFields
 	MinServerVersionManualOrderTimeExerciseOptions = protocol.MinServerVersionManualOrderTimeExerciseOptions
 	MinServerVersionLastTradeDate                  = protocol.MinServerVersionLastTradeDate
 	MinServerVersionCustomerAccount                = protocol.MinServerVersionCustomerAccount
 	MinServerVersionProfessionalCustomer           = protocol.MinServerVersionProfessionalCustomer
 	MinServerVersionBondAccruedInterest            = protocol.MinServerVersionBondAccruedInterest
+	MinServerVersionIneligibilityReasons           = protocol.MinServerVersionIneligibilityReasons
 	MinServerVersionRFQFields                      = protocol.MinServerVersionRFQFields
 	MinServerVersionIncludeOvernight               = protocol.MinServerVersionIncludeOvernight
 	MinServerVersionUndoRFQFields                  = protocol.MinServerVersionUndoRFQFields

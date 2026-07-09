@@ -38,24 +38,44 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  APIError{ReqID: -1, Code: 2104, Message: "Market data farm OK", AdvancedOrderRejectJSON: "", ErrorTimeMs: "1712345678000"},
 		},
 		{
-			// ContractDetails encode/decode is asymmetric: the encoder writes
-			// Expiry twice (as lastTradeDate and lastTradeDateOrContractMonth),
-			// and the decoder skips intermediate fields (orderTypes,
-			// validExchanges, etc.) that the encoder fills with
-			// empty strings. Also the encoder does not use readWireContract
-			// so the field order differs from the standard 11-field block.
-			// The round-trip preserves all ContractDetails-level fields.
+			// Full live VTSAX FUND shape from capture
+			// 20260415T150322Z-api_security_type_probe_matrix, request 11.
 			name: "ContractDetails",
 			msg: ContractDetails{
-				ReqID: 42,
+				ReqID: 11,
 				Contract: Contract{
-					ConID: 265598, Symbol: "AAPL", SecType: "STK",
-					Exchange: "SMART", Currency: "USD",
-					LocalSymbol: "AAPL", TradingClass: "AAPL",
-					PrimaryExchange: "NASDAQ",
+					ConID: 48013650, Symbol: "VTSAX", SecType: "FUND", Strike: "0",
+					Exchange: "FUNDSERV", Currency: "USD",
+					LocalSymbol: "922908728", TradingClass: "922908728",
 				},
-				MarketName: "NMS", MinTick: "0.01",
-				LongName: "APPLE INC", TimeZoneID: "US/Eastern",
+				MarketName:             "VTSAX",
+				MinTick:                "0.01",
+				PriceMagnifier:         1,
+				OrderTypes:             "AD,ALERT,ALLOC,BASKET,DAY,DEACT,DEACTDIS,FUNDSWAP,MKT,NONALGO,WHATIF",
+				ValidExchanges:         "FUNDSERV",
+				LongName:               "Vanguard Total Stock Market Index Fund A (Vanguard)",
+				TimeZoneID:             "US/Eastern",
+				TradingHours:           "20260415:1559-20260415:2200;20260416:1559-20260416:2200;20260417:1559-20260417:2200;20260418:CLOSED;20260419:CLOSED;20260420:1559-20260420:2200",
+				LiquidHours:            "20260415:1559-20260415:2200;20260416:1559-20260416:2200;20260417:1559-20260417:2200;20260418:CLOSED;20260419:CLOSED;20260420:1559-20260420:2200",
+				SecurityIDs:            []TagValue{{Tag: "ISIN", Value: "US9229087286"}},
+				AggGroup:               2147483647,
+				MarketRuleIDs:          "2963",
+				MinSize:                "0.001",
+				SizeIncrement:          "0.001",
+				SuggestedSizeIncrement: "1",
+				Fund: &FundDetails{
+					Name:                      "Vanguard Total Stock Market Index Fund A",
+					Family:                    "Vanguard",
+					FrontLoad:                 "0",
+					BackLoad:                  "0",
+					BackLoadTimeInterval:      "0",
+					ManagementFee:             "0.04",
+					NotifyAmount:              "10000000",
+					MinimumInitialPurchase:    "3000",
+					MinimumSubsequentPurchase: "1",
+					BlueSkyStates:             "All",
+					BlueSkyTerritories:        "ARE,ASM,FSM,GUM,MHL,MNP,PLW,PRI,VIR",
+				},
 			},
 		},
 		{

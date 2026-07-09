@@ -281,6 +281,12 @@ func TestContractDetailsVersionGate(t *testing.T) {
 			"APPLE INC", "NASDAQ", // longName, primaryExchange
 			"", "", "", "", // contractMonth, industry, category, subcategory
 			"America/New_York", // timeZoneId
+			"", "",             // tradingHours, liquidHours
+			"", "", // economic value rule and multiplier
+			"0",                      // security id count
+			"2147483647", "", "", "", // aggGroup, underSymbol, underSecType, marketRuleIds
+			"", "", // realExpirationDate, stockType
+			"0.0001", "0.0001", "1", // size rules
 		)
 		return f
 	}
@@ -295,6 +301,50 @@ func TestContractDetailsVersionGate(t *testing.T) {
 	if oldMsg.Contract != newMsg.Contract || oldMsg.MinTick != newMsg.MinTick ||
 		oldMsg.LongName != newMsg.LongName || oldMsg.TimeZoneID != newMsg.TimeZoneID {
 		t.Fatalf("contract details overlap mismatch: old=%+v new=%+v", oldMsg, newMsg)
+	}
+	if oldMsg.LastTradeDate != "" || newMsg.LastTradeDate != "20260101" {
+		t.Fatalf("explicit last trade date gate: old=%q new=%q", oldMsg.LastTradeDate, newMsg.LastTradeDate)
+	}
+}
+
+func TestContractDetailsFundAndIneligibilityVersionGates(t *testing.T) {
+	t.Parallel()
+
+	// VTSAX values are from captures/20260415T150322Z-api_security_type_probe_matrix,
+	// server_version=200, events SHA-256 prefix 9be83e57ed176a17.
+	msg := ContractDetails{
+		Contract: Contract{Symbol: "VTSAX", SecType: "FUND", Exchange: "FUNDSERV", Currency: "USD"},
+		Fund: &FundDetails{
+			Name: "Vanguard Total Stock Market Index Fund A", Family: "Vanguard",
+			ManagementFee: "0.04", MinimumInitialPurchase: "3000",
+			MinimumSubsequentPurchase: "1", BlueSkyStates: "All",
+		},
+	}
+	at178 := encFieldsAt(t, msg, 178)
+	at179 := encFieldsAt(t, msg, 179)
+	if len(at179)-len(at178) != 17 {
+		t.Fatalf("178->179 fund tail delta = %d, want 17", len(at179)-len(at178))
+	}
+	if got := at179[len(at179)-17]; got != "Vanguard Total Stock Market Index Fund A" {
+		t.Fatalf("first fund field = %q", got)
+	}
+	at185 := encFieldsAt(t, msg, 185)
+	at186 := encFieldsAt(t, msg, 186)
+	if len(at186)-len(at185) != 1 || at186[len(at186)-1] != "0" {
+		t.Fatalf("185->186 ineligibility count gate: sv185=%v sv186=%v", at185, at186)
+	}
+}
+
+func TestContractDetailsRejectsTrailingFields(t *testing.T) {
+	t.Parallel()
+
+	payload, err := Encode(200, ContractDetails{Contract: Contract{Symbol: "AAPL", SecType: "STK"}})
+	if err != nil {
+		t.Fatalf("Encode: %v", err)
+	}
+	payload = append(payload, []byte("unexpected\x00")...)
+	if _, err := DecodeBatch(200, payload); err == nil {
+		t.Fatal("DecodeBatch() error = nil, want trailing-field rejection")
 	}
 }
 

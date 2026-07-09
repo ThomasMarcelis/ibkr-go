@@ -25,6 +25,58 @@ func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 	}
 }
 
+func TestFromCodecContractDetailsProjectsLiveFundMetadata(t *testing.T) {
+	t.Parallel()
+
+	// VTSAX from captures/20260415T150322Z-api_security_type_probe_matrix,
+	// server_version=200, events SHA-256 prefix 9be83e57ed176a17.
+	detail, err := fromCodecContractDetails(codec.ContractDetails{
+		Contract: codec.Contract{
+			ConID: 48013650, Symbol: "VTSAX", SecType: "FUND", Exchange: "FUNDSERV",
+			Currency: "USD", LocalSymbol: "922908728", TradingClass: "922908728",
+		},
+		MarketName:             "VTSAX",
+		MinTick:                "0.01",
+		PriceMagnifier:         1,
+		OrderTypes:             "AD,ALERT,ALLOC,BASKET,DAY,DEACT,DEACTDIS,FUNDSWAP,MKT,NONALGO,WHATIF",
+		ValidExchanges:         "FUNDSERV",
+		LongName:               "Vanguard Total Stock Market Index Fund A (Vanguard)",
+		TimeZoneID:             "US/Eastern",
+		SecurityIDs:            []codec.TagValue{{Tag: "ISIN", Value: "US9229087286"}},
+		AggGroup:               2147483647,
+		MarketRuleIDs:          "2963",
+		MinSize:                "0.001",
+		SizeIncrement:          "0.001",
+		SuggestedSizeIncrement: "1",
+		Fund: &codec.FundDetails{
+			Name: "Vanguard Total Stock Market Index Fund A", Family: "Vanguard",
+			ManagementFee: "0.04", MinimumInitialPurchase: "3000",
+			MinimumSubsequentPurchase: "1", BlueSkyStates: "All",
+		},
+	})
+	if err != nil {
+		t.Fatalf("fromCodecContractDetails() error = %v", err)
+	}
+	if detail.AggGroup != nil {
+		t.Errorf("AggGroup = %v, want nil for live max-int sentinel", detail.AggGroup)
+	}
+	if len(detail.ValidExchanges) != 1 || detail.ValidExchanges[0] != (ContractExchange{Exchange: "FUNDSERV", MarketRuleID: 2963}) {
+		t.Errorf("ValidExchanges = %#v", detail.ValidExchanges)
+	}
+	if len(detail.OrderTypes) != 11 || detail.OrderTypes[7] != "FUNDSWAP" {
+		t.Errorf("OrderTypes = %#v", detail.OrderTypes)
+	}
+	if detail.MinSize == nil || detail.MinSize.String() != "0.001" || detail.SizeIncrement == nil || detail.SuggestedSizeIncrement == nil {
+		t.Errorf("size rules = %v/%v/%v", detail.MinSize, detail.SizeIncrement, detail.SuggestedSizeIncrement)
+	}
+	if len(detail.SecurityIDs) != 1 || detail.SecurityIDs[0] != (TagValue{Tag: "ISIN", Value: "US9229087286"}) {
+		t.Errorf("SecurityIDs = %#v", detail.SecurityIDs)
+	}
+	if detail.Fund == nil || detail.Fund.Family != "Vanguard" || detail.Fund.ManagementFee != "0.04" || detail.Fund.MinimumInitialPurchase != "3000" {
+		t.Errorf("Fund = %#v", detail.Fund)
+	}
+}
+
 func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) {
 	t.Parallel()
 

@@ -141,6 +141,71 @@ func TestCaptureDecode_ContractDetails(t *testing.T) {
 	if m.TimeZoneID != "US/Eastern" {
 		t.Errorf("TimeZoneID = %q, want US/Eastern", m.TimeZoneID)
 	}
+	if m.PriceMagnifier != 1 || m.UnderConID != 0 || m.ContractMonth != "" {
+		t.Errorf("numeric/reference metadata = magnifier %d underConID %d month %q", m.PriceMagnifier, m.UnderConID, m.ContractMonth)
+	}
+	if m.OrderTypes == "" || m.ValidExchanges == "" || m.MarketRuleIDs == "" {
+		t.Errorf("capability metadata missing: orderTypes=%t exchanges=%t rules=%t", m.OrderTypes != "", m.ValidExchanges != "", m.MarketRuleIDs != "")
+	}
+	if m.Industry != "Technology" || m.Category != "Computers" || m.Subcategory != "Computers" {
+		t.Errorf("classification = %q/%q/%q", m.Industry, m.Category, m.Subcategory)
+	}
+	if m.TradingHours == "" || m.LiquidHours == "" {
+		t.Errorf("hours missing: trading=%t liquid=%t", m.TradingHours != "", m.LiquidHours != "")
+	}
+	if len(m.SecurityIDs) != 1 || m.SecurityIDs[0] != (TagValue{Tag: "ISIN", Value: "US0378331005"}) {
+		t.Errorf("SecurityIDs = %#v, want live ISIN", m.SecurityIDs)
+	}
+	if m.AggGroup != 1 || m.StockType != "COMMON" || m.MinSize != "0.0001" || m.SizeIncrement != "0.0001" || m.SuggestedSizeIncrement != "100" {
+		t.Errorf("tail = agg %d stock %q sizes %q/%q/%q", m.AggGroup, m.StockType, m.MinSize, m.SizeIncrement, m.SuggestedSizeIncrement)
+	}
+	if m.Fund != nil || len(m.IneligibilityReasons) != 0 {
+		t.Errorf("stock optional facets = fund %#v ineligibility %#v", m.Fund, m.IneligibilityReasons)
+	}
+}
+
+func TestCaptureDecode_ContractDetailsFund(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260415T150322Z-api_security_type_probe_matrix, server_version=200,
+	// request 11. events.jsonl SHA-256 9be83e57ed176a17ec0c31a87e2c19220685e91b5d817dfebc88d8317cca024e.
+	hours := "20260415:1559-20260415:2200;20260416:1559-20260416:2200;20260417:1559-20260417:2200;20260418:CLOSED;20260419:CLOSED;20260420:1559-20260420:2200"
+	fields := []string{
+		"10", "11", "VTSAX", "FUND", "", "", "0", "", "FUNDSERV", "USD",
+		"922908728", "VTSAX", "922908728", "48013650", "0.01", "",
+		"AD,ALERT,ALLOC,BASKET,DAY,DEACT,DEACTDIS,FUNDSWAP,MKT,NONALGO,WHATIF", "FUNDSERV", "1", "0",
+		"Vanguard Total Stock Market Index Fund A (Vanguard)", "", "", "", "", "", "US/Eastern",
+		hours, hours, "", "", "1", "ISIN", "US9229087286", "2147483647", "", "", "2963", "", "",
+		"0.001", "0.001", "1",
+		"Vanguard Total Stock Market Index Fund A", "Vanguard", "", "0", "0", "0", "0.04",
+		"0", "0", "0", "10000000", "3000", "1", "All", "ARE,ASM,FSM,GUM,MHL,MNP,PLW,PRI,VIR", "", "", "0",
+	}
+	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(ContractDetails)
+	if !ok {
+		t.Fatalf("type = %T, want ContractDetails", msgs[0])
+	}
+	if m.Contract.Symbol != "VTSAX" || m.Contract.SecType != "FUND" || m.Contract.ConID != 48013650 {
+		t.Fatalf("contract = %+v, want live VTSAX FUND", m.Contract)
+	}
+	if m.Fund == nil {
+		t.Fatal("Fund = nil, want live mutual-fund metadata")
+	}
+	if m.Fund.Name != "Vanguard Total Stock Market Index Fund A" || m.Fund.Family != "Vanguard" || m.Fund.ManagementFee != "0.04" {
+		t.Errorf("fund identity/fee = %q/%q/%q", m.Fund.Name, m.Fund.Family, m.Fund.ManagementFee)
+	}
+	if m.Fund.MinimumInitialPurchase != "3000" || m.Fund.MinimumSubsequentPurchase != "1" || m.Fund.BlueSkyStates != "All" {
+		t.Errorf("fund purchase metadata = %q/%q/%q", m.Fund.MinimumInitialPurchase, m.Fund.MinimumSubsequentPurchase, m.Fund.BlueSkyStates)
+	}
+	if m.MinSize != "0.001" || m.SizeIncrement != "0.001" || m.SuggestedSizeIncrement != "1" {
+		t.Errorf("size rules = %q/%q/%q", m.MinSize, m.SizeIncrement, m.SuggestedSizeIncrement)
+	}
 }
 
 func TestCaptureDecode_ExecutionDetailNativeTime(t *testing.T) {
@@ -1007,8 +1072,8 @@ func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 
 	// The v200 contractData layout carries the contract multiplier in the
 	// slot directly after minTick (the slot the decoder used to skip as
-	// "mdSizeMultiplier"; mdSizeMultiplier left the wire at server version
-	// 152 and at v200 this position is the multiplier). Both frames below
+	// "mdSizeMultiplier"; mdSizeMultiplier left the wire at SIZE_RULES (164)
+	// and at v200 this position is the multiplier). Both frames below
 	// are full msg_id=10 frames from live IB Gateway (server_version 200),
 	// reconstructed from the captured length-prefixed stream.
 	tests := []struct {
@@ -1020,6 +1085,9 @@ func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 		wantMultiplier string
 		wantLongName   string
 		wantTimeZoneID string
+		wantExpiry     string
+		wantTradeTime  string
+		wantUnder      string
 	}{
 		{
 			// captures/20260405T214941Z-contract_details_aapl_opt,
@@ -1049,6 +1117,8 @@ func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 			wantMultiplier: "100",
 			wantLongName:   "APPLE INC",
 			wantTimeZoneID: "US/Eastern",
+			wantExpiry:     "20260618",
+			wantUnder:      "AAPL",
 		},
 		{
 			// captures/20260405T215018Z-contract_details_es_fut,
@@ -1077,6 +1147,9 @@ func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 			wantMultiplier: "50",
 			wantLongName:   "E-mini S&P 500",
 			wantTimeZoneID: "US/Central",
+			wantExpiry:     "20261218",
+			wantTradeTime:  "08:30:00",
+			wantUnder:      "ES",
 		},
 	}
 	for _, tt := range tests {
@@ -1111,6 +1184,12 @@ func TestCaptureDecode_ContractDetailsMultiplier(t *testing.T) {
 			}
 			if m.TimeZoneID != tt.wantTimeZoneID {
 				t.Errorf("TimeZoneID = %q, want %q", m.TimeZoneID, tt.wantTimeZoneID)
+			}
+			if m.Contract.Expiry != tt.wantExpiry || m.LastTradeDate != tt.wantExpiry || m.LastTradeTime != tt.wantTradeTime {
+				t.Errorf("expiry fields = %q/%q/%q, want %q/%q/%q", m.Contract.Expiry, m.LastTradeDate, m.LastTradeTime, tt.wantExpiry, tt.wantExpiry, tt.wantTradeTime)
+			}
+			if m.UnderSymbol != tt.wantUnder {
+				t.Errorf("UnderSymbol = %q, want %q", m.UnderSymbol, tt.wantUnder)
 			}
 		})
 	}

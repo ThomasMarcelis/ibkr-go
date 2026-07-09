@@ -3,6 +3,9 @@ package ibkr
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
+	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/shopspring/decimal"
@@ -363,11 +366,122 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 	if err != nil {
 		return ContractDetails{}, err
 	}
+	economicValueMultiplier, err := parseOptionalDecimalPointer(m.EconomicValueMultiplier, "contract details economic value multiplier")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	minSize, err := parseOptionalDecimalPointer(m.MinSize, "contract details minimum size")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	sizeIncrement, err := parseOptionalDecimalPointer(m.SizeIncrement, "contract details size increment")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	suggestedSizeIncrement, err := parseOptionalDecimalPointer(m.SuggestedSizeIncrement, "contract details suggested size increment")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	var aggGroup *int
+	if m.AggGroup != math.MaxInt32 {
+		aggGroup = new(m.AggGroup)
+	}
+
+	exchanges, err := contractExchanges(m.ValidExchanges, m.MarketRuleIDs)
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	var securityIDs []TagValue
+	if len(m.SecurityIDs) > 0 {
+		securityIDs = make([]TagValue, len(m.SecurityIDs))
+	}
+	for i, id := range m.SecurityIDs {
+		securityIDs[i] = TagValue{Tag: id.Tag, Value: id.Value}
+	}
+	var ineligibilityReasons []IneligibilityReason
+	if len(m.IneligibilityReasons) > 0 {
+		ineligibilityReasons = make([]IneligibilityReason, len(m.IneligibilityReasons))
+	}
+	for i, reason := range m.IneligibilityReasons {
+		ineligibilityReasons[i] = IneligibilityReason{ID: reason.ID, Description: reason.Description}
+	}
+	var fund *FundDetails
+	if m.Fund != nil {
+		fund = &FundDetails{
+			Name:                      m.Fund.Name,
+			Family:                    m.Fund.Family,
+			Type:                      m.Fund.Type,
+			FrontLoad:                 m.Fund.FrontLoad,
+			BackLoad:                  m.Fund.BackLoad,
+			BackLoadTimeInterval:      m.Fund.BackLoadTimeInterval,
+			ManagementFee:             m.Fund.ManagementFee,
+			Closed:                    m.Fund.Closed,
+			ClosedForNewInvestors:     m.Fund.ClosedForNewInvestors,
+			ClosedForNewMoney:         m.Fund.ClosedForNewMoney,
+			NotifyAmount:              m.Fund.NotifyAmount,
+			MinimumInitialPurchase:    m.Fund.MinimumInitialPurchase,
+			MinimumSubsequentPurchase: m.Fund.MinimumSubsequentPurchase,
+			BlueSkyStates:             m.Fund.BlueSkyStates,
+			BlueSkyTerritories:        m.Fund.BlueSkyTerritories,
+			DistributionPolicy:        m.Fund.DistributionPolicy,
+			AssetType:                 m.Fund.AssetType,
+		}
+	}
+
 	return ContractDetails{
-		Contract:   fromCodecContract(m.Contract),
-		MarketName: m.MarketName,
-		LongName:   m.LongName,
-		MinTick:    minTick,
-		TimeZoneID: m.TimeZoneID,
+		Contract:                fromCodecContract(m.Contract),
+		MarketName:              m.MarketName,
+		LongName:                m.LongName,
+		MinTick:                 minTick,
+		PriceMagnifier:          m.PriceMagnifier,
+		OrderTypes:              splitContractList(m.OrderTypes),
+		ValidExchanges:          exchanges,
+		UnderConID:              m.UnderConID,
+		ContractMonth:           m.ContractMonth,
+		Industry:                m.Industry,
+		Category:                m.Category,
+		Subcategory:             m.Subcategory,
+		TimeZoneID:              m.TimeZoneID,
+		TradingHours:            m.TradingHours,
+		LiquidHours:             m.LiquidHours,
+		EconomicValueRule:       m.EconomicValueRule,
+		EconomicValueMultiplier: economicValueMultiplier,
+		SecurityIDs:             securityIDs,
+		AggGroup:                aggGroup,
+		UnderSymbol:             m.UnderSymbol,
+		UnderSecType:            SecType(m.UnderSecType),
+		RealExpirationDate:      m.RealExpirationDate,
+		LastTradeDate:           m.LastTradeDate,
+		LastTradeTime:           m.LastTradeTime,
+		StockType:               m.StockType,
+		MinSize:                 minSize,
+		SizeIncrement:           sizeIncrement,
+		SuggestedSizeIncrement:  suggestedSizeIncrement,
+		Fund:                    fund,
+		IneligibilityReasons:    ineligibilityReasons,
 	}, nil
+}
+
+func contractExchanges(validExchanges, marketRuleIDs string) ([]ContractExchange, error) {
+	exchanges := splitContractList(validExchanges)
+	rules := splitContractList(marketRuleIDs)
+	if len(exchanges) != len(rules) {
+		return nil, fmt.Errorf("ibkr: contract details: %d valid exchanges but %d market rule ids", len(exchanges), len(rules))
+	}
+	result := make([]ContractExchange, len(exchanges))
+	for i := range exchanges {
+		marketRuleID, err := strconv.Atoi(rules[i])
+		if err != nil {
+			return nil, fmt.Errorf("ibkr: contract details market rule id %q: %w", rules[i], err)
+		}
+		result[i] = ContractExchange{Exchange: exchanges[i], MarketRuleID: marketRuleID}
+	}
+	return result, nil
+}
+
+func splitContractList(value string) []string {
+	if value == "" {
+		return nil
+	}
+	return strings.Split(value, ",")
 }

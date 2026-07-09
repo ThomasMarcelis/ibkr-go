@@ -2,6 +2,9 @@ package codec
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
+	"unicode/utf16"
 )
 
 // Contract holds the fields used for contract identification on the wire.
@@ -43,12 +46,63 @@ func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 }
 
 type ContractDetails struct {
-	ReqID      int
-	Contract   Contract
-	MarketName string
-	MinTick    string
-	LongName   string
-	TimeZoneID string
+	ReqID                   int
+	Contract                Contract
+	MarketName              string
+	MinTick                 string
+	PriceMagnifier          int
+	OrderTypes              string
+	ValidExchanges          string
+	UnderConID              int
+	LongName                string
+	ContractMonth           string
+	Industry                string
+	Category                string
+	Subcategory             string
+	TimeZoneID              string
+	TradingHours            string
+	LiquidHours             string
+	EconomicValueRule       string
+	EconomicValueMultiplier string
+	SecurityIDs             []TagValue
+	AggGroup                int
+	UnderSymbol             string
+	UnderSecType            string
+	MarketRuleIDs           string
+	RealExpirationDate      string
+	LastTradeDate           string
+	LastTradeTime           string
+	StockType               string
+	MinSize                 string
+	SizeIncrement           string
+	SuggestedSizeIncrement  string
+	Fund                    *FundDetails
+	IneligibilityReasons    []IneligibilityReason
+}
+
+type FundDetails struct {
+	Name                      string
+	Family                    string
+	Type                      string
+	FrontLoad                 string
+	BackLoad                  string
+	BackLoadTimeInterval      string
+	ManagementFee             string
+	Closed                    bool
+	ClosedForNewInvestors     bool
+	ClosedForNewMoney         bool
+	NotifyAmount              string
+	MinimumInitialPurchase    string
+	MinimumSubsequentPurchase string
+	BlueSkyStates             string
+	BlueSkyTerritories        string
+	DistributionPolicy        string
+	AssetType                 string
+}
+
+type IneligibilityReason struct {
+	ID          string
+	Description string
 }
 
 type ContractDetailsEnd struct {
@@ -148,24 +202,17 @@ type SmartComponentsResponse struct {
 	Components []SmartComponentEntry
 }
 
-// v200 wire layout verified against live IB Gateway capture.
+// v176..v200 classic layout. Explicit codec literals freeze live stock,
+// option, future, and mutual-fund responses; index and crypto responses are
+// additionally present in the checked-in capture corpus.
 func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
-	// [10, reqID, symbol, secType, lastTradeDate, lastTradeDateOrContractMonth,
-	//   strike, right, exchange, currency, localSymbol, marketName, tradingClass,
-	//   conID, minTick, multiplier, orderTypes, validExchanges,
-	//   priceMagnifier, underConID, longName, primaryExchange, contractMonth,
-	//   industry, category, subcategory, timeZoneID, ...]
-	// The slot after minTick is the contract multiplier: mdSizeMultiplier
-	// left the wire at server version 164 (size rules), and the v200 captures carry
-	// "100" there for AAPL options (20260405T214941Z, sha256 prefix
-	// 3dcaf0b74a7c27a4) and "50" for ES futures (20260405T215018Z,
-	// sha256 prefix e863bfbafe48370f).
 	reqID, _ := r.ReadInt()
 	symbol := r.ReadString()
 	secType := r.ReadString()
-	expiry := r.ReadString() // lastTradeDateOrContractMonth (readLastTradeDate)
+	expiry, lastTradeTime := splitLastTradeDate(r.ReadString())
+	lastTradeDate := ""
 	if sv >= MinServerVersionLastTradeDate {
-		r.Skip(1) // explicit lastTradeDate (decoder.py:509-510)
+		lastTradeDate = r.ReadString()
 	}
 	strike := r.ReadString()
 	right := r.ReadString()
@@ -176,12 +223,100 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	tradingClass := r.ReadString()
 	conID, _ := r.ReadInt()
 	minTick := r.ReadString()
+	// mdSizeMultiplier left the wire at SIZE_RULES (164). In every supported
+	// server version this slot is the contract multiplier.
 	multiplier := r.ReadString()
-	r.Skip(4) // orderTypes, validExchanges, priceMagnifier, underConID
-	longName := r.ReadString()
+	orderTypes := r.ReadString()
+	validExchanges := r.ReadString()
+	priceMagnifier, _ := r.ReadInt()
+	underConID, _ := r.ReadInt()
+	longName := decodeUnicodeEscapes(r.ReadString())
 	primaryExchange := r.ReadString()
-	r.Skip(4) // contractMonth, industry, category, subcategory
+	contractMonth := r.ReadString()
+	industry := r.ReadString()
+	category := r.ReadString()
+	subcategory := r.ReadString()
 	timeZoneID := r.ReadString()
+	tradingHours := r.ReadString()
+	liquidHours := r.ReadString()
+	economicValueRule := r.ReadString()
+	economicValueMultiplier := r.ReadString()
+
+	securityIDCount, err := r.ReadCount("contract security id count")
+	if err != nil {
+		return nil, err
+	}
+	trailerFields := 9
+	if sv >= MinServerVersionFundDataFields && secType == "FUND" {
+		trailerFields += 17
+	}
+	if sv >= MinServerVersionIneligibilityReasons {
+		trailerFields++
+	}
+	if err := r.RequireFixedEntryFields("contract security ids", securityIDCount, 2, trailerFields); err != nil {
+		return nil, err
+	}
+	var securityIDs []TagValue
+	if securityIDCount > 0 {
+		securityIDs = make([]TagValue, securityIDCount)
+	}
+	for i := range securityIDs {
+		securityIDs[i] = TagValue{Tag: r.ReadString(), Value: r.ReadString()}
+	}
+
+	aggGroup, _ := r.ReadInt()
+	underSymbol := r.ReadString()
+	underSecType := r.ReadString()
+	marketRuleIDs := r.ReadString()
+	realExpirationDate := r.ReadString()
+	stockType := r.ReadString()
+	minSize := r.ReadDecimal()
+	sizeIncrement := r.ReadDecimal()
+	suggestedSizeIncrement := r.ReadDecimal()
+
+	var fund *FundDetails
+	if sv >= MinServerVersionFundDataFields && secType == "FUND" {
+		fund = &FundDetails{
+			Name:                 r.ReadString(),
+			Family:               r.ReadString(),
+			Type:                 r.ReadString(),
+			FrontLoad:            r.ReadString(),
+			BackLoad:             r.ReadString(),
+			BackLoadTimeInterval: r.ReadString(),
+			ManagementFee:        r.ReadString(),
+		}
+		fund.Closed, _ = r.ReadBool()
+		fund.ClosedForNewInvestors, _ = r.ReadBool()
+		fund.ClosedForNewMoney, _ = r.ReadBool()
+		fund.NotifyAmount = r.ReadString()
+		fund.MinimumInitialPurchase = r.ReadString()
+		fund.MinimumSubsequentPurchase = r.ReadString()
+		fund.BlueSkyStates = r.ReadString()
+		fund.BlueSkyTerritories = r.ReadString()
+		fund.DistributionPolicy = r.ReadString()
+		fund.AssetType = r.ReadString()
+	}
+
+	var ineligibilityReasons []IneligibilityReason
+	if sv >= MinServerVersionIneligibilityReasons {
+		count, err := r.ReadCount("contract ineligibility reason count")
+		if err != nil {
+			return nil, err
+		}
+		if err := r.RequireFixedEntryFields("contract ineligibility reasons", count, 2, 0); err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			ineligibilityReasons = make([]IneligibilityReason, count)
+		}
+		for i := range ineligibilityReasons {
+			ineligibilityReasons[i] = IneligibilityReason{ID: r.ReadString(), Description: r.ReadString()}
+		}
+	}
+	if remaining := r.Remaining(); remaining != 0 {
+		return nil, fmt.Errorf("ibkr codec: contract details has %d trailing fields", remaining)
+	}
+
 	return []Message{ContractDetails{
 		ReqID: reqID,
 		Contract: Contract{
@@ -193,24 +328,168 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 			PrimaryExchange: primaryExchange,
 		},
 		MarketName: marketName, MinTick: minTick,
-		LongName: longName, TimeZoneID: timeZoneID,
+		PriceMagnifier: priceMagnifier, OrderTypes: orderTypes,
+		ValidExchanges: validExchanges, UnderConID: underConID,
+		LongName: longName, ContractMonth: contractMonth,
+		Industry: industry, Category: category, Subcategory: subcategory,
+		TimeZoneID: timeZoneID, TradingHours: tradingHours, LiquidHours: liquidHours,
+		EconomicValueRule: economicValueRule, EconomicValueMultiplier: economicValueMultiplier,
+		SecurityIDs: securityIDs, AggGroup: aggGroup,
+		UnderSymbol: underSymbol, UnderSecType: underSecType,
+		MarketRuleIDs: marketRuleIDs, RealExpirationDate: realExpirationDate,
+		LastTradeDate: lastTradeDate, LastTradeTime: lastTradeTime, StockType: stockType,
+		MinSize: minSize, SizeIncrement: sizeIncrement, SuggestedSizeIncrement: suggestedSizeIncrement,
+		Fund: fund, IneligibilityReasons: ineligibilityReasons,
 	}}, nil
 }
 
 func (m ContractDetails) encodeWire(sv int) ([]string, error) {
-	return []string{
-		itoa(InContractData), itoa(m.ReqID),
-		m.Contract.Symbol, m.Contract.SecType, m.Contract.Expiry,
-		m.Contract.Expiry, // lastTradeDateOrContractMonth (duplicate)
-		m.Contract.Strike, m.Contract.Right,
-		m.Contract.Exchange, m.Contract.Currency,
-		m.Contract.LocalSymbol, m.MarketName, m.Contract.TradingClass,
-		itoa(m.Contract.ConID), m.MinTick,
-		m.Contract.Multiplier, "", "", "", "",
-		m.LongName, m.Contract.PrimaryExchange,
-		"", "", "", "",
-		m.TimeZoneID,
-	}, nil
+	w := fieldWriter{}
+	w.WriteInt(InContractData)
+	w.WriteInt(m.ReqID)
+	w.WriteString(m.Contract.Symbol)
+	w.WriteString(m.Contract.SecType)
+	lastTradeDate := m.Contract.Expiry
+	if m.LastTradeTime != "" && !strings.ContainsAny(lastTradeDate, " -") {
+		lastTradeDate += " " + m.LastTradeTime
+		if m.TimeZoneID != "" {
+			lastTradeDate += " " + m.TimeZoneID
+		}
+	}
+	w.WriteString(lastTradeDate)
+	if sv >= MinServerVersionLastTradeDate {
+		explicitLastTradeDate := m.LastTradeDate
+		if explicitLastTradeDate == "" {
+			explicitLastTradeDate, _ = splitLastTradeDate(m.Contract.Expiry)
+		}
+		w.WriteString(explicitLastTradeDate)
+	}
+	w.WriteString(m.Contract.Strike)
+	w.WriteString(m.Contract.Right)
+	w.WriteString(m.Contract.Exchange)
+	w.WriteString(m.Contract.Currency)
+	w.WriteString(m.Contract.LocalSymbol)
+	w.WriteString(m.MarketName)
+	w.WriteString(m.Contract.TradingClass)
+	w.WriteInt(m.Contract.ConID)
+	w.WriteString(m.MinTick)
+	w.WriteString(m.Contract.Multiplier)
+	w.WriteString(m.OrderTypes)
+	w.WriteString(m.ValidExchanges)
+	w.WriteInt(m.PriceMagnifier)
+	w.WriteInt(m.UnderConID)
+	w.WriteString(m.LongName)
+	w.WriteString(m.Contract.PrimaryExchange)
+	w.WriteString(m.ContractMonth)
+	w.WriteString(m.Industry)
+	w.WriteString(m.Category)
+	w.WriteString(m.Subcategory)
+	w.WriteString(m.TimeZoneID)
+	w.WriteString(m.TradingHours)
+	w.WriteString(m.LiquidHours)
+	w.WriteString(m.EconomicValueRule)
+	w.WriteString(m.EconomicValueMultiplier)
+	w.WriteInt(len(m.SecurityIDs))
+	for _, id := range m.SecurityIDs {
+		w.WriteString(id.Tag)
+		w.WriteString(id.Value)
+	}
+	w.WriteInt(m.AggGroup)
+	w.WriteString(m.UnderSymbol)
+	w.WriteString(m.UnderSecType)
+	w.WriteString(m.MarketRuleIDs)
+	w.WriteString(m.RealExpirationDate)
+	w.WriteString(m.StockType)
+	w.WriteDecimal(m.MinSize)
+	w.WriteDecimal(m.SizeIncrement)
+	w.WriteDecimal(m.SuggestedSizeIncrement)
+	if sv >= MinServerVersionFundDataFields && m.Contract.SecType == "FUND" {
+		fund := m.Fund
+		if fund == nil {
+			fund = &FundDetails{}
+		}
+		w.WriteString(fund.Name)
+		w.WriteString(fund.Family)
+		w.WriteString(fund.Type)
+		w.WriteString(fund.FrontLoad)
+		w.WriteString(fund.BackLoad)
+		w.WriteString(fund.BackLoadTimeInterval)
+		w.WriteString(fund.ManagementFee)
+		w.WriteBool(fund.Closed)
+		w.WriteBool(fund.ClosedForNewInvestors)
+		w.WriteBool(fund.ClosedForNewMoney)
+		w.WriteString(fund.NotifyAmount)
+		w.WriteString(fund.MinimumInitialPurchase)
+		w.WriteString(fund.MinimumSubsequentPurchase)
+		w.WriteString(fund.BlueSkyStates)
+		w.WriteString(fund.BlueSkyTerritories)
+		w.WriteString(fund.DistributionPolicy)
+		w.WriteString(fund.AssetType)
+	}
+	if sv >= MinServerVersionIneligibilityReasons {
+		w.WriteInt(len(m.IneligibilityReasons))
+		for _, reason := range m.IneligibilityReasons {
+			w.WriteString(reason.ID)
+			w.WriteString(reason.Description)
+		}
+	}
+	return w.Fields(), nil
+}
+
+func splitLastTradeDate(value string) (date, tradeTime string) {
+	var fields []string
+	if strings.Contains(value, "-") {
+		fields = strings.Split(value, "-")
+	} else {
+		fields = strings.Fields(value)
+	}
+	if len(fields) > 0 {
+		date = fields[0]
+	}
+	if len(fields) > 1 {
+		tradeTime = fields[1]
+	}
+	return date, tradeTime
+}
+
+// decodeUnicodeEscapes reverses the ASCII7 encoding used by IBKR for classic
+// string fields. The official clients decode each \uXXXX UTF-16 code unit; a
+// valid adjacent surrogate pair therefore becomes one Unicode code point.
+func decodeUnicodeEscapes(value string) string {
+	if !strings.Contains(value, `\u`) {
+		return value
+	}
+
+	var out strings.Builder
+	for len(value) > 0 {
+		escape := strings.Index(value, `\u`)
+		if escape < 0 || len(value)-escape < 6 {
+			out.WriteString(value)
+			break
+		}
+		out.WriteString(value[:escape])
+		first, err := strconv.ParseUint(value[escape+2:escape+6], 16, 16)
+		if err != nil {
+			out.WriteString(value[escape : escape+2])
+			value = value[escape+2:]
+			continue
+		}
+
+		r := rune(first)
+		consumed := escape + 6
+		if utf16.IsSurrogate(r) && len(value) >= escape+12 && value[escape+6:escape+8] == `\u` {
+			second, err := strconv.ParseUint(value[escape+8:escape+12], 16, 16)
+			if err == nil {
+				if decoded := utf16.DecodeRune(r, rune(second)); decoded != '\uFFFD' {
+					r = decoded
+					consumed = escape + 12
+				}
+			}
+		}
+		out.WriteRune(r)
+		value = value[consumed:]
+	}
+	return out.String()
 }
 
 // [52, version, reqID]

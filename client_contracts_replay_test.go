@@ -174,6 +174,28 @@ func TestContractDetailsEURUSDCashReplay(t *testing.T) {
 	if d.TimeZoneID != "US/Eastern" {
 		t.Errorf("TimeZoneID = %q, want US/Eastern", d.TimeZoneID)
 	}
+	if d.PriceMagnifier != 1 || d.AggGroup == nil || *d.AggGroup != 4 {
+		t.Errorf("numeric metadata = magnifier %d aggregate group %v", d.PriceMagnifier, d.AggGroup)
+	}
+	if len(d.ValidExchanges) != 1 || d.ValidExchanges[0] != (ibkr.ContractExchange{Exchange: "IDEALPRO", MarketRuleID: 3188}) {
+		t.Errorf("ValidExchanges = %#v", d.ValidExchanges)
+	}
+	if d.TradingHours == "" || d.LiquidHours == "" {
+		t.Errorf("hours missing: trading=%t liquid=%t", d.TradingHours != "", d.LiquidHours != "")
+	}
+	if d.MinSize == nil || d.MinSize.String() != "0.01" || d.SizeIncrement == nil || d.SuggestedSizeIncrement == nil {
+		t.Errorf("size rules = %v/%v/%v", d.MinSize, d.SizeIncrement, d.SuggestedSizeIncrement)
+	}
+	hasCashQuantity := false
+	for _, orderType := range d.OrderTypes {
+		if orderType == "CASHQTY" {
+			hasCashQuantity = true
+			break
+		}
+	}
+	if !hasCashQuantity {
+		t.Errorf("OrderTypes = %#v, want live CASHQTY capability", d.OrderTypes)
+	}
 	if d.Expiry != "" || d.Right != "" {
 		t.Errorf("Expiry/Right = %q/%q, want empty for CASH", d.Expiry, d.Right)
 	}
@@ -215,9 +237,8 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 	if front.LocalSymbol != "ESZ6" {
 		t.Errorf("front LocalSymbol = %q, want ESZ6", front.LocalSymbol)
 	}
-	// v200 lastTradeDate carries the full session timestamp.
-	if front.Expiry != "20261218 08:30:00 US/Central" {
-		t.Errorf("front Expiry = %q, want 20261218 08:30:00 US/Central", front.Expiry)
+	if front.Expiry != "20261218" || front.LastTradeDate != "20261218" || front.LastTradeTime != "08:30:00" {
+		t.Errorf("front expiry fields = %q/%q/%q, want 20261218/20261218/08:30:00", front.Expiry, front.LastTradeDate, front.LastTradeTime)
 	}
 	if front.Exchange != "CME" {
 		t.Errorf("front Exchange = %q, want CME", front.Exchange)
@@ -254,8 +275,8 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 	if last.LocalSymbol != "ESM1" {
 		t.Errorf("last LocalSymbol = %q, want ESM1", last.LocalSymbol)
 	}
-	if last.Expiry != "20310620 08:30:00 US/Central" {
-		t.Errorf("last Expiry = %q, want 20310620 08:30:00 US/Central", last.Expiry)
+	if last.Expiry != "20310620" || last.LastTradeDate != "20310620" || last.LastTradeTime != "08:30:00" {
+		t.Errorf("last expiry fields = %q/%q/%q, want 20310620/20310620/08:30:00", last.Expiry, last.LastTradeDate, last.LastTradeTime)
 	}
 }
 

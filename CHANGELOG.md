@@ -17,6 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Contract details now preserve the complete classic response.** The public
+  result adds order capabilities, valid exchanges paired with market-rule IDs,
+  trading and liquid hours, security IDs, underlier/classification metadata,
+  size rules, the mutual-fund facet, and ineligibility reasons. Futures no
+  longer put `YYYYMMDD HH:MM:SS Zone` into `Contract.Expiry`: expiry remains
+  date-only, while `LastTradeDate`, `LastTradeTime`, and `TimeZoneID` expose the
+  distinct IBKR fields.
+
 - **Executions now expose the complete classic server-version-200 result and
   all nine official filters.** `Execution.Symbol` moves to
   `Execution.Contract.Symbol`; the result adds the full contract, execution
