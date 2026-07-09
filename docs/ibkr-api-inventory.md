@@ -46,7 +46,7 @@ committed.
 
 | Group | Official Methods | ibkr-go Status |
 |-------|------------------|----------------|
-| Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is implemented as `Client.CurrentTime`; explicit `reqIds` is captured but has no public facade yet. `reqManagedAccts`, server log level, redirect, and old connection toggles are matrix targets or explicit non-goals. |
+| Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is implemented as `Client.CurrentTime`; `reqIds` is `Orders().RefreshOrderID`. `reqManagedAccts`, server log level, redirect, and old connection toggles are matrix targets or explicit non-goals. |
 | Verification/internal auth | `verifyRequest`, `verifyMessage`, `verifyAndAuthRequest`, `verifyAndAuthMessage` | Officially internal-purpose. Matrix as out of public scope unless live Gateway emits callbacks. |
 | Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Needs MECE coverage by live, frozen, delayed, delayed-frozen, generic tick families, snapshot, stream, and cancel. |
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
@@ -88,7 +88,7 @@ committed.
 | `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges`, `FundamentalData` |
 | `MarketData()` | `SetType`, `Quote`, `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `History()` | `Bars`, `SubscribeBars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` |
-| `Orders()` | `Place`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen`, `RefreshOpen`, `Completed`, `Executions` |
+| `Orders()` | `RefreshOrderID`, `Place`, `PlaceBracket`, `Preview`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen`, `RefreshOpen`, `Completed`, `Executions` |
 | `Options()` | `ImpliedVolatility`, `Price`, `Exercise` |
 | `News()` | `Providers`, `Article`, `Historical`, `SubscribeBulletins` |
 | `Scanner()` | `Parameters`, `SubscribeResults` |
@@ -261,7 +261,7 @@ Inbound message IDs:
 These are not all defects. They are explicit matrix targets until live evidence
 and project scope decide whether to implement, defer, or mark out of scope.
 
-- `reqIds` public facade, `reqManagedAccts`, `setServerLogLevel`.
+- `reqManagedAccts`, `setServerLogLevel`.
 - Verification/auth callbacks and redirect/reroute callbacks.
 - `tickEFP`, `tickNews`, and `deltaNeutralValidation`.
 - `bondContractDetails` as a distinct callback shape.

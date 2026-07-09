@@ -75,6 +75,7 @@ const (
 	OpGlobalCancel         OpKind = "global_cancel"
 	OpHistoricalSchedule   OpKind = "historical_schedule"
 	OpCurrentTime          OpKind = "current_time"
+	OpOrderID              OpKind = "order_id"
 )
 
 // Event is a connection lifecycle transition delivered on [Client.SessionEvents].

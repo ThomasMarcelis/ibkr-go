@@ -22,6 +22,7 @@ const (
 	singletonFA                = "fa"
 	singletonCurrentTime       = "current_time"
 	singletonCurrentTimeMillis = "current_time_millis"
+	singletonOrderID           = "order_id"
 )
 
 func (e *engine) handleIncoming(msg any) {
@@ -39,6 +40,9 @@ func (e *engine) handleIncoming(msg any) {
 		})
 		e.bootstrap.nextValidID = true
 		e.maybeReady()
+		if route, ok := e.singletons[singletonOrderID]; ok {
+			route.handle(m, e)
+		}
 		return
 	case codec.CurrentTime:
 		// CurrentTime responses arrive without a reqID. Parse the server's
@@ -181,6 +185,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			_ = e.transport.Close()
 		}
 		return
+	}
+
+	// reqIds has no request ID. The read-only Gateway's live-attested failure
+	// is req_id=-1/code 321, so it can only be attributed while the singleton
+	// refresh is active.
+	if msg.ReqID <= 0 && msg.Code == 321 {
+		if route, ok := e.singletons[singletonOrderID]; ok && route.handleAPIErr != nil {
+			route.handleAPIErr(msg, e)
+			return
+		}
 	}
 
 	// 2xxx: bootstrap/farm-status informational codes (reqID -1).

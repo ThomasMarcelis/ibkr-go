@@ -5,10 +5,8 @@
 # req_id=-1 code-321 rejection below and never sent a next_valid_id refresh
 # (the driver kept the connection open for 5 more seconds; no reply followed).
 # The paper-gateway success variant is frozen in req_ids.txt.
-# Trimmed: the driver's client [8, 1, 1] frame is omitted because no ibkr-go
-# public API emits reqIds (order ids derive from the bootstrap next_valid_id);
-# the rejection frame replays as an unsolicited push at its captured stream
-# position so the client-side handling of the frame stays frozen.
+# The captured client [8, 1, 1] frame is retained so the public refresh API can
+# replay the real rejection path.
 # Account identifiers are sanitized to the DU9000001 redaction token.
 handshake {"server_version":200,"connection_time":"20260611 09:40:47 Central European Standard Time"}
 server managed_accounts {"accounts":["DU9000001"]}
@@ -17,5 +15,6 @@ server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection
 server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1781163647352"}
 server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1781163647352"}
 
+client req_ids {"num_ids":"1"}
 server api_error {"req_id":-1,"code":321,"message":"Error validating request.-'b7' : cause - The API interface is currently in Read-Only mode.","advanced_order_reject_json":"","error_time_ms":"1781163647405"}
 disconnect

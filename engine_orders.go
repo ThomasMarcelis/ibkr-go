@@ -9,6 +9,62 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 )
 
+// RefreshOrderID asks the Gateway for a fresh next-valid order ID and updates
+// the engine's allocation seed before returning it.
+func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
+	type result struct {
+		orderID int64
+		err     error
+	}
+	resp := make(chan result, 1)
+	enqueueOneShotSetup(ctx, e, func() {
+		if !e.isReady() {
+			resp <- result{err: ErrNotReady}
+			return
+		}
+		if _, exists := e.singletons[singletonOrderID]; exists {
+			resp <- result{err: fmt.Errorf("ibkr: order ID refresh already in progress")}
+			return
+		}
+		e.singletons[singletonOrderID] = &route{
+			opKind: OpOrderID,
+			handle: func(msg any, eng *engine) {
+				m, ok := msg.(codec.NextValidID)
+				if !ok {
+					return
+				}
+				delete(eng.singletons, singletonOrderID)
+				if m.OrderID <= 0 {
+					resp <- result{err: fmt.Errorf("ibkr: invalid next valid order ID %d", m.OrderID)}
+					return
+				}
+				resp <- result{orderID: m.OrderID}
+			},
+			handleAPIErr: func(msg codec.APIError, eng *engine) {
+				delete(eng.singletons, singletonOrderID)
+				resp <- result{err: eng.apiErr(OpOrderID, msg)}
+			},
+			onDisconnect: func(eng *engine, err error) bool {
+				delete(eng.singletons, singletonOrderID)
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) { resp <- result{err: err} },
+		}
+		if err := e.sendContext(ctx, codec.ReqIDsRequest{NumIDs: 1}); err != nil {
+			delete(e.singletons, singletonOrderID)
+			resp <- result{err: err}
+		}
+	})
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { delete(e.singletons, singletonOrderID) })
+	})
+	if err != nil {
+		return 0, err
+	}
+	return out.orderID, out.err
+}
+
 func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) ([]OpenOrder, error) {
 	sub, err := e.SubscribeOpenOrders(ctx, scope)
 	if err != nil {

@@ -286,6 +286,13 @@ func (c HistoryClient) Schedule(ctx context.Context, req HistoricalScheduleReque
 // observation. Obtain one from [Client.Orders].
 type OrdersClient struct{ engine *engine }
 
+// RefreshOrderID asks the Gateway to refresh the engine's next order-ID seed.
+// The returned ID remains engine-owned and is consumed by the next placement;
+// callers do not pass it back to Place.
+func (c OrdersClient) RefreshOrderID(ctx context.Context) (int64, error) {
+	return c.engine.RefreshOrderID(ctx)
+}
+
 // Place submits an order and returns an [OrderHandle] tracking its lifecycle.
 // What-if orders are rejected here; use [OrdersClient.Preview] for a margin preview.
 func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {

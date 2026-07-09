@@ -2,6 +2,7 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -42,20 +43,49 @@ func TestCurrentTimeExplicitReplay(t *testing.T) {
 	}
 }
 
+func TestRefreshOrderIDReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "req_ids.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	orderID, err := client.Orders().RefreshOrderID(ctx)
+	if err != nil {
+		t.Fatalf("RefreshOrderID() error = %v", err)
+	}
+	if orderID != 2 {
+		t.Fatalf("RefreshOrderID() = %d, want 2", orderID)
+	}
+	if got := client.Session().NextValidID; got != 2 {
+		t.Fatalf("Session().NextValidID = %d, want 2", got)
+	}
+}
+
 // TestReqIDsReadOnlyRejectedReplay freezes the read-only-mode reqIds
-// rejection (SESS-003): the live Gateway answered the capture driver's
-// explicit reqIds with an unsolicited-shaped req_id=-1 code-321 error and
-// never sent a next_valid_id refresh. No ibkr-go public API emits reqIds
-// (order ids derive from the bootstrap next_valid_id), so the transcript
-// replays the rejection as an unsolicited push and this test pins the
-// client-side surface: the frame is dropped without a session event, a state
-// change, or a NextValidID perturbation. Capture 20260611T074047Z-req_ids.
+// rejection (SESS-003): RefreshOrderID sends the captured reqIds frame, the
+// Gateway answers with req_id=-1/code 321, and the one-shot returns that real
+// APIError without changing the allocation seed. Capture
+// 20260611T074047Z-req_ids.
 func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "req_ids_read_only.txt")
 	defer client.Close()
 	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := client.Orders().RefreshOrderID(ctx)
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok {
+		t.Fatalf("RefreshOrderID() error = %v, want *APIError", err)
+	}
+	if apiErr.Code != 321 || apiErr.OpKind != ibkr.OpOrderID {
+		t.Fatalf("RefreshOrderID() error = %#v, want code 321 op %s", apiErr, ibkr.OpOrderID)
+	}
 
 	// The transcript ends with the gateway disconnect. With ReconnectOff the
 	// engine drains every received frame (farm statuses, then the code-321
@@ -88,8 +118,8 @@ func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 			t.Errorf("farm-status code %d not observed in session events", code)
 		}
 	}
-	// The req_id=-1 code-321 rejection has no public surface: it is neither
-	// routed to a request nor emitted as a session event.
+	// The req_id=-1 code-321 rejection belongs to RefreshOrderID and is not
+	// duplicated as a session event.
 	if codes[321] {
 		t.Error("code 321 surfaced as a session event, want the req_id=-1 rejection dropped")
 	}
