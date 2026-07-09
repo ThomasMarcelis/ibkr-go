@@ -73,7 +73,7 @@ committed.
 | Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Implemented except bond-specific callback is represented through generic contract details only if live wire confirms same path. Needs explicit bond row. |
 | Historical | `historicalData`, `historicalDataEnd`, `historicalDataUpdate`, `historicalSchedule`, `headTimestamp`, `histogramData`, `historicalTicks`, `historicalTicksBidAsk`, `historicalTicksLast`, `historicalNews`, `historicalNewsEnd` | Implemented. |
 | Accounts/portfolio | `accountSummary`, `accountSummaryEnd`, `updateAccountValue`, `updatePortfolio`, `updateAccountTime`, `accountDownloadEnd`, `position`, `positionEnd`, `positionMulti`, `positionMultiEnd`, `accountUpdateMulti`, `accountUpdateMultiEnd`, `pnl`, `pnlSingle`, `familyCodes` | Implemented. Needs richer live scenarios. |
-| Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed order details are simplified. |
+| Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed-order wire decoding is exact; the public result still exposes a common subset. |
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
 | News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has live capture coverage through `api_news_article_aapl`; invalid article/provider variants remain matrix work. |
 | FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented; `replaceFAEnd` decoded and routed by req_id (2026-07-04). |
@@ -265,7 +265,7 @@ and project scope decide whether to implement, defer, or mark out of scope.
 - Verification/auth callbacks and redirect/reroute callbacks.
 - `tickEFP`, `tickNews`, and `deltaNeutralValidation`.
 - `bondContractDetails` as a distinct callback shape.
-- `orderBound`, completed-order full detail extraction, and rare OpenOrder
+- `orderBound`, completed-order full-detail public projection, and rare OpenOrder
   branches.
 - Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
   order, soft-dollar-on-order, and advanced-reject override order branches.

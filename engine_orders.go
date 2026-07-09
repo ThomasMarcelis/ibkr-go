@@ -318,12 +318,6 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 						resp <- result{err: err}
 						return
 					}
-					remaining, err := parseOptionalDecimal(m.Remaining, "completed order remaining")
-					if err != nil {
-						delete(eng.singletons, singletonCompletedOrders)
-						resp <- result{err: err}
-						return
-					}
 					collected = append(collected, CompletedOrderResult{
 						Contract:  fromCodecContract(m.Contract),
 						Action:    OrderAction(m.Action),
@@ -331,7 +325,6 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 						Status:    OrderStatus(m.Status),
 						Quantity:  qty,
 						Filled:    filled,
-						Remaining: remaining,
 					})
 				case codec.CompletedOrderEnd:
 					delete(eng.singletons, singletonCompletedOrders)

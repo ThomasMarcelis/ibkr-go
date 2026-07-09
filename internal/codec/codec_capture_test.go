@@ -323,72 +323,22 @@ func TestCaptureDecode_CompletedOrderTrailLimitLive(t *testing.T) {
 	if m.Filled != "0" {
 		t.Errorf("Filled = %q, want 0", m.Filled)
 	}
-}
-
-func TestCaptureDecode_CompletedOrderIgnoresEarlyStatusLikeField(t *testing.T) {
-	t.Parallel()
-
-	fields := completedOrderFields("LMT", "Cancelled", "0")
-	fields[19] = "Filled" // account slot; status-like noise before the real order-state status.
-	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
-	if err != nil {
-		t.Fatalf("DecodeBatch: %v", err)
+	if m.PermID != "1426085924" {
+		t.Errorf("PermID = %q, want 1426085924", m.PermID)
 	}
-	m := msgs[0].(CompletedOrder)
-	if m.Status != "Cancelled" {
-		t.Fatalf("Status = %q, want real tail status Cancelled", m.Status)
+	if m.LmtPrice != "2000.05" || m.AuxPrice != "1.0" {
+		t.Errorf("prices = (%q, %q), want (2000.05, 1.0)", m.LmtPrice, m.AuxPrice)
 	}
-	if m.Filled != "0" {
-		t.Fatalf("Filled = %q, want 0", m.Filled)
+	if m.TrailStopPrice != "2000.0" || m.StopPrice != "2000.0" || m.LmtPriceOffset != "0.05" {
+		t.Errorf("trailing fields = (%q, %q, %q), want (2000.0, 2000.0, 0.05)",
+			m.TrailStopPrice, m.StopPrice, m.LmtPriceOffset)
 	}
-}
-
-func TestCaptureDecode_CompletedOrderPostStatusVariableFields(t *testing.T) {
-	t.Parallel()
-
-	fields := completedOrderFields("PEG BENCH", "Submitted", "4")
-	statusIndex := 15
-	fields = append(append([]string(nil), fields[:statusIndex+1]...), []string{
-		"0", "0", // randomizeSize, randomizePrice
-		"", "", "", "", "", // PEG BENCH fields
-		"1", "3", "a", "1", "20260415 16:00:00 UTC", // one time condition
-		"0", "0", // conditionsIgnoreRTH, conditionsCancelOrder
-		"", "", "", "0", "0", "", // stop/limit offset and cash/OMS/auto-cancel fields
-		"4",
-		"0", "0", "", "0", "0", "0", "20260415 16:00:01 UTC",
-		"Filled",
-		"", "", "", "", "", "", "0", "tester",
-	}...)
-
-	msgs, err := DecodeBatch(200, []byte(strings.Join(fields, "\x00")+"\x00"))
-	if err != nil {
-		t.Fatalf("DecodeBatch: %v", err)
+	if m.CompletedTime != "20260415 11:00:11 US/Eastern" || m.CompletedStatus != "Cancelled by Trader" {
+		t.Errorf("completion = (%q, %q)", m.CompletedTime, m.CompletedStatus)
 	}
-	m := msgs[0].(CompletedOrder)
-	if m.OrderType != "PEG BENCH" {
-		t.Fatalf("OrderType = %q, want PEG BENCH", m.OrderType)
+	if m.Shareholder != "Not an insider or substantial shareholder" || m.Submitter != "paper-user" {
+		t.Errorf("compliance = (%q, %q)", m.Shareholder, m.Submitter)
 	}
-	if m.Status != "Submitted" {
-		t.Fatalf("Status = %q, want Submitted", m.Status)
-	}
-	if m.Filled != "4" {
-		t.Fatalf("Filled = %q, want 4", m.Filled)
-	}
-}
-
-func completedOrderFields(orderType string, status string, filled string) []string {
-	fields := []string{
-		"101",
-		"265598", "AAPL", "STK", "", "0", "", "", "SMART", "USD", "AAPL", "NMS",
-		"BUY", "5", orderType,
-		status,
-		"0", "0", "0", "", "", "", "", "", "",
-		filled,
-		"0", "0", "", "0", "0", "0", "20260415 16:00:01 UTC",
-		"Filled",
-		"", "", "", "", "", "", "0", "tester",
-	}
-	return fields
 }
 
 func TestCaptureDecode_ContractDetailsEnd(t *testing.T) {

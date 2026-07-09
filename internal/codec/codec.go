@@ -90,91 +90,6 @@ func isWireInt(value string) bool {
 	return err == nil
 }
 
-// completedOrderTail probes the fields following a candidate status field. r is
-// a value copy positioned just past the status field, so the probe never
-// disturbs the caller's cursor. It returns the filled quantity when the tail
-// matches the live completed-order layout.
-func completedOrderTail(r fieldReader, orderType string) (string, bool) {
-	if err := skipCompletedOrderPostStatusPrefix(&r, orderType); err != nil {
-		return "", false
-	}
-	filled := r.ReadString()
-	if r.Err() != nil || !isNonNegativeWireNumber(filled) {
-		return "", false
-	}
-	if r.Remaining() < 8 {
-		return "", false
-	}
-	r.Skip(7)      // refFuturesConId through completedTime
-	r.ReadString() // completedStatus
-	if r.Err() != nil || r.Remaining() > 8 {
-		return "", false
-	}
-	return filled, true
-}
-
-// completedOrderStatusTail scans forward from the reader's current position
-// (anchored right after orderType) for an order-status field whose trailing
-// fields match the completed-order layout, returning the status and filled
-// quantity. It walks a byte-view copy so the caller's reader is untouched.
-func completedOrderStatusTail(r *fieldReader, orderType string) (string, string, error) {
-	probe := *r
-	probe.err = nil
-	for probe.off < len(probe.buf) {
-		field := probe.peek()
-		if isOrderStatusField(field) {
-			if filled, ok := completedOrderTail(probe.after(), orderType); ok {
-				return string(field), filled, nil
-			}
-		}
-		probe.Skip(1)
-	}
-	return "", "", fmt.Errorf("codec: completed order status tail not found")
-}
-
-// after returns a value copy of the reader advanced past the current field,
-// used to probe a candidate tail without consuming the outer scan cursor.
-func (r fieldReader) after() fieldReader {
-	r.Skip(1)
-	return r
-}
-
-func isOrderStatusField(value []byte) bool {
-	switch string(value) {
-	case "PendingSubmit", "PendingCancel", "PreSubmitted", "Submitted",
-		"ApiPending", "ApiCancelled", "Cancelled", "Filled", "Inactive":
-		return true
-	default:
-		return false
-	}
-}
-
-func skipCompletedOrderPostStatusPrefix(r *fieldReader, orderType string) error {
-	r.Skip(2) // randomizeSize, randomizePrice
-	if orderType == "PEG BENCH" {
-		r.Skip(5)
-	}
-	conditionsCount, err := r.ReadOptionalCount("completed order conditions")
-	if err != nil {
-		return err
-	}
-	if conditionsCount > 0 {
-		for range conditionsCount {
-			conditionType, err := r.ReadInt()
-			if err != nil {
-				return err
-			}
-			if _, err := readOrderCondition(r, conditionType); err != nil {
-				return err
-			}
-		}
-		r.Skip(2) // conditionsIgnoreRTH, conditionsCancelOrder
-	}
-	r.Skip(2) // stop price, limit price offset
-	r.Skip(4) // cashQty, dontUseAutoPriceForHedge, isOmsContainer, autoCancelDate
-	return nil
-}
-
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
 func Encode(sv int, msg Message) ([]byte, error) {
 	fields, err := msg.encodeWire(sv)
@@ -360,14 +275,6 @@ func isPositiveWireNumber(raw string) bool {
 	}
 	v, err := strconv.ParseFloat(raw, 64)
 	return err == nil && v > 0
-}
-
-func isNonNegativeWireNumber(raw string) bool {
-	if raw == "" {
-		return false
-	}
-	v, err := strconv.ParseFloat(raw, 64)
-	return err == nil && v >= 0
 }
 
 func mustReadInt(r *fieldReader) int {

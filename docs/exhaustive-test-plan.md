@@ -108,7 +108,7 @@ scenario.
 | 96 | reqHistoricalTicks | yes | yes | yes | |
 | 97 | reqTickByTickData | yes | yes | partial | AllLast, ignoreSize variants |
 | 98 | cancelTickByTickData | yes | yes | partial | |
-| 99 | reqCompletedOrders | yes | yes | partial | apiOnly filter, full detail |
+| 99 | reqCompletedOrders | yes | yes | partial | apiOnly filter is replay-promoted and the full classic response layout is decoded; expose every preserved field through the public result |
 | 100 | reqWSHMetaData | yes | yes | partial | entitlement error |
 | 101 | cancelWSHMetaData | partial | partial | yes | |
 | 102 | reqWSHEventData | yes | yes | partial | filter/date/portfolio variants |
@@ -429,7 +429,7 @@ tests.
 | PnL: single-position | yes | with open position |
 | Family codes | yes | multi-family account |
 | Completed orders: apiOnly filter | replay promoted | `api_completed_orders_variants_aapl` recaptured after the TRAIL LIMIT completed-order decode fix; apiOnly=false and apiOnly=true both reached `completedOrdersEnd` |
-| Completed orders: full details | no | deferred |
+| Completed orders: full details | codec complete | exact source-aligned parser is frozen by the live TRAIL LIMIT frame; public full-detail projection remains |
 
 ## 10. Error and Edge Case Coverage
 

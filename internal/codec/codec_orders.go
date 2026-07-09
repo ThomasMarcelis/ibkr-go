@@ -197,13 +197,126 @@ func (m CompletedOrdersRequest) encodeWire(sv int) ([]string, error) {
 }
 
 type CompletedOrder struct {
-	Contract  Contract
-	Action    string
-	OrderType string
-	Status    string
-	Quantity  string
-	Filled    string
-	Remaining string
+	Contract Contract
+
+	Action             string
+	Quantity           string
+	OrderType          string
+	LmtPrice           string
+	AuxPrice           string
+	TIF                string
+	OcaGroup           string
+	Account            string
+	OpenClose          string
+	Origin             string
+	OrderRef           string
+	PermID             string
+	OutsideRTH         string
+	Hidden             string
+	DiscretionAmt      string
+	GoodAfterTime      string
+	FAGroup            string
+	FAMethod           string
+	FAPercentage       string
+	ModelCode          string
+	GoodTillDate       string
+	Rule80A            string
+	PercentOffset      string
+	SettlingFirm       string
+	ShortSaleSlot      string
+	DesignatedLocation string
+	ExemptCode         string
+	StartingPrice      string
+	StockRefPrice      string
+	Delta              string
+	StockRangeLower    string
+	StockRangeUpper    string
+	DisplaySize        string
+	SweepToFill        string
+	AllOrNone          string
+	MinQty             string
+	OcaType            string
+	TriggerMethod      string
+
+	Volatility                     string
+	VolatilityType                 string
+	DeltaNeutralOrderType          string
+	DeltaNeutralAuxPrice           string
+	DeltaNeutralConID              string
+	DeltaNeutralShortSale          string
+	DeltaNeutralShortSaleSlot      string
+	DeltaNeutralDesignatedLocation string
+	ContinuousUpdate               string
+	ReferencePriceType             string
+	TrailStopPrice                 string
+	TrailingPercent                string
+
+	ComboLegsDescription string
+	ComboLegs            []ComboLeg
+	OrderComboLegPrices  []string
+	SmartComboRouting    []TagValue
+
+	ScaleInitLevelSize       string
+	ScaleSubsLevelSize       string
+	ScalePriceIncrement      string
+	ScalePriceAdjustValue    string
+	ScalePriceAdjustInterval string
+	ScaleProfitOffset        string
+	ScaleAutoReset           string
+	ScaleInitPosition        string
+	ScaleInitFillQty         string
+	ScaleRandomPercent       string
+
+	HedgeType       string
+	HedgeParam      string
+	ClearingAccount string
+	ClearingIntent  string
+	NotHeld         string
+
+	DeltaNeutralContractPresent string
+	DeltaNeutralContractConID   string
+	DeltaNeutralContractDelta   string
+	DeltaNeutralContractPrice   string
+
+	AlgoStrategy   string
+	AlgoParams     []TagValue
+	Solicited      string
+	Status         string
+	RandomizeSize  string
+	RandomizePrice string
+
+	ReferenceContractID        string
+	PeggedChangeAmountDecrease string
+	PeggedChangeAmount         string
+	ReferenceChangeAmount      string
+	ReferenceExchangeID        string
+	Conditions                 []OrderCondition
+	ConditionsIgnoreRTH        string
+	ConditionsCancelOrder      string
+
+	StopPrice                string
+	LmtPriceOffset           string
+	CashQty                  string
+	DontUseAutoPriceForHedge string
+	IsOMSContainer           string
+	AutoCancelDate           string
+	Filled                   string
+	RefFuturesConID          string
+	AutoCancelParent         string
+	Shareholder              string
+	ImbalanceOnly            string
+	RouteMarketableToBBO     string
+	ParentPermID             string
+	CompletedTime            string
+	CompletedStatus          string
+	MinTradeQty              string
+	MinCompeteSize           string
+	CompeteAgainstBestOffset string
+	MidOffsetAtWhole         string
+	MidOffsetAtHalf          string
+	CustomerAccount          string
+	ProfessionalCustomer     string
+	Submitter                string
 }
 
 type CompletedOrderEnd struct{}
@@ -1308,31 +1421,224 @@ func (m CommissionReport) encodeWire(sv int) ([]string, error) {
 
 // [101, contract(11-field), action, totalQty, orderType, ...]
 func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
-	// CompletedOrder uses the broad server->client order layout, with many
-	// advanced order sections whose presence varies by order type and algo.
-	// Decode only the public fields we expose, and anchor the tail on the
-	// live status field instead of inventing a full advanced-order parser.
-	contract := readWireContract(r)
-	action := r.ReadString()
-	quantity := r.ReadString()
-	orderType := r.ReadString()
-	// The reader now sits just past orderType. completedOrderStatusTail scans
-	// forward from here over the frame byte-view for the status field.
-	status, filled, err := completedOrderStatusTail(r, orderType)
+	m := CompletedOrder{Contract: readWireContract(r)}
+	m.Action = r.ReadString()
+	m.Quantity = r.ReadString()
+	m.OrderType = r.ReadString()
+	m.LmtPrice = r.ReadString()
+	m.AuxPrice = r.ReadString()
+	m.TIF = r.ReadString()
+	m.OcaGroup = r.ReadString()
+	m.Account = r.ReadString()
+	m.OpenClose = r.ReadString()
+	m.Origin = r.ReadString()
+	m.OrderRef = r.ReadString()
+	m.PermID = r.ReadString()
+	m.OutsideRTH = r.ReadString()
+	m.Hidden = r.ReadString()
+	m.DiscretionAmt = r.ReadString()
+	m.GoodAfterTime = r.ReadString()
+	m.FAGroup = r.ReadString()
+	m.FAMethod = r.ReadString()
+	m.FAPercentage = r.ReadString()
+	if sv < MinServerVersionFAProfileDesupport {
+		r.ReadString() // deprecated FA profile
+	}
+	// Models are present throughout ibkr-go's supported server range (the
+	// official gate is 103; the classic floor here is 176).
+	m.ModelCode = r.ReadString()
+	m.GoodTillDate = r.ReadString()
+	m.Rule80A = r.ReadString()
+	m.PercentOffset = r.ReadString()
+	m.SettlingFirm = r.ReadString()
+	m.ShortSaleSlot = r.ReadString()
+	m.DesignatedLocation = r.ReadString()
+	m.ExemptCode = r.ReadString()
+	m.StartingPrice = r.ReadString()
+	m.StockRefPrice = r.ReadString()
+	m.Delta = r.ReadString()
+	m.StockRangeLower = r.ReadString()
+	m.StockRangeUpper = r.ReadString()
+	m.DisplaySize = r.ReadString()
+	m.SweepToFill = r.ReadString()
+	m.AllOrNone = r.ReadString()
+	m.MinQty = r.ReadString()
+	m.OcaType = r.ReadString()
+	m.TriggerMethod = r.ReadString()
+
+	m.Volatility = r.ReadString()
+	m.VolatilityType = r.ReadString()
+	m.DeltaNeutralOrderType = r.ReadString()
+	m.DeltaNeutralAuxPrice = r.ReadString()
+	if m.DeltaNeutralOrderType != "" {
+		m.DeltaNeutralConID = r.ReadString()
+		m.DeltaNeutralShortSale = r.ReadString()
+		m.DeltaNeutralShortSaleSlot = r.ReadString()
+		m.DeltaNeutralDesignatedLocation = r.ReadString()
+	}
+	m.ContinuousUpdate = r.ReadString()
+	m.ReferencePriceType = r.ReadString()
+	m.TrailStopPrice = r.ReadString()
+	m.TrailingPercent = r.ReadString()
+
+	m.ComboLegsDescription = r.ReadString()
+	comboLegsCount, err := r.ReadOptionalCount("completed order combo legs")
 	if err != nil {
 		return nil, err
 	}
-	return []Message{CompletedOrder{
-		Contract: contract, Action: action, OrderType: orderType,
-		Status: status, Quantity: quantity, Filled: filled,
-	}}, nil
+	if err := r.RequireFixedEntryFields("completed order combo legs", comboLegsCount, 8, 0); err != nil {
+		return nil, err
+	}
+	if comboLegsCount > 0 {
+		m.ComboLegs = make([]ComboLeg, comboLegsCount)
+	}
+	for i := range m.ComboLegs {
+		m.ComboLegs[i] = ComboLeg{
+			ConID:              mustReadInt(r),
+			Ratio:              mustReadInt(r),
+			Action:             r.ReadString(),
+			Exchange:           r.ReadString(),
+			OpenClose:          r.ReadString(),
+			ShortSaleSlot:      r.ReadString(),
+			DesignatedLocation: r.ReadString(),
+			ExemptCode:         r.ReadString(),
+		}
+	}
+	orderComboLegsCount, err := r.ReadOptionalCount("completed order combo leg prices")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("completed order combo leg prices", orderComboLegsCount, 1, 0); err != nil {
+		return nil, err
+	}
+	if orderComboLegsCount > 0 {
+		m.OrderComboLegPrices = make([]string, orderComboLegsCount)
+	}
+	for i := range m.OrderComboLegPrices {
+		m.OrderComboLegPrices[i] = r.ReadString()
+	}
+	smartComboRoutingCount, err := r.ReadOptionalCount("completed order smart combo routing params")
+	if err != nil {
+		return nil, err
+	}
+	if smartComboRoutingCount > 0 {
+		m.SmartComboRouting, err = readTagValuePairs(r, "completed order smart combo routing params", smartComboRoutingCount)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	m.ScaleInitLevelSize = r.ReadString()
+	m.ScaleSubsLevelSize = r.ReadString()
+	m.ScalePriceIncrement = r.ReadString()
+	if isPositiveWireNumber(m.ScalePriceIncrement) && m.ScalePriceIncrement != unsetDoubleSentinel {
+		m.ScalePriceAdjustValue = r.ReadString()
+		m.ScalePriceAdjustInterval = r.ReadString()
+		m.ScaleProfitOffset = r.ReadString()
+		m.ScaleAutoReset = r.ReadString()
+		m.ScaleInitPosition = r.ReadString()
+		m.ScaleInitFillQty = r.ReadString()
+		m.ScaleRandomPercent = r.ReadString()
+	}
+	m.HedgeType = r.ReadString()
+	if m.HedgeType != "" {
+		m.HedgeParam = r.ReadString()
+	}
+	m.ClearingAccount = r.ReadString()
+	m.ClearingIntent = r.ReadString()
+	m.NotHeld = r.ReadString()
+	m.DeltaNeutralContractPresent = r.ReadString()
+	if m.DeltaNeutralContractPresent == "1" {
+		m.DeltaNeutralContractConID = r.ReadString()
+		m.DeltaNeutralContractDelta = r.ReadString()
+		m.DeltaNeutralContractPrice = r.ReadString()
+	}
+	m.AlgoStrategy = r.ReadString()
+	if m.AlgoStrategy != "" {
+		algoParamsCount, err := r.ReadCount("completed order algo params")
+		if err != nil {
+			return nil, err
+		}
+		m.AlgoParams, err = readTagValuePairs(r, "completed order algo params", algoParamsCount)
+		if err != nil {
+			return nil, err
+		}
+	}
+	m.Solicited = r.ReadString()
+	m.Status = r.ReadString()
+	m.RandomizeSize = r.ReadString()
+	m.RandomizePrice = r.ReadString()
+	if m.OrderType == "PEG BENCH" {
+		m.ReferenceContractID = r.ReadString()
+		m.PeggedChangeAmountDecrease = r.ReadString()
+		m.PeggedChangeAmount = r.ReadString()
+		m.ReferenceChangeAmount = r.ReadString()
+		m.ReferenceExchangeID = r.ReadString()
+	}
+	conditionsCount, err := r.ReadOptionalCount("completed order conditions")
+	if err != nil {
+		return nil, err
+	}
+	if conditionsCount > r.Remaining()/4+1 {
+		return nil, fmt.Errorf("codec: completed order conditions count %d exceeds remaining fields %d", conditionsCount, r.Remaining())
+	}
+	if conditionsCount > 0 {
+		m.Conditions = make([]OrderCondition, conditionsCount)
+	}
+	for i := range m.Conditions {
+		conditionType, err := r.ReadInt()
+		if err != nil {
+			return nil, err
+		}
+		m.Conditions[i], err = readOrderCondition(r, conditionType)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conditionsCount > 0 {
+		m.ConditionsIgnoreRTH = r.ReadString()
+		m.ConditionsCancelOrder = r.ReadString()
+	}
+
+	m.StopPrice = r.ReadString()
+	m.LmtPriceOffset = r.ReadString()
+	m.CashQty = r.ReadString()
+	m.DontUseAutoPriceForHedge = r.ReadString()
+	m.IsOMSContainer = r.ReadString()
+	m.AutoCancelDate = r.ReadString()
+	m.Filled = r.ReadString()
+	m.RefFuturesConID = r.ReadString()
+	m.AutoCancelParent = r.ReadString()
+	m.Shareholder = r.ReadString()
+	m.ImbalanceOnly = r.ReadString()
+	m.RouteMarketableToBBO = r.ReadString()
+	m.ParentPermID = r.ReadString()
+	m.CompletedTime = r.ReadString()
+	m.CompletedStatus = r.ReadString()
+	m.MinTradeQty = r.ReadString()
+	m.MinCompeteSize = r.ReadString()
+	m.CompeteAgainstBestOffset = r.ReadString()
+	m.MidOffsetAtWhole = r.ReadString()
+	m.MidOffsetAtHalf = r.ReadString()
+	if sv >= MinServerVersionCustomerAccount {
+		m.CustomerAccount = r.ReadString()
+	}
+	if sv >= MinServerVersionProfessionalCustomer {
+		m.ProfessionalCustomer = r.ReadString()
+	}
+	if sv >= MinServerVersionSubmitter {
+		m.Submitter = r.ReadString()
+	}
+	if err := r.Err(); err != nil {
+		return nil, err
+	}
+	if r.Remaining() != 0 {
+		return nil, fmt.Errorf("codec: completed order has %d unparsed fields", r.Remaining())
+	}
+	return []Message{m}, nil
 }
 
 func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
-	// Simplified encoder for testhost: server->client contract format
-	// followed by the live completed-order v200 field order. Most fields are
-	// intentionally empty because public tests only assert the public fields
-	// this package currently exposes.
 	w := fieldWriter{}
 	w.WriteInt(InCompletedOrder)
 	w.WriteInt(m.Contract.ConID)
@@ -1353,67 +1659,153 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.Action)
 	w.WriteString(m.Quantity)
 	w.WriteString(m.OrderType)
-	for range 13 { // lmtPrice through goodAfterTime
-		w.WriteString("")
+	w.WriteString(m.LmtPrice)
+	w.WriteString(m.AuxPrice)
+	w.WriteString(m.TIF)
+	w.WriteString(m.OcaGroup)
+	w.WriteString(m.Account)
+	w.WriteString(m.OpenClose)
+	w.WriteString(m.Origin)
+	w.WriteString(m.OrderRef)
+	w.WriteString(m.PermID)
+	w.WriteString(m.OutsideRTH)
+	w.WriteString(m.Hidden)
+	w.WriteString(m.DiscretionAmt)
+	w.WriteString(m.GoodAfterTime)
+	w.WriteString(m.FAGroup)
+	w.WriteString(m.FAMethod)
+	w.WriteString(m.FAPercentage)
+	if sv < MinServerVersionFAProfileDesupport {
+		w.WriteString("") // deprecated FA profile
 	}
-	for range 3 { // FAGroup, FAMethod, FAPercentage
-		w.WriteString("")
+	w.WriteString(m.ModelCode)
+	w.WriteString(m.GoodTillDate)
+	w.WriteString(m.Rule80A)
+	w.WriteString(m.PercentOffset)
+	w.WriteString(m.SettlingFirm)
+	w.WriteString(m.ShortSaleSlot)
+	w.WriteString(m.DesignatedLocation)
+	w.WriteString(m.ExemptCode)
+	w.WriteString(m.StartingPrice)
+	w.WriteString(m.StockRefPrice)
+	w.WriteString(m.Delta)
+	w.WriteString(m.StockRangeLower)
+	w.WriteString(m.StockRangeUpper)
+	w.WriteString(m.DisplaySize)
+	w.WriteString(m.SweepToFill)
+	w.WriteString(m.AllOrNone)
+	w.WriteString(m.MinQty)
+	w.WriteString(m.OcaType)
+	w.WriteString(m.TriggerMethod)
+	w.WriteString(m.Volatility)
+	w.WriteString(m.VolatilityType)
+	w.WriteString(m.DeltaNeutralOrderType)
+	w.WriteString(m.DeltaNeutralAuxPrice)
+	if m.DeltaNeutralOrderType != "" {
+		w.WriteString(m.DeltaNeutralConID)
+		w.WriteString(m.DeltaNeutralShortSale)
+		w.WriteString(m.DeltaNeutralShortSaleSlot)
+		w.WriteString(m.DeltaNeutralDesignatedLocation)
 	}
-	for range 5 { // modelCode through settlingFirm
-		w.WriteString("")
+	w.WriteString(m.ContinuousUpdate)
+	w.WriteString(m.ReferencePriceType)
+	w.WriteString(m.TrailStopPrice)
+	w.WriteString(m.TrailingPercent)
+	w.WriteString(m.ComboLegsDescription)
+	w.WriteInt(len(m.ComboLegs))
+	for _, leg := range m.ComboLegs {
+		w.WriteInt(leg.ConID)
+		w.WriteInt(leg.Ratio)
+		w.WriteString(leg.Action)
+		w.WriteString(leg.Exchange)
+		w.WriteString(leg.OpenClose)
+		w.WriteString(leg.ShortSaleSlot)
+		w.WriteString(leg.DesignatedLocation)
+		w.WriteString(leg.ExemptCode)
 	}
-	for range 3 { // short-sale params
-		w.WriteString("")
+	w.WriteInt(len(m.OrderComboLegPrices))
+	for _, price := range m.OrderComboLegPrices {
+		w.WriteString(price)
 	}
-	for range 3 { // BOX order params
-		w.WriteString("")
+	writeTagValuePairs(&w, m.SmartComboRouting)
+	w.WriteString(m.ScaleInitLevelSize)
+	w.WriteString(m.ScaleSubsLevelSize)
+	w.WriteString(m.ScalePriceIncrement)
+	if isPositiveWireNumber(m.ScalePriceIncrement) && m.ScalePriceIncrement != unsetDoubleSentinel {
+		w.WriteString(m.ScalePriceAdjustValue)
+		w.WriteString(m.ScalePriceAdjustInterval)
+		w.WriteString(m.ScaleProfitOffset)
+		w.WriteString(m.ScaleAutoReset)
+		w.WriteString(m.ScaleInitPosition)
+		w.WriteString(m.ScaleInitFillQty)
+		w.WriteString(m.ScaleRandomPercent)
 	}
-	for range 2 { // peg-to-stock/vol order params
-		w.WriteString("")
+	w.WriteString(m.HedgeType)
+	if m.HedgeType != "" {
+		w.WriteString(m.HedgeParam)
 	}
-	for range 5 { // displaySize through ocaType
-		w.WriteString("")
+	w.WriteString(m.ClearingAccount)
+	w.WriteString(m.ClearingIntent)
+	w.WriteString(m.NotHeld)
+	w.WriteString(m.DeltaNeutralContractPresent)
+	if m.DeltaNeutralContractPresent == "1" {
+		w.WriteString(m.DeltaNeutralContractConID)
+		w.WriteString(m.DeltaNeutralContractDelta)
+		w.WriteString(m.DeltaNeutralContractPrice)
 	}
-	w.WriteString("") // triggerMethod
-	for range 6 {     // vol order params
-		w.WriteString("")
+	w.WriteString(m.AlgoStrategy)
+	if m.AlgoStrategy != "" {
+		writeTagValuePairs(&w, m.AlgoParams)
 	}
-	for range 2 { // trailStopPrice, trailingPercent
-		w.WriteString("")
-	}
-	w.WriteString("") // comboLegsDescrip
-	w.WriteString("0")
-	w.WriteString("0")
-	w.WriteString("0")
-	for range 6 { // scale params plus table/start/stop
-		w.WriteString("")
-	}
-	w.WriteString("")  // hedgeType
-	w.WriteString("")  // optOutSmartRouting
-	w.WriteString("")  // clearingAccount
-	w.WriteString("")  // clearingIntent
-	w.WriteString("")  // notHeld
-	w.WriteString("0") // deltaNeutralContract present
-	w.WriteString("")  // algoStrategy
-	w.WriteString("")  // solicited
+	w.WriteString(m.Solicited)
 	w.WriteString(m.Status)
-	for range 2 { // randomizeSize, randomizePrice
-		w.WriteString("")
+	w.WriteString(m.RandomizeSize)
+	w.WriteString(m.RandomizePrice)
+	if m.OrderType == "PEG BENCH" {
+		w.WriteString(m.ReferenceContractID)
+		w.WriteString(m.PeggedChangeAmountDecrease)
+		w.WriteString(m.PeggedChangeAmount)
+		w.WriteString(m.ReferenceChangeAmount)
+		w.WriteString(m.ReferenceExchangeID)
 	}
-	w.WriteString("0") // conditions count
-	for range 2 {      // stop price, limit price offset
-		w.WriteString("")
+	w.WriteInt(len(m.Conditions))
+	for _, condition := range m.Conditions {
+		if err := writeOrderCondition(&w, condition); err != nil {
+			return nil, err
+		}
 	}
-	for range 4 { // cashQty through autoCancelDate
-		w.WriteString("")
+	if len(m.Conditions) > 0 {
+		w.WriteString(m.ConditionsIgnoreRTH)
+		w.WriteString(m.ConditionsCancelOrder)
 	}
+	w.WriteString(m.StopPrice)
+	w.WriteString(m.LmtPriceOffset)
+	w.WriteString(m.CashQty)
+	w.WriteString(m.DontUseAutoPriceForHedge)
+	w.WriteString(m.IsOMSContainer)
+	w.WriteString(m.AutoCancelDate)
 	w.WriteString(m.Filled)
-	for range 7 { // refFuturesConId through completedTime
-		w.WriteString("")
+	w.WriteString(m.RefFuturesConID)
+	w.WriteString(m.AutoCancelParent)
+	w.WriteString(m.Shareholder)
+	w.WriteString(m.ImbalanceOnly)
+	w.WriteString(m.RouteMarketableToBBO)
+	w.WriteString(m.ParentPermID)
+	w.WriteString(m.CompletedTime)
+	w.WriteString(m.CompletedStatus)
+	w.WriteString(m.MinTradeQty)
+	w.WriteString(m.MinCompeteSize)
+	w.WriteString(m.CompeteAgainstBestOffset)
+	w.WriteString(m.MidOffsetAtWhole)
+	w.WriteString(m.MidOffsetAtHalf)
+	if sv >= MinServerVersionCustomerAccount {
+		w.WriteString(m.CustomerAccount)
 	}
-	w.WriteString("") // completedStatus
-	for range 8 {     // post-completed-status optional fields
-		w.WriteString("")
+	if sv >= MinServerVersionProfessionalCustomer {
+		w.WriteString(m.ProfessionalCustomer)
+	}
+	if sv >= MinServerVersionSubmitter {
+		w.WriteString(m.Submitter)
 	}
 	return w.Fields(), nil
 }

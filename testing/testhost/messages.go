@@ -181,7 +181,6 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			Contract: asContract(resolve(body["contract"])), Action: asString(resolve(body["action"])),
 			OrderType: asString(resolve(body["order_type"])), Status: asString(resolve(body["status"])),
 			Quantity: asString(resolve(body["quantity"])), Filled: asString(resolve(body["filled"])),
-			Remaining: asString(resolve(body["remaining"])),
 		}, nil
 	case "completed_order_end":
 		return codec.CompletedOrderEnd{}, nil
