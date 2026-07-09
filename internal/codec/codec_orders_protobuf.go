@@ -13,9 +13,27 @@ import (
 // a classic field decoder.
 var inboundProtobufDecoders = map[int]protobufDecodeFunc{
 	InErrMsg:           decodeErrorProto,
+	InOrderStatus:      decodeOrderStatusProto,
+	InOpenOrder:        decodeOpenOrderProto,
+	InOpenOrderEnd:     decodeOpenOrdersEndProto,
 	InExecutionData:    decodeExecutionDetailsProto,
 	InExecutionDataEnd: decodeExecutionDetailsEndProto,
 	InCommissionReport: decodeCommissionAndFeesReportProto,
+}
+
+func decodeOpenOrdersEndProto(body []byte, sv int) ([]Message, error) {
+	for {
+		number, typ, ok, err := consumeProtoTag(&body)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return []Message{OpenOrderEnd{}}, nil
+		}
+		if err := skipProtoField(&body, number, typ); err != nil {
+			return nil, protoFieldError("open orders end", number, err)
+		}
+	}
 }
 
 func (m ExecutionsRequest) protobufVersion() int {

@@ -49,6 +49,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   that a protobuf Contract preserves both its conId and an explicitly present
   strike of zero.
 
+- Exact `server_version 203` support migrates place order, targeted cancel,
+  global cancel, and their open-order/status callbacks to protobuf using
+  pure-Go wire codecs. The lifecycle also freezes the protobuf error family
+  already introduced at 201. A guarded far-limit paper order was observed,
+  cancelled, globally cleaned up, and promoted to a sanitized replay.
+
 ### Changed (breaking)
 
 - **Legacy Reuters fundamental data has been removed.** IBKR API 10.47
@@ -169,13 +175,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **The client negotiates IB Gateway `server_version` 176..202, with exact 201
+- **The client negotiates IB Gateway `server_version` 176..203, with exact 201
   adding raw message IDs and protobuf executions and exact 202 adding the
   zero-strike contract boundary.** Fields are gated
   on the version the Gateway actually returns instead of assuming the latest
-  layout. The classic sv200, mixed-envelope sv201, and zero-strike sv202
+  layout. The classic sv200, mixed-envelope sv201, zero-strike sv202, and
+  order-protobuf sv203
   boundaries are live-attested; versions 176..199 remain compatibility paths
-  until independently evidenced, and 203+ is not advertised. The official API
+  until independently evidenced, and 204+ is not advertised. The official API
   10.48.01 migration table moves no message at 202; a sanitized live replay
   freezes a protobuf execution Contract with both conId and explicit strike=0.
   `CurrentTimeMillis` returns

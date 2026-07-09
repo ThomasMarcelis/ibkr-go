@@ -269,8 +269,8 @@ against the local paper Gateway when applicable.
   families (price, time, margin, execution, volume, percent-change), IB algo
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
-- ~~Server-version coverage through exactly `server_version 202`~~ **Done.**
-  The client negotiates `server_version` 176..202 and gates every post-176
+- ~~Server-version coverage through exactly `server_version 203`~~ **Done.**
+  The client negotiates `server_version` 176..203 and gates every post-176
   wire field on the negotiated value; live-validated 2026-07-04/05 by
   down-negotiating the paper Gateway to 176/184/193/195/199/200 across
   contract details, historical bars, API-error frames, and the
@@ -279,7 +279,9 @@ against the local paper Gateway when applicable.
   the official API 10.48.01 source names only its zero-strike gate, the
   migration table contains no v202 message transition, and a live protobuf
   execution contract carried both a nonzero conId and an explicitly present
-  zero strike. Version 203 is the next gap.
+  zero strike. Exact 203 is covered by a guarded live place/cancel/global-
+  cancel lifecycle and its sanitized protobuf replay. Version 204 is the next
+  gap.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
@@ -307,7 +309,15 @@ freezes that same field-presence vector. This proves the negotiated semantic
 and codec boundary, not trading support for a zero-strike derivative; no such
 live product was available in the local paper session.
 
-The production ceiling is 202. Server version 203 and later remain a deliberate
+Exact `server_version 203` is implemented and live-attested. Place order,
+targeted cancel, and global cancel move to protobuf, as do the observed
+open-order and order-status replies. Order errors use the protobuf family
+already introduced at 201. The guarded paper scenario
+rested a one-share AAPL order far below market, cancelled it, issued global
+cancel, and completed an ordered round trip before disconnect. See
+[`protocol-audit-sv203.md`](protocol-audit-sv203.md).
+
+The production ceiling is 203. Server version 204 and later remain a deliberate
 wall: each later migration gate must add its encoder/decoder, live capture, and
 deterministic replay before the advertised maximum moves again. The migration
 table fails closed rather than sending a classic body after IBKR has retired
@@ -318,7 +328,7 @@ it.
 - SDK conformance oracle workflow: capture reference traces from the official
   SDK against the local Gateway when adding or hardening a protocol area, and
   fold sanitized live-derived captures into deterministic replay fixtures.
-- Protobuf migrations for `server_version` 203+; see above.
+- Protobuf migrations for `server_version` 204+; see above.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
 

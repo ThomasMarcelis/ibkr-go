@@ -1,0 +1,35 @@
+# Live-derived from local paper IB Gateway at exact server_version 203.
+# Private capture: 20260709T233523Z-protobuf_sv203_order_cancel_aapl.
+# replay/frames.jsonl sha256: 47aafceab7ad8afe33813cb96886a9cc7fce2af161097d9889bc9de8d8e6a295
+# events.jsonl sha256: 26d77d633ee488dff8a6afd6c7d0ffd35c72b686e9378fed92e4019b02339a3a
+#
+# The guarded paper scenario placed one AAPL share at a non-marketable $50
+# limit, observed protobuf open-order/status callbacks, cancelled it, issued a
+# protobuf global cancel, then completed a current-time round trip to prove the
+# writer flushed before disconnect. Account, client, permanent, and submitter
+# identifiers are deterministic substitutions in official protobuf fields;
+# farm status and the time-dependent code-399 warning are trimmed.
+handshake {"server_version":203,"connection_time":"20260710 01:35:28 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+
+# PlaceOrderRequest, raw ID 203 (base 3 + protobuf discriminator 200).
+raw client AAAAYAAAAMsIARIXEgRBQVBMGgNTVEtCBVNNQVJUUgNVU0QaPSAAKgNCVVkyATE4AEIDTE1USQAAAAAAAElAWgNEQVnwAQD4AQCQBAGoBADABP///////////wGQBgDKBgAiAA==
+# OpenOrder raw ID 205, then OrderStatus raw ID 203.
+raw server AAABEQAAAM0IARIvCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgVTTUFSVFIDVVNEWgRBQVBMYgNOTVMaxwEIARABGIHSk60DIAAqA0JVWTIBMUIDTE1USQAAAAAAAElAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSUK5AQAAAAAAgElA8AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwEwsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwDKCA1wYXBlcnRyYWRlcjAx8AgAIg4KDFByZVN1Ym1pdHRlZA==
+raw server AAAAPwAAAMsIARIMUHJlU3VibWl0dGVkGgEwIgExKQAAAAAAAAAAMIHSk60DOABBAAAAAAAAAABIAVkAAAAAAAAAAA==
+
+# CancelOrderRequest, raw ID 204.
+raw client AAAACAAAAMwIARIA
+raw server AAAAPAAAAMsIARIJQ2FuY2VsbGVkGgEwIgExKQAAAAAAAAAAMIHSk60DOABBAAAAAAAAAABIAVkAAAAAAAAAAA==
+raw server AAAAKgAAAMwIARDo+/HJ9DMYygEiGE9yZGVyIENhbmNlbGVkIC0gcmVhc29uOg==
+
+# GlobalCancelRequest, raw ID 258 (base 58 + discriminator 200). The live
+# Gateway returned its ordinary code-161 notice because the sole order was
+# already terminal.
+raw client AAAABgAAAQIKAA==
+raw server AAAAZQAAAMwIARDo+/HJ9DMYoQEiU0NhbmNlbCBhdHRlbXB0ZWQgd2hlbiBvcmRlciBpcyBub3QgaW4gYSBjYW5jZWxsYWJsZSBzdGF0ZS4gIE9yZGVyIHBlcm1JZCA9OTAwMDAwMDAx
+
+raw client AAAABgAAADExAA==
+raw server AAAAEQAAADExADE3ODM2NDAxMjkA
+disconnect

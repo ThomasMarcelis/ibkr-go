@@ -7,7 +7,7 @@ import "slices"
 
 const (
 	SupportedMinServerVersion = 176
-	SupportedMaxServerVersion = 202
+	SupportedMaxServerVersion = 203
 )
 
 // Direction identifies which peer sends a message.

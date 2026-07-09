@@ -163,11 +163,11 @@ not reinterpret UTC instants in the login time zone.
 
 | Direction | Msg ID | Name | Status | Notes |
 |-----------|--------|------|--------|-------|
-| out | 3 | PlaceOrder | landed | BAG combo legs, algo params, and grounded order conditions encoded; delta-neutral/scale extensions remain deferred |
-| out | 4 | CancelOrder | landed | |
-| out | 58 | reqGlobalCancel | landed | |
-| in | 5 | OpenOrder | landed | Single live-grounded sv200 walk ("None" delta-neutral sentinel, official 32-field tail) covering combo/algo/conditional sections; no fill echo (fills are order_status truth) |
-| in | 3 | OrderStatus | landed | Full parse, authoritative fill data for all order types |
+| out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf; required empty nested messages and guarded live bytes are frozen. Opaque internal-only delta-neutral contract/options shapes fail closed. |
+| out | 4 | CancelOrder | landed | Classic plus exact-sv203 `CancelOrderRequest` protobuf, including compliance metadata. |
+| out | 58 | reqGlobalCancel | landed | Classic plus exact-sv203 `GlobalCancelRequest` protobuf, live-flushed before teardown. |
+| in | 5 | OpenOrder | landed | Live-grounded sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; no fill echo (fills are order_status truth). |
+| in | 3 | OrderStatus | landed | Classic and exact-sv203 protobuf parse; authoritative fill data for all order types. |
 
 OpenOrder is dual-dispatched to per-order handles and the singleton open-orders
 observer. OrderStatus is routed to per-order handles; open-orders observers
@@ -188,7 +188,7 @@ layout, so replay fixtures exercise the production decode path.
 | out | 15 | ReqAutoOpenOrders | landed | |
 | out | 16 | ReqAllOpenOrders | landed | |
 | in | 5 | OpenOrder | landed | See Order Management notes |
-| in | 53 | OpenOrderEnd | landed | |
+| in | 53 | OpenOrderEnd | landed | Classic plus exact-sv203 empty protobuf terminator after a still-classic `ReqAllOpenOrders`; live empty snapshot replay prevents request timeouts. |
 | in | 3 | OrderStatus | landed | |
 | out | 7 | ExecutionsRequest | landed | Complete classic filter plus sv200 day/date tail; exact-sv201 protobuf empty-filter request is live-frozen and unchanged at the zero-strike-only sv202 boundary. Nondefault day filters await live attestation. |
 | in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. Exact sv202 adds a live vector with both Contract.conId and explicitly present strike=0. |

@@ -154,6 +154,83 @@ func TestLiveServer202ZeroStrikeBoundary(t *testing.T) {
 	t.Log("sv202 execution query returned no present-zero-strike execution; deterministic live replay covers the non-empty callback")
 }
 
+// TestLiveServer203OrderProtobufBoundary exercises every outbound family that
+// migrates at 203: placeOrder, cancelOrder, and reqGlobalCancel. The order is a
+// one-share AAPL limit far below market and cleanup issues global cancel even
+// if the targeted cancel path fails. Exact-203 open-order and order-status
+// callbacks prove the paired inbound protobuf decoders.
+func TestLiveServer203OrderProtobufBoundary(t *testing.T) {
+	ibkrlive.RequireTrading(t)
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(203)
+	defer restore()
+
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
+	defer cancel()
+	defer client.Close()
+	cleaned := false
+	defer func() {
+		if cleaned {
+			return
+		}
+		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cleanupCancel()
+		if err := client.Orders().CancelAll(cleanupCtx); err != nil {
+			t.Logf("sv203 cleanup global cancel: %v", err)
+		}
+	}()
+
+	if got := client.Session().ServerVersion; got != 203 {
+		t.Fatalf("negotiated ServerVersion = %d, want 203", got)
+	}
+	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelReq()
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: aaplContract,
+		Order: ibkr.Order{
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit,
+			Quantity: decimal.NewFromInt(1), LmtPrice: decimal.NewFromInt(50), TIF: ibkr.TIFDay,
+		},
+	})
+	if err != nil {
+		t.Fatalf("Place at sv203: %v", err)
+	}
+
+	var sawOpen, sawStatus bool
+	for !sawOpen || !sawStatus {
+		select {
+		case event := <-handle.Events():
+			if event.OpenOrder != nil {
+				sawOpen = true
+				if event.OpenOrder.Contract.Symbol != "AAPL" || event.OpenOrder.OrderType != ibkr.OrderTypeLimit {
+					t.Fatalf("sv203 open order = %+v", event.OpenOrder)
+				}
+			}
+			if event.Status != nil {
+				sawStatus = true
+			}
+		case <-ctx.Done():
+			t.Fatalf("waiting for sv203 open/status callbacks: %v", ctx.Err())
+		}
+	}
+	if err := handle.Cancel(ctx); err != nil {
+		t.Fatalf("Cancel at sv203: %v", err)
+	}
+	select {
+	case <-handle.Done():
+	case <-ctx.Done():
+		t.Fatalf("waiting for sv203 targeted cancellation: %v", ctx.Err())
+	}
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("global cancel at sv203: %v", err)
+	}
+	// CancelAll has no completion callback. A following round trip proves the
+	// writer flushed the six-byte global-cancel protobuf frame before teardown.
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("round trip after global cancel at sv203: %v", err)
+	}
+	cleaned = true
+}
+
 // TestLiveDownNegotiatedPreview validates the OpenOrder inbound gates with
 // real down-negotiated echoes: the what-if open_order reply crosses the
 // FULL_ORDER_PREVIEW block gate (195) and the width-gated tail

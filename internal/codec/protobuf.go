@@ -70,6 +70,11 @@ func appendProtoVarint(dst []byte, number protowire.Number, value uint64) []byte
 	return protowire.AppendVarint(dst, value)
 }
 
+func appendProtoDouble(dst []byte, number protowire.Number, value float64) []byte {
+	dst = protowire.AppendTag(dst, number, protowire.Fixed64Type)
+	return protowire.AppendFixed64(dst, math.Float64bits(value))
+}
+
 func appendProtoString(dst []byte, number protowire.Number, value string) []byte {
 	dst = protowire.AppendTag(dst, number, protowire.BytesType)
 	return protowire.AppendString(dst, value)

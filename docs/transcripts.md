@@ -13,7 +13,8 @@ Current state:
   partial frames, lifecycle edges, and other protocol failures
 - live-grounded behavior includes the classic IB Gateway `server_version 200`
   baseline, the exact-201 protobuf executions migration, and the exact-202
-  zero-strike execution-contract boundary, frozen into replay artifacts
+  zero-strike execution-contract boundary, plus the exact-203 protobuf order
+  lifecycle, frozen into replay artifacts
 - raw capture logs record per-leg connect/disconnect events plus TCP chunks;
   normalized replay artifacts reconstruct framed payloads from those chunks
 
