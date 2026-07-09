@@ -246,9 +246,10 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpScannerSubscription, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -644,9 +645,10 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpDisplayGroupEvents, cfg.resume); err != nil {
 			resp <- result{err: err}

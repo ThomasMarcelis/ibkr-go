@@ -132,6 +132,10 @@ const (
 	ReconnectAuto ReconnectPolicy = "auto" // re-dial and rehandshake automatically
 )
 
+func (p ReconnectPolicy) valid() bool {
+	return p == ReconnectOff || p == ReconnectAuto
+}
+
 // ResumePolicy controls whether a subscription re-establishes itself after a
 // reconnect. Set the default with [WithDefaultResumePolicy] or per-subscription
 // with [WithResumePolicy].
@@ -141,6 +145,10 @@ const (
 	ResumeNever ResumePolicy = "never" // close the subscription on connection loss
 	ResumeAuto  ResumePolicy = "auto"  // re-issue the request after reconnect
 )
+
+func (p ResumePolicy) valid() bool {
+	return p == ResumeNever || p == ResumeAuto
+}
 
 // SlowConsumerPolicy controls what happens when a subscriber cannot keep up
 // with the event rate and the delivery queue fills. Set the default with
@@ -155,6 +163,10 @@ const (
 	SlowConsumerClose      SlowConsumerPolicy = "close"       // fail the subscription with [ErrSlowConsumer]
 	SlowConsumerDropOldest SlowConsumerPolicy = "drop_oldest" // evict the oldest queued event to make room
 )
+
+func (p SlowConsumerPolicy) valid() bool {
+	return p == SlowConsumerClose || p == SlowConsumerDropOldest
+}
 
 // XMLDocument is a raw XML payload returned by the Gateway (fundamental data,
 // scanner parameters, and FA configuration), passed through unparsed.

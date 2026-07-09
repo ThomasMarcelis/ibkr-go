@@ -242,9 +242,10 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpHistoricalBarsStream, cfg.resume); err != nil {
 			resp <- result{err: err}

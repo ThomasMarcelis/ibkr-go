@@ -34,9 +34,10 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpAccountSummary, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -147,9 +148,10 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpPositions, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -302,9 +304,10 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpAccountUpdates, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -443,9 +446,10 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpAccountUpdatesMulti, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -539,9 +543,10 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpPositionsMulti, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -638,9 +643,10 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpPnL, cfg.resume); err != nil {
 			resp <- result{err: err}
@@ -735,9 +741,10 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpPnLSingle, cfg.resume); err != nil {
 			resp <- result{err: err}

@@ -41,6 +41,10 @@ protobuf transition tracked in [`docs/roadmap.md`](roadmap.md).
 - One writer goroutine serializes outbound frames and applies global pacing.
 - Public methods talk to the actor through typed commands instead of sharing
   mutable maps or callback registries.
+- Work submitted while an automatic reconnect is in progress is held in an
+  actor-owned FIFO and released immediately after existing resumable routes are
+  restored. Context cancellation removes pending work through
+  `context.AfterFunc`; readiness uses no polling loop or retry timer.
 
 ## Codec Dispatch
 

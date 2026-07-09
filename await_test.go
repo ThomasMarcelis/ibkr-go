@@ -178,31 +178,62 @@ func TestEnqueueOneShotSetupRunsActiveContext(t *testing.T) {
 }
 
 func TestEnqueueOneShotSetupWaitsForReady(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.Background()
+	e := &engine{
+		cmds: make(chan func(), 1),
+		done: make(chan struct{}),
+	}
+
+	called := false
+	enqueueOneShotSetup(ctx, e, func() {
+		called = true
+	})
+
+	(<-e.cmds)()
+	if called {
+		t.Fatal("enqueueOneShotSetup ran before the session was ready")
+	}
+
+	e.transport = &transport.Conn{}
+	e.snapshot = Snapshot{State: StateReady}
+	e.flushReadySetups()
+	if !called {
+		t.Fatal("enqueueOneShotSetup did not run when readiness returned")
+	}
+}
+
+func TestEnqueueSubscriptionSetupRemovesCanceledWaiter(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx := context.Background()
+		ctx, cancel := context.WithCancel(context.Background())
 		e := &engine{
-			cmds: make(chan func(), 2),
+			cmds: make(chan func(), 1),
 			done: make(chan struct{}),
 		}
+		resp := make(chan int, 1)
 
-		called := false
-		enqueueOneShotSetup(ctx, e, func() {
-			called = true
+		enqueueSubscriptionSetup(ctx, e, resp, func() {
+			t.Fatal("canceled setup executed")
 		})
-
 		(<-e.cmds)()
-		if called {
-			t.Fatal("enqueueOneShotSetup ran before the session was ready")
+		if len(e.readySetups) != 1 {
+			t.Fatalf("ready setups = %d, want 1", len(e.readySetups))
 		}
 
-		time.Sleep(reconnectBackoff)
+		cancel()
 		synctest.Wait()
-		e.transport = &transport.Conn{}
-		e.snapshot = Snapshot{State: StateReady}
 		(<-e.cmds)()
-
-		if !called {
-			t.Fatal("enqueueOneShotSetup did not run after readiness returned")
+		if len(e.readySetups) != 0 {
+			t.Fatalf("ready setups after cancel = %d, want 0", len(e.readySetups))
+		}
+		select {
+		case got := <-resp:
+			if got != 0 {
+				t.Fatalf("canceled setup result = %d, want zero", got)
+			}
+		default:
+			t.Fatal("canceled setup did not publish a result")
 		}
 	})
 }

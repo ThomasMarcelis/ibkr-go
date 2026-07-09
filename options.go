@@ -5,6 +5,8 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
@@ -71,7 +73,70 @@ func defaultSubscriptionConfig(cfg config) subscriptionConfig {
 	}
 }
 
-// WithHost sets the Gateway/TWS host. Default: "127.0.0.1".
+func applyOptions(opts []Option) (config, error) {
+	cfg := defaultConfig()
+	for i, opt := range opts {
+		if opt == nil {
+			return config{}, &ValidationError{Field: "Option", Value: strconv.Itoa(i), Message: "must not be nil"}
+		}
+		opt(&cfg)
+	}
+	if err := validateConfig(cfg); err != nil {
+		return config{}, err
+	}
+	return cfg, nil
+}
+
+func validateConfig(cfg config) error {
+	if strings.TrimSpace(cfg.host) == "" {
+		return &ValidationError{Field: "Host", Message: "must not be empty"}
+	}
+	if cfg.port < 1 || cfg.port > 65535 {
+		return &ValidationError{Field: "Port", Value: strconv.Itoa(cfg.port), Message: "must be between 1 and 65535"}
+	}
+	if cfg.clientID < 0 {
+		return &ValidationError{Field: "ClientID", Value: strconv.Itoa(cfg.clientID), Message: "must be >= 0"}
+	}
+	if cfg.eventBuffer < 1 {
+		return &ValidationError{Field: "EventBuffer", Value: strconv.Itoa(cfg.eventBuffer), Message: "must be >= 1"}
+	}
+	if cfg.subscriptionBuffer < 1 {
+		return &ValidationError{Field: "SubscriptionBuffer", Value: strconv.Itoa(cfg.subscriptionBuffer), Message: "must be >= 1"}
+	}
+	if !cfg.reconnect.valid() {
+		return &ValidationError{Field: "ReconnectPolicy", Value: string(cfg.reconnect), Message: "must be ReconnectOff or ReconnectAuto"}
+	}
+	if !cfg.defaultResume.valid() {
+		return &ValidationError{Field: "DefaultResumePolicy", Value: string(cfg.defaultResume), Message: "must be ResumeNever or ResumeAuto"}
+	}
+	if !cfg.defaultSlowConsumer.valid() {
+		return &ValidationError{Field: "DefaultSlowConsumerPolicy", Value: string(cfg.defaultSlowConsumer), Message: "must be SlowConsumerClose or SlowConsumerDropOldest"}
+	}
+	return nil
+}
+
+func applySubscriptionOptions(client config, opts []SubscriptionOption) (subscriptionConfig, error) {
+	cfg := defaultSubscriptionConfig(client)
+	for i, opt := range opts {
+		if opt == nil {
+			return subscriptionConfig{}, &ValidationError{Field: "SubscriptionOption", Value: strconv.Itoa(i), Message: "must not be nil"}
+		}
+		opt(&cfg)
+	}
+	if cfg.buffer < 1 {
+		return subscriptionConfig{}, &ValidationError{Field: "QueueSize", Value: strconv.Itoa(cfg.buffer), Message: "must be >= 1"}
+	}
+	if !cfg.resume.valid() {
+		return subscriptionConfig{}, &ValidationError{Field: "ResumePolicy", Value: string(cfg.resume), Message: "must be ResumeNever or ResumeAuto"}
+	}
+	if !cfg.slowConsumer.valid() {
+		return subscriptionConfig{}, &ValidationError{Field: "SlowConsumerPolicy", Value: string(cfg.slowConsumer), Message: "must be SlowConsumerClose or SlowConsumerDropOldest"}
+	}
+	return cfg, nil
+}
+
+// WithHost sets the Gateway/TWS host. Default: "127.0.0.1". An empty host is
+// rejected by [DialContext] with a [ValidationError] before dialing.
 func WithHost(host string) Option {
 	return func(cfg *config) {
 		cfg.host = host
@@ -79,7 +144,7 @@ func WithHost(host string) Option {
 }
 
 // WithPort sets the Gateway/TWS port. Default: 7497 (TWS paper). IB Gateway
-// commonly listens on 4001 (live) or 4002 (paper).
+// commonly listens on 4001 (live) or 4002 (paper). Valid ports are 1..65535.
 func WithPort(port int) Option {
 	return func(cfg *config) {
 		cfg.port = port
@@ -196,7 +261,7 @@ func WithSlowConsumerPolicy(policy SlowConsumerPolicy) SubscriptionOption {
 
 // WithQueueSize overrides the event queue capacity for a single subscription.
 // Raising it gives a bursty high-rate stream (market depth, tick-by-tick) more
-// slack before the [SlowConsumerPolicy] takes effect.
+// slack before the [SlowConsumerPolicy] takes effect. The size must be positive.
 func WithQueueSize(size int) SubscriptionOption {
 	return func(cfg *subscriptionConfig) {
 		cfg.buffer = size

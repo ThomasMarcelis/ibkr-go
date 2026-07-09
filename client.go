@@ -27,7 +27,8 @@ func DialContext(ctx context.Context, opts ...Option) (*Client, error) {
 	return &Client{engine: engine}, nil
 }
 
-// Close shuts down the client and its connection. It is idempotent.
+// Close initiates shutdown of the client and its connection. It is idempotent;
+// use [Client.Done] or [Client.Wait] when the caller must observe completion.
 func (c *Client) Close() error { return c.engine.Close() }
 
 // Done returns a channel closed when the client has terminated.
@@ -73,7 +74,8 @@ func (c *Client) History() HistoryClient { return HistoryClient{engine: c.engine
 // Orders returns the sub-client for placing, cancelling, modifying, and observing orders.
 func (c *Client) Orders() OrdersClient { return OrdersClient{engine: c.engine} }
 
-// Options returns the sub-client for option chains and calculation.
+// Options returns the sub-client for option calculations and exercise.
+// Contract option-chain metadata is available through [Client.Contracts].
 func (c *Client) Options() OptionsClient { return OptionsClient{engine: c.engine} }
 
 // News returns the sub-client for news providers, articles, and headlines.

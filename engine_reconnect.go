@@ -191,6 +191,7 @@ func (e *engine) closeEngine(err error) {
 		return
 	}
 	e.closed = true
+	e.clearReadySetups()
 	if e.transport != nil {
 		_ = e.transport.Close()
 	}

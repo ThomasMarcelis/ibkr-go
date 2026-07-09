@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type readySetup struct {
+	ctx        context.Context
+	onCanceled func()
+	fn         func()
+	stop       func() bool
+}
+
 func enqueueContextSetup(ctx context.Context, e *engine, onCanceled func(), fn func()) {
 	e.enqueue(func() {
 		if ctx.Err() != nil {
@@ -23,10 +30,52 @@ func enqueueReadySetup(ctx context.Context, e *engine, onCanceled func(), fn fun
 			fn()
 			return
 		}
-		time.AfterFunc(reconnectBackoff, func() {
-			enqueueReadySetup(ctx, e, onCanceled, fn)
+
+		setup := &readySetup{ctx: ctx, onCanceled: onCanceled, fn: fn}
+		setup.stop = context.AfterFunc(ctx, func() {
+			e.enqueue(func() {
+				e.cancelReadySetup(setup)
+			})
 		})
+		e.readySetups = append(e.readySetups, setup)
 	})
+}
+
+func (e *engine) cancelReadySetup(target *readySetup) {
+	for i, setup := range e.readySetups {
+		if setup != target {
+			continue
+		}
+		copy(e.readySetups[i:], e.readySetups[i+1:])
+		e.readySetups[len(e.readySetups)-1] = nil
+		e.readySetups = e.readySetups[:len(e.readySetups)-1]
+		if setup.onCanceled != nil {
+			setup.onCanceled()
+		}
+		return
+	}
+}
+
+func (e *engine) flushReadySetups() {
+	setups := e.readySetups
+	e.readySetups = nil
+	for _, setup := range setups {
+		setup.stop()
+		if setup.ctx.Err() != nil {
+			if setup.onCanceled != nil {
+				setup.onCanceled()
+			}
+			continue
+		}
+		setup.fn()
+	}
+}
+
+func (e *engine) clearReadySetups() {
+	for _, setup := range e.readySetups {
+		setup.stop()
+	}
+	e.readySetups = nil
 }
 
 func enqueueHistoricalSetup(ctx context.Context, e *engine, key string, onCanceled func(), fn func()) {

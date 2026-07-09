@@ -80,9 +80,10 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			return
 		}
 
-		cfg := defaultSubscriptionConfig(e.cfg)
-		for _, opt := range opts {
-			opt(&cfg)
+		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
 		}
 		if err := validateResumePolicy(OpNewsBulletins, cfg.resume); err != nil {
 			resp <- result{err: err}

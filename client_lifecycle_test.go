@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -283,8 +282,9 @@ func TestDialContextRejectsInvalidEventBuffer(t *testing.T) {
 			if err == nil {
 				t.Fatal("DialContext() error = nil, want event buffer validation error")
 			}
-			if !strings.Contains(err.Error(), "event buffer must be >= 1") {
-				t.Fatalf("DialContext() error = %v, want event buffer validation error", err)
+			validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
+			if !ok || validationErr.Field != "EventBuffer" {
+				t.Fatalf("DialContext() error = %v, want EventBuffer ValidationError", err)
 			}
 			if dialer.called {
 				t.Fatal("DialContext() called dialer before validating event buffer")

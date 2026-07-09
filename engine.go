@@ -3,7 +3,6 @@ package ibkr
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -49,6 +48,7 @@ type engine struct {
 	// unknownInboundSeen records msg ids already reported as unknown, so a
 	// hot misdecoded feed logs and emits once instead of per frame.
 	unknownInboundSeen map[int]struct{}
+	readySetups        []*readySetup
 
 	nextReqID                int
 	nextHistoricalRequest    time.Time
@@ -145,15 +145,9 @@ type parsedOpenOrder struct {
 }
 
 func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
-	cfg := defaultConfig()
-	for _, opt := range opts {
-		opt(&cfg)
-	}
-	if cfg.clientID < 0 {
-		return nil, fmt.Errorf("ibkr: client id must be >= 0")
-	}
-	if cfg.eventBuffer < 1 {
-		return nil, fmt.Errorf("ibkr: event buffer must be >= 1")
+	cfg, err := applyOptions(opts)
+	if err != nil {
+		return nil, err
 	}
 
 	e := &engine{

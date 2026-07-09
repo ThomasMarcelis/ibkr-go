@@ -199,4 +199,5 @@ func (e *engine) maybeReady() {
 	e.setState(StateReady, 0, "", nil)
 	e.reportReady(nil)
 	e.resumeRoutes()
+	e.flushReadySetups()
 }

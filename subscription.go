@@ -10,7 +10,8 @@ import (
 // Subscription is a live stream of typed events from the Gateway. Business
 // events arrive on [Subscription.Events]; lifecycle state changes (gaps,
 // resumes, close) arrive on [Subscription.Lifecycle]. Call [Subscription.Close]
-// to cancel the server-side subscription and drain channels.
+// to initiate server-side cancellation, then [Subscription.Wait] when shutdown
+// completion matters.
 // [Subscription.AwaitSnapshot] blocks until the initial snapshot boundary,
 // [Subscription.Wait] blocks until the subscription closes, and
 // [Subscription.Err] returns the terminal error without blocking.
@@ -152,8 +153,10 @@ func (s *Subscription[T]) Err() error {
 	return s.err
 }
 
-// Close cancels the server-side subscription and drains its channels. It is
-// idempotent and safe to call concurrently.
+// Close initiates cancellation of the server-side subscription. It is
+// idempotent and safe to call concurrently. Events and lifecycle channels
+// close asynchronously; use [Subscription.Done] or [Subscription.Wait] to
+// observe completion.
 func (s *Subscription[T]) Close() error {
 	s.cancelOnce.Do(func() {
 		if s.cancelFn != nil {
