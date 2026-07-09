@@ -1302,49 +1302,30 @@ func TestLiveBracketFillChildrenActivate(t *testing.T) {
 	account := liveAccount(t, client)
 	anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("200"))
 
-	// Parent: MKT BUY, don't transmit.
-	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+	bracket, err := client.Orders().PlaceBracket(ctx, ibkr.PlaceBracketRequest{
 		Contract: aaplContract,
-		Order: ibkr.Order{
+		Parent: ibkr.Order{
 			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarket,
 			Quantity: decimal.NewFromInt(1), TIF: ibkr.TIFDay, Account: account,
-			Transmit: new(false),
 		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder parent: %v", err)
-	}
-	t.Logf("parent orderID=%d", parent.OrderID())
-
-	// Take-profit: LMT SELL far above.
-	tp, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
+		TakeProfit: ibkr.Order{
 			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeLimit,
 			Quantity: decimal.NewFromInt(1), LmtPrice: liveFarSell(anchor),
 			TIF: ibkr.TIFGTC, Account: account,
-			ParentID: parent.OrderID(), Transmit: new(false),
 		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder take-profit: %v", err)
-	}
-	t.Logf("take-profit orderID=%d", tp.OrderID())
-
-	// Stop-loss: STP SELL far below. Transmit=true triggers bracket.
-	sl, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
+		StopLoss: ibkr.Order{
 			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeStop,
 			Quantity: decimal.NewFromInt(1), AuxPrice: liveFarBuy(anchor),
 			TIF: ibkr.TIFGTC, Account: account,
-			ParentID: parent.OrderID(),
 		},
 	})
 	if err != nil {
-		t.Fatalf("PlaceOrder stop-loss: %v", err)
+		t.Fatalf("PlaceBracket: %v", err)
 	}
-	t.Logf("stop-loss orderID=%d", sl.OrderID())
+	parent := bracket.Parent
+	tp := bracket.TakeProfit
+	sl := bracket.StopLoss
+	t.Logf("bracket orderIDs=%d/%d/%d", parent.OrderID(), tp.OrderID(), sl.OrderID())
 
 	// Parent should fill.
 	parentResult := liveObserveOrder(t, ctx, parent, "bracket-parent", 30*time.Second)

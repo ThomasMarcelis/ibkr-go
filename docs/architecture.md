@@ -148,7 +148,9 @@ singleton open-orders observer.
 Order IDs are auto-allocated from `NextValidID`, which is received during
 bootstrap and tracked on `Snapshot`. Each `Orders().Place` call increments
 the counter atomically within the actor goroutine. Callers never need to manage
-order IDs manually.
+order IDs manually. `Orders().PlaceBracket` reserves three consecutive IDs in
+one actor turn and sends all three frames without interleaving another request;
+the final child is the only frame with `Transmit=true`.
 
 ## OrderHandle Lifecycle
 

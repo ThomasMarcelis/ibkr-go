@@ -366,6 +366,25 @@ type PlaceOrderRequest struct {
 	Order    Order
 }
 
+// PlaceBracketRequest describes a parent order and the two closing children
+// that protect it. [OrdersClient.PlaceBracket] assigns all IDs and controls
+// ParentID and Transmit; callers leave those fields, OrderID, and WhatIf unset
+// on all three orders.
+type PlaceBracketRequest struct {
+	Contract   Contract
+	Parent     Order
+	TakeProfit Order
+	StopLoss   Order
+}
+
+// BracketOrder contains the independently observable handles created by
+// [OrdersClient.PlaceBracket].
+type BracketOrder struct {
+	Parent     *OrderHandle
+	TakeProfit *OrderHandle
+	StopLoss   *OrderHandle
+}
+
 // OrderState is the margin-and-commission preview returned by
 // [OrdersClient.Preview]. It mirrors the order-state block the Gateway
 // attaches to the what-if open_order echo: the nine margin decimals plus the

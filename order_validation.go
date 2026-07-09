@@ -77,6 +77,73 @@ func validateOrderRequest(req PlaceOrderRequest, intent orderIntent) error {
 	return validateOrderAdjustment(order.Adjustment)
 }
 
+func prepareBracketRequest(req PlaceBracketRequest) (PlaceBracketRequest, error) {
+	for _, item := range []struct {
+		name  string
+		order Order
+	}{
+		{"Parent", req.Parent},
+		{"TakeProfit", req.TakeProfit},
+		{"StopLoss", req.StopLoss},
+	} {
+		if item.order.OrderID != 0 {
+			return PlaceBracketRequest{}, invalidOrderField(item.name+".OrderID", item.order.OrderID, "must be zero; PlaceBracket assigns it")
+		}
+		if item.order.ParentID != 0 {
+			return PlaceBracketRequest{}, invalidOrderField(item.name+".ParentID", item.order.ParentID, "must be zero; PlaceBracket assigns it")
+		}
+		if item.order.Transmit != nil {
+			return PlaceBracketRequest{}, invalidOrderField(item.name+".Transmit", *item.order.Transmit, "must be nil; PlaceBracket controls transmit sequencing")
+		}
+		if item.order.WhatIf != nil {
+			return PlaceBracketRequest{}, invalidOrderField(item.name+".WhatIf", *item.order.WhatIf, "must be nil; brackets are live orders")
+		}
+		if !item.order.CashQty.IsZero() {
+			return PlaceBracketRequest{}, invalidOrderField(item.name+".CashQty", item.order.CashQty, "cash-quantity orders are not supported in a bracket")
+		}
+	}
+
+	closingAction := ActionBuy
+	switch req.Parent.Action {
+	case ActionBuy:
+		closingAction = ActionSell
+	case ActionSell, ActionSellShort, ActionSellLong:
+		closingAction = ActionBuy
+	default:
+		return PlaceBracketRequest{}, invalidOrderField("Parent.Action", req.Parent.Action, "must be a defined order action")
+	}
+	for _, child := range []struct {
+		name  string
+		order Order
+	}{
+		{"TakeProfit", req.TakeProfit},
+		{"StopLoss", req.StopLoss},
+	} {
+		if child.order.Action != closingAction {
+			return PlaceBracketRequest{}, invalidOrderField(child.name+".Action", child.order.Action, "must close the parent position")
+		}
+		if !child.order.Quantity.Equal(req.Parent.Quantity) {
+			return PlaceBracketRequest{}, invalidOrderField(child.name+".Quantity", child.order.Quantity, "must equal Parent.Quantity")
+		}
+		if child.order.Account != req.Parent.Account {
+			return PlaceBracketRequest{}, invalidOrderField(child.name+".Account", child.order.Account, "must equal Parent.Account")
+		}
+	}
+
+	req = clonePlaceBracketRequest(req)
+	req.Parent.Transmit = new(false)
+	req.TakeProfit.ParentID = 1 // replaced with the allocated parent ID in the actor
+	req.TakeProfit.Transmit = new(false)
+	req.StopLoss.ParentID = 1 // replaced with the allocated parent ID in the actor
+	req.StopLoss.Transmit = new(true)
+	for _, order := range []Order{req.Parent, req.TakeProfit, req.StopLoss} {
+		if err := validateOrderRequest(PlaceOrderRequest{Contract: req.Contract, Order: order}, orderIntentPlace); err != nil {
+			return PlaceBracketRequest{}, err
+		}
+	}
+	return req, nil
+}
+
 func validateOrderContract(contract Contract, combo OrderCombo) error {
 	if contract.ConID < 0 {
 		return invalidOrderField("Contract.ConID", contract.ConID, "must be >= 0")

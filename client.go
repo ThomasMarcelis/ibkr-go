@@ -295,6 +295,13 @@ func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	return c.engine.PlaceOrder(ctx, req)
 }
 
+// PlaceBracket submits a parent, take-profit, and stop-loss as one safely
+// sequenced bracket. It allocates the three IDs together and controls ParentID
+// and Transmit so the final child releases the complete bracket atomically.
+func (c OrdersClient) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (BracketOrder, error) {
+	return c.engine.PlaceBracket(ctx, req)
+}
+
 // Preview submits a what-if order and returns the Gateway's margin-and-commission
 // preview as an [OrderState]. It forces the what-if flag, so the place_order
 // frame is byte-identical to a what-if order placed through Place; nothing rests

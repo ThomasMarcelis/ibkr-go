@@ -318,6 +318,11 @@ type placeOrderResult struct {
 	err    error
 }
 
+type bracketOrderResult struct {
+	bracket BracketOrder
+	err     error
+}
+
 // PlaceOrder submits a new order and returns an OrderHandle that tracks its
 // lifecycle. The handle receives OpenOrder, OrderStatus, Execution, and
 // Commission events via dual dispatch. The order can be modified or cancelled
@@ -346,58 +351,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		}
 
 		orderID := e.allocOrderID()
-		handle := newOrderHandle(orderID)
-
-		handle.cancelFn = func(ctx context.Context) error {
-			ch := make(chan error, 1)
-			e.enqueue(func() {
-				if !e.isReady() {
-					ch <- ErrNotReady
-					return
-				}
-				ch <- e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
-			})
-			select {
-			case err := <-ch:
-				return err
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-e.done:
-				return e.Wait()
-			}
-		}
-
-		handle.modifyFn = func(ctx context.Context, order Order) error {
-			if err := validateOrderRequest(PlaceOrderRequest{Contract: req.Contract, Order: order}, orderIntentModify); err != nil {
-				return err
-			}
-			order = cloneOrder(order)
-			return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-				if !e.isReady() {
-					return ErrNotReady
-				}
-				or, ok := e.orders[orderID]
-				if !ok || or.closed || or.handle == nil || or.handle.isDone() {
-					return ErrClosed
-				}
-				return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
-					Contract: req.Contract,
-					Order:    order,
-				}))
-			})
-		}
-
-		handle.detachFn = func() {
-			e.enqueue(func() {
-				if or, ok := e.orders[orderID]; ok {
-					e.closeOrderRoute(orderID, or, nil)
-					return
-				}
-				handle.closeWithErr(nil)
-			})
-		}
-
-		e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
+		handle := e.bindOrderHandle(orderID, req.Contract)
 
 		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, req)); err != nil {
 			delete(e.orders, orderID)
@@ -416,6 +370,154 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		return nil, err
 	}
 	return out.handle, out.err
+}
+
+// PlaceBracket allocates three consecutive order IDs and sends the parent,
+// take-profit, and stop-loss in one actor turn. The first two orders are staged
+// with Transmit=false; the final child is transmitted and releases the bracket.
+func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (BracketOrder, error) {
+	prepared, err := prepareBracketRequest(req)
+	if err != nil {
+		return BracketOrder{}, err
+	}
+	req = prepared
+	resp := make(chan bracketOrderResult, 1)
+	enqueueReadySetup(ctx, e, func() {
+		resp <- bracketOrderResult{err: ctx.Err()}
+	}, func() {
+		if !e.isReady() {
+			resp <- bracketOrderResult{err: ErrNotReady}
+			return
+		}
+
+		parentID := e.allocOrderID()
+		takeProfitID := e.allocOrderID()
+		stopLossID := e.allocOrderID()
+		req.TakeProfit.ParentID = parentID
+		req.StopLoss.ParentID = parentID
+
+		bracket := BracketOrder{
+			Parent:     e.bindOrderHandle(parentID, req.Contract),
+			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract),
+			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract),
+		}
+		allIDs := []int64{parentID, takeProfitID, stopLossID}
+		sentIDs := make([]int64, 0, len(allIDs))
+		orders := []struct {
+			id    int64
+			order Order
+		}{
+			{parentID, req.Parent},
+			{takeProfitID, req.TakeProfit},
+			{stopLossID, req.StopLoss},
+		}
+		for _, item := range orders {
+			if err := e.sendContext(ctx, toCodecPlaceOrder(item.id, PlaceOrderRequest{Contract: req.Contract, Order: item.order})); err != nil {
+				e.cancelAndCloseOrderRoutes(sentIDs, allIDs, err)
+				resp <- bracketOrderResult{err: err}
+				return
+			}
+			sentIDs = append(sentIDs, item.id)
+		}
+		resp <- bracketOrderResult{bracket: bracket}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.resolveOrphanedBracket(resp, ctx.Err())
+	})
+	if err != nil {
+		return BracketOrder{}, err
+	}
+	return out.bracket, out.err
+}
+
+func (e *engine) resolveOrphanedBracket(resp <-chan bracketOrderResult, cause error) {
+	go func() {
+		var out bracketOrderResult
+		select {
+		case out = <-resp:
+		case <-e.done:
+			return
+		}
+		if out.bracket.Parent == nil {
+			return
+		}
+		ids := []int64{out.bracket.Parent.orderID, out.bracket.TakeProfit.orderID, out.bracket.StopLoss.orderID}
+		e.enqueue(func() { e.cancelAndCloseOrderRoutes(ids, ids, cause) })
+	}()
+}
+
+// cancelAndCloseOrderRoutes is the common rollback for partially sent and
+// caller-orphaned order groups. It runs on the actor goroutine.
+func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, cause error) {
+	if len(sentIDs) > 0 {
+		cancelCtx, cancel := context.WithTimeout(context.Background(), orphanCancelTimeout)
+		defer cancel()
+		for _, orderID := range sentIDs {
+			if or, ok := e.orders[orderID]; ok && !or.closed {
+				_ = e.sendContext(cancelCtx, codec.CancelOrderRequest{OrderID: orderID})
+			}
+		}
+	}
+	for _, orderID := range allIDs {
+		if or, ok := e.orders[orderID]; ok {
+			e.closeOrderRoute(orderID, or, cause)
+		}
+	}
+}
+
+// bindOrderHandle installs a new order route and its public handle. It must be
+// called on the actor goroutine before the corresponding place_order is sent.
+func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle {
+	handle := newOrderHandle(orderID)
+	handle.cancelFn = func(ctx context.Context) error {
+		ch := make(chan error, 1)
+		e.enqueue(func() {
+			if !e.isReady() {
+				ch <- ErrNotReady
+				return
+			}
+			ch <- e.sendContext(ctx, codec.CancelOrderRequest{OrderID: orderID})
+		})
+		select {
+		case err := <-ch:
+			return err
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-e.done:
+			return e.Wait()
+		}
+	}
+	handle.modifyFn = func(ctx context.Context, order Order) error {
+		if err := validateOrderRequest(PlaceOrderRequest{Contract: contract, Order: order}, orderIntentModify); err != nil {
+			return err
+		}
+		order = cloneOrder(order)
+		return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
+			if !e.isReady() {
+				return ErrNotReady
+			}
+			or, ok := e.orders[orderID]
+			if !ok || or.closed || or.handle == nil || or.handle.isDone() {
+				return ErrClosed
+			}
+			return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
+				Contract: contract,
+				Order:    order,
+			}))
+		})
+	}
+	handle.detachFn = func() {
+		e.enqueue(func() {
+			if or, ok := e.orders[orderID]; ok {
+				e.closeOrderRoute(orderID, or, nil)
+				return
+			}
+			handle.closeWithErr(nil)
+		})
+	}
+	e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
+	return handle
 }
 
 // resolveOrphanedPlaceOrder runs after a PlaceOrder caller abandoned the call

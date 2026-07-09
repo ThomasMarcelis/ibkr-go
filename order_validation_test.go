@@ -219,3 +219,42 @@ func TestOrdersClientValidatesBeforeUsingEngine(t *testing.T) {
 		t.Fatalf("Place() error = %v, want Order.Action ValidationError", err)
 	}
 }
+
+func TestPrepareBracketRequestOwnsSequencing(t *testing.T) {
+	t.Parallel()
+
+	request := PlaceBracketRequest{
+		Contract: Contract{ConID: 265598},
+		Parent: Order{
+			Action: ActionBuy, OrderType: OrderTypeMarket,
+			Quantity: decimal.NewFromInt(1), Account: "DU123",
+		},
+		TakeProfit: Order{
+			Action: ActionSell, OrderType: OrderTypeLimit,
+			Quantity: decimal.NewFromInt(1), LmtPrice: decimal.NewFromInt(200), Account: "DU123",
+		},
+		StopLoss: Order{
+			Action: ActionSell, OrderType: OrderTypeStop,
+			Quantity: decimal.NewFromInt(1), AuxPrice: decimal.NewFromInt(100), Account: "DU123",
+		},
+	}
+	prepared, err := prepareBracketRequest(request)
+	if err != nil {
+		t.Fatalf("prepareBracketRequest() error = %v", err)
+	}
+	if prepared.Parent.Transmit == nil || *prepared.Parent.Transmit ||
+		prepared.TakeProfit.Transmit == nil || *prepared.TakeProfit.Transmit ||
+		prepared.StopLoss.Transmit == nil || !*prepared.StopLoss.Transmit {
+		t.Fatalf("transmit sequence = %v/%v/%v, want false/false/true", prepared.Parent.Transmit, prepared.TakeProfit.Transmit, prepared.StopLoss.Transmit)
+	}
+	if prepared.TakeProfit.ParentID == 0 || prepared.StopLoss.ParentID == 0 {
+		t.Fatalf("child parent placeholders = %d/%d, want non-zero", prepared.TakeProfit.ParentID, prepared.StopLoss.ParentID)
+	}
+
+	request.StopLoss.Transmit = new(true)
+	_, err = prepareBracketRequest(request)
+	validation, ok := errors.AsType[*ValidationError](err)
+	if !ok || validation.Field != "StopLoss.Transmit" {
+		t.Fatalf("controlled Transmit error = %v, want StopLoss.Transmit ValidationError", err)
+	}
+}

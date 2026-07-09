@@ -104,9 +104,18 @@ Default subscription behavior:
 ## Order Submission
 
 `Orders().Place(ctx, req)` sends a live order and returns an `OrderHandle`.
-It rejects a request whose `Order.WhatIf` is set with a `*ValidationError`
-pointing at `Orders().Preview` — a what-if request is a margin/commission
-query, not a trade, and does not fit the `OrderHandle` lifecycle contract.
+It validates the contract, core order fields, and structural relationships in
+advanced order settings before anything reaches the wire. A request whose
+`Order.WhatIf` is set is rejected with a `*ValidationError` pointing at
+`Orders().Preview` — a what-if request is a margin/commission query, not a
+trade, and does not fit the `OrderHandle` lifecycle contract.
+
+`Orders().PlaceBracket(ctx, req)` allocates the parent, take-profit, and
+stop-loss IDs in one actor turn and owns their `ParentID` and `Transmit`
+fields. It sends the orders in parent/child/child order with the live-attested
+false/false/true transmit sequence. The result contains one `OrderHandle` per
+leg. If setup is interrupted after any leg reaches the send queue, the engine
+best-effort cancels every sent leg and closes all three routes.
 
 `Orders().Preview(ctx, req)` is the one-shot counterpart: it forces the
 what-if flag and returns an `OrderState` (the nine margin decimals plus the

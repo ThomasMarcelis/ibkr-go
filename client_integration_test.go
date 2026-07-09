@@ -4255,51 +4255,38 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 		Exchange: "SMART",
 		Currency: "USD",
 	}
-	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+	bracket, err := client.Orders().PlaceBracket(ctx, ibkr.PlaceBracketRequest{
 		Contract: contract,
-		Order: ibkr.Order{
+		Parent: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
 			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			Transmit:  new(false),
 		},
-	})
-	if err != nil {
-		t.Fatalf("bracket parent PlaceOrder: %v", err)
-	}
-	takeProfit, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
+		TakeProfit: ibkr.Order{
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
 			LmtPrice:  decimal.RequireFromString("2578.5"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			Transmit:  new(false),
-			ParentID:  parent.OrderID(),
 		},
-	})
-	if err != nil {
-		t.Fatalf("bracket take-profit PlaceOrder: %v", err)
-	}
-	stopLoss, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
+		StopLoss: ibkr.Order{
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("1"),
 			AuxPrice:  decimal.RequireFromString("12.89"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			ParentID:  parent.OrderID(),
 		},
 	})
 	if err != nil {
-		t.Fatalf("bracket stop-loss PlaceOrder: %v", err)
+		t.Fatalf("PlaceBracket: %v", err)
 	}
+	parent := bracket.Parent
+	takeProfit := bracket.TakeProfit
+	stopLoss := bracket.StopLoss
 
 	parentFilled, parentExecution := waitOrderFillAndExecution(t, ctx, parent)
 	if !parentFilled || !parentExecution {

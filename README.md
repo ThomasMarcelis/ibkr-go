@@ -189,6 +189,26 @@ if err := handle.Modify(ctx, revisedOrder); err != nil { // amend price, quantit
 The events channel keeps delivering until the server confirms the terminal
 state.
 
+Place a bracket without managing IDs or transmit flags yourself:
+
+```go
+quantity := decimal.NewFromInt(1)
+bracket, err := client.Orders().PlaceBracket(ctx, ibkr.PlaceBracketRequest{
+    Contract:   ibkr.Stock("AAPL"),
+    Parent:     ibkr.LimitOrder(ibkr.ActionBuy, quantity, decimal.RequireFromString("150")),
+    TakeProfit: ibkr.LimitOrder(ibkr.ActionSell, quantity, decimal.RequireFromString("165")),
+    StopLoss:   ibkr.StopOrder(ibkr.ActionSell, quantity, decimal.RequireFromString("142")),
+})
+if err != nil {
+    return err
+}
+fmt.Println(bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.StopLoss.OrderID())
+```
+
+`PlaceBracket` allocates all three IDs in one engine turn, links both children,
+and sends the required `Transmit=false`, `false`, `true` sequence. Each returned
+handle has the same lifecycle API as a regular order.
+
 ### Account data
 
 ```go

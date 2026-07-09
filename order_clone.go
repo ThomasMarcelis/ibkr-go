@@ -5,6 +5,13 @@ func clonePlaceOrderRequest(req PlaceOrderRequest) PlaceOrderRequest {
 	return req
 }
 
+func clonePlaceBracketRequest(req PlaceBracketRequest) PlaceBracketRequest {
+	req.Parent = cloneOrder(req.Parent)
+	req.TakeProfit = cloneOrder(req.TakeProfit)
+	req.StopLoss = cloneOrder(req.StopLoss)
+	return req
+}
+
 func cloneOrder(order Order) Order {
 	order.Combo.Legs = append([]ComboLeg(nil), order.Combo.Legs...)
 	order.Combo.LegPrices = append([]string(nil), order.Combo.LegPrices...)
