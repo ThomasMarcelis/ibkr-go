@@ -117,6 +117,56 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	}
 }
 
+func TestContractDetailsAppleBondsReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "contract_details_apple_bonds.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{IssuerID: "e1432232"})
+	if err != nil {
+		t.Fatalf("ContractDetails() error = %v", err)
+	}
+	if len(details) != 2 {
+		t.Fatalf("details len = %d, want 2", len(details))
+	}
+
+	first := details[0]
+	if first.ConID != 127128131 || first.SecType != ibkr.SecTypeBond || first.TradingClass != "AAPL" {
+		t.Errorf("first identity = conID %d secType %q tradingClass %q", first.ConID, first.SecType, first.TradingClass)
+	}
+	if first.Bond == nil {
+		t.Fatal("first Bond = nil")
+	}
+	if first.Bond.CUSIP != "IBCID127128131" || first.Bond.Coupon != nil || first.Bond.DescriptionAppend != "AAPL 3.85 05/04/43" {
+		t.Errorf("first Bond = %+v", *first.Bond)
+	}
+	if len(first.SecurityIDs) != 2 || first.SecurityIDs[0] != (ibkr.TagValue{Tag: "CUSIP", Value: "037833AL4"}) || first.SecurityIDs[1] != (ibkr.TagValue{Tag: "ISIN", Value: "US037833AL42"}) {
+		t.Errorf("first SecurityIDs = %+v", first.SecurityIDs)
+	}
+	if len(first.ValidExchanges) != 1 || first.ValidExchanges[0] != (ibkr.ContractExchange{Exchange: "SMART", MarketRuleID: 1386}) {
+		t.Errorf("first ValidExchanges = %+v", first.ValidExchanges)
+	}
+	if first.MinTick.String() != "0.0001" || first.MinSize == nil || first.MinSize.String() != "2" || first.SizeIncrement == nil || first.SizeIncrement.String() != "1" {
+		t.Errorf("first tick/size = %s / %v / %v", first.MinTick, first.MinSize, first.SizeIncrement)
+	}
+
+	second := details[1]
+	if second.ConID != 194154340 || second.Bond == nil || second.Bond.CUSIP != "IBCID194154340" || second.Bond.DescriptionAppend != "AAPL 1 5/8 11/10/26" {
+		t.Errorf("second = %+v", second)
+	}
+	if len(second.SecurityIDs) != 1 || second.SecurityIDs[0] != (ibkr.TagValue{Tag: "ISIN", Value: "XS1135337498"}) {
+		t.Errorf("second SecurityIDs = %+v", second.SecurityIDs)
+	}
+	if second.MinSize == nil || second.MinSize.String() != "100" {
+		t.Errorf("second MinSize = %v, want 100", second.MinSize)
+	}
+}
+
 func TestContractDetailsEURUSDCashReplay(t *testing.T) {
 	t.Parallel()
 

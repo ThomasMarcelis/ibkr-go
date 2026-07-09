@@ -11,6 +11,7 @@ func (m AccountSummaryValue) RequestID() int           { return m.ReqID }
 func (m AccountUpdateMultiEnd) RequestID() int         { return m.ReqID }
 func (m AccountUpdateMultiValue) RequestID() int       { return m.ReqID }
 func (m ContractDetails) RequestID() int               { return m.ReqID }
+func (m BondContractDetails) RequestID() int           { return m.ReqID }
 func (m ContractDetailsEnd) RequestID() int            { return m.ReqID }
 func (m DisplayGroupList) RequestID() int              { return m.ReqID }
 func (m DisplayGroupUpdated) RequestID() int           { return m.ReqID }

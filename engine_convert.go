@@ -16,6 +16,7 @@ func toCodecContract(c Contract) codec.Contract {
 		LocalSymbol:     c.LocalSymbol,
 		TradingClass:    c.TradingClass,
 		PrimaryExchange: c.PrimaryExchange,
+		IssuerID:        c.IssuerID,
 	}
 }
 
@@ -42,5 +43,6 @@ func fromCodecContract(c codec.Contract) Contract {
 		LocalSymbol:     c.LocalSymbol,
 		TradingClass:    c.TradingClass,
 		PrimaryExchange: c.PrimaryExchange,
+		IssuerID:        c.IssuerID,
 	}
 }

@@ -77,6 +77,7 @@ type contractSpec struct {
 	LocalSymbol                  string
 	TradingClass                 string
 	IncludeExpired               bool
+	IssuerID                     string
 }
 
 // contractFields returns the standard contract field layout used by most
@@ -160,9 +161,9 @@ func sendReqContractDetails(conn net.Conn, reqID int, c contractSpec) error {
 	fields := []string{"9", "8", strconv.Itoa(reqID)}
 	fields = append(fields, contractRequestFields(c)...)
 	fields = append(fields,
-		"", // secIdType
-		"", // secId
-		"", // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
+		"",         // secIdType
+		"",         // secId
+		c.IssuerID, // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
 	)
 	return sendMessage(conn, fields)
 }

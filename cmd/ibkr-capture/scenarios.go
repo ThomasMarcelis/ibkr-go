@@ -186,6 +186,17 @@ var scenarios = map[string]scenario{
 			return readFrames(conn, 30*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
 		},
 	},
+	"contract_details_apple_bonds": {
+		name:        "contract_details_apple_bonds",
+		description: "REQ_CONTRACT_DATA for live-derived Apple bond issuer ID e1432232",
+		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
+			reqID := nextReqID()
+			if err := sendReqContractDetails(conn, reqID, contractSpec{IssuerID: "e1432232"}); err != nil {
+				return err
+			}
+			return readFrames(conn, 30*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
+		},
+	},
 	"contract_details_eurusd_cash": {
 		name:        "contract_details_eurusd_cash",
 		description: "REQ_CONTRACT_DATA for EUR.USD CASH IDEALPRO",

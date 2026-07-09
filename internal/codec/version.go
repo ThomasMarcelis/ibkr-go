@@ -17,6 +17,7 @@ const (
 	MinServerVersionBondAccruedInterest            = protocol.MinServerVersionBondAccruedInterest
 	MinServerVersionIneligibilityReasons           = protocol.MinServerVersionIneligibilityReasons
 	MinServerVersionRFQFields                      = protocol.MinServerVersionRFQFields
+	MinServerVersionBondTradingHours               = protocol.MinServerVersionBondTradingHours
 	MinServerVersionIncludeOvernight               = protocol.MinServerVersionIncludeOvernight
 	MinServerVersionUndoRFQFields                  = protocol.MinServerVersionUndoRFQFields
 	MinServerVersionCMETaggingFields               = protocol.MinServerVersionCMETaggingFields

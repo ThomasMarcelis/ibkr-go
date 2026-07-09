@@ -52,6 +52,7 @@ const (
 //   - FUT / CONTFUT: Symbol (or LocalSymbol), Expiry, Exchange, Currency.
 //   - CASH (forex): Symbol is the base currency, Currency the quote currency,
 //     Exchange "IDEALPRO".
+//   - BOND: IssuerID from [MatchingSymbol.IssuerID] resolves the issuer's bonds.
 //
 // Setting ConID alone unambiguously identifies a contract the client has
 // already qualified; the descriptive fields can then be left zero. Through
@@ -74,6 +75,7 @@ type Contract struct {
 	LocalSymbol     string          // exchange-local symbol; an alternative to Symbol for futures
 	TradingClass    string          // trading class, disambiguates options sharing a symbol
 	PrimaryExchange string          // primary listing exchange, resolves SMART ambiguity for dual-listed stocks
+	IssuerID        string          // bond issuer identifier returned by ContractsClient.Search
 }
 
 // ComboLeg is one leg of a multi-leg (BAG) combo contract.
@@ -179,8 +181,30 @@ type ContractDetails struct {
 	MinSize                 *decimal.Decimal // nil when IBKR omits the size rule
 	SizeIncrement           *decimal.Decimal // nil when IBKR omits the size rule
 	SuggestedSizeIncrement  *decimal.Decimal // nil when IBKR omits the size rule
+	Bond                    *BondDetails
 	Fund                    *FundDetails
 	IneligibilityReasons    []IneligibilityReason
+}
+
+// BondDetails carries the bond-only message-18 fields. IBKR's field named
+// CUSIP may contain an internal IBCID; use ContractDetails.SecurityIDs for the
+// separately tagged CUSIP and ISIN values returned by the Gateway.
+type BondDetails struct {
+	CUSIP             string
+	Coupon            *decimal.Decimal
+	Maturity          string
+	IssueDate         string
+	Ratings           string
+	Type              string
+	CouponType        string
+	Convertible       bool
+	Callable          bool
+	Putable           bool
+	DescriptionAppend string
+	NextOptionDate    string
+	NextOptionType    string
+	NextOptionPartial bool
+	Notes             string
 }
 
 // ContractExchange is a venue on which a contract is valid and the market

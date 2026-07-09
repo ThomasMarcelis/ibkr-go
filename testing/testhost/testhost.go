@@ -567,6 +567,7 @@ func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[strin
 				"currency":         safeField(fields, 12),
 				"primary_exchange": safeField(fields, 11),
 				"local_symbol":     safeField(fields, 13),
+				"issuer_id":        safeField(fields, 18),
 			}
 		}
 		return "req_contract_details", body, nil

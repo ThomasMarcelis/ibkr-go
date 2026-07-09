@@ -65,6 +65,49 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			Fund:                    asCodecFundDetails(resolve(body["fund"])),
 			IneligibilityReasons:    asCodecIneligibilityReasons(resolve(body["ineligibility_reasons"])),
 		}, nil
+	case "bond_contract_details":
+		aggGroup := math.MaxInt32
+		if value, ok := body["agg_group"]; ok {
+			aggGroup = asInt(resolve(value))
+		}
+		return codec.BondContractDetails{
+			ContractDetails: codec.ContractDetails{
+				ReqID:                   asInt(resolve(body["req_id"])),
+				Contract:                asContract(resolve(body["contract"])),
+				MarketName:              asString(resolve(body["market_name"])),
+				MinTick:                 asString(resolve(body["min_tick"])),
+				OrderTypes:              asString(resolve(body["order_types"])),
+				ValidExchanges:          asString(resolve(body["valid_exchanges"])),
+				LongName:                asString(resolve(body["long_name"])),
+				TimeZoneID:              asString(resolve(body["time_zone_id"])),
+				TradingHours:            asString(resolve(body["trading_hours"])),
+				LiquidHours:             asString(resolve(body["liquid_hours"])),
+				EconomicValueRule:       asString(resolve(body["economic_value_rule"])),
+				EconomicValueMultiplier: asString(resolve(body["economic_value_multiplier"])),
+				SecurityIDs:             asCodecTagValues(resolve(body["security_ids"])),
+				AggGroup:                aggGroup,
+				MarketRuleIDs:           asString(resolve(body["market_rule_ids"])),
+				LastTradeTime:           asString(resolve(body["last_trade_time"])),
+				MinSize:                 asString(resolve(body["min_size"])),
+				SizeIncrement:           asString(resolve(body["size_increment"])),
+				SuggestedSizeIncrement:  asString(resolve(body["suggested_size_increment"])),
+			},
+			CUSIP:             asString(resolve(body["cusip"])),
+			Coupon:            asString(resolve(body["coupon"])),
+			Maturity:          asString(resolve(body["maturity"])),
+			IssueDate:         asString(resolve(body["issue_date"])),
+			Ratings:           asString(resolve(body["ratings"])),
+			BondType:          asString(resolve(body["bond_type"])),
+			CouponType:        asString(resolve(body["coupon_type"])),
+			Convertible:       asBool(resolve(body["convertible"])),
+			Callable:          asBool(resolve(body["callable"])),
+			Putable:           asBool(resolve(body["putable"])),
+			DescriptionAppend: asString(resolve(body["description_append"])),
+			NextOptionDate:    asString(resolve(body["next_option_date"])),
+			NextOptionType:    asString(resolve(body["next_option_type"])),
+			NextOptionPartial: asBool(resolve(body["next_option_partial"])),
+			Notes:             asString(resolve(body["notes"])),
+		}, nil
 	case "contract_details_end":
 		return codec.ContractDetailsEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
 	case "historical_bar":
@@ -618,5 +661,6 @@ func asContract(value any) codec.Contract {
 		LocalSymbol:     asString(m["local_symbol"]),
 		TradingClass:    asString(m["trading_class"]),
 		PrimaryExchange: asString(m["primary_exchange"]),
+		IssuerID:        asString(m["issuer_id"]),
 	}
 }

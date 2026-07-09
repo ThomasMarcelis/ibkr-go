@@ -113,7 +113,7 @@ The next high-value workstreams are:
 | 2 | Market-open trading-basic captures | Grounds fill, modify-to-fill, order-type matrix, and rejection paths under regular-session behavior | `trading-basic` batch through `paper-dev`, then verify and triage |
 | 3 | Entitlement and account blocker ledger | Keeps missing subscriptions from looking like library regressions | 10089 market data, 10187 historical ticks, 10276 WSH, option-data permissions |
 | 4 | Protocol drift and version edges | Keeps the pure-Go codec current with IBKR releases | current-time millis, `$LEDGER-` account values, fractional tick sizes, order/completed-order tail fields |
-| 5 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, BOND identifier, CFD/CRYPTO/FUND probes |
+| 5 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, bond order/data permissions, CFD/CRYPTO/FUND probes |
 | 6 | Public ergonomics and examples | Helps users trust and adopt the library | examples for live roles, error handling, replay-backed behavior notes, pkg.go.dev polish |
 | 7 | Advanced order semantics (after the protobuf decision) | Closes gaps between "order placement works" and "order model is trustworthy", but these are classic-branch fields whose shape a future protobuf migration could touch — see [Protobuf era](#protobuf-era-sv-201) | brackets, OCA, conditions, scale, hedge, pegged/adjusted families |
 

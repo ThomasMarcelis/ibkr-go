@@ -96,6 +96,7 @@ const (
 	InManagedAccounts       = protocol.InManagedAccounts
 	InReceiveFA             = protocol.InReceiveFA
 	InHistoricalData        = protocol.InHistoricalData
+	InBondContractData      = protocol.InBondContractData
 	InScannerParameters     = protocol.InScannerParameters
 	InScannerData           = protocol.InScannerData
 	InTickOptionComputation = protocol.InTickOptionComputation

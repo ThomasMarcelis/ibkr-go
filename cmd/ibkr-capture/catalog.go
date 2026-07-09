@@ -63,6 +63,7 @@ var scenarioMetadataByName = map[string]scenarioMetadata{
 	"req_ids":                               meta("session", []string{"DialContext"}, []int{8, 9}, "read_only", nil, []string{"next valid id from explicit reqIds"}, 1, "promoted", batchNewV2, batchReadOnly),
 	"contract_details_aapl_stk":             meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"stock contract details end marker"}, 1, "promoted", batchReadOnly),
 	"contract_details_aapl_opt":             meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"option chain contract details"}, 1, "promoted", batchReadOnly),
+	"contract_details_apple_bonds":          meta("contracts", []string{"Contracts().Details"}, []int{9, 18, 52}, "read_only", nil, []string{"bond contract details by live-derived issuer ID"}, 1, "promoted", batchReadOnly),
 	"contract_details_eurusd_cash":          meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"cash/FX contract details"}, 1, "promoted", batchReadOnly),
 	"contract_details_es_fut":               meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"futures contract details"}, 1, "promoted", batchReadOnly),
 	"contract_details_not_found":            meta("contracts", []string{"Contracts().Details"}, []int{9, 4, 52}, "read_only", nil, []string{"real IBKR not-found API error"}, 1, "promoted", batchReadOnly),

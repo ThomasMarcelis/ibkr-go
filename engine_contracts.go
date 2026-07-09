@@ -40,6 +40,14 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 						return
 					}
 					values = append(values, detail)
+				case codec.BondContractDetails:
+					detail, err := fromCodecBondContractDetails(m)
+					if err != nil {
+						delete(e.keyed, reqID)
+						resp <- result{err: err}
+						return
+					}
+					values = append(values, detail)
 				case codec.ContractDetailsEnd:
 					delete(e.keyed, reqID)
 					resp <- result{values: values}
@@ -460,6 +468,27 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 		Fund:                    fund,
 		IneligibilityReasons:    ineligibilityReasons,
 	}, nil
+}
+
+func fromCodecBondContractDetails(m codec.BondContractDetails) (ContractDetails, error) {
+	detail, err := fromCodecContractDetails(m.ContractDetails)
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	coupon, err := parseOptionalDecimalPointer(m.Coupon, "bond contract coupon")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	detail.Bond = &BondDetails{
+		CUSIP: m.CUSIP, Coupon: coupon, Maturity: m.Maturity,
+		IssueDate: m.IssueDate, Ratings: m.Ratings, Type: m.BondType,
+		CouponType: m.CouponType, Convertible: m.Convertible,
+		Callable: m.Callable, Putable: m.Putable,
+		DescriptionAppend: m.DescriptionAppend,
+		NextOptionDate:    m.NextOptionDate, NextOptionType: m.NextOptionType,
+		NextOptionPartial: m.NextOptionPartial, Notes: m.Notes,
+	}
+	return detail, nil
 }
 
 func contractExchanges(validExchanges, marketRuleIDs string) ([]ContractExchange, error) {

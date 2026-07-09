@@ -24,6 +24,7 @@ type Contract struct {
 	LocalSymbol     string
 	TradingClass    string
 	PrimaryExchange string
+	IssuerID        string
 }
 
 type ContractDetailsRequest struct {
@@ -38,10 +39,10 @@ func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	w.WriteBool(false) // includeExpired
-	w.WriteString("")  // secIdType
-	w.WriteString("")  // secId
-	w.WriteString("")  // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
+	w.WriteBool(false)                 // includeExpired
+	w.WriteString("")                  // secIdType
+	w.WriteString("")                  // secId
+	w.WriteString(m.Contract.IssuerID) // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
 	return w.Fields(), nil
 }
 
@@ -78,6 +79,28 @@ type ContractDetails struct {
 	SuggestedSizeIncrement  string
 	Fund                    *FundDetails
 	IneligibilityReasons    []IneligibilityReason
+}
+
+// BondContractDetails is the distinct classic message-18 response used for
+// bonds. ContractDetails carries the common fields shared with message 10;
+// the remaining fields retain the official bond callback shape.
+type BondContractDetails struct {
+	ContractDetails
+	CUSIP             string
+	Coupon            string
+	Maturity          string
+	IssueDate         string
+	Ratings           string
+	BondType          string
+	CouponType        string
+	Convertible       bool
+	Callable          bool
+	Putable           bool
+	DescriptionAppend string
+	NextOptionDate    string
+	NextOptionType    string
+	NextOptionPartial bool
+	Notes             string
 }
 
 type FundDetails struct {
@@ -436,6 +459,154 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 	return w.Fields(), nil
 }
 
+// v176..v200 classic bond layout. Live server_version 200 frames are frozen
+// in codec_capture_test.go; API 10.48.01 processBondContractDataMsg is the
+// source reference for field order and version gates.
+func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	symbol := r.ReadString()
+	secType := r.ReadString()
+	cusip := r.ReadString()
+	coupon := r.ReadDecimal()
+	maturity, lastTradeTime, maturityTimeZone := splitBondLastTradeDate(r.ReadString())
+	issueDate := r.ReadString()
+	ratings := r.ReadString()
+	bondType := r.ReadString()
+	couponType := r.ReadString()
+	convertible, _ := r.ReadBool()
+	callable, _ := r.ReadBool()
+	putable, _ := r.ReadBool()
+	descriptionAppend := r.ReadString()
+	exchange := r.ReadString()
+	currency := r.ReadString()
+	marketName := r.ReadString()
+	tradingClass := r.ReadString()
+	conID, _ := r.ReadInt()
+	minTick := r.ReadDecimal()
+	orderTypes := r.ReadString()
+	validExchanges := r.ReadString()
+	nextOptionDate := r.ReadString()
+	nextOptionType := r.ReadString()
+	nextOptionPartial, _ := r.ReadBool()
+	notes := r.ReadString()
+	longName := decodeUnicodeEscapes(r.ReadString())
+	timeZoneID := maturityTimeZone
+	tradingHours := ""
+	liquidHours := ""
+	if sv >= MinServerVersionBondTradingHours {
+		timeZoneID = r.ReadString()
+		tradingHours = r.ReadString()
+		liquidHours = r.ReadString()
+	}
+	economicValueRule := r.ReadString()
+	economicValueMultiplier := r.ReadDecimal()
+
+	securityIDCount, err := r.ReadCount("bond contract security id count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("bond contract security ids", securityIDCount, 2, 5); err != nil {
+		return nil, err
+	}
+	var securityIDs []TagValue
+	if securityIDCount > 0 {
+		securityIDs = make([]TagValue, securityIDCount)
+	}
+	for i := range securityIDs {
+		securityIDs[i] = TagValue{Tag: r.ReadString(), Value: r.ReadString()}
+	}
+
+	aggGroup, _ := r.ReadInt()
+	marketRuleIDs := r.ReadString()
+	minSize := r.ReadDecimal()
+	sizeIncrement := r.ReadDecimal()
+	suggestedSizeIncrement := r.ReadDecimal()
+	if remaining := r.Remaining(); remaining != 0 {
+		return nil, fmt.Errorf("ibkr codec: bond contract details has %d trailing fields", remaining)
+	}
+
+	return []Message{BondContractDetails{
+		ContractDetails: ContractDetails{
+			ReqID: reqID,
+			Contract: Contract{
+				ConID: conID, Symbol: symbol, SecType: secType,
+				Exchange: exchange, Currency: currency, TradingClass: tradingClass,
+			},
+			MarketName: marketName, MinTick: minTick,
+			OrderTypes: orderTypes, ValidExchanges: validExchanges,
+			LongName: longName, TimeZoneID: timeZoneID,
+			TradingHours: tradingHours, LiquidHours: liquidHours,
+			EconomicValueRule: economicValueRule, EconomicValueMultiplier: economicValueMultiplier,
+			SecurityIDs: securityIDs, AggGroup: aggGroup,
+			MarketRuleIDs: marketRuleIDs, LastTradeTime: lastTradeTime,
+			MinSize: minSize, SizeIncrement: sizeIncrement, SuggestedSizeIncrement: suggestedSizeIncrement,
+		},
+		CUSIP: cusip, Coupon: coupon, Maturity: maturity, IssueDate: issueDate,
+		Ratings: ratings, BondType: bondType, CouponType: couponType,
+		Convertible: convertible, Callable: callable, Putable: putable,
+		DescriptionAppend: descriptionAppend,
+		NextOptionDate:    nextOptionDate, NextOptionType: nextOptionType,
+		NextOptionPartial: nextOptionPartial, Notes: notes,
+	}}, nil
+}
+
+func (m BondContractDetails) encodeWire(sv int) ([]string, error) {
+	w := fieldWriter{}
+	w.WriteInt(InBondContractData)
+	w.WriteInt(m.ReqID)
+	w.WriteString(m.Contract.Symbol)
+	w.WriteString(m.Contract.SecType)
+	w.WriteString(m.CUSIP)
+	w.WriteDecimal(m.Coupon)
+	maturity := m.Maturity
+	if m.LastTradeTime != "" && !strings.ContainsAny(maturity, " -") {
+		maturity += " " + m.LastTradeTime
+		if m.TimeZoneID != "" {
+			maturity += " " + m.TimeZoneID
+		}
+	}
+	w.WriteString(maturity)
+	w.WriteString(m.IssueDate)
+	w.WriteString(m.Ratings)
+	w.WriteString(m.BondType)
+	w.WriteString(m.CouponType)
+	w.WriteBool(m.Convertible)
+	w.WriteBool(m.Callable)
+	w.WriteBool(m.Putable)
+	w.WriteString(m.DescriptionAppend)
+	w.WriteString(m.Contract.Exchange)
+	w.WriteString(m.Contract.Currency)
+	w.WriteString(m.MarketName)
+	w.WriteString(m.Contract.TradingClass)
+	w.WriteInt(m.Contract.ConID)
+	w.WriteDecimal(m.MinTick)
+	w.WriteString(m.OrderTypes)
+	w.WriteString(m.ValidExchanges)
+	w.WriteString(m.NextOptionDate)
+	w.WriteString(m.NextOptionType)
+	w.WriteBool(m.NextOptionPartial)
+	w.WriteString(m.Notes)
+	w.WriteString(m.LongName)
+	if sv >= MinServerVersionBondTradingHours {
+		w.WriteString(m.TimeZoneID)
+		w.WriteString(m.TradingHours)
+		w.WriteString(m.LiquidHours)
+	}
+	w.WriteString(m.EconomicValueRule)
+	w.WriteDecimal(m.EconomicValueMultiplier)
+	w.WriteInt(len(m.SecurityIDs))
+	for _, id := range m.SecurityIDs {
+		w.WriteString(id.Tag)
+		w.WriteString(id.Value)
+	}
+	w.WriteInt(m.AggGroup)
+	w.WriteString(m.MarketRuleIDs)
+	w.WriteDecimal(m.MinSize)
+	w.WriteDecimal(m.SizeIncrement)
+	w.WriteDecimal(m.SuggestedSizeIncrement)
+	return w.Fields(), nil
+}
+
 func splitLastTradeDate(value string) (date, tradeTime string) {
 	var fields []string
 	if strings.Contains(value, "-") {
@@ -450,6 +621,25 @@ func splitLastTradeDate(value string) (date, tradeTime string) {
 		tradeTime = fields[1]
 	}
 	return date, tradeTime
+}
+
+func splitBondLastTradeDate(value string) (maturity, tradeTime, timeZone string) {
+	var fields []string
+	if strings.Contains(value, "-") {
+		fields = strings.Split(value, "-")
+	} else {
+		fields = strings.Fields(value)
+	}
+	if len(fields) > 0 {
+		maturity = fields[0]
+	}
+	if len(fields) > 1 {
+		tradeTime = fields[1]
+	}
+	if len(fields) > 2 {
+		timeZone = fields[2]
+	}
+	return maturity, tradeTime, timeZone
 }
 
 // decodeUnicodeEscapes reverses the ASCII7 encoding used by IBKR for classic

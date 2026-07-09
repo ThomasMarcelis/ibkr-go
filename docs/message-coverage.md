@@ -30,6 +30,7 @@ server version and managed-account bootstrap fields are known.
 |-----------|--------|------|--------|
 | out | 9 | ContractDetailsRequest | landed |
 | in | 10 | ContractDetails | landed; complete classic v200 common and FUND shapes |
+| in | 18 | BondContractDetails | landed; live-attested classic v200 bond shape |
 | in | 52 | ContractDetailsEnd | landed |
 | out | 81 | reqMatchingSymbols | landed |
 | in | 79 | SymbolSamples | landed |

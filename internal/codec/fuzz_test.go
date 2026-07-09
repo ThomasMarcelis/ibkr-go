@@ -52,6 +52,7 @@ var allInboundMsgIDs = []int{
 	InNewsBulletins,         // 14
 	InManagedAccounts,       // 15
 	InHistoricalData,        // 17
+	InBondContractData,      // 18
 	InScannerParameters,     // 19
 	InScannerData,           // 20
 	InTickOptionComputation, // 21
@@ -466,6 +467,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"NewsBulletins", InNewsBulletins, 5},                  // version, msgId, msgType, headline, source
 		{"ManagedAccounts", InManagedAccounts, 2},              // version, accountsList
 		{"HistoricalData", InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end
+		{"BondContractData", InBondContractData, 42},           // reqID, 31 fixed bond/common fields, security IDs, and size-rule tail
 		{"ScannerParameters", InScannerParameters, 2},          // version, xml
 		{"ScannerData", InScannerData, 20},                     // version, reqID, count, entries(rank + 11 contract + 4 fields)
 		{"TickOptionComputation", InTickOptionComputation, 12}, // version, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice

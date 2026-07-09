@@ -307,6 +307,30 @@ func TestContractDetailsVersionGate(t *testing.T) {
 	}
 }
 
+func TestBondContractDetailsTradingHoursVersionGate(t *testing.T) {
+	t.Parallel()
+
+	msg := BondContractDetails{
+		ContractDetails: ContractDetails{
+			ReqID: 7, Contract: Contract{SecType: "BOND"},
+			TimeZoneID: "US/Eastern", TradingHours: "trading", LiquidHours: "liquid",
+			LastTradeTime: "17:00:00",
+			AggGroup:      7, MarketRuleIDs: "1386", MinSize: "2", SizeIncrement: "1", SuggestedSizeIncrement: "1",
+		},
+		Maturity: "20430504",
+	}
+
+	at187 := encFieldsAt(t, msg, 187)
+	at188 := encFieldsAt(t, msg, 188)
+	if got := len(at188) - len(at187); got != 3 {
+		t.Fatalf("field delta at bond trading-hours gate = %d, want 3", got)
+	}
+	decoded := decodeSingle[BondContractDetails](t, 187, at187)
+	if decoded.Maturity != "20430504" || decoded.LastTradeTime != "17:00:00" || decoded.TimeZoneID != "US/Eastern" {
+		t.Errorf("pre-gate maturity metadata = %q %q %q", decoded.Maturity, decoded.LastTradeTime, decoded.TimeZoneID)
+	}
+}
+
 func TestContractDetailsFundAndIneligibilityVersionGates(t *testing.T) {
 	t.Parallel()
 

@@ -133,7 +133,7 @@ These are known official EWrapper callbacks with no ibkr-go message ID:
 
 - `tickEFP` — EFP tick pricing (no live data observed)
 - `orderBound` — order-bound notification
-- `bondContractDetails` — bond-specific contract details
+- `bondContractDetails` — implemented and frozen from the live Apple issuer query
 - `replaceFAEnd` — FA replace completion
 - `connectAck` — TWS-specific connection ack
 - `rerouteMktDataReq` / `rerouteMktDepthReq` — reroute suggestions
@@ -292,7 +292,7 @@ Probe each: place → check for rejection or acceptance.
 | FOP | SecTypeFutureOption | partial | yes | no | 2026-04-15 broad probe timed out; qualify concrete FOP |
 | CASH | SecTypeForex | yes | yes | no | — |
 | BAG | SecTypeCombo | blocked | blocked | no | depends on OPT |
-| BOND | SecTypeBond | yes | yes | no | placeholder CUSIP returned real code 200; replace with concrete bond |
+| BOND | SecTypeBond | yes | yes | yes | Apple issuer lookup and message-18 replay promoted; order/data permissions remain |
 | CFD | SecTypeCFD | yes | yes | no | order permissions still unknown |
 | WAR | SecTypeWarrant | partial | yes | no | 2026-04-15 probe timed out; needs concrete warrant |
 | IND | SecTypeIndex | yes | yes | partial | read-only (no orders) |
@@ -595,7 +595,7 @@ rejections or no-status cleanup evidence.
 - [x] Two subscriptions same contract (independent delayed streams)
 - [x] Cross-client order observation (client_id=0)
 - [ ] Server version boundary testing (sv=191 vs sv=192)
-- [ ] Bond contract details callback shape
+- [x] Bond contract details callback shape
 
 Progress: `api_transmit_false_then_transmit_aapl` was live-captured on
 2026-04-15 (`003abb59dfced542`) and replay-promoted. Duplicate quote

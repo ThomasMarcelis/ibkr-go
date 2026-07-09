@@ -2,9 +2,87 @@ package codec
 
 import (
 	"bytes"
+	"encoding/base64"
+	"slices"
 	"strings"
 	"testing"
 )
+
+func TestCaptureDecode_BondContractDetails(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260709T232431Z-contract_details_apple_bonds,
+	// server_version=200, events.jsonl sha256 fd71d9f7bf4f470c. These are exact
+	// message-18 payloads for the same issuer query, retaining both observed
+	// security-ID cardinalities (CUSIP+ISIN and ISIN-only).
+	tests := []struct {
+		name        string
+		payload     string
+		conID       int
+		cusip       string
+		description string
+		securityIDs []TagValue
+		marketRule  string
+		minSize     string
+	}{
+		{
+			name:    "two security ids",
+			payload: "MTgAMTAwMQAAQk9ORABJQkNJRDEyNzEyODEzMQAAAAAAAAAwADAAMABBQVBMIDMuODUgMDUvMDQvNDMAU01BUlQAAABBQVBMADEyNzEyODEzMQAwLjAwMDEAQUNUSVZFVElNLEFELEFESlVTVCxBTEVSVCxBTExPQyxBT04sQVZHQ09TVCxCQVNLRVQsQkVOQ0hQWCxDT05ET1JERVIsREFZLERFQUNULERFQUNURElTLERFQUNURU9ELEVWUlVMRSxHQVQsR1RDLEdURCxHVFQsSElELElCS1JBVFMsSU9DLExNVCxNS1QsTk9OQUxHTyxOT05GSVJNUVQsT0NBLE9ERFBPU0NMUyxQQU9OLFJGUSxSVEgsU0NBTEUsU0NBTEVSU1QsV0hBVElGAFNNQVJUAAAAMAAAAFVTL0Vhc3Rlcm4AMjAyNjA3MDg6MjAwMC0yMDI2MDcwOToxNzAwOzIwMjYwNzA5OjIwMDAtMjAyNjA3MTA6MTcwMDsyMDI2MDcxMTpDTE9TRUQ7MjAyNjA3MTI6MjAwMC0yMDI2MDcxMzoxNzAwOzIwMjYwNzEzOjIwMDAtMjAyNjA3MTQ6MTcwMDsyMDI2MDcxNDoyMDAwLTIwMjYwNzE1OjE3MDAAMjAyNjA3MDg6MjAwMC0yMDI2MDcwOToxNzAwOzIwMjYwNzA5OjIwMDAtMjAyNjA3MTA6MTcwMDsyMDI2MDcxMTpDTE9TRUQ7MjAyNjA3MTI6MjAwMC0yMDI2MDcxMzoxNzAwOzIwMjYwNzEzOjIwMDAtMjAyNjA3MTQ6MTcwMDsyMDI2MDcxNDoyMDAwLTIwMjYwNzE1OjE3MDAAAAAyAENVU0lQADAzNzgzM0FMNABJU0lOAFVTMDM3ODMzQUw0MgA3ADEzODYAMgAxADEA",
+			conID:   127128131, cusip: "IBCID127128131", description: "AAPL 3.85 05/04/43",
+			securityIDs: []TagValue{{Tag: "CUSIP", Value: "037833AL4"}, {Tag: "ISIN", Value: "US037833AL42"}},
+			marketRule:  "1386", minSize: "2",
+		},
+		{
+			name:    "one security id",
+			payload: "MTgAMTAwMQAAQk9ORABJQkNJRDE5NDE1NDM0MAAAAAAAAAAwADAAMABBQVBMIDEgNS84IDExLzEwLzI2AFNNQVJUAAAAQUFQTAAxOTQxNTQzNDAAMC4wMDAxAEFDVElWRVRJTSxBRCxBREpVU1QsQUxFUlQsQUxMT0MsQU9OLEFWR0NPU1QsQkFTS0VULEJFTkNIUFgsQ09ORE9SREVSLERBWSxERUFDVCxERUFDVERJUyxERUFDVEVPRCxFVlJVTEUsR0FULEdUQyxHVEQsR1RULEhJRCxJQktSQVRTLElPQyxMTVQsTUtULE5PTkFMR08sT0NBLE9ERFBPU0NMUyxQQU9OLFJGUSxSVEgsU0NBTEUsU0NBTEVSU1QsV0hBVElGAFNNQVJUAAAAMAAAAFVTL0Vhc3Rlcm4AMjAyNjA3MDg6MjAwMC0yMDI2MDcwOToxNzAwOzIwMjYwNzA5OjIwMDAtMjAyNjA3MTA6MTcwMDsyMDI2MDcxMTpDTE9TRUQ7MjAyNjA3MTI6MjAwMC0yMDI2MDcxMzoxNzAwOzIwMjYwNzEzOjIwMDAtMjAyNjA3MTQ6MTcwMDsyMDI2MDcxNDoyMDAwLTIwMjYwNzE1OjE3MDAAMjAyNjA3MDg6MjAwMC0yMDI2MDcwOToxNzAwOzIwMjYwNzA5OjIwMDAtMjAyNjA3MTA6MTcwMDsyMDI2MDcxMTpDTE9TRUQ7MjAyNjA3MTI6MjAwMC0yMDI2MDcxMzoxNzAwOzIwMjYwNzEzOjIwMDAtMjAyNjA3MTQ6MTcwMDsyMDI2MDcxNDoyMDAwLTIwMjYwNzE1OjE3MDAAAAAxAElTSU4AWFMxMTM1MzM3NDk4ADcAMTM4OAAxMDAAMQAxAA==",
+			conID:   194154340, cusip: "IBCID194154340", description: "AAPL 1 5/8 11/10/26",
+			securityIDs: []TagValue{{Tag: "ISIN", Value: "XS1135337498"}},
+			marketRule:  "1388", minSize: "100",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, err := base64.StdEncoding.DecodeString(tc.payload)
+			if err != nil {
+				t.Fatalf("decode captured payload: %v", err)
+			}
+			msgs, err := DecodeBatch(200, payload)
+			if err != nil {
+				t.Fatalf("DecodeBatch: %v", err)
+			}
+			if len(msgs) != 1 {
+				t.Fatalf("got %d messages, want 1", len(msgs))
+			}
+			m, ok := msgs[0].(BondContractDetails)
+			if !ok {
+				t.Fatalf("type = %T, want BondContractDetails", msgs[0])
+			}
+			if m.ReqID != 1001 || m.Contract.ConID != tc.conID || m.Contract.SecType != "BOND" {
+				t.Errorf("identity = req %d conID %d secType %q", m.ReqID, m.Contract.ConID, m.Contract.SecType)
+			}
+			if m.CUSIP != tc.cusip || m.DescriptionAppend != tc.description {
+				t.Errorf("bond identity = %q / %q", m.CUSIP, m.DescriptionAppend)
+			}
+			if m.TimeZoneID != "US/Eastern" || m.MinTick != "0.0001" {
+				t.Errorf("market metadata = zone %q minTick %q", m.TimeZoneID, m.MinTick)
+			}
+			if !slices.Equal(m.SecurityIDs, tc.securityIDs) {
+				t.Errorf("SecurityIDs = %+v, want %+v", m.SecurityIDs, tc.securityIDs)
+			}
+			if m.MarketRuleIDs != tc.marketRule || m.MinSize != tc.minSize || m.SizeIncrement != "1" || m.SuggestedSizeIncrement != "1" {
+				t.Errorf("size rules = market %q min %q increment %q suggested %q", m.MarketRuleIDs, m.MinSize, m.SizeIncrement, m.SuggestedSizeIncrement)
+			}
+			encoded, err := Encode(200, m)
+			if err != nil {
+				t.Fatalf("Encode: %v", err)
+			}
+			if !bytes.Equal(encoded, payload) {
+				t.Error("decoded bond details do not round-trip the captured fields exactly")
+			}
+		})
+	}
+}
 
 // Capture-grounded decode tests. Each payload is extracted from a real IB Gateway
 // session (server_version 200, captures/20260405T*) after stripping the 4-byte

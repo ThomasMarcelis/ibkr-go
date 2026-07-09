@@ -141,6 +141,7 @@ const (
 	InManagedAccounts       = 15
 	InReceiveFA             = 16
 	InHistoricalData        = 17
+	InBondContractData      = 18
 	InScannerParameters     = 19
 	InScannerData           = 20
 	InTickOptionComputation = 21
@@ -290,6 +291,7 @@ var messages = [...]Message{
 	{"InManagedAccounts", InManagedAccounts, ServerToClient},
 	{"InReceiveFA", InReceiveFA, ServerToClient},
 	{"InHistoricalData", InHistoricalData, ServerToClient},
+	{"InBondContractData", InBondContractData, ServerToClient},
 	{"InScannerParameters", InScannerParameters, ServerToClient},
 	{"InScannerData", InScannerData, ServerToClient},
 	{"InTickOptionComputation", InTickOptionComputation, ServerToClient},

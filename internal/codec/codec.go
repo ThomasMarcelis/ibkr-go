@@ -149,6 +149,7 @@ var inboundDecoders = map[int]decodeFunc{
 	InMarketDepthL2:         decodeMarketDepthL2,
 	InManagedAccounts:       decodeManagedAccounts,
 	InHistoricalData:        decodeHistoricalData,
+	InBondContractData:      decodeBondContractData,
 	InScannerParameters:     decodeScannerParameters,
 	InScannerData:           decodeScannerData,
 	InTickOptionComputation: decodeTickOptionComputation,

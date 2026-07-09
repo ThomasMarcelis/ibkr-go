@@ -402,6 +402,7 @@ against the role-aware `paper-dev` Gateway.
 | api_tick_by_tick_entitlement_errors_aapl.txt | 20260415T162200Z | promoted; covers Last, AllLast, AllLast ignore-size, BidAsk, and MidPoint live code 10089 subscription errors |
 | api_wsh_variants_aapl.txt | 20260415T162255Z | promoted; covers WSH metadata plus conid, portfolio, watchlist, and competitor event-data variants returning real code 10276 entitlement errors |
 | contract_details_aapl_opt.txt | 20260405T214941Z | promoted; covers OPT chain subset (strike ladder, call/put legs) with v200 option identifiers; source capture truncated before contractDataEnd, end frame taken verbatim from same-run sibling captures |
+| contract_details_apple_bonds.txt | 20260709T232431Z | promoted; covers message-18 Apple bond details by issuer ID with live one- and two-security-ID variants |
 | contract_details_eurusd_cash.txt | 20260405T215014Z | promoted; covers single-match EUR.USD CASH details on IDEALPRO |
 | contract_details_es_fut.txt | 20260405T215018Z | promoted; covers 21-expiry ES futures ladder including a full-session lastTradeDate timestamp (`20261218 08:30:00 US/Central`) |
 | contract_details_not_found.txt | 20260405T215022Z | promoted; covers real code 200 not-found error surfaced as `APIError` with `OpContractDetails` |
@@ -440,7 +441,7 @@ against the role-aware `paper-dev` Gateway.
 | OPT | 2026-04-15 probe timed out while streaming chain details | Rerun narrower qualified option probe or subscribe to OPRA data |
 | FOP | 2026-04-15 probe timed out | Rerun with a concrete future option contract after qualifying future expiry |
 | BAG (combo) | Depends on OPT qualification | Same |
-| BOND | 2026-04-15 placeholder probe returned real code 200; error replay is promoted | Replace placeholder with real live-derived bond identifier |
+| BOND | Apple issuer ID `e1432232` returned 58 message-18 rows on 2026-07-09 | Contract details and replay are promoted; order and market-data permissions remain separate probes |
 | CFD | ContractDetails succeeded in 2026-04-15 probe | Add order/market-data entitlement probe |
 | WAR | 2026-04-15 probe timed out | Rerun with concrete warrant from exchange search |
 | CRYPTO | ContractDetails succeeded for BTC/PAXOS in 2026-04-15 probe | Add trading-permission order probe |

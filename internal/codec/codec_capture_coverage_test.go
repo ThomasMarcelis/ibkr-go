@@ -83,6 +83,7 @@ var rawFrameAttested = map[int]string{
 	InOpenOrder:             "TestCaptureDecode_OpenOrder",
 	InNextValidID:           "TestCaptureDecode_NextValidID",
 	InContractData:          "TestCaptureDecode_ContractDetails",
+	InBondContractData:      "TestCaptureDecode_BondContractDetails",
 	InExecutionData:         "TestCaptureDecode_ExecutionDetailNativeTime",
 	InExecutionDataEnd:      "TestCaptureDecode_ExecutionsEndLive",
 	InCommissionReport:      "TestCaptureDecode_CommissionAndFeesLive",

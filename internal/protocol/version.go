@@ -15,6 +15,7 @@ const (
 	MinServerVersionBondAccruedInterest            = 185
 	MinServerVersionIneligibilityReasons           = 186
 	MinServerVersionRFQFields                      = 187
+	MinServerVersionBondTradingHours               = 188
 	MinServerVersionIncludeOvernight               = 189
 	MinServerVersionUndoRFQFields                  = 190
 	MinServerVersionCMETaggingFields               = 192

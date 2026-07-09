@@ -52,7 +52,7 @@ committed.
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
 | Real-time and historical bars | `reqRealTimeBars`, `cancelRealTimeBars`, `reqHistoricalData`, `cancelHistoricalData`, `reqHeadTimestamp`, `cancelHeadTimestamp`, `reqHistogramData`, `cancelHistogramData`, `reqHistoricalTicks` | Implemented, including historical schedule support through `History().Schedule`. Needs separate rows for keep-up updates, schedule, time zones, and pacing/errors. |
 | Market depth | `reqMarketDepth`, `cancelMktDepth`, `reqMktDepthExchanges` | Implemented. Needs regular depth, L2, smart depth, entitlement error, cancel, and depth metadata rows. |
-| Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. Regular contract details preserve the complete classic v200 response, including the FUND tail. Bond-specific details remain a separate gap. |
+| Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. Regular contract details preserve the complete classic v200 response, including the FUND tail. Bond issuer lookup and the distinct message-18 bond details shape are live-attested; empty coupon/maturity/rating fields remain unset rather than inferred. |
 | Accounts/portfolio | `reqAccountSummary`, `cancelAccountSummary`, `reqAccountUpdates`, `reqPositions`, `cancelPositions`, `reqPositionsMulti`, `cancelPositionsMulti`, `reqAccountUpdatesMulti`, `cancelAccountUpdatesMulti`, `reqFamilyCodes`, `reqPnL`, `cancelPnL`, `reqPnLSingle`, `cancelPnLSingle` | Implemented. Needs account/model/concurrent/streaming/trade-interaction rows. |
 | Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Completed orders and classic sv200 execution/commission-and-fees results are fully projected; exact-sv201 execution protobuf and sv202 zero-strike semantics are live-attested. Exact sv203 live-attests protobuf place, targeted cancel, global cancel, and paired open-order/status callbacks; order errors use the protobuf family introduced at 201. Nondefault execution filters, rare advanced-order branches, protobuf fee encoding, and bond yield/redemption still need live attestation. |
 | Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Calc implemented. Exercise implemented fire-and-forget but needs live target rows. |
@@ -75,7 +75,7 @@ evidence; WSH is a separate API, not a replacement.
 | Errors/session | `error`, `connectionClosed`, `currentTime`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
 | Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | All are implemented except `tickEFP`. `tickNews` is inbound message 84 and is delivered as `QuoteUpdateNewsTick`. |
 | Tick-by-tick | `tickByTickAllLast`, `tickByTickBidAsk`, `tickByTickMidPoint` | Implemented through unified tick-by-tick decode. Needs separate verification rows. |
-| Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Regular `contractDetails` is complete for the classic v200 shape. The distinct bond callback/message 18 is not implemented and has no successful checked-in capture. |
+| Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Complete for the live classic v200 shapes. `bondContractDetails` is projected through `ContractDetails.Bond`; tagged CUSIP/ISIN values and size rules are preserved independently from IBKR's bond `cusip` field. |
 | Historical | `historicalData`, `historicalDataEnd`, `historicalDataUpdate`, `historicalSchedule`, `headTimestamp`, `histogramData`, `historicalTicks`, `historicalTicksBidAsk`, `historicalTicksLast`, `historicalNews`, `historicalNewsEnd` | Implemented. |
 | Accounts/portfolio | `accountSummary`, `accountSummaryEnd`, `updateAccountValue`, `updatePortfolio`, `updateAccountTime`, `accountDownloadEnd`, `position`, `positionEnd`, `positionMulti`, `positionMultiEnd`, `accountUpdateMulti`, `accountUpdateMultiEnd`, `pnl`, `pnlSingle`, `familyCodes` | Implemented. Needs richer live scenarios. |
 | Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionAndFeesReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed-order and execution decoding preserve every classic v200 field; sv201 execution protobuf and sv202 zero-strike semantics are live-frozen. Exact sv203 protobuf `openOrder`, `orderStatus`, and order errors are live-attested. Advanced branches and protobuf-encoded fee reports remain explicitly unattested. |
@@ -202,6 +202,7 @@ Inbound message IDs:
 | `InManagedAccounts` | 15 | Managed accounts |
 | `InReceiveFA` | 16 | FA config |
 | `InHistoricalData` | 17 | Historical bars |
+| `InBondContractData` | 18 | Bond contract details |
 | `InScannerParameters` | 19 | Scanner parameters |
 | `InScannerData` | 20 | Scanner data |
 | `InTickOptionComputation` | 21 | Option computation |
@@ -267,7 +268,6 @@ and project scope decide whether to implement, defer, or mark out of scope.
 - `reqManagedAccts`, `setServerLogLevel`.
 - Verification/auth callbacks and redirect/reroute callbacks.
 - `tickEFP` and `deltaNeutralValidation`.
-- `bondContractDetails` as a distinct callback shape.
 - `orderBound` and rare OpenOrder branches.
 - Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
   order, soft-dollar-on-order, and advanced-reject override order branches.
