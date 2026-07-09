@@ -332,6 +332,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	if err := validateOrderRequest(req, orderIntentPlace); err != nil {
 		return nil, err
 	}
+	req = clonePlaceOrderRequest(req)
 	resp := make(chan placeOrderResult, 1)
 	// enqueueReadySetup with a drop callback guarantees resp receives exactly
 	// one result even when ctx is canceled before the actor runs the setup;
@@ -370,6 +371,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 			if err := validateOrderRequest(PlaceOrderRequest{Contract: req.Contract, Order: order}, orderIntentModify); err != nil {
 				return err
 			}
+			order = cloneOrder(order)
 			return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 				if !e.isReady() {
 					return ErrNotReady
@@ -461,6 +463,7 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 	if err := validateOrderRequest(req, orderIntentPreview); err != nil {
 		return OrderState{}, err
 	}
+	req = clonePlaceOrderRequest(req)
 	type setup struct {
 		ch  chan previewResult
 		err error
