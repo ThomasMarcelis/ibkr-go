@@ -22,8 +22,8 @@
 # must reach the handles, and the query's re-emitted executions
 # dual-dispatch to the still-open order routes (live answered 41 query
 # updates total). The final safety global cancel draws real code-161
-# replies for all six filled orders; in replay they land inside the
-# terminal drain windows and close each handle with the code-161 error.
+# replies for all six filled orders; in replay they remain session notices
+# and each Filled status owns its handle's clean close.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm ids -> 900368-900376, order refs ->
 # ibkrgo-sanitized-20260611T133024Z-001..-006, execution ids ->

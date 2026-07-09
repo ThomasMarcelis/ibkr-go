@@ -161,6 +161,11 @@ this covers both the sub-10000 rejection codes and the 10xxx codes
 live-attested as outright placement rejections (10063, 10255). Order-targeted
 10xxx notices for live orders — cancel replies such as 10147/10148 — stay
 session events, because the handle already carries the order's real state.
+Cancellation replies 161 (the order is not in a cancellable state) and 202
+(the order was cancelled) follow the same rule even though they are below
+10000: they are session notices, never placement failures. A 161 may race
+ahead of the terminal status it describes, so it must not tear down the route;
+the subsequent `OrderStatus` still owns the handle result.
 
 An order-targeted api_error whose `(&APIError{Code: ...}).IsWarning()` is true —
 notably code 399, the off-hours deferral — is delivered non-terminally as an

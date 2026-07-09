@@ -6,9 +6,9 @@
 # echoed twice), the API cancel produces order_status Cancelled plus the
 # code-202 cancellation notice, and the driver's safety global cancel then
 # draws a real code-161 "Cancel attempted when order is not in a cancellable
-# state" for the already-cancelled order. In replay the 161 reaches the order
-# route inside the terminal drain window, so the handle closes with the
-# code-161 error. The April 2026 capture of the same scenario stays frozen in
+# state" for the already-cancelled order. In replay the 161 is a session
+# notice; the handle's terminal Cancelled status remains authoritative and
+# closes cleanly. The April 2026 capture of the same scenario stays frozen in
 # api_order_rest_cancel_aapl.txt; this fixture adds the safety re-cancel tail.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm id -> 900337 (including inside the code-161 message text), order ref ->

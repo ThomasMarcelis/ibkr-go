@@ -17,9 +17,8 @@
 #     found.".
 # The final safety global cancel drew code-161 replies for order 348 and for
 # the previous scenario's order 346 (still bound to this client id on the
-# Gateway; the replay client has no route for it and drops it). In replay the
-# 161 for 348 lands inside the terminal drain window, so that handle closes
-# with the code-161 error.
+# Gateway). They remain session notices; order 348's Cancelled status owns
+# the clean handle close.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm ids -> 900348/900346 (including inside the code-161 message texts),
 # order refs -> ibkrgo-sanitized-20260610T195923Z-001/-002/-003. Trimmed:

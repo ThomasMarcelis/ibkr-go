@@ -269,7 +269,7 @@ against the role-aware `paper-dev` Gateway.
 | Bug | Root Cause | Fix |
 |-----|-----------|-----|
 | Individual/global cancel dropped | sv>=192 cancel messages require CME tagging fields; old global cancel version field is ignored | Encode cancel_order and global_cancel with extOperator/manualOrderIndicator |
-| Cancellation notice closed handles as errors | API code 202 is an order-cancel notice, not a placement failure | Route code 202 as a session notice and keep terminal status authoritative |
+| Cancellation notice closed handles as errors | API codes 161 and 202 are cancel replies, not placement failures; 161 can precede the eventual Cancelled status | Route both as session notices and keep terminal status authoritative |
 | DoubleCancelOrder timeout | Waited on Done() without draining Events(); cancel confirmations buffered | Replace Done() select with liveObserveOrder drain (8 locations) |
 | MarketableLimitFill rejected | 1.20x anchor exceeds exchange price reasonability | Reduced to 1.03x; made non-fill graceful |
 | Trailing stop tests trigger | SELL trail with liveFarSell triggers on rise | Changed to BUY direction with far trail price |
@@ -351,7 +351,7 @@ against the role-aware `paper-dev` Gateway.
 | contract_details_not_found.txt | 20260405T215022Z | promoted; covers real code 200 not-found error surfaced as `APIError` with `OpContractDetails` |
 | qualify_contract_ambiguous.txt | 20260407T190656Z | promoted; covers 26-row ambiguous MSFT qualify resolving to `ErrAmbiguousContract` |
 | api_conditions_matrix_aapl.txt | 20260610T200935Z | promoted; covers all six condition families accepted to PreSubmitted after the field-order fix, the non-terminal off-hours code-399 warning (handle stays open, then closes cleanly on the cancel's Cancelled status), and 5-field cancel acknowledgements; Gateway condition echoes decode fully since the None-sentinel fix (frozen by capture-decode tests) |
-| api_order_rest_cancel_161_aapl.txt | 20260610T195745Z | promoted; covers LMT rest/cancel plus the code-161 safety re-cancel closing the handle |
+| api_order_rest_cancel_161_aapl.txt | 20260610T195745Z | promoted; covers LMT rest/cancel plus the code-161 safety re-cancel remaining a session notice while the handle closes cleanly |
 | api_order_stop_cancel_aapl.txt | 20260610T195758Z | promoted; covers STP and STP LMT rest/cancel with Gateway-computed echo limits and why_held=trigger |
 | api_order_trailing_cancel_aapl.txt | 20260610T195819Z | promoted; covers TRAIL off-hours partial-then-full fill with cancel-after-fill 10148, TRAIL LIMIT rest/cancel, and the UTC-dash execution times the parser now accepts (both fills and commissions reach the handle in replay) |
 | api_order_relative_cancel_aapl.txt | 20260610T195833Z | promoted; covers REL with Gateway-assigned 0.01 offset echo and full cancel lifecycle |

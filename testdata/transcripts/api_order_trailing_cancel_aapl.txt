@@ -8,8 +8,8 @@
 # state: Filled.". The TRAIL LIMIT SELL 100 (limit offset 0.05, open_order
 # echo limit 2920.95) rested at PreSubmitted then Submitted and cancelled
 # cleanly (Cancelled + code 202). The final safety global cancel drew real
-# code-161 replies for both terminal orders; in replay both land inside the
-# terminal drain windows, so both handles close with the code-161 error.
+# code-161 replies for both terminal orders; in replay both remain session
+# notices and both handles keep their clean Filled/Cancelled terminal results.
 # The live execution_data frames carry the Gateway's UTC dash time form
 # ("20260610-19:58:22", preserved verbatim). The execution-time parser
 # accepts that form, so both executions and their commission reports reach

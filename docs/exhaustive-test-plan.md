@@ -437,6 +437,7 @@ tests.
 
 | Error | Status | Scenario |
 |-------|--------|----------|
+| 161 — cancel not in cancellable state | replay promoted | safety re-cancel stays a session notice; hedge replay freezes 161-before-Cancelled race |
 | 162 — historical data pacing | partial | rapid historical requests |
 | 200 — no security definition | yes | |
 | 201 — order rejected | yes | |

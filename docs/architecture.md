@@ -165,7 +165,8 @@ the final child is the only frame with `Transmit=true`.
   favor of the latest one.
 - **Terminal states.** When an OrderStatus arrives with status Filled,
   Cancelled, ApiCancelled, or Inactive, the handle auto-closes with `nil`
-  error.
+  error. Cancellation replies 161 and 202 remain session notices and do not
+  override that terminal result.
 - **Disconnect.** On session disconnect, active order handles receive a `Gap`
   event via Lifecycle(). On reconnect, they receive `Resumed`. Handles are not
   closed on disconnect — orders continue executing on the server.

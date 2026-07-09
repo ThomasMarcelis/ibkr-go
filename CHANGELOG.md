@@ -175,6 +175,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Code 161 no longer turns a successful terminal order into a handle
+  error.** "Cancel attempted when order is not in a cancellable state" is a
+  cancellation reply, like code 202, rather than a placement rejection. It
+  now surfaces on `SessionEvents()` while the real `OrderStatus` remains
+  authoritative. This also preserves late executions and commissions inside
+  the terminal drain window.
 - **`Orders().Place` no longer orphans a live order when its context is
   cancelled.** If the context fires in the window after the `place_order`
   frame reached the wire but before the caller received the handle,

@@ -27,8 +27,8 @@
 # The option parent (418) drew no open_order echo until its cancel was
 # processed much later (PendingCancel -> Cancelled + 202), preserved here at
 # its live position. The final global cancel raced the parent cancel and
-# drew code 161 for order 420 before its Cancelled status; the engine closes
-# that handle with the 161, so the trailing 202 for 420 is dropped.
+# drew code 161 for order 420 before its Cancelled status. The 161 remains a
+# session notice, so the later Cancelled status and code 202 still arrive.
 # Sanitized: account identifiers redacted to DU9000001, perm ids ->
 # 900418/900420/900422/900424 (including inside oca_group and the code-161
 # message), order refs -> ibkrgo-sanitized-20260611T134021Z-001..-007.
@@ -101,7 +101,7 @@ server order_status {"order_id":424,"status":"PreSubmitted","filled":"0","remain
 
 # teardown: cancel the pair child and the stock parent, then the safety
 # global cancel; the 161 for order 420 races ahead of its Cancelled status
-# and terminates that handle, so the trailing 202 for 420 has no live route
+# but remains a session notice, preserving the route for the terminal update
 client cancel_order {"field_count":"5","order_id":"424","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
 client cancel_order {"field_count":"5","order_id":"420","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
 client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}

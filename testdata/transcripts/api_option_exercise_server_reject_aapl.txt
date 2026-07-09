@@ -12,11 +12,12 @@
 # paper Gateway killed the working instruction: code 322 "Error processing
 # request.Exercise/Lapse failed due to server rejection.", order_status
 # Cancelled, and the code-202 cancellation notice, all on the exercise id.
-# Engine surfacing frozen here: the 10349 (10xxx with no keyed route) becomes
-# a session event; the pseudo-order open_order/order_status frames and the
-# 322/202 (request-range codes whose req id matches no order route) are
-# dropped silently. The 161 answering the global cancel does carry a real
-# order id (407) and terminates that handle.
+# Engine surfacing frozen here: the exercise request route turns 10349 and
+# 322 into session events; 322 retires that route, so the following 202 uses
+# the unmatched-request session fallback. The pseudo-order open_order and
+# order_status frames still match no order route and drop. The 161 answering
+# the global cancel for order 407 is also a session notice, preserving its
+# clean Filled handle result.
 # Sanitized: account identifiers redacted to DU9000001, perm ids -> 900407
 # and 900005, order ref -> ibkrgo-sanitized-20260611T133636Z-001, execution
 # id -> sanitized-exercise-fill-001. Trimmed: farm-status 2104/2107/2158,

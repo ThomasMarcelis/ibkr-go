@@ -8,9 +8,8 @@
 # echoes) to Submitted, the API cancel produced order_status Cancelled plus
 # the code-202 notice, and the final safety global cancel drew real code-161
 # replies: one for the previous scenario's order 340 (still bound to this
-# client id on the Gateway; the replay client has no route for it and drops
-# it) and one for order 342, which lands inside the terminal drain window and
-# closes the handle with the code-161 error.
+# client id on the Gateway) and one for order 342. Both surface as session
+# notices; order 342's Cancelled status owns the clean handle close.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm ids -> 900340/900342 (including inside the code-161 message texts),
 # order ref -> ibkrgo-sanitized-20260610T195833Z-001. Trimmed: farm-status

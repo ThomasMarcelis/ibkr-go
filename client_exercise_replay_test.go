@@ -16,10 +16,10 @@ import (
 // account/professional-customer tail, and registers a keyed route so the
 // request-id-targeted replies are not lost. How the Gateway's answers surface:
 //
-//   - api_error replies on the exercise request id (322 exercise refusals,
-//     the 10349 TIF-preset acknowledgement, and the 202 that cancels a
-//     working instruction) route to the exercise route and surface as
-//     session events;
+//   - api_error replies on the exercise request id surface as session events.
+//     The exercise route carries 10349 acknowledgements and 322 refusals;
+//     when 322 retires it before a following 202, the unmatched-request path
+//     preserves that cancellation reply at the same session scope;
 //   - the open_order/order_status frames for the pseudo-order the Gateway
 //     materializes under the exercise request id are keyed by order id, not
 //     request id, so they match no order route and are dropped.
@@ -209,8 +209,8 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 // 322 "Exercise/Lapse failed due to server rejection." and its code-202
 // notice both target the exercise request id and surface as session events,
 // the pseudo-order's Cancelled status between them is keyed by order id and
-// drops, and the code-161 reply for the filled buy order routes to its handle
-// and becomes the terminal error.
+// drops, and the code-161 reply for the filled buy order remains a session
+// notice without replacing the handle's clean Filled result.
 func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	t.Parallel()
 
@@ -279,17 +279,16 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	// The pseudo-order open_order/order_status under the exercise request id
 	// are delivered next and dropped (no order route); the global cancel
 	// then kills the instruction live. The code-161 for the already-filled
-	// buy order routes to its handle as the terminal error.
+	// buy order remains observable at session scope.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireOrderAPIError(t, "exercise buy", handle, ibkr.ErrCodeCancelNotCancellableState,
-		"Order permId =900407")
+	requireCancelNotCancellableNotice(t, ctx, events, "900407")
 
-	// The 322 server rejection and the 202 that cancels the exercise
-	// instruction both target the exercise request id, which carries the
-	// exercise route: both now surface as session events. (The pseudo-order's
-	// Cancelled status between them is keyed by order id and still drops.)
+	// The 322 server rejection targets the exercise route and retires it. The
+	// later 202 on the same request id then uses the unmatched-request fallback;
+	// both surface as session events. (The pseudo-order's Cancelled status
+	// between them is keyed by order id and still drops.)
 	rejection := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeServerErrorProcessingRequest)
 	if rejection.Message != "Error processing request.Exercise/Lapse failed due to server rejection." {
 		t.Fatalf("322 message = %q", rejection.Message)
@@ -297,4 +296,6 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	if canceled := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled); canceled.Message != "Order Canceled - reason:" {
 		t.Fatalf("202 message = %q", canceled.Message)
 	}
+	requireNoMoreOrderEvents(t, ctx, "exercise buy", handle)
+	requireOrderWaitNil(t, "exercise buy", handle)
 }

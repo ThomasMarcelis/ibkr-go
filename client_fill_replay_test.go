@@ -394,10 +394,9 @@ func TestPlaceOrderLmtBuyRestCancelReplay(t *testing.T) {
 // 91132d49f19f9213): a far LMT BUY 100 @ 14.61 rests at Submitted, Modify
 // re-places the same order id as MKT and it fills 100 @ 292.27; the flatten
 // MKT SELL fills 59 + 41 @ 292.20. The final safety global cancel draws
-// code-161 replies that close both handles (the replies for the previous
-// capture's orders have no routes here and are dropped); the flatten's
-// second commission report arrives after the 161 closed the handle and is
-// dropped too, so the handle tallies exactly one commission.
+// code-161 session notices without replacing either Filled terminal result.
+// Keeping the handles alive through the drain window also delivers the
+// flatten's second commission report after the notice burst.
 func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	t.Parallel()
 
@@ -407,6 +406,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	events := client.SessionEvents()
 
 	rest, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
@@ -501,17 +501,19 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	if !comms[0].RealizedPNL.Equal(decimal.RequireFromString("-9.622032")) {
 		t.Fatalf("realized PnL = %s, want -9.622032", comms[0].RealizedPNL)
 	}
-	requireOrderAPIError(t, "modify", rest, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900377")
+	requireCancelNotCancellableNotice(t, ctx, events, "900377")
+	requireOrderWaitNil(t, "modify", rest)
 
 	flattenLog.drain()
 	requireExecutions(t, "flatten", flattenLog.executions(), []wantExec{
 		{"SLD", "59", "292.20"},
 		{"SLD", "41", "292.20"},
 	})
-	// The second commission report trails the code-161 close and is dropped;
-	// only the first reaches the handle.
-	requireCommissions(t, "flatten", flattenLog.commissions(), []string{"1.366822"})
-	requireOrderAPIError(t, "flatten", flatten, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900378")
+	// The second commission trails the code-161 notice but remains inside the
+	// terminal drain window, so both live reports reach the handle.
+	requireCommissions(t, "flatten", flattenLog.commissions(), []string{"1.366822", "0.25491"})
+	requireCancelNotCancellableNotice(t, ctx, events, "900378")
+	requireOrderWaitNil(t, "flatten", flatten)
 }
 
 // TestAPIOrderFillCampaignReplay freezes the regular-session fill campaign
@@ -521,7 +523,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 // rest-modify-fill), then a one-shot executions query that returned 41
 // updates live (15 executions, including two from the same day's earlier
 // captures, plus 26 commission deliveries), and a final safety global cancel
-// whose code-161 replies close every handle. The query's re-emitted
+// whose code-161 replies remain session notices. The query's re-emitted
 // executions dual-dispatch to the still-open order routes but are deduped by
 // ExecID on the order-handle leg, so each handle sees every fill exactly once
 // while the query's own snapshot result still carries every row.
@@ -715,7 +717,8 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		t.Fatalf("query row 0 time = %s, want %s (parsed from US/Eastern form)", queryExecs[0].Time, want)
 	}
 
-	// Final safety global cancel: real code-161 replies close every handle.
+	// Final safety global cancel: real code-161 replies remain session notices;
+	// the Filled statuses continue to own the clean handle closes.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
@@ -729,30 +732,29 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		name      string
 		handle    *ibkr.OrderHandle
 		log       *orderEventLog
-		permID    string
 		wantExecs []wantExec
 		wantComms []string
 	}{
-		{"371", mktBuy, mktBuyLog, "900371",
+		{"371", mktBuy, mktBuyLog,
 			[]wantExec{{"BOT", "100", "292.79"}},
 			[]string{"1.0003"}},
-		{"372", mktSell, mktSellLog, "900372",
+		{"372", mktSell, mktSellLog,
 			[]wantExec{{"SLD", "40", "292.33"}, {"SLD", "40", "292.30"}, {"SLD", "20", "292.30"}},
 			[]string{"1.2488", "0.248775", "0.124388"}},
-		{"373", mtl, mtlLog, "900373",
+		{"373", mtl, mtlLog,
 			[]wantExec{{"BOT", "40", "292.44"}, {"BOT", "60", "292.44"}},
 			[]string{"1.00012", "1.8E-4"}},
-		{"374", flatten374, flatten374Log, "900374",
+		{"374", flatten374, flatten374Log,
 			[]wantExec{{"SLD", "40", "292.36"}, {"SLD", "40", "292.33"}, {"SLD", "20", "292.33"}},
 			[]string{"1.248825", "0.2488", "0.1244"}},
-		{"375", modify, modifyLog, "900375",
+		{"375", modify, modifyLog,
 			[]wantExec{{"BOT", "100", "292.31"}},
 			[]string{"1.0003"}},
 		// 376's three fills each stream one commission live; the query re-emits
 		// 011/012's commissions (013's arrives after the query end) but the
 		// order-handle leg deduplicates them, so the handle tallies 3 execs / 3
 		// commissions.
-		{"376", flatten376, flatten376Log, "900376",
+		{"376", flatten376, flatten376Log,
 			[]wantExec{{"SLD", "40", "292.20"}, {"SLD", "40", "292.20"}, {"SLD", "20", "292.20"}},
 			[]string{"1.248693", "0.248693", "0.124346"}},
 	}
@@ -760,7 +762,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		f.log.drain()
 		requireExecutions(t, f.name, f.log.executions(), f.wantExecs)
 		requireCommissions(t, f.name, f.log.commissions(), f.wantComms)
-		requireOrderAPIError(t, f.name, f.handle, ibkr.ErrCodeCancelNotCancellableState, "Order permId ="+f.permID)
+		requireOrderWaitNil(t, f.name, f.handle)
 	}
 }
 
@@ -1145,7 +1147,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 			t.Fatalf("10342 message = %q", notice.Message)
 		}
 		register("404", handle, log, nil, nil,
-			ibkr.ErrCodeCancelNotCancellableState, "Order permId =900404")
+			0, "")
 	})
 
 	t.Run("peg_best_silent_accept_discard", func(t *testing.T) {
@@ -1153,7 +1155,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 		cancelOrder(t, handle)
 		waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeImbalanceOnlyNotAllowed)
 		register("405", handle, log, nil, nil,
-			ibkr.ErrCodeCancelNotCancellableState, "Order permId =900405")
+			0, "")
 	})
 
 	t.Run("peg_bench_reject_on_cancel", func(t *testing.T) {
@@ -1169,10 +1171,10 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 		if err := client.Orders().CancelAll(ctx); err != nil {
 			t.Fatalf("CancelAll: %v", err)
 		}
-		// The Gateway discards the silently accepted PEG orders. The burst
-		// for 402 lands on its already-closed handle and is dropped, so only
-		// the 405 and 404 notices surface.
-		for range 2 {
+		// The Gateway discards the silently accepted PEG orders. All three 202
+		// replies surface as session notices: 402 through the unmatched-order
+		// fallback, then 405 and 404 through their live routes.
+		for range 3 {
 			notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 			if notice.Message != "Order Canceled - reason:Order was discarded." {
 				t.Fatalf("discard 202 message = %q", notice.Message)

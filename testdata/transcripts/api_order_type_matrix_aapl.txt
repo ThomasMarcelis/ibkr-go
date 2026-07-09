@@ -54,10 +54,9 @@
 #   406 PEG BENCH      accepted silently; the cancel is rejected with
 #                      code 321 "Missing reference financial instrument"
 # The final safety global cancel also re-answers the dead PEG MKT order
-# 402 with Cancelled + 202 + 161; its handle already closed with the 387,
-# so the engine drops that burst. The 404/405 code-161 replies land inside
-# the terminal drain windows of their just-delivered Cancelled statuses and
-# close both handles with the code-161 error. Execution times use the UTC
+# 402 with Cancelled + 202 + 161; its handle already closed with the 387.
+# The 404/405 code-161 replies remain session notices, and their just-delivered
+# Cancelled statuses own both clean handle closes. Execution times use the UTC
 # dash form; executions and commissions must reach the handles.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm ids -> 900<order id>, order refs ->
@@ -457,8 +456,7 @@ server api_error {"req_id":406,"code":321,"message":"Error validating request.-'
 
 # final safety global cancel: the Gateway discards the silently
 # accepted PEG orders (Cancelled + 202 "Order was discarded." + 161);
-# the 402 burst lands on the closed handle and is dropped, 404/405
-# close with the code-161 error
+# the 402 handle is already closed, while 404/405 keep clean Cancelled closes
 client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
 server order_status {"order_id":402,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0.0","perm_id":"900402","parent_id":"0","last_fill_price":"0.0","client_id":"1","why_held":"","mkt_cap_price":"0.0"}
 server api_error {"req_id":402,"code":202,"message":"Order Canceled - reason:Order was discarded.","advanced_order_reject_json":"","error_time_ms":"1781184779180"}

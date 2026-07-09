@@ -20,9 +20,8 @@ import (
 // Shared behavior frozen across the family: a safety global cancel against an
 // order that is already terminal draws a real code-161 "Cancel attempted when
 // order is not in a cancellable state" from the Gateway. The engine routes a
-// code-161 carrying a known order id to that order's route; in replay the 161
-// arrives inside the post-terminal drain window, so the handle closes with
-// the code-161 *ibkr.APIError instead of the nil terminal close.
+// code-161 carrying a known order id as a session notice; terminal order status
+// remains authoritative, so the handle closes cleanly after its drain window.
 
 var orderReplayAAPL = ibkr.Contract{
 	ConID:    265598,
@@ -93,12 +92,32 @@ func requireOrderAPIError(t *testing.T, name string, handle *ibkr.OrderHandle, c
 	}
 }
 
+func requireOrderWaitNil(t *testing.T, name string, handle *ibkr.OrderHandle) {
+	t.Helper()
+
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("%s Wait() = %v, want nil terminal close", name, err)
+	}
+}
+
+func requireCancelNotCancellableNotice(t *testing.T, ctx context.Context, events <-chan ibkr.Event, permID string) {
+	t.Helper()
+
+	for {
+		notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeCancelNotCancellableState)
+		if strings.Contains(notice.Message, "Order permId ="+permID) {
+			return
+		}
+	}
+}
+
 // TestAPIOrderRestCancelReplay freezes the resting-order cancel baseline
 // re-captured live on 2026-06-10 (captures/20260610T195745Z-
 // api_order_rest_cancel_aapl, events.jsonl sha256 prefix cab24496228ff1fb):
 // a far LMT BUY rests at Submitted, the API cancel yields order_status
 // Cancelled plus the code-202 session notice, and the safety global cancel
-// draws a real code 161 that closes the handle as its terminal error.
+// draws a real code 161 session notice without overriding the clean terminal
+// handle close.
 func TestAPIOrderRestCancelReplay(t *testing.T) {
 	t.Parallel()
 
@@ -170,13 +189,13 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 	}
 
 	// Safety re-cancel: the live Gateway answered the global cancel with
-	// code 161 for the already-cancelled order; it lands on the open order
-	// route and becomes the handle's terminal error.
+	// code 161 for the already-cancelled order. It is observable at session
+	// scope without overriding the terminal Cancelled status.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireOrderAPIError(t, "rest", handle, ibkr.ErrCodeCancelNotCancellableState,
-		"Cancel attempted when order is not in a cancellable state.  Order permId =900337")
+	requireCancelNotCancellableNotice(t, ctx, events, "900337")
+	requireOrderWaitNil(t, "rest", handle)
 }
 
 // TestAPIOrderStopCancelReplay freezes the STP and STP LMT rest/cancel
@@ -291,8 +310,10 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireOrderAPIError(t, "stop-limit", stopLimit, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900339")
-	requireOrderAPIError(t, "stop", stop, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900338")
+	requireCancelNotCancellableNotice(t, ctx, events, "900339")
+	requireCancelNotCancellableNotice(t, ctx, events, "900338")
+	requireOrderWaitNil(t, "stop-limit", stopLimit)
+	requireOrderWaitNil(t, "stop", stop)
 }
 
 // TestAPIOrderTrailingCancelReplay freezes the TRAIL and TRAIL LIMIT
@@ -486,8 +507,10 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	if executions != 2 || commissions != 2 {
 		t.Fatalf("trail surfaced %d executions and %d commissions, want 2/2", executions, commissions)
 	}
-	requireOrderAPIError(t, "trail", trail, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900340")
-	requireOrderAPIError(t, "trail-limit", trailLimit, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900341")
+	requireCancelNotCancellableNotice(t, ctx, events, "900340")
+	requireCancelNotCancellableNotice(t, ctx, events, "900341")
+	requireOrderWaitNil(t, "trail", trail)
+	requireOrderWaitNil(t, "trail-limit", trailLimit)
 }
 
 // TestAPIOrderRelativeCancelReplay freezes the REL rest/cancel lifecycle
@@ -496,7 +519,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 // 65c28d7faea45243): the Gateway assigns offset 0.01 to a REL order placed
 // with only a price cap, the order moves PreSubmitted to Submitted, cancels
 // with Cancelled + 202, and the final global cancel draws code 161 (plus a
-// second 161 for a previous scenario's order that this client drops).
+// second session notice for a previous scenario's order).
 func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	t.Parallel()
 
@@ -555,12 +578,13 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	}
 
 	// The replayed global-cancel response also carries a 161 for the
-	// previous scenario's order 340; this client has no route for it and
-	// drops it, which the replay completing proves (waitHost).
+	// previous scenario's order 340; both it and this order's notice remain
+	// observable at session scope.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireOrderAPIError(t, "relative", rel, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900342")
+	requireCancelNotCancellableNotice(t, ctx, events, "900342")
+	requireOrderWaitNil(t, "relative", rel)
 }
 
 // TestAPIOrderRejectsReplay freezes the order-reject family captured live on
@@ -685,10 +709,11 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 		t.Fatalf("10147 message = %q", notFound.Message)
 	}
 
-	// Safety global cancel: code 161 for order 348 (the 161 for a previous
-	// scenario's order 346 has no route here and is dropped).
+	// Safety global cancel: code 161 for order 348 plus a session notice for
+	// the previous scenario's order 346, which has no route here.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireOrderAPIError(t, "aggressive", aggressive, ibkr.ErrCodeCancelNotCancellableState, "Order permId =900348")
+	requireCancelNotCancellableNotice(t, ctx, events, "900348")
+	requireOrderWaitNil(t, "aggressive", aggressive)
 }

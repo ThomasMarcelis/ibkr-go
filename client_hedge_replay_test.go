@@ -296,9 +296,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 
 	// Teardown as captured: cancel the pair child and the stock parent, then
 	// the safety global cancel. The code-161 reply for order 420 raced ahead
-	// of its Cancelled status live, so the stock parent's handle terminates
-	// with the 161 and the trailing 202 for 420 is dropped (its route closed
-	// with the handle); the pair child cancels cleanly with Cancelled + 202.
+	// of its Cancelled status live. It must remain a session notice so the
+	// subsequent terminal status and code 202 still reach the parent route.
 	if err := pair.Cancel(ctx); err != nil {
 		t.Fatalf("pair Cancel: %v", err)
 	}
@@ -308,9 +307,10 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireOrderAPIError(t, "stock parent", stockParent, ibkr.ErrCodeCancelNotCancellableState,
-		"Order permId =900420")
+	requireCancelNotCancellableNotice(t, ctx, events, "900420")
 	waitForOrderStatus(t, ctx, pair, ibkr.OrderStatusCancelled)
+	waitForOrderStatus(t, ctx, stockParent, ibkr.OrderStatusCancelled)
+	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 
 	// Closure shapes on the transcript disconnect: handles that reached a
@@ -322,6 +322,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	if err := optionParent.Wait(); err != nil {
 		t.Fatalf("option parent Wait() = %v, want nil (terminal Cancelled)", err)
 	}
+	requireOrderWaitNil(t, "stock parent", stockParent)
 	requireNoMoreOrderEvents(t, ctx, "fx child", fx)
 	if _, ok := errors.AsType[*ibkr.APIError](fx.Wait()); !ok {
 		t.Fatalf("fx Wait() = %v, want the terminal code-10063 *ibkr.APIError", fx.Wait())

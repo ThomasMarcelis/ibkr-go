@@ -7,7 +7,8 @@ package ibkr
 const (
 	// ErrCodeCancelNotCancellableState: a cancel was attempted while the
 	// order was not in a cancellable state (already cancelled or filled);
-	// the live Gateway appends the order's permId to the message.
+	// the live Gateway appends the order's permId to the message. This is a
+	// cancellation reply, not an order-placement failure.
 	ErrCodeCancelNotCancellableState = 161
 	// ErrCodeNoSecurityDefinition: no security definition has been found
 	// for the request, or the contract description is ambiguous.

@@ -7,9 +7,8 @@
 # computed limit price 2921.23 next to the 2921.2 stop. Each API cancel
 # produced order_status Cancelled plus the code-202 notice, and the driver's
 # final safety global cancel drew real code-161 replies for both
-# already-cancelled orders (339 first, then 338). In replay both 161s land
-# inside the terminal drain windows, so both handles close with the code-161
-# error.
+# already-cancelled orders (339 first, then 338). In replay both 161s remain
+# session notices and both handles close cleanly from their Cancelled statuses.
 # Sanitized: account identifiers redacted to the DU9000001 redaction token,
 # perm ids -> 900338/900339 (including inside the code-161 message texts),
 # order refs -> ibkrgo-sanitized-20260610T195758Z-001/-002. Trimmed:

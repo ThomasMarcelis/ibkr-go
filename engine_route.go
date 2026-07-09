@@ -248,7 +248,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// Order-specific API errors: the reqID field carries the orderID
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
-			if isOrderCancellationNotice(msg) {
+			if isOrderCancellationReply(msg.Code) {
 				e.emitEvent(msg.Code, msg.Message)
 				return
 			}
@@ -293,8 +293,8 @@ func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
 	}
 }
 
-func isOrderCancellationNotice(msg codec.APIError) bool {
-	return msg.Code == 202
+func isOrderCancellationReply(code int) bool {
+	return code == ErrCodeCancelNotCancellableState || code == ErrCodeOrderCanceled
 }
 
 // isOrderPlacementRejection reports whether a 10xxx code is live-attested as
