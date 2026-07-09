@@ -11,8 +11,10 @@ import (
 type OrderAction string
 
 const (
-	ActionBuy  OrderAction = "BUY"
-	ActionSell OrderAction = "SELL"
+	ActionBuy       OrderAction = "BUY"
+	ActionSell      OrderAction = "SELL"
+	ActionSellShort OrderAction = "SSHORT"
+	ActionSellLong  OrderAction = "SLONG"
 )
 
 // OrderType is the execution instruction for an [Order]. The type determines

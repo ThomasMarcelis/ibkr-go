@@ -196,6 +196,7 @@ basics are untested. MOO/LOO need pre-market timing.
 | BUY | yes | |
 | SELL | yes | |
 | SSHORT | no | needs short-sale entitlement or specific account type |
+| SLONG | no | needs an institutional long/short account segment |
 
 ## 3. Order Attributes
 

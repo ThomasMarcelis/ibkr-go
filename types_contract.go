@@ -75,14 +75,14 @@ type Contract struct {
 
 // ComboLeg is one leg of a multi-leg (BAG) combo contract.
 type ComboLeg struct {
-	ConID              int    // contract ID of the leg instrument
-	Ratio              int    // relative size of this leg within the combo
-	Action             string // "BUY" or "SELL" for this leg
-	Exchange           string // routing exchange for the leg
-	OpenClose          string // open/close indicator (combo orders)
-	ShortSaleSlot      int    // short-sale slot: 0 unset, 1 broker, 2 third party
-	DesignatedLocation string // required when ShortSaleSlot is 2
-	ExemptCode         int    // short-sale exempt code; -1 when unset
+	ConID              int         // contract ID of the leg instrument
+	Ratio              int         // relative size of this leg within the combo
+	Action             OrderAction // BUY, SELL, or SSHORT for this leg
+	Exchange           string      // routing exchange for the leg
+	OpenClose          string      // open/close indicator (combo orders)
+	ShortSaleSlot      int         // short-sale slot: 0 unset, 1 broker, 2 third party
+	DesignatedLocation string      // required when ShortSaleSlot is 2
+	ExemptCode         int         // short-sale exempt code; -1 when unset
 }
 
 // TagValue is a generic name/value pair used for smart-routing and algo
@@ -92,15 +92,43 @@ type TagValue struct {
 	Value string
 }
 
+// OrderConditionType selects the payload carried by an [OrderCondition].
+type OrderConditionType int
+
+const (
+	ConditionPrice         OrderConditionType = 1
+	ConditionTime          OrderConditionType = 3
+	ConditionMargin        OrderConditionType = 4
+	ConditionExecution     OrderConditionType = 5
+	ConditionVolume        OrderConditionType = 6
+	ConditionPercentChange OrderConditionType = 7
+)
+
+// ConditionConjunction joins an order condition to the condition after it.
+type ConditionConjunction string
+
+const (
+	ConditionAnd ConditionConjunction = "a"
+	ConditionOr  ConditionConjunction = "o"
+)
+
+// ConditionOperator selects the direction of a threshold comparison.
+type ConditionOperator int
+
+const (
+	ConditionLess ConditionOperator = 1
+	ConditionMore ConditionOperator = 2
+)
+
 // OrderCondition is a single conditional trigger attached to an order (for
 // example price or time conditions). Type selects the condition kind and the
 // remaining fields carry its parameters.
 type OrderCondition struct {
-	Type          int     // condition kind
-	Conjunction   string  // "a" (and) or "o" (or) joining this condition to the next
-	ConID         int     // contract the condition observes
-	Exchange      string  // exchange the condition observes
-	Operator      int     // comparison operator
+	Type          OrderConditionType
+	Conjunction   ConditionConjunction
+	ConID         int    // contract the condition observes
+	Exchange      string // exchange the condition observes
+	Operator      ConditionOperator
 	Value         string  // threshold value
 	TriggerMethod int     // trigger method for price conditions
 	SecType       SecType // security type of the observed contract

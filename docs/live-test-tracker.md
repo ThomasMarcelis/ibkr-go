@@ -397,6 +397,7 @@ against the role-aware `paper-dev` Gateway.
 | MOO | Context expired in batch; needs solo run | high |
 | LOO | Same | high |
 | SSHORT | Needs short-sale permission | medium |
+| SLONG | Needs institutional long/short account | low |
 
 ### TIF Values Not Yet Live-Tested
 

@@ -239,7 +239,7 @@ type PlaceOrderRequest struct {
 	Contract Contract // 14 wire fields: conId through secId
 
 	// Core order fields
-	Action        string // "BUY", "SELL", "SSHORT"
+	Action        string // "BUY", "SELL", "SSHORT", "SLONG"
 	TotalQuantity string // decimal string
 	OrderType     string // "MKT", "LMT", "STP", "STP LMT", "TRAIL", etc.
 	LmtPrice      string // empty = UNSET

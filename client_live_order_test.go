@@ -1950,11 +1950,11 @@ func TestLiveOrderConditionPrice(t *testing.T) {
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = liveFarBuy(anchor)
 	order.Conditions.Values = []ibkr.OrderCondition{{
-		Type:          1, // Price condition
-		Conjunction:   "AND",
+		Type:          ibkr.ConditionPrice,
+		Conjunction:   ibkr.ConditionAnd,
 		ConID:         265598,
 		Exchange:      "SMART",
-		Operator:      1,   // <=
+		Operator:      ibkr.ConditionLess,
 		Value:         "1", // Absurdly low: never triggers.
 		TriggerMethod: 0,
 	}}

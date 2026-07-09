@@ -329,6 +329,9 @@ type placeOrderResult struct {
 // ownerless order (bounded background context) and detaches its handle, so a
 // canceled call cannot leave a live order resting with no way to reach it.
 func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
+	if err := validateOrderRequest(req, orderIntentPlace); err != nil {
+		return nil, err
+	}
 	resp := make(chan placeOrderResult, 1)
 	// enqueueReadySetup with a drop callback guarantees resp receives exactly
 	// one result even when ctx is canceled before the actor runs the setup;
@@ -364,11 +367,8 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		}
 
 		handle.modifyFn = func(ctx context.Context, order Order) error {
-			if order.WhatIf != nil && *order.WhatIf {
-				return &ValidationError{
-					Field:   "Order.WhatIf",
-					Message: "what-if orders are margin previews, not trades; use Orders().Preview",
-				}
+			if err := validateOrderRequest(PlaceOrderRequest{Contract: req.Contract, Order: order}, orderIntentModify); err != nil {
+				return err
 			}
 			return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 				if !e.isReady() {
@@ -458,6 +458,9 @@ func (e *engine) resolveOrphanedPlaceOrder(resp <-chan placeOrderResult, cause e
 // No OrderHandle is ever created — the preview route is resolved and torn down
 // on the one open_order echo, and nothing rests on the server.
 func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (OrderState, error) {
+	if err := validateOrderRequest(req, orderIntentPreview); err != nil {
+		return OrderState{}, err
+	}
 	type setup struct {
 		ch  chan previewResult
 		err error

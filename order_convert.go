@@ -112,7 +112,7 @@ func comboLegsToCodec(legs []ComboLeg) []codec.ComboLeg {
 		out[i] = codec.ComboLeg{
 			ConID:              leg.ConID,
 			Ratio:              leg.Ratio,
-			Action:             leg.Action,
+			Action:             string(leg.Action),
 			Exchange:           leg.Exchange,
 			OpenClose:          leg.OpenClose,
 			ShortSaleSlot:      strconv.Itoa(leg.ShortSaleSlot),
@@ -141,11 +141,11 @@ func orderConditionsToCodec(values []OrderCondition) []codec.OrderCondition {
 	out := make([]codec.OrderCondition, len(values))
 	for i, value := range values {
 		out[i] = codec.OrderCondition{
-			Type:          value.Type,
-			Conjunction:   value.Conjunction,
+			Type:          int(value.Type),
+			Conjunction:   string(value.Conjunction),
 			ConID:         value.ConID,
 			Exchange:      value.Exchange,
-			Operator:      value.Operator,
+			Operator:      int(value.Operator),
 			Value:         value.Value,
 			TriggerMethod: value.TriggerMethod,
 			SecType:       string(value.SecType),
@@ -166,7 +166,7 @@ func comboLegsFromCodec(legs []codec.ComboLeg) []ComboLeg {
 		out[i] = ComboLeg{
 			ConID:              leg.ConID,
 			Ratio:              leg.Ratio,
-			Action:             leg.Action,
+			Action:             OrderAction(leg.Action),
 			Exchange:           leg.Exchange,
 			OpenClose:          leg.OpenClose,
 			ShortSaleSlot:      shortSaleSlot,
@@ -195,11 +195,11 @@ func orderConditionsFromCodec(values []codec.OrderCondition) []OrderCondition {
 	out := make([]OrderCondition, len(values))
 	for i, value := range values {
 		out[i] = OrderCondition{
-			Type:          value.Type,
-			Conjunction:   value.Conjunction,
+			Type:          OrderConditionType(value.Type),
+			Conjunction:   ConditionConjunction(value.Conjunction),
 			ConID:         value.ConID,
 			Exchange:      value.Exchange,
-			Operator:      value.Operator,
+			Operator:      ConditionOperator(value.Operator),
 			Value:         value.Value,
 			TriggerMethod: value.TriggerMethod,
 			SecType:       SecType(value.SecType),

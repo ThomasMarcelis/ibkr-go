@@ -765,14 +765,14 @@ func runAPIConditionsMatrixAAPL(ctx context.Context, addr string, clientID int) 
 			label string
 			cond  ibkr.OrderCondition
 		}{
-			{label: "price_condition", cond: ibkr.OrderCondition{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: farSell(anchor).String(), TriggerMethod: 4}},
+			{label: "price_condition", cond: ibkr.OrderCondition{Type: ibkr.ConditionPrice, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: farSell(anchor).String(), TriggerMethod: 4}},
 			// Gateway code 10314 rejects zone abbreviations like CEST; it
 			// accepts the documented UTC dash form yyyymmdd-hh:mm:ss.
-			{label: "time_condition", cond: ibkr.OrderCondition{Type: 3, Conjunction: "a", Operator: 2, Value: time.Now().Add(2 * time.Minute).UTC().Format("20060102-15:04:05")}},
-			{label: "margin_condition", cond: ibkr.OrderCondition{Type: 4, Conjunction: "a", Operator: 2, Value: "10"}},
-			{label: "execution_condition", cond: ibkr.OrderCondition{Type: 5, Conjunction: "a", SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"}},
-			{label: "volume_condition", cond: ibkr.OrderCondition{Type: 6, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "999999999"}},
-			{label: "percent_change_condition", cond: ibkr.OrderCondition{Type: 7, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "50"}},
+			{label: "time_condition", cond: ibkr.OrderCondition{Type: ibkr.ConditionTime, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: time.Now().Add(2 * time.Minute).UTC().Format("20060102-15:04:05")}},
+			{label: "margin_condition", cond: ibkr.OrderCondition{Type: ibkr.ConditionMargin, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "10"}},
+			{label: "execution_condition", cond: ibkr.OrderCondition{Type: ibkr.ConditionExecution, Conjunction: ibkr.ConditionAnd, SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"}},
+			{label: "volume_condition", cond: ibkr.OrderCondition{Type: ibkr.ConditionVolume, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "999999999"}},
+			{label: "percent_change_condition", cond: ibkr.OrderCondition{Type: ibkr.ConditionPercentChange, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "50"}},
 		}
 		for _, tc := range conditions {
 			order := base

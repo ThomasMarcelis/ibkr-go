@@ -77,37 +77,37 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 	}{
 		{
 			name:      "price",
-			condition: ibkr.OrderCondition{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "2918.1", TriggerMethod: 4},
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionPrice, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "2918.1", TriggerMethod: 4},
 			orderID:   356,
 			permID:    900356,
 		},
 		{
 			name:      "time",
-			condition: ibkr.OrderCondition{Type: 3, Conjunction: "a", Operator: 2, Value: "20260610-20:11:37"},
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionTime, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "20260610-20:11:37"},
 			orderID:   357,
 			permID:    900357,
 		},
 		{
 			name:      "margin",
-			condition: ibkr.OrderCondition{Type: 4, Conjunction: "a", Operator: 2, Value: "10"},
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionMargin, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "10"},
 			orderID:   358,
 			permID:    900358,
 		},
 		{
 			name:      "execution",
-			condition: ibkr.OrderCondition{Type: 5, Conjunction: "a", SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"},
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionExecution, Conjunction: ibkr.ConditionAnd, SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"},
 			orderID:   359,
 			permID:    900359,
 		},
 		{
 			name:      "volume",
-			condition: ibkr.OrderCondition{Type: 6, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "999999999"},
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionVolume, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "999999999"},
 			orderID:   360,
 			permID:    900360,
 		},
 		{
 			name:      "percent_change",
-			condition: ibkr.OrderCondition{Type: 7, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "50"},
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionPercentChange, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "50"},
 			orderID:   361,
 			permID:    900361,
 		},

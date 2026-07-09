@@ -1,0 +1,346 @@
+package ibkr
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/shopspring/decimal"
+)
+
+type orderIntent uint8
+
+const (
+	orderIntentPlace orderIntent = iota
+	orderIntentPreview
+	orderIntentModify
+)
+
+func validateOrderRequest(req PlaceOrderRequest, intent orderIntent) error {
+	order := req.Order
+	if intent != orderIntentPreview && order.WhatIf != nil && *order.WhatIf {
+		return &ValidationError{
+			Field:   "Order.WhatIf",
+			Message: "what-if orders are margin previews, not trades; use Orders().Preview",
+		}
+	}
+	if intent != orderIntentModify && order.OrderID != 0 {
+		return invalidOrderField("Order.OrderID", order.OrderID, "must be zero for a new order; the client assigns it")
+	}
+	if err := validateOrderContract(req.Contract, order.Combo); err != nil {
+		return err
+	}
+
+	switch order.Action {
+	case ActionBuy, ActionSell, ActionSellShort, ActionSellLong:
+	default:
+		return invalidOrderField("Order.Action", order.Action, "must be BUY, SELL, SSHORT, or SLONG")
+	}
+	if strings.TrimSpace(string(order.OrderType)) == "" {
+		return invalidOrderField("Order.OrderType", order.OrderType, "is required")
+	}
+	if err := validateOrderQuantity(order); err != nil {
+		return err
+	}
+	if err := validateOrderPrices(order); err != nil {
+		return err
+	}
+	if err := validateOrderTIF(order); err != nil {
+		return err
+	}
+	if order.ParentID < 0 {
+		return invalidOrderField("Order.ParentID", order.ParentID, "must be >= 0")
+	}
+	if order.DisplaySize < 0 {
+		return invalidOrderField("Order.DisplaySize", order.DisplaySize, "must be >= 0")
+	}
+	if !validOrderTriggerMethod(order.TriggerMethod) {
+		return invalidOrderField("Order.TriggerMethod", order.TriggerMethod, "must be 0, 1, 2, 3, 4, 7, or 8")
+	}
+	if err := validateOrderOCA(order.OCA); err != nil {
+		return err
+	}
+	if err := validateOrderCombo(req.Contract, order.Combo); err != nil {
+		return err
+	}
+	if err := validateOrderScale(order.Scale); err != nil {
+		return err
+	}
+	if err := validateOrderHedge(order); err != nil {
+		return err
+	}
+	if err := validateOrderAlgorithm(order.Algorithm); err != nil {
+		return err
+	}
+	if err := validateOrderConditions(order.Conditions); err != nil {
+		return err
+	}
+	return validateOrderAdjustment(order.Adjustment)
+}
+
+func validateOrderContract(contract Contract, combo OrderCombo) error {
+	if contract.ConID < 0 {
+		return invalidOrderField("Contract.ConID", contract.ConID, "must be >= 0")
+	}
+	if contract.ConID == 0 {
+		if contract.SecType == "" {
+			return invalidOrderField("Contract.SecType", contract.SecType, "is required when ConID is not set")
+		}
+		if strings.TrimSpace(contract.Symbol) == "" && strings.TrimSpace(contract.LocalSymbol) == "" {
+			return invalidOrderField("Contract.Symbol", contract.Symbol, "Symbol or LocalSymbol is required when ConID is not set")
+		}
+	}
+	if contract.SecType == SecTypeCombo && len(combo.Legs) < 2 {
+		return invalidOrderField("Order.Combo.Legs", len(combo.Legs), "a BAG order requires at least two legs")
+	}
+	return nil
+}
+
+func validateOrderQuantity(order Order) error {
+	if order.Quantity.IsNegative() {
+		return invalidOrderField("Order.Quantity", order.Quantity, "must be >= 0")
+	}
+	if order.CashQty.IsNegative() {
+		return invalidOrderField("Order.CashQty", order.CashQty, "must be >= 0")
+	}
+	if !order.Quantity.IsZero() && !order.CashQty.IsZero() {
+		return invalidOrderField("Order.CashQty", order.CashQty, "cannot be combined with Quantity")
+	}
+	if order.Quantity.IsZero() && order.CashQty.IsZero() && order.Hedge.Type == "" {
+		return invalidOrderField("Order.Quantity", order.Quantity, "Quantity or CashQty must be positive; only hedge children may omit both")
+	}
+	if order.MinQty.IsNegative() {
+		return invalidOrderField("Order.MinQty", order.MinQty, "must be >= 0")
+	}
+	if !order.Quantity.IsZero() && order.MinQty.GreaterThan(order.Quantity) {
+		return invalidOrderField("Order.MinQty", order.MinQty, "must not exceed Quantity")
+	}
+	return nil
+}
+
+func validateOrderPrices(order Order) error {
+	// Outright prices may legitimately be negative for some futures and
+	// commodity markets. Only percentage and amount fields are sign-limited.
+	if order.TrailingPercent.IsNegative() {
+		return invalidOrderField("Order.TrailingPercent", order.TrailingPercent, "must be >= 0")
+	}
+
+	switch order.OrderType {
+	case OrderTypeLimit, OrderTypeLimitOnClose, OrderTypeLimitOnOpen:
+		if order.LmtPrice.IsZero() {
+			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
+		}
+	case OrderTypeStop:
+		if order.AuxPrice.IsZero() {
+			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "is required for a stop order")
+		}
+	case OrderTypeStopLimit, OrderTypeLimitIfTouched:
+		if order.LmtPrice.IsZero() {
+			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
+		}
+		if order.AuxPrice.IsZero() {
+			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "is required for this order type")
+		}
+	case OrderTypeMarketIfTouched:
+		if order.AuxPrice.IsZero() {
+			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "is required for a market-if-touched order")
+		}
+	case OrderTypeTrailingStop, OrderTypeTrailingLimit:
+		if order.AuxPrice.IsZero() && order.TrailingPercent.IsZero() {
+			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "AuxPrice or TrailingPercent is required for a trailing order")
+		}
+	}
+	return nil
+}
+
+func validateOrderTIF(order Order) error {
+	if order.TIF == TIFGTD && strings.TrimSpace(order.GoodTillDate) == "" {
+		return invalidOrderField("Order.GoodTillDate", order.GoodTillDate, "is required when TIF is GTD")
+	}
+	if order.TIF != TIFGTD && order.GoodTillDate != "" {
+		return invalidOrderField("Order.GoodTillDate", order.GoodTillDate, "requires TIF GTD")
+	}
+	return nil
+}
+
+func validateOrderOCA(oca OrderOCA) error {
+	if oca.Group == "" && oca.Type == 0 {
+		return nil
+	}
+	if strings.TrimSpace(oca.Group) == "" {
+		return invalidOrderField("Order.OCA.Group", oca.Group, "is required when OCA.Type is set")
+	}
+	switch oca.Type {
+	case OCACancelWithBlock, OCAReduceWithBlock, OCAReduceWithoutBlock:
+		return nil
+	default:
+		return invalidOrderField("Order.OCA.Type", oca.Type, "must be a defined OCAType when OCA.Group is set")
+	}
+}
+
+func validateOrderCombo(contract Contract, combo OrderCombo) error {
+	if len(combo.Legs) > 0 && contract.SecType != SecTypeCombo {
+		return invalidOrderField("Order.Combo.Legs", len(combo.Legs), "requires a BAG contract")
+	}
+	if len(combo.LegPrices) > 0 && len(combo.LegPrices) != len(combo.Legs) {
+		return invalidOrderField("Order.Combo.LegPrices", len(combo.LegPrices), "must contain one price per leg")
+	}
+	for i, leg := range combo.Legs {
+		prefix := fmt.Sprintf("Order.Combo.Legs[%d]", i)
+		if leg.ConID <= 0 {
+			return invalidOrderField(prefix+".ConID", leg.ConID, "must be > 0")
+		}
+		if leg.Ratio <= 0 {
+			return invalidOrderField(prefix+".Ratio", leg.Ratio, "must be > 0")
+		}
+		switch leg.Action {
+		case ActionBuy, ActionSell, ActionSellShort, ActionSellLong:
+		default:
+			return invalidOrderField(prefix+".Action", leg.Action, "must be BUY, SELL, SSHORT, or SLONG")
+		}
+		if strings.TrimSpace(leg.Exchange) == "" {
+			return invalidOrderField(prefix+".Exchange", leg.Exchange, "is required")
+		}
+		if leg.ShortSaleSlot < 0 || leg.ShortSaleSlot > 2 {
+			return invalidOrderField(prefix+".ShortSaleSlot", leg.ShortSaleSlot, "must be 0, 1, or 2")
+		}
+		if leg.ShortSaleSlot == 2 && strings.TrimSpace(leg.DesignatedLocation) == "" {
+			return invalidOrderField(prefix+".DesignatedLocation", leg.DesignatedLocation, "is required for short-sale slot 2")
+		}
+	}
+	return validateTagValues("Order.Combo.SmartRouting", combo.SmartRouting)
+}
+
+func validateOrderScale(scale OrderScale) error {
+	if scale.InitialLevelSize < 0 {
+		return invalidOrderField("Order.Scale.InitialLevelSize", scale.InitialLevelSize, "must be >= 0")
+	}
+	if scale.SubsequentLevelSize < 0 {
+		return invalidOrderField("Order.Scale.SubsequentLevelSize", scale.SubsequentLevelSize, "must be >= 0")
+	}
+	if scale.PriceIncrement.IsNegative() {
+		return invalidOrderField("Order.Scale.PriceIncrement", scale.PriceIncrement, "must be >= 0")
+	}
+	return nil
+}
+
+func validateOrderHedge(order Order) error {
+	hedge := order.Hedge
+	if hedge.Type == "" {
+		if hedge.Param != "" || hedge.DisableAutomaticPrice != nil {
+			return invalidOrderField("Order.Hedge.Type", hedge.Type, "is required when other hedge fields are set")
+		}
+		return nil
+	}
+	switch hedge.Type {
+	case HedgeDelta, HedgeBeta, HedgeFX, HedgePair:
+	default:
+		return invalidOrderField("Order.Hedge.Type", hedge.Type, "must be D, B, F, or P")
+	}
+	if order.ParentID <= 0 {
+		return invalidOrderField("Order.ParentID", order.ParentID, "must identify the parent of a hedge order")
+	}
+	return nil
+}
+
+func validateOrderAlgorithm(algorithm OrderAlgorithm) error {
+	if algorithm.Strategy == "" && len(algorithm.Params) > 0 {
+		return invalidOrderField("Order.Algorithm.Strategy", algorithm.Strategy, "is required when algorithm parameters are set")
+	}
+	return validateTagValues("Order.Algorithm.Params", algorithm.Params)
+}
+
+func validateOrderConditions(conditions OrderConditions) error {
+	if len(conditions.Values) == 0 {
+		if conditions.IgnoreRTH || conditions.CancelOrder {
+			return invalidOrderField("Order.Conditions.Values", 0, "is required when condition flags are set")
+		}
+		return nil
+	}
+	for i, condition := range conditions.Values {
+		prefix := fmt.Sprintf("Order.Conditions.Values[%d]", i)
+		switch condition.Type {
+		case ConditionPrice, ConditionTime, ConditionMargin, ConditionExecution, ConditionVolume, ConditionPercentChange:
+		default:
+			return invalidOrderField(prefix+".Type", condition.Type, "is not supported by the classic socket protocol")
+		}
+		if condition.Conjunction != ConditionAnd && condition.Conjunction != ConditionOr {
+			return invalidOrderField(prefix+".Conjunction", condition.Conjunction, "must be ConditionAnd or ConditionOr")
+		}
+		if condition.Type != ConditionExecution && condition.Operator != ConditionLess && condition.Operator != ConditionMore {
+			return invalidOrderField(prefix+".Operator", condition.Operator, "must be ConditionLess or ConditionMore")
+		}
+		switch condition.Type {
+		case ConditionPrice, ConditionVolume, ConditionPercentChange:
+			if condition.ConID <= 0 {
+				return invalidOrderField(prefix+".ConID", condition.ConID, "must be > 0")
+			}
+			if strings.TrimSpace(condition.Exchange) == "" {
+				return invalidOrderField(prefix+".Exchange", condition.Exchange, "is required")
+			}
+			if strings.TrimSpace(condition.Value) == "" {
+				return invalidOrderField(prefix+".Value", condition.Value, "is required")
+			}
+			if condition.Type == ConditionPrice && !validOrderTriggerMethod(condition.TriggerMethod) {
+				return invalidOrderField(prefix+".TriggerMethod", condition.TriggerMethod, "must be 0, 1, 2, 3, 4, 7, or 8")
+			}
+		case ConditionTime, ConditionMargin:
+			if strings.TrimSpace(condition.Value) == "" {
+				return invalidOrderField(prefix+".Value", condition.Value, "is required")
+			}
+		case ConditionExecution:
+			if condition.SecType == "" || strings.TrimSpace(condition.Exchange) == "" || strings.TrimSpace(condition.Symbol) == "" {
+				return invalidOrderField(prefix, condition.Type, "execution conditions require SecType, Exchange, and Symbol")
+			}
+		}
+	}
+	return nil
+}
+
+func validateOrderAdjustment(adjustment OrderAdjustment) error {
+	values := []struct {
+		field string
+		value decimal.Decimal
+	}{
+		{"Order.Adjustment.LmtPriceOffset", adjustment.LmtPriceOffset},
+		{"Order.Adjustment.TrailingAmount", adjustment.TrailingAmount},
+	}
+	for _, value := range values {
+		if value.value.IsNegative() {
+			return invalidOrderField(value.field, value.value, "must be >= 0")
+		}
+	}
+	if adjustment.TrailingUnit != 0 && adjustment.TrailingUnit != 1 {
+		return invalidOrderField("Order.Adjustment.TrailingUnit", adjustment.TrailingUnit, "must be 0 (amount) or 1 (percent)")
+	}
+	adjustmentOnly := !adjustment.TriggerPrice.IsZero() || !adjustment.StopPrice.IsZero() ||
+		!adjustment.StopLimitPrice.IsZero() || !adjustment.TrailingAmount.IsZero() || adjustment.TrailingUnit != 0
+	if adjustment.OrderType == "" && adjustmentOnly {
+		return invalidOrderField("Order.Adjustment.OrderType", adjustment.OrderType, "is required when adjustment fields are set")
+	}
+	if adjustment.OrderType != "" && adjustment.TriggerPrice.IsZero() {
+		return invalidOrderField("Order.Adjustment.TriggerPrice", adjustment.TriggerPrice, "is required for an adjusted order")
+	}
+	return nil
+}
+
+func validOrderTriggerMethod(method int) bool {
+	switch method {
+	case 0, 1, 2, 3, 4, 7, 8:
+		return true
+	default:
+		return false
+	}
+}
+
+func validateTagValues(field string, values []TagValue) error {
+	for i, value := range values {
+		if strings.TrimSpace(value.Tag) == "" {
+			return invalidOrderField(fmt.Sprintf("%s[%d].Tag", field, i), value.Tag, "is required")
+		}
+	}
+	return nil
+}
+
+func invalidOrderField(field string, value any, message string) error {
+	return &ValidationError{Field: field, Value: fmt.Sprint(value), Message: message}
+}
