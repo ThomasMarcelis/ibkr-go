@@ -1031,6 +1031,110 @@ func runAPIScannerSubscription(ctx context.Context, addr string, clientID int) e
 	})
 }
 
+func runAPIGenericTickMatrixAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		_ = account
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			recordProbeResult("generic_tick_set_delayed", "aapl", 0, err)
+			log.Printf("generic tick matrix set delayed: %v", err)
+		}
+
+		sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+			Contract: apiAAPL,
+			GenericTicks: []ibkr.GenericTick{
+				"221", // mark price
+				"233", // real-time volume
+				"236", // shortable
+				"293", // trade count
+				"294", // trade rate
+				"295", // volume rate
+			},
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			recordProbeResult("generic_tick_subscribe", "aapl", 0, err)
+			return nil
+		}
+		defer sub.Close()
+
+		timer := time.NewTimer(15 * time.Second)
+		defer timer.Stop()
+		count := 0
+		for {
+			select {
+			case update, ok := <-sub.Events():
+				if !ok {
+					recordProbeResult("generic_tick_matrix", "aapl", count, sub.Err())
+					return nil
+				}
+				count++
+				values := quoteUpdateValues(update)
+				recordAPIEvent("quote_update", update.Kind.String(), func(event *apiDriverEvent) {
+					event.Symbol = apiAAPL.Symbol
+					event.SecType = string(apiAAPL.SecType)
+					event.Values = values
+				})
+				log.Printf("generic tick matrix update kind=%s values=%v", update.Kind, values)
+			case <-sub.Done():
+				recordProbeResult("generic_tick_matrix", "aapl", count, sub.Err())
+				return nil
+			case <-timer.C:
+				recordProbeResult("generic_tick_matrix", "aapl", count, nil)
+				return nil
+			case <-ctx.Done():
+				recordProbeResult("generic_tick_matrix", "aapl", count, ctx.Err())
+				return nil
+			}
+		}
+	})
+}
+
+func quoteUpdateValues(update ibkr.QuoteUpdate) map[string]string {
+	values := map[string]string{
+		"changed":   strconv.FormatUint(uint64(update.Changed), 10),
+		"available": strconv.FormatUint(uint64(update.Snapshot.Available), 10),
+	}
+	switch update.Kind {
+	case ibkr.QuoteUpdatePriceTick:
+		if update.PriceTick != nil {
+			values["tick_type"] = strconv.Itoa(update.PriceTick.TickType)
+			values["price"] = update.PriceTick.Price.String()
+			values["attr_mask"] = strconv.Itoa(int(update.PriceTick.AttrMask))
+			if update.PriceTick.Size != nil {
+				values["size"] = update.PriceTick.Size.String()
+			}
+		}
+	case ibkr.QuoteUpdateSizeTick:
+		if update.SizeTick != nil {
+			values["tick_type"] = strconv.Itoa(update.SizeTick.TickType)
+			values["size"] = update.SizeTick.Size.String()
+		}
+	case ibkr.QuoteUpdateGenericTick:
+		if update.GenericTick != nil {
+			values["tick_type"] = strconv.Itoa(update.GenericTick.TickType)
+			values["value"] = update.GenericTick.Value.String()
+		}
+	case ibkr.QuoteUpdateStringTick:
+		if update.StringTick != nil {
+			values["tick_type"] = strconv.Itoa(update.StringTick.TickType)
+			values["value"] = update.StringTick.Value
+		}
+	case ibkr.QuoteUpdateParameters:
+		if update.Parameters != nil {
+			if update.Parameters.MinTick != nil {
+				values["min_tick"] = update.Parameters.MinTick.String()
+			}
+			values["bbo_exchange"] = update.Parameters.BBOExchange
+			values["snapshot_permissions"] = strconv.Itoa(update.Parameters.SnapshotPermissions)
+		}
+	case ibkr.QuoteUpdateOptionComputation:
+		if update.OptionComputation != nil {
+			values["tick_type"] = strconv.Itoa(update.OptionComputation.TickType)
+			values["tick_attrib"] = strconv.Itoa(update.OptionComputation.TickAttrib)
+		}
+	}
+	return values
+}
+
 func runAPIHistoricalMatrixAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 9*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		_ = account

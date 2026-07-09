@@ -229,13 +229,15 @@ type QuoteRequest struct {
 type QuoteUpdateKind uint8
 
 const (
-	// QuoteUpdateFields reports a price, size, or market-data-type update in
-	// QuoteUpdate.Snapshot and QuoteUpdate.Changed.
+	// QuoteUpdateFields reports a snapshot-field update with no separate tick
+	// payload. Market-data-type callbacks use this kind.
 	QuoteUpdateFields QuoteUpdateKind = iota
 	QuoteUpdateGenericTick
 	QuoteUpdateStringTick
 	QuoteUpdateParameters
 	QuoteUpdateOptionComputation
+	QuoteUpdatePriceTick
+	QuoteUpdateSizeTick
 )
 
 func (k QuoteUpdateKind) String() string {
@@ -250,9 +252,44 @@ func (k QuoteUpdateKind) String() string {
 		return "Parameters"
 	case QuoteUpdateOptionComputation:
 		return "OptionComputation"
+	case QuoteUpdatePriceTick:
+		return "PriceTick"
+	case QuoteUpdateSizeTick:
+		return "SizeTick"
 	default:
 		return fmt.Sprintf("QuoteUpdateKind(%d)", k)
 	}
+}
+
+// QuotePriceAttributes is the exact attribute bitmask attached to a classic
+// price tick. The methods expose the three bits defined by IBKR without hiding
+// any unknown future bits in the underlying mask.
+type QuotePriceAttributes int
+
+// CanAutoExecute reports whether the tick can be used for automatic order execution.
+func (a QuotePriceAttributes) CanAutoExecute() bool { return a&1 != 0 }
+
+// PastLimit reports whether the tick is outside the price limits.
+func (a QuotePriceAttributes) PastLimit() bool { return a&2 != 0 }
+
+// PreOpen reports whether the tick is from the pre-open period.
+func (a QuotePriceAttributes) PreOpen() bool { return a&4 != 0 }
+
+// QuotePriceTick preserves one classic IBKR tickPrice callback. Size is the
+// optional companion size carried in the same wire message; nil means the wire
+// field was unset. TickType is IBKR's numeric tick-type ID.
+type QuotePriceTick struct {
+	TickType int
+	Price    decimal.Decimal
+	Size     *decimal.Decimal
+	AttrMask QuotePriceAttributes
+}
+
+// QuoteSizeTick preserves one classic IBKR tickSize callback. TickType is
+// IBKR's numeric tick-type ID.
+type QuoteSizeTick struct {
+	TickType int
+	Size     decimal.Decimal
 }
 
 // QuoteGenericTick is one numeric IBKR tick that has no normalized [Quote]
@@ -272,7 +309,7 @@ type QuoteStringTick struct {
 // QuoteParameters describes the market-data rules attached to a quote
 // request. BBOExchange is IBKR's exchange bit field, not an exchange name.
 type QuoteParameters struct {
-	MinTick             decimal.Decimal
+	MinTick             *decimal.Decimal // nil when IBKR omits the value
 	BBOExchange         string
 	SnapshotPermissions int
 }
@@ -288,14 +325,16 @@ type QuoteOptionComputation struct {
 
 // QuoteUpdate is one event from a quote subscription. Kind selects exactly one
 // payload. Snapshot is always the full accumulated [Quote]; ancillary ticks do
-// not mutate it. For [QuoteUpdateFields], Changed reports only the normalized
-// fields touched by this event. The other kinds set exactly one of GenericTick,
-// StringTick, Parameters, or OptionComputation; unrelated payload pointers are
-// nil.
+// not mutate it. Changed reports the normalized fields touched by price, size,
+// or market-data-type callbacks and is zero when a tick has no [Quote] mapping.
+// Every kind except [QuoteUpdateFields] sets its corresponding payload pointer;
+// unrelated payload pointers are nil.
 type QuoteUpdate struct {
 	Kind              QuoteUpdateKind
 	Snapshot          Quote       // cumulative quote state after this update
 	Changed           QuoteFields // fields changed by this update
+	PriceTick         *QuotePriceTick
+	SizeTick          *QuoteSizeTick
 	GenericTick       *QuoteGenericTick
 	StringTick        *QuoteStringTick
 	Parameters        *QuoteParameters

@@ -52,6 +52,22 @@ Latest API 10.48 (released 2026-07-07), Stable API 10.45 (released
   No wire-shape change is announced. Re-run open-order snapshot and
   subscription captures when a local Gateway is on the updated release before
   changing result-set expectations.
+- The new public `api_generic_tick_matrix_aapl` scenario ran safely through
+  `readonly-live` for 15 seconds and cancelled cleanly. The successful capture
+  is `captures/20260709T223341Z-api_generic_tick_matrix_aapl` (raw sha256
+  `5c40260d783971d22e6de209c90a61fd489479e0e7fc2ebf20be4e76d677a45e`,
+  events sha256
+  `d04dd1439dfec841dafac9be56e199f453693d063c2dfd9f5a912389fbba7676`,
+  normalized frames sha256
+  `97b3ac64149500f42e533eafa4ba890bd7f88698be11463643eeb2ea24dea9f0`).
+  It observed delayed normalized prices/sizes plus unmapped mark-price tick 37,
+  shortable ticks 46/89, volume-rate tick 56, and delayed-timestamp string tick
+  88. Real-time volume, trade-count, and trade-rate values were requested but
+  did not arrive in this window, so they remain open. The preceding capture
+  `20260709T223247Z-api_generic_tick_matrix_aapl` exposed a real omitted
+  TickReqParams minimum tick; its raw hash
+  `bd284e22771394b3baf7b827d62ed22d45f15e401dd478f430e18f4e715b0377`
+  now grounds the nil-minimum regression test.
 
 ### 2026-07-04
 

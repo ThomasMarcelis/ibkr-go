@@ -1714,6 +1714,11 @@ var scenarios = map[string]scenario{
 		description: "public API campaign for market-data type, generic tick, real-time bar, and tick-by-tick variants",
 		runAPI:      runAPIMarketDataCompletenessAAPL,
 	},
+	"api_generic_tick_matrix_aapl": {
+		name:        "api_generic_tick_matrix_aapl",
+		description: "public API probe for exact price, size, generic, string, and parameter tick delivery",
+		runAPI:      runAPIGenericTickMatrixAAPL,
+	},
 	"api_scanner_subscription": {
 		name:        "api_scanner_subscription",
 		description: "public API probe for a complete HOT_BY_VOLUME scanner subscription request",

@@ -122,30 +122,49 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.TickPrice:
-					changed, err := applyTickPrice(&quote, m.TickType, m.Price)
+					price, err := parseRequiredDecimal(m.Price, "quote price tick")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
-					if sizeField, ok := companionSizeTickType(m.TickType); ok && m.Size != "" {
-						sizeChanged, err := applyTickSize(&quote, sizeField, m.Size)
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						changed |= sizeChanged
+					size, err := parseOptionalDecimalPointer(m.Size, "quote price tick companion size")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
 					}
-					emitSubscription(sub, QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
+					changed := applyTickPrice(&quote, m.TickType, price)
+					if sizeField, ok := companionSizeTickType(m.TickType); ok && size != nil {
+						changed |= applyTickSize(&quote, sizeField, *size)
+					}
+					emitSubscription(sub, QuoteUpdate{
+						Kind:     QuoteUpdatePriceTick,
+						Snapshot: quote,
+						Changed:  changed,
+						PriceTick: new(QuotePriceTick{
+							TickType: m.TickType,
+							Price:    price,
+							Size:     size,
+							AttrMask: QuotePriceAttributes(m.AttrMask),
+						}),
+						ReceivedAt: time.Now().UTC(),
+					})
 				case codec.TickSize:
-					changed, err := applyTickSize(&quote, m.TickType, m.Size)
+					size, err := parseRequiredDecimal(m.Size, "quote size tick")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
-					emitSubscription(sub, QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: changed, ReceivedAt: time.Now().UTC()})
+					changed := applyTickSize(&quote, m.TickType, size)
+					emitSubscription(sub, QuoteUpdate{
+						Kind:       QuoteUpdateSizeTick,
+						Snapshot:   quote,
+						Changed:    changed,
+						SizeTick:   new(QuoteSizeTick{TickType: m.TickType, Size: size}),
+						ReceivedAt: time.Now().UTC(),
+					})
 				case codec.MarketDataType:
 					quote.MarketDataType = MarketDataType(m.DataType)
 					quote.Available |= QuoteFieldMarketDataType
@@ -171,7 +190,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						ReceivedAt: time.Now().UTC(),
 					})
 				case codec.TickReqParams:
-					minTick, err := parseRequiredDecimal(m.MinTick, "quote parameters minimum tick")
+					minTick, err := parseOptionalDecimalPointer(m.MinTick, "quote parameters minimum tick")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
@@ -956,105 +975,61 @@ func parseTickByTickTime(raw string) (time.Time, error) {
 	return parseEpochSeconds(raw)
 }
 
-func applyTickPrice(quote *Quote, field int, raw string) (QuoteFields, error) {
+func applyTickPrice(quote *Quote, field int, value decimal.Decimal) QuoteFields {
 	switch field {
 	case 1, 66: // bid
-		value, err := parseRequiredDecimal(raw, "quote bid")
-		if err != nil {
-			return 0, err
-		}
 		quote.Bid = value
 		quote.Available |= QuoteFieldBid
-		return QuoteFieldBid, nil
+		return QuoteFieldBid
 	case 2, 67: // ask
-		value, err := parseRequiredDecimal(raw, "quote ask")
-		if err != nil {
-			return 0, err
-		}
 		quote.Ask = value
 		quote.Available |= QuoteFieldAsk
-		return QuoteFieldAsk, nil
+		return QuoteFieldAsk
 	case 4, 68: // last
-		value, err := parseRequiredDecimal(raw, "quote last")
-		if err != nil {
-			return 0, err
-		}
 		quote.Last = value
 		quote.Available |= QuoteFieldLast
-		return QuoteFieldLast, nil
+		return QuoteFieldLast
 	case 6, 72: // high
-		value, err := parseRequiredDecimal(raw, "quote high")
-		if err != nil {
-			return 0, err
-		}
 		quote.High = value
 		quote.Available |= QuoteFieldHigh
-		return QuoteFieldHigh, nil
+		return QuoteFieldHigh
 	case 7, 73: // low
-		value, err := parseRequiredDecimal(raw, "quote low")
-		if err != nil {
-			return 0, err
-		}
 		quote.Low = value
 		quote.Available |= QuoteFieldLow
-		return QuoteFieldLow, nil
+		return QuoteFieldLow
 	case 9, 75: // close
-		value, err := parseRequiredDecimal(raw, "quote close")
-		if err != nil {
-			return 0, err
-		}
 		quote.Close = value
 		quote.Available |= QuoteFieldClose
-		return QuoteFieldClose, nil
+		return QuoteFieldClose
 	case 14, 76: // open
-		value, err := parseRequiredDecimal(raw, "quote open")
-		if err != nil {
-			return 0, err
-		}
 		quote.Open = value
 		quote.Available |= QuoteFieldOpen
-		return QuoteFieldOpen, nil
+		return QuoteFieldOpen
 	default:
-		return 0, nil
+		return 0
 	}
 }
 
-func applyTickSize(quote *Quote, field int, raw string) (QuoteFields, error) {
+func applyTickSize(quote *Quote, field int, value decimal.Decimal) QuoteFields {
 	switch field {
 	case 0, 69: // bid_size
-		value, err := parseRequiredDecimal(raw, "quote bid size")
-		if err != nil {
-			return 0, err
-		}
 		quote.BidSize = value
 		quote.Available |= QuoteFieldBidSize
-		return QuoteFieldBidSize, nil
+		return QuoteFieldBidSize
 	case 3, 70: // ask_size
-		value, err := parseRequiredDecimal(raw, "quote ask size")
-		if err != nil {
-			return 0, err
-		}
 		quote.AskSize = value
 		quote.Available |= QuoteFieldAskSize
-		return QuoteFieldAskSize, nil
+		return QuoteFieldAskSize
 	case 5, 71: // last_size
-		value, err := parseRequiredDecimal(raw, "quote last size")
-		if err != nil {
-			return 0, err
-		}
 		quote.LastSize = value
 		quote.Available |= QuoteFieldLastSize
-		return QuoteFieldLastSize, nil
+		return QuoteFieldLastSize
 	case 8, 74: // volume
-		value, err := parseRequiredDecimal(raw, "quote volume")
-		if err != nil {
-			return 0, err
-		}
 		quote.Volume = value
 		quote.Available |= QuoteFieldVolume
-		return QuoteFieldVolume, nil
+		return QuoteFieldVolume
 	default:
-		return 0, nil
+		return 0
 	}
 }
 

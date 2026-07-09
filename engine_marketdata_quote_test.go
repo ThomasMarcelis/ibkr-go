@@ -6,8 +6,8 @@ func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
 	// captures/20260405T215752Z-quote_stream_genericticks, IB Gateway
 	// server_version 200. raw.txt sha256:
 	// 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee.
-	// These are the exact payloads from the live AAPL request for generic
-	// ticks 233 and 236; only the four-byte frame lengths are omitted.
+	// These are exact payloads captured during the live AAPL request for
+	// generic ticks 233 and 236; only the four-byte frame lengths are omitted.
 	e := newBenchEngine(t)
 	e.nextReqID = 1001
 	sub := installQuoteRoute(t, e)
@@ -29,7 +29,7 @@ func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
 	if parameters.Parameters == nil {
 		t.Fatal("parameters payload = nil")
 	}
-	if parameters.Parameters.MinTick.String() != "0.01" ||
+	if parameters.Parameters.MinTick == nil || parameters.Parameters.MinTick.String() != "0.01" ||
 		parameters.Parameters.BBOExchange != "9c0001" ||
 		parameters.Parameters.SnapshotPermissions != 4 {
 		t.Fatalf("parameters = %+v", parameters.Parameters)
@@ -122,11 +122,122 @@ func TestQuoteRouteAppliesLiveCompanionSize(t *testing.T) {
 
 	update := nextQuoteUpdate(t, sub)
 	wantChanged := QuoteFieldLast | QuoteFieldLastSize
-	if update.Kind != QuoteUpdateFields || update.Changed != wantChanged {
+	if update.Kind != QuoteUpdatePriceTick || update.Changed != wantChanged {
 		t.Fatalf("update = Kind %v Changed %v, want fields %v", update.Kind, update.Changed, wantChanged)
+	}
+	if update.PriceTick == nil {
+		t.Fatal("price tick payload = nil")
+	}
+	if update.PriceTick.TickType != 68 || update.PriceTick.Price.String() != "255.45" {
+		t.Fatalf("price tick = %+v", update.PriceTick)
+	}
+	if update.PriceTick.Size == nil || update.PriceTick.Size.String() != "200" {
+		t.Fatalf("price tick companion size = %v, want 200", update.PriceTick.Size)
+	}
+	if update.PriceTick.AttrMask != 0 {
+		t.Fatalf("price tick AttrMask = %d, want 0", update.PriceTick.AttrMask)
 	}
 	if update.Snapshot.Last.String() != "255.45" || update.Snapshot.LastSize.String() != "200" {
 		t.Fatalf("snapshot last/size = %s/%s, want 255.45/200", update.Snapshot.Last, update.Snapshot.LastSize)
+	}
+}
+
+func TestQuoteRoutePreservesLiveUnnormalizedSizeTick(t *testing.T) {
+	// Same live capture and hash as TestQuoteRouteAppliesLiveCompanionSize.
+	// Generic tick request 236 produced tickSize type 89 (shortable shares),
+	// which has no normalized Quote field.
+	e := newBenchEngine(t)
+	e.nextReqID = 1001
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	frame := []byte("2\x006\x001001\x0089\x00104796567\x00")
+	e.handleIncoming(decodeOne(t, frame))
+
+	update := nextQuoteUpdate(t, sub)
+	if update.Kind != QuoteUpdateSizeTick || update.Changed != 0 {
+		t.Fatalf("update = Kind %v Changed %v, want unnormalized size tick", update.Kind, update.Changed)
+	}
+	if update.SizeTick == nil || update.SizeTick.TickType != 89 || update.SizeTick.Size.String() != "104796567" {
+		t.Fatalf("size tick = %+v", update.SizeTick)
+	}
+	if update.Snapshot.Available != 0 {
+		t.Fatalf("unnormalized tick mutated snapshot: %+v", update.Snapshot)
+	}
+}
+
+func TestQuoteRoutePreservesLiveUnnormalizedPriceTick(t *testing.T) {
+	// captures/20260709T223341Z-api_generic_tick_matrix_aapl, read-only IB
+	// Gateway server_version 200. raw.txt sha256:
+	// 5c40260d783971d22e6de209c90a61fd489479e0e7fc2ebf20be4e76d677a45e.
+	// Generic tick request 221 produced tickPrice type 37 (mark price), which
+	// has no normalized Quote field. The exact frame's companion size is zero.
+	e := newBenchEngine(t)
+	e.nextReqID = 1
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	frame := []byte("1\x006\x001\x0037\x00315.50\x000\x000\x00")
+	e.handleIncoming(decodeOne(t, frame))
+
+	update := nextQuoteUpdate(t, sub)
+	if update.Kind != QuoteUpdatePriceTick || update.Changed != 0 {
+		t.Fatalf("update = Kind %v Changed %v, want unnormalized price tick", update.Kind, update.Changed)
+	}
+	if update.PriceTick == nil || update.PriceTick.TickType != 37 || update.PriceTick.Price.String() != "315.5" {
+		t.Fatalf("price tick = %+v", update.PriceTick)
+	}
+	if update.PriceTick.Size == nil || !update.PriceTick.Size.IsZero() || update.PriceTick.AttrMask != 0 {
+		t.Fatalf("price tick size/attributes = %v/%d, want 0/0", update.PriceTick.Size, update.PriceTick.AttrMask)
+	}
+	if update.Snapshot.Available != 0 {
+		t.Fatalf("unnormalized tick mutated snapshot: %+v", update.Snapshot)
+	}
+}
+
+func TestQuoteRoutePreservesLivePriceAttributes(t *testing.T) {
+	// captures/20260611T074859Z-api_option_campaign_aapl, paper IB Gateway
+	// server_version 200. raw.txt sha256:
+	// 1e35bce4310dbcd5c62c10cb8e9db5bf4961cebecb0b9a526c83f385a3a05fe5.
+	// This exact option quote tick carries attrMask=1 (canAutoExecute).
+	e := newBenchEngine(t)
+	e.nextReqID = 5
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	frame := []byte("1\x006\x005\x001\x00-1.00\x000\x001\x00")
+	e.handleIncoming(decodeOne(t, frame))
+
+	update := nextQuoteUpdate(t, sub)
+	if update.Kind != QuoteUpdatePriceTick || update.PriceTick == nil {
+		t.Fatalf("update = Kind %v PriceTick %+v", update.Kind, update.PriceTick)
+	}
+	attributes := update.PriceTick.AttrMask
+	if attributes != 1 || !attributes.CanAutoExecute() || attributes.PastLimit() || attributes.PreOpen() {
+		t.Fatalf("attributes = %d auto=%t pastLimit=%t preOpen=%t", attributes,
+			attributes.CanAutoExecute(), attributes.PastLimit(), attributes.PreOpen())
+	}
+}
+
+func TestQuoteRoutePreservesLiveMissingMinimumTick(t *testing.T) {
+	// captures/20260709T223247Z-api_generic_tick_matrix_aapl, read-only IB
+	// Gateway server_version 200. raw.txt sha256:
+	// bd284e22771394b3baf7b827d62ed22d45f15e401dd478f430e18f4e715b0377.
+	// The Gateway omitted minTick while still sending BBO and permission data.
+	e := newBenchEngine(t)
+	e.nextReqID = 1
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	frame := []byte("81\x001\x00\x009c0001\x004\x00")
+	e.handleIncoming(decodeOne(t, frame))
+
+	update := nextQuoteUpdate(t, sub)
+	if update.Kind != QuoteUpdateParameters || update.Parameters == nil {
+		t.Fatalf("update = Kind %v Parameters %+v", update.Kind, update.Parameters)
+	}
+	if update.Parameters.MinTick != nil || update.Parameters.BBOExchange != "9c0001" || update.Parameters.SnapshotPermissions != 4 {
+		t.Fatalf("parameters = %+v", update.Parameters)
 	}
 }
 

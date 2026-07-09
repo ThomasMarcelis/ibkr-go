@@ -370,7 +370,7 @@ tests.
 | Frozen (type 2) | set_type capture | no stream observed |
 | Delayed (type 3) | yes | |
 | Delayed-Frozen (type 4) | set_type capture | no stream observed |
-| Generic ticks (all families) | partial | RTVolume, shortable, news, dividend |
+| Generic ticks (all families) | partial | Mark price, shortable, and volume rate live-attested; RTVolume, trade count/rate, news, dividend, and newer families remain |
 | Option computation ticks | calc tests | streaming option ticks on OPT quotes |
 
 ### 8.2 Historical data
@@ -572,6 +572,7 @@ rejections or no-status cleanup evidence.
 ### Phase 7: Market data completeness
 
 - [x] Duplicate same-contract quote subscriptions (`api_duplicate_quote_subscriptions_aapl` captured 2026-04-15, replay-promoted from `84f1e78a18616e0f`)
+- [x] Public generic-tick matrix preserves observed mark-price, shortable, volume-rate, and delayed-timestamp callbacks (`api_generic_tick_matrix_aapl`, 2026-07-09 raw `5c40260d783971d2`)
 - [ ] All historical bar sizes (1sec through 1month)
 - [ ] All whatToShow values
 - [ ] Real-time bars BID_ASK and MIDPOINT
