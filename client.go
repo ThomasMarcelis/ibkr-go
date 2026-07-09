@@ -334,12 +334,17 @@ func (c OrdersClient) CancelAll(ctx context.Context, opts ...CancelOption) error
 	return c.engine.GlobalCancel(ctx, cfg)
 }
 
-// Open returns a one-shot snapshot of open orders in the given scope.
+// Open returns a one-shot snapshot of open orders in the client or all scope.
+// It returns [ErrNoSnapshot] for [OpenOrdersScopeAuto], which binds future
+// manual orders but has no snapshot boundary; use [OrdersClient.SubscribeOpen]
+// for that scope.
 func (c OrdersClient) Open(ctx context.Context, scope OpenOrdersScope) ([]OpenOrder, error) {
 	return c.engine.OpenOrdersSnapshot(ctx, scope)
 }
 
-// SubscribeOpen streams open-order echoes and status updates in the given scope.
+// SubscribeOpen streams open-order echoes and status updates in the given
+// scope. An [OpenOrdersScopeAuto] subscription is persistent and has no
+// snapshot phase, so [Subscription.AwaitSnapshot] returns [ErrNoSnapshot].
 func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
 	return c.engine.SubscribeOpenOrders(ctx, scope, opts...)
 }
@@ -347,7 +352,8 @@ func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, 
 // RefreshOpen requests a fresh open-orders snapshot on the active
 // SubscribeOpen subscription: the current open orders arrive as Order events
 // followed by another SnapshotComplete lifecycle event. Returns
-// ErrNoSubscription when no open-orders subscription is active.
+// [ErrNoSubscription] when no open-orders subscription is active, or
+// [ErrNoSnapshot] when the active subscription uses [OpenOrdersScopeAuto].
 func (c OrdersClient) RefreshOpen(ctx context.Context) error {
 	return c.engine.RefreshOpenOrders(ctx)
 }

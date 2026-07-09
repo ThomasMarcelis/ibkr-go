@@ -80,7 +80,7 @@ type OpenOrdersScope string
 const (
 	OpenOrdersScopeAll    OpenOrdersScope = "all"    // all open orders across every client
 	OpenOrdersScopeClient OpenOrdersScope = "client" // only orders placed by this client ID
-	OpenOrdersScopeAuto   OpenOrdersScope = "auto"   // bind manual TWS orders to this client; requires client ID 0
+	OpenOrdersScopeAuto   OpenOrdersScope = "auto"   // persistently bind future manual TWS orders; client ID 0 only, no snapshot
 )
 
 // OpenOrder is the typed open_order echo from the Gateway. Live open_order

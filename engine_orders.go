@@ -66,6 +66,9 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 }
 
 func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) ([]OpenOrder, error) {
+	if scope == OpenOrdersScopeAuto {
+		return nil, fmt.Errorf("%w: auto-scope open orders", ErrNoSnapshot)
+	}
 	sub, err := e.SubscribeOpenOrders(ctx, scope)
 	if err != nil {
 		return nil, err
@@ -118,7 +121,11 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 				sub.closeWithErr(nil)
 			})
 		})
-		sub.expectSnapshot()
+		// Auto scope binds future manual orders and emits no open_order_end, so
+		// it is a stream with no initial snapshot phase.
+		if scope != OpenOrdersScopeAuto {
+			sub.expectSnapshot()
+		}
 
 		e.singletons[singletonOpenOrders] = &route{
 			opKind:       OpOpenOrders,
@@ -132,7 +139,9 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 				case OrderStatusUpdate:
 					emitSubscription(sub, OpenOrderUpdate{Status: &m})
 				case codec.OpenOrderEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+					if scope != OpenOrdersScopeAuto {
+						sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+					}
 				}
 			},
 			onDisconnect: func(e *engine, err error) bool {

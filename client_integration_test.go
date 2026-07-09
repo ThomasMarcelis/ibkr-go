@@ -5117,11 +5117,13 @@ func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
 	waitHost(t, host)
 }
 
-// TestRefreshOpenAutoScopeHasNoSnapshot freezes the live-probed contract that
+// TestOpenOrdersAutoScopeHasNoSnapshot freezes the live-probed contract that
 // req_auto_open_orders has no snapshot boundary (the Gateway sends no
 // open_order_end for the bind, probed 2026-07-04, server_version 200), so
-// RefreshOpen rejects auto-scope subscriptions client-side.
-func TestRefreshOpenAutoScopeHasNoSnapshot(t *testing.T) {
+// one-shot and snapshot-wait APIs reject it while the persistent subscription
+// remains available. The transcript expects only SubscribeOpen's request,
+// proving Open rejects the unsupported scope before writing to the wire.
+func TestOpenOrdersAutoScopeHasNoSnapshot(t *testing.T) {
 	t.Parallel()
 
 	host := newHost(t, "open_orders_auto_refresh.txt")
@@ -5132,11 +5134,23 @@ func TestRefreshOpenAutoScopeHasNoSnapshot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	orders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAuto)
+	if !errors.Is(err, ibkr.ErrNoSnapshot) {
+		t.Fatalf("Open(auto) error = %v, want ErrNoSnapshot", err)
+	}
+	if orders != nil {
+		t.Fatalf("Open(auto) orders = %#v, want nil", orders)
+	}
+
 	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAuto)
 	if err != nil {
 		t.Fatalf("SubscribeOpen(auto): %v", err)
 	}
 	defer sub.Close()
+
+	if err := sub.AwaitSnapshot(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
+		t.Fatalf("AwaitSnapshot(auto) error = %v, want ErrNoSnapshot", err)
+	}
 
 	if err := client.Orders().RefreshOpen(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
 		t.Fatalf("RefreshOpen(auto) error = %v, want ErrNoSnapshot", err)
