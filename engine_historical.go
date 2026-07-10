@@ -38,9 +38,8 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 			resp <- result{err: err}
 			return
 		}
-		e.keyed[reqID] = &route{
-			opKind: OpHistoricalBars,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalBars,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalBar:
 					bar, err := fromCodecBar(m)
@@ -54,20 +53,9 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 					e.deleteKeyedRoute(reqID)
 					resp <- result{values: values}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpHistoricalBars, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -112,9 +100,8 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 			resp <- result{err: err}
 			return
 		}
-		e.keyed[reqID] = &route{
-			opKind: OpHistoricalSchedule,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalSchedule,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalScheduleResponse:
 					e.deleteKeyedRoute(reqID)
@@ -133,20 +120,9 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 						Sessions:      sessions,
 					}}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpHistoricalSchedule, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -185,9 +161,8 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 		}
 		reqID = e.allocReqID()
 
-		e.keyed[reqID] = &route{
-			opKind: OpHeadTimestamp,
-			handle: func(msg any, eng *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHeadTimestamp,
+			func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.HeadTimestamp:
 					timestamp, err := parseHeadTimestamp(m.Timestamp)
@@ -199,20 +174,9 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 					eng.deleteKeyedRoute(reqID)
 					resp <- result{timestamp: timestamp}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, eng *engine) {
-				eng.deleteKeyedRoute(reqID)
-				resp <- result{err: eng.apiErr(OpHeadTimestamp, m)}
-			},
-			onDisconnect: func(eng *engine, err error) bool {
-				eng.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.HeadTimestampRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
@@ -380,9 +344,8 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpHistogramData,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistogramData,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistogramDataResponse:
 					e.deleteKeyedRoute(reqID)
@@ -405,20 +368,9 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 					}
 					resp <- result{entries: entries}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpHistogramData, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.HistogramDataRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(req.Contract),
@@ -465,9 +417,8 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpHistoricalTicks,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalTicks,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalTicksResponse:
 					e.deleteKeyedRoute(reqID)
@@ -550,20 +501,9 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 					}
 					resp <- result{value: HistoricalTicksResult{Last: ticks}}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpHistoricalTicks, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.HistoricalTicksRequest{
 			ReqID:         reqID,
 			Contract:      toCodecContract(req.Contract),
