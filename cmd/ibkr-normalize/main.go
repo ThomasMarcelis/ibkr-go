@@ -9,6 +9,8 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
@@ -21,6 +23,7 @@ func main() {
 	rawOut := flag.String("out", "", "raw output file path (default: <dir>/raw.txt)")
 	replayDir := flag.String("replay-dir", "", "directory for normalized replay artifacts (default: <dir>/replay)")
 	transcriptOut := flag.String("transcript-out", "", "optional raw transcript skeleton output path")
+	verify := flag.Bool("verify", false, "verify capture integrity and print a protocol-aware summary")
 	flag.Parse()
 
 	if *dir == "" {
@@ -72,8 +75,14 @@ func main() {
 		}
 	}
 
-	if err := capturelog.WriteReplay(*replayDir, *dir, meta, events); err != nil {
+	replayEvents, err := capturelog.WriteReplay(*replayDir, *dir, meta, events)
+	if err != nil {
 		log.Fatalf("write replay: %v", err)
+	}
+	if *verify {
+		if err := writeVerification(os.Stdout, *dir, events, replayEvents); err != nil {
+			log.Fatalf("verify capture: %v", err)
+		}
 	}
 	if *transcriptOut != "" {
 		if err := writeTranscriptSkeleton(*transcriptOut, meta, events); err != nil {
@@ -100,14 +109,20 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	if _, err := fmt.Fprintln(file, "# Curate raw steps into typed client/server lines before promotion."); err != nil {
 		return err
 	}
-	frameState := transcriptFrameState{serverVersions: make(map[int]int)}
+	frameState := newCaptureFrameState()
 	for _, event := range replayEvents {
 		switch event.Kind {
 		case capturelog.EventConnect:
+			if err := frameState.connect(event.Leg); err != nil {
+				return err
+			}
 			if _, err := fmt.Fprintf(file, "# connect leg=%d\n", event.Leg); err != nil {
 				return err
 			}
 		case capturelog.EventDisconnect:
+			if err := frameState.disconnect(event.Leg); err != nil {
+				return err
+			}
 			if _, err := fmt.Fprintln(file, "disconnect"); err != nil {
 				return err
 			}
@@ -116,11 +131,11 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 			if err != nil {
 				return fmt.Errorf("decode replay frame: %w", err)
 			}
-			msgID, encoding, err := frameState.describe(event, payload)
+			description, err := frameState.describe(event, payload)
 			if err != nil {
 				return err
 			}
-			if _, err := fmt.Fprintf(file, "# leg=%d direction=%s msg_id=%s encoding=%s payload_len=%d\n", event.Leg, event.Direction, msgID, encoding, len(payload)); err != nil {
+			if _, err := fmt.Fprintf(file, "# leg=%d direction=%s msg_id=%s encoding=%s payload_len=%d\n", event.Leg, event.Direction, description.messageID(), description.encoding, len(payload)); err != nil {
 				return err
 			}
 			frame, err := frameBytes(payload)
@@ -135,33 +150,145 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capture
 	return nil
 }
 
-type transcriptFrameState struct {
-	serverVersions map[int]int
+type captureFrameState struct {
+	legs map[int]captureLegState
 }
 
-func (s *transcriptFrameState) describe(event capturelog.ReplayEvent, payload []byte) (string, string, error) {
-	serverVersion := s.serverVersions[event.Leg]
-	if serverVersion == 0 {
-		if event.Direction == "client" {
-			return "version_range", "pre_session", nil
+type captureLegState struct {
+	phase         captureLegPhase
+	minVersion    int
+	maxVersion    int
+	serverVersion int
+}
+
+type captureLegPhase uint8
+
+const (
+	awaitVersionRange captureLegPhase = iota + 1
+	awaitServerInfo
+	sessionFrames
+)
+
+type frameDescription struct {
+	label         string
+	msgID         int
+	encoding      string
+	serverVersion int
+	session       bool
+}
+
+func (d frameDescription) messageID() string {
+	if d.label != "" {
+		return d.label
+	}
+	return strconv.Itoa(d.msgID)
+}
+
+func newCaptureFrameState() captureFrameState {
+	return captureFrameState{legs: make(map[int]captureLegState)}
+}
+
+func (s *captureFrameState) connect(leg int) error {
+	if _, ok := s.legs[leg]; ok {
+		return fmt.Errorf("describe leg %d: duplicate connect", leg)
+	}
+	s.legs[leg] = captureLegState{phase: awaitVersionRange}
+	return nil
+}
+
+func (s *captureFrameState) disconnect(leg int) error {
+	if _, ok := s.legs[leg]; !ok {
+		return fmt.Errorf("describe leg %d: disconnect before connect", leg)
+	}
+	delete(s.legs, leg)
+	return nil
+}
+
+func (s *captureFrameState) describe(event capturelog.ReplayEvent, payload []byte) (frameDescription, error) {
+	leg, ok := s.legs[event.Leg]
+	if !ok {
+		return frameDescription{}, fmt.Errorf("describe leg %d: frame before connect", event.Leg)
+	}
+	switch leg.phase {
+	case awaitVersionRange:
+		if event.Direction != "client" {
+			return frameDescription{}, fmt.Errorf("describe leg %d: want client version range, got %s frame", event.Leg, event.Direction)
+		}
+		minVersion, maxVersion, err := decodeVersionRange(payload)
+		if err != nil {
+			return frameDescription{}, fmt.Errorf("describe leg %d version range: %w", event.Leg, err)
+		}
+		leg.phase = awaitServerInfo
+		leg.minVersion = minVersion
+		leg.maxVersion = maxVersion
+		s.legs[event.Leg] = leg
+		return frameDescription{label: "version_range", encoding: "pre_session"}, nil
+	case awaitServerInfo:
+		if event.Direction != "server" {
+			return frameDescription{}, fmt.Errorf("describe leg %d: want server info, got %s frame", event.Leg, event.Direction)
 		}
 		info, err := codec.DecodeServerInfo(payload)
 		if err != nil {
-			return "", "", fmt.Errorf("describe leg %d server-info frame: %w", event.Leg, err)
+			return frameDescription{}, fmt.Errorf("describe leg %d server-info frame: %w", event.Leg, err)
 		}
-		s.serverVersions[event.Leg] = info.ServerVersion
-		return "server_info", "pre_session", nil
+		if info.ServerVersion < leg.minVersion || info.ServerVersion > leg.maxVersion {
+			return frameDescription{}, fmt.Errorf(
+				"describe leg %d: server version %d outside requested range %d..%d",
+				event.Leg,
+				info.ServerVersion,
+				leg.minVersion,
+				leg.maxVersion,
+			)
+		}
+		leg.phase = sessionFrames
+		leg.serverVersion = info.ServerVersion
+		s.legs[event.Leg] = leg
+		return frameDescription{label: "server_info", encoding: "pre_session", serverVersion: info.ServerVersion}, nil
+	case sessionFrames:
+		return describeSessionFrame(event, payload, leg.serverVersion)
+	default:
+		return frameDescription{}, fmt.Errorf("describe leg %d: invalid capture phase %d", event.Leg, leg.phase)
 	}
+}
 
+func describeSessionFrame(event capturelog.ReplayEvent, payload []byte, serverVersion int) (frameDescription, error) {
 	envelope, err := protocol.DecodeEnvelope(serverVersion, payload)
 	if err != nil {
-		return "", "", fmt.Errorf("describe leg %d %s frame: %w", event.Leg, event.Direction, err)
+		return frameDescription{}, fmt.Errorf("describe leg %d %s frame: %w", event.Leg, event.Direction, err)
 	}
 	encoding := "classic"
 	if envelope.Encoding == protocol.ProtobufBody {
 		encoding = "protobuf"
 	}
-	return fmt.Sprintf("%d", envelope.MsgID), encoding, nil
+	return frameDescription{
+		msgID:         envelope.MsgID,
+		encoding:      encoding,
+		serverVersion: serverVersion,
+		session:       true,
+	}, nil
+}
+
+func decodeVersionRange(payload []byte) (int, int, error) {
+	value := string(payload)
+	if !strings.HasPrefix(value, "v") {
+		return 0, 0, fmt.Errorf("invalid payload %q", value)
+	}
+	minText, maxText, ok := strings.Cut(value[1:], "..")
+	if !ok || minText == "" || maxText == "" {
+		return 0, 0, fmt.Errorf("invalid payload %q", value)
+	}
+	minVersion, err := strconv.Atoi(minText)
+	if err != nil || minVersion <= 0 {
+		return 0, 0, fmt.Errorf("invalid minimum %q", minText)
+	}
+	maxVersion, err := strconv.Atoi(maxText)
+	if err != nil || maxVersion <= 0 {
+		return 0, 0, fmt.Errorf("invalid maximum %q", maxText)
+	}
+	if minVersion > maxVersion {
+		return 0, 0, fmt.Errorf("minimum %d exceeds maximum %d", minVersion, maxVersion)
+	}
+	return minVersion, maxVersion, nil
 }
 
 func frameBytes(payload []byte) ([]byte, error) {

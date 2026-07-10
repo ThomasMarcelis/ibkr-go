@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -221,7 +222,7 @@ func TestLoadMetaAndWriteReplay(t *testing.T) {
 		t.Fatalf("LoadEvents() error = %v", err)
 	}
 	replayDir := filepath.Join(session.Dir(), "replay")
-	if err := WriteReplay(replayDir, session.Dir(), meta, events); err != nil {
+	if _, err := WriteReplay(replayDir, session.Dir(), meta, events); err != nil {
 		t.Fatalf("WriteReplay() error = %v", err)
 	}
 
@@ -307,6 +308,29 @@ func TestNormalizeEventsRejectsTruncatedFrameOnDisconnect(t *testing.T) {
 
 	if _, err := NormalizeEvents(events); err == nil {
 		t.Fatal("NormalizeEvents() error = nil, want truncated frame rejection")
+	}
+}
+
+func TestNormalizeEventsRejectsDeclaredChunkLengthMismatch(t *testing.T) {
+	t.Parallel()
+
+	// First client chunk from live sv203 capture
+	// 20260710T160907Z-protobuf_sv203_required_conid_order_cancel_aapl,
+	// events sha256 8efd714c3885da232215b0f4f4bb661ac7f4364126d4c97f4200dfa71320c55d.
+	events := []Event{
+		{Kind: EventConnect, Leg: 1},
+		{
+			Kind:      EventChunk,
+			Leg:       1,
+			Direction: "client",
+			Length:    999,
+			Data:      "QVBJAAAAAAl2MTc2Li4yMDM=",
+		},
+	}
+
+	_, err := NormalizeEvents(events)
+	if err == nil || !strings.Contains(err.Error(), "chunk length = 999, decoded length = 17") {
+		t.Fatalf("NormalizeEvents() error = %v, want declared length mismatch", err)
 	}
 }
 
