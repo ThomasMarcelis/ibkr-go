@@ -193,25 +193,6 @@ func sendCancelMktData(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"2", "2", strconv.Itoa(reqID)})
 }
 
-// --- Real-time bars (msg_id=50) / cancel (msg_id=51) ---
-//
-//	[50, version=3, reqId, <contract fields no includeExpired>, barSize, whatToShow, useRTH, realTimeBarsOptions]
-func sendReqRealTimeBars(conn net.Conn, reqID, _ int, c contractSpec, whatToShow string, useRTH bool) error {
-	fields := []string{"50", "3", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFieldsNoExpired(c)...)
-	fields = append(fields,
-		"5", // barSize hardcoded to 5 seconds (only valid value)
-		whatToShow,
-		boolField(useRTH),
-		"", // realTimeBarsOptions empty tag-value list
-	)
-	return sendMessage(conn, fields)
-}
-
-func sendCancelRealTimeBars(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"51", "1", strconv.Itoa(reqID)})
-}
-
 // --- Executions (msg_id=7) ---
 //
 //	[7, version=3, reqId, filter.clientId, filter.acctCode, filter.time,
@@ -278,25 +259,6 @@ func sendReqPnLSingle(conn net.Conn, reqID int, account, modelCode string, conID
 
 func sendCancelPnLSingle(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"95", strconv.Itoa(reqID)})
-}
-
-// --- Tick by tick (msg_id=97) / cancel (msg_id=98) ---
-//
-//	[97, reqId, contract(12), tickType, numberOfTicks, ignoreSize]
-//	[98, reqId]
-func sendReqTickByTickData(conn net.Conn, reqID int, c contractSpec, tickType string, numberOfTicks int, ignoreSize bool) error {
-	fields := []string{"97", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFieldsNoExpired(c)...)
-	fields = append(fields,
-		tickType,
-		strconv.Itoa(numberOfTicks),
-		boolField(ignoreSize),
-	)
-	return sendMessage(conn, fields)
-}
-
-func sendCancelTickByTickData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"98", strconv.Itoa(reqID)})
 }
 
 // --- News bulletins (msg_id=12) / cancel (msg_id=13) ---

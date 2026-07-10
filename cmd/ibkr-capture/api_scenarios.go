@@ -1083,6 +1083,241 @@ func runAPISetMarketDataDelayedFrozen(ctx context.Context, addr string, clientID
 	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataDelayedFrozen)
 }
 
+func runAPIQuoteSnapshotAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: apiAAPL})
+		if err != nil {
+			return fmt.Errorf("AAPL quote snapshot: %w", err)
+		}
+		const priceOrSize = ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldLast |
+			ibkr.QuoteFieldBidSize | ibkr.QuoteFieldAskSize | ibkr.QuoteFieldLastSize |
+			ibkr.QuoteFieldOpen | ibkr.QuoteFieldHigh | ibkr.QuoteFieldLow | ibkr.QuoteFieldClose
+		if quote.Available == 0 || quote.Available&priceOrSize == 0 {
+			return fmt.Errorf("AAPL quote snapshot availability %d contains no price or size", quote.Available)
+		}
+		recordAPIEvent("quote_snapshot", "aapl", func(event *apiDriverEvent) {
+			event.Symbol = apiAAPL.Symbol
+			event.SecType = string(apiAAPL.SecType)
+			event.Values = map[string]string{
+				"available":        strconv.FormatUint(uint64(quote.Available), 10),
+				"market_data_type": quote.MarketDataType.String(),
+			}
+		})
+		return nil
+	})
+}
+
+func runAPIQuoteStreamAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiAAPL}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL quotes: %w", err)
+		}
+		const priceOrSize = ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldLast |
+			ibkr.QuoteFieldBidSize | ibkr.QuoteFieldAskSize | ibkr.QuoteFieldLastSize |
+			ibkr.QuoteFieldOpen | ibkr.QuoteFieldHigh | ibkr.QuoteFieldLow | ibkr.QuoteFieldClose
+		count, err := awaitSubscriptionEvidence(ctx, sub, 12*time.Second, func(update ibkr.QuoteUpdate) bool {
+			return update.Changed&priceOrSize != 0
+		})
+		if err != nil {
+			return fmt.Errorf("observe AAPL quote stream: %w", err)
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "AAPL quote stream cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("quote_stream", "aapl", func(event *apiDriverEvent) {
+			event.Symbol = apiAAPL.Symbol
+			event.SecType = string(apiAAPL.SecType)
+			event.Count = count
+		})
+		return nil
+	})
+}
+
+func runAPIQuoteStreamGenericTicksAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+			Contract: apiAAPL, GenericTicks: []ibkr.GenericTick{"233", "236"},
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL generic ticks: %w", err)
+		}
+		var sawParameters, sawGenericValue bool
+		count, err := awaitSubscriptionEvidence(ctx, sub, 12*time.Second, func(update ibkr.QuoteUpdate) bool {
+			sawParameters = sawParameters || update.Kind == ibkr.QuoteUpdateParameters
+			sawGenericValue = sawGenericValue ||
+				(update.GenericTick != nil && update.GenericTick.TickType == 46) ||
+				(update.StringTick != nil && update.StringTick.TickType == 48)
+			return sawParameters && sawGenericValue
+		})
+		if err != nil {
+			return fmt.Errorf("observe AAPL generic ticks: %w", err)
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "AAPL generic-tick cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("quote_stream", "aapl_generic_233_236", func(event *apiDriverEvent) {
+			event.Symbol = apiAAPL.Symbol
+			event.SecType = string(apiAAPL.SecType)
+			event.Count = count
+		})
+		return nil
+	})
+}
+
+func runAPIRealTimeBarsAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		sub, err := client.MarketData().SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
+			Contract: apiAAPL, WhatToShow: ibkr.ShowTrades, UseRTH: true,
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL real-time bars: %w", err)
+		}
+		count, err := awaitSubscriptionEvidence(ctx, sub, 15*time.Second, func(ibkr.Bar) bool { return true })
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if !ok || apiErr.OpKind != ibkr.OpRealTimeBars || apiErr.Code != ibkr.ErrCodeInvalidRealTimeQuery ||
+				!strings.HasPrefix(apiErr.Message, "Invalid Real-time Query:No market data permissions for ISLAND STK.") {
+				return fmt.Errorf("observe AAPL real-time bars: %w", err)
+			}
+			if err := fenceAPIWrites(ctx, client, "AAPL real-time-bars refusal"); err != nil {
+				return err
+			}
+			recordSubscriptionRefusal("realtime_bars", "aapl", apiErr)
+			return nil
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "AAPL real-time-bars cancellation"); err != nil {
+			return err
+		}
+		recordProbeResult("realtime_bars", "aapl", count, nil)
+		return nil
+	})
+}
+
+func runAPITickByTickLastAAPL(ctx context.Context, addr string, clientID int) error {
+	return runAPITickByTickAAPL(ctx, addr, clientID, ibkr.TickByTickLast)
+}
+
+func runAPITickByTickBidAskAAPL(ctx context.Context, addr string, clientID int) error {
+	return runAPITickByTickAAPL(ctx, addr, clientID, ibkr.TickByTickBidAsk)
+}
+
+func runAPITickByTickMidPointAAPL(ctx context.Context, addr string, clientID int) error {
+	return runAPITickByTickAAPL(ctx, addr, clientID, ibkr.TickByTickMidPoint)
+}
+
+func runAPITickByTickAAPL(ctx context.Context, addr string, clientID int, tickType ibkr.TickByTickType) error {
+	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		sub, err := client.MarketData().SubscribeTickByTick(ctx, ibkr.TickByTickRequest{
+			Contract: apiAAPL, TickType: tickType,
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL %s ticks: %w", tickType, err)
+		}
+		wantWireType := map[ibkr.TickByTickType]int{
+			ibkr.TickByTickLast: 1, ibkr.TickByTickBidAsk: 3, ibkr.TickByTickMidPoint: 4,
+		}[tickType]
+		count, err := awaitSubscriptionEvidence(ctx, sub, 15*time.Second, func(tick ibkr.TickByTickData) bool {
+			return tick.TickType == wantWireType || tickType == ibkr.TickByTickLast && tick.TickType == 2
+		})
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if !ok || !isExactTickByTickEntitlementRefusal(apiErr) {
+				return fmt.Errorf("observe AAPL %s ticks: %w", tickType, err)
+			}
+			if err := fenceAPIWrites(ctx, client, "AAPL tick-by-tick refusal"); err != nil {
+				return err
+			}
+			recordSubscriptionRefusal("tick_by_tick", string(tickType), apiErr)
+			return nil
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "AAPL tick-by-tick cancellation"); err != nil {
+			return err
+		}
+		recordProbeResult("tick_by_tick", string(tickType), count, nil)
+		return nil
+	})
+}
+
+func isExactTickByTickEntitlementRefusal(err *ibkr.APIError) bool {
+	if err.OpKind != ibkr.OpTickByTick {
+		return false
+	}
+	switch err.Code {
+	case ibkr.ErrCodeAdditionalSubscriptionRequired:
+		return strings.HasPrefix(err.Message, "Requested market data requires additional subscription for API")
+	case ibkr.ErrCodeTickByTickDataNotAllowed:
+		return strings.HasPrefix(err.Message, "Failed to request tick-by-tick data.No market data permissions for ISLAND STK.")
+	default:
+		return false
+	}
+}
+
+func awaitSubscriptionEvidence[T any](ctx context.Context, sub *ibkr.Subscription[T], timeout time.Duration, accept func(T) bool) (int, error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	count := 0
+	for {
+		select {
+		case value, ok := <-sub.Events():
+			if !ok {
+				if err := sub.Wait(); err != nil {
+					return count, err
+				}
+				return count, errors.New("subscription closed before required evidence")
+			}
+			count++
+			if accept(value) {
+				return count, nil
+			}
+		case <-sub.Done():
+			if err := sub.Wait(); err != nil {
+				return count, err
+			}
+			return count, errors.New("subscription closed before required evidence")
+		case <-timer.C:
+			return count, fmt.Errorf("required subscription evidence not observed within %s", timeout)
+		case <-ctx.Done():
+			return count, ctx.Err()
+		}
+	}
+}
+
+func closeAndFenceSubscription[T any](ctx context.Context, client *ibkr.Client, sub *ibkr.Subscription[T], label string) error {
+	if err := sub.Close(); err != nil {
+		return fmt.Errorf("%s: %w", label, err)
+	}
+	if err := sub.Wait(); err != nil {
+		return fmt.Errorf("%s wait: %w", label, err)
+	}
+	return fenceAPIWrites(ctx, client, label)
+}
+
+func recordSubscriptionRefusal(kind, label string, err *ibkr.APIError) {
+	recordAPIEvent(kind+"_refused", label, func(event *apiDriverEvent) {
+		event.Error = err.Error()
+		event.Values = map[string]string{
+			"code":    strconv.Itoa(err.Code),
+			"op_kind": string(err.OpKind),
+		}
+	})
+}
+
 func runAPIAccountUpdatesMulti(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
 		values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{Account: account})

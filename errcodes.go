@@ -103,6 +103,10 @@ const (
 	// subscribed; delayed market data is displayed and the stream continues
 	// with delayed ticks.
 	ErrCodeDelayedMarketDataDisplayed = 10167
+	// ErrCodeTickByTickDataNotAllowed: a tick-by-tick request lacks the
+	// market-data permission required for the contract. Unlike delayed quote
+	// code 10167, this response terminates the tick-by-tick subscription.
+	ErrCodeTickByTickDataNotAllowed = 10189
 	// ErrCodeDisplaySizeNotAllowed: the 'Display Size' order attribute may
 	// not be specified for this order (live-attested rejecting a DarkIce
 	// algo placement carrying display size 1); the placement is rejected
@@ -126,12 +130,14 @@ const (
 // IsEntitlement reports whether the error signals a missing market-data or
 // news entitlement: [ErrCodeMarketDataNotSubscribed],
 // [ErrCodeAdditionalSubscriptionRequired], [ErrCodeDelayedMarketDataDisplayed],
-// and [ErrCodeNewsFeedNotAllowed]. [ErrCodeDeepMarketDataNotSupported] is
-// excluded: it reports a venue capability gap, not a missing subscription.
+// [ErrCodeTickByTickDataNotAllowed], and [ErrCodeNewsFeedNotAllowed].
+// [ErrCodeDeepMarketDataNotSupported] is excluded: it reports a venue
+// capability gap, not a missing subscription.
 func (e *APIError) IsEntitlement() bool {
 	switch e.Code {
 	case ErrCodeMarketDataNotSubscribed, ErrCodeAdditionalSubscriptionRequired,
-		ErrCodeDelayedMarketDataDisplayed, ErrCodeNewsFeedNotAllowed:
+		ErrCodeDelayedMarketDataDisplayed, ErrCodeTickByTickDataNotAllowed,
+		ErrCodeNewsFeedNotAllowed:
 		return true
 	}
 	return false

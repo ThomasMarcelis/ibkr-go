@@ -42,6 +42,7 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeOrderToCancelNotFound},
 		{code: ErrCodeOrderCannotBeCancelled},
 		{code: ErrCodeDelayedMarketDataDisplayed, entitlement: true, warning: true},
+		{code: ErrCodeTickByTickDataNotAllowed, entitlement: true},
 		{code: ErrCodeDisplaySizeNotAllowed},
 		{code: ErrCodeNewsFeedNotAllowed, entitlement: true},
 		{code: ErrCodeImbalanceOnlyNotAllowed},

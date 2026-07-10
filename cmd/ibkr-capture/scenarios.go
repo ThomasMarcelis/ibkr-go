@@ -304,82 +304,27 @@ var scenarios = map[string]*scenario{
 	// --- Market data quotes ---
 
 	"quote_snapshot_aapl": {
-		metadata:    meta("market_data", []string{"MarketData().Quote"}, []int{1, 2, 57, 58, 59}, "read_only", []string{"market_data_or_delayed_data"}, []string{"snapshot ticks and snapshot end"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MKT_DATA snapshot=true for AAPL, drain to TICK_SNAPSHOT_END (delayed data)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", true); err != nil {
-				return err
-			}
-			// TICK_SNAPSHOT_END msg_id=57
-			return readFrames(conn, 15*time.Second, logFrame, stopOnMsgIDWithReq(57, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().Quote"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.InTickPrice, protocol.InTickSize, protocol.InTickString, protocol.InTickSnapshotEnd, protocol.InMarketDataType, protocol.InTickReqParams}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed delayed snapshot with price or size and snapshot completion"}, 1, "promoted", batchReadOnly),
+		description: "request and decode a complete delayed AAPL quote snapshot through the public API",
+		runAPI:      runAPIQuoteSnapshotAAPL,
 	},
 	"quote_stream_aapl": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"stream ticks then cancel"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MKT_DATA snapshot=false for AAPL, 10s observation (delayed data), then cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickString, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed delayed price or size update followed by fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "observe and cleanly cancel a delayed AAPL quote stream through the public API",
+		runAPI:      runAPIQuoteStreamAAPL,
 	},
 	"quote_stream_genericticks": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"generic tick stream fields"}, 1, "candidate", batchReadOnly),
-		description: "REQ_MKT_DATA with generic tick list 233,236 (delayed data)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "233,236", false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickGeneric, protocol.InTickString, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed quote parameters and a 233/236 value followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
+		description: "observe generic ticks 233 and 236 on a delayed AAPL quote stream through the public API",
+		runAPI:      runAPIQuoteStreamGenericTicksAAPL,
 	},
 
 	// --- Real-time bars ---
 
 	"realtime_bars_aapl": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeRealTimeBars"}, []int{50, 51}, "read_only", []string{"market_data_or_delayed_data"}, []string{"real-time bars then cancel"}, 1, "promoted", batchReadOnly),
-		description: "REQ_REAL_TIME_BARS AAPL, 15s observation (delayed data), cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqRealTimeBars(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "TRADES", true); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelRealTimeBars(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeRealTimeBars", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqRealTimeBars, protocol.OutCancelRealTimeBars, protocol.OutReqCurrentTime, protocol.InRealTimeBars, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed real-time bar and fenced cancellation or exact live permission refusal"}, 1, "promoted", batchReadOnly),
+		description: "observe an AAPL real-time bar or the exact live permission refusal through the public API",
+		runAPI:      runAPIRealTimeBarsAAPL,
 	},
 
 	// --- Open orders ---
@@ -654,64 +599,19 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"tick_by_tick_last": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeTickByTick"}, []int{97, 98, 99}, "read_only", []string{"market_data_or_delayed_data"}, []string{"tick-by-tick Last stream"}, 1, "candidate", batchReadOnly),
-		description: "REQ_TICK_BY_TICK_DATA Last for AAPL (delayed), read for 15s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqTickByTickData(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "Last", 0, false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelTickByTickData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed Last tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
+		description: "observe an AAPL Last tick or the exact live entitlement refusal through the public API",
+		runAPI:      runAPITickByTickLastAAPL,
 	},
 	"tick_by_tick_bidask": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeTickByTick"}, []int{97, 98, 99}, "read_only", []string{"market_data_or_delayed_data"}, []string{"tick-by-tick BidAsk stream"}, 1, "candidate", batchReadOnly),
-		description: "REQ_TICK_BY_TICK_DATA BidAsk for AAPL (delayed), read for 15s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqTickByTickData(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "BidAsk", 0, false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelTickByTickData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed BidAsk tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
+		description: "observe an AAPL BidAsk tick or the exact live entitlement refusal through the public API",
+		runAPI:      runAPITickByTickBidAskAAPL,
 	},
 	"tick_by_tick_midpoint": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeTickByTick"}, []int{97, 98, 99}, "read_only", []string{"market_data_or_delayed_data"}, []string{"tick-by-tick MidPoint stream"}, 1, "candidate", batchReadOnly),
-		description: "REQ_TICK_BY_TICK_DATA MidPoint for AAPL (delayed), read for 15s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqTickByTickData(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "MidPoint", 0, false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelTickByTickData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed MidPoint tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
+		description: "observe an AAPL MidPoint tick or the exact live entitlement refusal through the public API",
+		runAPI:      runAPITickByTickMidPointAAPL,
 	},
 	"historical_bars_keepup": {
 		metadata:    meta("history", []string{"History().SubscribeBars"}, []int{20, 25, 17, 90, 108}, "read_only", []string{"historical_data"}, []string{"keep-up-to-date historical bars"}, 1, "promoted", batchReadOnly),
