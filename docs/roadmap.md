@@ -41,8 +41,8 @@ The maintainer lab uses two local Gateway roles:
 
 Before the next release-quality sweep, run `cmd/ibkr-doctor` against both roles,
 refresh the executable capture catalog with `cmd/ibkr-capture -list-json`, and
-record market-open captures through `scripts/record-scenarios.sh`. The scripts
-derive each scenario's role from the catalog risk class, keeping the capture
+record market-open captures through `scripts/record-scenarios.sh`. The script
+derives each scenario's role from the catalog risk class, keeping the capture
 target in one place. Every promoted behavior must still follow the
 live-evidence path: live run, capture verification, sanitized transcript,
 public replay test, and updates to the coverage matrix and tracker.

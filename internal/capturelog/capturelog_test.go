@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
@@ -46,6 +47,51 @@ func TestCreateAndLoadEvents(t *testing.T) {
 	}
 	if string(got) != "hello" {
 		t.Fatalf("DecodeData() = %q, want %q", string(got), "hello")
+	}
+}
+
+func TestCreateDoesNotReuseSameSecondScenarioDirectory(t *testing.T) {
+	t.Parallel()
+
+	root := t.TempDir()
+	meta := Meta{
+		Scenario:  "repeated",
+		StartedAt: time.Date(2026, time.July, 10, 20, 0, 0, 0, time.UTC),
+	}
+	first, err := Create(root, meta)
+	if err != nil {
+		t.Fatalf("Create(first) error = %v", err)
+	}
+	if err := first.Record("client", []byte("first")); err != nil {
+		t.Fatalf("first.Record() error = %v", err)
+	}
+	if err := first.Close(); err != nil {
+		t.Fatalf("first.Close() error = %v", err)
+	}
+
+	second, err := Create(root, meta)
+	if err != nil {
+		t.Fatalf("Create(second) error = %v", err)
+	}
+	if first.Dir() == second.Dir() {
+		t.Fatalf("capture directories both = %q, want distinct runs", first.Dir())
+	}
+	if err := second.Close(); err != nil {
+		t.Fatalf("second.Close() error = %v", err)
+	}
+	events, err := LoadEvents(filepath.Join(first.Dir(), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("LoadEvents(first) error = %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("first events len = %d, want 1", len(events))
+	}
+	data, err := DecodeData(events[0])
+	if err != nil {
+		t.Fatalf("DecodeData(first) error = %v", err)
+	}
+	if string(data) != "first" {
+		t.Fatalf("first capture data = %q, want first", data)
 	}
 }
 

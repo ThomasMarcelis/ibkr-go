@@ -131,9 +131,16 @@ IBKR_CAPTURE_BATCH=trading-basic ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-advanced ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-campaigns ./scripts/record-scenarios.sh
 IBKR_CAPTURE_BATCH=trading-all ./scripts/record-scenarios.sh
+IBKR_CAPTURE_BATCH=all ./scripts/record-scenarios.sh
 ```
 
-The scripts ask `cmd/ibkr-capture` for each scenario's role. Scenarios whose
+`record-scenarios.sh` is the single batch workflow, including the `all` batch.
+It waits for an explicit recorder-ready handshake and gracefully reaps both
+processes on failure or interruption so the recorder can flush capture files.
+Set `IBKR_CAPTURE_FAIL_FAST=1` to stop after the first failed scenario; the
+default records the rest of the batch and reports all failures at the end.
+
+The script asks `cmd/ibkr-capture` for each scenario's role. Scenarios whose
 catalog risk class is `paper_*` use `paper-dev`; all others use
 `readonly-live`. `IBKR_CAPTURE_ROLE=paper-dev` may route read-only scenarios
 through the paper Gateway during maintenance, but paper-order scenarios cannot

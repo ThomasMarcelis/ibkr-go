@@ -9,7 +9,9 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
@@ -22,6 +24,7 @@ type recorderConfig struct {
 	scenario       string
 	notes          string
 	redact         string
+	readyFile      string
 	clientID       int
 	maxLegs        int
 	idleTimeout    time.Duration
@@ -37,19 +40,22 @@ type proxyResult struct {
 }
 
 func main() {
-	if err := run(os.Args[1:]); err != nil {
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer cancel()
+	if err := run(ctx, os.Args[1:]); err != nil {
 		log.Printf("ibkr-recorder: %v", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string) error {
+func run(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("ibkr-recorder", flag.ContinueOnError)
 	listenAddr := flags.String("listen", "127.0.0.1:4101", "local listen address")
 	upstreamAddr := flags.String("upstream", "127.0.0.1:4002", "upstream IB API address")
 	outRoot := flags.String("out", "captures", "capture output root")
 	scenario := flags.String("scenario", "bootstrap", "scenario name")
 	notes := flags.String("notes", "", "freeform notes")
+	readyFile := flags.String("ready-file", "", "write the capture directory here after the listener is ready")
 	clientID := flags.Int("client-id", 1, "client id used by the probe/client")
 	maxLegs := flags.Int("max-legs", 1, "maximum client connection legs to record before exiting")
 	idleTimeout := flags.Duration("idle-timeout", 3*time.Second, "time to wait for another leg after a connection closes")
@@ -61,13 +67,14 @@ func run(args []string) error {
 		return fmt.Errorf("parse flags: %w", err)
 	}
 
-	return record(recorderConfig{
+	return record(ctx, recorderConfig{
 		listenAddr:     *listenAddr,
 		upstreamAddr:   *upstreamAddr,
 		outRoot:        *outRoot,
 		scenario:       *scenario,
 		notes:          *notes,
 		redact:         os.Getenv("IBKR_CAPTURE_REDACT"),
+		readyFile:      *readyFile,
 		clientID:       *clientID,
 		maxLegs:        *maxLegs,
 		idleTimeout:    *idleTimeout,
@@ -75,7 +82,7 @@ func run(args []string) error {
 	})
 }
 
-func record(cfg recorderConfig) (err error) {
+func record(ctx context.Context, cfg recorderConfig) (err error) {
 	if cfg.maxLegs <= 0 {
 		cfg.maxLegs = 1
 	}
@@ -118,12 +125,29 @@ func record(cfg recorderConfig) (err error) {
 	if !ok {
 		return fmt.Errorf("listen: expected TCP listener, got %T", listener)
 	}
+	captureCtx, cancel := context.WithTimeout(ctx, cfg.captureTimeout)
+	defer cancel()
+	stopWake := context.AfterFunc(captureCtx, func() {
+		_ = tcpListener.SetDeadline(time.Now())
+	})
+	defer stopWake()
+	if err := captureCtx.Err(); err != nil {
+		return fmt.Errorf("capture context: %w", err)
+	}
+	if cfg.readyFile != "" {
+		if err := os.WriteFile(cfg.readyFile, []byte(session.Dir()+"\n"), 0o600); err != nil {
+			return fmt.Errorf("write ready file: %w", err)
+		}
+	}
 
 	log.Printf("recording %s -> %s into %s", cfg.listenAddr, cfg.upstreamAddr, session.Dir())
 
-	captureDeadline := time.Now().Add(cfg.captureTimeout)
+	captureDeadline, _ := captureCtx.Deadline()
 	acceptedLegs := 0
-	for acceptedLegs < cfg.maxLegs && time.Now().Before(captureDeadline) {
+	for acceptedLegs < cfg.maxLegs {
+		if err := captureCtx.Err(); err != nil {
+			return fmt.Errorf("capture context: %w", err)
+		}
 		wait := 500 * time.Millisecond
 		if acceptedLegs > 0 {
 			wait = cfg.idleTimeout
@@ -137,6 +161,9 @@ func record(cfg recorderConfig) (err error) {
 		clientConn, acceptErr := tcpListener.Accept()
 		if acceptErr != nil {
 			if netErr, ok := errors.AsType[net.Error](acceptErr); ok && netErr.Timeout() {
+				if err := captureCtx.Err(); err != nil {
+					return fmt.Errorf("capture context: %w", err)
+				}
 				if acceptedLegs > 0 {
 					break
 				}
@@ -146,9 +173,7 @@ func record(cfg recorderConfig) (err error) {
 		}
 
 		acceptedLegs++
-		legCtx, cancel := context.WithDeadline(context.Background(), captureDeadline)
-		legErr := runLeg(legCtx, session, acceptedLegs, cfg.upstreamAddr, clientConn, cfg.dial)
-		cancel()
+		legErr := runLeg(captureCtx, session, acceptedLegs, cfg.upstreamAddr, clientConn, cfg.dial)
 		if legErr != nil {
 			return fmt.Errorf("leg %d: %w", acceptedLegs, legErr)
 		}

@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,8 +131,8 @@ func Create(root string, meta Meta) (*Session, error) {
 	// Captures carry live account ids, order refs, and login tokens, so the
 	// session directory and its files are owner-only (0700/0600) rather than
 	// the world-readable default of MkdirAll/Create.
-	dir := filepath.Join(root, meta.StartedAt.Format("20060102T150405Z")+"-"+meta.Scenario)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	dir, err := createSessionDir(root, meta)
+	if err != nil {
 		return nil, fmt.Errorf("capturelog: create dir: %w", err)
 	}
 
@@ -160,6 +162,25 @@ func Create(root string, meta Meta) (*Session, error) {
 		meta:   metaFile,
 		enc:    json.NewEncoder(eventsFile),
 	}, nil
+}
+
+func createSessionDir(root string, meta Meta) (string, error) {
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return "", err
+	}
+	timestamp := meta.StartedAt.Format("20060102T150405Z")
+	for attempt := 1; ; attempt++ {
+		name := timestamp + "-" + meta.Scenario
+		if attempt > 1 {
+			name = fmt.Sprintf("%s-%d-%s", timestamp, attempt, meta.Scenario)
+		}
+		dir := filepath.Join(root, name)
+		if err := os.Mkdir(dir, 0o700); err == nil {
+			return dir, nil
+		} else if !errors.Is(err, fs.ErrExist) {
+			return "", err
+		}
+	}
 }
 
 func validateScenario(scenario string) error {

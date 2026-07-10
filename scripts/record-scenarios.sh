@@ -1,12 +1,10 @@
-#!/bin/bash
-# Record capture scenarios through the ibkr-recorder proxy.
-# Usage: ./scripts/record-scenarios.sh [scenario...]
-# If no scenarios are given, records the catalog batch named by
-# IBKR_CAPTURE_BATCH, defaulting to new-v2. Explicit scenarios may be passed as
-# "name" or "name|client_id".
-# Each scenario's Gateway role is read from the cmd/ibkr-capture catalog.
-# IBKR_CAPTURE_ROLE may route read-only scenarios through paper-dev, but
-# paper-order scenarios always stay on paper-dev.
+#!/usr/bin/env bash
+# Record live scenarios through ibkr-recorder. With no arguments, the catalog
+# batch named by IBKR_CAPTURE_BATCH is recorded (default: new-v2). Explicit
+# entries may be passed as "name" or "name|client_id".
+
+set -uo pipefail
+umask 077
 
 LISTEN="${IBKR_LISTEN:-127.0.0.1:4101}"
 OUTDIR="${IBKR_CAPTURES:-captures}"
@@ -15,9 +13,55 @@ CAPTURE="${IBKR_CAPTURE:-/tmp/ibkr-capture}"
 BATCH="${IBKR_CAPTURE_BATCH:-new-v2}"
 RECORDER_MAX_LEGS="${IBKR_RECORDER_MAX_LEGS:-1}"
 ROLE="${IBKR_CAPTURE_ROLE:-}"
-TMPLOG=$(mktemp)
-TMPEVENTS=$(mktemp)
-trap "rm -f $TMPLOG $TMPEVENTS" EXIT
+FAIL_FAST="${IBKR_CAPTURE_FAIL_FAST:-0}"
+START_TIMEOUT="${IBKR_RECORDER_START_TIMEOUT:-5}"
+
+case "$FAIL_FAST" in
+    0|1) ;;
+    *) echo "unsupported IBKR_CAPTURE_FAIL_FAST=$FAIL_FAST (want 0 or 1)" >&2; exit 1 ;;
+esac
+case "$START_TIMEOUT" in
+    ''|*[!0-9]*) echo "unsupported IBKR_RECORDER_START_TIMEOUT=$START_TIMEOUT (want whole seconds)" >&2; exit 1 ;;
+esac
+
+WORKDIR=$(mktemp -d)
+recorder_pid=""
+capture_pid=""
+
+signal_child() {
+    local pid="$1"
+    if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        kill -TERM "$pid" 2>/dev/null || true
+    fi
+}
+
+wait_child() {
+    local pid="$1"
+    if [ -n "$pid" ]; then
+        wait "$pid" 2>/dev/null || true
+    fi
+}
+
+terminate_child() {
+    signal_child "$1"
+    wait_child "$1"
+}
+
+cleanup() {
+    local status=$?
+    trap - EXIT INT TERM HUP
+    signal_child "$capture_pid"
+    signal_child "$recorder_pid"
+    wait_child "$capture_pid"
+    wait_child "$recorder_pid"
+    rm -rf "$WORKDIR"
+    exit "$status"
+}
+
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+trap 'exit 129' HUP
 
 scenario_entry() {
     local scenario="$1"
@@ -38,7 +82,16 @@ if [ $# -gt 0 ]; then
         SCENARIOS+=("$entry")
     done
 else
-    mapfile -t SCENARIOS < <("$CAPTURE" -list-batch "$BATCH")
+    if ! batch_entries=$("$CAPTURE" -list-batch "$BATCH"); then
+        echo "failed to list capture batch $BATCH"
+        exit 1
+    fi
+    SCENARIOS=()
+    while IFS= read -r entry; do
+        if [ -n "$entry" ]; then
+            SCENARIOS+=("$entry")
+        fi
+    done <<< "$batch_entries"
 fi
 
 if [ ${#SCENARIOS[@]} -eq 0 ]; then
@@ -77,10 +130,40 @@ upstream_for_role() {
     fi
 }
 
+wait_for_ready() {
+    local ready_file="$1"
+    local elapsed=0
+    while [ ! -s "$ready_file" ]; do
+        if ! kill -0 "$recorder_pid" 2>/dev/null; then
+            wait "$recorder_pid" 2>/dev/null
+            return $?
+        fi
+        if [ "$elapsed" -ge $((START_TIMEOUT * 20)) ]; then
+            return 124
+        fi
+        sleep 0.05
+        elapsed=$((elapsed + 1))
+    done
+}
+
+stop_recorder() {
+    local status=0
+    if kill -0 "$recorder_pid" 2>/dev/null; then
+        kill -TERM "$recorder_pid" 2>/dev/null || true
+    fi
+    wait "$recorder_pid" 2>/dev/null || status=$?
+    recorder_pid=""
+    return "$status"
+}
+
 mkdir -p "$OUTDIR"
 failures=0
+capture_dirs=()
+run_number=0
 
 for entry in "${SCENARIOS[@]}"; do
+    unset capture_rc recorder_rc
+    run_number=$((run_number + 1))
     scenario="${entry%|*}"
     client_id="${entry#*|}"
     if ! scenario_role=$(role_for_scenario "$scenario"); then
@@ -90,9 +173,16 @@ for entry in "${SCENARIOS[@]}"; do
     if ! upstream=$(upstream_for_role "$scenario_role"); then
         exit 1
     fi
+
+    run_prefix="$WORKDIR/$run_number"
+    log_file="$run_prefix.log"
+    events_file="$run_prefix.events.jsonl"
+    recorder_log="$run_prefix.recorder.log"
+    ready_file="$run_prefix.ready"
+    : > "$log_file"
+    : > "$events_file"
     printf "recording %-40s role=%-13s client_id=%-3s " "$scenario" "$scenario_role" "$client_id"
 
-    # Start recorder in background, suppress all output
     "$RECORDER" \
         -upstream "$upstream" \
         -listen "$LISTEN" \
@@ -100,51 +190,75 @@ for entry in "${SCENARIOS[@]}"; do
         -scenario "$scenario" \
         -client-id "$client_id" \
         -max-legs "$RECORDER_MAX_LEGS" \
+        -ready-file "$ready_file" \
         -notes "batch=$BATCH role=$scenario_role client_id=$client_id" \
-        >/dev/null 2>&1 &
-    rpid=$!
+        >"$recorder_log" 2>&1 &
+    recorder_pid=$!
 
-    # Give recorder a moment to bind. Do not probe the TCP port here: the
-    # recorder is intentionally one-leg-per-scenario, so a readiness probe would
-    # consume the capture connection.
-    sleep 0.5
+    if wait_for_ready "$ready_file"; then
+        capture_dir=$(<"$ready_file")
+        capture_dirs+=("$capture_dir")
+    else
+        recorder_rc=$?
+        terminate_child "$recorder_pid"
+        recorder_pid=""
+        recorder_last=$(tail -1 "$recorder_log")
+        echo "FAILED (recorder startup rc=$recorder_rc, last: $recorder_last)"
+        failures=$((failures + 1))
+        if [ "$FAIL_FAST" -eq 1 ]; then
+            break
+        fi
+        continue
+    fi
 
-    # Run capture, write output to temp file
-    : > "$TMPEVENTS"
     "$CAPTURE" \
         -addr "$LISTEN" \
         -scenario "$scenario" \
         -client-id "$client_id" \
-        -driver-events "$TMPEVENTS" \
-        >"$TMPLOG" 2>&1
-    rc=$?
+        -driver-events "$events_file" \
+        >"$log_file" 2>&1 &
+    capture_pid=$!
+    wait "$capture_pid" || capture_rc=$?
+    capture_rc=${capture_rc:-0}
+    capture_pid=""
 
-    # Wait for recorder to finish
-    wait "$rpid" 2>/dev/null
-    recorder_rc=$?
-
-    latest_dir=$(ls -dt "$OUTDIR"/20*-"$scenario" 2>/dev/null | head -1)
-    if [ -n "$latest_dir" ]; then
-        cp "$TMPLOG" "$latest_dir/driver.log"
-        if [ -s "$TMPEVENTS" ]; then
-            cp "$TMPEVENTS" "$latest_dir/driver_events.jsonl"
-        fi
+    if [ "$capture_rc" -eq 0 ]; then
+        wait "$recorder_pid" 2>/dev/null || recorder_rc=$?
+        recorder_rc=${recorder_rc:-0}
+        recorder_pid=""
+    else
+        stop_recorder || recorder_rc=$?
+        recorder_rc=${recorder_rc:-0}
     fi
 
-    last=$(tail -1 "$TMPLOG")
-    if [ $rc -eq 0 ] && [ $recorder_rc -eq 0 ] && echo "$last" | grep -q "complete"; then
+    evidence_rc=0
+    if [ -d "$capture_dir" ]; then
+        cp "$log_file" "$capture_dir/driver.log" || evidence_rc=1
+        cp "$recorder_log" "$capture_dir/recorder.log" || evidence_rc=1
+        if [ -s "$events_file" ]; then
+            cp "$events_file" "$capture_dir/driver_events.jsonl" || evidence_rc=1
+        fi
+    else
+        evidence_rc=1
+    fi
+
+    last=$(tail -1 "$log_file")
+    if [ "$capture_rc" -eq 0 ] && [ "$recorder_rc" -eq 0 ] && [ "$evidence_rc" -eq 0 ]; then
         echo "ok"
     else
-        echo "FAILED (rc=$rc, recorder_rc=$recorder_rc, last: $last)"
+        echo "FAILED (rc=$capture_rc, recorder_rc=$recorder_rc, evidence_rc=$evidence_rc, last: $last)"
         failures=$((failures + 1))
+        if [ "$FAIL_FAST" -eq 1 ]; then
+            break
+        fi
     fi
-
-    sleep 0.5
 done
 
-echo ""
+echo
 echo "done. new captures:"
-ls -dt "$OUTDIR"/20* 2>/dev/null | head -20
+if [ ${#capture_dirs[@]} -gt 0 ]; then
+    printf '%s\n' "${capture_dirs[@]}"
+fi
 
 if [ "$failures" -gt 0 ]; then
     echo "$failures scenario(s) failed"

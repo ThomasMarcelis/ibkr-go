@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -33,7 +34,7 @@ func TestRecordFailureFlushesRedactionAndClosesResources(t *testing.T) {
 
 	result := make(chan error, 1)
 	go func() {
-		result <- record(recorderConfig{
+		result <- record(context.Background(), recorderConfig{
 			listenAddr:     listenAddr,
 			upstreamAddr:   "upstream",
 			outRoot:        root,
@@ -109,6 +110,107 @@ func TestRecordFailureFlushesRedactionAndClosesResources(t *testing.T) {
 		t.Fatalf("recorder listener was not released: %v", err)
 	}
 	_ = rebound.Close()
+}
+
+func TestRecordCancellationBeforeFirstLegClosesResources(t *testing.T) {
+	listenAddr := reserveTCPAddress(t)
+	root := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := record(ctx, recorderConfig{
+		listenAddr:     listenAddr,
+		upstreamAddr:   "upstream",
+		outRoot:        root,
+		scenario:       "recorder-canceled",
+		maxLegs:        1,
+		captureTimeout: time.Second,
+	})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("record() error = %v, want context.Canceled", err)
+	}
+	events, err := capturelog.LoadEvents(filepath.Join(onlyCaptureDir(t, root), "events.jsonl"))
+	if err != nil {
+		t.Fatalf("LoadEvents() error = %v", err)
+	}
+	if len(events) != 0 {
+		t.Fatalf("events = %+v, want none before first leg", events)
+	}
+	rebound, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		t.Fatalf("recorder listener was not released: %v", err)
+	}
+	_ = rebound.Close()
+}
+
+func TestRecordReadyFileRequiresBoundListener(t *testing.T) {
+	listenAddr := reserveTCPAddress(t)
+	occupied, err := net.Listen("tcp", listenAddr)
+	if err != nil {
+		t.Fatalf("occupy recorder address: %v", err)
+	}
+	defer occupied.Close()
+	readyFile := filepath.Join(t.TempDir(), "ready")
+
+	err = record(context.Background(), recorderConfig{
+		listenAddr:     listenAddr,
+		upstreamAddr:   "upstream",
+		outRoot:        t.TempDir(),
+		scenario:       "recorder-bind-failure",
+		readyFile:      readyFile,
+		maxLegs:        1,
+		captureTimeout: time.Second,
+	})
+	if err == nil {
+		t.Fatal("record() error = nil, want bind failure")
+	}
+	if _, statErr := os.Stat(readyFile); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("ready file stat error = %v, want os.ErrNotExist", statErr)
+	}
+}
+
+func TestRecordReadyFileNamesCaptureDirectory(t *testing.T) {
+	listenAddr := reserveTCPAddress(t)
+	root := t.TempDir()
+	readyFile := filepath.Join(t.TempDir(), "ready")
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- record(ctx, recorderConfig{
+			listenAddr:     listenAddr,
+			upstreamAddr:   "upstream",
+			outRoot:        root,
+			scenario:       "recorder-ready",
+			readyFile:      readyFile,
+			maxLegs:        1,
+			captureTimeout: time.Second,
+		})
+	}()
+
+	var captureDir string
+	deadline := time.Now().Add(time.Second)
+	for captureDir == "" && time.Now().Before(deadline) {
+		// #nosec G304 -- readyFile is rooted in this test's temporary directory.
+		data, err := os.ReadFile(readyFile)
+		if err == nil {
+			captureDir = strings.TrimSpace(string(data))
+			break
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("read ready file: %v", err)
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if captureDir == "" {
+		t.Fatal("recorder did not publish readiness")
+	}
+	if want := onlyCaptureDir(t, root); captureDir != want {
+		t.Fatalf("ready capture directory = %q, want %q", captureDir, want)
+	}
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("record() error = %v, want context.Canceled", err)
+	}
 }
 
 func TestRunLegRecordsCleanDisconnectAndClosesConnections(t *testing.T) {
