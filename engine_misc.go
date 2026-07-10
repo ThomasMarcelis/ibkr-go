@@ -42,7 +42,6 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				resp <- result{ts: ts}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonCurrentTime)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -101,7 +100,6 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 				resp <- result{ts: ts}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonCurrentTimeMillis)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -147,7 +145,6 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonScannerParameters)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -269,7 +266,6 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 				sub.closeWithErr(e.apiErr(OpScannerSubscription, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -324,7 +320,6 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonFA)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -568,7 +563,6 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 				sub.closeWithErr(e.apiErr(OpDisplayGroupEvents, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},

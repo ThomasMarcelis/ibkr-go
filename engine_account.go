@@ -84,7 +84,6 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 				sub.closeWithErr(e.apiErr(OpAccountSummary, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -174,7 +173,6 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 				}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.singletons, singletonPositions)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -230,7 +228,6 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonFamilyCodes)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -370,7 +367,6 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 				}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.singletons, singletonAccountUpdates)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -456,7 +452,6 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 				sub.closeWithErr(e.apiErr(OpAccountUpdatesMulti, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -560,7 +555,6 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 				sub.closeWithErr(e.apiErr(OpPositionsMulti, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -647,7 +641,6 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 				sub.closeWithErr(e.apiErr(OpPnL, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -746,7 +739,6 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 				sub.closeWithErr(e.apiErr(OpPnLSingle, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},

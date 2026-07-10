@@ -35,7 +35,6 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonNewsProviders)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -103,7 +102,6 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 				}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.singletons, singletonNewsBulletins)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},

@@ -305,7 +305,6 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			},
 			onDisconnect: func(e *engine, err error) bool {
 				if snapshot {
-					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(ErrInterrupted)
 					return false
 				}
@@ -317,7 +316,6 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					})
 					return true
 				}
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -439,7 +437,6 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 					})
 					return true
 				}
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -587,7 +584,6 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					})
 					return true
 				}
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -657,7 +653,6 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonMktDepthExchanges)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -795,7 +790,6 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				sub.closeWithErr(e.apiErr(OpTickByTick, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},

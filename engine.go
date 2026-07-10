@@ -104,7 +104,7 @@ type route struct {
 	request        codec.Message
 	handle         func(any, *engine)
 	handleAPIErr   func(codec.APIError, *engine)
-	onDisconnect   func(*engine, error) bool
+	onDisconnect   func(*engine, error) bool // true retains the route; caller deletes on false
 	emitGap        func(*engine)
 	emitResumed    func(*engine)
 	validateResume func(*engine) error

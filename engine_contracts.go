@@ -183,7 +183,6 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonMarketRule)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},

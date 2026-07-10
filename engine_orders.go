@@ -42,7 +42,6 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 				resp <- result{err: eng.apiErr(OpOrderID, msg)}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonOrderID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -142,7 +141,6 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 				}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.singletons, singletonOpenOrders)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -252,7 +250,6 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 				sub.closeWithErr(e.apiErr(OpExecutions, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
@@ -311,7 +308,6 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				delete(eng.singletons, singletonCompletedOrders)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -690,7 +686,6 @@ func (e *engine) installExerciseRoute(reqID int) {
 			}
 		},
 		onDisconnect: func(e *engine, err error) bool {
-			e.deleteKeyedRoute(reqID)
 			return false
 		},
 		close: func(error) {},

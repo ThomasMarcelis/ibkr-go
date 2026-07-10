@@ -281,7 +281,6 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				sub.closeWithErr(e.apiErr(OpHistoricalBarsStream, m))
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(ErrResumeRequired)
 				return false
 			},
