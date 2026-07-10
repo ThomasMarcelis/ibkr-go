@@ -181,6 +181,11 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 - **Lifecycle()** delivers bounded observational `SubscriptionStateEvent` values
   (Gap, Resumed). If unread, older queued lifecycle events may be dropped in
   favor of the latest one.
+- **Event backpressure.** Each handle has a bounded, lossless event queue
+  (default 64, configured by `WithOrderEventBuffer`). Overflow closes local
+  observation with `ErrSlowConsumer` rather than dropping and continuing. It
+  does not change the live order; its OrderID remains available for
+  reconciliation or cancellation.
 - **Terminal states.** When an OrderStatus arrives with status Filled,
   Cancelled, ApiCancelled, or Inactive, the handle auto-closes with `nil`
   error. Cancellation replies 161 and 202 remain session notices and do not

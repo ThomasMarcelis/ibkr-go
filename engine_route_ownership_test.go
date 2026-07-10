@@ -20,7 +20,7 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 	// vector frozen in codec_orders_proto203_test.go, not a live priced-combo
 	// attestation. Combining them here exercises ownership, not Gateway meaning.
 	openOrders := make(chan OpenOrder, 1)
-	handle := newOrderHandle(443)
+	handle := newOrderHandle(443, 64)
 	e := &engine{
 		orders: map[int64]*orderRoute{443: {orderID: 443, handle: handle}},
 		singletons: map[string]*route{singletonOpenOrders: {

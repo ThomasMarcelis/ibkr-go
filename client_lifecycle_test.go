@@ -259,15 +259,18 @@ func TestBootstrapNoManagedAccounts(t *testing.T) {
 	_ = host.Close()
 }
 
-func TestDialContextRejectsInvalidEventBuffer(t *testing.T) {
+func TestDialContextRejectsInvalidEventBuffers(t *testing.T) {
 	t.Parallel()
 
 	testCases := []struct {
-		name string
-		size int
+		name   string
+		field  string
+		option ibkr.Option
 	}{
-		{name: "zero", size: 0},
-		{name: "negative", size: -1},
+		{name: "zero session events", field: "EventBuffer", option: ibkr.WithEventBuffer(0)},
+		{name: "negative session events", field: "EventBuffer", option: ibkr.WithEventBuffer(-1)},
+		{name: "zero order events", field: "OrderEventBuffer", option: ibkr.WithOrderEventBuffer(0)},
+		{name: "negative order events", field: "OrderEventBuffer", option: ibkr.WithOrderEventBuffer(-1)},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -277,17 +280,17 @@ func TestDialContextRejectsInvalidEventBuffer(t *testing.T) {
 
 			_, err := ibkr.DialContext(ctx,
 				ibkr.WithDialer(dialer),
-				ibkr.WithEventBuffer(tc.size),
+				tc.option,
 			)
 			if err == nil {
-				t.Fatal("DialContext() error = nil, want event buffer validation error")
+				t.Fatal("DialContext() error = nil, want buffer validation error")
 			}
 			validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
-			if !ok || validationErr.Field != "EventBuffer" {
-				t.Fatalf("DialContext() error = %v, want EventBuffer ValidationError", err)
+			if !ok || validationErr.Field != tc.field {
+				t.Fatalf("DialContext() error = %v, want %s ValidationError", err, tc.field)
 			}
 			if dialer.called {
-				t.Fatal("DialContext() called dialer before validating event buffer")
+				t.Fatal("DialContext() called dialer before validating buffer")
 			}
 		})
 	}

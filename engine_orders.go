@@ -524,7 +524,7 @@ func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, placementErr
 // bindOrderHandle installs a new order route and its public handle. It must be
 // called on the actor goroutine before the corresponding place_order is sent.
 func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle {
-	handle := newOrderHandle(orderID)
+	handle := newOrderHandle(orderID, e.cfg.orderEventBuffer)
 	handle.cancelFn = func(ctx context.Context, cfg cancelConfig) error {
 		ch := make(chan error, 1)
 		e.enqueue(func() {

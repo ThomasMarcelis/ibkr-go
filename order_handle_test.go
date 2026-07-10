@@ -10,7 +10,7 @@ import (
 
 func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		handle := newOrderHandle(7)
+		handle := newOrderHandle(7, 64)
 		for i := 0; i < 12; i++ {
 			handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: uint64(i + 1)})
 		}
@@ -39,7 +39,7 @@ func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
 func TestOrderHandleCloseSerializedWithEngineEmits(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newRunningEngineForOrderHandleTest(t)
-		handle := newOrderHandle(101)
+		handle := newOrderHandle(101, 64)
 		bindOrderHandleForEngineTest(t, e, handle)
 
 		for i := 0; i < 8; i++ {
@@ -67,7 +67,7 @@ func TestOrderHandleCloseSerializedWithEngineEmits(t *testing.T) {
 func TestOrderHandleCloseWhenEventsBufferFull(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newRunningEngineForOrderHandleTest(t)
-		handle := newOrderHandle(102)
+		handle := newOrderHandle(102, 64)
 		bindOrderHandleForEngineTest(t, e, handle)
 
 		for i := 0; i < cap(handle.events)+1; i++ {
@@ -92,7 +92,7 @@ func TestOrderHandleCloseWhenEventsBufferFull(t *testing.T) {
 func TestOrderHandleEventsDrainAfterClose(t *testing.T) {
 	t.Parallel()
 
-	handle := newOrderHandle(103)
+	handle := newOrderHandle(103, 64)
 	if !handle.emitStatus(OrderStatusUpdate{OrderID: 103, Status: OrderStatusSubmitted}) {
 		t.Fatal("emitStatus returned false, want true")
 	}
@@ -117,6 +117,28 @@ func TestOrderHandleEventsDrainAfterClose(t *testing.T) {
 	}
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("Wait() = %v, want nil", err)
+	}
+}
+
+func TestOrderHandleCancelAfterSlowConsumerUsesStableOrderID(t *testing.T) {
+	t.Parallel()
+
+	handle := newOrderHandle(1, 1)
+	var canceledOrderID int64
+	handle.cancelFn = func(context.Context, cancelConfig) error {
+		canceledOrderID = handle.OrderID()
+		return nil
+	}
+	handle.closeWithErr(ErrSlowConsumer)
+
+	if err := handle.Wait(); !errors.Is(err, ErrSlowConsumer) {
+		t.Fatalf("Wait() error = %v, want ErrSlowConsumer", err)
+	}
+	if err := handle.Cancel(context.Background()); err != nil {
+		t.Fatalf("Cancel() after observation overflow = %v", err)
+	}
+	if canceledOrderID != 1 {
+		t.Fatalf("cancel coordinate = %d, want stable OrderID 1", canceledOrderID)
 	}
 }
 
@@ -222,7 +244,7 @@ func enqueueOrderHandleEmit(e *engine, handle *OrderHandle) {
 func TestOrderHandleModifyRejectsMismatchedOrderID(t *testing.T) {
 	t.Parallel()
 
-	handle := newOrderHandle(100)
+	handle := newOrderHandle(100, 64)
 	var modifyCalled bool
 	handle.modifyFn = func(ctx context.Context, order Order) error {
 		modifyCalled = true
@@ -247,7 +269,7 @@ func TestOrderHandleModifyRejectsMismatchedOrderID(t *testing.T) {
 func TestOrderHandleModifyAllowsMatchingOrderID(t *testing.T) {
 	t.Parallel()
 
-	handle := newOrderHandle(100)
+	handle := newOrderHandle(100, 64)
 	var gotOrder Order
 	handle.modifyFn = func(ctx context.Context, order Order) error {
 		gotOrder = order
@@ -269,7 +291,7 @@ func TestOrderHandleModifyAllowsMatchingOrderID(t *testing.T) {
 func TestOrderHandleModifyAllowsZeroOrderID(t *testing.T) {
 	t.Parallel()
 
-	handle := newOrderHandle(100)
+	handle := newOrderHandle(100, 64)
 	var gotOrder Order
 	handle.modifyFn = func(ctx context.Context, order Order) error {
 		gotOrder = order
@@ -288,7 +310,7 @@ func TestOrderHandleModifyAllowsZeroOrderID(t *testing.T) {
 func TestOrderHandleModifyAfterCloseReturnsErrClosed(t *testing.T) {
 	t.Parallel()
 
-	handle := newOrderHandle(100)
+	handle := newOrderHandle(100, 64)
 	handle.modifyFn = func(ctx context.Context, order Order) error {
 		t.Fatal("Modify invoked modifyFn after handle close")
 		return nil
@@ -303,7 +325,7 @@ func TestOrderHandleModifyAfterCloseReturnsErrClosed(t *testing.T) {
 func TestOrderHandleCloseDropsRouteAndExecMappings(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newRunningEngineForOrderHandleTest(t)
-		handle := newOrderHandle(100)
+		handle := newOrderHandle(100, 64)
 		bindOrderHandleForEngineTest(t, e, handle)
 
 		closed := make(chan struct{})

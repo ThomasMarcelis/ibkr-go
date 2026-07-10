@@ -27,7 +27,7 @@ func TestDispatchExecutionToOrderDedupesReplayedFill(t *testing.T) {
 	t.Parallel()
 
 	e, _ := newEngineForDispatchTest()
-	handle := newOrderHandle(90)
+	handle := newOrderHandle(90, 64)
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	detail := codec.ExecutionDetail{
@@ -69,7 +69,7 @@ func TestRouteCommissionReportDedupesReplayedCommission(t *testing.T) {
 	t.Parallel()
 
 	e, _ := newEngineForDispatchTest()
-	handle := newOrderHandle(90)
+	handle := newOrderHandle(90, 64)
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	exec := codec.ExecutionDetail{
@@ -118,7 +118,7 @@ func TestRouteCommissionBeforeExecutionReachesHandle(t *testing.T) {
 	t.Parallel()
 
 	e, _ := newEngineForDispatchTest()
-	handle := newOrderHandle(90)
+	handle := newOrderHandle(90, 64)
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	comm := codec.CommissionReport{ExecID: "exec-race-1", Commission: "1.25", Currency: "USD", RealizedPNL: "0"}
@@ -162,7 +162,7 @@ func TestRouteCommissionResendWithChangedContentReachesHandle(t *testing.T) {
 	t.Parallel()
 
 	e, _ := newEngineForDispatchTest()
-	handle := newOrderHandle(90)
+	handle := newOrderHandle(90, 64)
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	exec := codec.ExecutionDetail{
@@ -238,7 +238,7 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
-	handle := newOrderHandle(5)
+	handle := newOrderHandle(5, 64)
 	e.orders[5] = &orderRoute{orderID: 5, handle: handle}
 	e.installExerciseRoute(5)
 
@@ -308,7 +308,7 @@ func TestHandleAPIErrorRejectionDropsOrderRoute(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
-	handle := newOrderHandle(42)
+	handle := newOrderHandle(42, 64)
 	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
 	e.execDeliveries["exec-42"] = &execDelivery{orderID: 42}
 

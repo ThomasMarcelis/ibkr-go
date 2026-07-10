@@ -149,9 +149,9 @@ for _, bar := range bars {
 ### Place an order and track its lifecycle
 
 `Place` returns an `OrderHandle` whose `Events()` channel carries a typed
-union — exactly one of `Status`, `Execution`, `CommissionAndFees`, or
-`OpenOrder` is non-nil per event. The channel closes after the terminal status
-(`Filled`, `Cancelled`, or `Inactive`).
+union — exactly one of `Status`, `Execution`, `CommissionAndFees`, `OpenOrder`,
+or `Warning` is non-nil per event. The channel closes after the terminal status
+(`Filled`, `Cancelled`, or `Inactive`) or an earlier local observation error.
 
 ```go
 handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -175,7 +175,14 @@ for evt := range handle.Events() {
 return handle.Wait() // nil when terminal status reached cleanly
 ```
 
-Cancel or modify a working order at any time:
+Order events use a bounded, lossless queue with a default capacity of 64;
+configure it for the client with `ibkr.WithOrderEventBuffer`. Events are never
+silently dropped while observation continues. If the queue fills, the handle
+closes and `Wait` returns `ibkr.ErrSlowConsumer`. That ends only this process's
+observation: the live order may keep executing at IBKR, and `handle.OrderID()`
+remains the coordinate for open-order reconciliation or direct cancellation.
+
+While the handle remains active, cancel or modify a working order:
 
 ```go
 if err := handle.Cancel(ctx); err != nil { // request cancellation
@@ -186,8 +193,12 @@ if err := handle.Modify(ctx, revisedOrder); err != nil { // amend price, quantit
 }
 ```
 
-The events channel keeps delivering until the server confirms the terminal
-state.
+After `ErrSlowConsumer`, `Modify` returns `ErrClosed`; reconcile with the
+stable `OrderID` and cancel through `handle.Cancel` or
+`client.Orders().Cancel(ctx, handle.OrderID())` if the order is still working.
+
+Absent an explicit local close or observation error, the events channel keeps
+delivering until the server confirms the terminal state.
 
 Place a bracket without managing IDs or transmit flags yourself:
 

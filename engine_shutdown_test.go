@@ -174,7 +174,7 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 		go e.run()
 		defer close(e.done)
 
-		route := &orderRoute{orderID: 50, handle: newOrderHandle(50)}
+		route := &orderRoute{orderID: 50, handle: newOrderHandle(50, 64)}
 		e.enqueue(func() {
 			e.orders[50] = route
 			e.execDeliveries["exec-a"] = &execDelivery{orderID: 50, delivered: &codec.CommissionReport{ExecID: "exec-a"}}

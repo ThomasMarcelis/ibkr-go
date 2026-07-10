@@ -187,6 +187,13 @@ lifecycle. `Events()` delivers `OrderEvent` values. `OrderEvent` is a union:
 exactly one of `OpenOrder`, `Status`, `Execution`, `CommissionAndFees`, or
 `Warning` is non-nil per event.
 
+The event queue is bounded and lossless, with a client-wide default capacity of
+64 configured by `WithOrderEventBuffer`. It never silently drops an event while
+continuing to observe. If the queue fills, the handle closes with
+`ErrSlowConsumer`; this ends only local observation and does not prove that
+IBKR stopped or cancelled the live order. `OrderID()` remains available as the
+stable coordinate for open-order reconciliation and direct cancellation.
+
 `Lifecycle()` delivers Gap and Resumed events across reconnect boundaries. It is
 bounded and observational. `Close()` detaches the handle without cancelling the
 server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows

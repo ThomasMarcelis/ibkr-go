@@ -38,6 +38,7 @@ type config struct {
 	sendRate            int
 	eventBuffer         int
 	subscriptionBuffer  int
+	orderEventBuffer    int
 	defaultResume       ResumePolicy
 	defaultSlowConsumer SlowConsumerPolicy
 }
@@ -61,6 +62,7 @@ func defaultConfig() config {
 		sendRate:            50,
 		eventBuffer:         64,
 		subscriptionBuffer:  64,
+		orderEventBuffer:    64,
 		defaultResume:       ResumeNever,
 		defaultSlowConsumer: SlowConsumerClose,
 	}
@@ -103,6 +105,9 @@ func validateConfig(cfg config) error {
 	}
 	if cfg.subscriptionBuffer < 1 {
 		return &ValidationError{Field: "SubscriptionBuffer", Value: strconv.Itoa(cfg.subscriptionBuffer), Message: "must be >= 1"}
+	}
+	if cfg.orderEventBuffer < 1 {
+		return &ValidationError{Field: "OrderEventBuffer", Value: strconv.Itoa(cfg.orderEventBuffer), Message: "must be >= 1"}
 	}
 	if !cfg.reconnect.valid() {
 		return &ValidationError{Field: "ReconnectPolicy", Value: string(cfg.reconnect), Message: "must be ReconnectOff or ReconnectAuto"}
@@ -221,6 +226,16 @@ func WithEventBuffer(size int) Option {
 func WithSubscriptionBuffer(size int) Option {
 	return func(cfg *config) {
 		cfg.subscriptionBuffer = size
+	}
+}
+
+// WithOrderEventBuffer sets the capacity of every [OrderHandle] event queue.
+// Default: 64. Order events are never silently dropped: when this queue fills,
+// local observation ends with [ErrSlowConsumer] while the live order may keep
+// executing at IBKR.
+func WithOrderEventBuffer(size int) Option {
+	return func(cfg *config) {
+		cfg.orderEventBuffer = size
 	}
 }
 

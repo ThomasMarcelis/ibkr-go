@@ -102,10 +102,18 @@
 // [OrdersClient.Place] submits an order and returns an [*OrderHandle] that tracks
 // its full lifecycle. The handle follows the same Events/Lifecycle/Done pattern as
 // subscriptions. OrderEvent is a union: exactly one of OpenOrder, Status,
-// Execution, or Commission is non-nil per event. The handle auto-closes when
-// the order reaches a terminal state (Filled, Cancelled, Inactive). Its
+// Execution, CommissionAndFees, or Warning is non-nil per event. The handle
+// auto-closes when the order reaches a terminal state (Filled, Cancelled,
+// Inactive). Its
 // Lifecycle() channel is also bounded and observational: if unread, older queued
 // lifecycle events may be dropped in favor of the latest one.
+//
+// The order-event queue is lossless and bounded. Its default capacity is 64
+// and [WithOrderEventBuffer] configures it for every handle on the client. If
+// it fills, the handle closes with [ErrSlowConsumer] instead of silently
+// dropping events. Only local observation ends: the order may remain live at
+// IBKR, and [OrderHandle.OrderID] remains the cancellation and reconciliation
+// coordinate.
 //
 // [OrderHandle.Close] detaches the handle without cancelling the order.
 // [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a

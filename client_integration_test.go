@@ -1982,6 +1982,72 @@ done:
 	}
 }
 
+func TestOrderEventBufferOverflowPreservesOrderCoordinate(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260413T192703Z-place_order_mkt_buy_aapl, server_version 200,
+	// events.jsonl sha256 prefix 301b075b217cbd99. The grounded replay's exact
+	// order is OpenOrder(PreSubmitted), PreSubmitted status, Execution,
+	// OpenOrder(Filled), Filled status, then CommissionAndFees. A four-event
+	// queue must close when the fifth event arrives instead of silently dropping
+	// it and continuing.
+	client, host := newClient(t, "place_order_fill_native_execution_time.txt", ibkr.WithOrderEventBuffer(4))
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Contract{
+			ConID:    265598,
+			Symbol:   "AAPL",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
+		Order: ibkr.Order{
+			Action:    ibkr.ActionBuy,
+			OrderType: ibkr.OrderTypeMarket,
+			Quantity:  decimal.RequireFromString("1"),
+			TIF:       ibkr.TIFDay,
+			Account:   "DU9000001",
+		},
+	})
+	if err != nil {
+		t.Fatalf("PlaceOrder: %v", err)
+	}
+
+	select {
+	case <-handle.Done():
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for order event overflow")
+	}
+	if err := handle.Wait(); !errors.Is(err, ibkr.ErrSlowConsumer) {
+		t.Fatalf("Wait() error = %v, want ErrSlowConsumer", err)
+	}
+
+	var events []ibkr.OrderEvent
+	for event := range handle.Events() {
+		events = append(events, event)
+	}
+	if len(events) != 4 {
+		t.Fatalf("buffered event count = %d, want configured capacity 4", len(events))
+	}
+	if events[0].OpenOrder == nil || events[0].OpenOrder.Status != ibkr.OrderStatusPreSubmitted ||
+		events[1].Status == nil || events[1].Status.Status != ibkr.OrderStatusPreSubmitted ||
+		events[2].Execution == nil || events[2].Execution.ExecID != "sanitized-native-exec-001" ||
+		events[3].OpenOrder == nil || events[3].OpenOrder.Status != ibkr.OrderStatusFilled {
+		t.Fatalf("buffered live-derived prefix = %+v, want OpenOrder(PreSubmitted), PreSubmitted, Execution, OpenOrder(Filled)", events)
+	}
+
+	// Observation has ended, but this stable server coordinate remains the
+	// authority for open-order reconciliation or direct Orders().Cancel.
+	if orderID := handle.OrderID(); orderID != 1 {
+		t.Fatalf("OrderID after observation overflow = %d, want reconciliation coordinate 1", orderID)
+	}
+}
+
 func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
 	t.Parallel()
 

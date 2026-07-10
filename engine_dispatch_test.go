@@ -37,7 +37,7 @@ func TestRouteCommissionReportLogsAndDropsOnDecodeError(t *testing.T) {
 	t.Parallel()
 
 	e, logs := newEngineForDispatchTest()
-	handle := newOrderHandle(42)
+	handle := newOrderHandle(42, 64)
 	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
 	e.execDeliveries["exec-bad"] = &execDelivery{orderID: 42}
 
@@ -79,7 +79,7 @@ func TestRouteCommissionReportDeliversValidReport(t *testing.T) {
 	t.Parallel()
 
 	e, logs := newEngineForDispatchTest()
-	handle := newOrderHandle(42)
+	handle := newOrderHandle(42, 64)
 	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
 	e.execDeliveries["exec-ok"] = &execDelivery{orderID: 42}
 
@@ -117,7 +117,7 @@ func TestDispatchExecutionToOrderLogsAndDropsOnDecodeError(t *testing.T) {
 	t.Parallel()
 
 	e, logs := newEngineForDispatchTest()
-	handle := newOrderHandle(77)
+	handle := newOrderHandle(77, 64)
 	e.orders[77] = &orderRoute{orderID: 77, handle: handle}
 
 	// Malformed Time field makes fromCodecExecution fail deterministically.

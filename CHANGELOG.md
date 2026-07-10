@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `WithOrderEventBuffer` configures the bounded event capacity shared by newly
+  created `OrderHandle` values (default 64). Order events remain lossless:
+  overflow closes local observation with `ErrSlowConsumer` instead of silently
+  dropping and continuing. The live order may still execute at IBKR, and its
+  `OrderID` remains available for reconciliation or direct cancellation.
+
 - Quote subscriptions now deliver every implemented classic L1 callback.
   `QuoteUpdate.Kind` preserves every classic price and size callback, including
   its numeric tick type, price attributes, and optional price-frame companion

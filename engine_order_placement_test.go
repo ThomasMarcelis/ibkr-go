@@ -17,7 +17,7 @@ import (
 func TestPlaceOrderAdmissionWinsCallerBoundaries(t *testing.T) {
 	t.Parallel()
 
-	handle := newOrderHandle(47)
+	handle := newOrderHandle(47, 64)
 	t.Cleanup(func() { _ = handle.Close() })
 
 	for _, tc := range []struct {
@@ -75,9 +75,9 @@ func TestBracketAdmissionWinsCallerBoundaries(t *testing.T) {
 	t.Parallel()
 
 	bracket := BracketOrder{
-		Parent:     newOrderHandle(47),
-		TakeProfit: newOrderHandle(48),
-		StopLoss:   newOrderHandle(49),
+		Parent:     newOrderHandle(47, 64),
+		TakeProfit: newOrderHandle(48, 64),
+		StopLoss:   newOrderHandle(49, 64),
 	}
 	t.Cleanup(func() {
 		_ = bracket.Parent.Close()
@@ -265,6 +265,7 @@ func newRollbackTestEngine(t *testing.T, orderIDs []int64) (*engine, net.Conn, m
 	peer, clientConn := net.Pipe()
 	tr := transport.New(clientConn, nil, 0)
 	e := &engine{
+		cfg:            defaultConfig(),
 		done:           make(chan struct{}),
 		transport:      tr,
 		serverVersion:  200,

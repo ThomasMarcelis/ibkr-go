@@ -10,6 +10,9 @@ import (
 // OrderHandle tracks a placed order's lifecycle. Events arrive via Events();
 // lifecycle state changes (Gap, Resumed) arrive via Lifecycle(). Close() detaches
 // the handle without cancelling the order. Cancel() sends a cancel request.
+// If the lossless event queue fills, Wait returns [ErrSlowConsumer]. That ends
+// only local observation: the live order may keep executing, and OrderID
+// remains available for cancellation and reconciliation.
 //
 // Commission events may race the terminal order status: the live Gateway can
 // deliver an execution or commission callback just after a Filled or Cancelled
@@ -30,10 +33,10 @@ type OrderHandle struct {
 	detachFn func()                                    // set by engine, routes Close through the actor loop
 }
 
-func newOrderHandle(orderID int64) *OrderHandle {
+func newOrderHandle(orderID int64, eventCapacity int) *OrderHandle {
 	return &OrderHandle{
 		orderID: orderID,
-		events:  make(chan OrderEvent, 64),
+		events:  make(chan OrderEvent, eventCapacity),
 		state:   newObserver[SubscriptionStateEvent](8),
 		done:    make(chan struct{}),
 	}
@@ -43,7 +46,9 @@ func newOrderHandle(orderID int64) *OrderHandle {
 func (h *OrderHandle) OrderID() int64 { return h.orderID }
 
 // Events returns the channel of order events (open-order echoes, status
-// updates, executions, commissions). It closes when the handle closes.
+// updates, executions, commissions). It closes when the handle closes. Events
+// are never silently dropped; queue overflow closes the handle with
+// [ErrSlowConsumer] without changing the live order.
 func (h *OrderHandle) Events() <-chan OrderEvent { return h.events }
 
 // Lifecycle returns the channel of lifecycle transitions (gap, resume, close)
@@ -57,7 +62,8 @@ func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent {
 func (h *OrderHandle) Done() <-chan struct{} { return h.done }
 
 // Wait blocks until the handle terminates and returns its terminal error, or
-// nil on a clean close.
+// nil on a clean close. [ErrSlowConsumer] means only that local observation
+// ended; use OrderID to reconcile or cancel the possibly live order.
 func (h *OrderHandle) Wait() error {
 	<-h.done
 	h.errMu.Lock()
