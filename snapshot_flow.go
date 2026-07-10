@@ -1,6 +1,9 @@
 package ibkr
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // A one-shot already promises to return every row, so it retains rows inside
 // the subscription until the server's snapshot boundary instead of applying a
@@ -59,6 +62,30 @@ func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], ma
 			return nil, ctx.Err()
 		}
 	}
+}
+
+// collectSnapshotAndClose keeps one-shot snapshot cleanup inside the result
+// boundary. Rows already delivered by the Gateway remain available even when
+// cancellation cannot enter the active transport queue.
+func collectSnapshotAndClose[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) (U, bool)) ([]U, error) {
+	values, collectErr := collectSnapshot(ctx, sub, mapFn)
+	_ = sub.Close()
+	closeErr := sub.Wait()
+	_, cancellationUncertain := errors.AsType[*SubscriptionCancelError](closeErr)
+	if collectErr == nil {
+		// The snapshot boundary is authoritative for the query result. A
+		// transport/session close racing later cleanup destroys the remote
+		// stream and does not invalidate collected rows; only cancellation
+		// uncertainty on the still-active connection crosses this boundary.
+		if cancellationUncertain {
+			return values, closeErr
+		}
+		return values, nil
+	}
+	if !cancellationUncertain || errors.Is(collectErr, closeErr) {
+		return values, collectErr
+	}
+	return values, errors.Join(collectErr, closeErr)
 }
 
 func collectRetainedSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) (U, bool)) ([]U, error) {

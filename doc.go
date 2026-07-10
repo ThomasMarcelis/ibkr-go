@@ -81,14 +81,21 @@
 // another goroutine, or drops to a manual select over Events() and
 // Lifecycle() to observe both streams in one loop.
 //
+// Admission to the transport queue is the ownership boundary for a
+// subscription. Once admitted, the subscription result wins context-cancellation
+// and session-close races so a live remote stream is never hidden behind a
+// context error.
+//
 // Call Close to unsubscribe. Wait blocks until termination and returns the
-// final error, if any. Err returns the currently recorded terminal error without
-// waiting for Done. SubscriptionClosed and Gap lifecycle events include a
-// Retryable flag. API errors are terminal request rejections; use [IsRetryable]
-// on the final error when a consumer loop only observes Events() or All().
-// Done is useful for coordinating other goroutines, but consumers that need
-// every business event should drain Events (or All) until it closes, then
-// check Err or call Wait.
+// final error, if any. A [*SubscriptionCancelError] means cancellation could
+// not enter the active transport queue and the remote stream may still be live;
+// recycle the client connection before subscribing again. Err returns the
+// currently recorded terminal error without waiting for Done.
+// SubscriptionClosed and Gap lifecycle events include a Retryable flag. API
+// errors are terminal request rejections; use [IsRetryable] on the final error
+// when a consumer loop only observes Events() or All(). Done is useful for
+// coordinating other goroutines, but consumers that need every business event
+// should drain Events (or All) until it closes, then check Err or call Wait.
 //
 // # Order Management
 //
@@ -150,13 +157,14 @@
 //
 // # Errors
 //
-// Five structured error types cover the main failure modes:
+// Six structured error types cover the main failure modes:
 //
 //   - [*ConnectError] — connection or handshake failure
 //   - [*ProtocolError] — wire protocol violation
 //   - [*APIError] — server-side rejection (error code + message)
 //   - [*ValidationError] — caller-side request validation failure
 //   - [*OrderRecoveryError] — uncertain live IDs after partial bracket rollback
+//   - [*SubscriptionCancelError] — uncertain remote stream after cancellation admission failure
 //
 // IBKR codes attested in live captures have named ErrCode constants (e.g.
 // [ErrCodeOrderCanceled], [ErrCodeMarketDataNotSubscribed]) and [*APIError]
@@ -167,7 +175,8 @@
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
 // [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].
 // [IsRetryable] classifies final errors for retry/backoff policy. Recovery
-// errors are never retryable because retrying can duplicate live orders.
+// errors are never retryable because retrying can duplicate live orders or
+// subscriptions.
 //
 // # Financial Types
 //

@@ -112,15 +112,17 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			resp <- result{err: err}
 			return
 		}
+		var ownedRoute *route
 		var sub *Subscription[OpenOrderUpdate]
 		sub = newSubscription[OpenOrderUpdate](cfg, func() {
 			e.enqueue(func() {
-				if _, ok := e.singletons[singletonOpenOrders]; !ok {
+				if e.singletons[singletonOpenOrders] != ownedRoute {
 					return
 				}
 				delete(e.singletons, singletonOpenOrders)
 				if scope == OpenOrdersScopeAuto {
-					_ = e.send(codec.CancelOpenOrders{})
+					sub.closeWithErr(e.cancelSubscription(OpOpenOrders, codec.CancelOpenOrders{}))
+					return
 				}
 				sub.closeWithErr(nil)
 			})
@@ -131,7 +133,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			sub.expectSnapshot()
 		}
 
-		e.singletons[singletonOpenOrders] = &route{
+		ownedRoute = &route{
 			opKind:       OpOpenOrders,
 			subscription: true,
 			resume:       cfg.resume,
@@ -155,6 +157,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
+		e.singletons[singletonOpenOrders] = ownedRoute
 
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
@@ -166,11 +169,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -284,11 +283,7 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -375,35 +370,8 @@ type bracketOrderResult struct {
 	err     error
 }
 
-// awaitPlacementResponse makes transport-queue admission the ownership
-// boundary. Once the actor has admitted a place frame, its buffered result
-// wins caller cancellation and engine shutdown races so the caller always
-// receives the handle that owns the order. Before admission, callers receive
-// only the setup or send error.
-func awaitPlacementResponse[T any](ctx context.Context, e *engine, resp <-chan T) (T, error) {
-	ctxDone := ctx.Done()
-	for {
-		select {
-		case out := <-resp:
-			return out, nil
-		case <-ctxDone:
-			// Cancellation stops being a return path until the actor establishes
-			// which side of the admission boundary the request reached.
-			ctxDone = nil
-		case <-e.done:
-			select {
-			case out := <-resp:
-				return out, nil
-			default:
-				var zero T
-				return zero, e.closedOperationError()
-			}
-		}
-	}
-}
-
 func awaitPlaceOrderResponse(ctx context.Context, e *engine, resp <-chan placeOrderResult) (*OrderHandle, error) {
-	out, err := awaitPlacementResponse(ctx, e, resp)
+	out, err := awaitAdmittedResponse(ctx, e, resp)
 	if err != nil {
 		return nil, err
 	}
@@ -414,7 +382,7 @@ func awaitPlaceOrderResponse(ctx context.Context, e *engine, resp <-chan placeOr
 }
 
 func awaitBracketOrderResponse(ctx context.Context, e *engine, resp <-chan bracketOrderResult) (BracketOrder, error) {
-	out, err := awaitPlacementResponse(ctx, e, resp)
+	out, err := awaitAdmittedResponse(ctx, e, resp)
 	if err != nil {
 		return BracketOrder{}, err
 	}

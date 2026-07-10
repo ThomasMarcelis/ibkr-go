@@ -78,6 +78,27 @@ type OrderRecoveryError struct {
 	CancelErr    error
 }
 
+// SubscriptionCancelError reports that a subscription cancellation could not
+// enter the active transport queue. The remote subscription may still be live
+// on the current connection; recycle the client connection before creating a
+// replacement subscription.
+type SubscriptionCancelError struct {
+	OpKind OpKind
+	Err    error
+}
+
+func (e *SubscriptionCancelError) Error() string {
+	return fmt.Sprintf(
+		"ibkr: cancel %s subscription: %v; remote state is uncertain, recycle the client connection before subscribing again",
+		e.OpKind,
+		e.Err,
+	)
+}
+
+func (e *SubscriptionCancelError) Unwrap() error {
+	return e.Err
+}
+
 func newOrderRecoveryError(orderIDs []int64, placementErr, cancelErr error) *OrderRecoveryError {
 	return &OrderRecoveryError{
 		OrderIDs:     append([]int64(nil), orderIDs...),
@@ -142,6 +163,12 @@ func isRetryableError(err error) bool {
 	// Retrying an uncertain bracket can duplicate orders that are still live
 	// at the Gateway, even when the underlying transport error is retryable.
 	if _, ok := errors.AsType[*OrderRecoveryError](err); ok {
+		return false
+	}
+	// A failed cancellation can leave the old remote stream live. Retrying by
+	// subscribing again could duplicate it or consume another subscription
+	// slot; callers must recycle the connection first.
+	if _, ok := errors.AsType[*SubscriptionCancelError](err); ok {
 		return false
 	}
 	if _, ok := errors.AsType[*APIError](err); ok {

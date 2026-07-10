@@ -265,8 +265,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelScannerSubscription{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpScannerSubscription, codec.CancelScannerSubscription{ReqID: reqID}))
 			})
 		})
 
@@ -319,11 +318,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -664,8 +659,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpDisplayGroupEvents, codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID}))
 			})
 		})
 
@@ -700,11 +694,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -724,9 +714,26 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 }
 
 func (e *engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo string) error {
+	lookup := make(chan *route, 1)
+	enqueueContextSetup(ctx, e, nil, func() {
+		route, ok := e.keyed[reqID]
+		if !ok || route.opKind != OpDisplayGroupEvents {
+			lookup <- nil
+			return
+		}
+		lookup <- route
+	})
+	ownedRoute, err := awaitOneShotResponse(ctx, e, lookup, nil)
+	if err != nil {
+		return err
+	}
+	if ownedRoute == nil {
+		return ErrClosed
+	}
+
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
+		if e.keyed[reqID] != ownedRoute {
+			return ErrClosed
 		}
 		return e.sendContext(ctx, codec.UpdateDisplayGroupRequest{ReqID: reqID, ContractInfo: contractInfo})
 	})

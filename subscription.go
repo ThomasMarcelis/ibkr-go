@@ -157,7 +157,8 @@ func (s *Subscription[T]) Err() error {
 // Close initiates cancellation of the server-side subscription. It is
 // idempotent and safe to call concurrently. Events and lifecycle channels
 // close asynchronously; use [Subscription.Done] or [Subscription.Wait] to
-// observe completion.
+// observe completion. If cancellation cannot enter the active transport queue,
+// Wait returns a non-retryable [*SubscriptionCancelError].
 func (s *Subscription[T]) Close() error {
 	s.cancelOnce.Do(func() {
 		if s.cancelFn != nil {

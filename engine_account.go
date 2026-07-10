@@ -13,8 +13,7 @@ func (e *engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update AccountSummaryUpdate) (AccountValue, bool) { return update.Value, true })
+	return collectSnapshotAndClose(ctx, sub, func(update AccountSummaryUpdate) (AccountValue, bool) { return update.Value, true })
 }
 
 func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountSummaryUpdate], error) {
@@ -54,8 +53,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelAccountSummary{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID}))
 			})
 		})
 		sub.expectSnapshot()
@@ -109,11 +107,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -128,8 +122,7 @@ func (e *engine) PositionsSnapshot(ctx context.Context) ([]Position, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update PositionUpdate) (Position, bool) { return update.Position, true })
+	return collectSnapshotAndClose(ctx, sub, func(update PositionUpdate) (Position, bool) { return update.Position, true })
 }
 
 func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[PositionUpdate], error) {
@@ -158,20 +151,20 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			resp <- result{err: err}
 			return
 		}
+		var ownedRoute *route
 		var sub *Subscription[PositionUpdate]
 		sub = newSubscription[PositionUpdate](cfg, func() {
 			e.enqueue(func() {
-				if _, ok := e.singletons[singletonPositions]; !ok {
+				if e.singletons[singletonPositions] != ownedRoute {
 					return
 				}
 				delete(e.singletons, singletonPositions)
-				_ = e.send(codec.CancelPositions{})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpPositions, codec.CancelPositions{}))
 			})
 		})
 		sub.expectSnapshot()
 
-		e.singletons[singletonPositions] = &route{
+		ownedRoute = &route{
 			opKind:       OpPositions,
 			subscription: true,
 			resume:       cfg.resume,
@@ -199,6 +192,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 				sub.closeWithErr(err)
 			},
 		}
+		e.singletons[singletonPositions] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, codec.PositionsRequest{}); err != nil {
 			delete(e.singletons, singletonPositions)
@@ -209,11 +203,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -283,8 +273,7 @@ func (e *engine) AccountUpdatesSnapshot(ctx context.Context, account string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(u AccountUpdate) (AccountUpdate, bool) { return u, true })
+	return collectSnapshotAndClose(ctx, sub, func(u AccountUpdate) (AccountUpdate, bool) { return u, true })
 }
 
 // SubscribeAccountUpdates is a singleton subscription for account value/portfolio updates.
@@ -314,20 +303,20 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			resp <- result{err: err}
 			return
 		}
+		var ownedRoute *route
 		var sub *Subscription[AccountUpdate]
 		sub = newSubscription[AccountUpdate](cfg, func() {
 			e.enqueue(func() {
-				if _, ok := e.singletons[singletonAccountUpdates]; !ok {
+				if e.singletons[singletonAccountUpdates] != ownedRoute {
 					return
 				}
 				delete(e.singletons, singletonAccountUpdates)
-				_ = e.send(codec.AccountUpdatesRequest{Subscribe: false, Account: account})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpAccountUpdates, codec.AccountUpdatesRequest{Subscribe: false, Account: account}))
 			})
 		})
 		sub.expectSnapshot()
 
-		e.singletons[singletonAccountUpdates] = &route{
+		ownedRoute = &route{
 			opKind:       OpAccountUpdates,
 			subscription: true,
 			resume:       cfg.resume,
@@ -406,6 +395,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
+		e.singletons[singletonAccountUpdates] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, codec.AccountUpdatesRequest{Subscribe: true, Account: account}); err != nil {
 			delete(e.singletons, singletonAccountUpdates)
@@ -416,11 +406,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -436,8 +422,7 @@ func (e *engine) AccountUpdatesMultiSnapshot(ctx context.Context, req AccountUpd
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(u AccountUpdateMultiValue) (AccountUpdateMultiValue, bool) { return u, true })
+	return collectSnapshotAndClose(ctx, sub, func(u AccountUpdateMultiValue) (AccountUpdateMultiValue, bool) { return u, true })
 }
 
 func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUpdatesMultiRequest, opts ...SubscriptionOption) (*Subscription[AccountUpdateMultiValue], error) {
@@ -470,8 +455,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelAccountUpdatesMulti{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpAccountUpdatesMulti, codec.CancelAccountUpdatesMulti{ReqID: reqID}))
 			})
 		})
 		sub.expectSnapshot()
@@ -513,11 +497,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -533,8 +513,7 @@ func (e *engine) PositionsMultiSnapshot(ctx context.Context, req PositionsMultiR
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(u PositionMulti) (PositionMulti, bool) { return u, true })
+	return collectSnapshotAndClose(ctx, sub, func(u PositionMulti) (PositionMulti, bool) { return u, true })
 }
 
 func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMultiRequest, opts ...SubscriptionOption) (*Subscription[PositionMulti], error) {
@@ -567,8 +546,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelPositionsMulti{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpPositionsMulti, codec.CancelPositionsMulti{ReqID: reqID}))
 			})
 		})
 		sub.expectSnapshot()
@@ -629,11 +607,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -673,8 +647,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelPnL{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpPnL, codec.CancelPnL{ReqID: reqID}))
 			})
 		})
 
@@ -727,11 +700,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -771,8 +740,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelPnLSingle{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID}))
 			})
 		})
 
@@ -837,11 +805,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}

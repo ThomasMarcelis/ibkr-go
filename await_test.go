@@ -92,61 +92,56 @@ func TestAwaitOneShotResponseCancelsImmediately(t *testing.T) {
 	})
 }
 
-func TestAwaitSubscriptionResponseRollsBackLateResult(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
+func TestAwaitSubscriptionResponseAdmissionWinsCallerBoundaries(t *testing.T) {
+	t.Run("caller cancellation waits for admission result", func(t *testing.T) {
+		synctest.Test(t, func(t *testing.T) {
+			resp := make(chan int, 1)
+			result := make(chan struct {
+				value int
+				err   error
+			}, 1)
+			go func() {
+				value, err := awaitSubscriptionResponse(canceledContext(), placementWaitEngine(false), resp, func(v int) bool { return v != 0 })
+				result <- struct {
+					value int
+					err   error
+				}{value: value, err: err}
+			}()
 
-		e := &engine{done: make(chan struct{})}
-		resp := make(chan int, 1)
-		rolledBack := make(chan int, 1)
-
-		_, err := awaitSubscriptionResponse(ctx, e, resp, func(v int) {
-			rolledBack <- v
-		})
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("awaitSubscriptionResponse() error = %v, want context.Canceled", err)
-		}
-
-		resp <- 42
-
-		synctest.Wait()
-		select {
-		case got := <-rolledBack:
-			if got != 42 {
-				t.Fatalf("rollback value = %d, want 42", got)
+			synctest.Wait()
+			select {
+			case out := <-result:
+				t.Fatalf("awaitSubscriptionResponse() returned before admission result: %+v", out)
+			default:
 			}
-		default:
-			t.Fatal("rollback did not run for late subscription result")
+
+			resp <- 42
+			synctest.Wait()
+			out := <-result
+			if out.err != nil || out.value != 42 {
+				t.Fatalf("awaitSubscriptionResponse() = (%d, %v), want (42, nil)", out.value, out.err)
+			}
+		})
+	})
+
+	t.Run("engine shutdown preserves buffered actor result", func(t *testing.T) {
+		resp := make(chan int, 1)
+		resp <- 42
+		got, err := awaitSubscriptionResponse(context.Background(), placementWaitEngine(true), resp, func(v int) bool { return v != 0 })
+		if err != nil || got != 42 {
+			t.Fatalf("awaitSubscriptionResponse() = (%d, %v), want (42, nil)", got, err)
 		}
 	})
-}
 
-func TestAwaitSubscriptionResponseReturnsContextErrorWhenAlreadyCanceled(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
-		cancel()
-
-		e := &engine{done: make(chan struct{})}
+	t.Run("pre-admission cancellation returns context error", func(t *testing.T) {
 		resp := make(chan int, 1)
-		resp <- 42
-		rolledBack := make(chan int, 1)
-
-		_, err := awaitSubscriptionResponse(ctx, e, resp, func(v int) {
-			rolledBack <- v
-		})
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("awaitSubscriptionResponse() error = %v, want context.Canceled", err)
+		resp <- 0 // enqueueSubscriptionSetup's pre-admission cancellation result.
+		got, err := awaitSubscriptionResponse(canceledContext(), placementWaitEngine(false), resp, func(v int) bool { return v != 0 })
+		if got != 0 {
+			t.Fatalf("pre-admission result = %d, want zero", got)
 		}
-
-		synctest.Wait()
-		select {
-		case got := <-rolledBack:
-			if got != 42 {
-				t.Fatalf("rollback value = %d, want 42", got)
-			}
-		default:
-			t.Fatal("rollback did not run for already-canceled response")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("pre-admission error = %v, want context.Canceled", err)
 		}
 	})
 }

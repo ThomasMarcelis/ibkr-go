@@ -88,6 +88,23 @@ completion coordination and must not replace event draining.
 dropped from the bounded channel. It returns `ErrNoSnapshot` for streams with no
 snapshot boundary.
 
+Transport-queue admission is the ownership boundary for subscription setup.
+Once the subscribe frame is admitted, its handle result wins caller-context and
+client-shutdown races; before admission, setup returns an error and no handle.
+The establishment context remains bound to the returned handle, so a context
+that raced admission initiates cancellation immediately without hiding the
+handle or its terminal result.
+
+`Close` initiates cancellation asynchronously and remains idempotent. `Wait`,
+`Err`, and the `Closed` lifecycle event report `*SubscriptionCancelError` when
+the cancel frame cannot enter the active transport queue. That error is
+non-retryable because the old remote stream may still be live; recycle the
+client connection before creating a replacement subscription. A nil close
+result means the cancel frame entered the queue, not that IBKR acknowledged it.
+Closing a route retained after transport loss, or before it was resumed on a
+replacement connection, is a clean local detach because no current connection
+hosts that remote stream.
+
 Lifecycle event kinds:
 
 - `Started`
@@ -101,6 +118,8 @@ Retryability:
 - transport/session gaps are retryable
 - `ErrInterrupted` and `ErrResumeRequired` closes are retryable
 - `*APIError` closes are terminal request rejections and are not retryable
+- `*SubscriptionCancelError` is not retryable even when it wraps
+  `ErrInterrupted`
 
 Default subscription behavior:
 
@@ -233,6 +252,8 @@ Public error taxonomy:
 - `*ConnectError`
 - `*ProtocolError`
 - `*APIError`
+- `*SubscriptionCancelError`
+- `*OrderRecoveryError`
 - `IsRetryable(err)`
 - `ErrNotReady`
 - `ErrInterrupted`

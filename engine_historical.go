@@ -289,8 +289,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelHistoricalData{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpHistoricalBarsStream, codec.CancelHistoricalData{ReqID: reqID}))
 			})
 		})
 		sub.expectSnapshot()
@@ -351,11 +350,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}

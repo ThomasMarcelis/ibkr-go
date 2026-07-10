@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -109,8 +110,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelQuote{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID}))
 			})
 		})
 		if snapshot {
@@ -138,9 +138,12 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				switch m := msg.(type) {
 				case codec.MarketDataReroute:
 					if rerouted {
-						_ = e.send(codec.CancelQuote{ReqID: reqID})
+						cancelErr := e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID})
 						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID))
+						sub.closeWithErr(errors.Join(
+							fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID),
+							cancelErr,
+						))
 						return
 					}
 					request := quoteRoute.request.(codec.QuoteRequest)
@@ -353,11 +356,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -406,8 +405,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelRealTimeBars{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpRealTimeBars, codec.CancelRealTimeBars{ReqID: reqID}))
 			})
 		})
 
@@ -482,11 +480,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -545,8 +539,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 				}
 				request := depthRoute.request.(codec.MarketDepthRequest)
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth}))
 			})
 		})
 
@@ -565,9 +558,12 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 				case codec.MarketDepthReroute:
 					if rerouted {
 						request := depthRoute.request.(codec.MarketDepthRequest)
-						_ = e.send(codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
+						cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
 						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(fmt.Errorf("ibkr: market depth request %d was rerouted more than once", reqID))
+						sub.closeWithErr(errors.Join(
+							fmt.Errorf("ibkr: market depth request %d was rerouted more than once", reqID),
+							cancelErr,
+						))
 						return
 					}
 					request := depthRoute.request.(codec.MarketDepthRequest)
@@ -638,11 +634,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
@@ -748,8 +740,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 					return
 				}
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelTickByTick{ReqID: reqID})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpTickByTick, codec.CancelTickByTick{ReqID: reqID}))
 			})
 		})
 
@@ -847,11 +838,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}

@@ -80,6 +80,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Subscription admission now transfers ownership deterministically.** Once a
+  subscribe frame enters the transport queue, the returned handle wins races
+  with caller cancellation and client shutdown; before admission, callers
+  receive no handle. Every wire-backed stream now reports cancellation
+  admission failure through `Wait`, `Err`, and the closed lifecycle event as a
+  non-retryable `*SubscriptionCancelError`, preventing an uncertain live stream
+  from being duplicated by a blind retry. Closing a route that has not resumed
+  on a replacement connection remains clean. Account snapshot methods wait for
+  their cancellation cleanup without discarding rows, and a closed display
+  group rejects `Update` with `ErrClosed` without writing a frame.
+
 - **`Options().Exercise` now rejects unsafe requests before transport
   admission.** `ExerciseAction` must be exactly `Exercise` or `Lapse`, and
   `ExerciseQuantity` must be positive. Invalid values return a structured

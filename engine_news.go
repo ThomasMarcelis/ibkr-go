@@ -89,19 +89,19 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			resp <- result{err: err}
 			return
 		}
+		var ownedRoute *route
 		var sub *Subscription[NewsBulletin]
 		sub = newSubscription[NewsBulletin](cfg, func() {
 			e.enqueue(func() {
-				if _, ok := e.singletons[singletonNewsBulletins]; !ok {
+				if e.singletons[singletonNewsBulletins] != ownedRoute {
 					return
 				}
 				delete(e.singletons, singletonNewsBulletins)
-				_ = e.send(codec.CancelNewsBulletins{})
-				sub.closeWithErr(nil)
+				sub.closeWithErr(e.cancelSubscription(OpNewsBulletins, codec.CancelNewsBulletins{}))
 			})
 		})
 
-		e.singletons[singletonNewsBulletins] = &route{
+		ownedRoute = &route{
 			opKind:       OpNewsBulletins,
 			subscription: true,
 			resume:       cfg.resume,
@@ -118,6 +118,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
+		e.singletons[singletonNewsBulletins] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, codec.NewsBulletinsRequest{AllMessages: allMessages}); err != nil {
 			delete(e.singletons, singletonNewsBulletins)
@@ -128,11 +129,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 		resp <- result{sub: sub}
 	})
 
-	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) {
-		if out.sub != nil {
-			_ = out.sub.Close()
-		}
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
