@@ -112,30 +112,6 @@ func TestDecodeLiveSymbolSamplesFrameShape(t *testing.T) {
 	}
 }
 
-func TestDecodeLiveHistoricalNewsFrameIDs(t *testing.T) {
-	t.Parallel()
-
-	itemPayload := wire.EncodeFields([]string{
-		"86", "1001", "2026-03-23 13:25:15.0", "BRFUPDN", "BRFUPDN$1deaeefd", "headline",
-	})
-	msgs, err := DecodeBatch(200, itemPayload)
-	if err != nil {
-		t.Fatalf("DecodeBatch(200, item) error = %v", err)
-	}
-	if item, ok := msgs[0].(HistoricalNewsItem); !ok || item.ReqID != 1001 || item.ArticleID != "BRFUPDN$1deaeefd" {
-		t.Fatalf("historical news item decode = %#v", msgs[0])
-	}
-
-	endPayload := wire.EncodeFields([]string{"87", "1001", "1"})
-	msgs, err = DecodeBatch(200, endPayload)
-	if err != nil {
-		t.Fatalf("DecodeBatch(200, end) error = %v", err)
-	}
-	if end, ok := msgs[0].(HistoricalNewsEnd); !ok || end.ReqID != 1001 || !end.HasMore {
-		t.Fatalf("historical news end decode = %#v", msgs[0])
-	}
-}
-
 func TestDecodeByMsgID(t *testing.T) {
 	t.Parallel()
 

@@ -84,13 +84,28 @@ func TestCaptureDecode_BondContractDetails(t *testing.T) {
 	}
 }
 
-// Capture-grounded decode tests. Each payload is extracted from a real IB Gateway
-// session (server_version 200, captures/20260405T*) after stripping the 4-byte
-// length prefix. The tests prove the codec decodes live wire bytes correctly.
+// Capture-grounded decode tests. Each payload comes from a real IB Gateway
+// session. Tests that sanitize captured identifiers or values say so locally;
+// payloads described as exact differ only by removal of the frame-length prefix.
+
+func decodeCapturedFrame(t *testing.T, payload string) Message {
+	t.Helper()
+
+	messages, err := DecodeBatch(200, []byte(payload))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("messages = %d, want 1", len(messages))
+	}
+	return messages[0]
+}
 
 func TestCaptureDecode_ManagedAccounts(t *testing.T) {
 	t.Parallel()
-	// captures/20260405T214926Z-bootstrap, frame at line 6
+	// captures/20260405T214926Z-bootstrap, frame at line 6. Source frame
+	// SHA-256 65ef1538878849262af07c2236117ab81b3ea0a9d81ea1a867b1a8cf4e83aedf.
+	// The account token is replaced with DU9000001; no other field changes.
 	payload := []byte("15\x001\x00DU9000001\x00")
 	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
@@ -252,6 +267,199 @@ func TestCaptureDecode_PnLLive(t *testing.T) {
 	if m.ReqID != 4 || m.DailyPnL != "11340.427636781911" ||
 		m.UnrealizedPnL != "54385.58271885987" || m.RealizedPnL != "-103.92738339177643" {
 		t.Errorf("PnLValue = %+v, want exact captured update", m)
+	}
+}
+
+func TestCaptureDecode_OrderStatusLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 3 payload from captures/20260405T215248Z-open_orders_all,
+	// events.jsonl line 10 frame 2. Frame SHA-256:
+	// 16859f1335e8091096cc7bf459e217281090f4f4276c0883af4d93a055eb608d.
+	// The perm ID is replaced with the repository's 9000 convention; no other
+	// field changes.
+	message := decodeCapturedFrame(t, "3\x000\x00PreSubmitted\x000\x001\x000\x009000\x000\x000\x000\x00\x000\x00")
+	status, ok := message.(OrderStatus)
+	if !ok {
+		t.Fatalf("type = %T, want OrderStatus", message)
+	}
+	if status.OrderID != 0 || status.Status != "PreSubmitted" || status.Filled != "0" ||
+		status.Remaining != "1" || status.PermID != "9000" || status.ClientID != "0" {
+		t.Fatalf("OrderStatus = %+v, want captured pre-submitted state", status)
+	}
+}
+
+func TestCaptureDecode_AccountUpdatesLive(t *testing.T) {
+	t.Parallel()
+
+	// IN 6, 8, and 54 are exact field sequences from captures/v1/account_updates.log
+	// (SHA-256 a211d7abf123f4812e6b76fe359b82d560f9130a6e96c914bbf1578a79adbd8e,
+	// lines 7, 128, and 129). IN 7 is the exact frame from
+	// captures/20260611T134246Z-api_algorithmic_campaign_aapl/events.jsonl line 30,
+	// frame SHA-256 8cf56859c14d031629e38e972b807bcebf11735a54862a3a7f61b6f4354aff4d.
+	// Account tokens are replaced with DU9000001; no other field changes.
+	valueMessage := decodeCapturedFrame(t, "6\x002\x00AccountCode\x00DU9000001\x00\x00DU9000001\x00")
+	value, ok := valueMessage.(UpdateAccountValue)
+	if !ok {
+		t.Fatalf("account value type = %T, want UpdateAccountValue", valueMessage)
+	}
+	if value != (UpdateAccountValue{Key: "AccountCode", Value: "DU9000001", Account: "DU9000001"}) {
+		t.Fatalf("UpdateAccountValue = %+v", value)
+	}
+
+	portfolioMessage := decodeCapturedFrame(t, "7\x008\x00265598\x00AAPL\x00STK\x00\x000\x000\x00\x00NASDAQ\x00USD\x00AAPL\x00NMS\x00-100\x00291.6234436\x00-29162.34\x00291.2660812\x00-35.74\x00-71.44\x00DU9000001\x00")
+	portfolio, ok := portfolioMessage.(UpdatePortfolio)
+	if !ok {
+		t.Fatalf("portfolio type = %T, want UpdatePortfolio", portfolioMessage)
+	}
+	if portfolio.Contract.ConID != 265598 || portfolio.Contract.Symbol != "AAPL" ||
+		portfolio.Contract.PrimaryExchange != "NASDAQ" || portfolio.Position != "-100" ||
+		portfolio.MarketValue != "-29162.34" || portfolio.RealizedPNL != "-71.44" ||
+		portfolio.Account != "DU9000001" {
+		t.Fatalf("UpdatePortfolio = %+v", portfolio)
+	}
+
+	timeMessage := decodeCapturedFrame(t, "8\x001\x0014:34\x00")
+	if update, ok := timeMessage.(UpdateAccountTime); !ok || update.Timestamp != "14:34" {
+		t.Fatalf("UpdateAccountTime = %#v", timeMessage)
+	}
+
+	endMessage := decodeCapturedFrame(t, "54\x001\x00DU9000001\x00")
+	if end, ok := endMessage.(AccountDownloadEnd); !ok || end.Account != "DU9000001" {
+		t.Fatalf("AccountDownloadEnd = %#v", endMessage)
+	}
+}
+
+func TestCaptureDecode_DisplayGroupsLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact payloads from captures/20260407T183142Z-display_groups/events.jsonl
+	// line 9 and 20260407T183153Z-display_group_subscribe/events.jsonl line 13.
+	// Frame SHA-256 values: caa4fc39b0281deccb78ae826e46bab8c461090477583970e74fd816792d0428
+	// and 907f762a60a8869065a58bfe8ee0c0dd8165f69a99b2f5d5291e3373a6fd135b.
+	listMessage := decodeCapturedFrame(t, "67\x001\x001001\x001|2|3|4|5|6|7\x00")
+	if list, ok := listMessage.(DisplayGroupList); !ok || list.ReqID != 1001 || list.Groups != "1|2|3|4|5|6|7" {
+		t.Fatalf("DisplayGroupList = %#v", listMessage)
+	}
+
+	updateMessage := decodeCapturedFrame(t, "68\x001\x001002\x00none\x00")
+	if update, ok := updateMessage.(DisplayGroupUpdated); !ok || update.ReqID != 1002 || update.ContractInfo != "none" {
+		t.Fatalf("DisplayGroupUpdated = %#v", updateMessage)
+	}
+}
+
+func TestCaptureDecode_AccountUpdatesMultiLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 73 and IN 74 field sequences from
+	// captures/v1/account_updates_multi.log (SHA-256
+	// dad696b11bbc111469a20474a0f6b3beec033390320cfe89b4519c344c843547),
+	// lines 7 and 57. The account token is replaced with DU9000001; no other
+	// field changes.
+	valueMessage := decodeCapturedFrame(t, "73\x001\x001001\x00DU9000001\x00\x00Currency\x00EUR\x00EUR\x00")
+	value, ok := valueMessage.(AccountUpdateMultiValue)
+	if !ok {
+		t.Fatalf("value type = %T, want AccountUpdateMultiValue", valueMessage)
+	}
+	if value != (AccountUpdateMultiValue{ReqID: 1001, Account: "DU9000001", Key: "Currency", Value: "EUR", Currency: "EUR"}) {
+		t.Fatalf("AccountUpdateMultiValue = %+v", value)
+	}
+
+	endMessage := decodeCapturedFrame(t, "74\x001\x001001\x00")
+	if end, ok := endMessage.(AccountUpdateMultiEnd); !ok || end.ReqID != 1001 {
+		t.Fatalf("AccountUpdateMultiEnd = %#v", endMessage)
+	}
+}
+
+func TestCaptureDecode_SecDefOptParamsEndLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 76 payload from captures/20260611T074859Z-api_option_campaign_aapl,
+	// events.jsonl line 30 frame 4. Frame SHA-256:
+	// f926ce02dcb8febcf1b02d69ac9310779782836c6c0307aec8079293d9cf48da.
+	message := decodeCapturedFrame(t, "76\x003\x00")
+	if end, ok := message.(SecDefOptParamsEnd); !ok || end.ReqID != 3 {
+		t.Fatalf("SecDefOptParamsEnd = %#v", message)
+	}
+}
+
+func TestCaptureDecode_SoftDollarTiersLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact zero-tier IN 77 payload from
+	// captures/20260407T180546Z-soft_dollar_tiers/events.jsonl line 8.
+	// Frame SHA-256: 8deacd34fd4d533ac8bc17b83a3928af5b31f06ca4b24a0fae2de4bfb2b2ebe0.
+	message := decodeCapturedFrame(t, "77\x001001\x000\x00")
+	tiers, ok := message.(SoftDollarTiersResponse)
+	if !ok {
+		t.Fatalf("type = %T, want SoftDollarTiersResponse", message)
+	}
+	if tiers.ReqID != 1001 || len(tiers.Tiers) != 0 {
+		t.Fatalf("SoftDollarTiersResponse = %+v", tiers)
+	}
+}
+
+func TestCaptureDecode_HistoricalNewsFlowLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact compact IN 83, 86, and 87 payloads from
+	// captures/20260415T162244Z-api_news_article_aapl/events.jsonl (SHA-256
+	// 3c6ef62da8d60e95ed8f05418ca218268d652fb6fc99bf1e6e90d7dcad20c8e3),
+	// lines 13, 10, and 11. Frame SHA-256 values are, respectively,
+	// cb8c015f1486ef5916bc66c9bfe0f56b8d5e2e54ca900d814ba9179abeac3a34,
+	// a2028f2723d90537cf17d22bba39fc92615fd6b4e42c61938b2270b95b903c86,
+	// and 22d4e8d3e04557b7288bfdfdf7bee0239f8e2e33ce530111deb190edbc00aa92.
+	articleMessage := decodeCapturedFrame(t, "83\x002\x000\x00BofA Securities reiterated Apple (AAPL) coverage with Buy rating and price target $325&#10;Previous price target: $320&#10;Issuance Date: 2026-04-14&#10;&#10;Copyright 2026 Briefing.com, Inc.\x00")
+	article, ok := articleMessage.(NewsArticleResponse)
+	if !ok {
+		t.Fatalf("article type = %T, want NewsArticleResponse", articleMessage)
+	}
+	if article.ReqID != 2 || article.ArticleType != 0 ||
+		!strings.Contains(article.ArticleText, "price target $325") ||
+		!strings.Contains(article.ArticleText, "Copyright 2026 Briefing.com") {
+		t.Fatalf("NewsArticleResponse = %+v", article)
+	}
+
+	itemMessage := decodeCapturedFrame(t, "86\x001\x002026-04-14 14:58:42.0\x00BRFUPDN\x00BRFUPDN$1e1f54ec\x00{A:800015:L:en}!BofA Securities reiterated Apple (AAPL) coverage with Buy and target $325\x00")
+	item, ok := itemMessage.(HistoricalNewsItem)
+	if !ok {
+		t.Fatalf("item type = %T, want HistoricalNewsItem", itemMessage)
+	}
+	if item.ReqID != 1 || item.Time != "2026-04-14 14:58:42.0" ||
+		item.ProviderCode != "BRFUPDN" || item.ArticleID != "BRFUPDN$1e1f54ec" ||
+		item.Headline != "{A:800015:L:en}!BofA Securities reiterated Apple (AAPL) coverage with Buy and target $325" {
+		t.Fatalf("HistoricalNewsItem = %+v", item)
+	}
+
+	endMessage := decodeCapturedFrame(t, "87\x001\x001\x00")
+	if end, ok := endMessage.(HistoricalNewsEnd); !ok || end.ReqID != 1 || !end.HasMore {
+		t.Fatalf("HistoricalNewsEnd = %#v", endMessage)
+	}
+}
+
+func TestCaptureDecode_HeadTimestampLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 88 field sequence from captures/v1/head_timestamp_aapl.log
+	// (SHA-256 f6a1a3fb3092f0cc7b96fab359b6dc01eefe12270e2fcc9d5d60a24bc0c253b6),
+	// line 7. Reconstructed frame SHA-256:
+	// 9a25cedcc074916607c1ad583de9a1a6a9f46522d89433a95804691f2b6c9ec0.
+	message := decodeCapturedFrame(t, "88\x001001\x0019801212-14:30:00\x00")
+	if head, ok := message.(HeadTimestamp); !ok || head.ReqID != 1001 || head.Timestamp != "19801212-14:30:00" {
+		t.Fatalf("HeadTimestamp = %#v", message)
+	}
+}
+
+func TestCaptureDecode_CompletedOrderEndLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact bare IN 102 payload from
+	// captures/20260415T162637Z-api_completed_orders_variants_aapl/events.jsonl
+	// line 27 frame 11. Frame SHA-256:
+	// 2ccb531bffd651a1e09825677ff8850d6b1e2377ee7952ead4ff0f44436e4b46.
+	message := decodeCapturedFrame(t, "102\x00")
+	if _, ok := message.(CompletedOrderEnd); !ok {
+		t.Fatalf("type = %T, want CompletedOrderEnd", message)
 	}
 }
 
@@ -539,7 +747,10 @@ func TestCaptureDecode_CompletedOrderTrailLimitLive(t *testing.T) {
 	t.Parallel()
 
 	// captures/20260415T162637Z-api_completed_orders_variants_aapl,
-	// server_version=200, events.jsonl sha256 prefix 6415ad97b4c9f33e.
+	// server_version=200. Source frame SHA-256
+	// 2c0843f3b7863f358ef397707d2f89a9d401d9c40b767a66d1fbd69a8d2d848f.
+	// The account is replaced with DU9000001 and the submitter with paper-user;
+	// no other field changes.
 	// This live TRAIL LIMIT completed-order shape includes a decimal field
 	// before the completed-order tail; treating every advanced section as a
 	// count field interrupts the completed-orders request.
@@ -714,7 +925,12 @@ func TestCaptureDecode_ContractDetailsEnd(t *testing.T) {
 
 func TestCaptureDecode_AccountSummaryValue(t *testing.T) {
 	t.Parallel()
-	// captures/20260405T215025Z-account_summary_snapshot, line 10 (first frame)
+	// captures/20260405T215025Z-account_summary_snapshot, line 10 (first frame).
+	// Source frame SHA-256
+	// 1a1fb0cc2a4c8d8d74641ae11391013bebfe47ed3859d7e2abf5aa933681307b.
+	// The account is replaced with DU9000001 and the sensitive account value
+	// with 300000.00; the message ID, version, request ID, tag, and currency
+	// retain the live field sequence.
 	payload := []byte("63\x001\x001001\x00DU9000001\x00BuyingPower\x00300000.00\x00EUR\x00")
 	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
@@ -766,7 +982,11 @@ func TestCaptureDecode_AccountSummaryEnd(t *testing.T) {
 
 func TestCaptureDecode_Position(t *testing.T) {
 	t.Parallel()
-	// captures/20260405T215052Z-positions_snapshot, first position frame (AMZN) at line 10
+	// captures/20260405T215052Z-positions_snapshot, first AMZN position frame
+	// at line 10. Source frame SHA-256
+	// 2a8c9491176a1d1293a0be0e71e77feda2c8192b1ad844cda94883cf37b3c058.
+	// The account is replaced with DU9000001 and the sensitive average cost
+	// with 200.25; no structural field changes are made.
 	payload := []byte("61\x003\x00DU9000001\x003691937\x00AMZN\x00STK\x00\x000.0\x00\x00\x00NASDAQ\x00USD\x00AMZN\x00NMS\x0015\x00200.25\x00")
 	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
@@ -992,13 +1212,15 @@ func TestCaptureDecode_TickSnapshotEnd(t *testing.T) {
 func TestCaptureDecode_OpenOrder(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T215248Z-open_orders_all (live IB Gateway,
-	// server_version 200, events.jsonl sha256 prefix cb036e1839ecded6): the
-	// 940-byte OpenOrder frame from the line-10 server chunk, exactly as
-	// framed on the wire (the chunk's trailing 43 bytes are the separate
-	// order_status frame; an earlier revision of this test misparsed the
-	// whole 991-byte chunk as one frame and fossilized a fabricated layout).
-	// OBDC PUT option, PreSubmitted. Sanitized: account -> DU9000001 (also
-	// inside the sharesAllocation echo).
+	// server_version 200). Source frame SHA-256
+	// a036b17746c76d3a623a887e342652432dd81593fc2fbb2bea1671552727cc6a.
+	// The payload preserves the 940-byte frame's field sequence after replacing
+	// the account with DU9000001 and the perm ID with 9000, including both
+	// values inside the shares-allocation echo. The line-10 chunk's trailing
+	// 43 bytes are the separate order_status frame; an earlier revision of this
+	// test misparsed the whole 991-byte chunk as one frame and fossilized a
+	// fabricated layout.
+	// OBDC PUT option, PreSubmitted.
 	payload := []byte(
 		"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
 			"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
