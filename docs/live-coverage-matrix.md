@@ -79,7 +79,7 @@ handled through dimensions rather than duplicate rows:
 | MD1-001 | Market data type control | `MarketData().SetType`, official `reqMarketDataType`, `marketDataType` | `set_type_live`, `set_type_frozen`, `set_type_delayed`, `set_type_delayed_frozen`, `set_type_invalid`, `set_type_switch_while_streaming`, `api_market_data_completeness_aapl`, `api_market_data_type_cycle.txt`, `quote_delayed_data.txt`, `lifecycle_set_mdt_after_close.txt`, `set_type_switch_while_streaming.txt` | promoted | Bare SetType(1/2/3/4) accepted silently (2026-04-15 capture `f692fc168a53da9d`); the 2026-06-11 readonly-live captures confirm the four bare variants stay ack-less and add the stream-tied push: marketDataType(3) arrives before the first tick, mid-stream SetType(Live) is accepted with the stream staying delayed in the captured window, and 10167 surfaces as a session event (`e244cae7f5eb7d57`). Invalid type 99 never reaches the wire from the public API (client-side validation, frozen by unit test); the 2026-06-11 invalid capture is inconclusive on Gateway behavior and is not promoted. Real-time (type 1) success pushes still need a market-hours entitled stream. |
 | MD1-002 | Quote snapshots | `MarketData().Quote`, official `reqMktData`, `cancelMktData`, `tickSnapshotEnd` | `quote_snapshot_aapl`, `api_market_data_completeness_aapl`, `quote_snapshot.txt`, `quote_delayed_data.txt` | promoted | STK/OPT/FUT/CASH snapshots, entitlement error, no data, regulatory snapshot where applicable |
 | MD1-003 | Quote streams and generic ticks | `MarketData().SubscribeQuotes`, official tick callbacks | `quote_stream_aapl`, `quote_stream_genericticks`, `quote_with_generic_ticks`, `quote_stream_multi_asset`, `api_market_data_completeness_aapl`, `api_generic_tick_matrix_aapl`, `api_tick_news_aapl_probe`, `tick_news_aapl_sv201_live.txt`, `api_duplicate_quote_subscriptions_aapl`, `api_duplicate_quote_subscriptions_aapl.txt` | candidate | The public `QuoteUpdate` union preserves every classic price/size callback with its numeric tick type, price-attribute mask, and optional companion size, including ticks that have no normalized `Quote` field. Numeric generic, string, request-parameter, option-computation, and contract-specific news events remain distinct. Exact sv200 TickReqParams/TickGeneric/TickString and companion-size frames are frozen from `quote_stream_genericticks` (`9c4fec0cd44041cc` raw, `3a280d5f1d165d85` events). The promoted July 9 generic-tick matrix (`5c40260d783971d2` raw, `d04dd1439dfec841` events) additionally observed mark-price tick 37, shortable ticks 46/89, volume-rate tick 56, delayed-timestamp tick 88, and an omitted minimum tick; requested real-time volume, trade-count, and trade-rate values did not arrive in its 15-second window. Five exact sv201 BRFG TickNews frames are frozen from `api_tick_news_aapl_probe` (`a0784d2eddda7468` events, `e3e1901503f7d1dc` normalized frames). A live option quote computation is frozen from `api_option_campaign_aapl` (`9272d7fc1b381a0e` raw). The untraceable `quote_with_generic_ticks.txt` replay was removed. TickEFP, additional generic families, and entitled live-price streams remain gaps; duplicate same-contract subscriptions are replay-promoted from capture `84f1e78a18616e0f`. |
-| MD1-004 | Tick callback edge shapes | official `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickNews`, `tickReqParams` | `quote_stream_genericticks`, `api_generic_tick_matrix_aapl`, `api_tick_news_aapl_probe`, `tick_news_aapl_sv201_live.txt`, `api_option_campaign_aapl`, `calc_implied_volatility.txt`, `calc_option_price.txt` | candidate | TickPrice attributes and companion size, mapped and unmapped TickPrice/TickSize IDs, an omitted TickReqParams minimum tick, TickGeneric, TickString, TickNews, and option-computation success/sentinel shapes are live-attested and publicly delivered. TickEFP remains unimplemented and has no live capture. |
+| MD1-004 | Tick callback edge shapes | official `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickNews`, `tickReqParams` | `quote_stream_genericticks`, `api_generic_tick_matrix_aapl`, `api_tick_news_aapl_probe`, `tick_news_aapl_sv201_live.txt`, `api_option_campaign_aapl`, `api_option_calculations_aapl`, `option_calculations_aapl_live.txt` | candidate | TickPrice attributes and companion size, mapped and unmapped TickPrice/TickSize IDs, an omitted TickReqParams minimum tick, TickGeneric, TickString, TickNews, and option-computation success/sentinel shapes are live-attested and publicly delivered. The calculation replay freezes exact computed and unavailable field-presence semantics. TickEFP remains unimplemented and has no live capture. |
 | MD1-005 | Real-time bars | `MarketData().SubscribeRealTimeBars`, official `reqRealTimeBars`, `cancelRealTimeBars`, `realtimeBar` | `realtime_bars_aapl`, `api_market_data_completeness_aapl`, `api_realtime_bars_request_errors_aapl.txt`, `realtime_bars_reconnect.txt` | promoted | TRADES/MIDPOINT/BID_ASK, RTH true/false, cancel, reconnect. AAPL TRADES/BID_ASK/MIDPOINT request-scoped error variants are replay-promoted from 2026-04-15 capture `f692fc168a53da9d`; live success streams still need live-derived grounding. |
 
 ## Market Data L2 And Tick-By-Tick
@@ -133,7 +133,7 @@ handled through dimensions rather than duplicate rows:
 
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
-| OPT-001 | Option calculations | `Options().ImpliedVolatility`, `Options().Price`, official calculate/cancel calls | `calc_implied_volatility.txt`, `calc_option_price.txt`, live tests | promoted | valid qualified option, unavailable data, invalid option, cancel after first computation |
+| OPT-001 | Option calculations | `Options().ImpliedVolatility`, `Options().Price`, official calculate/cancel calls | `api_option_calculations_aapl`, `option_calculations_aapl_live.txt`, live tests | promoted | A live-qualified AAPL call freezes both successful calculations byte-for-byte, including distinct computed-field masks and unavailable sentinels. Invalid-contract/error and cancellation-before-first-computation variants remain open. |
 | OPT-002 | Option exercise/lapse | `Options().Exercise`, official `exerciseOptions` | `api_option_exercise_aapl`, `api_option_exercise_not_itm_aapl.txt`, `api_option_exercise_server_reject_aapl.txt` | promoted | Both live outcomes frozen 2026-06-11: a barely-ITM call drew 322 "not in-the-money", and a deep-ITM call was accepted with the 10349 TIF-preset session event before paper clearing returned 322 and 202. Exercise replies are surfaced as session events while an exercise req-id route is active, and terminal 322/202 notices retire that route. Lapse and override variants plus a true clearing settlement remain open. |
 | OPT-003 | Option order and data integration | `Orders().Place`, market data/history for OPT | `place_order_option_buy`, `api_option_campaign_aapl`, `api_combo_option_vertical_aapl` | candidate | option quote, historical ticks if available, order fill/reject, completed/execution observation |
 
@@ -206,6 +206,7 @@ one primary matrix row above.
 | `api_market_data_completeness_aapl` | MD1-003 |
 | `api_market_data_type_cycle.txt` | MD1-001 |
 | `api_news_article_aapl` | NEWS-002 |
+| `api_option_calculations_aapl` | MD1-004, OPT-001 |
 | `api_oca_trigger_aapl` | AORD-002 |
 | `api_oca_trigger_aapl.txt` | AORD-002 |
 | `api_order_fill_aapl` | ORD-001 |
@@ -283,7 +284,6 @@ one primary matrix row above.
 | `place_order_option_buy` | OPT-003 |
 | `place_order_price_condition_aapl` | AORD-004 |
 | `pnl` | ACCT-006 |
-| `pnl_single` | ACCT-006 |
 | `positions_multi` | ACCT-005 |
 | `positions_snapshot` | ACCT-004 |
 | `qualify_contract_aapl_exact` | REF-001 |
@@ -292,7 +292,7 @@ one primary matrix row above.
 | `quote_stream_aapl` | MD1-003 |
 | `quote_stream_genericticks` | MD1-003 |
 | `quote_stream_multi_asset` | MD1-003 |
-| `quote_with_generic_ticks` | MD1-003 |
+| `option_calculations_aapl_live.txt` | MD1-004, OPT-001 |
 | `tick_news_aapl_sv201_live.txt` | MD1-003, MD1-004 |
 | `realtime_bars_aapl` | MD1-005 |
 | `req_ids` | SESS-003 |
