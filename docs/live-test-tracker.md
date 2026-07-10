@@ -408,6 +408,11 @@ against the role-aware `paper-dev` Gateway.
 | sdk_sv206_market_data_boundary | 2026-07-10 | official SDK oracle recorded; exact server_version=206, events sha256 `eea31798e7e59830f5cda9daadcd94223045c8e9ee0e5aa10f48428447505822`; quote snapshots, option computation, request parameters, request/cancel boundary |
 | sdk_sv206_market_data_readonly_retry | 2026-07-10 | official SDK oracle recorded and replay-promoted; exact server_version=206, events sha256 `989563f9c4cad108e34058beac205c576a9ebdc0fffe03e421e829bca851e7de`; dense AAPL quote and raw-212 depth rows |
 | sdk_sv206_cfd_reroute_readonly | 2026-07-10 | official SDK oracle recorded; exact server_version=206, events sha256 `7475841869bc53ceaf779b2672bb1606453e84b1dc0ff66a361510f45470d279`; IBM/BMW/EURUSD classic callbacks 91/92 |
+| open_orders_empty | 2026-07-10 | public API recorded on read-only Gateway; server_version=206, events sha256 `0e838de9d463070ac711be4950948c682c01e8ad02546d8be32f47f35ce68d25`; req_id=-1/code 321 now terminates `Orders().Open` as a typed error |
+| historical_news_aapl_timezone_window | 2026-07-10 | public API recorded on read-only Gateway; server_version=206, events sha256 `72f0bc03fb2e796685be47580d79b5e9363a9de9590702ee78da1e15c95f0629`; `.0 UTC` lower end bound returned 17 in-bound items and a clean end marker |
+| sdk_exact206_historical_news_end_bound | 2026-07-10 | official SDK 10.48.01 oracle; exact server_version=206, events sha256 `77f0031eef632b2779333eefc051f6731bb0d77daa8b35d3585771e7eccb854c`; `.0 UTC` lower end bound returned 17 items |
+| sdk_exact206_historical_news_end_bound_missing_fraction | 2026-07-10 | official SDK 10.48.01 negative oracle; exact server_version=206, events sha256 `63ca8e1ae5e99e8544491a051dd8f771d228b5d2b33b9f0baec8311b3b6e2b58`; identical bound without `.0` returned no items |
+| sdk_exact206_historical_news_both_bounds | 2026-07-10 | official SDK 10.48.01 negative oracle; exact server_version=206, events sha256 `b099280f7ddbd26041358218f9b2c9fa3667e0e9be0af804180559b051465023`; Gateway ignored the lower `EndTime` and returned 127 rows through 2023, grounding the public both-bound rejection |
 | api_transmit_false_then_transmit_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `003abb59dfced542` |
 | api_duplicate_quote_subscriptions_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `84f1e78a18616e0f` |
 | api_reconnect_active_order_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9d72a4711c25c788` |
@@ -420,6 +425,8 @@ against the role-aware `paper-dev` Gateway.
 | Transcript | Source Capture | Status |
 |-----------|---------------|--------|
 | market_data_sv206_live.txt | 20260710T133515Z + 20260710T134721Z | promoted; exact-sv206 raw protobuf quote frames, five request-family vectors in codec tests, parameter presence/precision, and clean cancellation |
+| open_orders_readonly_refusal_sv206_live.txt | 20260710T225552Z | promoted; exact-sv206 client-scope open-orders request and req_id=-1/code 321 read-only refusal |
+| historical_news_end_bound_sv206_live.txt | 20260710T231104Z | promoted; exact-sv206 `.0 UTC` lower end-bound request, two exact live rows, and end marker |
 | api_ioc_fok_aapl.txt | 20260413T184916Z | promoted; covers IOC cancel plus FOK inactive/reject paths |
 | api_tif_attribute_matrix_aapl.txt | 20260415T150535Z | promoted; covers GTC rest/cancel and trailing-percent fill replay |
 | api_stop_loss_management_aapl.txt | 20260415T153735Z | promoted; covers market entry, protective stop modify/cancel, and flatten replay |
