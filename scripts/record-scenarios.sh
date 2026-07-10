@@ -69,7 +69,7 @@ scenario_entry() {
         echo "$scenario"
         return
     fi
-    "$CAPTURE" -list-batch all | awk -F'|' -v name="$scenario" '$1 == name { print; found = 1; exit } END { if (!found) exit 1 }'
+    "$CAPTURE" -list-batch all | awk -F'|' -v name="$scenario" '$1 == name { print; found = 1 } END { if (!found) exit 1 }'
 }
 
 if [ $# -gt 0 ]; then
