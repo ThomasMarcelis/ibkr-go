@@ -137,7 +137,7 @@ func awaitOneShotResponse[T any](ctx context.Context, e *engine, resp <-chan T, 
 		}
 		return zero, ctx.Err()
 	case <-e.done:
-		return zero, e.Wait()
+		return zero, e.closedOperationError()
 	}
 }
 
@@ -162,7 +162,7 @@ func awaitSubscriptionResponse[T any](ctx context.Context, e *engine, resp <-cha
 		rollbackSubscriptionResponse(e, resp, rollback)
 		return zero, ctx.Err()
 	case <-e.done:
-		return zero, e.Wait()
+		return zero, e.closedOperationError()
 	}
 }
 
@@ -181,7 +181,7 @@ func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context)
 	case <-ctx.Done():
 		return ctx.Err()
 	case <-e.done:
-		return e.Wait()
+		return e.closedOperationError()
 	}
 }
 

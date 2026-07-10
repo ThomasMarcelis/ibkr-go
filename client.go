@@ -27,14 +27,16 @@ func DialContext(ctx context.Context, opts ...Option) (*Client, error) {
 	return &Client{engine: engine}, nil
 }
 
-// Close initiates shutdown of the client and its connection. It is idempotent;
-// use [Client.Done] or [Client.Wait] when the caller must observe completion.
+// Close initiates shutdown of the client and its connection. It is idempotent.
+// Active operations terminate with [ErrClosed], while [Client.Wait] returns nil
+// after this intentional shutdown.
 func (c *Client) Close() error { return c.engine.Close() }
 
 // Done returns a channel closed when the client has terminated.
 func (c *Client) Done() <-chan struct{} { return c.engine.Done() }
 
-// Wait blocks until the client terminates and returns its terminal error.
+// Wait blocks until the client terminates and returns its terminal error. It
+// returns nil when termination was initiated by [Client.Close].
 func (c *Client) Wait() error { return c.engine.Wait() }
 
 // Session returns a point-in-time [Snapshot] of the connection state.

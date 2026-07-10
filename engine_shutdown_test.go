@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"errors"
 	"log/slog"
 	"net"
 	"testing"
@@ -11,6 +12,50 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
+
+func TestClientCloseWaitsCleanlyAndInterruptsActiveWork(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		cfg := defaultConfig()
+		callErr := make(chan error, 1)
+		sub := newSubscription[int](defaultSubscriptionConfig(cfg), func() {})
+		e := &engine{
+			cfg:          cfg,
+			cmds:         make(chan func(), 1),
+			incoming:     make(chan any),
+			transportErr: make(chan transportLoss),
+			ready:        make(chan error, 1),
+			done:         make(chan struct{}),
+			events:       newObserver[Event](cfg.eventBuffer),
+			keyed: map[int]*route{
+				1: {close: func(err error) { callErr <- err }},
+			},
+			singletons: map[string]*route{
+				"active-stream": {subscription: true, close: sub.closeWithErr},
+			},
+			orders:         make(map[int64]*orderRoute),
+			executions:     newExecutionCorrelator(),
+			execDeliveries: make(map[string]*execDelivery),
+			snapshot:       Snapshot{State: StateReady},
+		}
+		go e.run()
+
+		client := &Client{engine: e}
+		if err := client.Close(); err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+		synctest.Wait()
+
+		if err := client.Wait(); err != nil {
+			t.Fatalf("Wait() after intentional Close = %v, want nil", err)
+		}
+		if err := <-callErr; !errors.Is(err, ErrClosed) {
+			t.Fatalf("active call close error = %v, want ErrClosed", err)
+		}
+		if err := sub.Wait(); !errors.Is(err, ErrClosed) {
+			t.Fatalf("active subscription Wait() = %v, want ErrClosed", err)
+		}
+	})
+}
 
 // TestAttachTransportPumpUnblocksOnEngineShutdown freezes the decode-pump
 // shutdown fix. The pump sends decoded messages to e.incoming and terminal

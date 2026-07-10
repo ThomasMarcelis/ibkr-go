@@ -23,7 +23,7 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 			err = ErrClosed
 		}
 		e.disconnectRoutes(err)
-		e.closeEngine(err)
+		e.closeEngine(err, err)
 		return
 	}
 	e.setState(StateReconnecting, 0, "transport lost", err)
@@ -186,7 +186,10 @@ func (e *engine) resumeRoutes() {
 	}
 }
 
-func (e *engine) closeEngine(err error) {
+// closeEngine terminates active work with err and records waitErr as the
+// client's terminal result. An intentional Client.Close uses ErrClosed for
+// active work but nil for Client.Wait; failures use the same error for both.
+func (e *engine) closeEngine(err, waitErr error) {
 	if e.closed {
 		return
 	}
@@ -233,7 +236,7 @@ func (e *engine) closeEngine(err error) {
 	e.setState(StateClosed, 0, "", err)
 	e.reportReady(err)
 	e.waitMu.Lock()
-	e.waitErr = err
+	e.waitErr = waitErr
 	e.waitMu.Unlock()
 	close(e.done)
 	e.events.Close()

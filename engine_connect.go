@@ -70,7 +70,7 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 		// transient reconnect failure. Terminate even during reconnect.
 		conn.Close()
 		e.reportReady(ErrUnsupportedServerVersion)
-		e.closeEngine(ErrUnsupportedServerVersion)
+		e.closeEngine(ErrUnsupportedServerVersion, ErrUnsupportedServerVersion)
 		return
 	}
 	e.serverVersion = info.ServerVersion
@@ -103,7 +103,7 @@ func (e *engine) connectFailed(op string, err error, reconnect bool) {
 	connectErr := &ConnectError{Op: op, Err: err}
 	if !reconnect {
 		e.reportReady(connectErr)
-		e.closeEngine(connectErr)
+		e.closeEngine(connectErr, connectErr)
 		return
 	}
 	e.setState(StateReconnecting, 0, "reconnect failed", connectErr)

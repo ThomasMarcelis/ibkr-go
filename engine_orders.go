@@ -541,7 +541,7 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-e.done:
-			return e.Wait()
+			return e.closedOperationError()
 		}
 	}
 	handle.modifyFn = func(ctx context.Context, order Order) error {
@@ -679,13 +679,13 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 			cleanup()
 			return OrderState{}, ctx.Err()
 		case <-e.done:
-			return OrderState{}, e.Wait()
+			return OrderState{}, e.closedOperationError()
 		}
 	case <-ctx.Done():
 		cleanup()
 		return OrderState{}, ctx.Err()
 	case <-e.done:
-		return OrderState{}, e.Wait()
+		return OrderState{}, e.closedOperationError()
 	}
 }
 

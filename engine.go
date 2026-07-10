@@ -192,7 +192,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 
 func (e *engine) Close() error {
 	e.enqueue(func() {
-		e.closeEngine(ErrClosed)
+		e.closeEngine(ErrClosed, nil)
 	})
 	return nil
 }
@@ -206,6 +206,13 @@ func (e *engine) Wait() error {
 	e.waitMu.Lock()
 	defer e.waitMu.Unlock()
 	return e.waitErr
+}
+
+func (e *engine) closedOperationError() error {
+	if err := e.Wait(); err != nil {
+		return err
+	}
+	return ErrClosed
 }
 
 func (e *engine) Session() Snapshot {

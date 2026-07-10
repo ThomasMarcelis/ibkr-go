@@ -194,8 +194,8 @@ func serveUnsupportedVersionGateway(conn net.Conn, serverVersion string) error {
 	if err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if string(versionRange) != "v176..205" {
-		return fmt.Errorf("version range = %q, want v176..205", string(versionRange))
+	if string(versionRange) != "v176..206" {
+		return fmt.Errorf("version range = %q, want v176..206", string(versionRange))
 	}
 	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{serverVersion, "2026-04-14T12:00:00Z"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
@@ -378,8 +378,8 @@ func TestSetMarketDataTypeAfterClose(t *testing.T) {
 	}()
 	select {
 	case err := <-done:
-		if err == nil {
-			t.Fatal("expected error from SetMarketDataType after Close, got nil")
+		if !errors.Is(err, ibkr.ErrClosed) {
+			t.Fatalf("SetType() after Close = %v, want ErrClosed", err)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("MarketData().SetType blocked after Close — deadlock")
