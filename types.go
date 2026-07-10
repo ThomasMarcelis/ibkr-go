@@ -154,9 +154,10 @@ func (p ResumePolicy) valid() bool {
 // with the event rate and the delivery queue fills. Set the default with
 // [WithDefaultSlowConsumerPolicy] or per-subscription with [WithSlowConsumerPolicy].
 //
-// The default is [SlowConsumerClose]. High-rate streams (market depth,
-// tick-by-tick) can outrun a slow consumer and trip this; such consumers should
-// choose [SlowConsumerDropOldest] or raise the queue with [WithQueueSize].
+// The default is [SlowConsumerClose]. [SlowConsumerDropOldest] is an explicitly
+// lossy policy for streams whose events are independent. Stateful streams such
+// as market depth reject it because dropping one delta corrupts the local book;
+// raise their queue with [WithQueueSize] instead.
 type SlowConsumerPolicy string
 
 const (

@@ -233,9 +233,9 @@ func WithDefaultResumePolicy(policy ResumePolicy) Option {
 }
 
 // WithDefaultSlowConsumerPolicy sets the default [SlowConsumerPolicy] for
-// subscriptions. Default: [SlowConsumerClose]. High-rate streams (market depth,
-// tick-by-tick) can trip this; for them prefer [SlowConsumerDropOldest] or a
-// larger queue. Override per subscription with [WithSlowConsumerPolicy].
+// subscriptions. Default: [SlowConsumerClose]. Drop-oldest is suitable only
+// when losing individual events is acceptable; stateful market-depth streams
+// reject it. Override per subscription with [WithSlowConsumerPolicy].
 func WithDefaultSlowConsumerPolicy(policy SlowConsumerPolicy) Option {
 	return func(cfg *config) {
 		cfg.defaultSlowConsumer = policy
@@ -251,9 +251,9 @@ func WithResumePolicy(policy ResumePolicy) SubscriptionOption {
 
 // WithSlowConsumerPolicy overrides the [SlowConsumerPolicy] for a single
 // subscription. The default is [SlowConsumerClose], which fails the
-// subscription when the consumer falls behind; high-rate market-depth or
-// tick-by-tick consumers should pass [SlowConsumerDropOldest] or raise the
-// queue with [WithQueueSize].
+// subscription when the consumer falls behind. Use [SlowConsumerDropOldest]
+// only for streams where losing individual events is acceptable; market depth
+// rejects it because each event mutates book state.
 func WithSlowConsumerPolicy(policy SlowConsumerPolicy) SubscriptionOption {
 	return func(cfg *subscriptionConfig) {
 		cfg.slowConsumer = policy

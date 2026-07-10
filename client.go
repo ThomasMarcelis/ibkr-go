@@ -235,7 +235,9 @@ func (c MarketDataClient) SubscribeTickByTick(ctx context.Context, req TickByTic
 }
 
 // SubscribeDepth streams market depth (Level 2) order-book updates. This is a
-// high-rate stream; see [SlowConsumerPolicy] and [WithQueueSize].
+// high-rate, stateful stream: it rejects [SlowConsumerDropOldest] because
+// dropping a delta corrupts the local book. Use [WithQueueSize] for more burst
+// capacity.
 func (c MarketDataClient) SubscribeDepth(ctx context.Context, req MarketDepthRequest, opts ...SubscriptionOption) (*Subscription[DepthRow], error) {
 	return c.engine.SubscribeMarketDepth(ctx, req, opts...)
 }

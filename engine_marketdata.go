@@ -489,6 +489,14 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			resp <- result{err: err}
 			return
 		}
+		if cfg.slowConsumer == SlowConsumerDropOldest {
+			resp <- result{err: &ValidationError{
+				Field:   "SlowConsumerPolicy",
+				Value:   string(cfg.slowConsumer),
+				Message: "must be SlowConsumerClose for market depth because every update mutates book state",
+			}}
+			return
+		}
 		if err := validateResumePolicy(OpMarketDepth, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return

@@ -585,3 +585,40 @@ func TestMarketDepthError10xxx(t *testing.T) {
 		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API error")
 	}
 }
+
+func TestMarketDepthRejectsLossySlowConsumerPolicy(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name       string
+		clientOpts []ibkr.Option
+		subOpts    []ibkr.SubscriptionOption
+	}{
+		{
+			name:       "inherited client default",
+			clientOpts: []ibkr.Option{ibkr.WithDefaultSlowConsumerPolicy(ibkr.SlowConsumerDropOldest)},
+		},
+		{
+			name:    "subscription override",
+			subOpts: []ibkr.SubscriptionOption{ibkr.WithSlowConsumerPolicy(ibkr.SlowConsumerDropOldest)},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			client, host := newClient(t, "grounded_bootstrap.txt", test.clientOpts...)
+			defer client.Close()
+			defer waitHost(t, host)
+
+			sub, err := client.MarketData().SubscribeDepth(context.Background(), ibkr.MarketDepthRequest{}, test.subOpts...)
+			if sub != nil {
+				t.Fatalf("SubscribeDepth() subscription = %v, want nil", sub)
+			}
+			validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
+			if !ok || validationErr.Field != "SlowConsumerPolicy" || validationErr.Value != string(ibkr.SlowConsumerDropOldest) {
+				t.Fatalf("SubscribeDepth() error = %v, want SlowConsumerPolicy ValidationError", err)
+			}
+		})
+	}
+}

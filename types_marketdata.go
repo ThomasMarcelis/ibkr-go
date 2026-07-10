@@ -533,10 +533,10 @@ type HistoricalTicksResult struct {
 // MarketDepthRequest describes a market depth (Level 2 order book)
 // subscription for [MarketDataClient.SubscribeDepth].
 //
-// Depth is a high-rate stream. The default slow-consumer policy is
-// [SlowConsumerClose], so a consumer that cannot keep up fails the
-// subscription with [ErrSlowConsumer]; deep or fast books should select
-// [SlowConsumerDropOldest] or raise the queue with [WithQueueSize].
+// Depth is a high-rate, stateful stream. A consumer that cannot keep up fails
+// the subscription with [ErrSlowConsumer]. [SlowConsumerDropOldest] is rejected
+// because losing one delta corrupts the local book; raise the queue with
+// [WithQueueSize] when more burst capacity is needed.
 type MarketDepthRequest struct {
 	Contract     Contract
 	NumRows      int  // number of book levels per side to stream

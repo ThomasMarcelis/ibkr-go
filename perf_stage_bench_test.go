@@ -38,7 +38,6 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
-	"github.com/shopspring/decimal"
 )
 
 //go:embed testdata/bench/quote_stream_frames.bin
@@ -244,22 +243,16 @@ func BenchmarkActorHandleTickQuote_NoConsumer(b *testing.B) { benchActorTick(b, 
 // BenchmarkActorHandleTickQuote_Drained: actor cost with a spinning consumer.
 func BenchmarkActorHandleTickQuote_Drained(b *testing.B) { benchActorTick(b, true) }
 
-// BenchmarkActorHandleDepthL2_NoConsumer: actor cost per L2 row (2 decimal
-// parses + DepthRow emit), drop-oldest.
-func BenchmarkActorHandleDepthL2_NoConsumer(b *testing.B) {
+// BenchmarkActorHandleDepthL2_Drained measures actor cost per L2 row (two
+// decimal parses plus delivery) with a consumer preserving every book delta.
+func BenchmarkActorHandleDepthL2_Drained(b *testing.B) {
 	e := newBenchEngine(b)
-	sub, reqID := installDepthRoute(b, e, WithSlowConsumerPolicy(SlowConsumerDropOldest))
+	sub, reqID := installDepthRoute(b, e)
 	msg := decodeOne(b, depthL2Frame(b, reqID))
-
-	e.handleIncoming(msg)
-	select {
-	case row := <-sub.Events():
-		if !row.Price.Equal(decimal.RequireFromString("255.45")) {
-			b.Fatalf("row = %+v", row)
+	go func() {
+		for range sub.Events() {
 		}
-	default:
-		b.Fatal("no DepthRow emitted")
-	}
+	}()
 
 	b.ReportAllocs()
 	for b.Loop() {
