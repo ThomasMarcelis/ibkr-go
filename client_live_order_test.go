@@ -1811,12 +1811,6 @@ func TestLiveOrderWhatIf(t *testing.T) {
 		t.Error("Preview returned no margin data")
 	}
 
-	// Preview must never leave an order behind; a rejected what-if flag on
-	// Place is the companion contract.
-	order.WhatIf = new(true)
-	if _, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: aaplContract, Order: order}); err == nil {
-		t.Error("Place accepted WhatIf=true; want ValidationError pointing at Preview")
-	}
 }
 
 func TestLiveOrderAdaptiveAlgo(t *testing.T) {

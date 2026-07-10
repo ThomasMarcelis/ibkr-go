@@ -6,7 +6,8 @@
 # initMargin/maintMargin/equityWithLoan before/change/after, and
 # commissionAndFees 1.0003 USD (min/max commission unset). No order_status
 # lifecycle ever follows: a what-if order computes margin and leaves nothing
-# resting on the server, so the handle only terminates with the session.
+# resting on the server. The public one-shot returns the OrderState without
+# creating an OrderHandle.
 # The live frame's fill echo is absent on the v200 live layout
 # (fills arrive on order_status, which a what-if never produces), and the
 # wire marginCurrency EUR is skipped by the codec.

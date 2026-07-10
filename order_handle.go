@@ -100,19 +100,13 @@ func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 }
 
 // Modify sends a modified order to the server. The order is re-sent with the
-// handle's bound order ID; the Contract is fixed at placement time. Callers
-// may leave order.OrderID at zero for convenience, but setting it to any
-// value other than the handle's bound ID is rejected as a misuse rather than
-// silently corrected.
+// handle's bound order ID; the Contract is fixed at placement time.
 func (h *OrderHandle) Modify(ctx context.Context, order Order) error {
 	if h.modifyFn == nil {
 		return fmt.Errorf("ibkr: order handle not connected")
 	}
 	if h.isDone() {
 		return ErrClosed
-	}
-	if order.OrderID != 0 && order.OrderID != h.orderID {
-		return fmt.Errorf("ibkr: modify order: order.OrderID %d does not match handle %d", order.OrderID, h.orderID)
 	}
 	return h.modifyFn(ctx, order)
 }

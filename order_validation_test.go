@@ -1,7 +1,6 @@
 package ibkr
 
 import (
-	"context"
 	"errors"
 	"testing"
 
@@ -24,17 +23,9 @@ func TestValidateOrderRequest(t *testing.T) {
 	}
 	cases := []struct {
 		name   string
-		intent orderIntent
 		mutate func(*PlaceOrderRequest)
 		field  string
 	}{
-		{
-			name: "new order id",
-			mutate: func(req *PlaceOrderRequest) {
-				req.Order.OrderID = 42
-			},
-			field: "Order.OrderID",
-		},
 		{
 			name: "missing contract identity",
 			mutate: func(req *PlaceOrderRequest) {
@@ -136,13 +127,6 @@ func TestValidateOrderRequest(t *testing.T) {
 			},
 			field: "Order.ParentID",
 		},
-		{
-			name: "what if trade",
-			mutate: func(req *PlaceOrderRequest) {
-				req.Order.WhatIf = new(true)
-			},
-			field: "Order.WhatIf",
-		},
 	}
 
 	for _, tc := range cases {
@@ -150,7 +134,7 @@ func TestValidateOrderRequest(t *testing.T) {
 			t.Parallel()
 			req := valid()
 			tc.mutate(&req)
-			err := validateOrderRequest(req, tc.intent)
+			err := validateOrderRequest(req)
 			validation, ok := errors.AsType[*ValidationError](err)
 			if !ok {
 				t.Fatalf("validateOrderRequest() error = %v, want *ValidationError", err)
@@ -223,23 +207,10 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if err := validateOrderRequest(tc.req, orderIntentPlace); err != nil {
+			if err := validateOrderRequest(tc.req); err != nil {
 				t.Fatalf("validateOrderRequest() error = %v", err)
 			}
 		})
-	}
-}
-
-func TestOrdersClientValidatesBeforeUsingEngine(t *testing.T) {
-	t.Parallel()
-
-	_, err := (OrdersClient{}).Place(context.Background(), PlaceOrderRequest{
-		Contract: Contract{ConID: 265598},
-		Order:    Order{Action: "HOLD", OrderType: OrderTypeMarket, Quantity: decimal.NewFromInt(1)},
-	})
-	validation, ok := errors.AsType[*ValidationError](err)
-	if !ok || validation.Field != "Order.Action" {
-		t.Fatalf("Place() error = %v, want Order.Action ValidationError", err)
 	}
 }
 

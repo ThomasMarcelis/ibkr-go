@@ -143,10 +143,10 @@ Default subscription behavior:
 
 `Orders().Place(ctx, req)` sends a live order and returns an `OrderHandle`.
 It validates the contract, core order fields, and structural relationships in
-advanced order settings before anything reaches the wire. A request whose
-`Order.WhatIf` is set is rejected with a `*ValidationError` pointing at
-`Orders().Preview` — a what-if request is a margin/commission query, not a
-trade, and does not fit the `OrderHandle` lifecycle contract.
+advanced order settings before anything reaches the wire. The operation owns
+the wire-level what-if flag: `Place` and `OrderHandle.Modify` submit live
+orders, while `Orders().Preview` performs the margin/commission query without
+creating an `OrderHandle`.
 
 Transport-queue admission is the placement ownership boundary. Once the place
 frame is admitted, its buffered success result wins races with `ctx.Done()` and

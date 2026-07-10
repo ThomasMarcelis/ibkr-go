@@ -231,24 +231,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Order{Action: ibkr.ActionBuy}
   ```
 
-- **`Orders().Place` rejects what-if orders.** Placing an `Order` with
-  `WhatIf` set now returns a `*ValidationError` instead of creating a
-  live `OrderHandle` for what is really a margin preview. Use
-  `Orders().Preview`, which forces the what-if flag and returns the
-  Gateway's margin-and-commission block as an `OrderState`; the
-  `place_order` frame it sends is byte-identical to the old what-if
-  `Place` call.
-
-  ```go
-  // Before
-  order.WhatIf = ptr(true)
-  handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: c, Order: order})
-  // handle never terminates normally; margin/commission read off OpenOrder echoes
-
-  // After
-  state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{Contract: c, Order: order})
-  // state.InitMarginChange, state.Commission, ... — one-shot, no OrderHandle
-  ```
+- **Order identity and preview mode are operation-owned.** `Order` no longer
+  exposes `OrderID` or `WhatIf`. `Place` allocates a new ID, `Modify` always
+  uses its handle's bound ID, and `Preview` sets the wire-level what-if flag
+  while returning the Gateway's margin-and-commission block as an
+  `OrderState`.
 
 - **`Contract.Strike` is `*decimal.Decimal`, not `string`.** Nil means the
   selector is absent; a non-nil zero preserves IBKR's explicitly present zero
@@ -456,12 +443,16 @@ Every breaking change in this release, before → after:
   Order{Action: ibkr.ActionBuy} // after
   ```
 
-- **What-if orders.** `Orders().Place` on a `WhatIf` order → rejected
-  with `*ValidationError`; use `Orders().Preview`.
+- **Order identity and previews.** Remove assignments to `Order.OrderID` and
+  `Order.WhatIf`; the handle owns modification identity and `Preview` owns the
+  what-if flag.
 
   ```go
-  handle, err := client.Orders().Place(ctx, req) // before: req.Order.WhatIf = ptr(true)
-  state, err := client.Orders().Preview(ctx, req) // after: returns OrderState
+  order.OrderID = handle.OrderID() // before Modify
+  err := handle.Modify(ctx, order) // after: the handle supplies its ID
+
+  order.WhatIf = ptr(true)                     // before a preview
+  state, err := client.Orders().Preview(ctx, req) // after: Preview sets it
   ```
 
 - **Contract composition.** Contract selectors, combo legs, and the
@@ -816,11 +807,6 @@ Every breaking change in this release, before → after:
   emits a `Warn`-level record via the configured logger (opt-in via
   `WithLogger`) while still dropping the event to keep the handle alive — the
   order remains valid on the server, so the handle must not terminate.
-- **`OrderHandle.Modify` rejects mismatched order IDs.** Setting
-  `order.OrderID` to a value other than the handle's bound ID returns an
-  explicit error rather than silently ignoring the caller-supplied ID. Zero
-  remains accepted for the ergonomic "construct a fresh `Order` without
-  threading the ID" case.
 - **Historical tick/news windows now include explicit time zones.** The
   `time.Time` request APIs no longer emit UTC wall-clock strings without a
   zone suffix, which TWS can reinterpret in the login timezone.

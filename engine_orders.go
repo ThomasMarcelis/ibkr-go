@@ -400,7 +400,7 @@ func awaitBracketOrderResponse(ctx context.Context, e *engine, resp <-chan brack
 // nil error; the handle remains the caller's authority to observe or cancel the
 // order. Before admission, PlaceOrder returns an error and no handle.
 func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
-	if err := validateOrderRequest(req, orderIntentPlace); err != nil {
+	if err := validateOrderRequest(req); err != nil {
 		return nil, err
 	}
 	req = clonePlaceOrderRequest(req)
@@ -547,7 +547,7 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 		}
 	}
 	handle.modifyFn = func(ctx context.Context, order Order) error {
-		if err := validateOrderRequest(PlaceOrderRequest{Contract: contract, Order: order}, orderIntentModify); err != nil {
+		if err := validateOrderRequest(PlaceOrderRequest{Contract: contract, Order: order}); err != nil {
 			return err
 		}
 		order = cloneOrder(order)
@@ -582,13 +582,13 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 }
 
 // PreviewOrder submits a what-if order and returns the margin-and-commission
-// preview the Gateway attaches to the single open_order echo. It forces
-// WhatIf=true, so the place_order frame is byte-identical to a what-if
-// [engine.PlaceOrder]; the difference is purely in how the reply is consumed.
+// preview the Gateway attaches to the single open_order echo. The encoder sets
+// WhatIf=true on the place_order frame; the difference is purely in how the
+// reply is consumed.
 // No OrderHandle is ever created — the preview route is resolved and torn down
 // on the one open_order echo, and nothing rests on the server.
 func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (OrderState, error) {
-	if err := validateOrderRequest(req, orderIntentPreview); err != nil {
+	if err := validateOrderRequest(req); err != nil {
 		return OrderState{}, err
 	}
 	req = clonePlaceOrderRequest(req)
@@ -615,10 +615,7 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 		ch := make(chan previewResult, 1)
 		e.orders[orderID] = &orderRoute{orderID: orderID, preview: ch}
 
-		// Force the what-if flag; the frame is otherwise the caller's order.
-		previewReq := req
-		previewReq.Order.WhatIf = new(true)
-		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, previewReq)); err != nil {
+		if err := e.sendContext(ctx, toCodecPreviewOrder(orderID, req)); err != nil {
 			delete(e.orders, orderID)
 			setupResp <- setup{err: err}
 			return

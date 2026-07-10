@@ -3200,14 +3200,13 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 func runAPIWhatIfMarginAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		order := baseAPIOrder(account, decimal.NewFromInt(100), ibkr.ActionBuy, ibkr.OrderTypeMarket)
-		order.WhatIf = new(true)
-
-		handle, err := placeAPIOrder(ctx, client, "whatif mkt buy 100", apiAAPL, order)
+		state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{Contract: apiAAPL, Order: order})
 		if err != nil {
-			log.Printf("whatif place: %v", err)
+			log.Printf("whatif preview: %v", err)
 			return nil
 		}
-		_ = observeOrder(ctx, handle, "whatif mkt buy 100", 15*time.Second)
+		log.Printf("whatif preview: init_margin_after=%s maint_margin_after=%s commission=%s min=%s max=%s currency=%s",
+			state.InitMarginAfter, state.MaintMarginAfter, state.Commission, state.CommissionMin, state.CommissionMax, state.Currency)
 		return nil
 	})
 }

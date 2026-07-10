@@ -26,9 +26,6 @@ func cloneOrder(order Order) Order {
 	if order.Hedge.DisableAutomaticPrice != nil {
 		order.Hedge.DisableAutomaticPrice = new(*order.Hedge.DisableAutomaticPrice)
 	}
-	if order.WhatIf != nil {
-		order.WhatIf = new(*order.WhatIf)
-	}
 	if order.UsePriceMgmtAlgo != nil {
 		order.UsePriceMgmtAlgo = new(*order.UsePriceMgmtAlgo)
 	}

@@ -294,12 +294,8 @@ func (c OrdersClient) RefreshOrderID(ctx context.Context) (int64, error) {
 // Place submits an order and returns an [OrderHandle] tracking its lifecycle.
 // Once the request enters the transport queue, the handle and a nil error win
 // context-cancellation and session-close races. Before admission, Place returns
-// an error and no handle. What-if orders are rejected here; use
-// [OrdersClient.Preview] for a margin preview.
+// an error and no handle. Use [OrdersClient.Preview] for a margin preview.
 func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
-	if err := validateOrderRequest(req, orderIntentPlace); err != nil {
-		return nil, err
-	}
 	return c.engine.PlaceOrder(ctx, req)
 }
 
@@ -314,13 +310,9 @@ func (c OrdersClient) PlaceBracket(ctx context.Context, req PlaceBracketRequest)
 }
 
 // Preview submits a what-if order and returns the Gateway's margin-and-commission
-// preview as an [OrderState]. It forces the what-if flag, so the place_order
-// frame is byte-identical to a what-if order placed through Place; nothing rests
-// on the server and no OrderHandle is created.
+// preview as an [OrderState]. It sets the wire-level what-if flag; nothing
+// rests on the server and no OrderHandle is created.
 func (c OrdersClient) Preview(ctx context.Context, req PlaceOrderRequest) (OrderState, error) {
-	if err := validateOrderRequest(req, orderIntentPreview); err != nil {
-		return OrderState{}, err
-	}
 	return c.engine.PreviewOrder(ctx, req)
 }
 

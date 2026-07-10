@@ -148,18 +148,6 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 		t.Fatalf("order id = %d, want 337", got)
 	}
 
-	// Modify must refuse a what-if flag client-side, before any wire I/O —
-	// the companion contract to Place's rejection (use Orders().Preview).
-	var whatIfErr *ibkr.ValidationError
-	if err := handle.Modify(ctx, ibkr.Order{
-		Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit,
-		Quantity: decimal.RequireFromString("100"),
-		LmtPrice: decimal.RequireFromString("14.61"),
-		TIF:      ibkr.TIFDay, WhatIf: new(true),
-	}); !errors.As(err, &whatIfErr) {
-		t.Fatalf("Modify(WhatIf) error = %v, want *ValidationError", err)
-	}
-
 	open := waitForOpenOrder(t, ctx, handle)
 	if open.OrderID != 337 || open.PermID != 900337 {
 		t.Fatalf("open order id/perm = %d/%d, want 337/900337", open.OrderID, open.PermID)

@@ -7,25 +7,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-type orderIntent uint8
-
-const (
-	orderIntentPlace orderIntent = iota
-	orderIntentPreview
-	orderIntentModify
-)
-
-func validateOrderRequest(req PlaceOrderRequest, intent orderIntent) error {
+func validateOrderRequest(req PlaceOrderRequest) error {
 	order := req.Order
-	if intent != orderIntentPreview && order.WhatIf != nil && *order.WhatIf {
-		return &ValidationError{
-			Field:   "Order.WhatIf",
-			Message: "what-if orders are margin previews, not trades; use Orders().Preview",
-		}
-	}
-	if intent != orderIntentModify && order.OrderID != 0 {
-		return invalidOrderField("Order.OrderID", order.OrderID, "must be zero for a new order; the client assigns it")
-	}
 	if err := validateOrderContract(req.Contract); err != nil {
 		return err
 	}
@@ -101,17 +84,11 @@ func prepareBracketRequest(req PlaceBracketRequest) (PlaceBracketRequest, error)
 		{"TakeProfit", req.TakeProfit},
 		{"StopLoss", req.StopLoss},
 	} {
-		if item.order.OrderID != 0 {
-			return PlaceBracketRequest{}, invalidOrderField(item.name+".OrderID", item.order.OrderID, "must be zero; PlaceBracket assigns it")
-		}
 		if item.order.ParentID != 0 {
 			return PlaceBracketRequest{}, invalidOrderField(item.name+".ParentID", item.order.ParentID, "must be zero; PlaceBracket assigns it")
 		}
 		if item.order.Transmit != nil {
 			return PlaceBracketRequest{}, invalidOrderField(item.name+".Transmit", *item.order.Transmit, "must be nil; PlaceBracket controls transmit sequencing")
-		}
-		if item.order.WhatIf != nil {
-			return PlaceBracketRequest{}, invalidOrderField(item.name+".WhatIf", *item.order.WhatIf, "must be nil; brackets are live orders")
 		}
 		if !item.order.CashQty.IsZero() {
 			return PlaceBracketRequest{}, invalidOrderField(item.name+".CashQty", item.order.CashQty, "cash-quantity orders are not supported in a bracket")
@@ -152,7 +129,7 @@ func prepareBracketRequest(req PlaceBracketRequest) (PlaceBracketRequest, error)
 	req.StopLoss.ParentID = 1 // replaced with the allocated parent ID in the actor
 	req.StopLoss.Transmit = new(true)
 	for _, order := range []Order{req.Parent, req.TakeProfit, req.StopLoss} {
-		if err := validateOrderRequest(PlaceOrderRequest{Contract: req.Contract, Order: order}, orderIntentPlace); err != nil {
+		if err := validateOrderRequest(PlaceOrderRequest{Contract: req.Contract, Order: order}); err != nil {
 			return PlaceBracketRequest{}, err
 		}
 	}

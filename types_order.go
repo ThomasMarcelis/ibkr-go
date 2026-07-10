@@ -116,9 +116,9 @@ type OpenOrder struct {
 	ConditionsIgnoreRTH   bool
 	ConditionsCancelOrder bool
 
-	// Order-state margin preview. Populated on the open_order reply to a
-	// what-if order ([Order].WhatIf); on regular orders the Gateway sends
-	// unset sentinels, which decode as zero.
+	// Order-state margin preview. Populated on the open_order reply produced by
+	// [OrdersClient.Preview]; on regular orders the Gateway sends unset
+	// sentinels, which decode as zero.
 	InitMarginBefore     decimal.Decimal
 	MaintMarginBefore    decimal.Decimal
 	EquityWithLoanBefore decimal.Decimal
@@ -391,7 +391,6 @@ type OrderAdjustment struct {
 // A minimal market order needs only Action, OrderType, and Quantity. A limit
 // order additionally sets LmtPrice.
 type Order struct {
-	OrderID               int64           // assigned by the engine at placement; leave zero. Place always allocates internally and ignores any value set here; Modify accepts zero or the handle's own id
 	Action                OrderAction     // BUY or SELL (required)
 	OrderType             OrderType       // execution instruction (required); selects which price fields apply
 	Quantity              decimal.Decimal // order size (required); zero is treated as unset
@@ -417,7 +416,6 @@ type Order struct {
 	Hedge                 OrderHedge      // hedge-child behavior
 	Combo                 OrderCombo      // BAG legs, per-leg prices, and smart routing
 	Algorithm             OrderAlgorithm  // IB algo strategy and parameters
-	WhatIf                *bool           // nil = live order; true requests a margin preview (rejected by Place, use Preview)
 	Conditions            OrderConditions // conditional submission/cancellation triggers
 	Adjustment            OrderAdjustment // adjustable-stop transition
 	CashQty               decimal.Decimal // cash quantity for cash-quantity orders; zero means unset
@@ -434,8 +432,7 @@ type PlaceOrderRequest struct {
 
 // PlaceBracketRequest describes a parent order and the two closing children
 // that protect it. [OrdersClient.PlaceBracket] assigns all IDs and controls
-// ParentID and Transmit; callers leave those fields, OrderID, and WhatIf unset
-// on all three orders.
+// ParentID and Transmit; callers leave those fields unset on all three orders.
 type PlaceBracketRequest struct {
 	Contract   Contract
 	Parent     Order

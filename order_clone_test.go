@@ -25,7 +25,6 @@ func TestCloneOrderOwnsMutableInput(t *testing.T) {
 		Transmit:         new(false),
 		AllOrNone:        new(true),
 		Hedge:            OrderHedge{DisableAutomaticPrice: new(true)},
-		WhatIf:           new(false),
 		UsePriceMgmtAlgo: new(true),
 		Combo: OrderCombo{
 			LegPrices:    []*decimal.Decimal{new(decimal.RequireFromString("0.05"))},
@@ -46,7 +45,6 @@ func TestCloneOrderOwnsMutableInput(t *testing.T) {
 	*original.Order.Transmit = true
 	*original.Order.AllOrNone = false
 	*original.Order.Hedge.DisableAutomaticPrice = false
-	*original.Order.WhatIf = true
 	*original.Order.UsePriceMgmtAlgo = false
 
 	if cloned.Contract.ComboLegs[0].ConID != 878923092 || *cloned.Contract.ComboLegs[0].ExemptCode != 0 ||
@@ -65,7 +63,6 @@ func TestCloneOrderOwnsMutableInput(t *testing.T) {
 		{name: "Transmit", got: cloned.Order.Transmit, want: false},
 		{name: "AllOrNone", got: cloned.Order.AllOrNone, want: true},
 		{name: "Hedge.DisableAutomaticPrice", got: cloned.Order.Hedge.DisableAutomaticPrice, want: true},
-		{name: "WhatIf", got: cloned.Order.WhatIf, want: false},
 		{name: "UsePriceMgmtAlgo", got: cloned.Order.UsePriceMgmtAlgo, want: true},
 	}
 	for _, pointer := range pointers {

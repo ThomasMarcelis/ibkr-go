@@ -224,9 +224,9 @@ Every `Order` struct field must be exercised in at least one scenario.
 
 ### 3.1 Core fields (tested)
 
-OrderID, Action, OrderType, Quantity, LmtPrice, AuxPrice, TIF, Account,
-Transmit, ParentID, OCA, DisplaySize, OutsideRTH, WhatIf, Algorithm, and
-Conditions.
+Action, OrderType, Quantity, LmtPrice, AuxPrice, TIF, Account, Transmit,
+ParentID, OCA, DisplaySize, OutsideRTH, Algorithm, and Conditions. Order IDs
+and the what-if flag are operation-owned and therefore are not `Order` fields.
 
 ### 3.2 Untested fields
 
@@ -518,7 +518,10 @@ tests.
 - [x] Fix cancel_order (CME_TAGGING_FIELDS)
 - [x] Add cancel regression tests
 - [x] Tighten live test cancel assertions
-- [ ] Promote pending transcripts (what-if still needs a fresh usable preview callback; 2026-04-14 attempts either lacked the preview callback or returned live code 320 after the WhatIf place request; scale-in replay promoted from `63db2db7cba21b68`; forex replay promoted from `641eab5c0e6909f7`, OCA replay promoted from `2dc16869778bc497`, bracket replay promoted from `682a1390b2acf04c`)
+- [x] Promote what-if, scale-in, forex lifecycle, OCA, and bracket transcripts
+  from live captures. The public `Orders().Preview` replay replaced the failed
+  2026-04-14 what-if attempts and was live-revalidated at server version 206
+  on 2026-07-10.
 - [ ] Record fresh captures for all scenarios with fixed cancel
 - [ ] Update `cancel_order.txt` and `direct_cancel_order.txt` to include PendingCancel
 

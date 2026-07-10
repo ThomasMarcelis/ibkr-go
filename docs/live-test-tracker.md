@@ -31,6 +31,15 @@ class, and promoted transcript or remaining blocker.
 
 ### 2026-07-10
 
+Order preview ownership was revalidated after removing caller-settable
+`Order.OrderID` and `Order.WhatIf`. The role-aware `paper-dev` doctor reached
+`server_version=206`, and `api_whatif_margin_aapl` then called
+`Orders().Preview` directly. Capture
+`captures/20260710T210047Z-api_whatif_margin_aapl` (events SHA-256
+`6f61cc2b44b11d339e5d5cda30a53fb0f1fdd6bd78f2e83aada4b996cd97afda`)
+returned the complete margin and commission state with no order-status
+lifecycle or resting order. The capture verifier passed.
+
 Exact-206 market-data boundary verification. The official API 10.48.01 SDK
 oracle produced exact quote/depth request and callback captures plus classic
 CFD reroute callbacks 91/92. Both role-aware doctor runs then negotiated
@@ -323,7 +332,7 @@ against the role-aware `paper-dev` Gateway.
 
 | Test | Feature | Status | Notes |
 |------|---------|--------|-------|
-| TestLiveOrderWhatIf | WhatIf=true | pass | no commission preview returned (account-dependent) |
+| TestLiveOrderWhatIf | `Orders().Preview` | pass | margin state plus 1.0003 USD commission revalidated at server version 206 |
 | TestLiveOrderAdaptiveAlgo | Adaptive algo | pass | algo echo not observed in OpenOrder (paper gateway) |
 | TestLiveOrderIceberg | DisplaySize=3 | pass | goes Inactive |
 | TestLiveOrderOutsideRTH | OutsideRTH=true | pass | |
@@ -430,7 +439,7 @@ against the role-aware `paper-dev` Gateway.
 | api_forex_lifecycle_eurusd.txt | 20260414T182627Z | promoted; covers EUR.USD far LMT OpenOrder, Inactive status, and real code 201 leverage rejection replay |
 | api_bracket_trigger_aapl.txt | 20260413T174517Z | promoted; covers bracket parent fill, child OCA group echo, and real price-band cancel/reject on forced take-profit modify |
 | api_oca_trigger_aapl.txt | 20260413T174546Z | promoted; covers OCA group echo on both AAPL peers and real PendingCancel/Cancelled price-band rejection for the aggressive peer |
-| api_whatif_margin_aapl.txt | 20260610T200009Z | promoted; covers the complete WhatIf margin preview (nine margin decimals plus commission 1.0003 USD) on the public OpenOrder, the no-lifecycle handle semantics, and the io.EOF teardown; the 2026-04-14 no-preview/code-320 attempts were the pre-v1.4.6 default-int placement bug |
+| api_whatif_margin_aapl.txt | 20260610T200009Z | promoted; covers the complete WhatIf margin preview (nine margin decimals plus commission 1.0003 USD) returned by the public one-shot with no OrderHandle or order lifecycle; the 2026-04-14 no-preview/code-320 attempts were the pre-v1.4.6 default-int placement bug; direct `Orders().Preview` was live-revalidated at server version 206 on 2026-07-10 (`6f61cc2b44b11d33`) |
 | api_scale_in_campaign_aapl.txt | 20260414T172617Z | promoted; covers two AAPL market fills and protective STP PreSubmitted trigger replay; source tail timed out before flatten/executions/cleanup callbacks |
 | api_duplicate_quote_subscriptions_aapl.txt | 20260415T162742Z | promoted; covers SetType(Delayed) followed by two independent same-contract AAPL quote subscriptions receiving delayed market-data type plus bid/ask ticks |
 | api_fundamental_report_errors_aapl.txt | 20260415T162248Z | retired and removed from the active replay suite on 2026-07-09 after official API 10.47 removed the feature; formerly covered live code 430 `ReportRatios` and `ReportsFinStatements` errors without checking in large XML report payloads |

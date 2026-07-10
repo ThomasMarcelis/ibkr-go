@@ -51,7 +51,7 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		HedgeParam:               req.Order.Hedge.Param,
 		AlgoStrategy:             req.Order.Algorithm.Strategy,
 		AlgoParams:               tagValuesToCodec(req.Order.Algorithm.Params),
-		WhatIf:                   optBoolToString(req.Order.WhatIf, ""),
+		WhatIf:                   "",
 		Conditions:               orderConditionsToCodec(req.Order.Conditions.Values),
 		ConditionsIgnoreRTH:      boolToString(req.Order.Conditions.IgnoreRTH),
 		ConditionsCancelOrder:    boolToString(req.Order.Conditions.CancelOrder),
@@ -68,6 +68,12 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		AdvancedErrorOverride:    req.Order.AdvancedErrorOverride,
 		ManualOrderTime:          req.Order.ManualOrderTime,
 	}
+}
+
+func toCodecPreviewOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
+	order := toCodecPlaceOrder(orderID, req)
+	order.WhatIf = "1"
+	return order
 }
 
 func decimalOrEmpty(d decimal.Decimal) string {

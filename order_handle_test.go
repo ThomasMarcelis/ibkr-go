@@ -3,7 +3,6 @@ package ibkr
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"testing/synctest"
 )
@@ -237,76 +236,6 @@ func enqueueOrderHandleEmit(e *engine, handle *OrderHandle) {
 	})
 }
 
-// TestOrderHandleModifyRejectsMismatchedOrderID freezes the S3 fix: calling
-// Modify with a non-zero Order.OrderID that does not match the handle's bound
-// order ID is a misuse and must produce an explicit error rather than a
-// silent override of the wire-level ID.
-func TestOrderHandleModifyRejectsMismatchedOrderID(t *testing.T) {
-	t.Parallel()
-
-	handle := newOrderHandle(100, 64)
-	var modifyCalled bool
-	handle.modifyFn = func(ctx context.Context, order Order) error {
-		modifyCalled = true
-		return nil
-	}
-
-	err := handle.Modify(context.Background(), Order{OrderID: 999, Action: ActionBuy, OrderType: OrderTypeLimit})
-	if err == nil {
-		t.Fatal("Modify() with mismatched OrderID returned nil, want error")
-	}
-	if !strings.Contains(err.Error(), "999") || !strings.Contains(err.Error(), "100") {
-		t.Errorf("Modify() error = %v, want message containing both 999 and 100", err)
-	}
-	if modifyCalled {
-		t.Error("Modify() invoked modifyFn despite mismatched OrderID")
-	}
-}
-
-// TestOrderHandleModifyAllowsMatchingOrderID verifies the guard does not
-// block the legitimate case where the caller explicitly sets the handle's
-// order ID.
-func TestOrderHandleModifyAllowsMatchingOrderID(t *testing.T) {
-	t.Parallel()
-
-	handle := newOrderHandle(100, 64)
-	var gotOrder Order
-	handle.modifyFn = func(ctx context.Context, order Order) error {
-		gotOrder = order
-		return nil
-	}
-
-	err := handle.Modify(context.Background(), Order{OrderID: 100, Action: ActionBuy, OrderType: OrderTypeLimit})
-	if err != nil {
-		t.Fatalf("Modify() error = %v, want nil", err)
-	}
-	if gotOrder.OrderID != 100 {
-		t.Errorf("modifyFn received OrderID = %d, want 100", gotOrder.OrderID)
-	}
-}
-
-// TestOrderHandleModifyAllowsZeroOrderID preserves the ergonomic convention
-// that callers can reuse a freshly constructed Order without threading the
-// handle's ID through.
-func TestOrderHandleModifyAllowsZeroOrderID(t *testing.T) {
-	t.Parallel()
-
-	handle := newOrderHandle(100, 64)
-	var gotOrder Order
-	handle.modifyFn = func(ctx context.Context, order Order) error {
-		gotOrder = order
-		return nil
-	}
-
-	err := handle.Modify(context.Background(), Order{Action: ActionBuy, OrderType: OrderTypeLimit})
-	if err != nil {
-		t.Fatalf("Modify() error = %v, want nil", err)
-	}
-	if gotOrder.OrderID != 0 {
-		t.Errorf("modifyFn received OrderID = %d, want 0 (handler will inject real ID downstream)", gotOrder.OrderID)
-	}
-}
-
 func TestOrderHandleModifyAfterCloseReturnsErrClosed(t *testing.T) {
 	t.Parallel()
 
@@ -366,31 +295,4 @@ func TestOrderHandleCloseDropsRouteAndExecMappings(t *testing.T) {
 			t.Fatalf("handle.Wait() = %v, want nil", err)
 		}
 	})
-}
-
-// TestPlaceRejectsWhatIfOrder freezes the v1.6.0 Place guard: a what-if order
-// is a margin preview, not a trade, so Orders().Place rejects it up front with
-// a *ValidationError pointing at Orders().Preview. The rejection is caller-side
-// and never reaches the engine, so a nil-engine OrdersClient is enough.
-func TestPlaceRejectsWhatIfOrder(t *testing.T) {
-	t.Parallel()
-
-	_, err := OrdersClient{}.Place(context.Background(), PlaceOrderRequest{
-		Order: Order{
-			Action:    ActionBuy,
-			OrderType: OrderTypeLimit,
-			WhatIf:    new(true),
-		},
-	})
-
-	var verr *ValidationError
-	if !errors.As(err, &verr) {
-		t.Fatalf("Place(WhatIf) error = %v, want *ValidationError", err)
-	}
-	if verr.Field != "Order.WhatIf" {
-		t.Errorf("ValidationError.Field = %q, want Order.WhatIf", verr.Field)
-	}
-	if !strings.Contains(verr.Message, "Preview") {
-		t.Errorf("ValidationError.Message = %q, want it to mention Preview", verr.Message)
-	}
 }

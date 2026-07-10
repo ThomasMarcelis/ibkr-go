@@ -150,8 +150,8 @@
 //	}
 //	fmt.Println(state.InitMarginAfter, state.Commission)
 //
-// [OrdersClient.Place] rejects an order with [Order].WhatIf set to true with a
-// [*ValidationError]: previews go through Preview, not Place.
+// The what-if flag is operation-owned: previews go through Preview, while
+// Place and [OrderHandle.Modify] always submit live orders.
 //
 // # Session Lifecycle
 //

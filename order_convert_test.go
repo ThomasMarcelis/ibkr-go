@@ -40,7 +40,6 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 				Param:                 "BUY EUR.USD",
 				DisableAutomaticPrice: new(true),
 			},
-			WhatIf: new(true),
 			Adjustment: OrderAdjustment{
 				OrderType:      OrderTypeStop,
 				TriggerPrice:   decimal.RequireFromString("198"),
@@ -77,7 +76,6 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 		"ActiveStopTime":           got.ActiveStopTime,
 		"HedgeType":                got.HedgeType,
 		"HedgeParam":               got.HedgeParam,
-		"WhatIf":                   got.WhatIf,
 		"AdjustedOrderType":        got.AdjustedOrderType,
 		"TriggerPrice":             got.TriggerPrice,
 		"LmtPriceOffset":           got.LmtPriceOffset,
@@ -108,7 +106,6 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 		"ActiveStopTime":           "20260413 16:00:00 US/Eastern",
 		"HedgeType":                "F",
 		"HedgeParam":               "BUY EUR.USD",
-		"WhatIf":                   "1",
 		"AdjustedOrderType":        "STP",
 		"TriggerPrice":             "198",
 		"LmtPriceOffset":           "0.02",
@@ -126,6 +123,25 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 		if checks[field] != wantValue {
 			t.Fatalf("%s = %q, want %q", field, checks[field], wantValue)
 		}
+	}
+}
+
+func TestToCodecPreviewOrderSetsWhatIf(t *testing.T) {
+	t.Parallel()
+
+	req := PlaceOrderRequest{
+		Contract: Contract{ConID: 265598},
+		Order: Order{
+			Action:    ActionBuy,
+			OrderType: OrderTypeMarket,
+			Quantity:  decimal.NewFromInt(1),
+		},
+	}
+	if got := toCodecPlaceOrder(77, req).WhatIf; got != "" {
+		t.Fatalf("live WhatIf = %q, want empty", got)
+	}
+	if got := toCodecPreviewOrder(77, req).WhatIf; got != "1" {
+		t.Fatalf("preview WhatIf = %q, want 1", got)
 	}
 }
 
