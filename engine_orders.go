@@ -19,10 +19,6 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 	}
 	resp := make(chan result, 1)
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonOrderID]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: order ID refresh already in progress")}
 			return
@@ -90,10 +86,6 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 	}
 	resp := make(chan result, 1)
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateOpenOrdersScope(scope, e.cfg.clientID); err != nil {
 			resp <- result{err: err}
 			return
@@ -196,11 +188,6 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}
@@ -299,10 +286,6 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonCompletedOrders]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: completed orders request already in progress")}
 			return
@@ -410,10 +393,6 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	enqueueReadySetup(ctx, e, func() {
 		resp <- placeOrderResult{err: ctx.Err()}
 	}, func() {
-		if !e.isReady() {
-			resp <- placeOrderResult{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "place order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
 			resp <- placeOrderResult{err: err}
 			return
@@ -448,10 +427,6 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 	enqueueReadySetup(ctx, e, func() {
 		resp <- bracketOrderResult{err: ctx.Err()}
 	}, func() {
-		if !e.isReady() {
-			resp <- bracketOrderResult{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "place bracket", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
 			resp <- bracketOrderResult{err: err}
 			return
@@ -552,9 +527,6 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 		}
 		order = cloneOrder(order)
 		return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-			if !e.isReady() {
-				return ErrNotReady
-			}
 			if err := validateContractFieldSupport(contract, "modify order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
 				return err
 			}
@@ -601,10 +573,6 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 	orderIDCh := make(chan int64, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			setupResp <- setup{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "preview order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
 			setupResp <- setup{err: err}
 			return
@@ -665,9 +633,6 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 // events channel as an OrderStatus with Status "Cancelled".
 func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
-		}
 		req, err := cancelOrderRequest(orderID, cfg, e.serverVersion)
 		if err != nil {
 			return err
@@ -685,9 +650,6 @@ func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfi
 // subscription down.
 func (e *engine) RefreshOpenOrders(ctx context.Context) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
-		}
 		route, ok := e.singletons[singletonOpenOrders]
 		if !ok {
 			return fmt.Errorf("%w: open orders", ErrNoSubscription)
@@ -707,9 +669,6 @@ func (e *engine) RefreshOpenOrders(ctx context.Context) error {
 // OrderHandle events channels.
 func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
-		}
 		req, err := globalCancelRequest(cfg, e.serverVersion)
 		if err != nil {
 			return err
@@ -755,9 +714,6 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 	}
 	req.Contract = cloneContract(req.Contract)
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
-		}
 		if err := validateContractFieldSupport(req.Contract, "exercise options", e.serverVersion, 0); err != nil {
 			return err
 		}

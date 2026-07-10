@@ -18,10 +18,6 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonCurrentTime]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: current time request already in progress")}
 			return
@@ -77,10 +73,6 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if e.serverVersion < protocol.MinServerVersionCurrentTimeInMillis {
 			resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", ErrUnsupportedServerVersion)}
 			return
@@ -140,10 +132,6 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonScannerParameters]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: scanner parameters request already in progress")}
 			return
@@ -191,10 +179,6 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 	var reqID int
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpUserInfo,
@@ -232,11 +216,6 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}
@@ -326,10 +305,6 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
 			resp <- result{err: err}
 			return
@@ -374,9 +349,6 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 
 func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml string) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
-		}
 		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
 			return err
 		}
@@ -406,10 +378,6 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSoftDollarTiers,
 			func(msg any, e *engine) {
@@ -450,10 +418,6 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpWSHMetaData,
 			func(msg any, e *engine) {
@@ -488,10 +452,6 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpWSHEventData,
 			func(msg any, e *engine) {
@@ -538,10 +498,6 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpDisplayGroups,
 			func(msg any, e *engine) {
@@ -577,11 +533,6 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 	var reqID int
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}

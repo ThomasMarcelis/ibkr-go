@@ -24,10 +24,6 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(contract, "contract details", e.serverVersion, contractDetailsContractFields(e.serverVersion)); err != nil {
 			resp <- result{err: err}
 			return
@@ -103,10 +99,6 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 	var reqID int
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpMatchingSymbols,
@@ -154,10 +146,6 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonMarketRule]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: market rule request already in progress")}
 			return
@@ -226,10 +214,6 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		values := make([]SecDefOptParams, 0, 4)
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSecDefOptParams,
@@ -290,10 +274,6 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSmartComponents,
 			func(msg any, e *engine) {

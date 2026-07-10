@@ -15,9 +15,6 @@ func (e *engine) SetMarketDataType(ctx context.Context, dataType MarketDataType)
 		return fmt.Errorf("invalid market data type %d: must be 1 (live), 2 (frozen), 3 (delayed), or 4 (delayed-frozen)", dataType)
 	}
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if !e.isReady() {
-			return ErrNotReady
-		}
 		return e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(dataType)})
 	})
 }
@@ -80,10 +77,6 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "market data quote", e.serverVersion, quoteContractFields(e.serverVersion)); err != nil {
 			resp <- result{err: err}
 			return
@@ -377,10 +370,6 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "real-time bars", e.serverVersion, contractFieldPrimaryExchange); err != nil {
 			resp <- result{err: err}
 			return
@@ -500,10 +489,6 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "market depth", e.serverVersion, depthContractFields(e.serverVersion)); err != nil {
 			resp <- result{err: err}
 			return
@@ -649,10 +634,6 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonMktDepthExchanges]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: mkt depth exchanges request already in progress")}
 			return
@@ -711,10 +692,6 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "tick-by-tick data", e.serverVersion, contractFieldPrimaryExchange); err != nil {
 			resp <- result{err: err}
 			return
@@ -856,10 +833,6 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "calculate implied volatility", e.serverVersion, contractFieldPrimaryExchange); err != nil {
 			resp <- result{err: err}
 			return
@@ -917,10 +890,6 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "calculate option price", e.serverVersion, contractFieldPrimaryExchange); err != nil {
 			resp <- result{err: err}
 			return

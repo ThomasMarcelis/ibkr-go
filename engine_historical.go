@@ -22,10 +22,6 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueHistoricalSetup(ctx, e, historicalBarsPacingKey(req), nil, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "historical bars", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldComboLegs); err != nil {
 			resp <- result{err: err}
 			return
@@ -85,10 +81,6 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueHistoricalSetup(ctx, e, historicalSchedulePacingKey(req), nil, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "historical schedule", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldComboLegs); err != nil {
 			resp <- result{err: err}
 			return
@@ -151,10 +143,6 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 	var reqID int
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "head timestamp", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
 			resp <- result{err: err}
 			return
@@ -220,10 +208,6 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 	enqueueHistoricalSetup(ctx, e, historicalBarsPacingKey(req), func() {
 		resp <- result{}
 	}, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "historical bars stream", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldComboLegs); err != nil {
 			resp <- result{err: err}
 			return
@@ -335,10 +319,6 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "histogram data", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
 			resp <- result{err: err}
 			return
@@ -408,10 +388,6 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if err := validateContractFieldSupport(req.Contract, "historical ticks", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
 			resp <- result{err: err}
 			return

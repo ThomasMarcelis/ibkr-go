@@ -25,10 +25,6 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if e.activeAccountSummarySubscriptions() >= 2 {
 			resp <- result{err: fmt.Errorf("ibkr: account summary supports at most two active subscriptions")}
 			return
@@ -132,10 +128,6 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonPositions]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: positions subscription already active")}
 			return
@@ -219,10 +211,6 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonFamilyCodes]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: family codes request already in progress")}
 			return
@@ -283,10 +271,6 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonAccountUpdates]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: account updates subscription already active")}
 			return
@@ -430,11 +414,6 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}
@@ -520,11 +499,6 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}
@@ -620,11 +594,6 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}
@@ -712,11 +681,6 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
-
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}

@@ -26,6 +26,8 @@ func enqueueContextSetup(ctx context.Context, e *engine, onCanceled func(), fn f
 
 func enqueueReadySetup(ctx context.Context, e *engine, onCanceled func(), fn func()) {
 	enqueueContextSetup(ctx, e, onCanceled, func() {
+		// fn runs synchronously on the actor only after session readiness is
+		// established, either here or from flushReadySetups.
 		if e.isReady() {
 			fn()
 			return

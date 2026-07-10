@@ -16,10 +16,6 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonNewsProviders]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: news providers request already in progress")}
 			return
@@ -71,10 +67,6 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		if _, exists := e.singletons[singletonNewsBulletins]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: news bulletins subscription already active")}
 			return
@@ -146,10 +138,6 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpNewsArticle,
 			func(msg any, e *engine) {
@@ -185,10 +173,6 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		if !e.isReady() {
-			resp <- result{err: ErrNotReady}
-			return
-		}
 		reqID = e.allocReqID()
 		var collected []HistoricalNewsItem
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalNews,
