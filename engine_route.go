@@ -25,6 +25,22 @@ const (
 	singletonOrderID           = "order_id"
 )
 
+func newKeyedOneShotRoute(reqID int, opKind OpKind, handle func(any, *engine), fail func(error)) *route {
+	return &route{
+		opKind: opKind,
+		handle: handle,
+		handleAPIErr: func(msg codec.APIError, e *engine) {
+			e.deleteKeyedRoute(reqID)
+			fail(e.apiErr(opKind, msg))
+		},
+		onDisconnect: func(*engine, error) bool {
+			fail(ErrInterrupted)
+			return false
+		},
+		close: fail,
+	}
+}
+
 func (e *engine) handleIncoming(msg any) {
 	switch m := msg.(type) {
 	case codec.ManagedAccounts:

@@ -35,10 +35,8 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 
 		reqID = e.allocReqID()
 		values := make([]ContractDetails, 0, 4)
-		e.keyed[reqID] = &route{
-			opKind:       OpContractDetails,
-			subscription: false,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpContractDetails,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.ContractDetails:
 					detail, err := fromCodecContractDetails(m)
@@ -60,20 +58,9 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 					e.deleteKeyedRoute(reqID)
 					resp <- result{values: values}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpContractDetails, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.ContractDetailsRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(contract),
@@ -122,9 +109,8 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 		}
 		reqID = e.allocReqID()
 
-		e.keyed[reqID] = &route{
-			opKind: OpMatchingSymbols,
-			handle: func(msg any, eng *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpMatchingSymbols,
+			func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.MatchingSymbols:
 					eng.deleteKeyedRoute(reqID)
@@ -142,20 +128,9 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 					}
 					resp <- result{symbols: symbols}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, eng *engine) {
-				eng.deleteKeyedRoute(reqID)
-				resp <- result{err: eng.apiErr(OpMatchingSymbols, m)}
-			},
-			onDisconnect: func(eng *engine, err error) bool {
-				eng.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.MatchingSymbolsRequest{ReqID: reqID, Pattern: pattern}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -257,9 +232,8 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 		}
 		reqID = e.allocReqID()
 		values := make([]SecDefOptParams, 0, 4)
-		e.keyed[reqID] = &route{
-			opKind: OpSecDefOptParams,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSecDefOptParams,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.SecDefOptParamsResponse:
 					strikes := make([]decimal.Decimal, len(m.Strikes))
@@ -284,20 +258,9 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 					e.deleteKeyedRoute(reqID)
 					resp <- result{values: values}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpSecDefOptParams, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.SecDefOptParamsRequest{
 			ReqID:             reqID,
 			UnderlyingSymbol:  req.UnderlyingSymbol,
@@ -332,9 +295,8 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpSmartComponents,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSmartComponents,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.SmartComponentsResponse:
 					e.deleteKeyedRoute(reqID)
@@ -348,20 +310,9 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 					}
 					resp <- result{components: components}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpSmartComponents, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.SmartComponentsRequest{ReqID: reqID, BBOExchange: bboExchange}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
