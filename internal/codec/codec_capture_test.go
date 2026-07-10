@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 func TestCaptureDecode_BondContractDetails(t *testing.T) {
@@ -246,6 +248,33 @@ func TestCaptureDecode_PositionMultiEndLive(t *testing.T) {
 	}
 	if m.ReqID != 1001 {
 		t.Errorf("ReqID = %d, want 1001", m.ReqID)
+	}
+}
+
+func TestCaptureDecode_PositionMultiServerVersion206(t *testing.T) {
+	t.Parallel()
+
+	// Exact server_version 206 row from capture
+	// 20260710T224440Z-positions_multi, events sha256
+	// 3d62b420e3a600a0ad1c420e7a805cc6adab8bab1ecd6ff1e0959ead167d6d29.
+	// Only the account was replaced with a short sanitization token.
+	payload := append([]byte{0, 0, 0, protocol.InPositionMulti}, []byte("1\x001\x00U1\x0045602025\x00MELI\x00STK\x00\x000.0\x00\x00\x00NASDAQ\x00USD\x00MELI\x00NMS\x001\x001581.09\x00\x00")...)
+	msgs, err := DecodeBatch(206, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(PositionMulti)
+	if !ok {
+		t.Fatalf("type = %T, want PositionMulti", msgs[0])
+	}
+	if m.ReqID != 1 || m.Account != "U1" || m.ModelCode != "" {
+		t.Fatalf("identity = reqID %d account %q model %q", m.ReqID, m.Account, m.ModelCode)
+	}
+	if m.Contract.ConID != 45602025 || m.Contract.Symbol != "MELI" || m.Contract.TradingClass != "NMS" {
+		t.Fatalf("contract = %+v", m.Contract)
+	}
+	if m.Position != "1" || m.AvgCost != "1581.09" {
+		t.Fatalf("position = %q avgCost = %q", m.Position, m.AvgCost)
 	}
 }
 

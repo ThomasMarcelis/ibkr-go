@@ -430,15 +430,15 @@ func (m AccountDownloadEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(protocol.InAccountDownloadEnd), "1", m.Account}, nil
 }
 
-// [71, version=1, reqID, account, modelCode, contract(11), position, avgCost]
+// [71, version=1, reqID, account, contract(11), position, avgCost, modelCode]
 func decodePositionMulti(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	account := r.ReadString()
-	modelCode := r.ReadString()
 	contract := readWireContract(r)
 	position := r.ReadString()
 	avgCost := r.ReadString()
+	modelCode := r.ReadString()
 	return []Message{PositionMulti{ReqID: reqID, Account: account, ModelCode: modelCode, Contract: contract, Position: position, AvgCost: avgCost}}, nil
 }
 
@@ -448,7 +448,6 @@ func (m PositionMulti) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(1) // version
 	w.WriteInt(m.ReqID)
 	w.WriteString(m.Account)
-	w.WriteString(m.ModelCode)
 	w.WriteInt(m.Contract.ConID)
 	w.WriteString(m.Contract.Symbol)
 	w.WriteString(m.Contract.SecType)
@@ -466,6 +465,7 @@ func (m PositionMulti) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.Contract.TradingClass)
 	w.WriteString(m.Position)
 	w.WriteString(m.AvgCost)
+	w.WriteString(m.ModelCode)
 	return w.Fields(), nil
 }
 

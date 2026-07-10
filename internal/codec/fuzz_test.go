@@ -489,7 +489,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"PositionEnd", protocol.InPositionEnd, 1},                      // version
 		{"AccountSummary", protocol.InAccountSummary, 6},                // version, reqID, account, tag, value, currency
 		{"AccountSummaryEnd", protocol.InAccountSummaryEnd, 2},          // version, reqID
-		{"PositionMulti", protocol.InPositionMulti, 17},                 // version, reqID, account, modelCode, 11 contract, position, avgCost
+		{"PositionMulti", protocol.InPositionMulti, 17},                 // version, reqID, account, 11 contract, position, avgCost, modelCode
 		{"PositionMultiEnd", protocol.InPositionMultiEnd, 2},            // version, reqID
 		{"AccountUpdateMulti", protocol.InAccountUpdateMulti, 7},        // version, reqID, account, modelCode, key, value, currency
 		{"AccountUpdateMultiEnd", protocol.InAccountUpdateMultiEnd, 2},  // version, reqID
