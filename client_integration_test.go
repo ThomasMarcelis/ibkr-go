@@ -1511,18 +1511,51 @@ func TestSmartComponents(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	components, err := client.Contracts().SmartComponents(ctx, "9c0001")
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType() error = %v", err)
+	}
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
+		ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+	}}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+	if err != nil {
+		t.Fatalf("SubscribeQuotes() error = %v", err)
+	}
+
+	bboExchange := ""
+	for bboExchange == "" {
+		select {
+		case update, ok := <-sub.Events():
+			if !ok {
+				t.Fatalf("quote closed before parameters: %v", sub.Err())
+			}
+			if update.Kind == ibkr.QuoteUpdateParameters {
+				bboExchange = update.Parameters.BBOExchange
+			}
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		}
+	}
+	components, err := client.Contracts().SmartComponents(ctx, bboExchange)
 	if err != nil {
 		t.Fatalf("SmartComponents() error = %v", err)
 	}
-	if len(components) != 2 {
-		t.Fatalf("components len = %d, want 2", len(components))
+	if len(components) != 20 {
+		t.Fatalf("components len = %d, want 20", len(components))
 	}
-	if components[0].ExchangeName != "IEX" {
-		t.Fatalf("first exchange = %q, want IEX", components[0].ExchangeName)
+	if components[0].ExchangeName != "AMEX" || components[0].ExchangeLetter != "A" {
+		t.Fatalf("first component = %+v, want AMEX/A", components[0])
 	}
-	if components[1].ExchangeLetter != "N" {
-		t.Fatalf("second letter = %q, want N", components[1].ExchangeLetter)
+	if components[10].ExchangeName != "IEX" || components[10].ExchangeLetter != "V" {
+		t.Fatalf("IEX component = %+v, want IEX/V", components[10])
+	}
+	if components[19].ExchangeName != "TXSE" || components[19].ExchangeLetter != "F" {
+		t.Fatalf("last component = %+v, want TXSE/F", components[19])
+	}
+	if err := sub.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v", err)
 	}
 }
 

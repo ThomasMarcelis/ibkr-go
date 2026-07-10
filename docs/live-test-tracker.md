@@ -448,7 +448,8 @@ against the role-aware `paper-dev` Gateway.
 | api_realtime_bars_request_errors_aapl.txt | 20260415T162200Z | promoted; covers TRADES code 420, BID_ASK code 321, and MIDPOINT code 10089 request-scoped errors |
 | api_tick_by_tick_entitlement_errors_aapl.txt | 20260415T162200Z | promoted; covers Last, AllLast, AllLast ignore-size, BidAsk, and MidPoint live code 10089 subscription errors |
 | api_wsh_variants_aapl.txt | 20260415T162255Z | promoted; covers WSH metadata plus conid, portfolio, watchlist, and competitor event-data variants returning real code 10276 entitlement errors |
-| contract_details_aapl_opt.txt | 20260405T214941Z | promoted; covers OPT chain subset (strike ladder, call/put legs) with v200 option identifiers; source capture truncated before contractDataEnd, end frame taken verbatim from same-run sibling captures |
+| contract_details_aapl_opt.txt | 20260710T221210Z | promoted; same-request sv206 replay retains three calls, one put, and ContractDetailsEnd from a complete 106-row nearest-expiry response selected through SecDefOptParams (`cff9f2c77e522104`) |
+| smart_components.txt | 20260710T221437Z | promoted; same-session sv206 replay derives `9c0001` from AAPL TickReqParams while the quote is active, then returns the complete current 20-exchange smart-component mapping (`c32ec635ec50ff69`) |
 | contract_details_apple_bonds.txt | 20260709T232431Z | promoted; covers message-18 Apple bond details by issuer ID with live one- and two-security-ID variants |
 | contract_details_eurusd_cash.txt | 20260405T215014Z | promoted; covers single-match EUR.USD CASH details on IDEALPRO |
 | contract_details_es_fut.txt | 20260405T215018Z | promoted; covers 21-expiry ES futures ladder including a full-session lastTradeDate timestamp (`20261218 08:30:00 US/Central`) |

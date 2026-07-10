@@ -11,9 +11,8 @@ import (
 )
 
 // Replay coverage for the contract-details asset-type matrix (REF-001).
-// Each transcript is derived from a live IB Gateway server_version=200
-// capture; the capture directory and events.jsonl hash are recorded in the
-// transcript headers.
+// Each transcript is derived from a live IB Gateway capture; the server
+// version, capture identity, and events hash are recorded in its header.
 
 func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	t.Parallel()
@@ -28,6 +27,7 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	details, err := client.Contracts().Details(ctx, ibkr.Contract{
 		Symbol:   "AAPL",
 		SecType:  ibkr.SecTypeOption,
+		Expiry:   "20260713",
 		Exchange: "SMART",
 		Currency: "USD",
 	})
@@ -39,8 +39,8 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	}
 
 	first := details[0]
-	if first.ConID != 675811965 {
-		t.Errorf("ConID = %d, want 675811965", first.ConID)
+	if first.ConID != 896781604 {
+		t.Errorf("ConID = %d, want 896781604", first.ConID)
 	}
 	if first.Symbol != "AAPL" {
 		t.Errorf("Symbol = %q, want AAPL", first.Symbol)
@@ -48,11 +48,11 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.SecType != ibkr.SecTypeOption {
 		t.Errorf("SecType = %q, want OPT", first.SecType)
 	}
-	if first.Expiry != "20260618" {
-		t.Errorf("Expiry = %q, want 20260618", first.Expiry)
+	if first.Expiry != "20260713" {
+		t.Errorf("Expiry = %q, want 20260713", first.Expiry)
 	}
-	if first.Strike == nil || !first.Strike.Equal(decimal.RequireFromString("100")) {
-		t.Errorf("Strike = %s, want 100", first.Strike)
+	if first.Strike == nil || !first.Strike.Equal(decimal.RequireFromString("210")) {
+		t.Errorf("Strike = %s, want 210", first.Strike)
 	}
 	if first.Right != ibkr.RightCall {
 		t.Errorf("Right = %q, want C", first.Right)
@@ -63,8 +63,8 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.Currency != "USD" {
 		t.Errorf("Currency = %q, want USD", first.Currency)
 	}
-	if first.LocalSymbol != "AAPL  260618C00100000" {
-		t.Errorf("LocalSymbol = %q, want AAPL  260618C00100000", first.LocalSymbol)
+	if first.LocalSymbol != "AAPL  260713C00210000" {
+		t.Errorf("LocalSymbol = %q, want AAPL  260713C00210000", first.LocalSymbol)
 	}
 	if first.TradingClass != "AAPL" {
 		t.Errorf("TradingClass = %q, want AAPL", first.TradingClass)
@@ -86,9 +86,9 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 		conID  int
 		strike string
 	}{
-		{675811965, "100"},
-		{675812035, "105"},
-		{675812080, "110"},
+		{896781604, "210"},
+		{896783364, "215"},
+		{896783404, "220"},
 	}
 	for i, want := range wantCalls {
 		if details[i].ConID != want.conID {
@@ -103,17 +103,17 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	}
 
 	put := details[3]
-	if put.ConID != 675815175 {
-		t.Errorf("put ConID = %d, want 675815175", put.ConID)
+	if put.ConID != 896784375 {
+		t.Errorf("put ConID = %d, want 896784375", put.ConID)
 	}
 	if put.Right != ibkr.RightPut {
 		t.Errorf("put Right = %q, want P", put.Right)
 	}
-	if put.Strike == nil || !put.Strike.Equal(decimal.RequireFromString("100")) {
-		t.Errorf("put Strike = %s, want 100", put.Strike)
+	if put.Strike == nil || !put.Strike.Equal(decimal.RequireFromString("210")) {
+		t.Errorf("put Strike = %s, want 210", put.Strike)
 	}
-	if put.LocalSymbol != "AAPL  260618P00100000" {
-		t.Errorf("put LocalSymbol = %q, want AAPL  260618P00100000", put.LocalSymbol)
+	if put.LocalSymbol != "AAPL  260713P00210000" {
+		t.Errorf("put LocalSymbol = %q, want AAPL  260713P00210000", put.LocalSymbol)
 	}
 }
 

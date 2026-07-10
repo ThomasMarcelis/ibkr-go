@@ -1,6 +1,21 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_smart_components {"req_id":"$req1","bbo_exchange":"9c0001"}
-server smart_components {"req_id":"$req1","components":[{"bit_number":1,"exchange_name":"IEX","exchange_letter":"I"},{"bit_number":2,"exchange_name":"NYSE","exchange_letter":"N"}]}
+# Grounded by readonly-live capture 20260710T221437Z-smart_components.
+# server_version=206; events.jsonl sha256:
+# c32ec635ec50ff69e951e8b79aec76f2048240c862e8cefa702def897225d263
+#
+# The public scenario requested delayed AAPL data, consumed the BBO mapping
+# identifier from TickReqParams on that connection, and requested all 20 smart
+# components while the quote remained active. Account data is sanitized and
+# unrelated farm-status frames are omitted; retained protocol frames are exact.
+handshake {"server_version":206,"connection_time":"20260711 00:14:37 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+
+raw client AAAABgAAAQMIAw==
+raw client AAAAIwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNE
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw client AAAADQAAAFMyADljMDAwMQA=
+raw server AAAACAAAAQIIARAD
+raw server AAAAWgAAAMwIARCwqePw9DMYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+raw server AAAAzQAAAFIyADIwADAAQU1FWABBADEAQkVYAEIAMgBOWVNFTkFUAEMAMwBGSU5SQQBEADQASVNFAEkANQBFREdFQQBKADYARFJDVEVER0UASwA3AENIWABNADgAQVJDQQBQADkATkFTREFRAFEAMTAASUVYAFYAMTEAVDI0WABHADEyAFBTWABYADEzAEJZWABZADE0AEJBVFMAWgAxNQBOWVNFAE4AMTYATFRTRQBMADE3AE1FTVgAVQAxOABQRUFSTABIADE5AFRYU0UARgA=
+raw client AAAABgAAAMoIAQ==
 disconnect
