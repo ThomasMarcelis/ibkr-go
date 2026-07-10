@@ -314,17 +314,14 @@ func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
 		e.handleIncoming(decodeOne(t, frame))
 	}
 
-	select {
-	case closeRoute := <-e.cmds:
-		closeRoute()
-	default:
-		t.Fatalf("slow consumer did not enqueue its route cancellation: len=%d cap=%d err=%v", len(first.events), cap(first.events), first.Err())
-	}
-	if err := first.Wait(); !errors.Is(err, ErrSlowConsumer) {
-		t.Fatalf("first Wait() = %v, want ErrSlowConsumer", err)
+	if err := first.Wait(); err != ErrSlowConsumer {
+		t.Fatalf("first Wait() = %v, want exact ErrSlowConsumer", err)
 	}
 	if _, ok := e.keyed[1]; ok {
 		t.Fatal("slow consumer route 1 remains registered")
+	}
+	if len(e.cmds) != 0 {
+		t.Fatalf("actor-owned cancellation queued %d command(s), want direct route removal", len(e.cmds))
 	}
 
 	for _, frame := range [][]byte{

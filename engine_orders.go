@@ -114,19 +114,18 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		}
 		var ownedRoute *route
 		var sub *Subscription[OpenOrderUpdate]
-		sub = newSubscription[OpenOrderUpdate](cfg, func() {
-			e.enqueue(func() {
-				if e.singletons[singletonOpenOrders] != ownedRoute {
-					return
-				}
-				delete(e.singletons, singletonOpenOrders)
-				if scope == OpenOrdersScopeAuto {
-					sub.closeWithErr(e.cancelSubscription(OpOpenOrders, codec.CancelOpenOrders{}))
-					return
-				}
-				sub.closeWithErr(nil)
-			})
-		})
+		actorCancel := func() {
+			if e.singletons[singletonOpenOrders] != ownedRoute {
+				return
+			}
+			delete(e.singletons, singletonOpenOrders)
+			if scope == OpenOrdersScopeAuto {
+				sub.closeWithErr(e.cancelSubscription(OpOpenOrders, codec.CancelOpenOrders{}))
+				return
+			}
+			sub.closeWithErr(nil)
+		}
+		sub = newEngineSubscription[OpenOrderUpdate](cfg, e, actorCancel)
 		// Auto scope binds future manual orders and emits no open_order_end, so
 		// it is a stream with no initial snapshot phase.
 		if scope != OpenOrdersScopeAuto {
@@ -219,15 +218,14 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		reqID := e.allocReqID()
 		wireReq.ReqID = reqID
 		var sub *Subscription[ExecutionUpdate]
-		sub = newSubscription[ExecutionUpdate](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(nil)
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(nil)
+		}
+		sub = newEngineSubscription[ExecutionUpdate](cfg, e, actorCancel)
 		sub.expectSnapshot()
 		e.executions.registerRoute(reqID)
 

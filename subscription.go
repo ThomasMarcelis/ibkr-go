@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"context"
+	"errors"
 	"iter"
 	"sync"
 	"time"
@@ -20,10 +21,12 @@ type Subscription[T any] struct {
 	state          *observer[SubscriptionStateEvent]
 	done           chan struct{}
 	cancelFn       func()
+	actorCancelFn  func()
 	cancelOnce     sync.Once
 	closeOnce      sync.Once
 	errMu          sync.Mutex
 	err            error
+	cancelCause    error
 	snapshotMu     sync.Mutex
 	snapshotClosed bool
 	snapshotWant   bool
@@ -138,7 +141,9 @@ func (s *Subscription[T]) AwaitSnapshot(ctx context.Context) error {
 }
 
 // Wait blocks until the subscription terminates and returns its terminal
-// error, or nil on a clean close.
+// error, or nil on a clean close. If slow-consumer shutdown cannot admit its
+// cancellation request, the error matches [ErrSlowConsumer] and contains a
+// [*SubscriptionCancelError].
 func (s *Subscription[T]) Wait() error {
 	<-s.done
 	s.errMu.Lock()
@@ -158,14 +163,54 @@ func (s *Subscription[T]) Err() error {
 // idempotent and safe to call concurrently. Events and lifecycle channels
 // close asynchronously; use [Subscription.Done] or [Subscription.Wait] to
 // observe completion. If cancellation cannot enter the active transport queue,
-// Wait returns a non-retryable [*SubscriptionCancelError].
+// Wait returns a non-retryable [*SubscriptionCancelError]. When cancellation
+// follows [ErrSlowConsumer], Wait preserves both causes in the terminal error.
 func (s *Subscription[T]) Close() error {
-	s.cancelOnce.Do(func() {
-		if s.cancelFn != nil {
-			s.cancelFn()
-		}
-	})
+	s.cancel(nil, s.cancelFn)
 	return nil
+}
+
+// cancelOnce serializes public cancellation initiation. The shutdown cause is
+// independent so an in-flight actor emit can still record local data loss after
+// public Close has started but before the actor terminally closes the route.
+func (s *Subscription[T]) cancel(cause error, cancelFn func()) {
+	s.recordCancelCause(cause)
+	s.cancelOnce.Do(func() {
+		if cancelFn != nil {
+			cancelFn()
+			return
+		}
+		s.closeWithErr(nil)
+	})
+}
+
+// cancelFromActor runs the engine-owned cancellation directly. Enqueuing from
+// the actor can deadlock when the command queue is full because only that same
+// actor can drain it. It deliberately does not wait on cancelOnce: a concurrent
+// public Close may hold that once while blocked in enqueue. Both paths invoke
+// the same route-owned callback, whose ownership check makes the later path a
+// no-op. Non-engine subscriptions fall back to their ordinary cancellation
+// callback.
+func (s *Subscription[T]) cancelFromActor(cause error) {
+	s.recordCancelCause(cause)
+
+	cancelFn := s.actorCancelFn
+	if cancelFn != nil {
+		cancelFn()
+		return
+	}
+	s.cancel(cause, s.cancelFn)
+}
+
+func (s *Subscription[T]) recordCancelCause(cause error) {
+	if cause == nil {
+		return
+	}
+	s.errMu.Lock()
+	if s.cancelCause == nil {
+		s.cancelCause = cause
+	}
+	s.errMu.Unlock()
 }
 
 func (s *Subscription[T]) emit(value T) bool {
@@ -199,11 +244,11 @@ func (s *Subscription[T]) emit(value T) bool {
 		case s.events <- value:
 			return true
 		default:
-			s.fail(ErrSlowConsumer)
+			s.cancelFromActor(ErrSlowConsumer)
 			return false
 		}
 	default:
-		s.fail(ErrSlowConsumer)
+		s.cancelFromActor(ErrSlowConsumer)
 		return false
 	}
 }
@@ -225,10 +270,6 @@ func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
 		s.snapshotOnce.Do(func() { close(s.snapshotDone) })
 	}
 	s.state.EmitLatest(evt)
-}
-
-func (s *Subscription[T]) fail(err error) {
-	s.closeWithErr(err)
 }
 
 func (s *Subscription[T]) snapshotComplete() bool {
@@ -254,6 +295,13 @@ func (s *Subscription[T]) takeSnapshotEvents() []T {
 func (s *Subscription[T]) closeWithErr(err error) {
 	s.closeOnce.Do(func() {
 		s.errMu.Lock()
+		if s.cancelCause != nil {
+			if _, ok := errors.AsType[*SubscriptionCancelError](err); ok {
+				err = errors.Join(s.cancelCause, err)
+			} else {
+				err = s.cancelCause
+			}
+		}
 		s.err = err
 		s.errMu.Unlock()
 		s.emitState(SubscriptionStateEvent{Kind: SubscriptionClosed, Err: err})

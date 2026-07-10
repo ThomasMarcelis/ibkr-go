@@ -259,15 +259,14 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[[]ScannerResult]
-		sub = newSubscription[[]ScannerResult](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpScannerSubscription, codec.CancelScannerSubscription{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpScannerSubscription, codec.CancelScannerSubscription{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[[]ScannerResult](cfg, e, actorCancel)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpScannerSubscription,
@@ -653,15 +652,14 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 		}
 		reqID = e.allocReqID()
 		var sub *Subscription[DisplayGroupUpdate]
-		sub = newSubscription[DisplayGroupUpdate](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpDisplayGroupEvents, codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpDisplayGroupEvents, codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[DisplayGroupUpdate](cfg, e, actorCancel)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpDisplayGroupEvents,

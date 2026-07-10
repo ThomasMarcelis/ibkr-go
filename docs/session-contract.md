@@ -105,6 +105,15 @@ Closing a route retained after transport loss, or before it was resumed on a
 replacement connection, is a clean local detach because no current connection
 hosts that remote stream.
 
+Slow-consumer shutdown uses the same cancellation path. If cancellation enters
+the active transport queue, that transport is already dead, or another terminal
+teardown wins the race, `Wait`, `Err`, and the `Closed` lifecycle event report
+exactly `ErrSlowConsumer`. Only when the active transport refuses cancellation
+admission do all three report the same joined error:
+`errors.Is(err, ErrSlowConsumer)` remains true and
+`errors.AsType[*SubscriptionCancelError](err)` exposes the uncertain remote
+stream. The joined result is not retryable.
+
 Lifecycle event kinds:
 
 - `Started`

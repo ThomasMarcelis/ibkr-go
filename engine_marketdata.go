@@ -104,15 +104,14 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[QuoteUpdate]
-		sub = newSubscription[QuoteUpdate](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[QuoteUpdate](cfg, e, actorCancel)
 		if snapshot {
 			sub.expectSnapshot()
 		}
@@ -399,15 +398,14 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 		reqID := e.allocReqID()
 		resumeContract := cloneContract(req.Contract)
 		var sub *Subscription[Bar]
-		sub = newSubscription[Bar](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpRealTimeBars, codec.CancelRealTimeBars{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpRealTimeBars, codec.CancelRealTimeBars{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[Bar](cfg, e, actorCancel)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpRealTimeBars,
@@ -532,16 +530,15 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 		var depthRoute *route
 		rerouted := false
 		var sub *Subscription[DepthRow]
-		sub = newSubscription[DepthRow](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				request := depthRoute.request.(codec.MarketDepthRequest)
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			request := depthRoute.request.(codec.MarketDepthRequest)
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth}))
+		}
+		sub = newEngineSubscription[DepthRow](cfg, e, actorCancel)
 
 		depthRoute = &route{
 			opKind:       OpMarketDepth,
@@ -734,15 +731,14 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[TickByTickData]
-		sub = newSubscription[TickByTickData](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpTickByTick, codec.CancelTickByTick{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpTickByTick, codec.CancelTickByTick{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[TickByTickData](cfg, e, actorCancel)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpTickByTick,

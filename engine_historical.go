@@ -283,15 +283,14 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 		codecReq.KeepUpToDate = true
 
 		var sub *Subscription[Bar]
-		sub = newSubscription[Bar](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpHistoricalBarsStream, codec.CancelHistoricalData{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpHistoricalBarsStream, codec.CancelHistoricalData{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[Bar](cfg, e, actorCancel)
 		sub.expectSnapshot()
 
 		e.keyed[reqID] = &route{

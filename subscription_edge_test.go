@@ -49,7 +49,7 @@ func TestSubscriptionDoubleClose(t *testing.T) {
 func TestSubscriptionSlowConsumerClose(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, nil)
 
 	if !sub.emit(1) {
 		t.Fatal("first emit returned false, want true")
@@ -58,9 +58,58 @@ func TestSubscriptionSlowConsumerClose(t *testing.T) {
 		t.Error("second emit (buffer full) returned true, want false")
 	}
 
-	err := sub.Wait()
-	if !errors.Is(err, ErrSlowConsumer) {
-		t.Errorf("Wait() = %v, want ErrSlowConsumer", err)
+	if err := sub.Wait(); err != ErrSlowConsumer {
+		t.Errorf("Wait() = %v, want exact ErrSlowConsumer", err)
+	}
+	if err := sub.Err(); err != ErrSlowConsumer {
+		t.Errorf("Err() = %v, want exact ErrSlowConsumer", err)
+	}
+	closed := <-sub.Lifecycle()
+	if closed.Kind != SubscriptionClosed || closed.Err != ErrSlowConsumer || closed.Retryable {
+		t.Fatalf("closed lifecycle = %+v, want exact non-retryable ErrSlowConsumer", closed)
+	}
+}
+
+func TestSubscriptionSlowConsumerWinsCompetingTeardown(t *testing.T) {
+	t.Parallel()
+
+	for _, teardownErr := range []error{nil, ErrResumeRequired, ErrInterrupted} {
+		name := "clean cancellation"
+		if teardownErr != nil {
+			name = teardownErr.Error()
+		}
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+			if !sub.emit(1) {
+				t.Fatal("first emit returned false, want true")
+			}
+			if err := sub.Close(); err != nil {
+				t.Fatalf("Close() error = %v", err)
+			}
+			if sub.emit(2) {
+				t.Fatal("in-flight emit with full queue returned true")
+			}
+			if err := sub.Err(); err != nil {
+				t.Fatalf("Err() before actor terminal close = %v, want nil", err)
+			}
+			// A competing teardown may terminally close before the actor reaches
+			// the queued cancel, but it must not replace the already recorded
+			// local data-loss cause.
+			sub.closeWithErr(teardownErr)
+
+			if err := sub.Wait(); err != ErrSlowConsumer {
+				t.Fatalf("Wait() = %v, want exact ErrSlowConsumer", err)
+			}
+			if err := sub.Err(); err != ErrSlowConsumer {
+				t.Fatalf("Err() = %v, want exact ErrSlowConsumer", err)
+			}
+			closed := <-sub.Lifecycle()
+			if closed.Kind != SubscriptionClosed || closed.Err != ErrSlowConsumer || closed.Retryable {
+				t.Fatalf("closed lifecycle = %+v, want exact non-retryable ErrSlowConsumer", closed)
+			}
+		})
 	}
 }
 
@@ -68,8 +117,10 @@ func TestEmitKeyedSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 	t.Parallel()
 
 	e := &engine{keyed: map[int]*route{7: {}}}
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+	var sub *Subscription[int]
+	sub = newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
 		e.deleteKeyedRoute(7)
+		sub.closeWithErr(nil)
 	})
 	if !emitSubscription(sub, 1) {
 		t.Fatal("first emit returned false, want true")
@@ -80,8 +131,8 @@ func TestEmitKeyedSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 	if _, ok := e.keyed[7]; ok {
 		t.Fatal("keyed route retained after slow-consumer close")
 	}
-	if err := sub.Wait(); !errors.Is(err, ErrSlowConsumer) {
-		t.Fatalf("Wait() = %v, want ErrSlowConsumer", err)
+	if err := sub.Wait(); err != ErrSlowConsumer {
+		t.Fatalf("Wait() = %v, want exact ErrSlowConsumer", err)
 	}
 }
 
@@ -89,8 +140,10 @@ func TestEmitSingletonSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 	t.Parallel()
 
 	e := &engine{singletons: map[string]*route{singletonOpenOrders: {}}}
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+	var sub *Subscription[int]
+	sub = newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
 		delete(e.singletons, singletonOpenOrders)
+		sub.closeWithErr(nil)
 	})
 	if !emitSubscription(sub, 1) {
 		t.Fatal("first emit returned false, want true")
@@ -101,8 +154,8 @@ func TestEmitSingletonSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 	if _, ok := e.singletons[singletonOpenOrders]; ok {
 		t.Fatal("singleton route retained after slow-consumer close")
 	}
-	if err := sub.Wait(); !errors.Is(err, ErrSlowConsumer) {
-		t.Fatalf("Wait() = %v, want ErrSlowConsumer", err)
+	if err := sub.Wait(); err != ErrSlowConsumer {
+		t.Fatalf("Wait() = %v, want exact ErrSlowConsumer", err)
 	}
 }
 

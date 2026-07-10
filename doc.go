@@ -91,6 +91,8 @@
 // not enter the active transport queue and the remote stream may still be live;
 // recycle the client connection before subscribing again. Err returns the
 // currently recorded terminal error without waiting for Done.
+// If slow-consumer shutdown also cannot admit its cancellation, the terminal
+// error preserves both [ErrSlowConsumer] and [*SubscriptionCancelError].
 // SubscriptionClosed and Gap lifecycle events include a Retryable flag. API
 // errors are terminal request rejections; use [IsRetryable] on the final error
 // when a consumer loop only observes Events() or All(). Done is useful for

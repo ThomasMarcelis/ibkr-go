@@ -325,6 +325,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- **Slow-consumer shutdown now preserves cancellation uncertainty.** A full
+  subscription event queue records `ErrSlowConsumer`, removes its owned route,
+  and attempts normal remote cancellation before terminal closure. If that
+  cancel cannot enter the active transport queue, `Wait`, `Err`, and the
+  `Closed` lifecycle event retain both `ErrSlowConsumer` and
+  `*SubscriptionCancelError`; successful cancellation admission or a dead
+  transport still returns exactly `ErrSlowConsumer`, as does any ordinary
+  teardown that wins the terminal-close race. Actor-owned overflow cancellation
+  executes directly, so a full engine command queue cannot deadlock shutdown.
+
 - **Code 161 no longer turns a successful terminal order into a handle
   error.** "Cancel attempted when order is not in a cancellable state" is a
   cancellation reply, like code 202, rather than a placement rejection. It

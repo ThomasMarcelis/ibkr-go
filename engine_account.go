@@ -47,15 +47,14 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 		reqID := e.allocReqID()
 		plan := newAccountSummaryPlan(reqID, req)
 		var sub *Subscription[AccountSummaryUpdate]
-		sub = newSubscription[AccountSummaryUpdate](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[AccountSummaryUpdate](cfg, e, actorCancel)
 		sub.expectSnapshot()
 
 		e.keyed[reqID] = &route{
@@ -153,15 +152,14 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 		}
 		var ownedRoute *route
 		var sub *Subscription[PositionUpdate]
-		sub = newSubscription[PositionUpdate](cfg, func() {
-			e.enqueue(func() {
-				if e.singletons[singletonPositions] != ownedRoute {
-					return
-				}
-				delete(e.singletons, singletonPositions)
-				sub.closeWithErr(e.cancelSubscription(OpPositions, codec.CancelPositions{}))
-			})
-		})
+		actorCancel := func() {
+			if e.singletons[singletonPositions] != ownedRoute {
+				return
+			}
+			delete(e.singletons, singletonPositions)
+			sub.closeWithErr(e.cancelSubscription(OpPositions, codec.CancelPositions{}))
+		}
+		sub = newEngineSubscription[PositionUpdate](cfg, e, actorCancel)
 		sub.expectSnapshot()
 
 		ownedRoute = &route{
@@ -305,15 +303,14 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 		}
 		var ownedRoute *route
 		var sub *Subscription[AccountUpdate]
-		sub = newSubscription[AccountUpdate](cfg, func() {
-			e.enqueue(func() {
-				if e.singletons[singletonAccountUpdates] != ownedRoute {
-					return
-				}
-				delete(e.singletons, singletonAccountUpdates)
-				sub.closeWithErr(e.cancelSubscription(OpAccountUpdates, codec.AccountUpdatesRequest{Subscribe: false, Account: account}))
-			})
-		})
+		actorCancel := func() {
+			if e.singletons[singletonAccountUpdates] != ownedRoute {
+				return
+			}
+			delete(e.singletons, singletonAccountUpdates)
+			sub.closeWithErr(e.cancelSubscription(OpAccountUpdates, codec.AccountUpdatesRequest{Subscribe: false, Account: account}))
+		}
+		sub = newEngineSubscription[AccountUpdate](cfg, e, actorCancel)
 		sub.expectSnapshot()
 
 		ownedRoute = &route{
@@ -449,15 +446,14 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[AccountUpdateMultiValue]
-		sub = newSubscription[AccountUpdateMultiValue](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpAccountUpdatesMulti, codec.CancelAccountUpdatesMulti{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpAccountUpdatesMulti, codec.CancelAccountUpdatesMulti{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[AccountUpdateMultiValue](cfg, e, actorCancel)
 		sub.expectSnapshot()
 
 		e.keyed[reqID] = &route{
@@ -540,15 +536,14 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[PositionMulti]
-		sub = newSubscription[PositionMulti](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpPositionsMulti, codec.CancelPositionsMulti{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpPositionsMulti, codec.CancelPositionsMulti{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[PositionMulti](cfg, e, actorCancel)
 		sub.expectSnapshot()
 
 		e.keyed[reqID] = &route{
@@ -641,15 +636,14 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[PnLUpdate]
-		sub = newSubscription[PnLUpdate](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpPnL, codec.CancelPnL{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpPnL, codec.CancelPnL{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[PnLUpdate](cfg, e, actorCancel)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpPnL,
@@ -734,15 +728,14 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 		}
 		reqID := e.allocReqID()
 		var sub *Subscription[PnLSingleUpdate]
-		sub = newSubscription[PnLSingleUpdate](cfg, func() {
-			e.enqueue(func() {
-				if _, ok := e.keyed[reqID]; !ok {
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.cancelSubscription(OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID}))
-			})
-		})
+		actorCancel := func() {
+			if _, ok := e.keyed[reqID]; !ok {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.cancelSubscription(OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID}))
+		}
+		sub = newEngineSubscription[PnLSingleUpdate](cfg, e, actorCancel)
 
 		e.keyed[reqID] = &route{
 			opKind:       OpPnLSingle,

@@ -91,15 +91,14 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 		}
 		var ownedRoute *route
 		var sub *Subscription[NewsBulletin]
-		sub = newSubscription[NewsBulletin](cfg, func() {
-			e.enqueue(func() {
-				if e.singletons[singletonNewsBulletins] != ownedRoute {
-					return
-				}
-				delete(e.singletons, singletonNewsBulletins)
-				sub.closeWithErr(e.cancelSubscription(OpNewsBulletins, codec.CancelNewsBulletins{}))
-			})
-		})
+		actorCancel := func() {
+			if e.singletons[singletonNewsBulletins] != ownedRoute {
+				return
+			}
+			delete(e.singletons, singletonNewsBulletins)
+			sub.closeWithErr(e.cancelSubscription(OpNewsBulletins, codec.CancelNewsBulletins{}))
+		}
+		sub = newEngineSubscription[NewsBulletin](cfg, e, actorCancel)
 
 		ownedRoute = &route{
 			opKind:       OpNewsBulletins,

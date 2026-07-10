@@ -7,6 +7,7 @@ import (
 	"net"
 	"strings"
 	"testing"
+	"testing/synctest"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
@@ -60,6 +61,107 @@ func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 	if closed.Err != waitErr || closed.Retryable {
 		t.Fatalf("closed lifecycle = %+v, want exact non-retryable cancellation error", closed)
 	}
+}
+
+func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 1
+	sub := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+	}, WithQueueSize(1))
+	_ = readObservedFrame(t, peer)
+	fillTransportQueue(t, e.transport, peer)
+
+	// captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl,
+	// server_version 200, events.jsonl sha256 prefix 84f1e78a18616e0f.
+	// These are the capture's first two updates for request 1; the full outbound
+	// queue is deterministic fault injection for the cancellation-admission edge.
+	e.handleIncoming(decodeOne(t, []byte("81\x001\x000.01\x009c0001\x004\x00")))
+	e.handleIncoming(decodeOne(t, []byte("58\x001\x001\x003\x00")))
+
+	waitErr := sub.Wait()
+	if !errors.Is(waitErr, ErrSlowConsumer) || !errors.Is(waitErr, ErrInterrupted) {
+		t.Fatalf("Wait() error = %v, want slow-consumer and cancellation-admission causes", waitErr)
+	}
+	cancelErr, ok := errors.AsType[*SubscriptionCancelError](waitErr)
+	if !ok || cancelErr.OpKind != OpQuotes {
+		t.Fatalf("Wait() error = %T %v, want joined quotes *SubscriptionCancelError", waitErr, waitErr)
+	}
+	if sub.Err() != waitErr {
+		t.Fatalf("Err() = %v, want exact Wait() error %v", sub.Err(), waitErr)
+	}
+	if IsRetryable(waitErr) {
+		t.Fatal("joined slow-consumer cancellation uncertainty is retryable")
+	}
+	if _, ok := e.keyed[1]; ok {
+		t.Fatal("failed slow-consumer cancellation left the quote route active")
+	}
+
+	var closed SubscriptionStateEvent
+	for event := range sub.Lifecycle() {
+		if event.Kind == SubscriptionClosed {
+			closed = event
+		}
+	}
+	if closed.Err != waitErr || closed.Retryable {
+		t.Fatalf("closed lifecycle = %+v, want exact non-retryable joined error", closed)
+	}
+}
+
+func TestActorSlowConsumerCancelsWhilePublicCloseWaitsOnFullCommandQueue(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := &engine{
+			cmds: make(chan func(), 1),
+			done: make(chan struct{}),
+		}
+		active := true
+		cancelCalls := 0
+		var sub *Subscription[int]
+		actorCancel := func() {
+			if !active {
+				return
+			}
+			active = false
+			cancelCalls++
+			sub.closeWithErr(nil)
+		}
+		sub = newEngineSubscription[int](subscriptionConfig{
+			buffer:       1,
+			slowConsumer: SlowConsumerClose,
+		}, e, actorCancel)
+		e.cmds <- func() {}
+
+		closeResult := make(chan error, 1)
+		go func() { closeResult <- sub.Close() }()
+		synctest.Wait()
+		select {
+		case err := <-closeResult:
+			t.Fatalf("Close() returned with full command queue: %v", err)
+		default:
+		}
+
+		if !sub.emit(1) || sub.emit(2) {
+			t.Fatal("emits did not trigger actor-owned slow-consumer cancellation")
+		}
+		if err := sub.Wait(); err != ErrSlowConsumer {
+			t.Fatalf("Wait() = %v, want exact ErrSlowConsumer", err)
+		}
+		if active || cancelCalls != 1 {
+			t.Fatalf("actor cancellation active=%t calls=%d, want false/1", active, cancelCalls)
+		}
+
+		<-e.cmds // Admit the public cancellation that already owns cancelOnce.
+		synctest.Wait()
+		if err := <-closeResult; err != nil {
+			t.Fatalf("Close() error = %v", err)
+		}
+		(<-e.cmds)()
+		if cancelCalls != 1 {
+			t.Fatalf("queued public cancellation calls = %d, want actor-owned callback once", cancelCalls)
+		}
+	})
 }
 
 func TestSubscriptionCancelSkipsUnresumedReconnectRoute(t *testing.T) {
