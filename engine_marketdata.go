@@ -865,9 +865,8 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpCalcImpliedVol,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpCalcImpliedVol,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.TickOptionComputation:
 					e.deleteKeyedRoute(reqID)
@@ -878,20 +877,9 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 					}
 					resp <- result{value: value}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpCalcImpliedVol, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.CalcImpliedVolatilityRequest{
 			ReqID:       reqID,
 			Contract:    toCodecContract(req.Contract),
@@ -938,9 +926,8 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpCalcOptionPrice,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpCalcOptionPrice,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.TickOptionComputation:
 					e.deleteKeyedRoute(reqID)
@@ -951,20 +938,9 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 					}
 					resp <- result{value: value}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpCalcOptionPrice, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.CalcOptionPriceRequest{
 			ReqID:      reqID,
 			Contract:   toCodecContract(req.Contract),
