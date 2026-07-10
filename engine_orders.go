@@ -787,7 +787,7 @@ func (e *engine) installExerciseRoute(reqID int) {
 }
 
 func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
-	if err := validateContract(req.Contract); err != nil {
+	if err := validateExerciseOptionsRequest(req); err != nil {
 		return err
 	}
 	req.Contract = cloneContract(req.Contract)

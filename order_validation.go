@@ -77,6 +77,21 @@ func validateOrderRequest(req PlaceOrderRequest, intent orderIntent) error {
 	return validateOrderAdjustment(order.Adjustment)
 }
 
+func validateExerciseOptionsRequest(req ExerciseOptionsRequest) error {
+	if err := validateContract(req.Contract); err != nil {
+		return err
+	}
+	switch req.ExerciseAction {
+	case Exercise, Lapse:
+	default:
+		return invalidOrderField("ExerciseAction", int(req.ExerciseAction), "must be Exercise or Lapse (1 or 2)")
+	}
+	if req.ExerciseQuantity <= 0 {
+		return invalidOrderField("ExerciseQuantity", req.ExerciseQuantity, "must be positive")
+	}
+	return nil
+}
+
 func prepareBracketRequest(req PlaceBracketRequest) (PlaceBracketRequest, error) {
 	for _, item := range []struct {
 		name  string

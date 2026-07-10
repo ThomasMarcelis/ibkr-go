@@ -80,6 +80,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **`Options().Exercise` now rejects unsafe requests before transport
+  admission.** `ExerciseAction` must be exactly `Exercise` or `Lapse`, and
+  `ExerciseQuantity` must be positive. Invalid values return a structured
+  `*ValidationError`; this change adds no local account requirement.
+
 - **`Contract` is the single owner of contract selection and composition.** It
   now carries `IncludeExpired`, the open `SecurityID` selector, `ComboLegs`,
   and `DeltaNeutral`. Contract legs no longer appear in order-level combo

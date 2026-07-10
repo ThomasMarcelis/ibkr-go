@@ -716,7 +716,7 @@ func (a ExerciseAction) String() string {
 type ExerciseOptionsRequest struct {
 	Contract         Contract
 	ExerciseAction   ExerciseAction
-	ExerciseQuantity int
+	ExerciseQuantity int // must be positive
 	Account          string
 	Override         bool // override IBKR's default handling for an out-of-the-money exercise
 }
