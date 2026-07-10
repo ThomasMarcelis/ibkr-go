@@ -46,7 +46,7 @@ The audited SDK was API 10.48.01, archive SHA-256
 - `EClientUtils.cpp` maps request IDs and Contract fields into protobuf
   presence (`f214567871040de6c5cb157de9f7f5842e515f85f8df22fde8c20925b556207e`).
 - `EDecoder.h` names 205 and the three inbound base IDs
-  (`1cb75811ea2b4dae4e091076cac8b883d5b902c95b0b7c0dcb14f6090d4a4f4c`).
+  (`75c3d2920ce47db156aed12a6c17e1de08c8f33755ef69052532169295b8df6a`).
 - `EDecoder.cpp` dispatches regular, bond, and end protobuf messages
   (`74aa6ea9790d30c9d1abacddba190871ac6b692141ae01a59323f6b4b54706e6`).
 - `EDecoderUtils.cpp` maps the shared ContractDetails schema into regular and
@@ -66,6 +66,11 @@ The audited SDK was API 10.48.01, archive SHA-256
 
 Production uses only `protowire`. No generated SDK code, SDK artifact, cgo, or
 schema-specific generated runtime is on the import path.
+
+The capture-oracle build patched only `EDecoder.h`'s advertised
+`MAX_CLIENT_VER` to force exact negotiation at 205; that harness-local file
+hashes to `1cb75811ea2b4dae4e091076cac8b883d5b902c95b0b7c0dcb14f6090d4a4f4c`.
+It is not the official archive source hash.
 
 ## Live evidence
 
@@ -97,15 +102,22 @@ captured protobuf frames.
 
 ## Public semantics and invariants
 
-- The public Contract remains the instrument selector. It does not acquire
-  combo-leg, description, or delta-neutral ownership merely because the shared
-  protobuf schema contains those branches.
+- Public `Contract` is the single owner of selection and composition:
+  include-expired, external security ID, issuer ID, BAG legs, and the
+  delta-neutral underlier. Response-only combo descriptions remain outside
+  `Contract`.
 - One internal Contract codec is shared by executions, open orders, completed
   orders, order requests, and contract data.
-- Current public selectors encode exactly: conID, symbol, security type,
-  expiry, strike, right, multiplier, exchange, primary exchange, currency,
-  local symbol, trading class, and issuer ID. Invalid integer or floating-point
-  values fail before a frame is sent.
+- The sv205 contract-details request uses all public fields represented by the
+  21-field shared schema. `Contract.conId` is proto3 optional, but the official
+  EClientUtils request encoder sets it for zero because
+  `Utils::isValidValue(0)` is true; ibkr-go mirrors that explicit tag. At
+  classic sv204 and below, contract details accept only IncludeExpired,
+  SecurityID, and IssuerID from the five extended canonical fields; request
+  validation rejects BAG legs or DeltaNeutral before a route exists.
+- Strike, delta-neutral decimals, combo-leg numeric fields, exempt codes, and
+  order combo prices decode strictly. A malformed response closes only its
+  request route rather than degrading a field or terminating the session.
 - Regular and bond responses require the request ID, Contract, and
   ContractDetails messages. The end message requires its request ID.
 - Size and precision strings become optional exact decimals. An explicitly
@@ -114,10 +126,12 @@ captured protobuf frames.
   Missing aggregate group retains the established max-int sentinel internally
   and becomes nil publicly.
 - Contract description, combo legs, and delta-neutral payloads are
-  source-defined shared-schema branches but were not attested in a 205
-  contract-data response. They are consumed without fabricating public values.
+  source-defined shared-schema branches. Combo legs and delta-neutral values
+  project into public `Contract`; description is response-only. No nondefault
+  205 contract-data response for those branches was captured, so that positive
+  response behavior remains explicitly unattested.
 - Event-contract fields 59..61 are source-defined and projected, but remained
   absent in the captured stock, bond, fund, and option matrix.
 
-Version 206 remains fail-closed until its market-data migration receives the
-same source audit, exact live capture, deterministic replay, and public test.
+Version 206 market data is audited separately in
+[`protocol-audit-sv206.md`](protocol-audit-sv206.md).

@@ -25,7 +25,7 @@ func TestOptionCalculationsLiveReplay(t *testing.T) {
 		Symbol:       "AAPL",
 		SecType:      ibkr.SecTypeOption,
 		Expiry:       "20260710",
-		Strike:       decimal.NewFromInt(315),
+		Strike:       new(decimal.NewFromInt(315)),
 		Right:        ibkr.RightCall,
 		Multiplier:   "100",
 		Exchange:     "SMART",

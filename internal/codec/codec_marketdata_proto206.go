@@ -17,7 +17,7 @@ func (m QuoteRequest) encodeProto(sv int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	contract, err := encodeSharedContractProto(m.Contract, nil, nil, false)
+	contract, err := encodeSharedContractProto(m.Contract, nil, true)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (m MarketDepthRequest) encodeProto(sv int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	contract, err := encodeSharedContractProto(m.Contract, nil, nil, false)
+	contract, err := encodeSharedContractProto(m.Contract, nil, true)
 	if err != nil {
 		return nil, err
 	}

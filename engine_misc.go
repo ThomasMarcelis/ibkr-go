@@ -280,9 +280,15 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 				case codec.ScannerDataResponse:
 					results := make([]ScannerResult, len(m.Entries))
 					for i, entry := range m.Entries {
+						contract, err := fromCodecContract(entry.Contract)
+						if err != nil {
+							e.deleteKeyedRoute(reqID)
+							sub.closeWithErr(err)
+							return
+						}
 						results[i] = ScannerResult{
 							Rank:       entry.Rank,
-							Contract:   fromCodecContract(entry.Contract),
+							Contract:   contract,
 							Distance:   entry.Distance,
 							Benchmark:  entry.Benchmark,
 							Projection: entry.Projection,

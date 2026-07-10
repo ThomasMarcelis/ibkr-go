@@ -390,6 +390,7 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 			ConID: 265598, Symbol: "AAPL", SecType: "STK",
 			Strike: "0", Exchange: "SMART", Currency: "USD",
 			LocalSymbol: "AAPL", TradingClass: "NMS",
+			ComboLegs: []ComboLeg{{ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}, {ConID: 2, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}},
 		},
 		Account:             "DU9000001",
 		Action:              "BUY",
@@ -405,7 +406,6 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 		Hidden:              "0",
 		DiscretionAmt:       "0",
 		Status:              "PreSubmitted",
-		ComboLegs:           []ComboLeg{{ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}, {ConID: 2, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}},
 		OrderComboLegPrices: []string{"1.25", "2.50"},
 		SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		AlgoStrategy:        "Adaptive",
@@ -425,11 +425,11 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 	if !ok {
 		t.Fatalf("type = %T, want OpenOrder", msgs[0])
 	}
-	if got := len(oo.ComboLegs); got != 2 {
+	if got := len(oo.Contract.ComboLegs); got != 2 {
 		t.Fatalf("ComboLegs len = %d, want 2", got)
 	}
-	if oo.ComboLegs[0].ConID != 1 || oo.ComboLegs[1].Action != "SELL" {
-		t.Fatalf("decoded combo legs = %#v", oo.ComboLegs)
+	if oo.Contract.ComboLegs[0].ConID != 1 || oo.Contract.ComboLegs[1].Action != "SELL" {
+		t.Fatalf("decoded combo legs = %#v", oo.Contract.ComboLegs)
 	}
 	if !slices.Equal(oo.OrderComboLegPrices, []string{"1.25", "2.50"}) {
 		t.Fatalf("OrderComboLegPrices = %#v", oo.OrderComboLegPrices)
@@ -461,6 +461,7 @@ func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 		OrderID: 77,
 		Contract: Contract{
 			ConID: 9001, Symbol: "BAG-TEST", SecType: "BAG", Exchange: "SMART", Currency: "USD",
+			ComboLegs: []ComboLeg{{ConID: 101, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}, {ConID: 102, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}},
 		},
 		Action:                  "BUY",
 		TotalQuantity:           "1",
@@ -472,7 +473,6 @@ func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 		Transmit:                "1",
 		ParentID:                "0",
 		OutsideRTH:              "0",
-		ComboLegs:               []ComboLeg{{ConID: 101, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}, {ConID: 102, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}},
 		OrderComboLegPrices:     []string{"1.10", "2.40"},
 		SmartComboRoutingParams: []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		AlgoStrategy:            "Adaptive",
@@ -592,6 +592,59 @@ func TestEncodeCalcRequestsCarryNoIncludeExpired(t *testing.T) {
 		t.Fatalf("ParseFields() error = %v", err)
 	}
 	assertSubsequence(t, fields, []string{"AAPL", "0.30", "292.0", ""})
+}
+
+func TestHistoricalClassicContractFieldsStayRequestSpecific(t *testing.T) {
+	t.Parallel()
+
+	// API 10.48.01 writes includeExpired immediately after the shared classic
+	// contract block for these four families. The MES contract is the same
+	// live-derived 202606 expiry used by the exact selector vectors.
+	expired := Contract{
+		ConID: 770561194, Symbol: "MES", SecType: "FUT", Expiry: "202606",
+		Exchange: "CME", Currency: "USD", IncludeExpired: true,
+	}
+	requests := []struct {
+		name string
+		msg  Message
+	}{
+		{"bars", HistoricalBarsRequest{ReqID: 1, Contract: expired, Duration: "1 D", BarSize: "1 day", WhatToShow: "TRADES"}},
+		{"head timestamp", HeadTimestampRequest{ReqID: 1, Contract: expired, WhatToShow: "TRADES"}},
+		{"histogram", HistogramDataRequest{ReqID: 1, Contract: expired, Period: "1 day"}},
+		{"historical ticks", HistoricalTicksRequest{ReqID: 1, Contract: expired, NumberOfTicks: 1, WhatToShow: "TRADES"}},
+	}
+	for _, tc := range requests {
+		t.Run(tc.name, func(t *testing.T) {
+			fields, err := tc.msg.encodeWire(200)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(fields) <= 14 || fields[14] != "1" {
+				t.Fatalf("includeExpired position = %#v, want field 14", fields)
+			}
+		})
+	}
+
+	// Historical bars alone append the BAG leg count and four-field legs,
+	// after formatDate. These leg IDs come from the live AAPL vertical capture.
+	combo := Contract{
+		Symbol: "AAPL", SecType: "BAG", Exchange: "SMART", Currency: "USD",
+		ComboLegs: []ComboLeg{
+			{ConID: 887307502, Ratio: 1, Action: "BUY", Exchange: "SMART"},
+			{ConID: 887307536, Ratio: 1, Action: "SELL", Exchange: "SMART"},
+		},
+	}
+	fields, err := (HistoricalBarsRequest{
+		ReqID: 2, Contract: combo, Duration: "1 D", BarSize: "1 day", WhatToShow: "TRADES",
+	}).encodeWire(200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertSubsequence(t, fields, []string{
+		"TRADES", "1", "2",
+		"887307502", "1", "BUY", "SMART",
+		"887307536", "1", "SELL", "SMART",
+	})
 }
 
 func TestEncodeExerciseOptionsTailFields(t *testing.T) {

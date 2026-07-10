@@ -344,7 +344,7 @@ func liveQualifyOption(t *testing.T, ctx context.Context, client *ibkr.Client, u
 		Symbol:       "AAPL",
 		SecType:      ibkr.SecTypeOption,
 		Expiry:       expiry,
-		Strike:       strike,
+		Strike:       new(strike),
 		Right:        right,
 		Multiplier:   param.Multiplier,
 		Exchange:     "SMART",
@@ -389,7 +389,7 @@ func liveQualifyVerticalLegs(t *testing.T, ctx context.Context, client *ibkr.Cli
 			Symbol:       "AAPL",
 			SecType:      ibkr.SecTypeOption,
 			Expiry:       expiry,
-			Strike:       strike,
+			Strike:       new(strike),
 			Right:        ibkr.RightCall,
 			Multiplier:   param.Multiplier,
 			Exchange:     "SMART",
@@ -1767,15 +1767,15 @@ func TestLiveComboVerticalRestCancel(t *testing.T) {
 		SecType:  ibkr.SecTypeCombo,
 		Exchange: "SMART",
 		Currency: "USD",
+		ComboLegs: []ibkr.ComboLeg{
+			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART"},
+			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART"},
+		},
 	}
 
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 	order.LmtPrice = decimal.RequireFromString("0.05")
 	order.Combo = ibkr.OrderCombo{
-		Legs: []ibkr.ComboLeg{
-			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART"},
-			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART"},
-		},
 		SmartRouting: []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 	}
 

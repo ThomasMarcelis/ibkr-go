@@ -147,7 +147,9 @@ reqPositionsMulti (msg 74/75), reqPnL (msg 92/93), reqPnLSingle
 
 Contract details, contract qualification. reqMatchingSymbols (msg 81),
 reqMarketRule (msg 91), reqSecDefOptParams (msg 78), reqSmartComponents
-(msg 83).
+(msg 83). `Contract` is the canonical owner of include-expired and external-ID
+selectors plus BAG legs and delta-neutral composition. Nil versus explicit
+zero is preserved for strike and combo-leg exempt code.
 
 ### Market data
 
@@ -331,9 +333,10 @@ working orders and a flat AAPL position. See
 
 Exact `server_version 205` is implemented and live-attested. Contract-details
 request, regular response, bond response, and end marker migrate to protobuf.
-The shared Contract schema has one internal codec, while combo, description,
-and delta-neutral branches remain out of the public Contract until a real
-contract-data response earns them. See
+The shared Contract schema has one internal codec and the public `Contract`
+owns its selector and composition fields across request families and returned
+orders. Description and per-leg execution prices remain response/order
+metadata rather than contract identity. See
 [`protocol-audit-sv205.md`](protocol-audit-sv205.md).
 
 Exact `server_version 206` is implemented and live-attested. Quote, market-

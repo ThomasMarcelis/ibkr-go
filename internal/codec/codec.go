@@ -256,11 +256,7 @@ func writeWireContract(w *fieldWriter, c Contract) {
 	w.WriteString(c.Symbol)
 	w.WriteString(c.SecType)
 	w.WriteString(c.Expiry)
-	if c.Strike == "" {
-		w.WriteString("0")
-	} else {
-		w.WriteString(c.Strike)
-	}
+	w.WriteString(c.Strike)
 	w.WriteString(c.Right)
 	w.WriteString(c.Multiplier)
 	w.WriteString(c.Exchange)

@@ -108,9 +108,8 @@ type OpenOrder struct {
 	Hidden                bool
 	GoodAfterTime         string
 	ParentID              int64
-	ComboLegs             []ComboLeg
-	OrderComboLegPrices   []string
-	SmartComboRouting     []TagValue
+	Combo                 OrderCombo
+	ComboDescription      string // BAG description echoed by IBKR; never sent on placement
 	AlgoStrategy          string
 	AlgoParams            []TagValue
 	Conditions            []OrderCondition
@@ -306,11 +305,10 @@ type OrderOCA struct {
 	Type  OCAType
 }
 
-// OrderCombo holds the leg definitions and execution instructions for a
-// BAG/combo contract order. LegPrices and SmartRouting are optional.
+// OrderCombo holds per-leg prices and routing instructions for a BAG order.
+// The contract's leg definitions live in [Contract.ComboLegs].
 type OrderCombo struct {
-	Legs         []ComboLeg
-	LegPrices    []string
+	LegPrices    []*decimal.Decimal
 	SmartRouting []TagValue
 }
 
@@ -532,21 +530,21 @@ type CompletedOrderDetails struct {
 	GoodTillDate  string
 	ModelCode     string
 
-	Prices               CompletedOrderPrices
-	OCA                  OrderOCA
-	Allocation           CompletedOrderAllocation
-	Routing              CompletedOrderRouting
-	Auction              CompletedOrderAuction
-	Execution            CompletedOrderExecution
-	Volatility           CompletedOrderVolatility
-	Combo                CompletedOrderCombo
-	Scale                CompletedOrderScale
-	Hedge                OrderHedge
-	DeltaNeutralContract *DeltaNeutralContract
-	Algorithm            OrderAlgorithm
-	Conditions           OrderConditions
-	PeggedBenchmark      *CompletedOrderPeggedBenchmark
-	Compliance           CompletedOrderCompliance
+	Prices           CompletedOrderPrices
+	OCA              OrderOCA
+	Allocation       CompletedOrderAllocation
+	Routing          CompletedOrderRouting
+	Auction          CompletedOrderAuction
+	Execution        CompletedOrderExecution
+	Volatility       CompletedOrderVolatility
+	Combo            OrderCombo
+	ComboDescription string
+	Scale            CompletedOrderScale
+	Hedge            OrderHedge
+	Algorithm        OrderAlgorithm
+	Conditions       OrderConditions
+	PeggedBenchmark  *CompletedOrderPeggedBenchmark
+	Compliance       CompletedOrderCompliance
 }
 
 // CompletedOrderCompletion is the terminal state returned with a completed
@@ -647,15 +645,6 @@ type CompletedOrderDeltaNeutral struct {
 	ShortSale          bool
 	ShortSaleSlot      int
 	DesignatedLocation string
-}
-
-// CompletedOrderCombo contains the contract legs and routing instructions
-// echoed for a completed combo order.
-type CompletedOrderCombo struct {
-	Description  string
-	Legs         []ComboLeg
-	LegPrices    []*decimal.Decimal
-	SmartRouting []TagValue
 }
 
 // CompletedOrderScale contains the full scale-order block echoed by IBKR.

@@ -3,6 +3,7 @@ package ibkr
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,6 +31,9 @@ func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (codec.His
 }
 
 func validateHistoricalBarsRequest(req HistoricalBarsRequest) error {
+	if err := validateContract(req.Contract); err != nil {
+		return err
+	}
 	if !req.WhatToShow.Valid() {
 		return &ValidationError{
 			Field:   "WhatToShow",
@@ -105,6 +109,9 @@ func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (c
 }
 
 func validateHistoricalScheduleRequest(req HistoricalScheduleRequest) error {
+	if err := validateContract(req.Contract); err != nil {
+		return err
+	}
 	if _, err := formatHistoricalDuration(req.Duration); err != nil {
 		return err
 	}
@@ -144,11 +151,11 @@ func historicalSchedulePacingKey(req HistoricalScheduleRequest) string {
 }
 
 func historicalContractPacingKey(contract Contract) string {
-	return strings.Join([]string{
+	parts := []string{
 		contract.Symbol,
 		string(contract.SecType),
 		contract.Expiry,
-		decimalOrEmpty(contract.Strike),
+		decimalPointerOrEmpty(contract.Strike),
 		string(contract.Right),
 		contract.Multiplier,
 		contract.Exchange,
@@ -157,7 +164,17 @@ func historicalContractPacingKey(contract Contract) string {
 		contract.LocalSymbol,
 		contract.TradingClass,
 		fmt.Sprintf("%d", contract.ConID),
-	}, "\x00")
+		fmt.Sprintf("%t", contract.IncludeExpired),
+	}
+	for _, leg := range contract.ComboLegs {
+		parts = append(parts,
+			strconv.Itoa(leg.ConID),
+			strconv.Itoa(leg.Ratio),
+			string(leg.Action),
+			leg.Exchange,
+		)
+	}
+	return strings.Join(parts, "\x00")
 }
 
 // IBKR documents UTC historical data times as "YYYYMMDD-hh:mm:ss";

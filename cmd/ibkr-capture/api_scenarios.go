@@ -1583,6 +1583,9 @@ func runAPIOptionCalculationsAAPL(ctx context.Context, addr string, clientID int
 			recordProbeResult("option_qualify", "aapl call", 0, err)
 			return nil
 		}
+		if opt.Strike == nil {
+			return fmt.Errorf("qualified AAPL option has no strike")
+		}
 		recordAPIEvent("option_qualified", "aapl call", func(event *apiDriverEvent) {
 			event.Symbol = opt.Symbol
 			event.SecType = string(opt.SecType)
@@ -1681,13 +1684,12 @@ func runAPIComboOptionVerticalAAPL(ctx context.Context, addr string, clientID in
 			})
 			return nil
 		}
-		bag := ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "USD"}
+		bag := ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "USD", ComboLegs: []ibkr.ComboLeg{
+			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: ibkr.ComboLegSame},
+			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: ibkr.ComboLegSame},
+		}}
 		order := withLimit(baseAPIOrder(account, apiOptionContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), decimal.RequireFromString("0.05"))
 		order.Combo = ibkr.OrderCombo{
-			Legs: []ibkr.ComboLeg{
-				{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
-				{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ExemptCode: -1},
-			},
 			SmartRouting: []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		}
 		handle, err := placeAPIOrder(ctx, client, "option vertical BAG", bag, order)
@@ -2926,7 +2928,7 @@ func qualifyAAPLCall(ctx context.Context, client *ibkr.Client, anchor decimal.De
 		Symbol:       "AAPL",
 		SecType:      ibkr.SecTypeOption,
 		Expiry:       expiry,
-		Strike:       strike,
+		Strike:       new(strike),
 		Right:        ibkr.RightCall,
 		Multiplier:   param.Multiplier,
 		Exchange:     "SMART",
@@ -2968,7 +2970,7 @@ func qualifyAAPLCallVertical(ctx context.Context, client *ibkr.Client, anchor de
 			Symbol:       "AAPL",
 			SecType:      ibkr.SecTypeOption,
 			Expiry:       expiry,
-			Strike:       strike,
+			Strike:       new(strike),
 			Right:        ibkr.RightCall,
 			Multiplier:   param.Multiplier,
 			Exchange:     "SMART",

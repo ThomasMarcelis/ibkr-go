@@ -42,15 +42,26 @@ CFD reroute callbacks are the important exception. Base/raw IDs 91
 
 ## Codec and public semantics
 
-- All five requests use the existing shared Contract protobuf encoder. It
-  emits every nonzero/nonempty selector represented by the current
-  public/internal Contract type. Public `Contract.Strike` has no separate
-  presence bit, so outbound zero remains indistinguishable from unset; a
-  qualified zero-strike contract must use conID. Option maps and regulatory
-  snapshots remain intentionally unexposed.
-- The public Contract does not yet own BAG combo legs or a delta-neutral
-  contract. This boundary therefore does not claim support for those generic
-  Contract branches; they are a separate contract-model change.
+- Quote and depth requests use the shared Contract protobuf encoder. Public
+  `Contract` owns IncludeExpired, SecurityID, IssuerID, BAG ComboLegs, and
+  DeltaNeutral; all are represented at 206. `Contract.conId` is proto3
+  optional, but official EClientUtils emits it for zero because
+  `Utils::isValidValue(0)` is true; ibkr-go mirrors that request behavior.
+  `Contract.Strike` is `*decimal.Decimal`, so nil and an explicitly present
+  zero remain distinct through the public conversion boundary.
+- Request-family validation runs before route installation. Classic quotes
+  carry ComboLegs and DeltaNeutral but not IncludeExpired, SecurityID, or
+  IssuerID; classic depth carries none of those five. At 206 both migrated
+  requests use the full shared schema, preventing a canonical field from
+  disappearing due to a request-specific classic layout.
+- Classic quote BAG legs carry only ConID, Ratio, Action, and Exchange.
+  Nondefault OpenClose, ShortSaleSlot, DesignatedLocation, or ExemptCode is
+  rejected before route installation; the 206 shared leg carries them all.
+- DeltaNeutral is accepted only on BAG. The captured exact-200 OPT request was
+  a negative code-320 result and is labeled as such; it is not positive
+  delta-neutral support evidence. Exact-200 and exact-206 BAG quote request
+  vectors are live-frozen. A successful nondefault delta-neutral BAG response
+  remains a named live gap.
 - False booleans and empty strings follow protobuf absence. Request IDs and
   market-data type retain explicit zero presence inside the codec.
 - Tick price, generic, and option doubles use round-trip-safe Go formatting.
@@ -142,7 +153,8 @@ notices and does not contain private capture data.
 ## Regression gates
 
 - Byte-exact outbound vectors cover all five migrated request families,
-  including smart-depth cancellation.
+  including smart-depth cancellation and complete shared-contract BAG
+  composition.
 - Byte-exact inbound vectors cover every live-observed migrated callback.
 - Boundary tests prove classic ID/body selection at 205 and protobuf selection
   at 206.
@@ -153,6 +165,9 @@ notices and does not contain private capture data.
   dispatch path.
 - Public route tests freeze transparent rerouting, stored resume replacement,
   loop prevention, and smart-depth cancellation.
+- Field-support tests freeze the classic/protobuf request matrix so unsupported
+  IncludeExpired, SecurityID, ComboLegs, DeltaNeutral, or IssuerID values fail
+  before a route is installed.
 - The public exact-206 replay proves negotiation, request encoding, typed quote
   updates, parameter presence, precision, and cancellation without a Gateway.
 - `TestLiveServer206MarketDataBoundary` is the opt-in read-only public live

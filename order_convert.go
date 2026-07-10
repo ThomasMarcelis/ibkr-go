@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -19,55 +20,53 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		LmtPrice:      decimalOrEmpty(req.Order.LmtPrice),
 		AuxPrice:      decimalOrEmpty(req.Order.AuxPrice),
 
-		TIF:                         string(req.Order.TIF),
-		OcaGroup:                    req.Order.OCA.Group,
-		OcaType:                     strconv.Itoa(int(req.Order.OCA.Type)),
-		Account:                     req.Order.Account,
-		Origin:                      "0",
-		OrderRef:                    req.Order.OrderRef,
-		Transmit:                    optBoolToString(req.Order.Transmit, "1"),
-		ParentID:                    strconv.FormatInt(req.Order.ParentID, 10),
-		TriggerMethod:               strconv.Itoa(req.Order.TriggerMethod),
-		OutsideRTH:                  boolToString(req.Order.OutsideRTH),
-		DisplaySize:                 strconv.Itoa(req.Order.DisplaySize),
-		ComboLegs:                   comboLegsToCodec(req.Order.Combo.Legs),
-		OrderComboLegPrices:         append([]string(nil), req.Order.Combo.LegPrices...),
-		SmartComboRoutingParams:     tagValuesToCodec(req.Order.Combo.SmartRouting),
-		ExemptCode:                  "-1",
-		GoodAfterTime:               req.Order.GoodAfterTime,
-		GoodTillDate:                req.Order.GoodTillDate,
-		AllOrNone:                   optBoolToString(req.Order.AllOrNone, ""),
-		MinQty:                      decimalOrEmpty(req.Order.MinQty),
-		PercentOffset:               decimalOrEmpty(req.Order.PercentOffset),
-		TrailStopPrice:              decimalOrEmpty(req.Order.TrailStopPrice),
-		TrailingPercent:             decimalOrEmpty(req.Order.TrailingPercent),
-		ScaleInitLevelSize:          scaleSizeOrEmpty(req.Order.Scale.InitialLevelSize),
-		ScaleSubsLevelSize:          scaleSizeOrEmpty(req.Order.Scale.SubsequentLevelSize),
-		ScalePriceIncrement:         decimalOrEmpty(req.Order.Scale.PriceIncrement),
-		ScaleTable:                  req.Order.Scale.Table,
-		ActiveStartTime:             req.Order.Scale.ActiveStartTime,
-		ActiveStopTime:              req.Order.Scale.ActiveStopTime,
-		HedgeType:                   string(req.Order.Hedge.Type),
-		HedgeParam:                  req.Order.Hedge.Param,
-		AlgoStrategy:                req.Order.Algorithm.Strategy,
-		AlgoParams:                  tagValuesToCodec(req.Order.Algorithm.Params),
-		WhatIf:                      optBoolToString(req.Order.WhatIf, ""),
-		Conditions:                  orderConditionsToCodec(req.Order.Conditions.Values),
-		ConditionsIgnoreRTH:         boolToString(req.Order.Conditions.IgnoreRTH),
-		ConditionsCancelOrder:       boolToString(req.Order.Conditions.CancelOrder),
-		AdjustedOrderType:           string(req.Order.Adjustment.OrderType),
-		TriggerPrice:                decimalOrEmpty(req.Order.Adjustment.TriggerPrice),
-		LmtPriceOffset:              decimalOrEmpty(req.Order.Adjustment.LmtPriceOffset),
-		AdjustedStopPrice:           decimalOrEmpty(req.Order.Adjustment.StopPrice),
-		AdjustedStopLimitPrice:      decimalOrEmpty(req.Order.Adjustment.StopLimitPrice),
-		AdjustedTrailingAmount:      decimalOrEmpty(req.Order.Adjustment.TrailingAmount),
-		AdjustableTrailingUnit:      strconv.Itoa(req.Order.Adjustment.TrailingUnit),
-		CashQty:                     decimalOrEmpty(req.Order.CashQty),
-		DontUseAutoPriceForHedge:    optBoolToString(req.Order.Hedge.DisableAutomaticPrice, ""),
-		UsePriceMgmtAlgo:            optBoolToString(req.Order.UsePriceMgmtAlgo, ""),
-		AdvancedErrorOverride:       req.Order.AdvancedErrorOverride,
-		ManualOrderTime:             req.Order.ManualOrderTime,
-		DeltaNeutralContractPresent: "0",
+		TIF:                      string(req.Order.TIF),
+		OcaGroup:                 req.Order.OCA.Group,
+		OcaType:                  strconv.Itoa(int(req.Order.OCA.Type)),
+		Account:                  req.Order.Account,
+		Origin:                   "0",
+		OrderRef:                 req.Order.OrderRef,
+		Transmit:                 optBoolToString(req.Order.Transmit, "1"),
+		ParentID:                 strconv.FormatInt(req.Order.ParentID, 10),
+		TriggerMethod:            strconv.Itoa(req.Order.TriggerMethod),
+		OutsideRTH:               boolToString(req.Order.OutsideRTH),
+		DisplaySize:              strconv.Itoa(req.Order.DisplaySize),
+		OrderComboLegPrices:      comboLegPricesToCodec(req.Order.Combo.LegPrices),
+		SmartComboRoutingParams:  tagValuesToCodec(req.Order.Combo.SmartRouting),
+		ExemptCode:               "-1",
+		GoodAfterTime:            req.Order.GoodAfterTime,
+		GoodTillDate:             req.Order.GoodTillDate,
+		AllOrNone:                optBoolToString(req.Order.AllOrNone, ""),
+		MinQty:                   decimalOrEmpty(req.Order.MinQty),
+		PercentOffset:            decimalOrEmpty(req.Order.PercentOffset),
+		TrailStopPrice:           decimalOrEmpty(req.Order.TrailStopPrice),
+		TrailingPercent:          decimalOrEmpty(req.Order.TrailingPercent),
+		ScaleInitLevelSize:       scaleSizeOrEmpty(req.Order.Scale.InitialLevelSize),
+		ScaleSubsLevelSize:       scaleSizeOrEmpty(req.Order.Scale.SubsequentLevelSize),
+		ScalePriceIncrement:      decimalOrEmpty(req.Order.Scale.PriceIncrement),
+		ScaleTable:               req.Order.Scale.Table,
+		ActiveStartTime:          req.Order.Scale.ActiveStartTime,
+		ActiveStopTime:           req.Order.Scale.ActiveStopTime,
+		HedgeType:                string(req.Order.Hedge.Type),
+		HedgeParam:               req.Order.Hedge.Param,
+		AlgoStrategy:             req.Order.Algorithm.Strategy,
+		AlgoParams:               tagValuesToCodec(req.Order.Algorithm.Params),
+		WhatIf:                   optBoolToString(req.Order.WhatIf, ""),
+		Conditions:               orderConditionsToCodec(req.Order.Conditions.Values),
+		ConditionsIgnoreRTH:      boolToString(req.Order.Conditions.IgnoreRTH),
+		ConditionsCancelOrder:    boolToString(req.Order.Conditions.CancelOrder),
+		AdjustedOrderType:        string(req.Order.Adjustment.OrderType),
+		TriggerPrice:             decimalOrEmpty(req.Order.Adjustment.TriggerPrice),
+		LmtPriceOffset:           decimalOrEmpty(req.Order.Adjustment.LmtPriceOffset),
+		AdjustedStopPrice:        decimalOrEmpty(req.Order.Adjustment.StopPrice),
+		AdjustedStopLimitPrice:   decimalOrEmpty(req.Order.Adjustment.StopLimitPrice),
+		AdjustedTrailingAmount:   decimalOrEmpty(req.Order.Adjustment.TrailingAmount),
+		AdjustableTrailingUnit:   strconv.Itoa(req.Order.Adjustment.TrailingUnit),
+		CashQty:                  decimalOrEmpty(req.Order.CashQty),
+		DontUseAutoPriceForHedge: optBoolToString(req.Order.Hedge.DisableAutomaticPrice, ""),
+		UsePriceMgmtAlgo:         optBoolToString(req.Order.UsePriceMgmtAlgo, ""),
+		AdvancedErrorOverride:    req.Order.AdvancedErrorOverride,
+		ManualOrderTime:          req.Order.ManualOrderTime,
 	}
 }
 
@@ -115,10 +114,13 @@ func comboLegsToCodec(legs []ComboLeg) []codec.ComboLeg {
 			Ratio:              leg.Ratio,
 			Action:             string(leg.Action),
 			Exchange:           leg.Exchange,
-			OpenClose:          leg.OpenClose,
+			OpenClose:          strconv.Itoa(int(leg.OpenClose)),
 			ShortSaleSlot:      strconv.Itoa(leg.ShortSaleSlot),
 			DesignatedLocation: leg.DesignatedLocation,
-			ExemptCode:         strconv.Itoa(leg.ExemptCode),
+			ExemptCode:         "-1",
+		}
+		if leg.ExemptCode != nil {
+			out[i].ExemptCode = strconv.Itoa(*leg.ExemptCode)
 		}
 	}
 	return out
@@ -156,26 +158,72 @@ func orderConditionsToCodec(values []OrderCondition) []codec.OrderCondition {
 	return out
 }
 
-func comboLegsFromCodec(legs []codec.ComboLeg) []ComboLeg {
+func comboLegsFromCodec(legs []codec.ComboLeg) ([]ComboLeg, error) {
 	if len(legs) == 0 {
-		return nil
+		return nil, nil
 	}
 	out := make([]ComboLeg, len(legs))
 	for i, leg := range legs {
-		shortSaleSlot, _ := strconv.Atoi(leg.ShortSaleSlot)
-		exemptCode, _ := strconv.Atoi(leg.ExemptCode)
+		prefix := fmt.Sprintf("contract combo leg %d", i)
+		openClose, err := parseOptionalInt(leg.OpenClose, prefix+" open/close")
+		if err != nil {
+			return nil, err
+		}
+		if openClose < int(ComboLegSame) || openClose > int(ComboLegUnknown) {
+			return nil, fmt.Errorf("%s open/close: value %d is outside IBKR range 0..3", prefix, openClose)
+		}
+		shortSaleSlot, err := parseOptionalInt(leg.ShortSaleSlot, prefix+" short-sale slot")
+		if err != nil {
+			return nil, err
+		}
 		out[i] = ComboLeg{
 			ConID:              leg.ConID,
 			Ratio:              leg.Ratio,
 			Action:             OrderAction(leg.Action),
 			Exchange:           leg.Exchange,
-			OpenClose:          leg.OpenClose,
+			OpenClose:          ComboLegOpenClose(openClose),
 			ShortSaleSlot:      shortSaleSlot,
 			DesignatedLocation: leg.DesignatedLocation,
-			ExemptCode:         exemptCode,
+		}
+		rawExempt := strings.TrimSpace(leg.ExemptCode)
+		if rawExempt != "" && rawExempt != "-1" {
+			exemptCode, err := parseOptionalInt(rawExempt, prefix+" exempt code")
+			if err != nil {
+				return nil, err
+			}
+			if exemptCode < 0 {
+				return nil, fmt.Errorf("%s exempt code: value %d must be >= 0 or the -1 unset sentinel", prefix, exemptCode)
+			}
+			out[i].ExemptCode = new(exemptCode)
 		}
 	}
+	return out, nil
+}
+
+func comboLegPricesToCodec(prices []*decimal.Decimal) []string {
+	if len(prices) == 0 {
+		return nil
+	}
+	out := make([]string, len(prices))
+	for i, price := range prices {
+		out[i] = decimalPointerOrEmpty(price)
+	}
 	return out
+}
+
+func comboLegPricesFromCodec(prices []string, field string) ([]*decimal.Decimal, error) {
+	if len(prices) == 0 {
+		return nil, nil
+	}
+	out := make([]*decimal.Decimal, len(prices))
+	for i, raw := range prices {
+		price, err := parseOptionalDecimalPointer(raw, fmt.Sprintf("%s %d", field, i))
+		if err != nil {
+			return nil, err
+		}
+		out[i] = price
+	}
+	return out, nil
 }
 
 func tagValuesFromCodec(values []codec.TagValue) []TagValue {
@@ -292,17 +340,9 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		return value
 	}
 
-	legPrices := make([]*decimal.Decimal, len(m.OrderComboLegPrices))
-	for i, raw := range m.OrderComboLegPrices {
-		legPrices[i] = decimalPointer(raw, "combo leg price")
-	}
-
-	var deltaNeutralContract *DeltaNeutralContract
-	if m.DeltaNeutralContractPresent == "1" {
-		conID := intValue(m.DeltaNeutralContractConID, "delta-neutral contract id")
-		delta := decimalValue(m.DeltaNeutralContractDelta, "delta-neutral contract delta")
-		price := decimalValue(m.DeltaNeutralContractPrice, "delta-neutral contract price")
-		deltaNeutralContract = &DeltaNeutralContract{ConID: conID, Delta: delta, Price: price}
+	legPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, "completed order combo leg price")
+	if err != nil {
+		return CompletedOrderResult{}, err
 	}
 
 	deltaNeutralOrderType := m.DeltaNeutralOrderType
@@ -357,8 +397,12 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		disableAutomaticHedgePrice = new(boolValue(m.DontUseAutoPriceForHedge, "disable automatic hedge price"))
 	}
 
+	contract, err := fromCodecContract(m.Contract)
+	if err != nil {
+		return CompletedOrderResult{}, err
+	}
 	result := CompletedOrderResult{
-		Contract: fromCodecContract(m.Contract),
+		Contract: contract,
 		Order: CompletedOrderDetails{
 			OrderID:       orderID,
 			ClientID:      clientID,
@@ -435,12 +479,11 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				ContinuousUpdate:   boolValue(m.ContinuousUpdate, "continuous update"),
 				ReferencePriceType: intPointer(m.ReferencePriceType, "reference price type"),
 			},
-			Combo: CompletedOrderCombo{
-				Description:  m.ComboLegsDescription,
-				Legs:         comboLegsFromCodec(m.ComboLegs),
+			Combo: OrderCombo{
 				LegPrices:    legPrices,
 				SmartRouting: tagValuesFromCodec(m.SmartComboRouting),
 			},
+			ComboDescription: m.ComboLegsDescription,
 			Scale: CompletedOrderScale{
 				InitialLevelSize:    intPointer(m.ScaleInitLevelSize, "scale initial level size"),
 				SubsequentLevelSize: intPointer(m.ScaleSubsLevelSize, "scale subsequent level size"),
@@ -458,8 +501,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				Param:                 m.HedgeParam,
 				DisableAutomaticPrice: disableAutomaticHedgePrice,
 			},
-			DeltaNeutralContract: deltaNeutralContract,
-			Algorithm:            OrderAlgorithm{Strategy: m.AlgoStrategy, Params: tagValuesFromCodec(m.AlgoParams)},
+			Algorithm: OrderAlgorithm{Strategy: m.AlgoStrategy, Params: tagValuesFromCodec(m.AlgoParams)},
 			Conditions: OrderConditions{
 				Values:      orderConditionsFromCodec(m.Conditions),
 				IgnoreRTH:   boolValue(m.ConditionsIgnoreRTH, "conditions ignore RTH"),

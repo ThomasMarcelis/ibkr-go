@@ -98,17 +98,18 @@ const (
 var advertisedServerVersionMax = maxServerVersion
 
 type route struct {
-	opKind       OpKind
-	subscription bool
-	resume       ResumePolicy
-	request      codec.Message
-	handle       func(any, *engine)
-	handleAPIErr func(codec.APIError, *engine)
-	onDisconnect func(*engine, error) bool
-	emitGap      func(*engine)
-	emitResumed  func(*engine)
-	close        func(error)
-	gapped       bool // true after Gap emitted, reset on Resumed; prevents double emission
+	opKind         OpKind
+	subscription   bool
+	resume         ResumePolicy
+	request        codec.Message
+	handle         func(any, *engine)
+	handleAPIErr   func(codec.APIError, *engine)
+	onDisconnect   func(*engine, error) bool
+	emitGap        func(*engine)
+	emitResumed    func(*engine)
+	validateResume func(*engine) error
+	close          func(error)
+	gapped         bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
 type orderRoute struct {

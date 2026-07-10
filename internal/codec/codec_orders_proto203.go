@@ -22,7 +22,7 @@ func (m PlaceOrderRequest) encodeProto(sv int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	contract, err := encodeOrderContractProto(m.Contract, m.ComboLegs, m.OrderComboLegPrices)
+	contract, err := encodeOrderContractProto(m.Contract, m.OrderComboLegPrices)
 	if err != nil {
 		return nil, err
 	}
@@ -163,11 +163,11 @@ func decodeOpenOrderProto(body []byte, sv int) ([]Message, error) {
 			if err != nil {
 				return nil, protoFieldError("open order", number, err)
 			}
-			contract, legs, prices, err := decodeOpenOrderContractProto(value)
+			contract, description, prices, err := decodeOpenOrderContractProto(value)
 			if err != nil {
 				return nil, protoFieldError("open order contract", number, err)
 			}
-			m.Contract, m.ComboLegs, m.OrderComboLegPrices = contract, legs, prices
+			m.Contract, m.ComboLegsDescription, m.OrderComboLegPrices = contract, description, prices
 			hasContract = true
 		case 3:
 			value, err := consumeProtoBytes(&body, typ)
@@ -195,9 +195,9 @@ func decodeOpenOrderProto(body []byte, sv int) ([]Message, error) {
 	}
 }
 
-func decodeOpenOrderContractProto(body []byte) (Contract, []ComboLeg, []string, error) {
+func decodeOpenOrderContractProto(body []byte) (Contract, string, []string, error) {
 	decoded, err := decodeSharedContractProto(body)
-	return decoded.Contract, decoded.ComboLegs, decoded.ComboLegPrices, err
+	return decoded.Contract, decoded.ComboLegsDescription, decoded.ComboLegPrices, err
 }
 
 func decodeComboLegProto(body []byte) (ComboLeg, string, error) {
@@ -547,24 +547,24 @@ func encodeOrderCancelProto(manualTime, extOperator, manualIndicator string) ([]
 	return appendOptionalProtoInt32(body, 3, manualIndicator, "manual order indicator")
 }
 
-func encodeOrderContractProto(contract Contract, legs []ComboLeg, legPrices []string) ([]byte, error) {
-	return encodeSharedContractProto(contract, legs, legPrices, false)
+func encodeOrderContractProto(contract Contract, legPrices []string) ([]byte, error) {
+	// API 10.48.01 Contract.proto declares proto3 optional int32 conId = 1.
+	// Official EClientUtils nevertheless sets it whenever Utils::isValidValue
+	// accepts the value; zero is valid, so placement emits tag 1 with zero for
+	// an unqualified descriptive contract. Mirror that implementation law.
+	return encodeSharedContractProto(contract, legPrices, true)
 }
 
 func encodeComboLegProto(leg ComboLeg, price string) ([]byte, error) {
 	body := make([]byte, 0, 48)
 	var err error
-	if leg.ConID != 0 {
-		body, err = appendProtoInt(body, 1, leg.ConID, "conid")
-		if err != nil {
-			return nil, err
-		}
+	body, err = appendProtoInt(body, 1, leg.ConID, "conid")
+	if err != nil {
+		return nil, err
 	}
-	if leg.Ratio != 0 {
-		body, err = appendProtoInt(body, 2, leg.Ratio, "ratio")
-		if err != nil {
-			return nil, err
-		}
+	body, err = appendProtoInt(body, 2, leg.Ratio, "ratio")
+	if err != nil {
+		return nil, err
 	}
 	if leg.Action != "" {
 		body = appendProtoString(body, 3, leg.Action)
@@ -576,7 +576,7 @@ func encodeComboLegProto(leg ComboLeg, price string) ([]byte, error) {
 		number protowire.Number
 		value  string
 		label  string
-	}{{5, leg.OpenClose, "open close"}, {6, leg.ShortSaleSlot, "short sale slot"}, {8, leg.ExemptCode, "exempt code"}} {
+	}{{5, defaultProtoInt(leg.OpenClose, "0"), "open close"}, {6, defaultProtoInt(leg.ShortSaleSlot, "0"), "short sale slot"}, {8, defaultProtoInt(leg.ExemptCode, "-1"), "exempt code"}} {
 		body, err = appendOptionalProtoInt32(body, field.number, field.value, field.label)
 		if err != nil {
 			return nil, err
@@ -590,6 +590,13 @@ func encodeComboLegProto(leg ComboLeg, price string) ([]byte, error) {
 		return nil, err
 	}
 	return canonicalProtoFields(body), nil
+}
+
+func defaultProtoInt(value, defaultValue string) string {
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
 
 func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
@@ -690,9 +697,6 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-	}
-	if m.DeltaNeutralContractPresent != "" && m.DeltaNeutralContractPresent != "0" {
-		return nil, fmt.Errorf("codec: delta-neutral contract protobuf encoding is not exposed")
 	}
 	if m.OrderMiscOptions != "" {
 		return nil, fmt.Errorf("codec: order misc options protobuf map cannot be encoded from %q", m.OrderMiscOptions)

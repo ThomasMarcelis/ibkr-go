@@ -42,6 +42,19 @@ server version and managed-account bootstrap fields are known.
 | out | 83 | reqSmartComponents | landed |
 | in | 82 | SmartComponents | landed |
 
+Canonical Contract fields fail closed against each request layout. Classic
+contract details carry IncludeExpired/SecurityID/IssuerID; classic quotes carry
+BAG legs/delta-neutral; classic depth carries none of those extended fields;
+classic place order carries SecurityID/BAG legs/delta-neutral. Historical bars
+carry IncludeExpired/BAG legs, while head/histogram/historical-tick requests
+carry only IncludeExpired. Real-time bars, tick-by-tick, calculations, and
+exercise carry none of these extended fields. Common classic layouts carry
+PrimaryExchange, but exercise does not. Classic quote/historical BAG legs carry
+only ConID/Ratio/Action/Exchange, so nondefault leg position/short-sale fields
+fail before send. Place-order, contract-data, and market-data protobuf
+migrations use the complete shared Contract schema at 203, 205, and 206
+respectively.
+
 ## Accounts and Positions
 
 | Direction | Msg ID | Name | Status |
@@ -178,22 +191,28 @@ as IBKR's unavailable sentinels.
 
 | Direction | Msg ID | Name | Status | Notes |
 |-----------|--------|------|--------|-------|
-| out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf; required empty nested messages and guarded live bytes are frozen. Opaque internal-only delta-neutral contract/options shapes fail closed. |
+| out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf. `Contract.conId` is proto3 optional; official EClientUtils nevertheless emits zero because `Utils::isValidValue(0)` is true, and a fresh guarded paper lifecycle capture freezes that request. Combo-leg price tag 9 is source-law coverage, not claimed live priced-combo evidence. |
 | out | 4 | CancelOrder | landed | Classic plus exact-sv203 `CancelOrderRequest` protobuf, including compliance metadata. |
 | out | 58 | reqGlobalCancel | landed | Classic plus exact-sv203 `GlobalCancelRequest` protobuf, live-flushed before teardown. |
 | in | 5 | OpenOrder | landed | Live-grounded sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; no fill echo (fills are order_status truth). |
 | in | 3 | OrderStatus | landed | Classic and exact-sv203 protobuf parse; authoritative fill data for all order types. |
 
-OpenOrder is dual-dispatched to per-order handles and the singleton open-orders
-observer. OrderStatus is routed to per-order handles; open-orders observers
-read status from the OpenOrder payload.
+OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
+singleton open-orders observer. Each OpenOrder consumer receives a deep-owned
+Contract/OrderCombo payload, including decimal pointers. Strict canonical
+numeric conversion errors close those affected routes without closing the
+session.
 
 OpenOrder uses one live-grounded sequential walk: the "None"-sentinel
 delta-neutral block, the no-scale section, grounded combo, algo, and
 condition sections, and the official 32-field adjustedOrderType..imbalanceOnly
-tail. Real delta-neutral, scale, and other live-unattested shapes fall back
-to the safe partial parse. The codec's OpenOrder encoder emits the same live
-layout, so replay fixtures exercise the production decode path.
+tail. The classic codec marks an order Partial only at its explicit
+unattested order-level delta-neutral/advanced-layout boundaries; it does not
+best-effort canonical Contract or combo numerics. Those conversions return an
+error and close the affected route. The codec's OpenOrder encoder emits the
+same live layout, so replay fixtures exercise the production decode path.
+Public open and completed orders use the same `OrderCombo` shape as placement
+for per-leg prices and smart-routing tags; `ComboDescription` is response-only.
 
 ## Order and Execution Observation
 

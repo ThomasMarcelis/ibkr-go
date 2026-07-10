@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
@@ -298,7 +299,7 @@ func TestContractDetailsVersionGate(t *testing.T) {
 		oldMsg.Contract.ConID != 265598 || oldMsg.TimeZoneID != "America/New_York" {
 		t.Fatalf("sv181 contract details desync: %+v", oldMsg)
 	}
-	if oldMsg.Contract != newMsg.Contract || oldMsg.MinTick != newMsg.MinTick ||
+	if !reflect.DeepEqual(oldMsg.Contract, newMsg.Contract) || oldMsg.MinTick != newMsg.MinTick ||
 		oldMsg.LongName != newMsg.LongName || oldMsg.TimeZoneID != newMsg.TimeZoneID {
 		t.Fatalf("contract details overlap mismatch: old=%+v new=%+v", oldMsg, newMsg)
 	}

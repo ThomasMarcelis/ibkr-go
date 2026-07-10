@@ -1441,8 +1441,8 @@ func TestCompletedOrdersCancelledSystemLive(t *testing.T) {
 		order.Order.Routing.ExemptCode != nil {
 		t.Fatalf("numeric sentinels were exposed as values: prices=%+v routing=%+v", order.Order.Prices, order.Order.Routing)
 	}
-	if order.Order.Volatility.DeltaNeutral != nil || order.Order.DeltaNeutralContract != nil {
-		t.Fatalf("inactive delta-neutral blocks = %+v/%+v, want nil", order.Order.Volatility.DeltaNeutral, order.Order.DeltaNeutralContract)
+	if order.Order.Volatility.DeltaNeutral != nil || order.Contract.DeltaNeutral != nil {
+		t.Fatalf("inactive delta-neutral blocks = %+v/%+v, want nil", order.Order.Volatility.DeltaNeutral, order.Contract.DeltaNeutral)
 	}
 	if order.Order.Hedge.DisableAutomaticPrice == nil || !*order.Order.Hedge.DisableAutomaticPrice {
 		t.Fatalf("disable automatic hedge price = %v, want explicit true", order.Order.Hedge.DisableAutomaticPrice)
@@ -2804,7 +2804,7 @@ func TestGroundedPositions(t *testing.T) {
 	}
 	// The wire strike "500.0" normalizes to "500" through decimal; compare by
 	// value, never by string.
-	if !qqq.Contract.Strike.Equal(decimal.RequireFromString("500.0")) {
+	if qqq.Contract.Strike == nil || !qqq.Contract.Strike.Equal(decimal.RequireFromString("500.0")) {
 		t.Errorf("QQQ strike = %s, want 500.0", qqq.Contract.Strike)
 	}
 	if qqq.Contract.Right != ibkr.RightPut {

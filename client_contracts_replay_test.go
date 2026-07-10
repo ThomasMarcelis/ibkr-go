@@ -51,7 +51,7 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.Expiry != "20260618" {
 		t.Errorf("Expiry = %q, want 20260618", first.Expiry)
 	}
-	if !first.Strike.Equal(decimal.RequireFromString("100")) {
+	if first.Strike == nil || !first.Strike.Equal(decimal.RequireFromString("100")) {
 		t.Errorf("Strike = %s, want 100", first.Strike)
 	}
 	if first.Right != ibkr.RightCall {
@@ -94,7 +94,7 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 		if details[i].ConID != want.conID {
 			t.Errorf("details[%d].ConID = %d, want %d", i, details[i].ConID, want.conID)
 		}
-		if !details[i].Strike.Equal(decimal.RequireFromString(want.strike)) {
+		if details[i].Strike == nil || !details[i].Strike.Equal(decimal.RequireFromString(want.strike)) {
 			t.Errorf("details[%d].Strike = %s, want %s", i, details[i].Strike, want.strike)
 		}
 		if details[i].Right != ibkr.RightCall {
@@ -109,7 +109,7 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if put.Right != ibkr.RightPut {
 		t.Errorf("put Right = %q, want P", put.Right)
 	}
-	if !put.Strike.Equal(decimal.RequireFromString("100")) {
+	if put.Strike == nil || !put.Strike.Equal(decimal.RequireFromString("100")) {
 		t.Errorf("put Strike = %s, want 100", put.Strike)
 	}
 	if put.LocalSymbol != "AAPL  260618P00100000" {

@@ -213,6 +213,7 @@ func BenchmarkEncodePlaceOrder(b *testing.B) {
 		OrderID: 77,
 		Contract: Contract{
 			ConID: 9001, Symbol: "BAG-TEST", SecType: "BAG", Exchange: "SMART", Currency: "USD",
+			ComboLegs: []ComboLeg{{ConID: 101, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}, {ConID: 102, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}},
 		},
 		Action:                  "BUY",
 		TotalQuantity:           "1",
@@ -224,7 +225,6 @@ func BenchmarkEncodePlaceOrder(b *testing.B) {
 		Transmit:                "1",
 		ParentID:                "0",
 		OutsideRTH:              "0",
-		ComboLegs:               []ComboLeg{{ConID: 101, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}, {ConID: 102, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", DesignatedLocation: "", ExemptCode: "-1"}},
 		OrderComboLegPrices:     []string{"1.10", "2.40"},
 		SmartComboRoutingParams: []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		AlgoStrategy:            "Adaptive",

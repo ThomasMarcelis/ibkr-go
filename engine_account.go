@@ -341,6 +341,12 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 						return
 					}
 				case codec.UpdatePortfolio:
+					contract, err := fromCodecContract(m.Contract)
+					if err != nil {
+						delete(e.singletons, singletonAccountUpdates)
+						sub.closeWithErr(err)
+						return
+					}
 					position, err := parseOptionalDecimal(m.Position, "account updates position")
 					if err != nil {
 						delete(e.singletons, singletonAccountUpdates)
@@ -379,7 +385,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					}
 					emitSubscription(sub, AccountUpdate{Portfolio: &PortfolioUpdate{
 						Account:       m.Account,
-						Contract:      fromCodecContract(m.Contract),
+						Contract:      contract,
 						Position:      position,
 						MarketPrice:   marketPrice,
 						MarketValue:   marketValue,
@@ -575,6 +581,12 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.PositionMulti:
+					contract, err := fromCodecContract(m.Contract)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 					position, err := parseRequiredDecimal(m.Position, "positions multi position")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -589,7 +601,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 					}
 					emitSubscription(sub, PositionMulti{
 						Account: m.Account, ModelCode: m.ModelCode,
-						Contract: fromCodecContract(m.Contract),
+						Contract: contract,
 						Position: position, AvgCost: avgCost,
 					})
 				case codec.PositionMultiEnd:
@@ -840,6 +852,10 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 }
 
 func fromCodecPosition(m codec.Position) (Position, error) {
+	contract, err := fromCodecContract(m.Contract)
+	if err != nil {
+		return Position{}, err
+	}
 	position, err := decimal.NewFromString(m.Position)
 	if err != nil {
 		return Position{}, err
@@ -850,7 +866,7 @@ func fromCodecPosition(m codec.Position) (Position, error) {
 	}
 	return Position{
 		Account:  m.Account,
-		Contract: fromCodecContract(m.Contract),
+		Contract: contract,
 		Position: position,
 		AvgCost:  avgCost,
 	}, nil

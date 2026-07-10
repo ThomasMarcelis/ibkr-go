@@ -16,8 +16,21 @@ func (m QuoteRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	// BAG combo legs omitted (not supported in v1).
-	w.WriteBool(false) // deltaNeutralContract present
+	if m.Contract.SecType == "BAG" {
+		w.WriteInt(len(m.Contract.ComboLegs))
+		for _, leg := range m.Contract.ComboLegs {
+			w.WriteInt(leg.ConID)
+			w.WriteInt(leg.Ratio)
+			w.WriteString(leg.Action)
+			w.WriteString(leg.Exchange)
+		}
+	}
+	w.WriteBool(m.Contract.DeltaNeutral != nil)
+	if m.Contract.DeltaNeutral != nil {
+		w.WriteInt(m.Contract.DeltaNeutral.ConID)
+		w.WriteString(m.Contract.DeltaNeutral.Delta)
+		w.WriteString(m.Contract.DeltaNeutral.Price)
+	}
 	w.WriteString(strings.Join(m.GenericTicks, ","))
 	w.WriteBool(m.Snapshot)
 	w.WriteBool(false) // regulatorySnapshot

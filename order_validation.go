@@ -26,7 +26,7 @@ func validateOrderRequest(req PlaceOrderRequest, intent orderIntent) error {
 	if intent != orderIntentModify && order.OrderID != 0 {
 		return invalidOrderField("Order.OrderID", order.OrderID, "must be zero for a new order; the client assigns it")
 	}
-	if err := validateOrderContract(req.Contract, order.Combo); err != nil {
+	if err := validateOrderContract(req.Contract); err != nil {
 		return err
 	}
 
@@ -144,9 +144,9 @@ func prepareBracketRequest(req PlaceBracketRequest) (PlaceBracketRequest, error)
 	return req, nil
 }
 
-func validateOrderContract(contract Contract, combo OrderCombo) error {
-	if contract.ConID < 0 {
-		return invalidOrderField("Contract.ConID", contract.ConID, "must be >= 0")
+func validateOrderContract(contract Contract) error {
+	if err := validateContract(contract); err != nil {
+		return err
 	}
 	if contract.ConID == 0 {
 		if contract.SecType == "" {
@@ -156,8 +156,8 @@ func validateOrderContract(contract Contract, combo OrderCombo) error {
 			return invalidOrderField("Contract.Symbol", contract.Symbol, "Symbol or LocalSymbol is required when ConID is not set")
 		}
 	}
-	if contract.SecType == SecTypeCombo && len(combo.Legs) < 2 {
-		return invalidOrderField("Order.Combo.Legs", len(combo.Legs), "a BAG order requires at least two legs")
+	if contract.SecType == SecTypeCombo && len(contract.ComboLegs) < 2 {
+		return invalidOrderField("Contract.ComboLegs", len(contract.ComboLegs), "a BAG order requires at least two legs")
 	}
 	return nil
 }
@@ -245,34 +245,11 @@ func validateOrderOCA(oca OrderOCA) error {
 }
 
 func validateOrderCombo(contract Contract, combo OrderCombo) error {
-	if len(combo.Legs) > 0 && contract.SecType != SecTypeCombo {
-		return invalidOrderField("Order.Combo.Legs", len(combo.Legs), "requires a BAG contract")
+	if len(combo.SmartRouting) > 0 && contract.SecType != SecTypeCombo {
+		return invalidOrderField("Order.Combo.SmartRouting", len(combo.SmartRouting), "requires a BAG contract")
 	}
-	if len(combo.LegPrices) > 0 && len(combo.LegPrices) != len(combo.Legs) {
+	if len(combo.LegPrices) > 0 && len(combo.LegPrices) != len(contract.ComboLegs) {
 		return invalidOrderField("Order.Combo.LegPrices", len(combo.LegPrices), "must contain one price per leg")
-	}
-	for i, leg := range combo.Legs {
-		prefix := fmt.Sprintf("Order.Combo.Legs[%d]", i)
-		if leg.ConID <= 0 {
-			return invalidOrderField(prefix+".ConID", leg.ConID, "must be > 0")
-		}
-		if leg.Ratio <= 0 {
-			return invalidOrderField(prefix+".Ratio", leg.Ratio, "must be > 0")
-		}
-		switch leg.Action {
-		case ActionBuy, ActionSell, ActionSellShort, ActionSellLong:
-		default:
-			return invalidOrderField(prefix+".Action", leg.Action, "must be BUY, SELL, SSHORT, or SLONG")
-		}
-		if strings.TrimSpace(leg.Exchange) == "" {
-			return invalidOrderField(prefix+".Exchange", leg.Exchange, "is required")
-		}
-		if leg.ShortSaleSlot < 0 || leg.ShortSaleSlot > 2 {
-			return invalidOrderField(prefix+".ShortSaleSlot", leg.ShortSaleSlot, "must be 0, 1, or 2")
-		}
-		if leg.ShortSaleSlot == 2 && strings.TrimSpace(leg.DesignatedLocation) == "" {
-			return invalidOrderField(prefix+".DesignatedLocation", leg.DesignatedLocation, "is required for short-sale slot 2")
-		}
 	}
 	return validateTagValues("Order.Combo.SmartRouting", combo.SmartRouting)
 }

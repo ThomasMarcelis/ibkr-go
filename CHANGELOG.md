@@ -53,7 +53,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   global cancel, and their open-order/status callbacks to protobuf using
   pure-Go wire codecs. The lifecycle also freezes the protobuf error family
   already introduced at 201. A guarded far-limit paper order was observed,
-  cancelled, globally cleaned up, and promoted to a sanitized replay.
+  cancelled, and promoted to a sanitized replay; the subsequent global-cancel
+  request was flushed after terminal cancellation and returned code 161.
 
 - Exact `server_version 204` support migrates client/all/auto open-order
   requests and completed-order request/results to protobuf. Completed orders
@@ -78,6 +79,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   schemas, exact live vectors, and a curated public replay freeze the boundary.
 
 ### Changed (breaking)
+
+- **`Contract` is the single owner of contract selection and composition.** It
+  now carries `IncludeExpired`, the open `SecurityID` selector, `ComboLegs`,
+  and `DeltaNeutral`. Contract legs no longer appear in order-level combo
+  metadata. `OrderCombo` is now the one placement/open/completed-order shape:
+  `LegPrices` is `[]*decimal.Decimal`, `SmartRouting` owns routing tags, and
+  `ComboDescription` remains a separate response-only field.
+  `ComboLeg.OpenClose` is the typed official 0..3 enum and
+  `ComboLeg.ExemptCode` is a nonnegative `*int`; nil sends IBKR's `-1` unset
+  sentinel. Canonical fields are validated against the exact request layout
+  and negotiated server version before route installation instead of being
+  silently dropped, including IssuerID, the exercise-only PrimaryExchange
+  omission, and reduced classic combo-leg layouts. `DeltaNeutral` requires
+  BAG, and a one-leg BAG is rejected while an empty BAG remains valid for
+  lookup. `Contract` is no longer comparable because it directly owns its
+  combo-leg slice.
+
+- **Contract and combo decoding now fails closed per operation.** Malformed
+  strike, delta-neutral values, combo leg integer fields, exempt codes, and
+  order combo prices close only the affected route. Open-order payloads are
+  deeply cloned for the order handle and open-orders subscription, including
+  decimal pointers, so neither consumer can mutate the other's event.
+
+- **Exact sv203 placement now emits explicit `Contract.conId=0`.** The official
+  encoder law is frozen independently: `conId` is proto3 optional, but
+  EClientUtils emits zero because `Utils::isValidValue(0)` is true. A fresh
+  guarded paper capture
+  (`20260710T160907Z-protobuf_sv203_required_conid_order_cancel_aapl`, events
+  SHA-256 `8efd714c3885da232215b0f4f4bb661ac7f4364126d4c97f4200dfa71320c55d`)
+  proves the corrected request is accepted through open/status and targeted
+  cancel. Global cancel was live-flushed after the sole order was terminal and
+  returned the expected code 161 no-active-order response. Per-leg price tag 9
+  remains an official-schema law, not a claimed live priced-combo placement.
+  The capture name preserves its initial, incorrect required-field hypothesis;
+  the unchanged bytes prove the official explicit-zero encoder behavior.
 
 - **`QuoteParameters.SnapshotPermissions` is now `*int`.** Nil means IBKR
   omitted the mask; a pointer to zero is an explicitly present zero. Quote
@@ -188,15 +224,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   // state.InitMarginChange, state.Commission, ... — one-shot, no OrderHandle
   ```
 
-- **`Contract.Strike` is `decimal.Decimal`, not `string`.** Closes the last
-  stringly money field in the public contract surface. The zero value
-  encodes to the same wire bytes the empty string produced.
+- **`Contract.Strike` is `*decimal.Decimal`, not `string`.** Nil means the
+  selector is absent; a non-nil zero preserves IBKR's explicitly present zero
+  across classic and protobuf requests and responses.
 
   ```go
   // Before
   Contract{Strike: "150"}
   // After
-  Contract{Strike: decimal.NewFromInt(150)}
+  Contract{Strike: new(decimal.NewFromInt(150))}
   ```
 
 - **`WithDialer` takes the new public `Dialer` interface, not
@@ -390,11 +426,15 @@ Every breaking change in this release, before → after:
   state, err := client.Orders().Preview(ctx, req) // after: returns OrderState
   ```
 
-- **Contract.Strike.** `string` → `decimal.Decimal`.
+- **Contract composition.** Contract selectors, combo legs, and the
+  delta-neutral underlier now live on `Contract`; order-level combo state is
+  limited to leg prices and routing parameters.
+
+- **Contract.Strike.** `string` → `*decimal.Decimal`.
 
   ```go
-  Contract{Strike: "150"}                 // before
-  Contract{Strike: decimal.NewFromInt(150)} // after
+  Contract{Strike: "150"}                      // before
+  Contract{Strike: new(decimal.NewFromInt(150))} // after
   ```
 
 - **WithDialer.** `internal/transport.Dialer` → public `ibkr.Dialer`.

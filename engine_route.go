@@ -348,12 +348,12 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	}
 
 	if orderObserved && !orderRoute.closed {
-		if !orderRoute.handle.emitOrder(order) {
+		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 		}
 	}
 	if singletonObserved {
-		singletonRoute.handle(parsedOpenOrder{order: order}, e)
+		singletonRoute.handle(parsedOpenOrder{order: cloneOpenOrder(order)}, e)
 	}
 }
 

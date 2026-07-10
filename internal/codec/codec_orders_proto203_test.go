@@ -25,9 +25,13 @@ func TestEncodeServer203OrderRequestVectors(t *testing.T) {
 				LmtPrice: "50", TIF: "DAY", Transmit: "1", ParentID: "0", Origin: "0",
 				OcaType: "0", TriggerMethod: "0", ExemptCode: "-1", AdjustableTrailingUnit: "0",
 			},
-			// Exact client frame from the sanitized exact-sv203 live capture.
-			// Raw ID 203 is base ID 3 plus the protobuf discriminator 200.
-			want: "000000cb0801121712044141504c1a0353544b4205534d41525452035553441a3d20002a03425559320131380042034c4d544900000000000049405a03444159f00100f80100900401a80400c004ffffffffffffffffff01900600ca06002200",
+			// Official API 10.48.01 PlaceOrderRequest.proto / Contract.proto
+			// source-law vector. Contract.conId is proto3 optional, but official
+			// EClientUtils sets it because Utils::isValidValue accepts zero. This
+			// freezes official implementation behavior, not a schema requirement
+			// or live order attestation. Raw ID 203 is base ID 3 plus the protobuf
+			// discriminator 200.
+			want: "000000cb08011219080012044141504c1a0353544b4205534d41525452035553441a3d20002a03425559320131380042034c4d544900000000000049405a03444159f00100f80100900401a80400c004ffffffffffffffffff01900600ca06002200",
 		},
 		{name: "cancel", msg: CancelOrderRequest{OrderID: 1}, want: "000000cc08011200"},
 		{name: "global cancel", msg: GlobalCancelRequest{}, want: "000001020a00"},
@@ -47,13 +51,43 @@ func TestEncodeServer203OrderRequestVectors(t *testing.T) {
 	}
 }
 
+func TestEncodePlaceOrderContractSourceLaws(t *testing.T) {
+	t.Parallel()
+
+	contract, err := encodeOrderContractProto(Contract{}, nil)
+	if err != nil {
+		t.Fatalf("encodeOrderContractProto() error = %v", err)
+	}
+	// API 10.48.01 Contract.proto: optional int32 conId = 1. Official
+	// EClientUtils emits zero because Utils::isValidValue(0) is true.
+	if want := decodeHex(t, "0800"); !bytes.Equal(contract, want) {
+		t.Fatalf("zero-conId contract = %x, want official explicit tag 1 %x", contract, want)
+	}
+
+	leg, err := encodeComboLegProto(ComboLeg{
+		ConID: 265598, Ratio: 1, Action: "BUY", Exchange: "SMART",
+		OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1",
+	}, "0.05")
+	if err != nil {
+		t.Fatalf("encodeComboLegProto() error = %v", err)
+	}
+	// API 10.48.01 ComboLeg.proto: optional double price = 9. This exact
+	// source-law vector proves a supplied per-leg price is tag 9/fixed64;
+	// it is not presented as a live placed-order capture.
+	wantLeg := decodeHex(t, "08fe9a1010011a034255592205534d4152542800300040ffffffffffffffffff01499a9999999999a93f")
+	if !bytes.Equal(leg, wantLeg) {
+		t.Fatalf("priced combo leg = %x, want source-law vector %x", leg, wantLeg)
+	}
+}
+
 func TestDecodeServer203OrderCallbacks(t *testing.T) {
 	t.Parallel()
 
-	// Exact callbacks from the sanitized exact-sv203 paper capture frozen in
-	// order_lifecycle_sv203_live.txt. These retain every live protobuf field;
-	// only account/client/permanent/submitter identifiers were substituted.
-	openMessage, err := Decode(203, recordedPayload(t, "AAABEQAAAM0IARIvCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgVTTUFSVFIDVVNEWgRBQVBMYgNOTVMaxwEIARABGIHSk60DIAAqA0JVWTIBMUIDTE1USQAAAAAAAElAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSUK5AQAAAAAAgElA8AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwEwsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwDKCA1wYXBlcnRyYWRlcjAx8AgAIg4KDFByZVN1Ym1pdHRlZA=="))
+	// Exact callbacks from the sanitized 20260710 exact-sv203 paper capture
+	// frozen in order_lifecycle_sv203_live.txt. These retain every live
+	// protobuf field; only account/permanent/submitter identifiers were
+	// substituted.
+	openMessage, err := Decode(203, recordedPayload(t, "AAABEwAAAM0IwAMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGsgBCAEQwAMYgdKTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAASUBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAACASUDwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVydHJhZGVyMDHwCAAiDgoMUHJlU3VibWl0dGVk"))
 	if err != nil {
 		t.Fatalf("Decode(open order) error = %v", err)
 	}
@@ -61,19 +95,19 @@ func TestDecodeServer203OrderCallbacks(t *testing.T) {
 	if !ok {
 		t.Fatalf("Decode(open order) = %T", openMessage)
 	}
-	if openOrder.OrderID != 1 || openOrder.Contract.ConID != 265598 || openOrder.Contract.Symbol != "AAPL" ||
+	if openOrder.OrderID != 448 || openOrder.Contract.ConID != 265598 || openOrder.Contract.Symbol != "AAPL" ||
 		openOrder.Contract.Strike != "0" || openOrder.Action != "BUY" || openOrder.Quantity != "1" ||
 		openOrder.OrderType != "LMT" || openOrder.LmtPrice != "50" || openOrder.Account != "DU9000001" ||
 		openOrder.ClientID != "1" || openOrder.PermID != "900000001" || openOrder.Status != "PreSubmitted" {
 		t.Fatalf("open order = %+v", openOrder)
 	}
 
-	statusMessage, err := Decode(203, recordedPayload(t, "AAAAPwAAAMsIARIMUHJlU3VibWl0dGVkGgEwIgExKQAAAAAAAAAAMIHSk60DOABBAAAAAAAAAABIAVkAAAAAAAAAAA=="))
+	statusMessage, err := Decode(203, recordedPayload(t, "AAAAQAAAAMsIwAMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCB0pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA="))
 	if err != nil {
 		t.Fatalf("Decode(order status) error = %v", err)
 	}
 	status, ok := statusMessage.(OrderStatus)
-	if !ok || status.OrderID != 1 || status.Status != "PreSubmitted" || status.Filled != "0" ||
+	if !ok || status.OrderID != 448 || status.Status != "PreSubmitted" || status.Filled != "0" ||
 		status.Remaining != "1" || status.PermID != "900000001" || status.ClientID != "1" {
 		t.Fatalf("order status = %#v", statusMessage)
 	}
@@ -82,16 +116,17 @@ func TestDecodeServer203OrderCallbacks(t *testing.T) {
 		name string
 		data string
 		code int
+		when string
 	}{
-		{"targeted cancel", "AAAAKgAAAMwIARDo+/HJ9DMYygEiGE9yZGVyIENhbmNlbGVkIC0gcmVhc29uOg==", 202},
-		{"global cancel after terminal", "AAAAZQAAAMwIARDo+/HJ9DMYoQEiU0NhbmNlbCBhdHRlbXB0ZWQgd2hlbiBvcmRlciBpcyBub3QgaW4gYSBjYW5jZWxsYWJsZSBzdGF0ZS4gIE9yZGVyIHBlcm1JZCA9OTAwMDAwMDAx", 161},
+		{"targeted cancel", "AAAAKwAAAMwIwAMQqJCp5vQzGMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo=", 202, "1783699753000"},
+		{"global cancel after terminal", "AAAAZgAAAMwIwAMQrZep5vQzGKEBIlNDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTkwMDAwMDAwMQ==", 161, "1783699753901"},
 	} {
 		message, err := Decode(203, recordedPayload(t, tc.data))
 		if err != nil {
 			t.Fatalf("Decode(%s error) = %v", tc.name, err)
 		}
 		apiError, ok := message.(APIError)
-		if !ok || apiError.ReqID != 1 || apiError.Code != tc.code || apiError.ErrorTimeMs != "1783640129000" {
+		if !ok || apiError.ReqID != 448 || apiError.Code != tc.code || apiError.ErrorTimeMs != tc.when {
 			t.Fatalf("%s error = %#v", tc.name, message)
 		}
 	}

@@ -56,7 +56,7 @@ func OptionContract(symbol, lastTradeDateOrContractMonth string, strike decimal.
 		Symbol:     symbol,
 		SecType:    SecTypeOption,
 		Expiry:     lastTradeDateOrContractMonth,
-		Strike:     strike,
+		Strike:     new(strike),
 		Right:      right,
 		Multiplier: "100",
 		Exchange:   "SMART",

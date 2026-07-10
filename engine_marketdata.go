@@ -67,6 +67,10 @@ func (e *engine) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...
 }
 
 func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot bool, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
+	if err := validateContract(req.Contract); err != nil {
+		return nil, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	genericTicks := formatGenericTicks(req.GenericTicks)
 	type result struct {
 		sub *Subscription[QuoteUpdate]
@@ -77,6 +81,10 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "market data quote", e.serverVersion, quoteContractFields(e.serverVersion)); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -111,6 +119,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 		quote := Quote{}
 		var quoteRoute *route
 		rerouted := false
+		resumeContract := cloneContract(req.Contract)
 
 		quoteRoute = &route{
 			opKind:       OpQuotes,
@@ -121,6 +130,9 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				Contract:     toCodecContract(req.Contract),
 				Snapshot:     snapshot,
 				GenericTicks: genericTicks,
+			},
+			validateResume: func(e *engine) error {
+				return validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion))
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -134,6 +146,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					request := quoteRoute.request.(codec.QuoteRequest)
 					request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
 					quoteRoute.request = request
+					resumeContract = Contract{ConID: m.ConID, Exchange: m.Exchange}
 					rerouted = true
 					if err := e.send(request); err != nil {
 						e.deleteKeyedRoute(reqID)
@@ -355,6 +368,10 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 }
 
 func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequest, opts ...SubscriptionOption) (*Subscription[Bar], error) {
+	if err := validateContract(req.Contract); err != nil {
+		return nil, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		sub *Subscription[Bar]
 		err error
@@ -364,6 +381,10 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "real-time bars", e.serverVersion, contractFieldPrimaryExchange); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -377,6 +398,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			return
 		}
 		reqID := e.allocReqID()
+		resumeContract := cloneContract(req.Contract)
 		var sub *Subscription[Bar]
 		sub = newSubscription[Bar](cfg, func() {
 			e.enqueue(func() {
@@ -398,6 +420,9 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				Contract:   toCodecContract(req.Contract),
 				WhatToShow: string(req.WhatToShow),
 				UseRTH:     req.UseRTH,
+			},
+			validateResume: func(e *engine) error {
+				return validateContractFieldSupport(resumeContract, "resume real-time bars", e.serverVersion, contractFieldPrimaryExchange)
 			},
 			handle: func(msg any, e *engine) {
 				barMsg, ok := msg.(codec.RealTimeBar)
@@ -472,6 +497,10 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 }
 
 func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthRequest, opts ...SubscriptionOption) (*Subscription[DepthRow], error) {
+	if err := validateContract(req.Contract); err != nil {
+		return nil, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		sub *Subscription[DepthRow]
 		err error
@@ -481,6 +510,10 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "market depth", e.serverVersion, depthContractFields(e.serverVersion)); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -678,6 +711,10 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 }
 
 func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest, opts ...SubscriptionOption) (*Subscription[TickByTickData], error) {
+	if err := validateContract(req.Contract); err != nil {
+		return nil, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		sub *Subscription[TickByTickData]
 		err error
@@ -687,6 +724,10 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "tick-by-tick data", e.serverVersion, contractFieldPrimaryExchange); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -821,6 +862,10 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 }
 
 func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolatilityRequest) (OptionComputation, error) {
+	if err := validateContract(req.Contract); err != nil {
+		return OptionComputation{}, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		value OptionComputation
 		err   error
@@ -830,6 +875,10 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "calculate implied volatility", e.serverVersion, contractFieldPrimaryExchange); err != nil {
+			resp <- result{err: err}
 			return
 		}
 		reqID = e.allocReqID()
@@ -886,6 +935,10 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 }
 
 func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest) (OptionComputation, error) {
+	if err := validateContract(req.Contract); err != nil {
+		return OptionComputation{}, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		value OptionComputation
 		err   error
@@ -895,6 +948,10 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "calculate option price", e.serverVersion, contractFieldPrimaryExchange); err != nil {
+			resp <- result{err: err}
 			return
 		}
 		reqID = e.allocReqID()

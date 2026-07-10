@@ -30,7 +30,7 @@ func TestExecutionsZeroStrikeServer202Replay(t *testing.T) {
 		t.Fatalf("Executions() = %+v, want one live execution", updates)
 	}
 	execution := updates[0].Execution
-	if execution.Contract.ConID != 265598 || !execution.Contract.Strike.IsZero() {
+	if execution.Contract.ConID != 265598 || execution.Contract.Strike == nil || !execution.Contract.Strike.IsZero() {
 		t.Fatalf("Contract = %+v, want conId 265598 with zero strike", execution.Contract)
 	}
 	if execution.ExecID != "sanitized-sv202-buy-001" {

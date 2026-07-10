@@ -150,6 +150,13 @@ func (e *engine) dropLostRoutes() {
 func (e *engine) resumeRoutes() {
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
+			if route.validateResume != nil {
+				if err := route.validateResume(e); err != nil {
+					route.close(err)
+					e.deleteKeyedRoute(reqID)
+					continue
+				}
+			}
 			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
@@ -163,6 +170,13 @@ func (e *engine) resumeRoutes() {
 	}
 	for key, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto {
+			if route.validateResume != nil {
+				if err := route.validateResume(e); err != nil {
+					route.close(err)
+					delete(e.singletons, key)
+					continue
+				}
+			}
 			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)

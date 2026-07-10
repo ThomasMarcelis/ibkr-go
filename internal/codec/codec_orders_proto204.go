@@ -67,13 +67,12 @@ func decodeCompletedOrderProto(body []byte, sv int) ([]Message, error) {
 			if err != nil {
 				return nil, protoFieldError("completed order", number, err)
 			}
-			contract, description, legs, prices, err := decodeCompletedOrderContractProto(value)
+			contract, description, prices, err := decodeCompletedOrderContractProto(value)
 			if err != nil {
 				return nil, protoFieldError("completed order contract", number, err)
 			}
 			m.Contract = contract
 			m.ComboLegsDescription = description
-			m.ComboLegs = legs
 			m.OrderComboLegPrices = prices
 			hasContract = true
 		case 2:
@@ -117,9 +116,9 @@ func decodeCompletedOrdersEndProto(body []byte, sv int) ([]Message, error) {
 	}
 }
 
-func decodeCompletedOrderContractProto(body []byte) (Contract, string, []ComboLeg, []string, error) {
+func decodeCompletedOrderContractProto(body []byte) (Contract, string, []string, error) {
 	decoded, err := decodeSharedContractProto(body)
-	return decoded.Contract, decoded.ComboLegsDescription, decoded.ComboLegs, decoded.ComboLegPrices, err
+	return decoded.Contract, decoded.ComboLegsDescription, decoded.ComboLegPrices, err
 }
 
 func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {

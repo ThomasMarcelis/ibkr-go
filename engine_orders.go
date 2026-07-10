@@ -400,6 +400,10 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 			resp <- placeOrderResult{err: ErrNotReady}
 			return
 		}
+		if err := validateContractFieldSupport(req.Contract, "place order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+			resp <- placeOrderResult{err: err}
+			return
+		}
 
 		orderID := e.allocOrderID()
 		handle := e.bindOrderHandle(orderID, req.Contract)
@@ -438,6 +442,10 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 	}, func() {
 		if !e.isReady() {
 			resp <- bracketOrderResult{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "place bracket", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+			resp <- bracketOrderResult{err: err}
 			return
 		}
 
@@ -553,6 +561,9 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 			if !e.isReady() {
 				return ErrNotReady
 			}
+			if err := validateContractFieldSupport(contract, "modify order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+				return err
+			}
 			or, ok := e.orders[orderID]
 			if !ok || or.closed || or.handle == nil || or.handle.isDone() {
 				return ErrClosed
@@ -633,6 +644,10 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			setupResp <- setup{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "preview order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+			setupResp <- setup{err: err}
 			return
 		}
 
@@ -779,9 +794,16 @@ func (e *engine) installExerciseRoute(reqID int) {
 }
 
 func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
+	if err := validateContract(req.Contract); err != nil {
+		return err
+	}
+	req.Contract = cloneContract(req.Contract)
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		if !e.isReady() {
 			return ErrNotReady
+		}
+		if err := validateContractFieldSupport(req.Contract, "exercise options", e.serverVersion, 0); err != nil {
+			return err
 		}
 		override := 0
 		if req.Override {
@@ -816,6 +838,14 @@ func isTerminalExerciseNotice(code int) bool {
 }
 
 func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
+	contract, err := fromCodecContract(m.Contract)
+	if err != nil {
+		return OpenOrder{}, err
+	}
+	comboLegPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, "open order combo leg price")
+	if err != nil {
+		return OpenOrder{}, err
+	}
 	quantity, err := parseOptionalDecimal(m.Quantity, "open order quantity")
 	if err != nil {
 		return OpenOrder{}, err
@@ -901,30 +931,32 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 		return OpenOrder{}, err
 	}
 	return OpenOrder{
-		OrderID:               m.OrderID,
-		Account:               m.Account,
-		Contract:              fromCodecContract(m.Contract),
-		Action:                OrderAction(m.Action),
-		OrderType:             OrderType(m.OrderType),
-		Status:                OrderStatus(m.Status),
-		WarningText:           m.WarningText,
-		Quantity:              quantity,
-		LmtPrice:              lmtPrice,
-		AuxPrice:              auxPrice,
-		TIF:                   TimeInForce(m.TIF),
-		OcaGroup:              m.OcaGroup,
-		OpenClose:             m.OpenClose,
-		Origin:                origin,
-		OrderRef:              m.OrderRef,
-		ClientID:              clientID,
-		PermID:                permID,
-		OutsideRTH:            outsideRTH,
-		Hidden:                hidden,
-		GoodAfterTime:         m.GoodAfterTime,
-		ParentID:              parentID,
-		ComboLegs:             comboLegsFromCodec(m.ComboLegs),
-		OrderComboLegPrices:   append([]string(nil), m.OrderComboLegPrices...),
-		SmartComboRouting:     tagValuesFromCodec(m.SmartComboRouting),
+		OrderID:       m.OrderID,
+		Account:       m.Account,
+		Contract:      contract,
+		Action:        OrderAction(m.Action),
+		OrderType:     OrderType(m.OrderType),
+		Status:        OrderStatus(m.Status),
+		WarningText:   m.WarningText,
+		Quantity:      quantity,
+		LmtPrice:      lmtPrice,
+		AuxPrice:      auxPrice,
+		TIF:           TimeInForce(m.TIF),
+		OcaGroup:      m.OcaGroup,
+		OpenClose:     m.OpenClose,
+		Origin:        origin,
+		OrderRef:      m.OrderRef,
+		ClientID:      clientID,
+		PermID:        permID,
+		OutsideRTH:    outsideRTH,
+		Hidden:        hidden,
+		GoodAfterTime: m.GoodAfterTime,
+		ParentID:      parentID,
+		Combo: OrderCombo{
+			LegPrices:    comboLegPrices,
+			SmartRouting: tagValuesFromCodec(m.SmartComboRouting),
+		},
+		ComboDescription:      m.ComboLegsDescription,
 		AlgoStrategy:          m.AlgoStrategy,
 		AlgoParams:            tagValuesFromCodec(m.AlgoParams),
 		Conditions:            orderConditionsFromCodec(m.Conditions),
@@ -996,6 +1028,10 @@ func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
 }
 
 func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
+	contract, err := fromCodecContract(m.Contract)
+	if err != nil {
+		return ExecutionUpdate{}, err
+	}
 	shares, err := parseRequiredDecimal(m.Shares, "execution shares")
 	if err != nil {
 		return ExecutionUpdate{}, err
@@ -1051,7 +1087,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
 	return ExecutionUpdate{
 		Execution: &Execution{
 			OrderID:                 m.OrderID,
-			Contract:                fromCodecContract(m.Contract),
+			Contract:                contract,
 			ExecID:                  m.ExecID,
 			Time:                    ts,
 			Account:                 m.Account,

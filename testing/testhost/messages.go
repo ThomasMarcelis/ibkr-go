@@ -143,10 +143,12 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "realtime_bar":
 		return codec.RealTimeBar{ReqID: asInt(resolve(body["req_id"])), Time: asString(resolve(body["time"])), Open: asString(resolve(body["open"])), High: asString(resolve(body["high"])), Low: asString(resolve(body["low"])), Close: asString(resolve(body["close"])), Volume: asString(resolve(body["volume"]))}, nil
 	case "open_order":
+		contract := asContract(resolve(body["contract"]))
+		contract.ComboLegs = asCodecComboLegs(resolve(body["combo_legs"]))
 		return codec.OpenOrder{
 			OrderID:               int64(asInt(resolve(body["order_id"]))),
 			Account:               asString(resolve(body["account"])),
-			Contract:              asContract(resolve(body["contract"])),
+			Contract:              contract,
 			Action:                asString(resolve(body["action"])),
 			OrderType:             asString(resolve(body["order_type"])),
 			Status:                asString(resolve(body["status"])),
@@ -165,7 +167,6 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 			DiscretionAmt:         asString(resolve(body["discretion_amt"])),
 			GoodAfterTime:         asString(resolve(body["good_after_time"])),
 			ParentID:              asString(resolve(body["parent_id"])),
-			ComboLegs:             asCodecComboLegs(resolve(body["combo_legs"])),
 			OrderComboLegPrices:   asStrings(resolve(body["order_combo_leg_prices"])),
 			SmartComboRouting:     asCodecTagValues(resolve(body["smart_combo_routing"])),
 			AlgoStrategy:          asString(resolve(body["algo_strategy"])),

@@ -11,6 +11,76 @@ import (
 
 const marketDataSV206CaptureHashes = "eea31798e7e59830f5cda9daadcd94223045c8e9ee0e5aa10f48428447505822, 989563f9c4cad108e34058beac205c576a9ebdc0fffe03e421e829bca851e7de"
 
+func TestContractCompositionLiveQuoteVectorsExact200And206(t *testing.T) {
+	t.Parallel()
+
+	combo := Contract{
+		Symbol: "AAPL", SecType: "BAG", Exchange: "SMART", Currency: "USD",
+		ComboLegs: []ComboLeg{
+			{ConID: 887307502, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
+			{ConID: 887307536, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
+		},
+	}
+	tests := []struct {
+		name string
+		sv   int
+		msg  QuoteRequest
+		want string
+		hash string
+	}{
+		{
+			name: "exact200 combo",
+			sv:   200,
+			msg:  QuoteRequest{ReqID: 2002201, Contract: combo, Snapshot: true},
+			want: "3100313100323030323230310030004141504c004241470000000000534d4152540000555344000000320038383733303735303200310042555900534d4152540038383733303735333600310053454c4c00534d415254003000003100300000",
+			hash: "1f8354ee5d9ea0570472caa35d905127f5a8c5bab694ba1f9a74532178842c69",
+		},
+		{
+			name: "exact206 combo",
+			sv:   206,
+			msg:  QuoteRequest{ReqID: 2062301, Contract: combo, Snapshot: true},
+			want: "000000c908ddef7d1266080012044141504c1a034241474205534d4152545203555344a2012308eef98ca70310011a034255592205534d4152542800300040ffffffffffffffffff01a201240890fa8ca70310011a0453454c4c2205534d4152542800300040ffffffffffffffffff012001",
+			hash: "d31c21c79b110fdba66e0db556ac12a48b0aa5c089ee47a19054c7a901823f3d",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Encode(tc.sv, tc.msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := decodeHex(t, tc.want); !bytes.Equal(got, want) {
+				t.Fatalf("Encode() = %x\nwant     = %x\ncapture events sha256 %s", got, want, tc.hash)
+			}
+		})
+	}
+}
+
+func TestRejectedNonBAGDeltaNeutralLiveRequestVectorExact200(t *testing.T) {
+	t.Parallel()
+
+	msg := QuoteRequest{ReqID: 2002401, Snapshot: true, Contract: Contract{
+		ConID: 887307502, Symbol: "AAPL", SecType: "OPT", Expiry: "20260710", Strike: "315", Right: "C",
+		Multiplier: "100", Exchange: "SMART", Currency: "USD", TradingClass: "AAPL",
+		DeltaNeutral: &DeltaNeutralContract{ConID: 265598, Delta: "0.5", Price: "314.5"},
+	}}
+	got, err := Encode(200, msg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := decodeHex(t, "31003131003230303234303100383837333037353032004141504c004f50540032303236303731300033313500430031303000534d415254000055534400004141504c00310032363535393800302e35003331342e3500003100300000")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("Encode() = %x\nwant     = %x", got, want)
+	}
+	// The live exact-200 Gateway rejected this OPT+delta-neutral request with
+	// code 320; capture events sha256
+	// 6180897b133f7b39fc99377d08a5ebf99a543e097a5a9821573df446e9fb3bad.
+	// It freezes the historical wire evidence only. Public validation now
+	// requires DeltaNeutral on a BAG contract and does not advertise this as a
+	// supported option request.
+}
+
 func TestEncodeMarketDataProto206LiveVectors(t *testing.T) {
 	t.Parallel()
 

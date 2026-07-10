@@ -12,6 +12,7 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 	if err := validateHistoricalBarsRequest(req); err != nil {
 		return nil, err
 	}
+	req.Contract = cloneContract(req.Contract)
 
 	type result struct {
 		values []Bar
@@ -23,6 +24,10 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 	enqueueHistoricalSetup(ctx, e, historicalBarsPacingKey(req), nil, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "historical bars", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldComboLegs); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -82,6 +87,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 	if err := validateHistoricalScheduleRequest(req); err != nil {
 		return HistoricalSchedule{}, err
 	}
+	req.Contract = cloneContract(req.Contract)
 
 	type result struct {
 		value HistoricalSchedule
@@ -93,6 +99,10 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 	enqueueHistoricalSetup(ctx, e, historicalSchedulePacingKey(req), nil, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "historical schedule", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldComboLegs); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -153,6 +163,10 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 }
 
 func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (time.Time, error) {
+	if err := validateContract(req.Contract); err != nil {
+		return time.Time{}, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		timestamp time.Time
 		err       error
@@ -163,6 +177,10 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "head timestamp", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
+			resp <- result{err: err}
 			return
 		}
 		reqID = e.allocReqID()
@@ -227,6 +245,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 	if err := validateHistoricalBarsStreamRequest(req); err != nil {
 		return nil, err
 	}
+	req.Contract = cloneContract(req.Contract)
 
 	type result struct {
 		sub *Subscription[Bar]
@@ -239,6 +258,10 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 	}, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "historical bars stream", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldComboLegs); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -343,6 +366,10 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 }
 
 func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([]HistogramEntry, error) {
+	if err := validateContract(req.Contract); err != nil {
+		return nil, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		entries []HistogramEntry
 		err     error
@@ -352,6 +379,10 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "histogram data", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
+			resp <- result{err: err}
 			return
 		}
 		reqID = e.allocReqID()
@@ -420,6 +451,10 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 }
 
 func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest) (HistoricalTicksResult, error) {
+	if err := validateContract(req.Contract); err != nil {
+		return HistoricalTicksResult{}, err
+	}
+	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		value HistoricalTicksResult
 		err   error
@@ -429,6 +464,10 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "historical ticks", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
+			resp <- result{err: err}
 			return
 		}
 		reqID = e.allocReqID()

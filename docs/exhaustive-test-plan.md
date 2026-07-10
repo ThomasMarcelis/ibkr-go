@@ -42,8 +42,8 @@ scenario.
 |----|------|------|---------|------------|-----|
 | 1 | reqMktData | yes | yes | yes | snapshot vs stream vs generic ticks |
 | 2 | cancelMktData | yes | yes | yes | |
-| 3 | placeOrder | yes | yes | yes | advanced fields (hedge, scale, delta-neutral) |
-| 4 | cancelOrder | yes | yes | yes | **just fixed** — CME_TAGGING_FIELDS regression |
+| 3 | placeOrder | yes | yes | yes | nondefault scale/hedge, live per-leg prices, successful BAG delta-neutral |
+| 4 | cancelOrder | yes | yes | yes | non-empty CME tagging metadata |
 | 5 | reqOpenOrders | yes | yes | yes | |
 | 6 | reqAccountUpdates | yes | yes | yes | |
 | 7 | reqExecutions | yes | yes | yes | filter variants |
@@ -58,7 +58,7 @@ scenario.
 | 18 | requestFA | yes | yes | partial | non-FA error frozen; FA-account path missing |
 | 19 | replaceFA | no | no | no | **target** — needs FA account |
 | 20 | reqHistoricalData | yes | yes | yes | schedule variant, more bar sizes |
-| 21 | exerciseOptions | no | no | no | **target** — needs option position + OPT permissions |
+| 21 | exerciseOptions | yes | yes | yes | lapse, override, and successful clearing settlement |
 | 22 | reqScannerSubscription | yes | yes | yes | complete 25-field public request and ten-row result are live-captured |
 | 23 | cancelScannerSubscription | yes | yes | yes | clean cancel after live results plus rejected-request code 365 path |
 | 24 | reqScannerParameters | yes | yes | yes | |
@@ -127,16 +127,39 @@ All are exercised through the outbound scenarios above. Individual gaps:
 | 90 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
 | 108 | historicalDataEnd | standalone end marker at server_version >= 196; edge cases untested |
 
-### 1.3 Unimplemented official callbacks
+### 1.3 Contract field-layout law
+
+Extended canonical fields are rejected before route installation unless the
+request's negotiated layout represents them:
+
+| Request family | Classic fields | Protobuf gate and fields |
+|---|---|---|
+| Quote | ComboLegs, DeltaNeutral | sv206: all |
+| Market depth | none | sv206: all |
+| Contract details | IncludeExpired, SecurityID, IssuerID | sv205: all |
+| Place/preview/modify/bracket | SecurityID, ComboLegs, DeltaNeutral | sv203: all |
+| Historical bars/schedule/stream | IncludeExpired, ComboLegs | no migration through sv206 |
+| Head/histogram/historical ticks | IncludeExpired | no migration through sv206 |
+| Real-time bars/tick-by-tick/calculations/exercise | none | no migration through sv206 |
+
+All classic rows above use the common identity block including
+PrimaryExchange except exercise, whose custom layout omits it. Classic quote
+and historical combo layouts carry only leg ConID, Ratio, Action, and Exchange;
+nondefault OpenClose, ShortSaleSlot, DesignatedLocation, or ExemptCode is
+rejected unless the request uses a full order/protobuf leg.
+
+Structural invariants are separate: negative conIDs, one-leg BAGs, non-BAG
+delta-neutral blocks, open/close values outside 0..3, negative explicit exempt
+codes, and surrounding SecurityID whitespace fail before encoding. Empty BAG
+legs remain valid for contract lookup.
+
+### 1.4 Unimplemented official callbacks
 
 These are known official EWrapper callbacks with no ibkr-go message ID:
 
 - `tickEFP` — EFP tick pricing (no live data observed)
 - `orderBound` — order-bound notification
-- `bondContractDetails` — implemented and frozen from the live Apple issuer query
-- `replaceFAEnd` — FA replace completion
 - `connectAck` — TWS-specific connection ack
-- `rerouteMktDataReq` / `rerouteMktDepthReq` — reroute suggestions
 - `deltaNeutralValidation` — delta-neutral validation callback
 - `verifyMessageAPI` / `verifyCompleted` / `verifyAndAuthMessageAPI` / `verifyAndAuthCompleted` — internal auth
 
@@ -242,20 +265,20 @@ Conditions.
 
 | Field | Scenario Needed |
 |-------|-----------------|
-| Combo.Legs | vertical spread, iron condor, calendar |
-| Combo.LegPrices | per-leg pricing |
-| Combo.SmartRouting | NonGuaranteed execution |
+| Contract.ComboLegs | option vertical is live accepted/cancelled; add STK combo, ratios, calendar, iron condor |
+| Order.Combo.LegPrices | typed decimal pointer/source-law encoding landed; live nondefault per-leg pricing remains |
+| Order.Combo.SmartRouting | NonGuaranteed BAG acceptance/cancel is live-attested; completed-order echo and additional nondefault routing variants remain |
 
 ## 4. Order Conditions
 
 | Condition Type | ID | Tested | Scenario Needed |
 |---------------|-----|--------|-----------------|
 | Price | 1 | yes | already done (AAPL price <= $1) |
-| Time | 3 | no | order activates after specific time |
-| Margin | 4 | no | order fires when margin cushion drops |
-| Execution | 5 | no | order fires when another symbol trades |
-| Volume | 6 | no | order fires when volume exceeds threshold |
-| Percent-change | 7 | no | order fires on % price change |
+| Time | 3 | yes | OR conjunction and cancel-order behavior remain |
+| Margin | 4 | yes | threshold variants remain |
+| Execution | 5 | yes | alternate sec type/exchange variants remain |
+| Volume | 6 | yes | threshold variants remain |
+| Percent-change | 7 | yes | threshold variants remain |
 
 **Cross-cutting:** AND/OR conjunction, multiple conditions, conditionsIgnoreRTH,
 conditionsCancelOrder.

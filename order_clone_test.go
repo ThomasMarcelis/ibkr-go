@@ -1,44 +1,59 @@
 package ibkr
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/shopspring/decimal"
+)
 
 func TestCloneOrderOwnsMutableInput(t *testing.T) {
 	t.Parallel()
 
-	// captures/20260415T162717Z-api_transmit_false_then_transmit_aapl,
-	// server_version 200, events.jsonl sha256 003abb59dfced54248d50644ec171c406aefc587141bdd7780fb44c4d59d0a45.
-	// The live request stages Transmit=false, then modifies the same order with
-	// Transmit=true, making pointer ownership observable on the wire.
-	original := Order{
+	// This ownership-only composite labels its independent evidence. The
+	// transmit pointer comes from the 20260415 live false-then-true request
+	// (events SHA-256 003abb59dfced54248d50644ec171c406aefc587141bdd7780fb44c4d59d0a45),
+	// BAG identity/routing from the June paper combo order, and adaptive/price
+	// condition values from their live campaigns. The 0.05 leg price and
+	// explicit zero exempt code exercise official-schema presence laws; neither
+	// is claimed as a live nondefault combo echo.
+	original := PlaceOrderRequest{Contract: Contract{
+		ConID: 28812380, SecType: SecTypeCombo, Strike: new(decimal.NewFromInt(0)),
+		ComboLegs: []ComboLeg{{
+			ConID: 878923092, Ratio: 1, Action: ActionSell, Exchange: "SMART", ExemptCode: new(0),
+		}},
+	}, Order: Order{
 		Transmit:         new(false),
 		AllOrNone:        new(true),
 		Hedge:            OrderHedge{DisableAutomaticPrice: new(true)},
 		WhatIf:           new(false),
 		UsePriceMgmtAlgo: new(true),
 		Combo: OrderCombo{
-			Legs:         []ComboLeg{{ConID: 1}},
-			LegPrices:    []string{"1.25"},
+			LegPrices:    []*decimal.Decimal{new(decimal.RequireFromString("0.05"))},
 			SmartRouting: []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		},
 		Algorithm:  OrderAlgorithm{Params: []TagValue{{Tag: "adaptivePriority", Value: "Normal"}}},
 		Conditions: OrderConditions{Values: []OrderCondition{{Type: ConditionPrice}}},
-	}
-	cloned := cloneOrder(original)
+	}}
+	cloned := clonePlaceOrderRequest(original)
 
-	original.Combo.Legs[0].ConID = 2
-	original.Combo.LegPrices[0] = "2.50"
-	original.Combo.SmartRouting[0].Value = "0"
-	original.Algorithm.Params[0].Value = "Patient"
-	original.Conditions.Values[0].Type = ConditionTime
-	*original.Transmit = true
-	*original.AllOrNone = false
-	*original.Hedge.DisableAutomaticPrice = false
-	*original.WhatIf = true
-	*original.UsePriceMgmtAlgo = false
+	original.Contract.ComboLegs[0].ConID = 886441502
+	*original.Contract.ComboLegs[0].ExemptCode = 1
+	*original.Contract.Strike = decimal.NewFromInt(1)
+	*original.Order.Combo.LegPrices[0] = decimal.RequireFromString("291.09")
+	original.Order.Combo.SmartRouting[0].Value = "0"
+	original.Order.Algorithm.Params[0].Value = "Patient"
+	original.Order.Conditions.Values[0].Type = ConditionTime
+	*original.Order.Transmit = true
+	*original.Order.AllOrNone = false
+	*original.Order.Hedge.DisableAutomaticPrice = false
+	*original.Order.WhatIf = true
+	*original.Order.UsePriceMgmtAlgo = false
 
-	if cloned.Combo.Legs[0].ConID != 1 || cloned.Combo.LegPrices[0] != "1.25" ||
-		cloned.Combo.SmartRouting[0].Value != "1" || cloned.Algorithm.Params[0].Value != "Normal" ||
-		cloned.Conditions.Values[0].Type != ConditionPrice {
+	if cloned.Contract.ComboLegs[0].ConID != 878923092 || *cloned.Contract.ComboLegs[0].ExemptCode != 0 ||
+		cloned.Contract.Strike == nil || !cloned.Contract.Strike.IsZero() || cloned.Order.Combo.LegPrices[0] == nil ||
+		!cloned.Order.Combo.LegPrices[0].Equal(decimal.RequireFromString("0.05")) ||
+		cloned.Order.Combo.SmartRouting[0].Value != "1" || cloned.Order.Algorithm.Params[0].Value != "Normal" ||
+		cloned.Order.Conditions.Values[0].Type != ConditionPrice {
 		t.Fatalf("clone shares nested slice storage: %#v", cloned)
 	}
 
@@ -47,11 +62,11 @@ func TestCloneOrderOwnsMutableInput(t *testing.T) {
 		got  *bool
 		want bool
 	}{
-		{name: "Transmit", got: cloned.Transmit, want: false},
-		{name: "AllOrNone", got: cloned.AllOrNone, want: true},
-		{name: "Hedge.DisableAutomaticPrice", got: cloned.Hedge.DisableAutomaticPrice, want: true},
-		{name: "WhatIf", got: cloned.WhatIf, want: false},
-		{name: "UsePriceMgmtAlgo", got: cloned.UsePriceMgmtAlgo, want: true},
+		{name: "Transmit", got: cloned.Order.Transmit, want: false},
+		{name: "AllOrNone", got: cloned.Order.AllOrNone, want: true},
+		{name: "Hedge.DisableAutomaticPrice", got: cloned.Order.Hedge.DisableAutomaticPrice, want: true},
+		{name: "WhatIf", got: cloned.Order.WhatIf, want: false},
+		{name: "UsePriceMgmtAlgo", got: cloned.Order.UsePriceMgmtAlgo, want: true},
 	}
 	for _, pointer := range pointers {
 		if pointer.got == nil || *pointer.got != pointer.want {

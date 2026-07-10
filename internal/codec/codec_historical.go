@@ -17,13 +17,22 @@ func (m HistoricalBarsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	w.WriteBool(false) // includeExpired
+	w.WriteBool(m.Contract.IncludeExpired)
 	w.WriteString(m.EndDateTime)
 	w.WriteString(m.BarSize)
 	w.WriteString(m.Duration)
 	w.WriteBool(m.UseRTH)
 	w.WriteString(m.WhatToShow)
 	w.WriteInt(1) // formatDate
+	if m.Contract.SecType == "BAG" {
+		w.WriteInt(len(m.Contract.ComboLegs))
+		for _, leg := range m.Contract.ComboLegs {
+			w.WriteInt(leg.ConID)
+			w.WriteInt(leg.Ratio)
+			w.WriteString(leg.Action)
+			w.WriteString(leg.Exchange)
+		}
+	}
 	w.WriteBool(m.KeepUpToDate)
 	w.WriteString("") // chartOptions
 	return w.Fields(), nil
@@ -71,7 +80,7 @@ func (m HeadTimestampRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	w.WriteBool(false) // includeExpired
+	w.WriteBool(m.Contract.IncludeExpired)
 	w.WriteBool(m.UseRTH)
 	w.WriteString(m.WhatToShow)
 	w.WriteInt(1) // formatDate
@@ -106,7 +115,7 @@ func (m HistogramDataRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	w.WriteBool(false) // includeExpired
+	w.WriteBool(m.Contract.IncludeExpired)
 	w.WriteBool(m.UseRTH)
 	w.WriteString(m.Period)
 	return w.Fields(), nil
@@ -149,7 +158,7 @@ func (m HistoricalTicksRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	w.WriteBool(false) // includeExpired
+	w.WriteBool(m.Contract.IncludeExpired)
 	w.WriteString(m.StartDateTime)
 	w.WriteString(m.EndDateTime)
 	w.WriteInt(m.NumberOfTicks)

@@ -136,7 +136,7 @@ func TestLiveServer202ZeroStrikeBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("conId-only ContractDetails() at sv202 error = %v", err)
 	}
-	if len(details) != 1 || details[0].ConID != 265598 || !details[0].Strike.IsZero() {
+	if len(details) != 1 || details[0].ConID != 265598 || details[0].Strike == nil || !details[0].Strike.IsZero() {
 		t.Fatalf("conId-only ContractDetails() at sv202 = %+v, want AAPL conId 265598 with zero strike", details)
 	}
 
@@ -145,7 +145,8 @@ func TestLiveServer202ZeroStrikeBoundary(t *testing.T) {
 		t.Fatalf("Executions() at sv202 error = %v", err)
 	}
 	for _, update := range updates {
-		if update.Execution != nil && update.Execution.Contract.ConID != 0 && update.Execution.Contract.Strike.IsZero() {
+		if update.Execution != nil && update.Execution.Contract.ConID != 0 &&
+			update.Execution.Contract.Strike != nil && update.Execution.Contract.Strike.IsZero() {
 			t.Logf("sv202 execution attested: exec_id=%s con_id=%d strike=%s",
 				update.Execution.ExecID, update.Execution.Contract.ConID, update.Execution.Contract.Strike)
 			return
@@ -340,6 +341,78 @@ func TestLiveServer205ContractDataBoundary(t *testing.T) {
 	if len(ineligible.IneligibilityReasons) != 3 || ineligible.IneligibilityReasons[0].ID != "i155" ||
 		ineligible.IneligibilityReasons[1].ID != "i156" || ineligible.IneligibilityReasons[2].ID != "i30" {
 		t.Fatalf("ineligible bond reasons at sv205 = %+v", ineligible.IneligibilityReasons)
+	}
+}
+
+// TestLiveCanonicalContractRequestMatrix crosses the classic/protobuf request
+// boundaries with the public Contract selectors and composition fields. All
+// operations are read-only: external-ID and expired-future lookups plus a BAG
+// quote snapshot assembled from dynamically qualified AAPL option legs.
+func TestLiveCanonicalContractRequestMatrix(t *testing.T) {
+	for _, sv := range []int{200, 205, 206} {
+		t.Run(versionName(sv), func(t *testing.T) {
+			restore := ibkr.SetAdvertisedServerVersionMaxForTest(sv)
+			defer restore()
+
+			client, ctx, cancel := ibkrlive.DialContext(t, 60*time.Second)
+			defer cancel()
+			defer client.Close()
+			if got := client.Session().ServerVersion; got != sv {
+				t.Fatalf("negotiated ServerVersion = %d, want %d", got, sv)
+			}
+
+			byISIN, err := client.Contracts().Details(ctx, ibkr.Contract{
+				Exchange:   "SMART",
+				SecurityID: ibkr.SecurityID{Type: ibkr.SecurityIDISIN, Value: "US0378331005"},
+			})
+			if err != nil {
+				t.Fatalf("ISIN ContractDetails at sv%d: %v", sv, err)
+			}
+			foundAAPL := false
+			for _, detail := range byISIN {
+				if detail.ConID == 265598 && detail.Symbol == "AAPL" && detail.Currency == "USD" {
+					foundAAPL = true
+					break
+				}
+			}
+			if !foundAAPL {
+				t.Fatalf("ISIN ContractDetails at sv%d returned %d contracts without AAPL conId 265598", sv, len(byISIN))
+			}
+
+			expired, err := client.Contracts().Details(ctx, ibkr.Contract{
+				Symbol: "MES", SecType: ibkr.SecTypeFuture, Expiry: "202606",
+				Exchange: "CME", Currency: "USD", IncludeExpired: true,
+			})
+			if err != nil {
+				t.Fatalf("expired MES ContractDetails at sv%d: %v", sv, err)
+			}
+			foundExpiredMES := false
+			for _, detail := range expired {
+				if detail.SecType == ibkr.SecTypeFuture && len(detail.Expiry) >= 6 && detail.Expiry[:6] == "202606" {
+					foundExpiredMES = true
+					break
+				}
+			}
+			if !foundExpiredMES {
+				t.Fatalf("expired MES ContractDetails at sv%d returned %d contracts without a 202606 future", sv, len(expired))
+			}
+
+			anchor := liveAnchorPrice(t, ctx, client, aaplContract, decimal.RequireFromString("300"))
+			lower, upper := liveQualifyVerticalLegs(t, ctx, client, anchor)
+			bag := ibkr.Contract{
+				Symbol: "AAPL", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "USD",
+				ComboLegs: []ibkr.ComboLeg{
+					{ConID: lower.ConID, Ratio: 1, Action: ibkr.ActionBuy, Exchange: "SMART"},
+					{ConID: upper.ConID, Ratio: 1, Action: ibkr.ActionSell, Exchange: "SMART"},
+				},
+			}
+			if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+				t.Fatalf("SetType(delayed) at sv%d: %v", sv, err)
+			}
+			if _, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: bag}); err != nil {
+				t.Fatalf("BAG Quote at sv%d: %v", sv, err)
+			}
+		})
 	}
 }
 

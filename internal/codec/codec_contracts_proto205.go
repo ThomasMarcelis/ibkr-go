@@ -8,15 +8,12 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
-// decodedContractProto is the shared wire projection used by execution,
-// open-order, completed-order, and contract-details protobuf messages. Fields
-// without a public owner remain local instead of expanding Contract merely to
-// mirror the official schema.
+// decodedContractProto carries the response-only metadata and order-leg prices
+// that accompany the canonical Contract in the official shared schema.
 type decodedContractProto struct {
 	Contract             Contract
 	Description          string
 	ComboLegsDescription string
-	ComboLegs            []ComboLeg
 	ComboLegPrices       []string
 	LastTradeDate        string
 }
@@ -62,6 +59,10 @@ func decodeSharedContractProto(body []byte) (decodedContractProto, error) {
 				m.Contract.LocalSymbol = string(value)
 			case 12:
 				m.Contract.TradingClass = string(value)
+			case 13:
+				m.Contract.SecurityIDType = string(value)
+			case 14:
+				m.Contract.SecurityID = string(value)
 			case 15:
 				m.Description = string(value)
 			case 16:
@@ -82,16 +83,20 @@ func decodeSharedContractProto(body []byte) (decodedContractProto, error) {
 				m.Contract.Multiplier = formatProtoDouble(value)
 			}
 		case 17:
-			// DeltaNeutralContract is source-defined but has no public Contract
-			// owner in this slice. Consume its length-delimited envelope without
-			// inventing an unattested projection.
-			if _, err := consumeProtoBytes(&body, typ); err != nil {
+			value, err := consumeProtoBytes(&body, typ)
+			if err != nil {
 				return decodedContractProto{}, protoFieldError("contract", number, err)
+			}
+			m.Contract.DeltaNeutral, err = decodeDeltaNeutralContractProto(value)
+			if err != nil {
+				return decodedContractProto{}, protoFieldError("delta-neutral contract", number, err)
 			}
 		case 18:
-			if _, err := consumeProtoVarint(&body, typ); err != nil {
+			value, err := consumeProtoVarint(&body, typ)
+			if err != nil {
 				return decodedContractProto{}, protoFieldError("contract", number, err)
 			}
+			m.Contract.IncludeExpired = value != 0
 		case 20:
 			value, err := consumeProtoBytes(&body, typ)
 			if err != nil {
@@ -101,7 +106,7 @@ func decodeSharedContractProto(body []byte) (decodedContractProto, error) {
 			if err != nil {
 				return decodedContractProto{}, protoFieldError("contract combo leg", number, err)
 			}
-			m.ComboLegs = append(m.ComboLegs, leg)
+			m.Contract.ComboLegs = append(m.Contract.ComboLegs, leg)
 			m.ComboLegPrices = append(m.ComboLegPrices, price)
 		default:
 			if err := skipProtoField(&body, number, typ); err != nil {
@@ -111,7 +116,7 @@ func decodeSharedContractProto(body []byte) (decodedContractProto, error) {
 	}
 }
 
-func encodeSharedContractProto(contract Contract, legs []ComboLeg, legPrices []string, emitZeroConID bool) ([]byte, error) {
+func encodeSharedContractProto(contract Contract, legPrices []string, emitZeroConID bool) ([]byte, error) {
 	body := make([]byte, 0, 96)
 	var err error
 	if contract.ConID != 0 || emitZeroConID {
@@ -127,7 +132,7 @@ func encodeSharedContractProto(contract Contract, legs []ComboLeg, legPrices []s
 		{2, contract.Symbol}, {3, contract.SecType}, {4, contract.Expiry},
 		{6, contract.Right}, {8, contract.Exchange}, {9, contract.PrimaryExchange},
 		{10, contract.Currency}, {11, contract.LocalSymbol}, {12, contract.TradingClass},
-		{16, contract.IssuerID},
+		{13, contract.SecurityIDType}, {14, contract.SecurityID}, {16, contract.IssuerID},
 	} {
 		if field.value != "" {
 			body = appendProtoString(body, field.number, field.value)
@@ -141,15 +146,78 @@ func encodeSharedContractProto(contract Contract, legs []ComboLeg, legPrices []s
 	if err != nil {
 		return nil, err
 	}
-	if len(legPrices) > len(legs) {
-		return nil, fmt.Errorf("codec: %d combo leg prices for %d combo legs", len(legPrices), len(legs))
+	if contract.DeltaNeutral != nil {
+		deltaNeutral, err := encodeDeltaNeutralContractProto(*contract.DeltaNeutral)
+		if err != nil {
+			return nil, err
+		}
+		body = appendProtoMessage(body, 17, deltaNeutral)
 	}
-	for i, leg := range legs {
+	if contract.IncludeExpired {
+		body = appendProtoVarint(body, 18, 1)
+	}
+	if len(legPrices) > len(contract.ComboLegs) {
+		return nil, fmt.Errorf("codec: %d combo leg prices for %d combo legs", len(legPrices), len(contract.ComboLegs))
+	}
+	for i, leg := range contract.ComboLegs {
 		legBody, err := encodeComboLegProto(leg, legPriceAt(legPrices, i))
 		if err != nil {
 			return nil, fmt.Errorf("codec: combo leg %d: %w", i, err)
 		}
 		body = appendProtoMessage(body, 20, legBody)
+	}
+	return canonicalProtoFields(body), nil
+}
+
+func decodeDeltaNeutralContractProto(body []byte) (*DeltaNeutralContract, error) {
+	// API 10.48.01 declares both double fields optional in proto3, so their
+	// decoded value is zero when the sender omits either tag.
+	m := &DeltaNeutralContract{Delta: "0", Price: "0"}
+	for {
+		number, typ, ok, err := consumeProtoTag(&body)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return m, nil
+		}
+		switch number {
+		case 1:
+			value, err := consumeProtoVarint(&body, typ)
+			if err != nil {
+				return nil, protoFieldError("delta-neutral contract", number, err)
+			}
+			m.ConID = decodeProtoInt32(value)
+		case 2, 3:
+			value, err := consumeProtoDouble(&body, typ)
+			if err != nil {
+				return nil, protoFieldError("delta-neutral contract", number, err)
+			}
+			if number == 2 {
+				m.Delta = formatProtoDouble(value)
+			} else {
+				m.Price = formatProtoDouble(value)
+			}
+		default:
+			if err := skipProtoField(&body, number, typ); err != nil {
+				return nil, protoFieldError("delta-neutral contract", number, err)
+			}
+		}
+	}
+}
+
+func encodeDeltaNeutralContractProto(m DeltaNeutralContract) ([]byte, error) {
+	body, err := appendProtoInt(nil, 1, m.ConID, "delta-neutral contract conid")
+	if err != nil {
+		return nil, err
+	}
+	body, err = appendRequiredProtoDouble(body, 2, m.Delta, "delta-neutral contract delta")
+	if err != nil {
+		return nil, err
+	}
+	body, err = appendRequiredProtoDouble(body, 3, m.Price, "delta-neutral contract price")
+	if err != nil {
+		return nil, err
 	}
 	return canonicalProtoFields(body), nil
 }
@@ -166,7 +234,7 @@ func (m ContractDetailsRequest) encodeProto(sv int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	contract, err := encodeSharedContractProto(m.Contract, nil, nil, true)
+	contract, err := encodeSharedContractProto(m.Contract, nil, true)
 	if err != nil {
 		return nil, err
 	}

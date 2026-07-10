@@ -79,7 +79,7 @@ type OpenOrder struct {
 	Hidden                string
 	DiscretionAmt         string
 	GoodAfterTime         string
-	ComboLegs             []ComboLeg
+	ComboLegsDescription  string
 	OrderComboLegPrices   []string
 	SmartComboRouting     []TagValue
 	AlgoStrategy          string
@@ -286,7 +286,6 @@ type CompletedOrder struct {
 	TrailingPercent                string
 
 	ComboLegsDescription string
-	ComboLegs            []ComboLeg
 	OrderComboLegPrices  []string
 	SmartComboRouting    []TagValue
 
@@ -306,11 +305,6 @@ type CompletedOrder struct {
 	ClearingAccount string
 	ClearingIntent  string
 	NotHeld         string
-
-	DeltaNeutralContractPresent string
-	DeltaNeutralContractConID   string
-	DeltaNeutralContractDelta   string
-	DeltaNeutralContractPrice   string
 
 	AlgoStrategy   string
 	AlgoParams     []TagValue
@@ -409,7 +403,6 @@ type PlaceOrderRequest struct {
 	TriggerMethod           string // always a decimal digit; "0" = Default
 	OutsideRTH              string
 	Hidden                  string
-	ComboLegs               []ComboLeg
 	OrderComboLegPrices     []string
 	SmartComboRoutingParams []TagValue
 
@@ -467,19 +460,18 @@ type PlaceOrderRequest struct {
 	HedgeParam string
 
 	// Misc
-	OptOutSmartRouting          string
-	ClearingAccount             string
-	ClearingIntent              string
-	NotHeld                     string
-	DeltaNeutralContractPresent string // "0" or "1"
-	AlgoStrategy                string
-	AlgoParams                  []TagValue
-	AlgoID                      string
-	WhatIf                      string
-	OrderMiscOptions            string
-	Solicited                   string
-	RandomizeSize               string
-	RandomizePrice              string
+	OptOutSmartRouting string
+	ClearingAccount    string
+	ClearingIntent     string
+	NotHeld            string
+	AlgoStrategy       string
+	AlgoParams         []TagValue
+	AlgoID             string
+	WhatIf             string
+	OrderMiscOptions   string
+	Solicited          string
+	RandomizeSize      string
+	RandomizePrice     string
 
 	// Conditions
 	Conditions            []OrderCondition
@@ -542,8 +534,8 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.Contract.Currency)
 	w.WriteString(m.Contract.LocalSymbol)
 	w.WriteString(m.Contract.TradingClass)
-	w.WriteString("") // secIdType
-	w.WriteString("") // secId
+	w.WriteString(m.Contract.SecurityIDType)
+	w.WriteString(m.Contract.SecurityID)
 	// Main order fields
 	w.WriteString(m.Action)
 	w.WriteString(m.TotalQuantity)
@@ -565,9 +557,9 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.TriggerMethod)
 	w.WriteString(m.OutsideRTH)
 	w.WriteString(m.Hidden)
-	if m.Contract.SecType == "BAG" || len(m.ComboLegs) > 0 || len(m.OrderComboLegPrices) > 0 || len(m.SmartComboRoutingParams) > 0 {
-		w.WriteInt(len(m.ComboLegs))
-		for _, leg := range m.ComboLegs {
+	if m.Contract.SecType == "BAG" {
+		w.WriteInt(len(m.Contract.ComboLegs))
+		for _, leg := range m.Contract.ComboLegs {
 			w.WriteInt(leg.ConID)
 			w.WriteInt(leg.Ratio)
 			w.WriteString(leg.Action)
@@ -645,8 +637,12 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.ClearingAccount)
 	w.WriteString(m.ClearingIntent)
 	w.WriteString(m.NotHeld)
-	w.WriteString(m.DeltaNeutralContractPresent)
-	// grounded v1.2 leaves delta-neutral contract fields deferred
+	w.WriteBool(m.Contract.DeltaNeutral != nil)
+	if m.Contract.DeltaNeutral != nil {
+		w.WriteInt(m.Contract.DeltaNeutral.ConID)
+		w.WriteString(m.Contract.DeltaNeutral.Delta)
+		w.WriteString(m.Contract.DeltaNeutral.Price)
+	}
 	w.WriteString(m.AlgoStrategy)
 	if m.AlgoStrategy != "" {
 		writeTagValuePairs(&w, m.AlgoParams)
@@ -956,7 +952,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	r.ReadString() // TrailingPercent
 	r.ReadString() // BasisPoints
 	r.ReadString() // BasisPointsType
-	r.ReadString() // ComboLegsDescrip
+	comboLegsDescription := r.ReadString()
 
 	comboLegsCount, err := r.ReadOptionalCount("open order combo legs")
 	if err != nil {
@@ -978,6 +974,8 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 			ExemptCode:         r.ReadString(),
 		}
 	}
+	contract.ComboLegs = comboLegs
+	partial.Contract = contract
 
 	orderComboLegsCount, err := r.ReadOptionalCount("open order combo leg prices")
 	if err != nil {
@@ -1021,7 +1019,12 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	r.ReadString() // NotHeld
 	deltaNeutralContractPresent := r.ReadString()
 	if deltaNeutralContractPresent == "1" {
-		return []Message{partial}, nil
+		contract.DeltaNeutral = &DeltaNeutralContract{
+			ConID: mustReadInt(r),
+			Delta: r.ReadString(),
+			Price: r.ReadString(),
+		}
+		partial.Contract = contract
 	}
 	algoStrategy := r.ReadString()
 	var algoParams []TagValue
@@ -1180,7 +1183,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 		ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 		Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
-		ComboLegs:             comboLegs,
+		ComboLegsDescription:  comboLegsDescription,
 		OrderComboLegPrices:   orderComboLegPrices,
 		SmartComboRouting:     smartComboRouting,
 		AlgoStrategy:          algoStrategy,
@@ -1279,9 +1282,9 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString("")     // TrailingPercent
 	w.WriteString("")     // BasisPoints
 	w.WriteString("")     // BasisPointsType
-	w.WriteString("")     // ComboLegsDescrip
-	w.WriteInt(len(m.ComboLegs))
-	for _, leg := range m.ComboLegs {
+	w.WriteString(m.ComboLegsDescription)
+	w.WriteInt(len(m.Contract.ComboLegs))
+	for _, leg := range m.Contract.ComboLegs {
 		w.WriteInt(leg.ConID)
 		w.WriteInt(leg.Ratio)
 		w.WriteString(leg.Action)
@@ -1307,7 +1310,12 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString("")           // ClearingAccount
 	w.WriteString("")           // ClearingIntent
 	w.WriteString("")           // NotHeld
-	w.WriteString("0")          // deltaNeutralContractPresent
+	w.WriteBool(m.Contract.DeltaNeutral != nil)
+	if m.Contract.DeltaNeutral != nil {
+		w.WriteInt(m.Contract.DeltaNeutral.ConID)
+		w.WriteString(m.Contract.DeltaNeutral.Delta)
+		w.WriteString(m.Contract.DeltaNeutral.Price)
+	}
 	w.WriteString(m.AlgoStrategy)
 	if m.AlgoStrategy != "" {
 		writeTagValuePairs(&w, m.AlgoParams)
@@ -1592,10 +1600,10 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 		return nil, err
 	}
 	if comboLegsCount > 0 {
-		m.ComboLegs = make([]ComboLeg, comboLegsCount)
+		m.Contract.ComboLegs = make([]ComboLeg, comboLegsCount)
 	}
-	for i := range m.ComboLegs {
-		m.ComboLegs[i] = ComboLeg{
+	for i := range m.Contract.ComboLegs {
+		m.Contract.ComboLegs[i] = ComboLeg{
 			ConID:              mustReadInt(r),
 			Ratio:              mustReadInt(r),
 			Action:             r.ReadString(),
@@ -1649,11 +1657,12 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	m.ClearingAccount = r.ReadString()
 	m.ClearingIntent = r.ReadString()
 	m.NotHeld = r.ReadString()
-	m.DeltaNeutralContractPresent = r.ReadString()
-	if m.DeltaNeutralContractPresent == "1" {
-		m.DeltaNeutralContractConID = r.ReadString()
-		m.DeltaNeutralContractDelta = r.ReadString()
-		m.DeltaNeutralContractPrice = r.ReadString()
+	if r.ReadString() == "1" {
+		m.Contract.DeltaNeutral = &DeltaNeutralContract{
+			ConID: mustReadInt(r),
+			Delta: r.ReadString(),
+			Price: r.ReadString(),
+		}
 	}
 	m.AlgoStrategy = r.ReadString()
 	if m.AlgoStrategy != "" {
@@ -1814,8 +1823,8 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.TrailStopPrice)
 	w.WriteString(m.TrailingPercent)
 	w.WriteString(m.ComboLegsDescription)
-	w.WriteInt(len(m.ComboLegs))
-	for _, leg := range m.ComboLegs {
+	w.WriteInt(len(m.Contract.ComboLegs))
+	for _, leg := range m.Contract.ComboLegs {
 		w.WriteInt(leg.ConID)
 		w.WriteInt(leg.Ratio)
 		w.WriteString(leg.Action)
@@ -1849,11 +1858,11 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.ClearingAccount)
 	w.WriteString(m.ClearingIntent)
 	w.WriteString(m.NotHeld)
-	w.WriteString(m.DeltaNeutralContractPresent)
-	if m.DeltaNeutralContractPresent == "1" {
-		w.WriteString(m.DeltaNeutralContractConID)
-		w.WriteString(m.DeltaNeutralContractDelta)
-		w.WriteString(m.DeltaNeutralContractPrice)
+	w.WriteBool(m.Contract.DeltaNeutral != nil)
+	if m.Contract.DeltaNeutral != nil {
+		w.WriteInt(m.Contract.DeltaNeutral.ConID)
+		w.WriteString(m.Contract.DeltaNeutral.Delta)
+		w.WriteString(m.Contract.DeltaNeutral.Price)
 	}
 	w.WriteString(m.AlgoStrategy)
 	if m.AlgoStrategy != "" {

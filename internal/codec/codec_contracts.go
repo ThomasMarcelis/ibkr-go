@@ -7,10 +7,9 @@ import (
 	"unicode/utf16"
 )
 
-// Contract holds the fields used for contract identification on the wire.
-// The full TWS wire contract has 11 fields (conID, symbol, secType, expiry,
-// strike, right, multiplier, exchange, currency, localSymbol, tradingClass).
-// PrimaryExchange is used by some request/response messages outside the 11-field block.
+// Contract is the canonical internal contract model. Classic encoders select
+// the request-specific subset they own; protobuf encoders use the complete
+// shared Contract schema.
 type Contract struct {
 	ConID           int
 	Symbol          string
@@ -24,7 +23,18 @@ type Contract struct {
 	LocalSymbol     string
 	TradingClass    string
 	PrimaryExchange string
+	IncludeExpired  bool
+	SecurityIDType  string
+	SecurityID      string
 	IssuerID        string
+	ComboLegs       []ComboLeg
+	DeltaNeutral    *DeltaNeutralContract
+}
+
+type DeltaNeutralContract struct {
+	ConID int
+	Delta string
+	Price string
 }
 
 type ContractDetailsRequest struct {
@@ -39,9 +49,9 @@ func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
-	w.WriteBool(false)                 // includeExpired
-	w.WriteString("")                  // secIdType
-	w.WriteString("")                  // secId
+	w.WriteBool(m.Contract.IncludeExpired)
+	w.WriteString(m.Contract.SecurityIDType)
+	w.WriteString(m.Contract.SecurityID)
 	w.WriteString(m.Contract.IssuerID) // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
 	return w.Fields(), nil
 }

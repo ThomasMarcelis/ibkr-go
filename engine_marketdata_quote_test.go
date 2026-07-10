@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -40,7 +41,7 @@ func TestQuoteRouteFollowsLiveRerouteAndFreezesResumeRequest(t *testing.T) {
 	if !ok {
 		t.Fatalf("route request = %T, want codec.QuoteRequest", route.request)
 	}
-	if routedRequest.Contract != (codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
+	if !reflect.DeepEqual(routedRequest.Contract, codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
 		routedRequest.Snapshot || len(routedRequest.GenericTicks) != 2 ||
 		routedRequest.GenericTicks[0] != "100" || routedRequest.GenericTicks[1] != "233" {
 		t.Fatalf("rerouted request = %+v, want replacement contract with original request configuration", routedRequest)
@@ -70,6 +71,48 @@ func TestQuoteRouteFollowsLiveRerouteAndFreezesResumeRequest(t *testing.T) {
 	}
 }
 
+func TestQuoteResumeRejectsContractFieldsAfterVersionDowngrade(t *testing.T) {
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 20623
+	// IncludeExpired is present in the exact-sv206 shared Contract request but
+	// has no field in the classic sv205 quote layout. This test freezes the
+	// reconnect actor behavior; it does not claim a positive expired-future
+	// market-data result from the Gateway.
+	req := QuoteRequest{Contract: Contract{
+		Symbol: "MES", SecType: SecTypeFuture, Expiry: "202606",
+		Exchange: "CME", Currency: "USD", IncludeExpired: true,
+	}}
+	sub := installObservedQuoteRoute(t, e, req, WithResumePolicy(ResumeAuto))
+	_ = readObservedFrame(t, peer)
+
+	route := e.keyed[20623]
+	if route == nil {
+		t.Fatal("quote route was not installed")
+	}
+	route.gapped = true
+	e.serverVersion = 205
+	e.resumeRoutes()
+
+	if _, ok := e.keyed[20623]; ok {
+		t.Fatal("unsupported quote resume left the route active")
+	}
+	validation, ok := errors.AsType[*ValidationError](sub.Err())
+	if !ok || validation.Field != "Contract.IncludeExpired" ||
+		validation.Message != "is not represented by resume market data quote at negotiated server_version 205" {
+		t.Fatalf("resume error = %#v, want precise IncludeExpired version failure", sub.Err())
+	}
+	select {
+	case <-e.done:
+		t.Fatal("unsupported quote resume terminated the session")
+	default:
+	}
+	for state := range sub.Lifecycle() {
+		if state.Kind == SubscriptionResumed {
+			t.Fatal("unsupported quote resume emitted Resumed")
+		}
+	}
+}
+
 func TestMarketDepthRouteRejectsRepeatedLiveRerouteWithSmartCancel(t *testing.T) {
 	e, peer := newObservedMarketDataEngine(t)
 	e.nextReqID = 20622
@@ -93,7 +136,7 @@ func TestMarketDepthRouteRejectsRepeatedLiveRerouteWithSmartCancel(t *testing.T)
 	if !ok {
 		t.Fatalf("route request = %T, want codec.MarketDepthRequest", active.request)
 	}
-	if routedRequest.Contract != (codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
+	if !reflect.DeepEqual(routedRequest.Contract, codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
 		routedRequest.NumRows != 5 || !routedRequest.IsSmartDepth || active.resume != ResumeNever {
 		t.Fatalf("rerouted depth request = %+v, route resume=%v", routedRequest, active.resume)
 	}

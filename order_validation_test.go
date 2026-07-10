@@ -80,9 +80,33 @@ func TestValidateOrderRequest(t *testing.T) {
 		{
 			name: "combo legs on stock",
 			mutate: func(req *PlaceOrderRequest) {
-				req.Order.Combo.Legs = []ComboLeg{{ConID: 1}, {ConID: 2}}
+				req.Contract.ComboLegs = []ComboLeg{{ConID: 1}, {ConID: 2}}
 			},
-			field: "Order.Combo.Legs",
+			field: "Contract.ComboLegs",
+		},
+		{
+			name: "security id type without value",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Contract.SecurityID.Type = SecurityIDISIN
+			},
+			field: "Contract.SecurityID.Value",
+		},
+		{
+			name: "security id value without type",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Contract.SecurityID.Value = "US0378331005"
+			},
+			field: "Contract.SecurityID.Type",
+		},
+		{
+			name: "invalid combo leg exempt code",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Contract = Contract{SecType: SecTypeCombo, ComboLegs: []ComboLeg{
+					{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART", ExemptCode: new(-2)},
+					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+				}}
+			},
+			field: "Contract.ComboLegs[0].ExemptCode",
 		},
 		{
 			name: "algo params without strategy",
@@ -162,13 +186,12 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 		{
 			name: "bag",
 			req: PlaceOrderRequest{
-				Contract: Contract{Symbol: "AAPL", SecType: SecTypeCombo},
+				Contract: Contract{Symbol: "AAPL", SecType: SecTypeCombo, ComboLegs: []ComboLeg{
+					{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
+					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+				}},
 				Order: Order{
 					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: decimal.RequireFromString("0.05"),
-					Combo: OrderCombo{Legs: []ComboLeg{
-						{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
-						{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
-					}},
 				},
 			},
 		},

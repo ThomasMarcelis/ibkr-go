@@ -12,6 +12,10 @@ import (
 )
 
 func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]ContractDetails, error) {
+	if err := validateContract(contract); err != nil {
+		return nil, err
+	}
+	contract = cloneContract(contract)
 	type result struct {
 		values []ContractDetails
 		err    error
@@ -22,6 +26,10 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 	enqueueOneShotSetup(ctx, e, func() {
 		if !e.isReady() {
 			resp <- result{err: ErrNotReady}
+			return
+		}
+		if err := validateContractFieldSupport(contract, "contract details", e.serverVersion, contractDetailsContractFields(e.serverVersion)); err != nil {
+			resp <- result{err: err}
 			return
 		}
 
@@ -370,6 +378,10 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 }
 
 func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) {
+	contract, err := fromCodecContract(m.Contract)
+	if err != nil {
+		return ContractDetails{}, err
+	}
 	minTick, err := parseOptionalDecimal(m.MinTick, "contract details min tick")
 	if err != nil {
 		return ContractDetails{}, err
@@ -449,7 +461,7 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 	}
 
 	return ContractDetails{
-		Contract:                  fromCodecContract(m.Contract),
+		Contract:                  contract,
 		MarketName:                m.MarketName,
 		LongName:                  m.LongName,
 		MinTick:                   minTick,

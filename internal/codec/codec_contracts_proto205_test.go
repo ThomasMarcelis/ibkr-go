@@ -36,6 +36,115 @@ func TestContractDetailsMigrationStartsAtServer205(t *testing.T) {
 	}
 }
 
+func TestContractSelectorLiveVectorsExact200And206(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sv   int
+		msg  ContractDetailsRequest
+		want string
+		hash string
+	}{
+		{
+			name: "exact200 ISIN",
+			sv:   200,
+			msg: ContractDetailsRequest{ReqID: 2002501, Contract: Contract{
+				Exchange: "SMART", SecurityIDType: "ISIN", SecurityID: "US0378331005",
+			}},
+			want: "3900380032303032353031003000000000000000534d415254000000000030004953494e005553303337383333313030350000",
+			hash: "4bf5eb9bc34999c641522ea9d9f3f59adfad30e22422ae5151995dc61d5ab3e8",
+		},
+		{
+			name: "exact200 include expired",
+			sv:   200,
+			msg: ContractDetailsRequest{ReqID: 2002102, Contract: Contract{
+				Symbol: "MES", SecType: "FUT", Expiry: "202606", Exchange: "CME", Currency: "USD", IncludeExpired: true,
+			}},
+			want: "39003800323030323130320030004d4553004655540032303236303600000000434d4500005553440000003100000000",
+			hash: "5f9cf0fda64da12264f619f6bc2c37e374b6220a5e75aef8caa9d5f04117e9cf",
+		},
+		{
+			name: "exact206 ISIN",
+			sv:   206,
+			msg: ContractDetailsRequest{ReqID: 2061801, Contract: Contract{
+				Exchange: "SMART", SecurityIDType: "ISIN", SecurityID: "US0378331005",
+			}},
+			want: "000000d108e9eb7d121d08004205534d4152546a044953494e720c555330333738333331303035",
+			hash: "278e244c9e103e719b42f64de3d28660a33f24feb2c6b83832754bda2bbd9e77",
+		},
+		{
+			name: "exact206 include expired",
+			sv:   206,
+			msg: ContractDetailsRequest{ReqID: 2061902, Contract: Contract{
+				ConID: 770561194, Exchange: "CME", IncludeExpired: true,
+			}},
+			want: "000000d108ceec7d120e08aaa9b7ef024203434d45900101",
+			hash: "440c1f5d83dc13fdb2f7cd07ef29c748a4a5498d9bb0777a5ea55233018ab1df",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Encode(tc.sv, tc.msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := decodeHex(t, tc.want); !bytes.Equal(got, want) {
+				t.Fatalf("Encode() = %x\nwant     = %x\ncapture events sha256 %s", got, want, tc.hash)
+			}
+		})
+	}
+}
+
+func TestDeltaNeutralContractOfficialSchemaVector(t *testing.T) {
+	t.Parallel()
+
+	contract := Contract{
+		ConID:        265598,
+		DeltaNeutral: &DeltaNeutralContract{ConID: 265598, Delta: "0.5", Price: "314.5"},
+	}
+	got, err := encodeSharedContractProto(contract, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Official API 10.48.01 DeltaNeutralContract.proto: conId=1,
+	// delta=2, price=3; Contract.deltaNeutralContract=17.
+	want := decodeHex(t, "08fe9a108a011608fe9a1011000000000000e03f190000000000a87340")
+	if !bytes.Equal(got, want) {
+		t.Fatalf("encodeSharedContractProto() = %x, want official schema vector %x", got, want)
+	}
+
+	decoded, err := decodeSharedContractProto(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Contract.DeltaNeutral == nil ||
+		decoded.Contract.DeltaNeutral.ConID != 265598 ||
+		decoded.Contract.DeltaNeutral.Delta != "0.5" ||
+		decoded.Contract.DeltaNeutral.Price != "314.5" {
+		t.Fatalf("decoded delta-neutral contract = %+v", decoded.Contract.DeltaNeutral)
+	}
+}
+
+func TestDeltaNeutralContractProtoOmittedScalarsDefaultZero(t *testing.T) {
+	t.Parallel()
+
+	// API 10.48.01 uses proto3 optional doubles for delta and price. Omitting
+	// either tag therefore decodes as zero; only conId is present in this
+	// official-schema vector.
+	decoded, err := decodeSharedContractProto(decodeHex(t, "8a010408fe9a10"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded.Contract.DeltaNeutral == nil ||
+		decoded.Contract.DeltaNeutral.ConID != 265598 ||
+		decoded.Contract.DeltaNeutral.Delta != "0" ||
+		decoded.Contract.DeltaNeutral.Price != "0" {
+		t.Fatalf("decoded omitted delta-neutral scalars = %+v", decoded.Contract.DeltaNeutral)
+	}
+}
+
 func TestEncodeServer205ContractDetailsVectors(t *testing.T) {
 	t.Parallel()
 

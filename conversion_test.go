@@ -25,6 +25,109 @@ func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 	}
 }
 
+func TestContractConversionPreservesCanonicalPresence(t *testing.T) {
+	t.Parallel()
+
+	// This conversion-law composite keeps provenance explicit rather than
+	// claiming one accepted Gateway request: BAG conID 28812380 came from the
+	// June paper order, the two legs from the exact-200 BAG quote, ISIN and
+	// IncludeExpired from the read-only request matrix, and the delta-neutral
+	// values from the exact-200 OPT request rejected with code 320. Explicit
+	// zero presence for strike and exempt code is the official schema law under
+	// test, not positive delta-neutral or exempt-code live evidence.
+	explicitExempt := 0
+	contract := Contract{
+		ConID:          28812380,
+		SecType:        SecTypeCombo,
+		Strike:         new(decimal.Zero),
+		IncludeExpired: true,
+		SecurityID:     SecurityID{Type: SecurityIDISIN, Value: "US0378331005"},
+		ComboLegs: []ComboLeg{
+			{ConID: 887307502, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
+			{ConID: 887307536, Ratio: 1, Action: ActionSell, Exchange: "SMART", ExemptCode: &explicitExempt},
+		},
+		DeltaNeutral: &DeltaNeutralContract{
+			ConID: 265598,
+			Delta: decimal.RequireFromString("0.5"),
+			Price: decimal.RequireFromString("314.5"),
+		},
+	}
+
+	wire := toCodecContract(contract)
+	if wire.Strike != "0" || wire.SecurityIDType != "ISIN" || wire.SecurityID != "US0378331005" ||
+		wire.ComboLegs[0].ExemptCode != "-1" || wire.ComboLegs[1].ExemptCode != "0" {
+		t.Fatalf("wire contract presence = %+v", wire)
+	}
+	got, err := fromCodecContract(wire)
+	if err != nil {
+		t.Fatalf("fromCodecContract() error = %v", err)
+	}
+	if got.Strike == nil || !got.Strike.IsZero() || got.DeltaNeutral == nil ||
+		got.DeltaNeutral.ConID != 265598 || !got.DeltaNeutral.Delta.Equal(decimal.RequireFromString("0.5")) ||
+		got.ComboLegs[0].ExemptCode != nil || got.ComboLegs[1].ExemptCode == nil || *got.ComboLegs[1].ExemptCode != 0 {
+		t.Fatalf("round-tripped contract presence = %+v", got)
+	}
+	if empty := toCodecContract(Contract{}); empty.Strike != "" {
+		t.Fatalf("nil strike encoded as %q, want absent", empty.Strike)
+	}
+}
+
+func TestFromCodecContractRejectsMalformedCanonicalNumerics(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		contract codec.Contract
+	}{
+		{name: "strike", contract: codec.Contract{Strike: "not-a-decimal"}},
+		{name: "combo open close", contract: codec.Contract{ComboLegs: []codec.ComboLeg{{OpenClose: "many"}}}},
+		{name: "combo open close range", contract: codec.Contract{ComboLegs: []codec.ComboLeg{{OpenClose: "4"}}}},
+		{name: "combo short-sale slot", contract: codec.Contract{ComboLegs: []codec.ComboLeg{{ShortSaleSlot: "broker"}}}},
+		{name: "combo exempt code", contract: codec.Contract{ComboLegs: []codec.ComboLeg{{ExemptCode: "exempt"}}}},
+		{name: "combo negative exempt code", contract: codec.Contract{ComboLegs: []codec.ComboLeg{{ExemptCode: "-2"}}}},
+		{name: "delta-neutral delta", contract: codec.Contract{DeltaNeutral: &codec.DeltaNeutralContract{Delta: "half", Price: "1"}}},
+		{name: "delta-neutral price", contract: codec.Contract{DeltaNeutral: &codec.DeltaNeutralContract{Delta: "0.5", Price: "market"}}},
+		{name: "missing delta-neutral delta", contract: codec.Contract{DeltaNeutral: &codec.DeltaNeutralContract{Price: "1"}}},
+		{name: "missing delta-neutral price", contract: codec.Contract{DeltaNeutral: &codec.DeltaNeutralContract{Delta: "0.5"}}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if _, err := fromCodecContract(tc.contract); err == nil {
+				t.Fatalf("fromCodecContract(%+v) error = nil", tc.contract)
+			}
+		})
+	}
+}
+
+func TestContractConversionAcceptsProtobufDeltaNeutralDefaults(t *testing.T) {
+	t.Parallel()
+
+	// The protobuf decoder materializes omitted optional doubles as canonical
+	// zero strings before the strict public conversion boundary.
+	got, err := fromCodecContract(codec.Contract{DeltaNeutral: &codec.DeltaNeutralContract{
+		ConID: 265598,
+		Delta: "0",
+		Price: "0",
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DeltaNeutral == nil || got.DeltaNeutral.ConID != 265598 ||
+		!got.DeltaNeutral.Delta.IsZero() || !got.DeltaNeutral.Price.IsZero() {
+		t.Fatalf("converted delta-neutral defaults = %+v", got.DeltaNeutral)
+	}
+}
+
+func TestFromCodecOpenOrderRejectsMalformedComboLegPrice(t *testing.T) {
+	t.Parallel()
+
+	_, err := fromCodecOpenOrder(codec.OpenOrder{OrderID: 1, Quantity: "1", OrderComboLegPrices: []string{"market"}})
+	if err == nil {
+		t.Fatal("fromCodecOpenOrder() accepted malformed combo leg price")
+	}
+}
+
 func TestFromCodecContractDetailsProjectsLiveFundMetadata(t *testing.T) {
 	t.Parallel()
 

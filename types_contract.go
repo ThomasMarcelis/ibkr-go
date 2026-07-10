@@ -42,6 +42,25 @@ const (
 	RightPut  Right = "P"
 )
 
+// SecurityIDType identifies the namespace of a [SecurityID]. It is open so
+// callers can use identifiers introduced by IBKR without waiting for a library
+// release.
+type SecurityIDType string
+
+const (
+	SecurityIDCUSIP SecurityIDType = "CUSIP"
+	SecurityIDSEDOL SecurityIDType = "SEDOL"
+	SecurityIDISIN  SecurityIDType = "ISIN"
+	SecurityIDRIC   SecurityIDType = "RIC"
+)
+
+// SecurityID selects a contract by an external identifier. Type and Value must
+// either both be empty or both be set.
+type SecurityID struct {
+	Type  SecurityIDType
+	Value string
+}
+
 // Contract identifies a tradable instrument. Users fill it in by hand to
 // request data or place orders; the Gateway resolves it against its security
 // database. Which fields are required depends on [Contract.SecType]:
@@ -55,49 +74,75 @@ const (
 //   - BOND: IssuerID from [MatchingSymbol.IssuerID] resolves the issuer's bonds.
 //
 // Setting ConID alone unambiguously identifies a contract the client has
-// already qualified; the descriptive fields can then be left zero. Through
-// server versions below 205, contract-bearing requests remain classic and
-// transmit a zero Strike in the numeric slot. At 205, contract-data requests
-// move to protobuf and preserve the same conID-only lookup semantics. The
-// market-data request family moves to protobuf at 206 and encodes each
-// nonzero/nonempty selector represented by this Contract type. Because Strike
-// does not carry separate presence, an outbound zero remains indistinguishable
-// from unset at protobuf boundaries; use ConID for a qualified zero-strike
-// contract. The Gateway may return an explicitly present zero strike for a
-// resolved contract. Empty Expiry, Right, and Multiplier mean unset. Use
+// already qualified; the descriptive fields can then be left zero. Request
+// families migrate independently: place order at server version 203, contract
+// details at 205, and market data at 206; the remaining supported families
+// stay on their classic request-specific layouts through 206. A nil Strike is
+// absent where the protocol preserves presence; a non-nil zero is an explicitly
+// selected or returned zero strike. The legacy
+// option-exercise layout requires a numeric zero when strike is absent. Empty
+// Expiry, Right, and Multiplier mean unset. Use
 // [ContractsClient.Qualify] to resolve a partial contract to a fully specified
 // one.
+//
+// Methods reject canonical fields that their negotiated wire layout cannot
+// represent; no field is silently dropped. Before the protobuf migrations,
+// quotes carry ComboLegs and DeltaNeutral, depth carries none of the five
+// extended fields, contract details carry IncludeExpired, SecurityID, and
+// IssuerID, and place order carries SecurityID, ComboLegs, and DeltaNeutral.
+// Historical bars/schedule/streams carry IncludeExpired and ComboLegs; head
+// timestamp, histogram, and historical ticks carry only IncludeExpired;
+// real-time bars, tick-by-tick, and option calculations carry none. Exercise
+// also omits PrimaryExchange from the otherwise common identity block. Classic
+// quote and historical combo layouts carry only each leg's ConID, Ratio,
+// Action, and Exchange; nondefault position/short-sale fields require a full
+// order or protobuf leg. The shared protobuf Contract used by place order at
+// 203, contract details at 205, and quotes/depth at 206 carries all fields.
 type Contract struct {
-	ConID           int             // IBKR contract ID; nonzero pins an exact contract
-	Symbol          string          // underlying symbol (ticker); base currency for forex
-	SecType         SecType         // instrument class; drives which other fields matter
-	Expiry          string          // YYYYMMDD (or YYYYMM) for derivatives; empty for cash instruments
-	Strike          decimal.Decimal // option strike; zero is valid and is also the zero value for an unspecified classic request
-	Right           Right           // option right; empty means unset
-	Multiplier      string          // contract multiplier as a string, e.g. "100"; empty means default
-	Exchange        string          // routing/listing exchange, commonly "SMART"
-	Currency        string          // trading currency, e.g. "USD"; quote currency for forex
-	LocalSymbol     string          // exchange-local symbol; an alternative to Symbol for futures
-	TradingClass    string          // trading class, disambiguates options sharing a symbol
-	PrimaryExchange string          // primary listing exchange, resolves SMART ambiguity for dual-listed stocks
-	IssuerID        string          // bond issuer identifier returned by ContractsClient.Search
+	ConID           int              // IBKR contract ID; nonzero pins an exact contract
+	Symbol          string           // underlying symbol (ticker); base currency for forex
+	SecType         SecType          // instrument class; drives which other fields matter
+	Expiry          string           // YYYYMMDD (or YYYYMM) for derivatives; empty for cash instruments
+	Strike          *decimal.Decimal // option strike; nil means absent and a non-nil zero is preserved
+	Right           Right            // option right; empty means unset
+	Multiplier      string           // contract multiplier as a string, e.g. "100"; empty means default
+	Exchange        string           // routing/listing exchange, commonly "SMART"
+	Currency        string           // trading currency, e.g. "USD"; quote currency for forex
+	LocalSymbol     string           // exchange-local symbol; an alternative to Symbol for futures
+	TradingClass    string           // trading class, disambiguates options sharing a symbol
+	PrimaryExchange string           // primary listing exchange, resolves SMART ambiguity for dual-listed stocks
+	IncludeExpired  bool             // include expired contracts where the request supports it
+	SecurityID      SecurityID       // external identifier selector; Type and Value are a pair
+	IssuerID        string           // bond issuer identifier returned by ContractsClient.Search
+	ComboLegs       []ComboLeg       // legs of a BAG contract
+	DeltaNeutral    *DeltaNeutralContract
 }
 
 // ComboLeg is one leg of a multi-leg (BAG) combo contract.
 type ComboLeg struct {
-	ConID              int         // contract ID of the leg instrument
-	Ratio              int         // relative size of this leg within the combo
-	Action             OrderAction // BUY, SELL, or SSHORT for this leg
-	Exchange           string      // routing exchange for the leg
-	OpenClose          string      // open/close indicator (combo orders)
-	ShortSaleSlot      int         // short-sale slot: 0 unset, 1 broker, 2 third party
-	DesignatedLocation string      // required when ShortSaleSlot is 2
-	ExemptCode         int         // short-sale exempt code; -1 when unset
+	ConID              int               // contract ID of the leg instrument
+	Ratio              int               // relative size of this leg within the combo
+	Action             OrderAction       // BUY, SELL, or SSHORT for this leg
+	Exchange           string            // routing exchange for the leg
+	OpenClose          ComboLegOpenClose // position effect of the combo leg
+	ShortSaleSlot      int               // short-sale slot: 0 unset, 1 broker, 2 third party
+	DesignatedLocation string            // required when ShortSaleSlot is 2
+	ExemptCode         *int              // nil sends IBKR's -1 unset sentinel; explicit zero remains zero
 }
 
-// DeltaNeutralContract describes the delta-neutral underlier attached to a
-// contract. It is present only when IBKR echoes an explicit delta-neutral
-// contract block.
+// ComboLegOpenClose is IBKR's position-effect code for a combo leg.
+type ComboLegOpenClose int
+
+const (
+	ComboLegSame    ComboLegOpenClose = 0
+	ComboLegOpen    ComboLegOpenClose = 1
+	ComboLegClose   ComboLegOpenClose = 2
+	ComboLegUnknown ComboLegOpenClose = 3
+)
+
+// DeltaNeutralContract describes the delta-neutral underlier attached to a BAG
+// contract. It can be sent by request families whose wire layout carries the
+// block and is preserved when IBKR echoes it.
 type DeltaNeutralContract struct {
 	ConID int
 	Delta decimal.Decimal

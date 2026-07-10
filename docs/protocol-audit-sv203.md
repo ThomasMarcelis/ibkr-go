@@ -33,16 +33,21 @@ deliberately not advertised here.
 - `PlaceOrderRequest` contains `orderId` (field 1), an emitted `Contract`
   message (2), an emitted `Order` message (3), and an emitted empty
   `AttachedOrders` message (4). The official client emits the nested message
-  even when it has no fields.
+  even when it has no fields. `Contract.conId` is proto3 optional. Official
+  EClientUtils sets it whenever `Utils::isValidValue` accepts the value; zero
+  is valid, so the request explicitly carries tag 1 with value zero.
 - Contract combo legs and per-leg prices are merged into repeated
   `Contract.comboLegs`; an extra price with no matching leg fails before send.
+  The exact tag-9/fixed64 leg-price regression is an official-schema
+  source-law vector, not a claim that the live capture placed a priced combo.
 - `Order.totalQuantity` remains a decimal string. Protobuf integer and double
   fields are parsed and range-checked; malformed, overflowing, NaN, and
   infinite values fail before send. Protobuf maps use deterministic key order
   and official duplicate-key last-wins behavior.
 - `Order.softDollarTier` is emitted even when empty. Unsupported internal
-  shapes such as an opaque classic order-options string or a delta-neutral
-  contract with no typed public representation fail before send.
+  shapes such as an opaque classic order-options string fail before send;
+  public Contract fields are separately checked against the exact request
+  layout before route installation.
 - `CancelOrderRequest` emits `orderId` plus a present `OrderCancel`, and
   `GlobalCancelRequest` emits a present `OrderCancel`, including when that
   nested message is empty.
@@ -79,20 +84,25 @@ Official source files used for the audit:
 - `ErrorMessage.proto`: `6ae1e1d78b69b75603310b40194074a6706ebc4055aa0fbf904360ef2d316b4f`
 
 The private capture
-`20260709T233523Z-protobuf_sv203_order_cancel_aapl` placed one AAPL share at a
-non-marketable $50 limit, observed the open/status callbacks, cancelled it,
-issued global cancel, and completed a current-time round trip before teardown.
-The account ended flat and no order remained working.
+`20260710T160907Z-protobuf_sv203_required_conid_order_cancel_aapl` is the
+source of the committed replay. It placed one AAPL share at a non-marketable
+$50 limit with an explicit zero `Contract.conId`, observed the open/status
+callbacks, cancelled it, issued global cancel, and completed a current-time
+round trip before teardown. No fill callback or filled status was observed;
+targeted cancel reached `Cancelled`, no order remained working in the capture,
+and the subsequent global cancel returned code 161 because no active order
+remained. The historical capture label preserves the initial, incorrect
+required-field hypothesis; the captured bytes instead prove the official
+encoder's explicit-zero behavior for this optional proto3 field.
 
-- `events.jsonl`: `26d77d633ee488dff8a6afd6c7d0ffd35c72b686e9378fed92e4019b02339a3a`
-- `raw.txt`: `665cb95403e5bc18a59b82a4c6628f3b05da67447de2b87df5221e455b91484a`
-- `replay/frames.jsonl`: `47aafceab7ad8afe33813cb96886a9cc7fce2af161097d9889bc9de8d8e6a295`
+- `events.jsonl`: `8efd714c3885da232215b0f4f4bb661ac7f4364126d4c97f4200dfa71320c55d`
+- normalized `replay/frames.jsonl`: `c5d436012eb9e5f47db6d20b3719a9fc284e21b75562648d07d855041b45f1cf`
 
 The committed transcript is sanitized and retains the exact protobuf field
-presence. It replaces the account, client, permanent, and submitter identifiers
-and omits farm-status noise and the time-dependent warning text. Unit tests
-also compare the minimal place/cancel/global-cancel bytes with the official
-10.48.01 schemas and freeze malformed-input failure behavior.
+presence. It replaces the account, permanent, and submitter identifiers and
+omits farm-status noise. Unit tests decode the callbacks from this same capture,
+compare minimal place/cancel/global-cancel source-law bytes with the official
+10.48.01 schemas, and freeze malformed-input failure behavior.
 
 The separate read-only capture
 `20260709T234704Z-protobuf_sv203_open_orders_empty` proves the mixed request/end
