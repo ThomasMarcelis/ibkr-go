@@ -48,6 +48,13 @@ jobs:
           go vet ./...
           go build ./...
 
+      - name: Verify 32-bit build
+        env:
+          CGO_ENABLED: '0'
+          GOOS: linux
+          GOARCH: '386'
+        run: go build ./...
+
       - name: Lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
         with:

@@ -3,7 +3,6 @@ package wire
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io"
 )
 
@@ -44,9 +43,6 @@ func WriteFrame(w io.Writer, payload []byte) error {
 	}
 	if len(payload) > MaxFrameSize {
 		return ErrFrameTooLarge
-	}
-	if len(payload) > int(^uint32(0)) {
-		return fmt.Errorf("wire: payload too large: %d", len(payload))
 	}
 
 	var header [4]byte
