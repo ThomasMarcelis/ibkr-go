@@ -141,16 +141,11 @@ func sendCancelAccountSummary(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"63", "1", strconv.Itoa(reqID)})
 }
 
-// --- Positions (msg_id=61) / cancel (msg_id=64) ---
+// --- Positions (msg_id=61) ---
 //
 //	[61, version=1]
-//	[64, version=1]
 func sendReqPositions(conn net.Conn) error {
 	return sendMessage(conn, []string{"61", "1"})
-}
-
-func sendCancelPositions(conn net.Conn) error {
-	return sendMessage(conn, []string{"64", "1"})
 }
 
 // --- Historical bars (msg_id=20) / cancel (msg_id=25) ---

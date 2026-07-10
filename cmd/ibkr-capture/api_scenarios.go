@@ -806,6 +806,168 @@ func runAPISmartComponents(ctx context.Context, addr string, clientID int) error
 	})
 }
 
+func runAPIAccountSummarySnapshot(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
+			Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"},
+		})
+		if err != nil {
+			return err
+		}
+		if len(values) == 0 {
+			return errors.New("account summary returned no values")
+		}
+		if err := fenceAPIWrites(ctx, client, "account summary cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("account_summary", "snapshot", func(event *apiDriverEvent) { event.Count = len(values) })
+		return nil
+	})
+}
+
+func fenceAPIWrites(ctx context.Context, client *ibkr.Client, label string) error {
+	// The response proves earlier writes reached the connection before Client.Close.
+	if _, err := client.CurrentTime(ctx); err != nil {
+		return fmt.Errorf("%s protocol fence: %w", label, err)
+	}
+	return nil
+}
+
+func drainAccountSummaryEvents(sub *ibkr.Subscription[ibkr.AccountSummaryUpdate]) int {
+	count := 0
+	for {
+		select {
+		case _, ok := <-sub.Events():
+			if !ok {
+				return count
+			}
+			count++
+		default:
+			return count
+		}
+	}
+}
+
+func runAPIAccountSummaryStream(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
+			Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return err
+		}
+		if err := sub.AwaitSnapshot(ctx); err != nil {
+			_ = sub.Close()
+			return err
+		}
+		count := drainAccountSummaryEvents(sub)
+		_ = sub.Close()
+		if err := sub.Wait(); err != nil {
+			return err
+		}
+		if count == 0 {
+			return errors.New("account summary subscription returned no values")
+		}
+		if err := fenceAPIWrites(ctx, client, "account summary cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("account_summary", "subscription", func(event *apiDriverEvent) { event.Count = count })
+		return nil
+	})
+}
+
+func runAPIAccountSummaryTwoSubscriptions(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		first, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
+			Tags: []string{"NetLiquidation"},
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return err
+		}
+		second, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
+			Tags: []string{"TotalCashValue"},
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			_ = first.Close()
+			return err
+		}
+		if err := first.AwaitSnapshot(ctx); err != nil {
+			_ = first.Close()
+			_ = second.Close()
+			return fmt.Errorf("first account summary: %w", err)
+		}
+		if err := second.AwaitSnapshot(ctx); err != nil {
+			_ = first.Close()
+			_ = second.Close()
+			return fmt.Errorf("second account summary: %w", err)
+		}
+		firstCount := drainAccountSummaryEvents(first)
+		secondCount := drainAccountSummaryEvents(second)
+		_ = first.Close()
+		_ = second.Close()
+		if err := errors.Join(first.Wait(), second.Wait()); err != nil {
+			return fmt.Errorf("close account summaries: %w", err)
+		}
+		if firstCount == 0 || secondCount == 0 {
+			return fmt.Errorf("account summary subscriptions returned %d and %d values", firstCount, secondCount)
+		}
+		if err := fenceAPIWrites(ctx, client, "account summary cancellations"); err != nil {
+			return err
+		}
+		recordAPIEvent("account_summary", "two_subscriptions", func(event *apiDriverEvent) {
+			event.Count = firstCount + secondCount
+			event.Values = map[string]string{
+				"first_count":  strconv.Itoa(firstCount),
+				"second_count": strconv.Itoa(secondCount),
+			}
+		})
+		return nil
+	})
+}
+
+func runAPIPositionsSnapshot(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		positions, err := client.Accounts().Positions(ctx)
+		if err != nil {
+			return err
+		}
+		if err := fenceAPIWrites(ctx, client, "positions cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("positions", "snapshot", func(event *apiDriverEvent) { event.Count = len(positions) })
+		return nil
+	})
+}
+
+func runAPISetMarketDataType(ctx context.Context, addr string, clientID int, dataType ibkr.MarketDataType) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, dataType); err != nil {
+			return err
+		}
+		if err := fenceAPIWrites(ctx, client, "market data type"); err != nil {
+			return err
+		}
+		recordAPIEvent("market_data_type", dataType.String(), nil)
+		return nil
+	})
+}
+
+func runAPISetMarketDataLive(ctx context.Context, addr string, clientID int) error {
+	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataLive)
+}
+
+func runAPISetMarketDataFrozen(ctx context.Context, addr string, clientID int) error {
+	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataFrozen)
+}
+
+func runAPISetMarketDataDelayed(ctx context.Context, addr string, clientID int) error {
+	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataDelayed)
+}
+
+func runAPISetMarketDataDelayedFrozen(ctx context.Context, addr string, clientID int) error {
+	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataDelayedFrozen)
+}
+
 func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))

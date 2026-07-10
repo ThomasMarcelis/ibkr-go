@@ -199,85 +199,27 @@ var scenarios = map[string]*scenario{
 	// --- Account summary ---
 
 	"account_summary_snapshot": {
-		metadata:    meta("accounts", []string{"Accounts().Summary"}, []int{62, 63, 64}, "read_only", nil, []string{"finite account summary snapshot"}, 1, "promoted", batchReadOnly),
-		description: "REQ_ACCOUNT_SUMMARY then cancel after end marker",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqAccountSummary(conn, reqID, "All", "NetLiquidation,TotalCashValue,BuyingPower,ExcessLiquidity"); err != nil {
-				return err
-			}
-			// ACCOUNT_SUMMARY_END msg_id=64
-			if err := readFrames(conn, 15*time.Second, logFrame, stopOnMsgIDWithReq(64, strconv.Itoa(reqID), 2)); err != nil {
-				return err
-			}
-			if err := sendCancelAccountSummary(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().Summary", "Client.CurrentTime"}, []int{protocol.OutReqAccountSummary, protocol.InAccountSummary, protocol.InAccountSummaryEnd, protocol.OutReqCurrentTime}, "read_only", nil, []string{"finite account summary snapshot and protocol-fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "collect and close a finite account summary through the public API",
+		runAPI:      runAPIAccountSummarySnapshot,
 	},
 	"account_summary_stream": {
-		metadata:    meta("accounts", []string{"Accounts().SubscribeSummary"}, []int{62, 63, 64}, "read_only", nil, []string{"summary snapshot plus streaming window"}, 1, "promoted", batchReadOnly),
-		description: "REQ_ACCOUNT_SUMMARY held open for 10s to catch streaming updates",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqAccountSummary(conn, reqID, "All", "NetLiquidation,TotalCashValue,BuyingPower"); err != nil {
-				return err
-			}
-			// Read for 10 seconds regardless of end marker — we want streaming updates.
-			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelAccountSummary(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().SubscribeSummary", "Client.CurrentTime"}, []int{protocol.OutReqAccountSummary, protocol.InAccountSummary, protocol.InAccountSummaryEnd, protocol.OutReqCurrentTime}, "read_only", nil, []string{"nonempty summary snapshot and protocol-fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "observe and close an account-summary subscription through the public API",
+		runAPI:      runAPIAccountSummaryStream,
 	},
 	"account_summary_two_subs": {
-		metadata:    meta("accounts", []string{"Accounts().SubscribeSummary"}, []int{62, 63, 64}, "read_only", nil, []string{"concurrent summary subscriptions"}, 1, "promoted", batchReadOnly),
-		description: "two concurrent REQ_ACCOUNT_SUMMARY with different tags",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqA := nextReqID()
-			reqB := nextReqID()
-			if err := sendReqAccountSummary(conn, reqA, "All", "NetLiquidation"); err != nil {
-				return err
-			}
-			if err := sendReqAccountSummary(conn, reqB, "All", "TotalCashValue"); err != nil {
-				return err
-			}
-			// Read for 5 seconds to capture both snapshot ends.
-			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelAccountSummary(conn, reqA); err != nil {
-				return err
-			}
-			if err := sendCancelAccountSummary(conn, reqB); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().SubscribeSummary", "Client.CurrentTime"}, []int{protocol.OutReqAccountSummary, protocol.InAccountSummary, protocol.InAccountSummaryEnd, protocol.OutReqCurrentTime}, "read_only", nil, []string{"two nonempty concurrent summary snapshots and protocol-fenced cancellations"}, 1, "promoted", batchReadOnly),
+		description: "observe two concurrent account-summary subscriptions through the public API",
+		runAPI:      runAPIAccountSummaryTwoSubscriptions,
 	},
 
 	// --- Positions ---
 
 	"positions_snapshot": {
-		metadata:    meta("accounts", []string{"Accounts().Positions"}, []int{61, 62, 64}, "read_only", nil, []string{"positions snapshot end marker"}, 1, "promoted", batchReadOnly),
-		description: "REQ_POSITIONS drained to POSITION_END, then CANCEL_POSITIONS",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqPositions(conn); err != nil {
-				return err
-			}
-			// POSITION_END msg_id=62
-			if err := readFrames(conn, 15*time.Second, logFrame, stopOnMsgID(62)); err != nil {
-				return err
-			}
-			if err := sendCancelPositions(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().Positions", "Client.CurrentTime"}, []int{protocol.OutReqPositions, protocol.InPositionEnd, protocol.OutCancelPositions, protocol.OutReqCurrentTime}, "read_only", nil, []string{"finite positions snapshot and protocol-fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "collect and close the positions snapshot through the public API",
+		runAPI:      runAPIPositionsSnapshot,
 	},
 
 	// --- Historical bars ---
@@ -360,44 +302,24 @@ var scenarios = map[string]*scenario{
 	// --- Market data type control (MarketData().SetType) ---
 
 	"set_type_live": {
-		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=1 push or real entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_MARKET_DATA_TYPE=1 (live), drain for marketDataType push",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 1); err != nil {
-				return err
-			}
-			return readFrames(conn, 3*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqCurrentTime}, "read_only", nil, []string{"protocol-fenced live market-data type request"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "select live market data through the public API",
+		runAPI:      runAPISetMarketDataLive,
 	},
 	"set_type_frozen": {
-		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=2 push"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_MARKET_DATA_TYPE=2 (frozen), drain for marketDataType push",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 2); err != nil {
-				return err
-			}
-			return readFrames(conn, 3*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqCurrentTime}, "read_only", nil, []string{"protocol-fenced frozen market-data type request"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "select frozen market data through the public API",
+		runAPI:      runAPISetMarketDataFrozen,
 	},
 	"set_type_delayed": {
-		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=3 push"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_MARKET_DATA_TYPE=3 (delayed), drain for marketDataType push",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			return readFrames(conn, 3*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqCurrentTime}, "read_only", nil, []string{"protocol-fenced delayed market-data type request"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "select delayed market data through the public API",
+		runAPI:      runAPISetMarketDataDelayed,
 	},
 	"set_type_delayed_frozen": {
-		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=4 push"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_MARKET_DATA_TYPE=4 (delayed-frozen), drain for marketDataType push",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 4); err != nil {
-				return err
-			}
-			return readFrames(conn, 3*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqCurrentTime}, "read_only", nil, []string{"protocol-fenced delayed-frozen market-data type request"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "select delayed-frozen market data through the public API",
+		runAPI:      runAPISetMarketDataDelayedFrozen,
 	},
 	"set_type_invalid": {
 		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 4}, "read_only", nil, []string{"real IBKR invalid data type error"}, 1, "promoted", batchNewV2, batchReadOnly),
