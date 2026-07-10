@@ -102,7 +102,6 @@ var rawFrameAttested = map[int]string{
 	InMarketRule:            "TestCaptureDecode_MarketRuleLive",
 	InNewsBulletins:         "TestCaptureDecode_NewsBulletinLive",
 	InCompletedOrder:        "TestCaptureDecode_CompletedOrderTrailLimitLive",
-	InReplaceFAEnd:          "TestDecodeReplaceFAEnd",
 	InHistoricalSchedule:    "TestCaptureDecode_HistoricalSchedule",
 	InUserInfo:              "TestDecodeUserInfoLiveFrame",
 	InHistoricalDataEnd:     "TestCaptureDecode_HistoricalDataEndLive",
@@ -156,6 +155,7 @@ var pendingLiveAttestation = map[int]string{
 	InHistoricalTicksLast:   "needs a reqHistoricalTicks whatToShow=TRADES capture",
 	InTickByTick:            "needs a reqTickByTickData capture (market hours)",
 	InCompletedOrderEnd:     "needs the completedOrdersEnd frame that follows the msg-101 batch",
+	InReplaceFAEnd:          "source-referenced decoder coverage only — needs a live replaceFAEnd frame from an FA-entitled account",
 	InWSHMetaData:           "needs a reqWSHMetaData capture (WSH entitlement)",
 	InWSHEventData:          "needs a reqWSHEventData capture (WSH entitlement)",
 }
