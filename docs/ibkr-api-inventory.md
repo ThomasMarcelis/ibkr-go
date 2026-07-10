@@ -82,7 +82,7 @@ evidence; WSH is a separate API, not a replacement.
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
 | News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has live capture coverage through `api_news_article_aapl`; invalid article/provider variants remain matrix work. |
 | FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented; `replaceFAEnd` decoded and routed by req_id (2026-07-04). |
-| Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Official callbacks not in current implemented message inventory; matrix as target/deferred/out-of-public-scope based on live behavior and project scope. |
+| Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Both reroute callbacks are live-attested at exact sv206 and handled transparently by active quote/depth routes. Verification/auth, connectAck, and delta-neutral validation remain outside the implemented inventory. |
 
 ## Current ibkr-go Public Facade Methods
 
@@ -243,6 +243,8 @@ Inbound message IDs:
 | `InHistoricalNewsEnd` | 87 | Historical news end |
 | `InHeadTimestamp` | 88 | Head timestamp |
 | `InHistogramData` | 89 | Histogram data |
+| `InMarketDataReroute` | 91 | Transparent quote request reroute |
+| `InMarketDepthReroute` | 92 | Transparent market-depth request reroute |
 | `InMarketRule` | 93 | Market rule |
 | `InPnL` | 94 | Account PnL |
 | `InPnLSingle` | 95 | Single-position PnL |
@@ -266,7 +268,7 @@ These are not all defects. They are explicit matrix targets until live evidence
 and project scope decide whether to implement, defer, or mark out of scope.
 
 - `reqManagedAccts`, `setServerLogLevel`.
-- Verification/auth callbacks and redirect/reroute callbacks.
+- Verification/auth callbacks and redirect callbacks.
 - `tickEFP` and `deltaNeutralValidation`.
 - `orderBound` and rare OpenOrder branches.
 - Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual

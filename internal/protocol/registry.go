@@ -7,7 +7,7 @@ import "slices"
 
 const (
 	SupportedMinServerVersion = 176
-	SupportedMaxServerVersion = 205
+	SupportedMaxServerVersion = 206
 )
 
 // Direction identifies which peer sends a message.
@@ -182,6 +182,8 @@ const (
 	InHeadTimestamp         = 88
 	InHistogramData         = 89
 	InHistoricalDataUpdate  = 90
+	InMarketDataReroute     = 91
+	InMarketDepthReroute    = 92
 	InMarketRule            = 93
 	InPnL                   = 94
 	InPnLSingle             = 95
@@ -332,6 +334,8 @@ var messages = [...]Message{
 	{"InHeadTimestamp", InHeadTimestamp, ServerToClient},
 	{"InHistogramData", InHistogramData, ServerToClient},
 	{"InHistoricalDataUpdate", InHistoricalDataUpdate, ServerToClient},
+	{"InMarketDataReroute", InMarketDataReroute, ServerToClient},
+	{"InMarketDepthReroute", InMarketDepthReroute, ServerToClient},
 	{"InMarketRule", InMarketRule, ServerToClient},
 	{"InPnL", InPnL, ServerToClient},
 	{"InPnLSingle", InPnLSingle, ServerToClient},

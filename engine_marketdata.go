@@ -109,8 +109,10 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			sub.expectSnapshot()
 		}
 		quote := Quote{}
+		var quoteRoute *route
+		rerouted := false
 
-		e.keyed[reqID] = &route{
+		quoteRoute = &route{
 			opKind:       OpQuotes,
 			subscription: true,
 			resume:       cfg.resume,
@@ -122,6 +124,21 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
+				case codec.MarketDataReroute:
+					if rerouted {
+						_ = e.send(codec.CancelQuote{ReqID: reqID})
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID))
+						return
+					}
+					request := quoteRoute.request.(codec.QuoteRequest)
+					request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
+					quoteRoute.request = request
+					rerouted = true
+					if err := e.send(request); err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(fmt.Errorf("ibkr: reroute market data request %d: %w", reqID, err))
+					}
 				case codec.TickPrice:
 					price, err := parseRequiredDecimal(m.Price, "quote price tick")
 					if err != nil {
@@ -152,13 +169,16 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						ReceivedAt: time.Now().UTC(),
 					})
 				case codec.TickSize:
-					size, err := parseRequiredDecimal(m.Size, "quote size tick")
+					size, err := parseOptionalDecimalPointer(m.Size, "quote size tick")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
-					changed := applyTickSize(&quote, m.TickType, size)
+					var changed QuoteFields
+					if size != nil {
+						changed = applyTickSize(&quote, m.TickType, *size)
+					}
 					emitSubscription(sub, QuoteUpdate{
 						Kind:       QuoteUpdateSizeTick,
 						Snapshot:   quote,
@@ -216,6 +236,18 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 						sub.closeWithErr(err)
 						return
 					}
+					lastPricePrecision, err := parseOptionalDecimalPointer(m.LastPricePrecision, "quote parameters last price precision")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					lastSizePrecision, err := parseOptionalDecimalPointer(m.LastSizePrecision, "quote parameters last size precision")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 					emitSubscription(sub, QuoteUpdate{
 						Kind:     QuoteUpdateParameters,
 						Snapshot: quote,
@@ -223,6 +255,8 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 							MinTick:             minTick,
 							BBOExchange:         m.BBOExchange,
 							SnapshotPermissions: m.SnapshotPermissions,
+							LastPricePrecision:  lastPricePrecision,
+							LastSizePrecision:   lastSizePrecision,
 						}),
 						ReceivedAt: time.Now().UTC(),
 					})
@@ -295,6 +329,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				sub.closeWithErr(err)
 			},
 		}
+		e.keyed[reqID] = quoteRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -459,19 +494,22 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			return
 		}
 		reqID := e.allocReqID()
+		var depthRoute *route
+		rerouted := false
 		var sub *Subscription[DepthRow]
 		sub = newSubscription[DepthRow](cfg, func() {
 			e.enqueue(func() {
 				if _, ok := e.keyed[reqID]; !ok {
 					return
 				}
+				request := depthRoute.request.(codec.MarketDepthRequest)
 				e.deleteKeyedRoute(reqID)
-				_ = e.send(codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: req.IsSmartDepth})
+				_ = e.send(codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
 				sub.closeWithErr(nil)
 			})
 		})
 
-		e.keyed[reqID] = &route{
+		depthRoute = &route{
 			opKind:       OpMarketDepth,
 			subscription: true,
 			resume:       cfg.resume,
@@ -483,6 +521,22 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
+				case codec.MarketDepthReroute:
+					if rerouted {
+						request := depthRoute.request.(codec.MarketDepthRequest)
+						_ = e.send(codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(fmt.Errorf("ibkr: market depth request %d was rerouted more than once", reqID))
+						return
+					}
+					request := depthRoute.request.(codec.MarketDepthRequest)
+					request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
+					depthRoute.request = request
+					rerouted = true
+					if err := e.send(request); err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(fmt.Errorf("ibkr: reroute market depth request %d: %w", reqID, err))
+					}
 				case codec.MarketDepthUpdate:
 					row, err := fromCodecMarketDepth(m)
 					if err != nil {
@@ -532,6 +586,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			},
 			close: func(err error) { sub.closeWithErr(err) },
 		}
+		e.keyed[reqID] = depthRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -953,9 +1008,9 @@ func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth price: %w", err)
 	}
-	size, err := decimal.NewFromString(m.Size)
+	size, err := parseOptionalDecimalPointer(m.Size, "market depth size")
 	if err != nil {
-		return DepthRow{}, fmt.Errorf("ibkr: market depth size: %w", err)
+		return DepthRow{}, err
 	}
 	return DepthRow{
 		Position:  m.Position,
@@ -971,9 +1026,9 @@ func fromCodecMarketDepthL2(m codec.MarketDepthL2Update) (DepthRow, error) {
 	if err != nil {
 		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 price: %w", err)
 	}
-	size, err := decimal.NewFromString(m.Size)
+	size, err := parseOptionalDecimalPointer(m.Size, "market depth l2 size")
 	if err != nil {
-		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 size: %w", err)
+		return DepthRow{}, err
 	}
 	return DepthRow{
 		Position:     m.Position,

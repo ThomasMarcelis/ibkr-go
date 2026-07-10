@@ -240,7 +240,7 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 	if update.Parameters.MinTick == nil || update.Parameters.MinTick.String() != "0.01" ||
 		update.Parameters.BBOExchange != "9c0001" ||
-		update.Parameters.SnapshotPermissions != 4 {
+		update.Parameters.SnapshotPermissions == nil || *update.Parameters.SnapshotPermissions != 4 {
 		t.Fatalf("update 2 Parameters = %+v", update.Parameters)
 	}
 
@@ -250,7 +250,7 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	if update.Kind != ibkr.QuoteUpdateSizeTick || update.Changed != ibkr.QuoteFieldVolume {
 		t.Fatalf("update 3 = Kind %v Changed %v, want QuoteFieldVolume", update.Kind, update.Changed)
 	}
-	if update.SizeTick == nil || update.SizeTick.TickType != 74 || !update.SizeTick.Size.IsZero() {
+	if update.SizeTick == nil || update.SizeTick.TickType != 74 || update.SizeTick.Size == nil || !update.SizeTick.Size.IsZero() {
 		t.Fatalf("update 3 SizeTick = %+v, want delayed volume tick 74 value 0", update.SizeTick)
 	}
 	if !update.Snapshot.Volume.IsZero() {

@@ -10,11 +10,12 @@ raw-ID envelope and protobuf executions flow. Exact `server_version 202` adds
 zero-strike contract semantics but no message migration. Exact 203 migrates the
 order placement/cancellation lifecycle to protobuf. Exact 204 migrates the
 open/completed-order query family and completed-order replies. Exact 205
-migrates contract-details requests and replies. The session handshake can
-negotiate 176..205 and gates fields on the returned version, but 176..199
-remain compatibility paths rather than advertised support until each has
-independent evidence. Version 206 and newer remain unsupported until their
-staged protobuf migrations are implemented and live-attested.
+migrates contract-details requests and replies. Exact 206 migrates quote,
+market-depth, and market-data-type requests plus their L1/depth callbacks. The
+session handshake can negotiate 176..206 and gates fields on the returned
+version, but 176..199 remain compatibility paths rather than advertised support
+until each has independent evidence. Version 207 and newer remain unsupported
+until their staged protobuf migrations are implemented and live-attested.
 
 ## Layers
 
@@ -148,7 +149,7 @@ singleton open-orders observer.
 - `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
   boundary it could not fully resolve, so a degraded parse is observable
   instead of silently dropping fields.
-- The advertised handshake maximum (`maxServerVersion`, currently 205) is a
+- The advertised handshake maximum (`maxServerVersion`, currently 206) is a
   package-level override point used only by the version-matrix live tests to
   force a session onto an older wire layout for verification; production
   code always advertises the maximum.

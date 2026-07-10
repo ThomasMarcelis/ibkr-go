@@ -7,7 +7,7 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates `server_version` 176..205; the Gateway's answer below
+The client negotiates `server_version` 176..206; the Gateway's answer below
 176 is rejected during handshake, and wire fields introduced above 176 are
 gated on whatever version the Gateway actually negotiates. `sv200` remains
 the classic live-validated layout; exact `sv201` adds the raw-ID envelope and
@@ -19,7 +19,8 @@ the protobuf error family introduced at 201. Exact `sv204` migrates the three
 open-order requests, completed-order request, and completed-order result/end
 pair. Exact `sv205` migrates contract-details requests and regular, bond, and
 end responses to protobuf while retaining the same typed public operation.
-Versions 206 and newer are not advertised.
+Exact `sv206` migrates market-data, market-depth, and market-data-type requests
+and their quote/depth callbacks. Versions 207 and newer are not advertised.
 
 ```go
 type Client struct{ /* opaque */ }

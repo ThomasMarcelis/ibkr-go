@@ -34,7 +34,7 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		{TickGeneric{ReqID: 1, TickType: 49, Value: "0"}, "codec.TickGeneric"},
 		{TickString{ReqID: 1, TickType: 45, Value: "1712300400"}, "codec.TickString"},
 		{TickNews{ReqID: 1, Time: "1758294759000", ProviderCode: "BRFG", ArticleID: "BRFG$1c2d5728", Headline: "Headline", ExtraData: "L:en"}, "codec.TickNews"},
-		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3}, "codec.TickReqParams"},
+		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: new(3)}, "codec.TickReqParams"},
 		{ExecutionDetail{ReqID: 1, OrderID: 42, Contract: Contract{Symbol: "AAPL"}, ExecID: "0001", Account: "DU12345", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "codec.ExecutionDetail"},
 		{ExecutionsEnd{ReqID: 1}, "codec.ExecutionsEnd"},
 		{OpenOrder{

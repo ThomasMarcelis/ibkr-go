@@ -69,7 +69,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   freeze the boundary; the public result adds optional algorithmic-minimum and
   price/size-precision decimals plus the source-defined event-contract fields.
 
+- Exact `server_version 206` support migrates quote, market-depth, their
+  cancellations, and market-data-type requests plus ten L1/depth callbacks to
+  protobuf. Quote request parameters preserve omitted snapshot permissions and
+  last-price/last-size precision. Classic CFD reroute callbacks transparently
+  replace active quote/depth requests while preserving subscription settings;
+  repeated reroutes fail explicitly instead of looping. Official-source
+  schemas, exact live vectors, and a curated public replay freeze the boundary.
+
 ### Changed (breaking)
+
+- **`QuoteParameters.SnapshotPermissions` is now `*int`.** Nil means IBKR
+  omitted the mask; a pointer to zero is an explicitly present zero. Quote
+  parameters also expose optional last-price and last-size precision decimals.
+
+- **`QuoteSizeTick.Size` and `DepthRow.Size` are now `*decimal.Decimal`.** Nil
+  preserves the official exact-protobuf `UNSET_DECIMAL` result when IBKR omits
+  a standalone tick or depth size; an explicit zero remains a non-nil decimal.
 
 - **Legacy Reuters fundamental data has been removed.** IBKR API 10.47
   de-supported the request, cancellation, callback, and fundamental-ratios
@@ -189,16 +205,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **The client negotiates IB Gateway `server_version` 176..205, with exact 201
+- **The client negotiates IB Gateway `server_version` 176..206, with exact 201
   adding raw message IDs and protobuf executions, exact 202 adding the
-  zero-strike contract boundary, exact 203 migrating the order lifecycle, and
-  exact 204 migrating open/completed-order queries and completed results, and
-  exact 205 migrating contract data.** Fields are gated
+  zero-strike contract boundary, exact 203 migrating the order lifecycle,
+  exact 204 migrating open/completed-order queries and completed results,
+  exact 205 migrating contract data, and exact 206 migrating market data and
+  depth.** Fields are gated
   on the version the Gateway actually returns instead of assuming the latest
   layout. The classic sv200, mixed-envelope sv201, zero-strike sv202,
-  order-protobuf sv203, completed-order-protobuf sv204, and contract-data sv205
+  order-protobuf sv203, completed-order-protobuf sv204, contract-data sv205,
+  and market-data sv206
   boundaries are live-attested; versions 176..199 remain compatibility paths
-  until independently evidenced, and 206+ is not advertised. The official API
+  until independently evidenced, and 207+ is not advertised. The official API
   10.48.01 migration table moves no message at 202; a sanitized live replay
   freezes a protobuf execution Contract with both conId and explicit strike=0.
   `CurrentTimeMillis` returns

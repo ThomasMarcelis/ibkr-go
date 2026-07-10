@@ -59,8 +59,12 @@ const (
 // server versions below 205, contract-bearing requests remain classic and
 // transmit a zero Strike in the numeric slot. At 205, contract-data requests
 // move to protobuf and preserve the same conID-only lookup semantics. The
-// Gateway may return an explicitly present zero strike for a resolved
-// contract. Empty Expiry, Right, and Multiplier mean unset. Use
+// market-data request family moves to protobuf at 206 and encodes each
+// nonzero/nonempty selector represented by this Contract type. Because Strike
+// does not carry separate presence, an outbound zero remains indistinguishable
+// from unset at protobuf boundaries; use ConID for a qualified zero-strike
+// contract. The Gateway may return an explicitly present zero strike for a
+// resolved contract. Empty Expiry, Right, and Multiplier mean unset. Use
 // [ContractsClient.Qualify] to resolve a partial contract to a fully specified
 // one.
 type Contract struct {

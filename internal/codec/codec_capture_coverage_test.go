@@ -79,6 +79,7 @@ func TestInboundDecoderRegistryCoverage(t *testing.T) {
 var rawFrameAttested = map[int]string{
 	InTickPrice:             "TestCaptureDecode_TickPrice",
 	InTickSize:              "TestCaptureDecode_TickSize",
+	InMarketDepth:           "TestDecodeMarketDataProto206LiveVectors",
 	InErrMsg:                "TestCaptureDecode_APIError_2104",
 	InOpenOrder:             "TestCaptureDecode_OpenOrder",
 	InNextValidID:           "TestCaptureDecode_NextValidID",
@@ -108,6 +109,8 @@ var rawFrameAttested = map[int]string{
 	InTickGeneric:           "TestCaptureDecode_QuoteAncillaryTicksLive",
 	InTickString:            "TestCaptureDecode_QuoteAncillaryTicksLive",
 	InTickReqParams:         "TestCaptureDecode_QuoteAncillaryTicksLive",
+	InMarketDataReroute:     "TestCaptureDecode_MarketDataReroutesLive",
+	InMarketDepthReroute:    "TestCaptureDecode_MarketDataReroutesLive",
 	InTickNews:              "TestCaptureDecode_TickNewsLive",
 	InScannerData:           "TestCaptureDecode_ScannerDataLive",
 	InCurrentTimeInMillis:   "TestCaptureDecode_CurrentTimeMillis",
@@ -139,8 +142,7 @@ var rawFrameAttested = map[int]string{
 // here is a promise to capture, not a license to skip: move the id to
 // rawFrameAttested the moment a cited live frame exists.
 var pendingLiveAttestation = map[int]string{
-	InMarketDepth:           "needs a reqMktDepth (L1) capture",
-	InMarketDepthL2:         "needs a reqMktDepth L2 (isSmartDepth) capture",
+	InMarketDepthL2:         "exact-sv206 protobuf dispatch/schema are official-source-attested; positive raw 213 remains pending because the local capture account lacked L2 entitlement",
 	InReceiveFA:             "needs a requestFA capture (FA account entitlement)",
 	InScannerParameters:     "needs a reqScannerParameters capture (large XML frame)",
 	InRealTimeBars:          "needs a reqRealTimeBars 5s-bar capture (market hours)",

@@ -1106,7 +1106,9 @@ func quoteUpdateValues(update ibkr.QuoteUpdate) map[string]string {
 	case ibkr.QuoteUpdateSizeTick:
 		if update.SizeTick != nil {
 			values["tick_type"] = strconv.Itoa(update.SizeTick.TickType)
-			values["size"] = update.SizeTick.Size.String()
+			if update.SizeTick.Size != nil {
+				values["size"] = update.SizeTick.Size.String()
+			}
 		}
 	case ibkr.QuoteUpdateGenericTick:
 		if update.GenericTick != nil {
@@ -1132,7 +1134,15 @@ func quoteUpdateValues(update ibkr.QuoteUpdate) map[string]string {
 				values["min_tick"] = update.Parameters.MinTick.String()
 			}
 			values["bbo_exchange"] = update.Parameters.BBOExchange
-			values["snapshot_permissions"] = strconv.Itoa(update.Parameters.SnapshotPermissions)
+			if update.Parameters.SnapshotPermissions != nil {
+				values["snapshot_permissions"] = strconv.Itoa(*update.Parameters.SnapshotPermissions)
+			}
+			if update.Parameters.LastPricePrecision != nil {
+				values["last_price_precision"] = update.Parameters.LastPricePrecision.String()
+			}
+			if update.Parameters.LastSizePrecision != nil {
+				values["last_size_precision"] = update.Parameters.LastSizePrecision.String()
+			}
 		}
 	case ibkr.QuoteUpdateOptionComputation:
 		if update.OptionComputation != nil {

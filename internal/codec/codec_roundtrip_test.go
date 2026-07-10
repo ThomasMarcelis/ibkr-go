@@ -237,7 +237,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 		},
 		{
 			name: "TickReqParams",
-			msg:  TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3},
+			msg:  TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: new(3)},
 		},
 		{
 			name: "UpdateAccountValue",

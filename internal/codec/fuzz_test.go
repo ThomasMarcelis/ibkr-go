@@ -89,6 +89,8 @@ var allInboundMsgIDs = []int{
 	InHistoricalNewsEnd,     // 87
 	InHeadTimestamp,         // 88
 	InHistogramData,         // 89
+	InMarketDataReroute,     // 91
+	InMarketDepthReroute,    // 92
 	InMarketRule,            // 93
 	InPnL,                   // 94
 	InPnLSingle,             // 95
@@ -139,7 +141,7 @@ func FuzzDecodeBatch(f *testing.F) {
 		AccountSummaryValue{ReqID: 3, Account: "DU1234", Tag: "NetLiquidation", Value: "50000.00", Currency: "USD"},
 		AccountSummaryEnd{ReqID: 4},
 		Position{Account: "DU1234", Contract: Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, Position: "100", AvgCost: "150.00"},
-		TickReqParams{ReqID: 5, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: 3},
+		TickReqParams{ReqID: 5, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: new(3)},
 		FamilyCodes{Codes: []FamilyCodeEntry{{AccountID: "U123", FamilyCode: "F1"}, {AccountID: "U456", FamilyCode: "F2"}}},
 		ManagedAccounts{Accounts: []string{"DU1234", "DU5678"}},
 		NextValidID{OrderID: 42},
@@ -374,7 +376,7 @@ func FuzzEncodeDecodeRoundTrip_TickReqParams(f *testing.F) {
 		if containsNull(minTick, bboExchange) {
 			return
 		}
-		original := TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: snapshotPermissions}
+		original := TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: new(snapshotPermissions)}
 		encoded, err := Encode(200, original)
 		if err != nil {
 			return
@@ -399,8 +401,8 @@ func FuzzEncodeDecodeRoundTrip_TickReqParams(f *testing.F) {
 		if trp.BBOExchange != bboExchange {
 			t.Errorf("BBOExchange: got %q, want %q", trp.BBOExchange, bboExchange)
 		}
-		if trp.SnapshotPermissions != snapshotPermissions {
-			t.Errorf("SnapshotPermissions: got %d, want %d", trp.SnapshotPermissions, snapshotPermissions)
+		if trp.SnapshotPermissions == nil || *trp.SnapshotPermissions != snapshotPermissions {
+			t.Errorf("SnapshotPermissions: got %v, want %d", trp.SnapshotPermissions, snapshotPermissions)
 		}
 	})
 }

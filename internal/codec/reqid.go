@@ -29,6 +29,8 @@ func (m HistoricalTicksBidAskResponse) RequestID() int { return m.ReqID }
 func (m HistoricalTicksLastResponse) RequestID() int   { return m.ReqID }
 func (m HistoricalTicksResponse) RequestID() int       { return m.ReqID }
 func (m MarketDataType) RequestID() int                { return m.ReqID }
+func (m MarketDataReroute) RequestID() int             { return m.ReqID }
+func (m MarketDepthReroute) RequestID() int            { return m.ReqID }
 func (m MarketDepthL2Update) RequestID() int           { return m.ReqID }
 func (m MarketDepthUpdate) RequestID() int             { return m.ReqID }
 func (m MatchingSymbols) RequestID() int               { return m.ReqID }

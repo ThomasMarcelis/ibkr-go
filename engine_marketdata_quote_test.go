@@ -1,9 +1,253 @@
 package ibkr
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"io"
+	"log/slog"
+	"net"
 	"testing"
+	"time"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
+
+func TestQuoteRouteFollowsLiveRerouteAndFreezesResumeRequest(t *testing.T) {
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 20621
+	req := QuoteRequest{
+		Contract:     Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
+		GenericTicks: []GenericTick{"100", "233"},
+	}
+	sub := installObservedQuoteRoute(t, e, req, WithResumePolicy(ResumeAuto))
+	_ = readObservedFrame(t, peer)
+
+	rawReroute := []byte("\x00\x00\x00\x5b20621\x008314\x00SMART\x00")
+	reroute, err := codec.Decode(206, rawReroute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(reroute)
+
+	routedPayload := readObservedFrame(t, peer)
+	route := e.keyed[20621]
+	if route == nil || route.resume != ResumeAuto {
+		t.Fatalf("route = %+v, want resumable active route", route)
+	}
+	routedRequest, ok := route.request.(codec.QuoteRequest)
+	if !ok {
+		t.Fatalf("route request = %T, want codec.QuoteRequest", route.request)
+	}
+	if routedRequest.Contract != (codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
+		routedRequest.Snapshot || len(routedRequest.GenericTicks) != 2 ||
+		routedRequest.GenericTicks[0] != "100" || routedRequest.GenericTicks[1] != "233" {
+		t.Fatalf("rerouted request = %+v, want replacement contract with original request configuration", routedRequest)
+	}
+	wantPayload, err := codec.Encode(206, routedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(routedPayload, wantPayload) {
+		t.Fatalf("rerouted payload = %x, want %x", routedPayload, wantPayload)
+	}
+
+	e.handleIncoming(reroute)
+	if _, ok := e.keyed[20621]; ok {
+		t.Fatal("second reroute left the request active")
+	}
+	cancelPayload := readObservedFrame(t, peer)
+	wantCancel, err := codec.Encode(206, codec.CancelQuote{ReqID: 20621})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(cancelPayload, wantCancel) {
+		t.Fatalf("second reroute cancel = %x, want %x", cancelPayload, wantCancel)
+	}
+	if err := sub.Err(); err == nil || err.Error() != "ibkr: market data request 20621 was rerouted more than once" {
+		t.Fatalf("second reroute error = %v", err)
+	}
+}
+
+func TestMarketDepthRouteRejectsRepeatedLiveRerouteWithSmartCancel(t *testing.T) {
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 20622
+	req := MarketDepthRequest{
+		Contract: Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
+		NumRows:  5, IsSmartDepth: true,
+	}
+	sub := installObservedDepthRoute(t, e, req)
+	_ = readObservedFrame(t, peer)
+
+	rawReroute := []byte("\x00\x00\x00\x5c20622\x008314\x00SMART\x00")
+	reroute, err := codec.Decode(206, rawReroute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(reroute)
+	_ = readObservedFrame(t, peer)
+
+	active := e.keyed[20622]
+	routedRequest, ok := active.request.(codec.MarketDepthRequest)
+	if !ok {
+		t.Fatalf("route request = %T, want codec.MarketDepthRequest", active.request)
+	}
+	if routedRequest.Contract != (codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
+		routedRequest.NumRows != 5 || !routedRequest.IsSmartDepth || active.resume != ResumeNever {
+		t.Fatalf("rerouted depth request = %+v, route resume=%v", routedRequest, active.resume)
+	}
+
+	e.handleIncoming(reroute)
+	if _, ok := e.keyed[20622]; ok {
+		t.Fatal("second depth reroute left the request active")
+	}
+	cancelPayload := readObservedFrame(t, peer)
+	wantCancel, err := codec.Encode(206, codec.CancelMarketDepth{ReqID: 20622, IsSmartDepth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(cancelPayload, wantCancel) {
+		t.Fatalf("cancel payload = %x, want smart-depth cancel %x", cancelPayload, wantCancel)
+	}
+	if err := sub.Err(); err == nil || err.Error() != "ibkr: market depth request 20622 was rerouted more than once" {
+		t.Fatalf("second reroute error = %v", err)
+	}
+}
+
+func TestQuoteRoutePreservesSV206ParameterPresenceAndPrecision(t *testing.T) {
+	e := newBenchEngine(t)
+	e.serverVersion = 206
+	e.nextReqID = 20611
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	raw := []byte("\x00\x00\x01\x19\x08\x83\xa1\x01\x12\x04\x30\x2e\x30\x31\x1a\x06\x39\x63\x30\x30\x30\x31\x20\x04\x2a\x08\x30\x2e\x30\x30\x30\x30\x30\x31\x32\x08\x30\x2e\x30\x30\x30\x30\x30\x31")
+	msg, err := codec.Decode(206, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(msg)
+	update := nextQuoteUpdate(t, sub)
+	parameters := update.Parameters
+	if update.Kind != QuoteUpdateParameters || parameters == nil ||
+		parameters.SnapshotPermissions == nil || *parameters.SnapshotPermissions != 4 ||
+		parameters.LastPricePrecision == nil || parameters.LastPricePrecision.String() != "0.000001" ||
+		parameters.LastSizePrecision == nil || parameters.LastSizePrecision.String() != "0.000001" {
+		t.Fatalf("parameters = %+v", parameters)
+	}
+
+	e.handleIncoming(codec.TickReqParams{ReqID: 20611})
+	absent := nextQuoteUpdate(t, sub).Parameters
+	if absent == nil || absent.SnapshotPermissions != nil || absent.LastPricePrecision != nil || absent.LastSizePrecision != nil {
+		t.Fatalf("omitted parameters = %+v, want nil presence fields", absent)
+	}
+}
+
+func TestMarketDataRoutesPreserveOfficialUnavailableSizes(t *testing.T) {
+	t.Run("quote size", func(t *testing.T) {
+		e := newBenchEngine(t)
+		e.serverVersion = 206
+		e.nextReqID = 20611
+		sub := installQuoteRoute(t, e)
+		closeInstalledQuoteRoute(t, e, sub)
+
+		// API 10.48.01 maps an omitted TickSize.size to UNSET_DECIMAL.
+		e.handleIncoming(codec.TickSize{ReqID: 20611, TickType: 0})
+		update := nextQuoteUpdate(t, sub)
+		if update.Kind != QuoteUpdateSizeTick || update.Changed != 0 ||
+			update.SizeTick == nil || update.SizeTick.Size != nil || update.Snapshot.Available != 0 {
+			t.Fatalf("unavailable size update = %+v", update)
+		}
+	})
+
+	tests := []struct {
+		name    string
+		convert func() (DepthRow, error)
+	}{
+		{
+			"depth",
+			func() (DepthRow, error) {
+				return fromCodecMarketDepth(codec.MarketDepthUpdate{ReqID: 20614, Price: "0"})
+			},
+		},
+		{
+			"depth L2",
+			func() (DepthRow, error) {
+				return fromCodecMarketDepthL2(codec.MarketDepthL2Update{ReqID: 20614, Price: "0"})
+			},
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			row, err := tc.convert()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if row.Size != nil || !row.Price.IsZero() {
+				t.Fatalf("unavailable depth size = %+v", row)
+			}
+		})
+	}
+}
+
+func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
+	t.Helper()
+	peer, client := net.Pipe()
+	cfg := defaultConfig()
+	cfg.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	e := &engine{
+		cfg: cfg, cmds: make(chan func(), 8), incoming: make(chan any, 8),
+		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
+		events: newObserver[Event](cfg.eventBuffer), transport: transport.New(client, cfg.logger, 0),
+		serverVersion: 206, keyed: make(map[int]*route), singletons: make(map[string]*route),
+		orders: make(map[int64]*orderRoute), executions: newExecutionCorrelator(),
+		execDeliveries: make(map[string]*execDelivery), snapshot: Snapshot{State: StateReady, ConnectionSeq: 1},
+	}
+	t.Cleanup(func() {
+		_ = e.transport.Close()
+		_ = peer.Close()
+		_ = e.transport.Wait()
+	})
+	return e, peer
+}
+
+func installObservedQuoteRoute(t *testing.T, e *engine, req QuoteRequest, opts ...SubscriptionOption) *Subscription[QuoteUpdate] {
+	t.Helper()
+	result := make(chan *Subscription[QuoteUpdate], 1)
+	go func() {
+		sub, err := e.subscribeQuotes(context.Background(), req, false, opts...)
+		if err != nil {
+			t.Errorf("subscribeQuotes: %v", err)
+		}
+		result <- sub
+	}()
+	(<-e.cmds)()
+	return <-result
+}
+
+func installObservedDepthRoute(t *testing.T, e *engine, req MarketDepthRequest, opts ...SubscriptionOption) *Subscription[DepthRow] {
+	t.Helper()
+	result := make(chan *Subscription[DepthRow], 1)
+	go func() {
+		sub, err := e.SubscribeMarketDepth(context.Background(), req, opts...)
+		if err != nil {
+			t.Errorf("SubscribeMarketDepth: %v", err)
+		}
+		result <- sub
+	}()
+	(<-e.cmds)()
+	return <-result
+}
+
+func readObservedFrame(t *testing.T, peer net.Conn) []byte {
+	t.Helper()
+	payload, err := transport.ReadOneFrame(peer, time.Now().Add(time.Second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return payload
+}
 
 func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
 	// captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl,
@@ -92,7 +336,7 @@ func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
 	}
 	if parameters.Parameters.MinTick == nil || parameters.Parameters.MinTick.String() != "0.01" ||
 		parameters.Parameters.BBOExchange != "9c0001" ||
-		parameters.Parameters.SnapshotPermissions != 4 {
+		parameters.Parameters.SnapshotPermissions == nil || *parameters.Parameters.SnapshotPermissions != 4 {
 		t.Fatalf("parameters = %+v", parameters.Parameters)
 	}
 
@@ -219,7 +463,7 @@ func TestQuoteRoutePreservesLiveUnnormalizedSizeTick(t *testing.T) {
 	if update.Kind != QuoteUpdateSizeTick || update.Changed != 0 {
 		t.Fatalf("update = Kind %v Changed %v, want unnormalized size tick", update.Kind, update.Changed)
 	}
-	if update.SizeTick == nil || update.SizeTick.TickType != 89 || update.SizeTick.Size.String() != "104796567" {
+	if update.SizeTick == nil || update.SizeTick.TickType != 89 || update.SizeTick.Size == nil || update.SizeTick.Size.String() != "104796567" {
 		t.Fatalf("size tick = %+v", update.SizeTick)
 	}
 	if update.Snapshot.Available != 0 {
@@ -297,7 +541,7 @@ func TestQuoteRoutePreservesLiveMissingMinimumTick(t *testing.T) {
 	if update.Kind != QuoteUpdateParameters || update.Parameters == nil {
 		t.Fatalf("update = Kind %v Parameters %+v", update.Kind, update.Parameters)
 	}
-	if update.Parameters.MinTick != nil || update.Parameters.BBOExchange != "9c0001" || update.Parameters.SnapshotPermissions != 4 {
+	if update.Parameters.MinTick != nil || update.Parameters.BBOExchange != "9c0001" || update.Parameters.SnapshotPermissions == nil || *update.Parameters.SnapshotPermissions != 4 {
 		t.Fatalf("parameters = %+v", update.Parameters)
 	}
 }

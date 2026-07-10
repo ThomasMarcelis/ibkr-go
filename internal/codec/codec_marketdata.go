@@ -113,7 +113,21 @@ type TickReqParams struct {
 	ReqID               int
 	MinTick             string
 	BBOExchange         string
-	SnapshotPermissions int
+	SnapshotPermissions *int
+	LastPricePrecision  string
+	LastSizePrecision   string
+}
+
+type MarketDataReroute struct {
+	ReqID    int
+	ConID    int
+	Exchange string
+}
+
+type MarketDepthReroute struct {
+	ReqID    int
+	ConID    int
+	Exchange string
 }
 
 type ReqMarketDataType struct {
@@ -463,11 +477,37 @@ func decodeTickReqParams(r *fieldReader, sv int) ([]Message, error) {
 	minTick := r.ReadString()
 	bboExchange := r.ReadString()
 	snapshotPermissions, _ := r.ReadInt()
-	return []Message{TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: snapshotPermissions}}, nil
+	return []Message{TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: new(snapshotPermissions)}}, nil
 }
 
 func (m TickReqParams) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickReqParams), itoa(m.ReqID), m.MinTick, m.BBOExchange, itoa(m.SnapshotPermissions)}, nil
+	permissions := 0
+	if m.SnapshotPermissions != nil {
+		permissions = *m.SnapshotPermissions
+	}
+	return []string{itoa(InTickReqParams), itoa(m.ReqID), m.MinTick, m.BBOExchange, itoa(permissions)}, nil
+}
+
+// [91, reqID, conID, exchange] — no version, including after server_version 200.
+func decodeMarketDataReroute(r *fieldReader, sv int) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	conID, _ := r.ReadInt()
+	return []Message{MarketDataReroute{ReqID: reqID, ConID: conID, Exchange: r.ReadString()}}, nil
+}
+
+func (m MarketDataReroute) encodeWire(sv int) ([]string, error) {
+	return []string{itoa(InMarketDataReroute), itoa(m.ReqID), itoa(m.ConID), m.Exchange}, nil
+}
+
+// [92, reqID, conID, exchange] — no version, including after server_version 200.
+func decodeMarketDepthReroute(r *fieldReader, sv int) ([]Message, error) {
+	reqID, _ := r.ReadInt()
+	conID, _ := r.ReadInt()
+	return []Message{MarketDepthReroute{ReqID: reqID, ConID: conID, Exchange: r.ReadString()}}, nil
+}
+
+func (m MarketDepthReroute) encodeWire(sv int) ([]string, error) {
+	return []string{itoa(InMarketDepthReroute), itoa(m.ReqID), itoa(m.ConID), m.Exchange}, nil
 }
 
 // [50, version, reqID, time, O, H, L, C, vol, wap, count]

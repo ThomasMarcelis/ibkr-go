@@ -343,6 +343,54 @@ func TestLiveServer205ContractDataBoundary(t *testing.T) {
 	}
 }
 
+// TestLiveServer206MarketDataBoundary validates the exact protobuf migration
+// through the public quote API. The request is read-only and can run against
+// either Gateway role selected by IBKR_LIVE_ADDR.
+func TestLiveServer206MarketDataBoundary(t *testing.T) {
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(206)
+	defer restore()
+
+	client, ctx, cancel := ibkrlive.DialContext(t, 20*time.Second)
+	defer cancel()
+	defer client.Close()
+	if got := client.Session().ServerVersion; got != 206 {
+		t.Fatalf("negotiated ServerVersion = %d, want 206", got)
+	}
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType(delayed): %v", err)
+	}
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+		Contract: ibkr.Contract{
+			ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock,
+			Exchange: "SMART", PrimaryExchange: "NASDAQ", Currency: "USD",
+		},
+		GenericTicks: []ibkr.GenericTick{"221"},
+	})
+	if err != nil {
+		t.Fatalf("SubscribeQuotes(): %v", err)
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case update := <-sub.Events():
+			if update.Kind != ibkr.QuoteUpdateParameters {
+				continue
+			}
+			parameters := update.Parameters
+			if parameters == nil || parameters.SnapshotPermissions == nil ||
+				parameters.LastPricePrecision == nil || parameters.LastSizePrecision == nil {
+				t.Fatalf("server_version 206 parameters = %+v", parameters)
+			}
+			return
+		case <-sub.Done():
+			t.Fatalf("quote subscription closed before request parameters: %v", sub.Err())
+		case <-ctx.Done():
+			t.Fatalf("waiting for server_version 206 request parameters: %v", ctx.Err())
+		}
+	}
+}
+
 // TestLiveDownNegotiatedPreview validates the OpenOrder inbound gates with
 // real down-negotiated echoes: the what-if open_order reply crosses the
 // FULL_ORDER_PREVIEW block gate (195) and the width-gated tail

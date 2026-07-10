@@ -288,11 +288,12 @@ type QuotePriceTick struct {
 	AttrMask QuotePriceAttributes
 }
 
-// QuoteSizeTick preserves one classic IBKR tickSize callback. TickType is
-// IBKR's numeric tick-type ID.
+// QuoteSizeTick preserves one IBKR tickSize callback. Size is nil when a
+// protobuf callback omits the value and the official decoder reports
+// UNSET_DECIMAL. TickType is IBKR's numeric tick-type ID.
 type QuoteSizeTick struct {
 	TickType int
-	Size     decimal.Decimal
+	Size     *decimal.Decimal
 }
 
 // QuoteGenericTick is one numeric IBKR tick that has no normalized [Quote]
@@ -325,7 +326,9 @@ type QuoteNewsTick struct {
 type QuoteParameters struct {
 	MinTick             *decimal.Decimal // nil when IBKR omits the value
 	BBOExchange         string
-	SnapshotPermissions int
+	SnapshotPermissions *int             // nil when IBKR omits the bit mask
+	LastPricePrecision  *decimal.Decimal // nil when IBKR omits the value
+	LastSizePrecision   *decimal.Decimal // nil when IBKR omits the value
 }
 
 // QuoteOptionComputation is one option-price or greeks tick. TickType selects
@@ -582,14 +585,15 @@ func (s BookSide) String() string {
 }
 
 // DepthRow is one order-book mutation from a market depth subscription: apply
-// Operation to Side at Position with the given Price and Size.
+// Operation to Side at Position with the given Price and Size. Size is nil
+// when an exact protobuf callback omits it and IBKR reports UNSET_DECIMAL.
 type DepthRow struct {
 	Position     int
 	MarketMaker  string // only populated for L2
 	Operation    DepthOperation
 	Side         BookSide
 	Price        decimal.Decimal
-	Size         decimal.Decimal
+	Size         *decimal.Decimal
 	IsSmartDepth bool
 }
 

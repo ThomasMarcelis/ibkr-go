@@ -89,12 +89,15 @@ server version and managed-account bootstrap fields are known.
 | out | 2 | CancelQuote (cancelMktData) | landed |
 | in | 1 | TickPrice | landed |
 | in | 2 | TickSize | landed |
+| in | 21 | TickOptionComputation | landed |
 | in | 45 | TickGeneric | landed |
 | in | 46 | TickString | landed |
 | in | 81 | TickReqParams | landed |
 | in | 58 | MarketDataType | landed |
 | in | 57 | TickSnapshotEnd | landed |
 | in | 84 | TickNews | landed |
+| in | 91 | MarketDataReroute | landed |
+| in | 92 | MarketDepthReroute | landed |
 | out | 59 | reqMarketDataType | landed |
 | out | 97 | reqTickByTickData | landed |
 | out | 98 | cancelTickByTickData | landed |
@@ -115,6 +118,12 @@ option computation is attested by
 TickNews is attested by the exact server-version-201 frames in
 `captures/20260709T230825Z-api_tick_news_aapl_probe` and frozen at the public
 API boundary by `tick_news_aapl_sv201_live.txt`.
+Exact server-version-206 request/callback protobuf vectors, parameter
+precision, and transparent classic CFD reroutes are frozen by codec/engine
+tests backed by `protocol-audit-sv206.md`; the quote-focused
+`market_data_sv206_live.txt` replay covers the public quote path. Positive
+raw-213 L2 evidence remains pending because the capture account lacked
+entitlement.
 
 ## Real-Time and Historical Bars
 

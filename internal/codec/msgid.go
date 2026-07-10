@@ -137,6 +137,8 @@ const (
 	InHeadTimestamp         = protocol.InHeadTimestamp
 	InHistogramData         = protocol.InHistogramData
 	InHistoricalDataUpdate  = protocol.InHistoricalDataUpdate
+	InMarketDataReroute     = protocol.InMarketDataReroute
+	InMarketDepthReroute    = protocol.InMarketDepthReroute
 	InMarketRule            = protocol.InMarketRule
 	InPnL                   = protocol.InPnL
 	InPnLSingle             = protocol.InPnLSingle

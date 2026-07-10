@@ -182,6 +182,8 @@ var inboundDecoders = map[int]decodeFunc{
 	InHeadTimestamp:         decodeHeadTimestamp,
 	InHistogramData:         decodeHistogramData,
 	InMarketRule:            decodeMarketRule,
+	InMarketDataReroute:     decodeMarketDataReroute,
+	InMarketDepthReroute:    decodeMarketDepthReroute,
 	InCompletedOrder:        decodeCompletedOrder,
 	InCompletedOrderEnd:     decodeCompletedOrderEnd,
 	InReplaceFAEnd:          decodeReplaceFAEnd,

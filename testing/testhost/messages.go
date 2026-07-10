@@ -297,7 +297,15 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 	case "tick_string":
 		return codec.TickString{ReqID: asInt(resolve(body["req_id"])), TickType: asInt(resolve(body["field"])), Value: asString(resolve(body["value"]))}, nil
 	case "tick_req_params":
-		return codec.TickReqParams{ReqID: asInt(resolve(body["req_id"])), MinTick: asString(resolve(body["min_tick"])), BBOExchange: asString(resolve(body["bbo_exchange"])), SnapshotPermissions: asInt(resolve(body["snapshot_permissions"]))}, nil
+		var snapshotPermissions *int
+		if value, ok := body["snapshot_permissions"]; ok {
+			snapshotPermissions = new(asInt(resolve(value)))
+		}
+		return codec.TickReqParams{
+			ReqID: asInt(resolve(body["req_id"])), MinTick: asString(resolve(body["min_tick"])),
+			BBOExchange: asString(resolve(body["bbo_exchange"])), SnapshotPermissions: snapshotPermissions,
+			LastPricePrecision: asString(resolve(body["last_price_precision"])), LastSizePrecision: asString(resolve(body["last_size_precision"])),
+		}, nil
 	case "update_account_value":
 		return codec.UpdateAccountValue{Key: asString(resolve(body["key"])), Value: asString(resolve(body["value"])), Currency: asString(resolve(body["currency"])), Account: asString(resolve(body["account"]))}, nil
 	case "update_portfolio":

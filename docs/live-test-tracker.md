@@ -5,7 +5,7 @@ live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
 Last updated: 2026-07-10. Both readonly-live gateway 127.0.0.1:4001 and
-paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 205`.
+paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 206`.
 
 ## Current Campaign Contract
 
@@ -30,6 +30,22 @@ class, and promoted transcript or remaining blocker.
 ## Gateway Bring-Up Runs
 
 ### 2026-07-10
+
+Exact-206 market-data boundary verification. The official API 10.48.01 SDK
+oracle produced exact quote/depth request and callback captures plus classic
+CFD reroute callbacks 91/92. Both role-aware doctor runs then negotiated
+`server_version=206` and completed read-only probes. Readonly-live returned the
+expected code 10168 entitlement warning; paper-dev returned a delayed AAPL
+quote with every normalized field available.
+
+`TestLiveServer206MarketDataBoundary` passed independently against
+127.0.0.1:4001 and 127.0.0.1:4002. Through the public API it selected delayed
+data, opened an exact-206 protobuf quote subscription, and preserved request-
+parameter permission presence plus both precision values. No order was sent.
+The promoted `market_data_sv206_live.txt` transcript hashes to
+`495b20087d9c548a814d4bedadf52dcfd80b489b4723197f818558dd366f1075`.
+Positive raw-213 L2 remains blocked by account entitlement and is not
+fabricated.
 
 Exact-205 contract-data boundary verification. Both role-aware doctor runs
 connected at `server_version=205` and completed the read-only time probe. The
@@ -380,6 +396,9 @@ against the role-aware `paper-dev` Gateway.
 | sdk_sv205_contract_data_boundary | 2026-07-10 | official SDK oracle recorded; exact server_version=205, normalized frames sha256 `f9dc02ad6fd6b480c26be3e4628efbfa26821602f16e97f974a8d9ce61cd6d8c`; 58-row Apple issuer lookup plus a real three-reason ineligibility response |
 | sdk_sv205_contract_data_compact | 2026-07-10 | official SDK oracle recorded and replay-promoted; exact server_version=205, events sha256 `3d1e3c303295a88e1923fa8127a991d83ce9dc86e742b8423eff047ce8ce6a49`; exact AAPL stock and single Apple bond round trips |
 | sdk_sv205_contract_data_type_matrix | 2026-07-10 | official SDK oracle recorded; exact server_version=205, normalized frames sha256 `a55614fb9b32d35b8d0e3ba6479d5a111fe7db8bed83429527a20217a44c8ef5`; exact stock, bond, fund, and option responses |
+| sdk_sv206_market_data_boundary | 2026-07-10 | official SDK oracle recorded; exact server_version=206, events sha256 `eea31798e7e59830f5cda9daadcd94223045c8e9ee0e5aa10f48428447505822`; quote snapshots, option computation, request parameters, request/cancel boundary |
+| sdk_sv206_market_data_readonly_retry | 2026-07-10 | official SDK oracle recorded and replay-promoted; exact server_version=206, events sha256 `989563f9c4cad108e34058beac205c576a9ebdc0fffe03e421e829bca851e7de`; dense AAPL quote and raw-212 depth rows |
+| sdk_sv206_cfd_reroute_readonly | 2026-07-10 | official SDK oracle recorded; exact server_version=206, events sha256 `7475841869bc53ceaf779b2672bb1606453e84b1dc0ff66a361510f45470d279`; IBM/BMW/EURUSD classic callbacks 91/92 |
 | api_transmit_false_then_transmit_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `003abb59dfced542` |
 | api_duplicate_quote_subscriptions_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `84f1e78a18616e0f` |
 | api_reconnect_active_order_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9d72a4711c25c788` |
@@ -391,6 +410,7 @@ against the role-aware `paper-dev` Gateway.
 
 | Transcript | Source Capture | Status |
 |-----------|---------------|--------|
+| market_data_sv206_live.txt | 20260710T133515Z + 20260710T134721Z | promoted; exact-sv206 raw protobuf quote frames, five request-family vectors in codec tests, parameter presence/precision, and clean cancellation |
 | api_ioc_fok_aapl.txt | 20260413T184916Z | promoted; covers IOC cancel plus FOK inactive/reject paths |
 | api_tif_attribute_matrix_aapl.txt | 20260415T150535Z | promoted; covers GTC rest/cancel and trailing-percent fill replay |
 | api_stop_loss_management_aapl.txt | 20260415T153735Z | promoted; covers market entry, protective stop modify/cancel, and flatten replay |

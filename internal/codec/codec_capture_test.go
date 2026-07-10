@@ -1540,7 +1540,7 @@ func TestCaptureDecode_QuoteAncillaryTicksLive(t *testing.T) {
 				if !ok {
 					t.Fatalf("type = %T, want TickReqParams", message)
 				}
-				if m.ReqID != 1001 || m.MinTick != "0.01" || m.BBOExchange != "9c0001" || m.SnapshotPermissions != 4 {
+				if m.ReqID != 1001 || m.MinTick != "0.01" || m.BBOExchange != "9c0001" || m.SnapshotPermissions == nil || *m.SnapshotPermissions != 4 {
 					t.Fatalf("message = %+v", m)
 				}
 			},
@@ -2029,6 +2029,34 @@ func TestCaptureDecode_MarketRuleLive(t *testing.T) {
 	}
 	if len(m.Increments) != 1 || m.Increments[0].LowEdge != "0" || m.Increments[0].Increment != "0.01" {
 		t.Errorf("Increments = %+v, want [{0 0.01}]", m.Increments)
+	}
+}
+
+func TestCaptureDecode_MarketDataReroutesLive(t *testing.T) {
+	t.Parallel()
+
+	// Capture 20260710T135301Z-sdk_sv206_cfd_reroute_readonly,
+	// events.jsonl sha256 7475841869bc53ceaf779b2672bb1606453e84b1dc0ff66a361510f45470d279.
+	// Exact server_version 206 keeps both reroute bodies classic and only changes
+	// their message-ID prefix to the post-200 four-byte representation.
+	tests := []struct {
+		name    string
+		payload []byte
+		want    Message
+	}{
+		{"market data", []byte("\x00\x00\x00\x5b20621\x008314\x00SMART\x00"), MarketDataReroute{ReqID: 20621, ConID: 8314, Exchange: "SMART"}},
+		{"market depth", []byte("\x00\x00\x00\x5c20622\x008314\x00SMART\x00"), MarketDepthReroute{ReqID: 20622, ConID: 8314, Exchange: "SMART"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Decode(206, tc.payload)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("Decode() = %#v, want %#v", got, tc.want)
+			}
+		})
 	}
 }
 
