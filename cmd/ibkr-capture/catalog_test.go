@@ -22,6 +22,9 @@ func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
 		t.Fatalf("catalog entries = %d, scenarios = %d", len(entries), len(scenarios))
 	}
 	for _, entry := range entries {
+		if entry.Description == "" {
+			t.Errorf("%s missing description", entry.Name)
+		}
 		if entry.Domain == "" {
 			t.Errorf("%s missing domain", entry.Name)
 		}
@@ -55,10 +58,26 @@ func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
 func TestUserInfoCatalogMessageIDs(t *testing.T) {
 	t.Parallel()
 
-	got := scenarioMetadataByName["user_info"].MessageIDs
+	got := scenarios["user_info"].metadata.MessageIDs
 	want := []int{protocol.OutReqUserInfo, protocol.InUserInfo}
 	if !slices.Equal(got, want) {
 		t.Fatalf("user_info message IDs = %v, want request/response %v", got, want)
+	}
+}
+
+func TestScenarioMessageIDsExistInProtocolRegistry(t *testing.T) {
+	t.Parallel()
+
+	known := make(map[int]struct{})
+	for _, message := range protocol.Messages() {
+		known[message.ID] = struct{}{}
+	}
+	for name, scenario := range scenarios {
+		for _, id := range scenario.metadata.MessageIDs {
+			if _, ok := known[id]; !ok {
+				t.Errorf("scenario %q refers to unknown classic message ID %d", name, id)
+			}
+		}
 	}
 }
 
@@ -221,10 +240,11 @@ func TestExhaustivePlanScenariosAreCatalogued(t *testing.T) {
 		"api_stop_loss_management_aapl",
 		"api_bracket_trailing_stop_aapl",
 	} {
-		if _, ok := scenarios[name]; !ok {
+		scenario, ok := scenarios[name]
+		if !ok {
 			t.Fatalf("scenario %q missing from executable scenario map", name)
 		}
-		if _, ok := scenarioMetadataByName[name]; !ok {
+		if scenario.metadata.Domain == "" {
 			t.Fatalf("scenario %q missing catalog metadata", name)
 		}
 	}
@@ -233,7 +253,7 @@ func TestExhaustivePlanScenariosAreCatalogued(t *testing.T) {
 func TestOrderTypeMatrixCoversPublicOrderTypes(t *testing.T) {
 	t.Parallel()
 
-	entry := scenarioMetadataByName["api_order_type_matrix_aapl"]
+	entry := scenarios["api_order_type_matrix_aapl"].metadata
 	text := strings.Join(entry.ExpectedOutcomes, " ")
 	for _, orderType := range []string{
 		"MKT",

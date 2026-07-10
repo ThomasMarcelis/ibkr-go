@@ -69,12 +69,16 @@ func main() {
 	if !ok {
 		log.Fatalf("unknown scenario %q; use -list to see available", *scenario)
 	}
+	driver, err := sc.driver()
+	if err != nil {
+		log.Fatalf("invalid scenario %q: %v", *scenario, err)
+	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
 
-	if sc.runAPI != nil {
-		recorder, err := newAPIDriverRecorder(*driverEvents, *scenario)
+	if driver == driverAPI {
+		recorder, err := newAPIDriverRecorder(*driverEvents, *scenario, sc)
 		if err != nil {
 			log.Fatalf("driver-events: %v", err)
 		}

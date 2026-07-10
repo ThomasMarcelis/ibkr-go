@@ -60,12 +60,8 @@ func runLiveCaptureScenario(t *testing.T, name string, timeout time.Duration) []
 	if sc.runAPI == nil {
 		t.Fatalf("scenario %q is not an API scenario", name)
 	}
-	md, ok := scenarioMetadataByName[name]
-	if !ok {
-		t.Fatalf("scenario %q has no catalog metadata", name)
-	}
 
-	rec, err := newAPIDriverRecorder("", name)
+	rec, err := newAPIDriverRecorder("", name, sc)
 	if err != nil {
 		t.Fatalf("newAPIDriverRecorder: %v", err)
 	}
@@ -78,7 +74,7 @@ func runLiveCaptureScenario(t *testing.T, name string, timeout time.Duration) []
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := sc.runAPI(ctx, cfg.Addr, md.DefaultClientID); err != nil {
+	if err := sc.runAPI(ctx, cfg.Addr, sc.metadata.DefaultClientID); err != nil {
 		t.Fatalf("%s live run: %v", name, err)
 	}
 	events := rec.Events()

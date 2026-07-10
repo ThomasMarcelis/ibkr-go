@@ -39,6 +39,7 @@ type apiDriverRecorder struct {
 	file        *os.File
 	enc         *json.Encoder
 	scenario    string
+	definition  *scenario
 	runID       string
 	scenarioTag string
 	orderSeq    int
@@ -96,12 +97,13 @@ var (
 	apiOptionContractQuantity     = decimal.NewFromInt(5)
 )
 
-func newAPIDriverRecorder(path string, scenario string) (*apiDriverRecorder, error) {
+func newAPIDriverRecorder(path string, name string, definition *scenario) (*apiDriverRecorder, error) {
 	now := time.Now().UTC()
 	rec := &apiDriverRecorder{
-		scenario:    scenario,
+		scenario:    name,
+		definition:  definition,
 		runID:       now.Format("20060102T150405Z"),
-		scenarioTag: scenarioHash(scenario),
+		scenarioTag: scenarioHash(name),
 	}
 	if path == "" {
 		return rec, nil
@@ -289,21 +291,28 @@ func currentScenarioName() string {
 	return apiDriver.scenario
 }
 
+func currentScenarioDefinition() *scenario {
+	if apiDriver == nil {
+		return nil
+	}
+	return apiDriver.definition
+}
+
 // verifyWrapperForScenario cross-checks the wrapper a run function chose against
 // the scenario's catalog RiskClass. The trading wrapper (pre/post global
 // cancels) is valid only for paper-trading risk classes; the read-only wrapper
 // is valid only for the rest. A mismatch is a wiring bug and is refused before
 // any connection is made, so a read-only scenario can never reach the cancel
 // path even if it is miswired.
-func verifyWrapperForScenario(name string, wrapper apiScenarioWrapper) error {
-	md, ok := scenarioMetadataByName[name]
-	if !ok {
-		return fmt.Errorf("scenario %q missing catalog metadata; cannot verify capture wrapper", name)
+func verifyWrapperForScenario(name string, definition *scenario, wrapper apiScenarioWrapper) error {
+	if name == "" || definition == nil {
+		return fmt.Errorf("scenario identity and definition are required to verify capture wrapper")
 	}
-	wantTrading := cancelsAllowedForRiskClass(md.RiskClass)
+	riskClass := definition.metadata.RiskClass
+	wantTrading := cancelsAllowedForRiskClass(riskClass)
 	gotTrading := wrapper == wrapperTrading
 	if wantTrading != gotTrading {
-		return fmt.Errorf("scenario %q RiskClass %q wants trading-wrapper=%t but is wired to trading-wrapper=%t", name, md.RiskClass, wantTrading, gotTrading)
+		return fmt.Errorf("scenario %q RiskClass %q wants trading-wrapper=%t but is wired to trading-wrapper=%t", name, riskClass, wantTrading, gotTrading)
 	}
 	return nil
 }
@@ -314,7 +323,7 @@ func verifyWrapperForScenario(name string, wrapper apiScenarioWrapper) error {
 // if it is pointed at a real-money account. Paper-trading scenarios that need
 // pre/post isolation cancels must use apiTradingScenario instead.
 func apiScenario(ctx context.Context, addr string, clientID int, timeout time.Duration, run func(context.Context, *ibkr.Client, string) error) error {
-	if err := verifyWrapperForScenario(currentScenarioName(), wrapperReadOnly); err != nil {
+	if err := verifyWrapperForScenario(currentScenarioName(), currentScenarioDefinition(), wrapperReadOnly); err != nil {
 		recordAPIEvent("scenario_wrapper_mismatch", "", func(event *apiDriverEvent) {
 			event.Error = err.Error()
 		})
@@ -329,7 +338,7 @@ func apiScenario(ctx context.Context, addr string, clientID int, timeout time.Du
 // requirePaperAccount, so the scenario aborts before mutating any order state
 // when the session is not a paper account.
 func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout time.Duration, run func(context.Context, *ibkr.Client, string) error) error {
-	if err := verifyWrapperForScenario(currentScenarioName(), wrapperTrading); err != nil {
+	if err := verifyWrapperForScenario(currentScenarioName(), currentScenarioDefinition(), wrapperTrading); err != nil {
 		recordAPIEvent("scenario_wrapper_mismatch", "", func(event *apiDriverEvent) {
 			event.Error = err.Error()
 		})

@@ -108,21 +108,22 @@ func TestGuardedCancelOrderRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 func TestVerifyWrapperForScenario(t *testing.T) {
 	t.Parallel()
 
-	for name, md := range scenarioMetadataByName {
+	for name, scenario := range scenarios {
+		md := scenario.metadata
 		want := wrapperReadOnly
 		other := wrapperTrading
 		if cancelsAllowedForRiskClass(md.RiskClass) {
 			want, other = wrapperTrading, wrapperReadOnly
 		}
-		if err := verifyWrapperForScenario(name, want); err != nil {
+		if err := verifyWrapperForScenario(name, scenario, want); err != nil {
 			t.Errorf("verifyWrapperForScenario(%q, correct) = %v, want nil", name, err)
 		}
-		if err := verifyWrapperForScenario(name, other); err == nil {
+		if err := verifyWrapperForScenario(name, scenario, other); err == nil {
 			t.Errorf("verifyWrapperForScenario(%q, wrong) = nil, want mismatch error", name)
 		}
 	}
 
-	if err := verifyWrapperForScenario("scenario_that_does_not_exist", wrapperTrading); err == nil {
+	if err := verifyWrapperForScenario("scenario_that_does_not_exist", nil, wrapperTrading); err == nil {
 		t.Fatal("verifyWrapperForScenario(unknown) = nil, want error")
 	}
 }
@@ -142,7 +143,7 @@ func TestAPIRunFunctionsUseWrapperMatchingRiskClass(t *testing.T) {
 		if sc.runAPI == nil {
 			continue
 		}
-		apiDriver = &apiDriverRecorder{scenario: name}
+		apiDriver = &apiDriverRecorder{scenario: name, definition: sc}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
@@ -159,7 +160,8 @@ func TestAPIRunFunctionsUseWrapperMatchingRiskClass(t *testing.T) {
 func TestScenarioCaptureRoleMatchesCancelPolicy(t *testing.T) {
 	t.Parallel()
 
-	for name, md := range scenarioMetadataByName {
+	for name, scenario := range scenarios {
+		md := scenario.metadata
 		wantPaper := cancelsAllowedForRiskClass(md.RiskClass)
 		gotPaper := scenarioCaptureRole(md) == captureRolePaperDev
 		if wantPaper != gotPaper {

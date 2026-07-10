@@ -12,13 +12,24 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
-// scenario describes a single live capture scenario. It runs against an
-// already-bootstrapped connection.
+// scenario owns the catalog metadata and exactly one wire or public-API runner
+// for a live capture scenario.
 type scenario struct {
-	name        string
+	metadata    scenarioMetadata
 	description string
 	run         func(ctx context.Context, conn net.Conn, sess *sessionInfo) error
 	runAPI      func(ctx context.Context, addr string, clientID int) error
+}
+
+func (s scenario) driver() (string, error) {
+	switch {
+	case s.run != nil && s.runAPI == nil:
+		return driverWire, nil
+	case s.run == nil && s.runAPI != nil:
+		return driverAPI, nil
+	default:
+		return "", fmt.Errorf("must define exactly one runner")
+	}
 }
 
 // logFrame is the default per-frame logger used by readFrames. It prints a
@@ -98,27 +109,31 @@ func rawScenarioManagedAccounts(sess *sessionInfo) []string {
 }
 
 func verifyRawScenarioForSession(name string, sess *sessionInfo) error {
-	md, ok := scenarioMetadataByName[name]
+	sc, ok := scenarios[name]
 	if !ok {
-		return fmt.Errorf("missing catalog metadata; cannot verify capture safety")
+		return fmt.Errorf("unknown scenario; cannot verify capture safety")
 	}
-	if md.Driver != driverWire {
+	driver, err := sc.driver()
+	if err != nil {
+		return err
+	}
+	if driver != driverWire {
 		return nil
 	}
 	if sess != nil && sess.ServerVersion > 200 && name != "bootstrap" && name != "bootstrap_client_id_0" && name != "executions_snapshot" {
 		return fmt.Errorf("raw scenario %s is not envelope-aware above server_version 200", name)
 	}
-	if !cancelsAllowedForRiskClass(md.RiskClass) {
+	if !cancelsAllowedForRiskClass(sc.metadata.RiskClass) {
 		return nil
 	}
 	return requirePaperAccounts(rawScenarioManagedAccounts(sess), "raw wire order-mutating scenario "+name)
 }
 
-var scenarios = map[string]scenario{
+var scenarios = map[string]*scenario{
 	// --- Bootstrap-only scenarios ---
 
 	"bootstrap": {
-		name:        "bootstrap",
+		metadata:    meta("session", []string{"DialContext"}, []int{71, 15, 9}, "read_only", nil, []string{"ready session", "farm status drain"}, 1, "promoted", batchReadOnly),
 		description: "clean handshake + START_API + farm-status drain (no feature request)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			// Already bootstrapped. Read a few more frames to catch any late farm-status info.
@@ -126,14 +141,14 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"bootstrap_client_id_0": {
-		name:        "bootstrap_client_id_0",
+		metadata:    meta("session", []string{"DialContext"}, []int{71, 15, 9}, "read_only", []string{"client_id_0"}, []string{"ready session scoped to client ID 0"}, 0, "promoted", batchReadOnly),
 		description: "same as bootstrap but client_id=0 (required for REQ_ALL_OPEN_ORDERS scope)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			return readFramesAt(conn, sess.ServerVersion, 3*time.Second, logFrame, nil)
 		},
 	},
 	"current_time": {
-		name:        "current_time",
+		metadata:    meta("session", []string{"Client.CurrentTime"}, []int{49}, "read_only", nil, []string{"parsed server current time"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_CURRENT_TIME, drain until CURRENT_TIME (msg_id=49)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqCurrentTime(conn); err != nil {
@@ -143,7 +158,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"current_time_millis": {
-		name:        "current_time_millis",
+		metadata:    meta("session", []string{"Client.CurrentTimeMillis"}, []int{105, 109}, "read_only", nil, []string{"server current time in milliseconds"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CURRENT_TIME_IN_MILLIS, drain until CURRENT_TIME_IN_MILLIS (msg_id=109)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqCurrentTimeInMillis(conn); err != nil {
@@ -153,7 +168,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"req_ids": {
-		name:        "req_ids",
+		metadata:    meta("session", []string{"DialContext"}, []int{8, 9}, "read_only", nil, []string{"next valid id from explicit reqIds"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_IDS numIds=1, drain until NEXT_VALID_ID (msg_id=9)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqIds(conn, 1); err != nil {
@@ -166,7 +181,7 @@ var scenarios = map[string]scenario{
 	// --- Contract details ---
 
 	"contract_details_aapl_stk": {
-		name:        "contract_details_aapl_stk",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"stock contract details end marker"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CONTRACT_DATA for AAPL STK SMART USD",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -178,7 +193,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"contract_details_aapl_opt": {
-		name:        "contract_details_aapl_opt",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"option chain contract details"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CONTRACT_DATA for AAPL OPT SMART USD (all strikes/expiries)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -189,7 +204,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"contract_details_apple_bonds": {
-		name:        "contract_details_apple_bonds",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 18, 52}, "read_only", nil, []string{"bond contract details by live-derived issuer ID"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CONTRACT_DATA for live-derived Apple bond issuer ID e1432232",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -200,7 +215,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"contract_details_eurusd_cash": {
-		name:        "contract_details_eurusd_cash",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"cash/FX contract details"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CONTRACT_DATA for EUR.USD CASH IDEALPRO",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -211,7 +226,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"contract_details_es_fut": {
-		name:        "contract_details_es_fut",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"futures contract details"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CONTRACT_DATA for ES FUT CME USD front month",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -222,7 +237,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"contract_details_not_found": {
-		name:        "contract_details_not_found",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 4, 52}, "read_only", nil, []string{"real IBKR not-found API error"}, 1, "promoted", batchReadOnly),
 		description: "REQ_CONTRACT_DATA for bogus symbol (expect ERR_MSG code 200)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -244,7 +259,7 @@ var scenarios = map[string]scenario{
 	// --- Account summary ---
 
 	"account_summary_snapshot": {
-		name:        "account_summary_snapshot",
+		metadata:    meta("accounts", []string{"Accounts().Summary"}, []int{62, 63, 64}, "read_only", nil, []string{"finite account summary snapshot"}, 1, "promoted", batchReadOnly),
 		description: "REQ_ACCOUNT_SUMMARY then cancel after end marker",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -262,7 +277,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"account_summary_stream": {
-		name:        "account_summary_stream",
+		metadata:    meta("accounts", []string{"Accounts().SubscribeSummary"}, []int{62, 63, 64}, "read_only", nil, []string{"summary snapshot plus streaming window"}, 1, "promoted", batchReadOnly),
 		description: "REQ_ACCOUNT_SUMMARY held open for 10s to catch streaming updates",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -280,7 +295,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"account_summary_two_subs": {
-		name:        "account_summary_two_subs",
+		metadata:    meta("accounts", []string{"Accounts().SubscribeSummary"}, []int{62, 63, 64}, "read_only", nil, []string{"concurrent summary subscriptions"}, 1, "promoted", batchReadOnly),
 		description: "two concurrent REQ_ACCOUNT_SUMMARY with different tags",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqA := nextReqID()
@@ -308,7 +323,7 @@ var scenarios = map[string]scenario{
 	// --- Positions ---
 
 	"positions_snapshot": {
-		name:        "positions_snapshot",
+		metadata:    meta("accounts", []string{"Accounts().Positions"}, []int{61, 62, 64}, "read_only", nil, []string{"positions snapshot end marker"}, 1, "promoted", batchReadOnly),
 		description: "REQ_POSITIONS drained to POSITION_END, then CANCEL_POSITIONS",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqPositions(conn); err != nil {
@@ -328,7 +343,7 @@ var scenarios = map[string]scenario{
 	// --- Historical bars ---
 
 	"historical_bars_1d_1h": {
-		name:        "historical_bars_1d_1h",
+		metadata:    meta("history", []string{"History().Bars"}, []int{20, 17}, "read_only", []string{"historical_data"}, []string{"hour bars for liquid stock"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTORICAL_DATA AAPL STK 1 D / 1 hour / TRADES",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -340,7 +355,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_bars_30d_1day": {
-		name:        "historical_bars_30d_1day",
+		metadata:    meta("history", []string{"History().Bars"}, []int{20, 17}, "read_only", []string{"historical_data"}, []string{"daily bars over long window"}, 1, "candidate", batchReadOnly),
 		description: "REQ_HISTORICAL_DATA AAPL STK 30 D / 1 day / TRADES",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -351,7 +366,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_bars_bidask": {
-		name:        "historical_bars_bidask",
+		metadata:    meta("history", []string{"History().Bars"}, []int{20, 17}, "read_only", []string{"historical_data"}, []string{"BID_ASK historical bars"}, 1, "candidate", batchReadOnly),
 		description: "REQ_HISTORICAL_DATA AAPL STK 1 D / 1 hour / BID_ASK",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -362,7 +377,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_bars_error": {
-		name:        "historical_bars_error",
+		metadata:    meta("history", []string{"History().Bars"}, []int{20, 4}, "read_only", []string{"historical_data"}, []string{"real historical API error"}, 1, "candidate", batchReadOnly),
 		description: "REQ_HISTORICAL_DATA with bogus symbol (expect ERR_MSG)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -382,7 +397,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_schedule_aapl": {
-		name:        "historical_schedule_aapl",
+		metadata:    meta("history", []string{"History().Schedule"}, []int{20, 106}, "read_only", []string{"historical_data"}, []string{"historical session schedule entries"}, 1, "candidate", batchNewV2, batchReadOnly),
 		description: "REQ_HISTORICAL_DATA AAPL STK 1 M / 1 day / SCHEDULE",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -405,7 +420,7 @@ var scenarios = map[string]scenario{
 	// --- Market data type control (MarketData().SetType) ---
 
 	"set_type_live": {
-		name:        "set_type_live",
+		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=1 push or real entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_MARKET_DATA_TYPE=1 (live), drain for marketDataType push",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 1); err != nil {
@@ -415,7 +430,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"set_type_frozen": {
-		name:        "set_type_frozen",
+		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=2 push"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_MARKET_DATA_TYPE=2 (frozen), drain for marketDataType push",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 2); err != nil {
@@ -425,7 +440,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"set_type_delayed": {
-		name:        "set_type_delayed",
+		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=3 push"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_MARKET_DATA_TYPE=3 (delayed), drain for marketDataType push",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -435,7 +450,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"set_type_delayed_frozen": {
-		name:        "set_type_delayed_frozen",
+		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 58}, "read_only", nil, []string{"marketDataType=4 push"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_MARKET_DATA_TYPE=4 (delayed-frozen), drain for marketDataType push",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 4); err != nil {
@@ -445,7 +460,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"set_type_invalid": {
-		name:        "set_type_invalid",
+		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 4}, "read_only", nil, []string{"real IBKR invalid data type error"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_MARKET_DATA_TYPE=99 (invalid), drain for real IBKR API error",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 99); err != nil {
@@ -455,7 +470,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"set_type_switch_while_streaming": {
-		name:        "set_type_switch_while_streaming",
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{59, 1, 2, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"setType push observed mid-stream"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "Start delayed quote stream, switch SetType to live mid-stream, drain, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -484,7 +499,7 @@ var scenarios = map[string]scenario{
 	// --- Market data quotes ---
 
 	"quote_snapshot_aapl": {
-		name:        "quote_snapshot_aapl",
+		metadata:    meta("market_data", []string{"MarketData().Quote"}, []int{1, 2, 57, 58, 59}, "read_only", []string{"market_data_or_delayed_data"}, []string{"snapshot ticks and snapshot end"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MKT_DATA snapshot=true for AAPL, drain to TICK_SNAPSHOT_END (delayed data)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -499,7 +514,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"quote_stream_aapl": {
-		name:        "quote_stream_aapl",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"stream ticks then cancel"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MKT_DATA snapshot=false for AAPL, 10s observation (delayed data), then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -519,7 +534,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"quote_stream_genericticks": {
-		name:        "quote_stream_genericticks",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"generic tick stream fields"}, 1, "candidate", batchReadOnly),
 		description: "REQ_MKT_DATA with generic tick list 233,236 (delayed data)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -542,7 +557,7 @@ var scenarios = map[string]scenario{
 	// --- Real-time bars ---
 
 	"realtime_bars_aapl": {
-		name:        "realtime_bars_aapl",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeRealTimeBars"}, []int{50, 51}, "read_only", []string{"market_data_or_delayed_data"}, []string{"real-time bars then cancel"}, 1, "promoted", batchReadOnly),
 		description: "REQ_REAL_TIME_BARS AAPL, 15s observation (delayed data), cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -565,7 +580,7 @@ var scenarios = map[string]scenario{
 	// --- Open orders ---
 
 	"open_orders_empty": {
-		name:        "open_orders_empty",
+		metadata:    meta("orders", []string{"Orders().Open"}, []int{5, 53}, "read_only", nil, []string{"own open-orders snapshot"}, 1, "promoted", batchReadOnly),
 		description: "REQ_OPEN_ORDERS drained to OPEN_ORDER_END",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqOpenOrders(conn); err != nil {
@@ -576,7 +591,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"open_orders_all": {
-		name:        "open_orders_all",
+		metadata:    meta("orders", []string{"Orders().Open"}, []int{16, 53}, "read_only", []string{"client_id_0"}, []string{"all open-orders snapshot"}, 0, "promoted", batchReadOnly),
 		description: "REQ_ALL_OPEN_ORDERS drained to OPEN_ORDER_END (requires client_id=0)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqAllOpenOrders(conn); err != nil {
@@ -589,7 +604,7 @@ var scenarios = map[string]scenario{
 	// --- Executions ---
 
 	"executions_snapshot": {
-		name:        "executions_snapshot",
+		metadata:    meta("orders", []string{"Orders().Executions"}, []int{7, 11, 55, 59}, "read_only", nil, []string{"finite execution query and commissions when present"}, 1, "promoted", batchReadOnly),
 		description: "REQ_EXECUTIONS with empty filter drained to EXECUTION_DATA_END",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -604,7 +619,7 @@ var scenarios = map[string]scenario{
 	// --- v1 expanded scope: Batch C1 — singleton one-shots (no reqID) ---
 
 	"family_codes": {
-		name:        "family_codes",
+		metadata:    meta("accounts", []string{"Accounts().FamilyCodes"}, []int{80, 78}, "read_only", nil, []string{"family codes response"}, 1, "promoted", batchReadOnly),
 		description: "REQ_FAMILY_CODES, read FAMILY_CODES response (msg 78)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqFamilyCodes(conn); err != nil {
@@ -614,7 +629,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"news_providers": {
-		name:        "news_providers",
+		metadata:    meta("news", []string{"News().Providers"}, []int{85}, "read_only", nil, []string{"free news provider list"}, 1, "promoted", batchReadOnly),
 		description: "REQ_NEWS_PROVIDERS, read NEWS_PROVIDERS response (msg 86)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqNewsProviders(conn); err != nil {
@@ -624,7 +639,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"mkt_depth_exchanges": {
-		name:        "mkt_depth_exchanges",
+		metadata:    meta("contracts", []string{"Contracts().DepthExchanges"}, []int{82}, "read_only", nil, []string{"market-depth exchange metadata"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MKT_DEPTH_EXCHANGES, read response (msg 79)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMktDepthExchanges(conn); err != nil {
@@ -634,7 +649,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"scanner_parameters": {
-		name:        "scanner_parameters",
+		metadata:    meta("scanner", []string{"Scanner().Parameters"}, []int{24, 19}, "read_only", nil, []string{"scanner XML parameters"}, 1, "promoted", batchReadOnly),
 		description: "REQ_SCANNER_PARAMETERS, read response (msg 19)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqScannerParameters(conn); err != nil {
@@ -647,7 +662,7 @@ var scenarios = map[string]scenario{
 	// --- v1 expanded scope: Batch C2 — keyed one-shots ---
 
 	"user_info": {
-		name:        "user_info",
+		metadata:    meta("tws", []string{"TWS().UserInfo"}, []int{protocol.OutReqUserInfo, protocol.InUserInfo}, "read_only", nil, []string{"user info response"}, 1, "promoted", batchReadOnly),
 		description: "REQ_USER_INFO, read USER_INFO response",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -658,7 +673,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"matching_symbols_aapl": {
-		name:        "matching_symbols_aapl",
+		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"exact-ish symbol samples"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MATCHING_SYMBOLS pattern=AAPL, read SYMBOL_SAMPLES (msg 79)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -669,7 +684,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"matching_symbols_partial": {
-		name:        "matching_symbols_partial",
+		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"broad symbol samples"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MATCHING_SYMBOLS pattern=AA (partial), read SYMBOL_SAMPLES (msg 79)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -680,7 +695,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"head_timestamp_aapl": {
-		name:        "head_timestamp_aapl",
+		metadata:    meta("history", []string{"History().HeadTimestamp"}, []int{87, 88, 90}, "read_only", []string{"historical_data"}, []string{"head timestamp response"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HEAD_TIMESTAMP AAPL/STK/TRADES, read HEAD_TIMESTAMP (msg 88)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -691,7 +706,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"sec_def_opt_params_aapl": {
-		name:        "sec_def_opt_params_aapl",
+		metadata:    meta("contracts", []string{"Contracts().SecDefOptParams"}, []int{78, 75, 76}, "read_only", nil, []string{"option parameter surface"}, 1, "promoted", batchReadOnly),
 		description: "REQ_SEC_DEF_OPT_PARAMS AAPL/STK conId=265598, read responses (msg 75+76)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -704,7 +719,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"histogram_data_aapl": {
-		name:        "histogram_data_aapl",
+		metadata:    meta("history", []string{"History().Histogram"}, []int{88, 89}, "read_only", []string{"historical_data"}, []string{"histogram bins"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTOGRAM_DATA AAPL/1 week, read response (msg 89)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -718,7 +733,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_ticks_aapl_trades": {
-		name:        "historical_ticks_aapl_trades",
+		metadata:    meta("history", []string{"History().Ticks"}, []int{96, 98}, "read_only", []string{"historical_data"}, []string{"historical last ticks and attributes"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTORICAL_TICKS AAPL/TRADES, read response (msg 98)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -734,7 +749,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_ticks_aapl_bidask": {
-		name:        "historical_ticks_aapl_bidask",
+		metadata:    meta("history", []string{"History().Ticks"}, []int{96, 97}, "read_only", []string{"historical_data"}, []string{"historical bid/ask ticks and attributes"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTORICAL_TICKS AAPL/BID_ASK, read response (msg 97)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -748,7 +763,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_ticks_aapl_midpoint": {
-		name:        "historical_ticks_aapl_midpoint",
+		metadata:    meta("history", []string{"History().Ticks"}, []int{96}, "read_only", []string{"historical_data"}, []string{"historical midpoint ticks"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTORICAL_TICKS AAPL/MIDPOINT, read response (msg 96)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -762,7 +777,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_news_aapl": {
-		name:        "historical_news_aapl",
+		metadata:    meta("news", []string{"News().Historical"}, []int{86, 87}, "read_only", []string{"news_or_historical_news"}, []string{"historical news items and end marker"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTORICAL_NEWS AAPL conId=265598, read responses (msg 86+87)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -777,7 +792,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_ticks_aapl_timezone_window": {
-		name:        "historical_ticks_aapl_timezone_window",
+		metadata:    meta("history", []string{"History().Ticks"}, []int{96, 97, 98}, "read_only", []string{"historical_data"}, []string{"explicit timezone tick windows for all tick kinds"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_HISTORICAL_TICKS AAPL with explicit UTC start/end timezone windows for TRADES, BID_ASK, MIDPOINT",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			end := time.Now()
@@ -799,7 +814,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_news_aapl_timezone_window": {
-		name:        "historical_news_aapl_timezone_window",
+		metadata:    meta("news", []string{"News().Historical"}, []int{86, 87}, "read_only", []string{"news_or_historical_news"}, []string{"explicit timezone historical-news window"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_HISTORICAL_NEWS AAPL with explicit UTC start/end timezone window",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -819,7 +834,7 @@ var scenarios = map[string]scenario{
 	// --- v1 expanded scope: Batch C3 — completed orders and tick types ---
 
 	"completed_orders": {
-		name:        "completed_orders",
+		metadata:    meta("orders", []string{"Orders().Completed"}, []int{99, 101, 102}, "read_only", nil, []string{"completed order snapshot"}, 1, "promoted", batchReadOnly),
 		description: "REQ_COMPLETED_ORDERS apiOnly=true, read to COMPLETED_ORDERS_END (msg 102)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqCompletedOrders(conn, true); err != nil {
@@ -829,7 +844,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"quote_with_generic_ticks": {
-		name:        "quote_with_generic_ticks",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"generic tick list and delayed data"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MKT_DATA with generic ticks 100,101,104,106,233,236,258 to observe TickGeneric/TickString/TickReqParams",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -849,7 +864,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"tick_efp_probe": {
-		name:        "tick_efp_probe",
+		metadata:    meta("market_data", []string{"official reqMktData EFP BAG"}, []int{1, 2, 4, 58, 59, 81}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"TickEFP callback or real contract, entitlement, or no-data result"}, 1, "candidate", batchReadOnly),
 		description: "live EFP market-data probe using DTE/EUREX and Tencent/HKFE single-stock-future BAGs",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 1); err != nil {
@@ -887,7 +902,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"quote_stream_multi_asset": {
-		name:        "quote_stream_multi_asset",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"concurrent quote streams for multiple asset classes"}, 1, "candidate", batchNewV2, batchReadOnly),
 		description: "concurrent delayed REQ_MKT_DATA streams for AAPL stock and EUR.USD cash, then cancel both",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -917,7 +932,7 @@ var scenarios = map[string]scenario{
 	// --- v1 expanded scope: Batch C4 — streaming subscriptions ---
 
 	"account_updates": {
-		name:        "account_updates",
+		metadata:    meta("accounts", []string{"Accounts().Updates", "Accounts().SubscribeUpdates"}, []int{6, 7, 8, 54}, "read_only", nil, []string{"account and portfolio update stream"}, 1, "promoted", batchReadOnly),
 		description: "REQ_ACCOUNT_UPDATES subscribe=true, read for 10s, then unsubscribe",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			acct := sess.ManagedAccounts
@@ -935,7 +950,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"account_updates_multi": {
-		name:        "account_updates_multi",
+		metadata:    meta("accounts", []string{"Accounts().UpdatesMulti", "Accounts().SubscribeUpdatesMulti"}, []int{76, 77, 73, 74}, "read_only", nil, []string{"account updates multi stream"}, 1, "promoted", batchReadOnly),
 		description: "REQ_ACCOUNT_UPDATES_MULTI, read to end marker (msg 74), then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -954,7 +969,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"positions_multi": {
-		name:        "positions_multi",
+		metadata:    meta("accounts", []string{"Accounts().PositionsMulti", "Accounts().SubscribePositionsMulti"}, []int{74, 75, 71, 72}, "read_only", nil, []string{"positions multi stream"}, 1, "promoted", batchReadOnly),
 		description: "REQ_POSITIONS_MULTI, read to POSITION_MULTI_END (msg 72), then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -973,7 +988,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"pnl": {
-		name:        "pnl",
+		metadata:    meta("accounts", []string{"Accounts().SubscribePnL"}, []int{92, 93, 94}, "read_only", nil, []string{"account PnL stream"}, 1, "promoted", batchReadOnly),
 		description: "REQ_PNL for account, read for 5s, then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -991,7 +1006,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"pnl_single": {
-		name:        "pnl_single",
+		metadata:    meta("accounts", []string{"Accounts().SubscribePnLSingle"}, []int{94, 95}, "read_only", nil, []string{"single-position PnL stream or real error"}, 1, "promoted", batchReadOnly),
 		description: "REQ_PNL_SINGLE for AAPL conId=265598, read for 5s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1009,7 +1024,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"tick_by_tick_last": {
-		name:        "tick_by_tick_last",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeTickByTick"}, []int{97, 98, 99}, "read_only", []string{"market_data_or_delayed_data"}, []string{"tick-by-tick Last stream"}, 1, "candidate", batchReadOnly),
 		description: "REQ_TICK_BY_TICK_DATA Last for AAPL (delayed), read for 15s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -1029,7 +1044,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"tick_by_tick_bidask": {
-		name:        "tick_by_tick_bidask",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeTickByTick"}, []int{97, 98, 99}, "read_only", []string{"market_data_or_delayed_data"}, []string{"tick-by-tick BidAsk stream"}, 1, "candidate", batchReadOnly),
 		description: "REQ_TICK_BY_TICK_DATA BidAsk for AAPL (delayed), read for 15s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -1049,7 +1064,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"tick_by_tick_midpoint": {
-		name:        "tick_by_tick_midpoint",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeTickByTick"}, []int{97, 98, 99}, "read_only", []string{"market_data_or_delayed_data"}, []string{"tick-by-tick MidPoint stream"}, 1, "candidate", batchReadOnly),
 		description: "REQ_TICK_BY_TICK_DATA MidPoint for AAPL (delayed), read for 15s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqMarketDataType(conn, 3); err != nil {
@@ -1069,7 +1084,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"historical_bars_keepup": {
-		name:        "historical_bars_keepup",
+		metadata:    meta("history", []string{"History().SubscribeBars"}, []int{20, 25, 17, 90, 108}, "read_only", []string{"historical_data"}, []string{"keep-up-to-date historical bars"}, 1, "promoted", batchReadOnly),
 		description: "REQ_HISTORICAL_DATA keepUpToDate=true for AAPL 5 secs bars, read 15s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1086,7 +1101,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"news_bulletins": {
-		name:        "news_bulletins",
+		metadata:    meta("news", []string{"News().SubscribeBulletins"}, []int{12, 13, 14}, "read_only", []string{"news_or_bulletins"}, []string{"news bulletin subscribe/cancel"}, 1, "promoted", batchReadOnly),
 		description: "REQ_NEWS_BULLETINS allMessages=true, read for 5s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendReqNewsBulletins(conn, true); err != nil {
@@ -1105,7 +1120,7 @@ var scenarios = map[string]scenario{
 	// --- v1 expanded scope: Batch C5 — option calculations and scanner ---
 
 	"scanner_subscription": {
-		name:        "scanner_subscription",
+		metadata:    meta("scanner", []string{"Scanner().SubscribeResults"}, []int{22, 23, 20}, "read_only", nil, []string{"scanner rows or real subscription error"}, 1, "candidate", batchReadOnly),
 		description: "REQ_SCANNER_SUBSCRIPTION top 10 hot US stocks, read response, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1129,7 +1144,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"smart_components": {
-		name:        "smart_components",
+		metadata:    meta("contracts", []string{"Contracts().SmartComponents"}, []int{83, 82}, "read_only", nil, []string{"smart component mapping"}, 1, "promoted", batchReadOnly),
 		description: "REQ_SMART_COMPONENTS for AAPL bboExchange=9c0001, read response",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1141,7 +1156,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"market_rule": {
-		name:        "market_rule",
+		metadata:    meta("contracts", []string{"Contracts().MarketRule"}, []int{91, 93}, "read_only", nil, []string{"price increment ladder"}, 1, "promoted", batchReadOnly),
 		description: "REQ_MARKET_RULE id=26 (common US equity rule), read response (msg 93)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			// Market rule 26 is common for US equities on SMART/ISLAND.
@@ -1155,7 +1170,7 @@ var scenarios = map[string]scenario{
 	// --- Order management ---
 
 	"place_order_lmt_buy_aapl": {
-		name:        "place_order_lmt_buy_aapl",
+		metadata:    meta("orders", []string{"Orders().Place", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"far-from-market order accepted then cancelled"}, 1, "promoted", batchNewV2, batchTrading),
 		description: "PLACE_ORDER LMT buy 1 AAPL at $50 (far below market), observe status, then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1174,7 +1189,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_mkt_buy_aapl": {
-		name:        "place_order_mkt_buy_aapl",
+		metadata:    meta("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_marketable_order", []string{"paper_trading", "market_hours"}, []string{"market buy fill or real market-state response"}, 1, "promoted", batchNewV2, batchTrading),
 		description: "PLACE_ORDER MKT buy 1 AAPL (will fill), observe status",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1187,7 +1202,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_mkt_sell_aapl": {
-		name:        "place_order_mkt_sell_aapl",
+		metadata:    meta("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_marketable_order", []string{"paper_trading", "market_hours", "position_or_short_permission"}, []string{"market sell fill or real rejection"}, 1, "promoted", batchNewV2, batchTrading),
 		description: "PLACE_ORDER MKT sell 1 AAPL, observe status",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1200,7 +1215,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_modify": {
-		name:        "place_order_modify",
+		metadata:    meta("orders", []string{"Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"modify accepted and open-order update observed"}, 1, "promoted", batchNewV2, batchTrading),
 		description: "PLACE_ORDER LMT buy 1 AAPL at $50, modify to $51, then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1226,7 +1241,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_cancel": {
-		name:        "place_order_cancel",
+		metadata:    meta("orders", []string{"Orders().Place", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"cancel terminal status"}, 1, "promoted", batchNewV2, batchTrading),
 		description: "PLACE_ORDER LMT buy 1 AAPL at $50, then cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1245,7 +1260,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_direct_cancel": {
-		name:        "place_order_direct_cancel",
+		metadata:    meta("orders", []string{"Orders().Place", "Orders().Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"direct Orders().Cancel(orderID) terminal status"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "PLACE_ORDER LMT buy 1 AAPL at $50, then cancel via Orders().Cancel(orderID)",
 		// Wire-identical to place_order_cancel. The scenario exists so the
 		// replay transcript and integration test can exercise the direct-by-ID
@@ -1268,7 +1283,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_bracket_aapl": {
-		name:        "place_order_bracket_aapl",
+		metadata:    meta("orders", []string{"Orders().Place"}, []int{3, 5}, "paper_marketable_order", []string{"paper_trading", "market_hours"}, []string{"parent/child transmit sequencing"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "bracket order: MKT parent + LMT take-profit + STP stop-loss for AAPL",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			parentID := sess.NextValidID
@@ -1294,7 +1309,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"global_cancel": {
-		name:        "global_cancel",
+		metadata:    meta("orders", []string{"Orders().Place", "Orders().CancelAll"}, []int{3, 5, 58}, "paper_order", []string{"paper_trading"}, []string{"multiple open orders cancelled globally"}, 1, "promoted", batchNewV2, batchTrading),
 		description: "place 3 LMT buy orders at $50, then GLOBAL_CANCEL",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			acct := sess.ManagedAccounts
@@ -1316,7 +1331,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_option_buy": {
-		name:        "place_order_option_buy",
+		metadata:    meta("options", []string{"Orders().Place"}, []int{3, 5}, "paper_marketable_order", []string{"paper_trading", "option_permissions"}, []string{"option order fill or real contract/permission error"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "PLACE_ORDER buy 1 AAPL far-OTM call option, observe status",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1342,7 +1357,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_algo_adaptive_aapl": {
-		name:        "place_order_algo_adaptive_aapl",
+		metadata:    meta("orders", []string{"Orders().Place"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"Adaptive algo open-order wire"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "PLACE_ORDER LMT buy 1 AAPL with Adaptive algo, observe open-order wire",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1371,7 +1386,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_price_condition_aapl": {
-		name:        "place_order_price_condition_aapl",
+		metadata:    meta("orders", []string{"Orders().Place"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"price condition open-order wire"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "PLACE_ORDER LMT buy 1 AAPL with a high price condition so it stays inactive",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			orderID := sess.NextValidID
@@ -1409,7 +1424,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"place_order_oca_pair_aapl": {
-		name:        "place_order_oca_pair_aapl",
+		metadata:    meta("orders", []string{"Orders().Place", "Orders().CancelAll"}, []int{3, 5, 58}, "paper_order", []string{"paper_trading"}, []string{"OCA pair accepted then globally cancelled"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "place two far-from-market AAPL LMT orders in one OCA group, then GLOBAL_CANCEL",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			acct := sess.ManagedAccounts
@@ -1436,7 +1451,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"trading_split_round_trip_aapl": {
-		name:        "trading_split_round_trip_aapl",
+		metadata:    meta("orders", []string{"Accounts().Summary", "Accounts().Positions", "Orders().Place", "Orders().Executions", "Orders().Completed", "Accounts().SubscribePnL"}, []int{3, 5, 7, 11, 55, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_marketable_order", []string{"paper_trading", "market_hours"}, []string{"split buy/sell round trip with account/order reconciliation"}, 1, "candidate", batchNewV2, batchTrading),
 		description: "account baseline, split AAPL market buys, executions/completed orders, split sells, final account/position/PnL probes",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			acct := sess.ManagedAccounts
@@ -1519,7 +1534,7 @@ var scenarios = map[string]scenario{
 	// --- Market depth ---
 
 	"market_depth_aapl": {
-		name:        "market_depth_aapl",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth"}, []int{10, 11, 12, 13}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"regular depth rows or entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_MKT_DEPTH AAPL numRows=5 isSmartDepth=false, read 10s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1536,7 +1551,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"market_depth_aapl_smart": {
-		name:        "market_depth_aapl_smart",
+		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth"}, []int{10, 11, 12, 13}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"smart depth rows or entitlement error"}, 1, "candidate", batchNewV2, batchReadOnly),
 		description: "REQ_MKT_DEPTH AAPL numRows=5 isSmartDepth=true, read 10s, cancel",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1556,7 +1571,7 @@ var scenarios = map[string]scenario{
 	// --- Reference data ---
 
 	"soft_dollar_tiers": {
-		name:        "soft_dollar_tiers",
+		metadata:    meta("advisors", []string{"Advisors().SoftDollarTiers"}, []int{79, 77}, "read_only", nil, []string{"soft-dollar tier list"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_SOFT_DOLLAR_TIERS, read response (msg 77)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1571,7 +1586,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"display_groups": {
-		name:        "display_groups",
+		metadata:    meta("tws", []string{"TWS().DisplayGroups"}, []int{67}, "read_only", nil, []string{"display group list"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "QUERY_DISPLAY_GROUPS, read response (msg 67)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1589,7 +1604,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"display_group_subscribe": {
-		name:        "display_group_subscribe",
+		metadata:    meta("tws", []string{"TWS().SubscribeDisplayGroup", "DisplayGroupHandle.Update"}, []int{67, 68, 69, 70}, "read_only", []string{"tws_display_groups"}, []string{"display group subscribe/update/unsubscribe"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "QUERY_DISPLAY_GROUPS then SUBSCRIBE_TO_GROUP_EVENTS for group 1, observe, unsubscribe",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			queryReqID := nextReqID()
@@ -1613,7 +1628,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"wsh_meta_data": {
-		name:        "wsh_meta_data",
+		metadata:    meta("wsh", []string{"WSH().MetaData"}, []int{100, 101, 104}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"WSH metadata JSON or entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_WSH_META_DATA, read response (msg 105 or error)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1628,7 +1643,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"wsh_event_data_aapl": {
-		name:        "wsh_event_data_aapl",
+		metadata:    meta("wsh", []string{"WSH().EventData"}, []int{102, 103, 105}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"WSH event JSON or entitlement error"}, 1, "candidate", batchNewV2, batchReadOnly),
 		description: "REQ_WSH_EVENT_DATA for AAPL conId=265598, read response (msg 106 or error)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1643,7 +1658,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"request_fa": {
-		name:        "request_fa",
+		metadata:    meta("advisors", []string{"Advisors().Config"}, []int{18, 16}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"FA XML or non-FA error"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQUEST_FA groups (faDataType=1), read response (may error on non-FA accounts)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			if err := sendRequestFA(conn, 1); err != nil {
@@ -1667,7 +1682,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"qualify_contract_aapl_exact": {
-		name:        "qualify_contract_aapl_exact",
+		metadata:    meta("contracts", []string{"Contracts().Qualify"}, []int{9, 10, 52}, "read_only", nil, []string{"single qualified contract"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_CONTRACT_DATA for fully-qualified AAPL STK SMART USD",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1678,7 +1693,7 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"qualify_contract_ambiguous": {
-		name:        "qualify_contract_ambiguous",
+		metadata:    meta("contracts", []string{"Contracts().Qualify", "Contracts().Details"}, []int{9, 10, 52, 4}, "read_only", nil, []string{"ambiguous contract results or real ambiguity error"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "REQ_CONTRACT_DATA with just symbol=MSFT, no exchange (may return multiple results)",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
@@ -1696,222 +1711,222 @@ var scenarios = map[string]scenario{
 		},
 	},
 	"api_order_type_matrix_aapl": {
-		name:        "api_order_type_matrix_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families accepted, rejected, filled, modified, or cancelled with real order lifecycle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchExhaustivePremarket, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL order type breadth: fills, rests, rejects, modifies, and cancels",
 		runAPI:      runAPIOrderTypeMatrixAAPL,
 	},
 	"api_order_fill_aapl": {
-		name:        "api_order_fill_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT, MTL, and delayed modify-to-market fill paths with flattening"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL fill paths: MKT, MTL, and delayed modify-to-market",
 		runAPI:      runAPIOrderFillAAPL,
 	},
 	"api_order_rest_cancel_aapl": {
-		name:        "api_order_rest_cancel_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"far LMT rest/cancel path"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL resting order types and cancel/reject behavior",
 		runAPI:      runAPIOrderRestCancelAAPL,
 	},
 	"api_order_relative_cancel_aapl": {
-		name:        "api_order_relative_cancel_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"REL rest/cancel behavior isolated because Gateway can reconnect during relative order validation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for AAPL relative order behavior",
 		runAPI:      runAPIOrderRelativeCancelAAPL,
 	},
 	"api_order_trailing_cancel_aapl": {
-		name:        "api_order_trailing_cancel_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"TRAIL and TRAIL LIMIT behavior isolated because Gateway can reconnect during trailing validation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for AAPL trailing and trailing-limit behavior",
 		runAPI:      runAPIOrderTrailingCancelAAPL,
 	},
 	"api_order_stop_cancel_aapl": {
-		name:        "api_order_stop_cancel_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"STP and STP LMT rest/cancel behavior isolated because Gateway can reconnect during stop validation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for AAPL stop and stop-limit rest/cancel behavior",
 		runAPI:      runAPIOrderStopCancelAAPL,
 	},
 	"api_order_rejects_aapl": {
-		name:        "api_order_rejects_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "Orders().Cancel"}, []int{1, 2, 3, 4, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"invalid order type, price band, invalid contract, and unknown cancel real Gateway errors"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL order rejection and unknown cancel behavior",
 		runAPI:      runAPIOrderRejectsAAPL,
 	},
 	"api_delayed_success_modify_aapl": {
-		name:        "api_delayed_success_modify_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "Orders().Executions", "Accounts().Positions"}, []int{3, 4, 5, 11, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"resting limit order later becomes marketable through modify and is observed through the original handle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign where a resting AAPL limit order succeeds later through OrderHandle.Modify",
 		runAPI:      runAPIDelayedSuccessModifyAAPL,
 	},
 	"api_bracket_trigger_aapl": {
-		name:        "api_bracket_trigger_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "Orders().Open", "Orders().Executions", "Orders().CancelAll"}, []int{3, 4, 5, 11, 16, 53, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"bracket parent fills, children echo the same OCA group, forced take-profit modify reaches real price-band cancellation/rejection"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for bracket parent/child activation and take-profit-trigger sibling cancellation",
 		runAPI:      runAPIBracketTriggerAAPL,
 	},
 	"api_oca_trigger_aapl": {
-		name:        "api_oca_trigger_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Open", "Orders().Executions", "Orders().CancelAll"}, []int{3, 4, 5, 11, 16, 53, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"OCA group echoed on both peers; aggressive peer reaches real price-band cancellation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for OCA fill/cancel behavior",
 		runAPI:      runAPIOCATriggerAAPL,
 	},
 	"api_conditions_matrix_aapl": {
-		name:        "api_conditions_matrix_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Cancel", "Orders().CancelAll"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"price/time/margin/execution/volume/percent-change condition families accepted or rejected with real Gateway response"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for IBKR order condition families",
 		runAPI:      runAPIConditionsMatrixAAPL,
 	},
 	"api_tif_attribute_matrix_aapl": {
-		name:        "api_tif_attribute_matrix_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 7, 11, 55}, "paper_order", []string{"paper_trading"}, []string{"GTC/GTD/GoodAfterTime/AON/MinQty/TrailingPercent/PercentOffset/Scale/Adjusted/ManualOrderTime/AdvancedErrorOverride accepted or rejected with real Gateway response"}, 1, "promoted", []string{"STK"}, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for TIF values and advanced AAPL order attributes",
 		runAPI:      runAPITIFAttributeMatrixAAPL,
 	},
 	"api_security_type_probe_matrix": {
-		name:        "api_security_type_probe_matrix",
+		metadata:    metaWithAssets("contracts", []string{"Contracts().Details"}, []int{9, 10, 52, 4}, "entitlement_probe", []string{"security_type_permissions_or_real_error"}, []string{"contract details or real rejection for STK/OPT/FUT/FOP/CASH/BOND/CFD/WAR/IND/CRYPTO/FUND/BILL/CMDTY/CONTFUT"}, 1, "candidate", []string{"STK", "OPT", "FUT", "FOP", "CASH", "BOND", "CFD", "WAR", "IND", "CRYPTO", "FUND", "BILL", "CMDTY", "CONTFUT"}, batchNewV2, batchReplayAll),
 		description: "public API probe matrix for real Gateway contract-details behavior across security types",
 		runAPI:      runAPISecurityTypeProbeMatrix,
 	},
 	"api_market_data_completeness_aapl": {
-		name:        "api_market_data_completeness_aapl",
+		metadata:    metaWithAssets("market_data", []string{"MarketData().SetType", "MarketData().Quote", "MarketData().SubscribeRealTimeBars", "MarketData().SubscribeTickByTick"}, []int{1, 2, 45, 46, 50, 51, 57, 58, 59, 97, 98, 99}, "entitlement_probe", []string{"market_data_or_delayed_data"}, []string{"market data type pushes, generic ticks, real-time TRADES/BID_ASK/MIDPOINT, and tick-by-tick variants or entitlement errors"}, 1, "candidate", []string{"STK"}, batchNewV2, batchReplayAll),
 		description: "public API campaign for market-data type, generic tick, real-time bar, and tick-by-tick variants",
 		runAPI:      runAPIMarketDataCompletenessAAPL,
 	},
 	"api_generic_tick_matrix_aapl": {
-		name:        "api_generic_tick_matrix_aapl",
+		metadata:    metaWithAssets("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58, 59, 81}, "entitlement_probe", []string{"market_data_or_delayed_data"}, []string{"delayed AAPL stream preserves observed mark-price tick 37, shortable ticks 46/89, volume-rate tick 56, delayed timestamp tick 88, and omitted minimum-tick parameters"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchReplayAll),
 		description: "public API probe for exact price, size, generic, string, and parameter tick delivery",
 		runAPI:      runAPIGenericTickMatrixAAPL,
 	},
 	"api_tick_news_aapl_probe": {
-		name:        "api_tick_news_aapl_probe",
+		metadata:    metaWithAssets("news", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{1, 2, 4, 58, 59, 81, 84}, "entitlement_probe", []string{"api_news_subscription"}, []string{"contract-specific BRFG TickNews or a real entitlement/no-new-headline result"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchReplayAll),
 		description: "public API probe for contract-specific BRFG news ticks",
 		runAPI:      runAPITickNewsAAPLProbe,
 	},
 	"api_scanner_subscription": {
-		name:        "api_scanner_subscription",
+		metadata:    metaWithAssets("scanner", []string{"Scanner().SubscribeResults"}, []int{22, 23, 20, 4}, "entitlement_probe", []string{"scanner_permissions_or_real_error"}, []string{"complete public scanner request returns ranked rows or the real Gateway subscription error"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchReplayAll),
 		description: "public API probe for a complete HOT_BY_VOLUME scanner subscription request",
 		runAPI:      runAPIScannerSubscription,
 	},
 	"api_historical_matrix_aapl": {
-		name:        "api_historical_matrix_aapl",
+		metadata:    metaWithAssets("history", []string{"History().Bars"}, []int{20, 17, 4}, "read_only", []string{"historical_data"}, []string{"all planned historical bar-size probes and whatToShow variants return data or real Gateway errors"}, 1, "candidate", []string{"STK"}, batchNewV2, batchReplayAll),
 		description: "public API campaign for historical bar-size and whatToShow variants",
 		runAPI:      runAPIHistoricalMatrixAAPL,
 	},
 	"api_news_article_aapl": {
-		name:        "api_news_article_aapl",
+		metadata:    metaWithAssets("news", []string{"News().Historical", "News().Article"}, []int{84, 83, 86, 87, 80, 4}, "entitlement_probe", []string{"news_or_historical_news"}, []string{"article ID sourced from historical news is requested through reqNewsArticle or real entitlement/no-result is frozen"}, 1, "candidate", []string{"STK"}, batchNewV2, batchReplayAll),
 		description: "public API campaign that requests a real news article ID from historical news, then fetches the article",
 		runAPI:      runAPINewsArticleAAPL,
 	},
 	"api_wsh_variants_aapl": {
-		name:        "api_wsh_variants_aapl",
+		metadata:    metaWithAssets("wsh", []string{"WSH().MetaData", "WSH().EventData"}, []int{100, 102, 4}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"WSH metadata plus conid, portfolio, watchlist, competitor, and date-window event-data variants return real code 10276 entitlement errors"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReplayAll),
 		description: "public API probe for WSH metadata plus conid, portfolio, watchlist, competitor, and date-window event-data entitlement variants",
 		runAPI:      runAPIWSHVariantsAAPL,
 	},
 	"api_algo_variants_aapl": {
-		name:        "api_algo_variants_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 7, 11, 55}, "paper_order", []string{"paper_trading", "algo_permissions_or_real_error"}, []string{"Adaptive, TWAP, VWAP, ArrivalPx, DarkIce, AccumDist, Inline, Close, PctVol, BalanceImpactRisk, MinImpact, and Jefferies variants accepted, rejected, or cancelled with real Gateway response"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for available IBKR algorithmic strategy variants",
 		runAPI:      runAPIAlgoVariantsAAPL,
 	},
 	"api_pairs_trading_aapl_msft": {
-		name:        "api_pairs_trading_aapl_msft",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"paired AAPL/MSFT market entries and per-symbol flatten fills; source execution-query tail timed out"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for paired AAPL/MSFT market orders and cleanup",
 		runAPI:      runAPIPairsTradingAAPLMSFT,
 	},
 	"api_dollar_cost_averaging_aapl": {
-		name:        "api_dollar_cost_averaging_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"three staged AAPL market buys plus aggregate flatten fill; source execution-query tail timed out"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for repeated AAPL buys and post-campaign flattening",
 		runAPI:      runAPIDollarCostAveragingAAPL,
 	},
 	"api_stop_loss_management_aapl": {
-		name:        "api_stop_loss_management_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"market entry, protective stop placement, stop modification, cancellation, flatten, and execution reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for placing, moving, cancelling, and flattening a protective stop",
 		runAPI:      runAPIStopLossManagementAAPL,
 	},
 	"api_bracket_trailing_stop_aapl": {
-		name:        "api_bracket_trailing_stop_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "Orders().CancelAll", "Orders().Executions"}, []int{1, 2, 3, 4, 7, 11, 55, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"live scenario probes quote, places market-parent bracket with TRAIL child, and receives code 328; promoted replay freezes request/rejection before execution-query and cleanup tail"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for bracket order sequencing with a trailing stop child",
 		runAPI:      runAPIBracketTrailingStopAAPL,
 	},
 	"api_fa_replace_non_fa": {
-		name:        "api_fa_replace_non_fa",
+		metadata:    metaWithAssets("advisors", []string{"Advisors().ReplaceConfig"}, []int{19}, "paper_order", []string{"paper_trading"}, []string{"real non-FA account response to FA group replacement"}, 1, "promoted", []string{"STK"}, batchTrading),
 		description: "public API probe replacing FA groups on a non-FA paper account, freezing the real account-type response",
 		runAPI:      runAPIFAReplaceNonFA,
 	},
 	"api_option_exercise_aapl": {
-		name:        "api_option_exercise_aapl",
+		metadata:    meta("options", []string{"Orders().Place", "Options().Exercise"}, []int{3, 5, 21}, "paper_marketable_order", []string{"paper_trading", "market_hours", "option_permissions"}, []string{"option fill then real exercise acknowledgement or no-position error"}, 1, "promoted", batchTrading),
 		description: "public API campaign buying one AAPL call then exercising it, freezing the real exercise or no-position response",
 		runAPI:      runAPIOptionExerciseAAPL,
 	},
 	"api_hedge_order_aapl": {
-		name:        "api_hedge_order_aapl",
+		metadata:    meta("orders", []string{"Orders().Place"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"hedge child accept or real rejection per hedge type"}, 1, "promoted", batchTrading),
 		description: "public API campaign attaching delta, beta, FX, and pair hedge children to a staged parent",
 		runAPI:      runAPIHedgeOrderAAPL,
 	},
 	"api_option_campaign_aapl": {
-		name:        "api_option_campaign_aapl",
+		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "MarketData().Quote", "Options().Price", "Options().Exercise", "Orders().Place", "Orders().Executions", "Orders().Completed"}, []int{1, 2, 3, 5, 11, 21, 55, 59, 75, 76, 99, 101, 102}, "paper_trigger", []string{"paper_trading", "market_hours", "option_permissions"}, []string{"live-qualified AAPL option quote/calculation/order/exercise-or-real-reject campaign"}, 1, "candidate", []string{"OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for live-qualified AAPL option data, order, execution, and exercise/lapse responses",
 		runAPI:      runAPIOptionCampaignAAPL,
 	},
 	"api_option_calculations_aapl": {
-		name:        "api_option_calculations_aapl",
+		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Details", "MarketData().Quote", "Options().Price", "Options().ImpliedVolatility"}, []int{1, 2, 4, 10, 21, 52, 54, 55, 56, 57, 75, 76}, "read_only", []string{"option_permissions"}, []string{"live-qualified option price and implied-volatility results with field-presence sentinels"}, 1, "promoted", []string{"OPT"}, batchNewV2, batchReadOnly, batchReplayAll),
 		description: "read-only public API probe for live-qualified AAPL option price and implied-volatility calculations",
 		runAPI:      runAPIOptionCalculationsAAPL,
 	},
 	"api_future_campaign_mes": {
-		name:        "api_future_campaign_mes",
+		metadata:    metaWithAssets("orders", []string{"Contracts().Details", "MarketData().Quote", "Orders().Place", "Orders().Executions", "Accounts().Positions", "Orders().CancelAll"}, []int{1, 2, 3, 5, 10, 11, 52, 57, 58, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours", "future_permissions"}, []string{"live-qualified MES future order/modify/round-trip or real permission rejection"}, 1, "promoted", []string{"FUT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for live-qualified MES futures order behavior",
 		runAPI:      runAPIFutureCampaignMES,
 	},
 	"api_combo_option_vertical_aapl": {
-		name:        "api_combo_option_vertical_aapl",
+		metadata:    metaWithAssets("orders", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "Orders().Place", "Orders().Open", "Orders().CancelAll"}, []int{3, 4, 5, 16, 53, 58, 75, 76}, "paper_order", []string{"paper_trading", "option_permissions"}, []string{"live-qualified AAPL option BAG vertical accepted/cancelled or real combo rejection"}, 1, "candidate", []string{"BAG", "OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for live-qualified AAPL option vertical BAG order behavior",
 		runAPI:      runAPIComboOptionVerticalAAPL,
 	},
 	"api_algorithmic_campaign_aapl": {
-		name:        "api_algorithmic_campaign_aapl",
+		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribeUpdates", "Accounts().SubscribePnL", "Accounts().Positions", "MarketData().SubscribeQuotes", "Orders().SubscribeOpen", "Orders().Place", "OrderHandle.Modify", "Orders().Executions", "Orders().Completed", "Orders().CancelAll"}, []int{1, 2, 3, 5, 6, 7, 8, 11, 16, 53, 54, 58, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_destructive", []string{"paper_trading", "market_hours"}, []string{"multi-subscription algorithmic campaign with split fills, resting modifies, reconciliation, and cleanup"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign with concurrent market/account/order observers and multi-step trading",
 		runAPI:      runAPIAlgorithmicCampaignAAPL,
 	},
 	"api_completed_orders_variants_aapl": {
-		name:        "api_completed_orders_variants_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Completed", "Orders().Executions"}, []int{3, 5, 7, 11, 55, 59, 99, 101, 102}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"fresh paper fill followed by completed-orders apiOnly=false and apiOnly=true queries"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchExhaustiveMarketHours, batchReplayAll),
 		description: "public API campaign for completed-orders apiOnly true/false variants after a live paper fill",
 		runAPI:      runAPICompletedOrdersVariantsAAPL,
 	},
 	"api_transmit_false_then_transmit_aapl": {
-		name:        "api_transmit_false_then_transmit_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"Transmit=false staged order is modified to transmit, then cancelled or rejected by the real Gateway"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "public API campaign for staging Transmit=false then modifying to transmit and cancel",
 		runAPI:      runAPITransmitFalseThenTransmitAAPL,
 	},
 	"api_duplicate_quote_subscriptions_aapl": {
-		name:        "api_duplicate_quote_subscriptions_aapl",
+		metadata:    metaWithAssets("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{1, 2, 58, 59}, "entitlement_probe", []string{"market_data_or_delayed_data"}, []string{"SetType(Delayed), then two same-contract quote subscriptions start independently and both receive delayed bid/ask ticks"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchExhaustiveReadOnly, batchReplayAll),
 		description: "public API probe for two same-contract quote subscriptions on one client",
 		runAPI:      runAPIDuplicateQuoteSubscriptionsAAPL,
 	},
 	"api_reconnect_active_order_aapl": {
-		name:        "api_reconnect_active_order_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Open", "Orders().Cancel"}, []int{3, 4, 5, 53}, "paper_order", []string{"paper_trading", "multi_leg_recorder"}, []string{"resting GTC order survives client reconnect and is visible/cancellable after reconnect"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "public API campaign for reconnecting with a live resting order and cancelling it after reconnect",
 		runAPI:      runAPIReconnectActiveOrderAAPL,
 	},
 	"api_client_id0_order_observation_aapl": {
-		name:        "api_client_id0_order_observation_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Open", "Orders().Cancel"}, []int{3, 4, 5, 16, 53}, "paper_order", []string{"paper_trading", "client_id_0", "multi_leg_recorder"}, []string{"client ID 0 observes and cancels another client's live resting order"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "public API campaign for client ID 0 observing and cancelling another client's resting order",
 		runAPI:      runAPIClientID0OrderObservationAAPL,
 	},
 	"api_cross_client_cancel_aapl": {
-		name:        "api_cross_client_cancel_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Open", "Orders().Cancel"}, []int{3, 4, 5, 16, 53}, "paper_order", []string{"paper_trading", "multi_client", "multi_leg_recorder"}, []string{"one client places a resting order and a second client observes/cancels it or returns the real Gateway rejection"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "public API campaign for placing from one client ID and cancelling from another client ID",
 		runAPI:      runAPICrossClientCancelAAPL,
 	},
 	"api_forex_lifecycle_eurusd": {
-		name:        "api_forex_lifecycle_eurusd",
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading", "forex_hours"}, []string{"EUR.USD far LMT reaches Inactive with real paper-account leverage rejection"}, 1, "promoted", []string{"CASH"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for EUR.USD forex rest/modify/cancel lifecycle",
 		runAPI:      runAPIForexLifecycleEURUSD,
 	},
 	"api_whatif_margin_aapl": {
-		name:        "api_whatif_margin_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Preview"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"WhatIf margin/commission preview or real Gateway parser/permission response without execution"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for WhatIf margin/commission preview on AAPL",
 		runAPI:      runAPIWhatIfMarginAAPL,
 	},
 	"api_stress_rapid_fire_aapl": {
-		name:        "api_stress_rapid_fire_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().CancelAll"}, []int{3, 4, 5, 58}, "paper_order", []string{"paper_trading"}, []string{"10 rapid-fire far LMT orders plus global cancel"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for rapid-fire 10 orders plus global cancel",
 		runAPI:      runAPIStressRapidFireAAPL,
 	},
 	"api_scale_in_campaign_aapl": {
-		name:        "api_scale_in_campaign_aapl",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"scale-in 2x MKT buy plus protective stop-loss PreSubmitted trigger; source capture tail timed out during cancel/flatten/execution query"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for scale-in buy strategy with protective stop-loss and flatten",
 		runAPI:      runAPIScaleInCampaignAAPL,
 	},
 	"api_ioc_fok_aapl": {
-		name:        "api_ioc_fok_aapl",
+		metadata:    metaWithAssets("orders", []string{"MarketData().Quote", "Orders().Place", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"IOC marketable cancel and FOK invalid/inactive paths"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayAll),
 		description: "public API campaign for IOC and FOK fill/reject paths",
 		runAPI:      runAPIIOCFOKAAPL,
 	},
