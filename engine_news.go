@@ -163,6 +163,9 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 }
 
 func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) ([]HistoricalNewsItem, error) {
+	if err := validateHistoricalNewsRequest(req); err != nil {
+		return nil, err
+	}
 	providerCodes := formatProviderCodes(req.ProviderCodes)
 	type result struct {
 		items []HistoricalNewsItem

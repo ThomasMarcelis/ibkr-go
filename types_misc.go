@@ -46,9 +46,9 @@ type NewsArticle struct {
 type HistoricalNewsRequest struct {
 	ConID         int
 	ProviderCodes []NewsProviderCode
-	StartTime     time.Time
-	EndTime       time.Time
-	TotalResults  int // maximum headlines to return
+	StartTime     time.Time // exclusive upper bound in the descending result stream; cannot be combined with EndTime
+	EndTime       time.Time // inclusive lower bound in the descending result stream; cannot be combined with StartTime
+	TotalResults  int       // maximum headlines to return
 }
 
 // HistoricalNewsItem is one historical news headline.

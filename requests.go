@@ -157,6 +157,23 @@ func validateHistoricalTicksRequest(req HistoricalTicksRequest) error {
 	}
 }
 
+func validateHistoricalNewsRequest(req HistoricalNewsRequest) error {
+	if !req.StartTime.IsZero() && !req.EndTime.IsZero() {
+		return &ValidationError{
+			Field:   "StartTime/EndTime",
+			Message: "at most one historical news time bound is supported; IBKR ignores EndTime when both are set",
+		}
+	}
+	if req.TotalResults < 1 || req.TotalResults > 300 {
+		return &ValidationError{
+			Field:   "TotalResults",
+			Value:   strconv.Itoa(req.TotalResults),
+			Message: "must be between 1 and 300",
+		}
+	}
+	return nil
+}
+
 func historicalBarsPacingKey(req HistoricalBarsRequest) string {
 	return strings.Join([]string{
 		historicalContractPacingKey(req.Contract),
@@ -290,13 +307,14 @@ func formatHistoricalTickTime(t time.Time) string {
 	return formatTimeWithZone(t, "20060102 15:04:05")
 }
 
-// IBKR historical news documents "yyyy-MM-dd HH:mm:ss". Use the same explicit
-// zone policy as historical ticks so a non-UTC login zone cannot shift windows.
+// The Gateway requires the documented fractional-second suffix on historical
+// news bounds. Without it, server_version 206 accepts the request but ignores
+// the window. Preserve the caller's explicit zone so login zones cannot shift it.
 func formatHistoricalNewsTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	return formatTimeWithZone(t, "2006-01-02 15:04:05")
+	return formatTimeWithZone(t, "2006-01-02 15:04:05.0")
 }
 
 func formatTimeWithZone(t time.Time, layout string) string {

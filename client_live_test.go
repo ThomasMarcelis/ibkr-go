@@ -907,14 +907,12 @@ func TestLiveHistoricalNews(t *testing.T) {
 
 	ctx, cancelReq := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancelReq()
-	end := time.Now().UTC()
-	start := end.AddDate(0, 0, -7)
+	lowerBound := time.Now().UTC().AddDate(0, -6, 0).Truncate(time.Second)
 
 	items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
 		ConID:         265598,
 		ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"},
-		StartTime:     start,
-		EndTime:       end,
+		EndTime:       lowerBound,
 		TotalResults:  20,
 	})
 	if err != nil {
@@ -922,6 +920,11 @@ func TestLiveHistoricalNews(t *testing.T) {
 	}
 	if len(items) == 0 {
 		t.Fatal("HistoricalNews() returned 0 items")
+	}
+	for _, item := range items {
+		if item.Time.Before(lowerBound) {
+			t.Fatalf("HistoricalNews() item %s is before lower bound %s", item.Time, lowerBound)
+		}
 	}
 	t.Logf("HistoricalNews: %d items", len(items))
 }

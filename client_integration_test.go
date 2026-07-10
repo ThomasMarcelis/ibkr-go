@@ -1738,21 +1738,19 @@ func TestNewsArticle(t *testing.T) {
 func TestHistoricalNews(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "historical_news.txt")
+	client, host := newClient(t, "historical_news_end_bound_sv206_live.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	start := time.Date(2026, 4, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2026, 4, 5, 23, 59, 59, 0, time.UTC)
+	lowerBound := time.Date(2026, 1, 10, 23, 11, 4, 0, time.UTC)
 
 	items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
 		ConID:         265598,
-		ProviderCodes: []ibkr.NewsProviderCode{"BRFG"},
-		StartTime:     start,
-		EndTime:       end,
-		TotalResults:  10,
+		ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"},
+		EndTime:       lowerBound,
+		TotalResults:  20,
 	})
 	if err != nil {
 		t.Fatalf("HistoricalNews() error = %v", err)
@@ -1760,48 +1758,13 @@ func TestHistoricalNews(t *testing.T) {
 	if len(items) != 2 {
 		t.Fatalf("items len = %d, want 2", len(items))
 	}
-	if items[0].Headline != "AAPL Q1 Earnings Preview" {
-		t.Fatalf("first headline = %q, want %q", items[0].Headline, "AAPL Q1 Earnings Preview")
+	if !items[0].Time.Equal(time.Date(2026, 5, 1, 14, 27, 6, 0, time.UTC)) || items[0].ProviderCode != "BRFG" {
+		t.Fatalf("first item = %+v", items[0])
 	}
-	if !items[0].Time.Equal(time.UnixMilli(1775385000000).UTC()) {
-		t.Fatalf("first time = %s, want %s", items[0].Time.Format(time.RFC3339), time.UnixMilli(1775385000000).UTC().Format(time.RFC3339))
-	}
-	if items[1].ArticleID != "BRFG$12344" {
-		t.Fatalf("second article id = %q, want BRFG$12344", items[1].ArticleID)
-	}
-	if !items[1].Time.Equal(time.UnixMilli(1775379600000).UTC()) {
-		t.Fatalf("second time = %s, want %s", items[1].Time.Format(time.RFC3339), time.UnixMilli(1775379600000).UTC().Format(time.RFC3339))
-	}
-}
-
-func TestHistoricalNewsPreserveExplicitTimeZone(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_news_timezone_window.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	amsterdam, err := time.LoadLocation("Europe/Amsterdam")
-	if err != nil {
-		t.Fatalf("LoadLocation() error = %v", err)
-	}
-	start := time.Date(2026, 4, 1, 10, 0, 0, 0, amsterdam)
-	end := time.Date(2026, 4, 5, 11, 30, 0, 0, amsterdam)
-
-	items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
-		ConID:         265598,
-		ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "DJNL"},
-		StartTime:     start,
-		EndTime:       end,
-		TotalResults:  5,
-	})
-	if err != nil {
-		t.Fatalf("HistoricalNews() error = %v", err)
-	}
-	if len(items) != 1 {
-		t.Fatalf("items len = %d, want 1", len(items))
+	for _, item := range items {
+		if item.Time.Before(lowerBound) {
+			t.Fatalf("item %s is before lower bound %s", item.Time, lowerBound)
+		}
 	}
 }
 

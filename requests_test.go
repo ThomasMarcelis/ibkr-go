@@ -377,14 +377,18 @@ func TestValidateHistoricalTicksRequest(t *testing.T) {
 
 func TestFormatHistoricalNewsTime(t *testing.T) {
 	t.Parallel()
+	// Exact-sv206 SDK oracle: the .0 end bound returned 17 live items
+	// (events SHA-256 77f0031eef632b2779333eefc051f6731bb0d77daa8b35d3585771e7eccb854c),
+	// while the otherwise identical request without .0 returned none
+	// (63ca8e1ae5e99e8544491a051dd8f771d228b5d2b33b9f0baec8311b3b6e2b58).
 
 	if got := formatHistoricalNewsTime(time.Time{}); got != "" {
 		t.Fatalf("formatHistoricalNewsTime(zero) = %q, want empty", got)
 	}
 
 	timestamp := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
-	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 12:00:00 UTC" {
-		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 12:00:00 UTC")
+	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 12:00:00.0 UTC" {
+		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 12:00:00.0 UTC")
 	}
 
 	amsterdam, err := time.LoadLocation("Europe/Amsterdam")
@@ -392,8 +396,41 @@ func TestFormatHistoricalNewsTime(t *testing.T) {
 		t.Fatalf("LoadLocation() error = %v", err)
 	}
 	timestamp = time.Date(2026, 4, 5, 14, 0, 0, 0, amsterdam)
-	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 14:00:00 Europe/Amsterdam" {
-		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 14:00:00 Europe/Amsterdam")
+	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 14:00:00.0 Europe/Amsterdam" {
+		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 14:00:00.0 Europe/Amsterdam")
+	}
+}
+
+func TestValidateHistoricalNewsRequest(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	for _, req := range []HistoricalNewsRequest{
+		{TotalResults: 1},
+		{StartTime: now, TotalResults: 300},
+		{EndTime: now, TotalResults: 10},
+	} {
+		if err := validateHistoricalNewsRequest(req); err != nil {
+			t.Fatalf("validateHistoricalNewsRequest() error = %v", err)
+		}
+	}
+
+	testCases := []struct {
+		name  string
+		req   HistoricalNewsRequest
+		field string
+	}{
+		{name: "both bounds", req: HistoricalNewsRequest{StartTime: now.Add(-time.Hour), EndTime: now, TotalResults: 10}, field: "StartTime/EndTime"},
+		{name: "zero results", req: HistoricalNewsRequest{}, field: "TotalResults"},
+		{name: "too many results", req: HistoricalNewsRequest{TotalResults: 301}, field: "TotalResults"},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			if err := validateHistoricalNewsRequest(tt.req); !isValidationField(err, tt.field) {
+				t.Fatalf("validateHistoricalNewsRequest() error = %v, want %s validation error", err, tt.field)
+			}
+		})
 	}
 }
 
