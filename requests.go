@@ -128,6 +128,35 @@ func validateHistoricalScheduleRequest(req HistoricalScheduleRequest) error {
 	return nil
 }
 
+func validateHistoricalTicksRequest(req HistoricalTicksRequest) error {
+	if err := validateContract(req.Contract); err != nil {
+		return err
+	}
+	if req.StartTime.IsZero() == req.EndTime.IsZero() {
+		return &ValidationError{
+			Field:   "StartTime/EndTime",
+			Message: "exactly one historical tick time bound is required",
+		}
+	}
+	if req.NumberOfTicks < 1 || req.NumberOfTicks > 1000 {
+		return &ValidationError{
+			Field:   "NumberOfTicks",
+			Value:   strconv.Itoa(req.NumberOfTicks),
+			Message: "must be between 1 and 1000",
+		}
+	}
+	switch req.WhatToShow {
+	case ShowTrades, ShowBidAsk, ShowMidpoint:
+		return nil
+	default:
+		return &ValidationError{
+			Field:   "WhatToShow",
+			Value:   string(req.WhatToShow),
+			Message: "historical ticks support TRADES, BID_ASK, or MIDPOINT",
+		}
+	}
+}
+
 func historicalBarsPacingKey(req HistoricalBarsRequest) string {
 	return strings.Join([]string{
 		historicalContractPacingKey(req.Contract),

@@ -336,6 +336,45 @@ func TestFormatHistoricalTickTime(t *testing.T) {
 	}
 }
 
+func TestValidateHistoricalTicksRequest(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	base := HistoricalTicksRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+		EndTime:  now, NumberOfTicks: 100, WhatToShow: ShowTrades, UseRTH: true,
+	}
+	if err := validateHistoricalTicksRequest(base); err != nil {
+		t.Fatalf("validateHistoricalTicksRequest(end bound) error = %v", err)
+	}
+	startBound := base
+	startBound.StartTime, startBound.EndTime = now.Add(-time.Hour), time.Time{}
+	if err := validateHistoricalTicksRequest(startBound); err != nil {
+		t.Fatalf("validateHistoricalTicksRequest(start bound) error = %v", err)
+	}
+
+	testCases := []struct {
+		name   string
+		mutate func(*HistoricalTicksRequest)
+		field  string
+	}{
+		{name: "neither bound", mutate: func(req *HistoricalTicksRequest) { req.EndTime = time.Time{} }, field: "StartTime/EndTime"},
+		{name: "both bounds", mutate: func(req *HistoricalTicksRequest) { req.StartTime = now.Add(-time.Hour) }, field: "StartTime/EndTime"},
+		{name: "zero count", mutate: func(req *HistoricalTicksRequest) { req.NumberOfTicks = 0 }, field: "NumberOfTicks"},
+		{name: "count above limit", mutate: func(req *HistoricalTicksRequest) { req.NumberOfTicks = 1001 }, field: "NumberOfTicks"},
+		{name: "unsupported kind", mutate: func(req *HistoricalTicksRequest) { req.WhatToShow = ShowBid }, field: "WhatToShow"},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			req := base
+			tt.mutate(&req)
+			if err := validateHistoricalTicksRequest(req); !isValidationField(err, tt.field) {
+				t.Fatalf("validateHistoricalTicksRequest() error = %v, want %s validation error", err, tt.field)
+			}
+		})
+	}
+}
+
 func TestFormatHistoricalNewsTime(t *testing.T) {
 	t.Parallel()
 

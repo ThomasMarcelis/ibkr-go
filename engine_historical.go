@@ -376,7 +376,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 }
 
 func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest) (HistoricalTicksResult, error) {
-	if err := validateContract(req.Contract); err != nil {
+	if err := validateHistoricalTicksRequest(req); err != nil {
 		return HistoricalTicksResult{}, err
 	}
 	req.Contract = cloneContract(req.Contract)

@@ -1710,43 +1710,6 @@ func TestHistoricalTicksTrades(t *testing.T) {
 	}
 }
 
-func TestHistoricalTicksPreserveExplicitTimeZone(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_ticks_timezone_window.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	newYork, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		t.Fatalf("LoadLocation() error = %v", err)
-	}
-	start := time.Date(2026, 4, 5, 8, 0, 0, 0, newYork)
-	end := time.Date(2026, 4, 5, 9, 0, 0, 0, newYork)
-
-	result, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		StartTime:     start,
-		EndTime:       end,
-		NumberOfTicks: 25,
-		WhatToShow:    ibkr.ShowTrades,
-		UseRTH:        true,
-	})
-	if err != nil {
-		t.Fatalf("HistoricalTicks() error = %v", err)
-	}
-	if len(result.Last) != 1 {
-		t.Fatalf("last ticks len = %d, want 1", len(result.Last))
-	}
-}
-
 func TestNewsArticle(t *testing.T) {
 	t.Parallel()
 
