@@ -46,11 +46,15 @@ func writeVerification(out io.Writer, captureDir string, events []capturelog.Eve
 		case capturelog.EventDisconnect:
 			stats.disconnects++
 		case "", capturelog.EventChunk:
+			data, err := capturelog.DecodeData(event)
+			if err != nil {
+				return fmt.Errorf("decode leg %d %s chunk: %w", event.Leg, event.Direction, err)
+			}
 			switch event.Direction {
 			case "client":
-				stats.clientBytes += event.Length
+				stats.clientBytes += len(data)
 			case "server":
-				stats.serverBytes += event.Length
+				stats.serverBytes += len(data)
 			}
 		}
 	}

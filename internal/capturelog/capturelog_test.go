@@ -221,8 +221,12 @@ func TestLoadMetaAndWriteReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEvents() error = %v", err)
 	}
+	replayEvents, err := NormalizeEvents(events)
+	if err != nil {
+		t.Fatalf("NormalizeEvents() error = %v", err)
+	}
 	replayDir := filepath.Join(session.Dir(), "replay")
-	if _, err := WriteReplay(replayDir, session.Dir(), meta, events); err != nil {
+	if err := WriteReplay(replayDir, session.Dir(), meta, replayEvents); err != nil {
 		t.Fatalf("WriteReplay() error = %v", err)
 	}
 

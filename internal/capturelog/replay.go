@@ -56,25 +56,21 @@ func LoadMeta(path string) (Meta, error) {
 	return meta, nil
 }
 
-func WriteReplay(dir string, sourceDir string, meta Meta, events []Event) ([]ReplayEvent, error) {
+func WriteReplay(dir string, sourceDir string, meta Meta, replayEvents []ReplayEvent) error {
 	if dir == "" {
-		return nil, fmt.Errorf("capturelog: replay dir is required")
+		return fmt.Errorf("capturelog: replay dir is required")
 	}
 	if err := validateScenario(meta.Scenario); err != nil {
-		return nil, err
-	}
-	replayEvents, err := NormalizeEvents(events)
-	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("capturelog: create replay dir: %w", err)
+		return fmt.Errorf("capturelog: create replay dir: %w", err)
 	}
 
 	// #nosec G304 -- dir is the operator-selected private replay directory.
 	metaFile, err := os.OpenFile(filepath.Join(dir, "meta.json"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("capturelog: create replay meta: %w", err)
+		return fmt.Errorf("capturelog: create replay meta: %w", err)
 	}
 	defer metaFile.Close()
 
@@ -91,23 +87,23 @@ func WriteReplay(dir string, sourceDir string, meta Meta, events []Event) ([]Rep
 		replayMeta.StartedAt = meta.StartedAt.UTC().Format("2006-01-02T15:04:05.000000000Z07:00")
 	}
 	if err := json.NewEncoder(metaFile).Encode(replayMeta); err != nil {
-		return nil, fmt.Errorf("capturelog: write replay meta: %w", err)
+		return fmt.Errorf("capturelog: write replay meta: %w", err)
 	}
 
 	// #nosec G304 -- same operator-selected replay directory as metaFile.
 	replayFile, err := os.OpenFile(filepath.Join(dir, "frames.jsonl"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
-		return nil, fmt.Errorf("capturelog: create replay frames: %w", err)
+		return fmt.Errorf("capturelog: create replay frames: %w", err)
 	}
 	defer replayFile.Close()
 
 	enc := json.NewEncoder(replayFile)
 	for _, event := range replayEvents {
 		if err := enc.Encode(event); err != nil {
-			return nil, fmt.Errorf("capturelog: write replay frame: %w", err)
+			return fmt.Errorf("capturelog: write replay frame: %w", err)
 		}
 	}
-	return replayEvents, nil
+	return nil
 }
 
 func NormalizeEvents(events []Event) ([]ReplayEvent, error) {

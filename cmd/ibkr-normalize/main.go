@@ -44,6 +44,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("load meta: %v", err)
 	}
+	replayEvents, err := capturelog.NormalizeEvents(events)
+	if err != nil {
+		log.Fatalf("normalize events: %v", err)
+	}
 
 	file, err := os.OpenFile(*rawOut, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -75,8 +79,7 @@ func main() {
 		}
 	}
 
-	replayEvents, err := capturelog.WriteReplay(*replayDir, *dir, meta, events)
-	if err != nil {
+	if err := capturelog.WriteReplay(*replayDir, *dir, meta, replayEvents); err != nil {
 		log.Fatalf("write replay: %v", err)
 	}
 	if *verify {
@@ -85,17 +88,13 @@ func main() {
 		}
 	}
 	if *transcriptOut != "" {
-		if err := writeTranscriptSkeleton(*transcriptOut, meta, events); err != nil {
+		if err := writeTranscriptSkeleton(*transcriptOut, meta, replayEvents); err != nil {
 			log.Fatalf("write transcript skeleton: %v", err)
 		}
 	}
 }
 
-func writeTranscriptSkeleton(path string, meta capturelog.Meta, events []capturelog.Event) error {
-	replayEvents, err := capturelog.NormalizeEvents(events)
-	if err != nil {
-		return err
-	}
+func writeTranscriptSkeleton(path string, meta capturelog.Meta, replayEvents []capturelog.ReplayEvent) error {
 	// #nosec G304 -- path is the operator-selected transcript output.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
