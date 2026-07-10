@@ -1,8 +1,48 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_executions {"req_id":"$req1","account":"DU12345","symbol":"AAPL"}
-server execution_detail {"req_id":"$req1","exec_id":"exec-1","account":"DU12345","symbol":"AAPL","side":"BOT","shares":"10","price":"189.11","time":"2026-04-05T12:01:00Z"}
-server commission_report {"exec_id":"exec-1","commission":"1.25","currency":"USD","realized_pnl":"0"}
-server executions_end {"req_id":"$req1"}
+# Extracted from the live public-API capture
+# captures/20260611T133024Z-api_order_fill_aapl, server_version=200,
+# events.jsonl sha256 4fa597ba1c4bc3690a076f44fe5b124f03c6849a580dc6e4edb7e872fc32c0a0.
+# This standalone replay preserves the complete finite query response: 15
+# execution rows in native "US/Eastern" time form, 14 commission re-emits,
+# then executions_end. Account and execution identifiers retain the source
+# fixture's documented sanitization.
+# Intentionally trimmed: the six preceding order lifecycles; an unrelated
+# open-order/status echo and streaming commission between reqExecutions and
+# its first response row; the post-end order echo/status and late 15th
+# commission; and the final safety global cancel. No query-row timestamp,
+# price, size, commission, realized-PnL value, or ordering was changed.
+handshake {"server_version":200,"connection_time":"20260611 15:30:24 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":371}
+
+client req_executions {"req_id":"$execReq","account":"DU9000001","symbol":"AAPL"}
+server execution_detail {"req_id":"$execReq","order_id":368,"exec_id":"sanitized-fill-014","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"292.76","time":"20260611 09:30:10 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":369,"exec_id":"sanitized-fill-015","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"1","price":"292.70","time":"20260611 09:30:12 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":371,"exec_id":"sanitized-fill-001","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"100","price":"292.79","time":"20260611 09:30:30 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":372,"exec_id":"sanitized-fill-002","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.33","time":"20260611 09:30:33 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":372,"exec_id":"sanitized-fill-003","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.30","time":"20260611 09:30:33 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":372,"exec_id":"sanitized-fill-004","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.30","time":"20260611 09:30:34 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":373,"exec_id":"sanitized-fill-005","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"40","price":"292.44","time":"20260611 09:30:34 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":373,"exec_id":"sanitized-fill-006","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"60","price":"292.44","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":374,"exec_id":"sanitized-fill-007","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.36","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":374,"exec_id":"sanitized-fill-008","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.33","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":374,"exec_id":"sanitized-fill-009","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.33","time":"20260611 09:30:35 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":375,"exec_id":"sanitized-fill-010","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"100","price":"292.31","time":"20260611 09:30:43 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":376,"exec_id":"sanitized-fill-011","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.20","time":"20260611 09:30:43 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":376,"exec_id":"sanitized-fill-012","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"40","price":"292.20","time":"20260611 09:30:43 US/Eastern"}
+server execution_detail {"req_id":"$execReq","order_id":376,"exec_id":"sanitized-fill-013","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"20","price":"292.20","time":"20260611 09:30:43 US/Eastern"}
+server commission_report {"exec_id":"sanitized-fill-014","commission":"1.000003","currency":"USD","realized_pnl":"-1.636219"}
+server commission_report {"exec_id":"sanitized-fill-015","commission":"1.006228","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-001","commission":"1.0003","currency":"USD","realized_pnl":"-68.051912"}
+server commission_report {"exec_id":"sanitized-fill-002","commission":"1.2488","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-003","commission":"0.248775","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-004","commission":"0.124388","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-005","commission":"1.00012","currency":"USD","realized_pnl":"-6.768905"}
+server commission_report {"exec_id":"sanitized-fill-006","commission":"1.8E-4","currency":"USD","realized_pnl":"-8.653358"}
+server commission_report {"exec_id":"sanitized-fill-007","commission":"1.248825","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-008","commission":"0.2488","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-009","commission":"0.1244","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-010","commission":"1.0003","currency":"USD","realized_pnl":"0.577675"}
+server commission_report {"exec_id":"sanitized-fill-011","commission":"1.248693","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server commission_report {"exec_id":"sanitized-fill-012","commission":"0.248693","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server executions_end {"req_id":"$execReq"}
 disconnect

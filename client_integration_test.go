@@ -879,37 +879,10 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 	}
 }
 
-func TestExecutions(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "executions.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
-		Account: "DU12345",
-		Symbol:  "AAPL",
-	})
-	if err != nil {
-		t.Fatalf("Executions() error = %v", err)
-	}
-	if len(updates) != 2 {
-		t.Fatalf("updates len = %d, want 2", len(updates))
-	}
-	if updates[0].Execution == nil || updates[0].Execution.ExecID != "exec-1" {
-		t.Fatalf("first execution = %#v", updates[0].Execution)
-	}
-	if updates[1].CommissionAndFees == nil || updates[1].CommissionAndFees.Amount.String() != "1.25" {
-		t.Fatalf("second commission = %#v", updates[1].CommissionAndFees)
-	}
-}
-
-// TestExecutionsBurstExceedsSubscriptionBuffer freezes the live-derived
-// execution-detail plus commission burst in executions.txt. One-shot queries
-// promise every row, independently of the bounded live-stream buffer.
+// TestExecutionsBurstExceedsSubscriptionBuffer freezes a finite live execution
+// query whose 29 response rows exceed the configured consumer buffer. The
+// one-shot must retain every row and return when execution-data-end arrives;
+// the capture's fifteenth commission arrived only after that boundary.
 func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	t.Parallel()
 
@@ -920,40 +893,57 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(updates) != 2 || updates[0].Execution == nil || updates[1].CommissionAndFees == nil {
-		t.Fatalf("updates = %#v, want execution and commission", updates)
+	if len(updates) != 29 {
+		t.Fatalf("updates len = %d, want 29 before execution-data-end", len(updates))
 	}
-}
 
-func TestExecutionsCompletesOnSnapshotEnd(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "executions.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
-		Account: "DU12345",
-		Symbol:  "AAPL",
-	})
-	if err != nil {
-		t.Fatalf("Executions() error = %v", err)
+	var executionIDs, commissionIDs []string
+	for i, update := range updates {
+		switch {
+		case update.Execution != nil:
+			executionIDs = append(executionIDs, update.Execution.ExecID)
+		case update.CommissionAndFees != nil:
+			commissionIDs = append(commissionIDs, update.CommissionAndFees.ExecID)
+		default:
+			t.Fatalf("updates[%d] = %#v, want execution or commission", i, update)
+		}
 	}
-	if len(updates) != 2 {
-		t.Fatalf("updates len = %d, want 2", len(updates))
+	wantExecutionIDs := []string{
+		"sanitized-fill-014", "sanitized-fill-015",
+		"sanitized-fill-001", "sanitized-fill-002", "sanitized-fill-003",
+		"sanitized-fill-004", "sanitized-fill-005", "sanitized-fill-006",
+		"sanitized-fill-007", "sanitized-fill-008", "sanitized-fill-009",
+		"sanitized-fill-010", "sanitized-fill-011", "sanitized-fill-012",
+		"sanitized-fill-013",
 	}
-	if updates[0].Execution == nil || updates[0].Execution.ExecID != "exec-1" {
-		t.Fatalf("execution = %#v, want exec-1", updates[0])
+	wantCommissionIDs := []string{
+		"sanitized-fill-014", "sanitized-fill-015",
+		"sanitized-fill-001", "sanitized-fill-002", "sanitized-fill-003",
+		"sanitized-fill-004", "sanitized-fill-005", "sanitized-fill-006",
+		"sanitized-fill-007", "sanitized-fill-008", "sanitized-fill-009",
+		"sanitized-fill-010", "sanitized-fill-011", "sanitized-fill-012",
 	}
-	if updates[1].CommissionAndFees == nil || updates[1].CommissionAndFees.ExecID != "exec-1" {
-		t.Fatalf("commission = %#v, want exec-1", updates[1])
+	if !reflect.DeepEqual(executionIDs, wantExecutionIDs) {
+		t.Fatalf("execution IDs = %v, want %v", executionIDs, wantExecutionIDs)
+	}
+	if !reflect.DeepEqual(commissionIDs, wantCommissionIDs) {
+		t.Fatalf("commission IDs = %v, want %v", commissionIDs, wantCommissionIDs)
+	}
+
+	first := updates[0].Execution
+	if first.Price.String() != "292.76" || first.Shares.String() != "1" {
+		t.Fatalf("first execution price/shares = %s/%s, want 292.76/1", first.Price, first.Shares)
+	}
+	wantTime := time.Date(2026, 6, 11, 13, 30, 10, 0, time.UTC)
+	if !first.Time.Equal(wantTime) {
+		t.Fatalf("first execution time = %s, want %s", first.Time, wantTime)
+	}
+	if got := updates[15].CommissionAndFees.Amount.String(); got != "1.000003" {
+		t.Fatalf("first commission = %s, want 1.000003", got)
 	}
 }
 
