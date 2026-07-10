@@ -262,8 +262,6 @@ against the local paper Gateway when applicable.
 - Scale order extensions.
 - Remaining ungrounded OpenOrder branches.
 - CompletedOrder full-detail public projection (the exact classic wire parser is complete).
-- Millisecond-precision current-time pair (`reqCurrentTimeInMillis` /
-  `currentTimeInMillis`) added in newer SDK releases.
 - Order-side coverage promised by the public API but not yet exhaustively
   grounded: OCA group semantics, bracket parent/child sequencing, condition
   families (price, time, margin, execution, volume, percent-change), IB algo

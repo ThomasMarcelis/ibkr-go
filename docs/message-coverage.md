@@ -160,6 +160,11 @@ not reinterpret UTC instants in the login time zone.
 | out | 57 | cancelCalcOptionPrice | landed |
 | in | 21 | TickOptionComputation | landed |
 
+Both calculation requests and their successful result shapes are frozen
+byte-for-byte from a live-qualified AAPL option at exact server version 204.
+The public replay also checks which decimal fields were computed versus sent
+as IBKR's unavailable sentinels.
+
 ## Order Management
 
 | Direction | Msg ID | Name | Status | Notes |
