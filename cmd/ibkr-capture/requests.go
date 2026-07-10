@@ -129,24 +129,6 @@ func boolField(b bool) string {
 	return "0"
 }
 
-// --- Contract details (msg_id=9) ---
-//
-// Layout on server v200 (trading_class and issuer_id gates active):
-//
-//	[9, version=8, reqId, conId, symbol, secType, lastTradeDateOrContractMonth,
-//	 strike, right, multiplier, exchange, primaryExchange, currency, localSymbol,
-//	 tradingClass, includeExpired, secIdType, secId, issuerId]
-func sendReqContractDetails(conn net.Conn, reqID int, c contractSpec) error {
-	fields := []string{"9", "8", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		"",         // secIdType
-		"",         // secId
-		c.IssuerID, // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
-	)
-	return sendMessage(conn, fields)
-}
-
 // --- Account summary (msg_id=62) / cancel (msg_id=63) ---
 //
 //	[62, version=1, reqId, group, tags]
@@ -312,13 +294,6 @@ func sendReqMarketDataType(conn net.Conn, dataType int) error {
 	return sendMessage(conn, []string{"59", "1", strconv.Itoa(dataType)})
 }
 
-// --- Matching symbols (msg_id=81) ---
-//
-//	[81, reqId, pattern]
-func sendReqMatchingSymbols(conn net.Conn, reqID int, pattern string) error {
-	return sendMessage(conn, []string{"81", strconv.Itoa(reqID), pattern})
-}
-
 // --- Head timestamp (msg_id=87) ---
 //
 //	[87, reqId, contract fields (13), includeExpired, useRTH, whatToShow, formatDate]
@@ -439,20 +414,6 @@ func sendReqNewsBulletins(conn net.Conn, allMessages bool) error {
 
 func sendCancelNewsBulletins(conn net.Conn) error {
 	return sendMessage(conn, []string{"13", "1"})
-}
-
-// --- Sec def opt params (msg_id=78) ---
-//
-//	[78, reqId, underlyingSymbol, futFopExchange, underlyingSecType, underlyingConId]
-func sendReqSecDefOptParams(conn net.Conn, reqID int, symbol, futFopExchange, secType string, conID int) error {
-	return sendMessage(conn, []string{"78", strconv.Itoa(reqID), symbol, futFopExchange, secType, strconv.Itoa(conID)})
-}
-
-// --- Smart components (msg_id=83) ---
-//
-//	[83, reqId, bboExchange]
-func sendReqSmartComponents(conn net.Conn, reqID int, bboExchange string) error {
-	return sendMessage(conn, []string{"83", strconv.Itoa(reqID), bboExchange})
 }
 
 // --- Histogram data (msg_id=88) / cancel (msg_id=89) ---

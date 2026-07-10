@@ -571,6 +571,241 @@ func runAPIDisplayGroups(ctx context.Context, addr string, clientID int) error {
 	})
 }
 
+func runAPIContractDetails(ctx context.Context, addr string, clientID int, timeout time.Duration, contract ibkr.Contract) error {
+	return apiScenario(ctx, addr, clientID, timeout, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		details, err := client.Contracts().Details(ctx, contract)
+		if err != nil {
+			return err
+		}
+		if len(details) == 0 {
+			return fmt.Errorf("contract details returned no matches")
+		}
+		recordAPIEvent("contract_details", "", func(event *apiDriverEvent) {
+			event.Count = len(details)
+			event.Symbol = details[0].Symbol
+			event.SecType = string(details[0].SecType)
+			event.Values = map[string]string{"first_con_id": strconv.Itoa(details[0].ConID)}
+		})
+		return nil
+	})
+}
+
+func runAPIContractDetailsAAPLStock(ctx context.Context, addr string, clientID int) error {
+	return runAPIContractDetails(ctx, addr, clientID, 10*time.Second, ibkr.Contract{
+		Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+	})
+}
+
+func runAPIContractDetailsAAPLOptions(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 45*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		parameters, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+			UnderlyingSymbol: "AAPL", UnderlyingSecType: ibkr.SecTypeStock, UnderlyingConID: 265598,
+		})
+		if err != nil {
+			return fmt.Errorf("resolve AAPL option expirations: %w", err)
+		}
+
+		expiry := ""
+		for _, parameter := range parameters {
+			if parameter.Exchange != "SMART" || parameter.TradingClass != "AAPL" {
+				continue
+			}
+			for _, candidate := range parameter.Expirations {
+				if candidate != "" && (expiry == "" || candidate < expiry) {
+					expiry = candidate
+				}
+			}
+		}
+		if expiry == "" {
+			return fmt.Errorf("AAPL option parameters returned no current SMART expiry")
+		}
+
+		details, err := client.Contracts().Details(ctx, ibkr.Contract{
+			Symbol: "AAPL", SecType: ibkr.SecTypeOption, Expiry: expiry, Exchange: "SMART", Currency: "USD",
+		})
+		if err != nil {
+			return err
+		}
+		if len(details) == 0 {
+			return fmt.Errorf("AAPL option details returned no matches for expiry %s", expiry)
+		}
+		recordAPIEvent("contract_details", "nearest_expiry", func(event *apiDriverEvent) {
+			event.Count = len(details)
+			event.Symbol = details[0].Symbol
+			event.SecType = string(details[0].SecType)
+			event.Values = map[string]string{
+				"expiry":       expiry,
+				"first_con_id": strconv.Itoa(details[0].ConID),
+			}
+		})
+		return nil
+	})
+}
+
+func runAPIContractDetailsAppleBonds(ctx context.Context, addr string, clientID int) error {
+	return runAPIContractDetails(ctx, addr, clientID, 30*time.Second, ibkr.Contract{IssuerID: "e1432232"})
+}
+
+func runAPIContractDetailsEURUSD(ctx context.Context, addr string, clientID int) error {
+	return runAPIContractDetails(ctx, addr, clientID, 10*time.Second, ibkr.Contract{
+		Symbol: "EUR", SecType: ibkr.SecTypeForex, Exchange: "IDEALPRO", Currency: "USD",
+	})
+}
+
+func runAPIContractDetailsESFutures(ctx context.Context, addr string, clientID int) error {
+	return runAPIContractDetails(ctx, addr, clientID, 10*time.Second, ibkr.Contract{
+		Symbol: "ES", SecType: ibkr.SecTypeFuture, Exchange: "CME", Currency: "USD",
+	})
+}
+
+func runAPIContractDetailsNotFound(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		_, err := client.Contracts().Details(ctx, ibkr.Contract{
+			Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+		})
+		if err == nil {
+			return errors.New("expected contract-details code 200 not-found error, got nil")
+		}
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok || apiErr.Code != 200 || apiErr.OpKind != ibkr.OpContractDetails || !strings.Contains(apiErr.Message, "No security definition has been found") {
+			return fmt.Errorf("expected contract-details code 200 not-found error, got %v", err)
+		}
+		recordAPIEvent("contract_not_found", "", func(event *apiDriverEvent) { event.Error = err.Error() })
+		return nil
+	})
+}
+
+func runAPIQualifyContractAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		details, err := client.Contracts().Qualify(ctx, ibkr.Contract{
+			Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+		})
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("contract_qualified", "", func(event *apiDriverEvent) {
+			event.Symbol = details.Symbol
+			event.SecType = string(details.SecType)
+			event.Values = map[string]string{"con_id": strconv.Itoa(details.ConID)}
+		})
+		return nil
+	})
+}
+
+func runAPIQualifyContractAmbiguous(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		_, err := client.Contracts().Qualify(ctx, ibkr.Contract{
+			Symbol: "MSFT", SecType: ibkr.SecTypeStock, Currency: "USD",
+		})
+		if err == nil {
+			return errors.New("expected ErrAmbiguousContract, got nil")
+		}
+		if !errors.Is(err, ibkr.ErrAmbiguousContract) {
+			return fmt.Errorf("expected ErrAmbiguousContract, got %v", err)
+		}
+		recordAPIEvent("contract_ambiguous", "", func(event *apiDriverEvent) { event.Error = err.Error() })
+		return nil
+	})
+}
+
+func runAPIMatchingSymbolsAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		symbols, err := client.Contracts().Search(ctx, "AAPL")
+		if err != nil {
+			return err
+		}
+		if len(symbols) == 0 {
+			return fmt.Errorf("AAPL contract search returned no matches")
+		}
+		recordAPIEvent("matching_symbols", "AAPL", func(event *apiDriverEvent) { event.Count = len(symbols) })
+		return nil
+	})
+}
+
+func runAPIMatchingSymbolsPartial(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		symbols, err := client.Contracts().Search(ctx, "AA")
+		if err != nil {
+			return err
+		}
+		if len(symbols) == 0 {
+			return fmt.Errorf("AA contract search returned no matches")
+		}
+		recordAPIEvent("matching_symbols", "AA", func(event *apiDriverEvent) { event.Count = len(symbols) })
+		return nil
+	})
+}
+
+func runAPISecDefOptParamsAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		parameters, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+			UnderlyingSymbol: "AAPL", UnderlyingSecType: ibkr.SecTypeStock, UnderlyingConID: 265598,
+		})
+		if err != nil {
+			return err
+		}
+		if len(parameters) == 0 {
+			return fmt.Errorf("AAPL option parameters returned no matches")
+		}
+		recordAPIEvent("sec_def_opt_params", "", func(event *apiDriverEvent) { event.Count = len(parameters) })
+		return nil
+	})
+}
+
+func runAPISmartComponents(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiAAPL}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL quote parameters: %w", err)
+		}
+
+		bboExchange := ""
+		for bboExchange == "" {
+			select {
+			case update, ok := <-sub.Events():
+				if !ok {
+					if err := sub.Err(); err != nil {
+						return fmt.Errorf("AAPL quote closed before BBO mapping: %w", err)
+					}
+					return errors.New("AAPL quote closed before BBO mapping")
+				}
+				if update.Kind == ibkr.QuoteUpdateParameters && update.Parameters != nil {
+					bboExchange = update.Parameters.BBOExchange
+				}
+			case <-sub.Done():
+				if err := sub.Err(); err != nil {
+					return fmt.Errorf("AAPL quote closed before BBO mapping: %w", err)
+				}
+				return errors.New("AAPL quote closed before BBO mapping")
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		components, err := client.Contracts().SmartComponents(ctx, bboExchange)
+		if err != nil {
+			_ = sub.Close()
+			return err
+		}
+		if err := sub.Close(); err != nil {
+			return fmt.Errorf("close AAPL quote: %w", err)
+		}
+		if err := sub.Wait(); err != nil {
+			return fmt.Errorf("wait for AAPL quote close: %w", err)
+		}
+		if len(components) == 0 {
+			return fmt.Errorf("SMART components returned no matches")
+		}
+		recordAPIEvent("smart_components", "", func(event *apiDriverEvent) {
+			event.Count = len(components)
+			event.Values = map[string]string{"bbo_exchange": bboExchange}
+		})
+		return nil
+	})
+}
+
 func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))

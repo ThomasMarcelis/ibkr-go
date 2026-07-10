@@ -166,79 +166,34 @@ var scenarios = map[string]*scenario{
 	// --- Contract details ---
 
 	"contract_details_aapl_stk": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"stock contract details end marker"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CONTRACT_DATA for AAPL STK SMART USD",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}); err != nil {
-				return err
-			}
-			// CONTRACT_DATA_END msg_id=52
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"decoded AAPL stock contract details"}, 1, "promoted", batchReadOnly),
+		description: "request and decode AAPL stock contract details through the public API",
+		runAPI:      runAPIContractDetailsAAPLStock,
 	},
 	"contract_details_aapl_opt": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"option chain contract details"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CONTRACT_DATA for AAPL OPT SMART USD (all strikes/expiries)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "OPT", Exchange: "SMART", Currency: "USD"}); err != nil {
-				return err
-			}
-			return readFrames(conn, 30*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("contracts", []string{"Contracts().SecDefOptParams", "Contracts().Details"}, []int{protocol.OutReqSecDefOptParams, protocol.InSecDefOptParams, protocol.InSecDefOptParamsEnd, protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"complete nearest-expiry option contract ladder"}, 1, "promoted", batchReadOnly),
+		description: "resolve and completely decode the nearest AAPL option expiry through the public API",
+		runAPI:      runAPIContractDetailsAAPLOptions,
 	},
 	"contract_details_apple_bonds": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 18, 52}, "read_only", nil, []string{"bond contract details by live-derived issuer ID"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CONTRACT_DATA for live-derived Apple bond issuer ID e1432232",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{IssuerID: "e1432232"}); err != nil {
-				return err
-			}
-			return readFrames(conn, 30*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InBondContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"bond contract details by live-derived issuer ID"}, 1, "promoted", batchReadOnly),
+		description: "request and decode Apple bonds by live-derived issuer ID through the public API",
+		runAPI:      runAPIContractDetailsAppleBonds,
 	},
 	"contract_details_eurusd_cash": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"cash/FX contract details"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CONTRACT_DATA for EUR.USD CASH IDEALPRO",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "EUR", SecType: "CASH", Exchange: "IDEALPRO", Currency: "USD"}); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"cash/FX contract details"}, 1, "promoted", batchReadOnly),
+		description: "request and decode EUR.USD cash contract details through the public API",
+		runAPI:      runAPIContractDetailsEURUSD,
 	},
 	"contract_details_es_fut": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 10, 52}, "read_only", nil, []string{"futures contract details"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CONTRACT_DATA for ES FUT CME USD front month",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "ES", SecType: "FUT", Exchange: "CME", Currency: "USD"}); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"ES futures expiry ladder"}, 1, "promoted", batchReadOnly),
+		description: "request and decode the ES futures expiry ladder through the public API",
+		runAPI:      runAPIContractDetailsESFutures,
 	},
 	"contract_details_not_found": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{9, 4, 52}, "read_only", nil, []string{"real IBKR not-found API error"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CONTRACT_DATA for bogus symbol (expect ERR_MSG code 200)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "ZZZZNONE", SecType: "STK", Exchange: "SMART", Currency: "USD"}); err != nil {
-				return err
-			}
-			// Stop on either CONTRACT_DATA_END (52) or ERR_MSG (4) with matching reqID.
-			// msg 52 wire: [52, version, reqID] — reqID position varies, use field-scanning helper.
-			reqIDStr := strconv.Itoa(reqID)
-			endPred := stopOnMsgIDWithReq(52, reqIDStr, 0)
-			stop := func(msgID int, fields []string) bool {
-				return endPred(msgID, fields) ||
-					(msgID == 4 && len(fields) >= 2 && fields[1] == reqIDStr)
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stop)
-		},
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InErrMsg}, "read_only", nil, []string{"typed code 200 contract-not-found error"}, 1, "promoted", batchReadOnly),
+		description: "request a nonexistent stock and require the live contract-not-found error through the public API",
+		runAPI:      runAPIContractDetailsNotFound,
 	},
 
 	// --- Account summary ---
@@ -632,26 +587,14 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIUserInfo,
 	},
 	"matching_symbols_aapl": {
-		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"exact-ish symbol samples"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MATCHING_SYMBOLS pattern=AAPL, read SYMBOL_SAMPLES (msg 79)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqMatchingSymbols(conn, reqID, "AAPL"); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(79, strconv.Itoa(reqID), 0))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{protocol.OutReqMatchingSymbols, protocol.InSymbolSamples}, "read_only", nil, []string{"exact-ish symbol samples"}, 1, "promoted", batchReadOnly),
+		description: "search for AAPL contracts through the public API",
+		runAPI:      runAPIMatchingSymbolsAAPL,
 	},
 	"matching_symbols_partial": {
-		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"broad symbol samples"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MATCHING_SYMBOLS pattern=AA (partial), read SYMBOL_SAMPLES (msg 79)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqMatchingSymbols(conn, reqID, "AA"); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(79, strconv.Itoa(reqID), 0))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{protocol.OutReqMatchingSymbols, protocol.InSymbolSamples}, "read_only", nil, []string{"broad symbol samples"}, 1, "promoted", batchReadOnly),
+		description: "search a broad AA symbol pattern through the public API",
+		runAPI:      runAPIMatchingSymbolsPartial,
 	},
 	"head_timestamp_aapl": {
 		metadata:    meta("history", []string{"History().HeadTimestamp"}, []int{87, 88, 90}, "read_only", []string{"historical_data"}, []string{"head timestamp response"}, 1, "promoted", batchReadOnly),
@@ -665,17 +608,9 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"sec_def_opt_params_aapl": {
-		metadata:    meta("contracts", []string{"Contracts().SecDefOptParams"}, []int{78, 75, 76}, "read_only", nil, []string{"option parameter surface"}, 1, "promoted", batchReadOnly),
-		description: "REQ_SEC_DEF_OPT_PARAMS AAPL/STK conId=265598, read responses (msg 75+76)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			// AAPL conId=265598 (from contract details)
-			if err := sendReqSecDefOptParams(conn, reqID, "AAPL", "", "STK", 265598); err != nil {
-				return err
-			}
-			// SEC_DEF_OPT_PARAMS_END msg_id=76
-			return readFrames(conn, 15*time.Second, logFrame, stopOnMsgIDWithReq(76, strconv.Itoa(reqID), 0))
-		},
+		metadata:    meta("contracts", []string{"Contracts().SecDefOptParams"}, []int{protocol.OutReqSecDefOptParams, protocol.InSecDefOptParams, protocol.InSecDefOptParamsEnd}, "read_only", nil, []string{"option parameter surface"}, 1, "promoted", batchReadOnly),
+		description: "request and decode AAPL option-chain parameters through the public API",
+		runAPI:      runAPISecDefOptParamsAAPL,
 	},
 	"histogram_data_aapl": {
 		metadata:    meta("history", []string{"History().Histogram"}, []int{88, 89}, "read_only", []string{"historical_data"}, []string{"histogram bins"}, 1, "promoted", batchReadOnly),
@@ -1103,16 +1038,9 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"smart_components": {
-		metadata:    meta("contracts", []string{"Contracts().SmartComponents"}, []int{83, 82}, "read_only", nil, []string{"smart component mapping"}, 1, "promoted", batchReadOnly),
-		description: "REQ_SMART_COMPONENTS for AAPL bboExchange=9c0001, read response",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqSmartComponents(conn, reqID, "9c0001"); err != nil {
-				return err
-			}
-			// Read for 10s, stop on any response with matching reqID.
-			return readFrames(conn, 10*time.Second, logFrame, nil)
-		},
+		metadata:    meta("contracts", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Contracts().SmartComponents"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.InTickReqParams, protocol.OutReqSmartComponents, protocol.InSmartComponents, protocol.OutCancelMktData}, "read_only", []string{"market_hours", "market_data_or_delayed_data"}, []string{"quote-derived smart component mapping"}, 1, "promoted", batchReadOnly, batchExhaustiveMarketHours),
+		description: "derive AAPL's BBO mapping from quote parameters and decode its SMART components through the public API",
+		runAPI:      runAPISmartComponents,
 	},
 	"market_rule": {
 		metadata:    meta("contracts", []string{"Contracts().MarketRule"}, []int{91, 93}, "read_only", nil, []string{"price increment ladder"}, 1, "promoted", batchReadOnly),
@@ -1612,33 +1540,14 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"qualify_contract_aapl_exact": {
-		metadata:    meta("contracts", []string{"Contracts().Qualify"}, []int{9, 10, 52}, "read_only", nil, []string{"single qualified contract"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_CONTRACT_DATA for fully-qualified AAPL STK SMART USD",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgIDWithReq(52, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("contracts", []string{"Contracts().Qualify"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"single qualified contract"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "qualify an unpinned AAPL stock contract through the public API",
+		runAPI:      runAPIQualifyContractAAPL,
 	},
 	"qualify_contract_ambiguous": {
-		metadata:    meta("contracts", []string{"Contracts().Qualify", "Contracts().Details"}, []int{9, 10, 52, 4}, "read_only", nil, []string{"ambiguous contract results or real ambiguity error"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_CONTRACT_DATA with just symbol=MSFT, no exchange (may return multiple results)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqContractDetails(conn, reqID, contractSpec{Symbol: "MSFT", SecType: "STK", Currency: "USD"}); err != nil {
-				return err
-			}
-			// CONTRACT_DATA_END msg_id=52: wire [52, version, reqID] — use field-scanning helper.
-			reqIDStr := strconv.Itoa(reqID)
-			endPred := stopOnMsgIDWithReq(52, reqIDStr, 0)
-			stop := func(msgID int, fields []string) bool {
-				return endPred(msgID, fields) ||
-					(msgID == 4 && len(fields) >= 2 && fields[1] == reqIDStr)
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stop)
-		},
+		metadata:    meta("contracts", []string{"Contracts().Qualify"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"ErrAmbiguousContract from multiple matches"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "require ambiguous qualification for MSFT stock without an exchange through the public API",
+		runAPI:      runAPIQualifyContractAmbiguous,
 	},
 	"api_order_type_matrix_aapl": {
 		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families accepted, rejected, filled, modified, or cancelled with real order lifecycle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchExhaustivePremarket, batchReplayDefault, batchReplayAll),
