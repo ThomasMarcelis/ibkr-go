@@ -1,12 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"net"
 	"strconv"
-
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
 type comboLegSpec struct {
@@ -216,19 +212,6 @@ func sendCancelRealTimeBars(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"51", "1", strconv.Itoa(reqID)})
 }
 
-// --- Open orders variants ---
-//
-//	[5, version=1]    REQ_OPEN_ORDERS (client's own)
-//	[16, version=1]   REQ_ALL_OPEN_ORDERS (all clients, requires client_id=0)
-//	[15, version=1, autoBind] REQ_AUTO_OPEN_ORDERS
-func sendReqOpenOrders(conn net.Conn) error {
-	return sendMessage(conn, []string{"5", "1"})
-}
-
-func sendReqAllOpenOrders(conn net.Conn) error {
-	return sendMessage(conn, []string{"16", "1"})
-}
-
 // --- Executions (msg_id=7) ---
 //
 //	[7, version=3, reqId, filter.clientId, filter.acctCode, filter.time,
@@ -240,17 +223,6 @@ func sendReqAllOpenOrders(conn net.Conn) error {
 // parsing on the server and causes the request to be silently dropped.
 func sendReqExecutions(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"7", "3", strconv.Itoa(reqID), "0", "", "", "", "", "", "", "2147483647", "0"})
-}
-
-func sendReqExecutionsAt(conn net.Conn, serverVersion, reqID int) error {
-	payload, err := codec.Encode(serverVersion, codec.ExecutionsRequest{ReqID: reqID})
-	if err != nil {
-		return fmt.Errorf("encode executions request: %w", err)
-	}
-	if err := wire.WriteFrame(conn, payload); err != nil {
-		return fmt.Errorf("write executions request: %w", err)
-	}
-	return nil
 }
 
 // --- Market data type (msg_id=59) ---
@@ -382,13 +354,6 @@ func sendCancelCalcOptionPrice(conn net.Conn, reqID int) error {
 //	[84, reqId, providerCode, articleId, newsArticleOptions]
 func sendReqNewsArticle(conn net.Conn, reqID int, providerCode, articleID string) error {
 	return sendMessage(conn, []string{"84", strconv.Itoa(reqID), providerCode, articleID, ""})
-}
-
-// --- Historical news (msg_id=86) ---
-//
-//	[86, reqId, conId, providerCodes, startDate, endDate, totalResults, historicalNewsOptions]
-func sendReqHistoricalNews(conn net.Conn, reqID int, conID int, providerCodes, startDate, endDate string, totalResults int) error {
-	return sendMessage(conn, []string{"86", strconv.Itoa(reqID), strconv.Itoa(conID), providerCodes, startDate, endDate, strconv.Itoa(totalResults), ""})
 }
 
 // --- Scanner subscription (msg_id=22) / cancel (msg_id=23) ---
@@ -780,41 +745,6 @@ func sendRequestFA(conn net.Conn, faDataType int) error {
 
 func sendReplaceFA(conn net.Conn, faDataType int, xml string) error {
 	return sendMessage(conn, []string{"19", "1", strconv.Itoa(faDataType), xml})
-}
-
-// --- WSH meta data (msg_id=100) / cancel (msg_id=101) ---
-//
-//	[100, reqId]
-//	[101, reqId]
-func sendReqWSHMetaData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"100", strconv.Itoa(reqID)})
-}
-
-func sendCancelWSHMetaData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"101", strconv.Itoa(reqID)})
-}
-
-// --- WSH event data (msg_id=102) / cancel (msg_id=103) ---
-//
-//	[102, reqId, conId, filter, fillWatchlist, fillPortfolio, fillCompetitors,
-//	 startDate, endDate, totalLimit]
-//	[103, reqId]
-func sendReqWSHEventData(conn net.Conn, reqID, conID int, filter string, fillWatchlist, fillPortfolio, fillCompetitors bool, startDate, endDate string, totalLimit int) error {
-	return sendMessage(conn, []string{
-		"102", strconv.Itoa(reqID),
-		strconv.Itoa(conID),
-		filter,
-		boolField(fillWatchlist),
-		boolField(fillPortfolio),
-		boolField(fillCompetitors),
-		startDate,
-		endDate,
-		strconv.Itoa(totalLimit),
-	})
-}
-
-func sendCancelWSHEventData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"103", strconv.Itoa(reqID)})
 }
 
 // --- Query display groups (msg_id=67) ---

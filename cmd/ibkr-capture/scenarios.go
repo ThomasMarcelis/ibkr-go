@@ -85,10 +85,6 @@ func nextReqID() int {
 	return scenarioReqIDCounter
 }
 
-func captureHistoricalNewsTime(t time.Time) string {
-	return t.UTC().Format("2006-01-02 15:04:05") + " UTC"
-}
-
 func rawScenarioManagedAccounts(sess *sessionInfo) []string {
 	if sess == nil || sess.ManagedAccounts == "" {
 		return nil
@@ -116,7 +112,7 @@ func verifyRawScenarioForSession(name string, sess *sessionInfo) error {
 	if driver != driverWire {
 		return nil
 	}
-	if sess != nil && sess.ServerVersion > 200 && name != "bootstrap" && name != "bootstrap_client_id_0" && name != "executions_snapshot" {
+	if sess != nil && sess.ServerVersion > 200 && name != "bootstrap" && name != "bootstrap_client_id_0" {
 		return fmt.Errorf("raw scenario %s is not envelope-aware above server_version 200", name)
 	}
 	if !cancelsAllowedForRiskClass(sc.metadata.RiskClass) {
@@ -389,40 +385,22 @@ var scenarios = map[string]*scenario{
 	// --- Open orders ---
 
 	"open_orders_empty": {
-		metadata:    meta("orders", []string{"Orders().Open"}, []int{5, 53}, "read_only", nil, []string{"own open-orders snapshot"}, 1, "promoted", batchReadOnly),
-		description: "REQ_OPEN_ORDERS drained to OPEN_ORDER_END",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqOpenOrders(conn); err != nil {
-				return err
-			}
-			// OPEN_ORDER_END msg_id=53
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(53))
-		},
+		metadata:    meta("orders", []string{"Orders().Open"}, []int{protocol.OutReqOpenOrders, protocol.InOpenOrder, protocol.InOpenOrderEnd, protocol.InErrMsg}, "read_only", nil, []string{"own open-orders snapshot or exact read-only refusal"}, 1, "promoted", batchReadOnly),
+		description: "request the client's open-order snapshot or typed read-only refusal through the public API",
+		runAPI:      runAPIOpenOrdersClient,
 	},
 	"open_orders_all": {
-		metadata:    meta("orders", []string{"Orders().Open"}, []int{16, 53}, "read_only", []string{"client_id_0"}, []string{"all open-orders snapshot"}, 0, "promoted", batchReadOnly),
-		description: "REQ_ALL_OPEN_ORDERS drained to OPEN_ORDER_END (requires client_id=0)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqAllOpenOrders(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(53))
-		},
+		metadata:    meta("orders", []string{"Orders().Open"}, []int{protocol.OutReqAllOpenOrders, protocol.InOpenOrder, protocol.InOpenOrderEnd}, "read_only", []string{"client_id_0"}, []string{"all open-orders snapshot"}, 0, "promoted", batchReadOnly),
+		description: "request the all-client open-order snapshot through the public API",
+		runAPI:      runAPIOpenOrdersAll,
 	},
 
 	// --- Executions ---
 
 	"executions_snapshot": {
-		metadata:    meta("orders", []string{"Orders().Executions"}, []int{7, 11, 55, 59}, "read_only", nil, []string{"finite execution query and commissions when present"}, 1, "promoted", batchReadOnly),
-		description: "REQ_EXECUTIONS with empty filter drained to EXECUTION_DATA_END",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqExecutionsAt(conn, sess.ServerVersion, reqID); err != nil {
-				return err
-			}
-			// EXECUTION_DATA_END msg_id=55
-			return readFramesAt(conn, sess.ServerVersion, 10*time.Second, logFrame, stopOnMsgIDWithReq(55, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("orders", []string{"Orders().Executions"}, []int{protocol.OutReqExecutions, protocol.InExecutionData, protocol.InExecutionDataEnd, protocol.InCommissionReport}, "read_only", nil, []string{"finite execution query and commissions when present"}, 1, "promoted", batchReadOnly),
+		description: "request an unfiltered execution snapshot through the public API",
+		runAPI:      runAPIExecutionsSnapshot,
 	},
 
 	// --- v1 expanded scope: Batch C1 — singleton one-shots (no reqID) ---
@@ -496,19 +474,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIHistoricalTicksMidpoint,
 	},
 	"historical_news_aapl": {
-		metadata:    meta("news", []string{"News().Historical"}, []int{86, 87}, "read_only", []string{"news_or_historical_news"}, []string{"historical news items and end marker"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTORICAL_NEWS AAPL conId=265598, read responses (msg 86+87)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalNews(conn, reqID, 265598, "BRFG:BRFUPDN:DJNL", "", "", 10); err != nil {
-				return err
-			}
-			// HISTORICAL_NEWS_END msg_id=87
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 87 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 15*time.Second, logFrame, stop)
-		},
+		metadata:    meta("news", []string{"News().Historical"}, []int{protocol.OutReqHistoricalNews, protocol.InHistoricalNewsEnd}, "read_only", []string{"news_or_historical_news"}, []string{"nonempty historical news snapshot"}, 1, "promoted", batchReadOnly),
+		description: "request recent AAPL historical news through the public API",
+		runAPI:      runAPIHistoricalNewsAAPL,
 	},
 	"historical_ticks_aapl_timezone_start": {
 		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"explicit UTC start-bound ticks for all kinds or exact permission errors"}, 1, "promoted", batchNewV2, batchReadOnly),
@@ -516,21 +484,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIHistoricalTicksStartBound,
 	},
 	"historical_news_aapl_timezone_window": {
-		metadata:    meta("news", []string{"News().Historical"}, []int{86, 87}, "read_only", []string{"news_or_historical_news"}, []string{"explicit timezone historical-news window"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_HISTORICAL_NEWS AAPL with explicit UTC start/end timezone window",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			end := time.Now()
-			start := end.AddDate(0, 0, -7)
-			if err := sendReqHistoricalNews(conn, reqID, 265598, "BRFG+BRFUPDN+DJNL", captureHistoricalNewsTime(start), captureHistoricalNewsTime(end), 20); err != nil {
-				return err
-			}
-			reqIDStr := strconv.Itoa(reqID)
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 87 || msgID == 4) && len(fields) >= 2 && fields[1] == reqIDStr
-			}
-			return readFrames(conn, 20*time.Second, logFrame, stop)
-		},
+		metadata:    meta("news", []string{"News().Historical"}, []int{protocol.OutReqHistoricalNews, protocol.InHistoricalNewsEnd}, "read_only", []string{"news_or_historical_news"}, []string{"nonempty historical news at or after an explicit UTC lower bound"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "request AAPL historical news with an explicit UTC lower end bound through the public API",
+		runAPI:      runAPIHistoricalNewsAAPLTimezoneWindow,
 	},
 
 	// --- v1 expanded scope: Batch C3 — completed orders and tick types ---
@@ -1266,34 +1222,14 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"wsh_meta_data": {
-		metadata:    meta("wsh", []string{"WSH().MetaData"}, []int{100, 101, 104}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"WSH metadata JSON or entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_WSH_META_DATA, read response (msg 105 or error)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqWSHMetaData(conn, reqID); err != nil {
-				return err
-			}
-			// WSH_META_DATA: [105, reqID, data] — reqID at fields[1].
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 105 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stop)
-		},
+		metadata:    meta("wsh", []string{"WSH().MetaData"}, []int{protocol.OutReqWSHMetaData, protocol.InWSHMetaData, protocol.InErrMsg}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"valid WSH metadata JSON or exact entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "request WSH metadata or its typed entitlement refusal through the public API",
+		runAPI:      runAPIWSHMetaData,
 	},
 	"wsh_event_data_aapl": {
-		metadata:    meta("wsh", []string{"WSH().EventData"}, []int{102, 103, 105}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"WSH event JSON or entitlement error"}, 1, "candidate", batchNewV2, batchReadOnly),
-		description: "REQ_WSH_EVENT_DATA for AAPL conId=265598, read response (msg 106 or error)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqWSHEventData(conn, reqID, 265598, "", false, false, false, "", "", 10); err != nil {
-				return err
-			}
-			// WSH_EVENT_DATA: [106, reqID, data] — reqID at fields[1].
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 106 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stop)
-		},
+		metadata:    meta("wsh", []string{"WSH().EventData"}, []int{protocol.OutReqWSHEventData, protocol.InWSHEventData, protocol.InErrMsg}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"valid WSH event JSON or exact entitlement error"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "request AAPL WSH events or their typed entitlement refusal through the public API",
+		runAPI:      runAPIWSHEventDataAAPL,
 	},
 	"request_fa": {
 		metadata:    meta("advisors", []string{"Advisors().Config"}, []int{18, 16}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"FA XML or non-FA error"}, 1, "promoted", batchNewV2, batchReadOnly),

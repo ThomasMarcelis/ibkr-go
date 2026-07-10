@@ -571,6 +571,121 @@ func runAPIDisplayGroups(ctx context.Context, addr string, clientID int) error {
 	})
 }
 
+func runAPIOpenOrders(ctx context.Context, addr string, clientID int, scope ibkr.OpenOrdersScope, label string, allowReadOnlyRefusal bool) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		orders, err := client.Orders().Open(ctx, scope)
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if allowReadOnlyRefusal && ok && apiErr.OpKind == ibkr.OpOpenOrders && apiErr.Code == 321 && strings.Contains(apiErr.Message, "Read-Only mode") {
+				recordAPIEvent("open_orders_refused", label, func(event *apiDriverEvent) { event.Error = err.Error() })
+				return nil
+			}
+			return err
+		}
+		recordAPIEvent("open_orders", label, func(event *apiDriverEvent) { event.Count = len(orders) })
+		return nil
+	})
+}
+
+func runAPIOpenOrdersClient(ctx context.Context, addr string, clientID int) error {
+	return runAPIOpenOrders(ctx, addr, clientID, ibkr.OpenOrdersScopeClient, "client", true)
+}
+
+func runAPIOpenOrdersAll(ctx context.Context, addr string, clientID int) error {
+	if clientID != 0 {
+		return fmt.Errorf("all-client open orders require client ID 0, got %d", clientID)
+	}
+	return runAPIOpenOrders(ctx, addr, clientID, ibkr.OpenOrdersScopeAll, "all", false)
+}
+
+func runAPIExecutionsSnapshot(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
+		if err != nil {
+			return err
+		}
+		for _, update := range updates {
+			if (update.Execution == nil) == (update.CommissionAndFees == nil) {
+				return errors.New("execution snapshot update must contain exactly one payload")
+			}
+		}
+		recordAPIEvent("executions", "snapshot", func(event *apiDriverEvent) { event.Count = len(updates) })
+		return nil
+	})
+}
+
+func runAPIHistoricalNews(ctx context.Context, addr string, clientID int, label string, start, end time.Time, totalResults int) error {
+	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
+			ConID:         apiAAPL.ConID,
+			ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"},
+			StartTime:     start,
+			EndTime:       end,
+			TotalResults:  totalResults,
+		})
+		if err != nil {
+			return err
+		}
+		if len(items) == 0 {
+			return fmt.Errorf("%s returned no historical news", label)
+		}
+		for _, item := range items {
+			if item.Time.IsZero() || item.ProviderCode == "" || item.ArticleID == "" || item.Headline == "" {
+				return fmt.Errorf("%s returned an incomplete historical news item", label)
+			}
+			if !start.IsZero() && !item.Time.Before(start) {
+				return fmt.Errorf("%s returned item %s at or after exclusive upper bound %s", label, item.Time, start)
+			}
+			if !end.IsZero() && item.Time.Before(end) {
+				return fmt.Errorf("%s returned item %s before inclusive lower bound %s", label, item.Time, end)
+			}
+		}
+		recordAPIEvent("historical_news", label, func(event *apiDriverEvent) { event.Count = len(items) })
+		return nil
+	})
+}
+
+func runAPIHistoricalNewsAAPL(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalNews(ctx, addr, clientID, "aapl_recent", time.Time{}, time.Time{}, 10)
+}
+
+func runAPIHistoricalNewsAAPLTimezoneWindow(ctx context.Context, addr string, clientID int) error {
+	end := time.Now().UTC().AddDate(0, -6, 0).Truncate(time.Second)
+	return runAPIHistoricalNews(ctx, addr, clientID, "aapl_utc_end", time.Time{}, end, 20)
+}
+
+func captureWSHResult(label string, op ibkr.OpKind, data ibkr.JSONDocument, err error) error {
+	if err != nil {
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok || apiErr.OpKind != op || apiErr.Code != 10276 || !strings.Contains(apiErr.Message, "News feed is not allowed") {
+			return err
+		}
+		recordAPIEvent("wsh_entitlement_refused", label, func(event *apiDriverEvent) { event.Error = err.Error() })
+		return nil
+	}
+	if len(data) == 0 || !json.Valid(data) {
+		return fmt.Errorf("%s returned invalid JSON", label)
+	}
+	recordAPIEvent("wsh_data", label, func(event *apiDriverEvent) {
+		event.Values = map[string]string{"bytes": strconv.Itoa(len(data))}
+	})
+	return nil
+}
+
+func runAPIWSHMetaData(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		data, err := client.WSH().MetaData(ctx)
+		return captureWSHResult("metadata", ibkr.OpWSHMetaData, data, err)
+	})
+}
+
+func runAPIWSHEventDataAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		data, err := client.WSH().EventData(ctx, ibkr.WSHEventDataRequest{ConID: apiAAPL.ConID, TotalLimit: 10})
+		return captureWSHResult("aapl_events", ibkr.OpWSHEventData, data, err)
+	})
+}
+
 func runAPIContractDetails(ctx context.Context, addr string, clientID int, timeout time.Duration, contract ibkr.Contract) error {
 	return apiScenario(ctx, addr, clientID, timeout, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		details, err := client.Contracts().Details(ctx, contract)
@@ -2040,8 +2155,6 @@ func runAPINewsArticleAAPL(ctx context.Context, addr string, clientID int) error
 			ProviderCodes: []ibkr.NewsProviderCode{
 				"BRFG", "BRFUPDN", "DJNL",
 			},
-			StartTime:    time.Now().Add(-14 * 24 * time.Hour),
-			EndTime:      time.Now(),
 			TotalResults: 5,
 		})
 		cancel()
