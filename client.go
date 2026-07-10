@@ -292,7 +292,10 @@ func (c OrdersClient) RefreshOrderID(ctx context.Context) (int64, error) {
 }
 
 // Place submits an order and returns an [OrderHandle] tracking its lifecycle.
-// What-if orders are rejected here; use [OrdersClient.Preview] for a margin preview.
+// Once the request enters the transport queue, the handle and a nil error win
+// context-cancellation and session-close races. Before admission, Place returns
+// an error and no handle. What-if orders are rejected here; use
+// [OrdersClient.Preview] for a margin preview.
 func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
 	if err := validateOrderRequest(req, orderIntentPlace); err != nil {
 		return nil, err
@@ -302,7 +305,10 @@ func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderH
 
 // PlaceBracket submits a parent, take-profit, and stop-loss as one safely
 // sequenced bracket. It allocates the three IDs together and controls ParentID
-// and Transmit so the final child releases the complete bracket atomically.
+// and Transmit so the final child releases the complete bracket atomically. A
+// partial send returns [*OrderRecoveryError] with every admitted leg, even when
+// all compensating cancellations entered the transport queue, because queue
+// admission is not Gateway acknowledgement.
 func (c OrdersClient) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (BracketOrder, error) {
 	return c.engine.PlaceBracket(ctx, req)
 }

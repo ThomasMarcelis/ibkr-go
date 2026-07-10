@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -357,13 +358,13 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 	return out.orders, out.err
 }
 
-// orphanCancelTimeout bounds the best-effort cancel of an order that reached
-// the wire just as its PlaceOrder caller's context was canceled.
-const orphanCancelTimeout = 15 * time.Second
+// orderRollbackTimeout bounds cancellation admission after a bracket place
+// frame was admitted but a later frame was not.
+const orderRollbackTimeout = 15 * time.Second
 
 // placeOrderResult is the single value the PlaceOrder setup delivers on resp.
-// Exactly one is sent on every path (drop-on-cancel, not-ready, send error, or
-// success), so the orphan resolver's drain always completes.
+// Exactly one is sent on every path: before transport admission it carries an
+// error; after admission it carries the handle that owns the live order.
 type placeOrderResult struct {
 	handle *OrderHandle
 	err    error
@@ -374,16 +375,64 @@ type bracketOrderResult struct {
 	err     error
 }
 
+// awaitPlacementResponse makes transport-queue admission the ownership
+// boundary. Once the actor has admitted a place frame, its buffered result
+// wins caller cancellation and engine shutdown races so the caller always
+// receives the handle that owns the order. Before admission, callers receive
+// only the setup or send error.
+func awaitPlacementResponse[T any](ctx context.Context, e *engine, resp <-chan T) (T, error) {
+	ctxDone := ctx.Done()
+	for {
+		select {
+		case out := <-resp:
+			return out, nil
+		case <-ctxDone:
+			// Cancellation stops being a return path until the actor establishes
+			// which side of the admission boundary the request reached.
+			ctxDone = nil
+		case <-e.done:
+			select {
+			case out := <-resp:
+				return out, nil
+			default:
+				var zero T
+				return zero, e.closedOperationError()
+			}
+		}
+	}
+}
+
+func awaitPlaceOrderResponse(ctx context.Context, e *engine, resp <-chan placeOrderResult) (*OrderHandle, error) {
+	out, err := awaitPlacementResponse(ctx, e, resp)
+	if err != nil {
+		return nil, err
+	}
+	if out.handle != nil {
+		return out.handle, nil
+	}
+	return nil, out.err
+}
+
+func awaitBracketOrderResponse(ctx context.Context, e *engine, resp <-chan bracketOrderResult) (BracketOrder, error) {
+	out, err := awaitPlacementResponse(ctx, e, resp)
+	if err != nil {
+		return BracketOrder{}, err
+	}
+	if out.bracket.Parent != nil {
+		return out.bracket, nil
+	}
+	return BracketOrder{}, out.err
+}
+
 // PlaceOrder submits a new order and returns an OrderHandle that tracks its
 // lifecycle. The handle receives OpenOrder, OrderStatus, Execution, and
 // Commission events via dual dispatch. The order can be modified or cancelled
 // through the returned handle.
 //
-// If ctx is canceled after the order already reached the wire — the window
-// between the actor sending place_order and the caller receiving the handle —
-// PlaceOrder returns ctx.Err() and the engine best-effort cancels the now
-// ownerless order (bounded background context) and detaches its handle, so a
-// canceled call cannot leave a live order resting with no way to reach it.
+// Transport-queue admission is the ownership boundary. If ctx is canceled or
+// the engine closes after admission, PlaceOrder still returns the handle and a
+// nil error; the handle remains the caller's authority to observe or cancel the
+// order. Before admission, PlaceOrder returns an error and no handle.
 func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
 	if err := validateOrderRequest(req, orderIntentPlace); err != nil {
 		return nil, err
@@ -391,8 +440,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	req = clonePlaceOrderRequest(req)
 	resp := make(chan placeOrderResult, 1)
 	// enqueueReadySetup with a drop callback guarantees resp receives exactly
-	// one result even when ctx is canceled before the actor runs the setup;
-	// nothing reached the wire on that path, so a plain error is correct.
+	// one result even when ctx is canceled before the actor runs the setup.
 	enqueueReadySetup(ctx, e, func() {
 		resp <- placeOrderResult{err: ctx.Err()}
 	}, func() {
@@ -418,13 +466,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		resp <- placeOrderResult{handle: handle}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.resolveOrphanedPlaceOrder(resp, ctx.Err())
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out.handle, out.err
+	return awaitPlaceOrderResponse(ctx, e, resp)
 }
 
 // PlaceBracket allocates three consecutive order IDs and sends the parent,
@@ -472,8 +514,7 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 		}
 		for _, item := range orders {
 			if err := e.sendContext(ctx, toCodecPlaceOrder(item.id, PlaceOrderRequest{Contract: req.Contract, Order: item.order})); err != nil {
-				e.cancelAndCloseOrderRoutes(sentIDs, allIDs, err)
-				resp <- bracketOrderResult{err: err}
+				resp <- bracketOrderResult{err: e.cancelAndCloseOrderRoutes(sentIDs, allIDs, err)}
 				return
 			}
 			sentIDs = append(sentIDs, item.id)
@@ -481,48 +522,35 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 		resp <- bracketOrderResult{bracket: bracket}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.resolveOrphanedBracket(resp, ctx.Err())
-	})
-	if err != nil {
-		return BracketOrder{}, err
-	}
-	return out.bracket, out.err
+	return awaitBracketOrderResponse(ctx, e, resp)
 }
 
-func (e *engine) resolveOrphanedBracket(resp <-chan bracketOrderResult, cause error) {
-	go func() {
-		var out bracketOrderResult
-		select {
-		case out = <-resp:
-		case <-e.done:
-			return
-		}
-		if out.bracket.Parent == nil {
-			return
-		}
-		ids := []int64{out.bracket.Parent.orderID, out.bracket.TakeProfit.orderID, out.bracket.StopLoss.orderID}
-		e.enqueue(func() { e.cancelAndCloseOrderRoutes(ids, ids, cause) })
-	}()
-}
-
-// cancelAndCloseOrderRoutes is the common rollback for partially sent and
-// caller-orphaned order groups. It runs on the actor goroutine.
-func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, cause error) {
+// cancelAndCloseOrderRoutes rolls back a bracket placement on the actor
+// goroutine. It sends cancellation only for admitted place frames. Any partial
+// bracket returns an OrderRecoveryError naming every admitted ID because queue
+// admission of a cancellation is not a Gateway acknowledgement. Only a
+// failure before the first place admission returns placementErr directly.
+func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, placementErr error) error {
+	var cancelErrs []error
 	if len(sentIDs) > 0 {
-		cancelCtx, cancel := context.WithTimeout(context.Background(), orphanCancelTimeout)
+		cancelCtx, cancel := context.WithTimeout(context.Background(), orderRollbackTimeout)
 		defer cancel()
 		for _, orderID := range sentIDs {
-			if or, ok := e.orders[orderID]; ok && !or.closed {
-				_ = e.sendContext(cancelCtx, codec.CancelOrderRequest{OrderID: orderID})
+			if err := e.sendContext(cancelCtx, codec.CancelOrderRequest{OrderID: orderID}); err != nil {
+				cancelErrs = append(cancelErrs, fmt.Errorf("cancel order %d: %w", orderID, err))
 			}
 		}
 	}
+	resultErr := placementErr
+	if len(sentIDs) > 0 {
+		resultErr = newOrderRecoveryError(sentIDs, placementErr, errors.Join(cancelErrs...))
+	}
 	for _, orderID := range allIDs {
 		if or, ok := e.orders[orderID]; ok {
-			e.closeOrderRoute(orderID, or, cause)
+			e.closeOrderRoute(orderID, or, resultErr)
 		}
 	}
+	return resultErr
 }
 
 // bindOrderHandle installs a new order route and its public handle. It must be
@@ -585,41 +613,6 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 	}
 	e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
 	return handle
-}
-
-// resolveOrphanedPlaceOrder runs after a PlaceOrder caller abandoned the call
-// on context cancellation. The setup guarantees resp receives exactly one
-// result; draining it in a background goroutine lets the caller return at once.
-// If the result carries a handle, the order reached the wire with no owner, so
-// the engine best-effort cancels it under a bounded background context and
-// tears the route down with the caller's cancellation cause — all inside one
-// actor turn, so the cancel only goes out while the route is still live (an
-// order that was rejected or filled inside the cancellation window draws no
-// spurious cancel_order). The Gateway's acknowledgements for the auto-cancel
-// arrive after the route is gone and surface as session events.
-func (e *engine) resolveOrphanedPlaceOrder(resp <-chan placeOrderResult, cause error) {
-	go func() {
-		var out placeOrderResult
-		select {
-		case out = <-resp:
-		case <-e.done:
-			return
-		}
-		if out.handle == nil {
-			return
-		}
-		e.enqueue(func() {
-			or, ok := e.orders[out.handle.orderID]
-			if !ok || or.closed {
-				out.handle.closeWithErr(cause)
-				return
-			}
-			cancelCtx, cancel := context.WithTimeout(context.Background(), orphanCancelTimeout)
-			defer cancel()
-			_ = e.sendContext(cancelCtx, codec.CancelOrderRequest{OrderID: out.handle.orderID})
-			e.closeOrderRoute(out.handle.orderID, or, cause)
-		})
-	}()
 }
 
 // PreviewOrder submits a what-if order and returns the margin-and-commission

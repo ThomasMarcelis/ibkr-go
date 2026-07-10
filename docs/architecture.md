@@ -163,6 +163,13 @@ order IDs manually. `Orders().PlaceBracket` reserves three consecutive IDs in
 one actor turn and sends all three frames without interleaving another request;
 the final child is the only frame with `Transmit=true`.
 
+Admission to the transport queue transfers placement ownership to the caller.
+The buffered handle result therefore wins context and shutdown races after
+admission. A partially admitted bracket cancels only admitted IDs and always
+returns an `OrderRecoveryError` containing every one of those IDs. Even a
+queue-admitted cancellation is unacknowledged, so callers reconcile open orders
+before retrying; `CancelErr` only records failures to admit those cancellations.
+
 ## OrderHandle Lifecycle
 
 `Orders().Place` returns an `OrderHandle` that tracks a single order's lifecycle:

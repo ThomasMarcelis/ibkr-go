@@ -120,12 +120,28 @@ advanced order settings before anything reaches the wire. A request whose
 `Orders().Preview` — a what-if request is a margin/commission query, not a
 trade, and does not fit the `OrderHandle` lifecycle contract.
 
+Transport-queue admission is the placement ownership boundary. Once the place
+frame is admitted, its buffered success result wins races with `ctx.Done()` and
+engine shutdown: `Place` returns the handle and `nil`, even if concurrent
+shutdown has already closed that handle. Before admission, it returns an error
+and no handle. This keeps the result unambiguous; a live order is never hidden
+behind a context error.
+
 `Orders().PlaceBracket(ctx, req)` allocates the parent, take-profit, and
 stop-loss IDs in one actor turn and owns their `ParentID` and `Transmit`
 fields. It sends the orders in parent/child/child order with the live-attested
 false/false/true transmit sequence. The result contains one `OrderHandle` per
-leg. If setup is interrupted after any leg reaches the send queue, the engine
-best-effort cancels every sent leg and closes all three routes.
+leg. If a later place frame is not admitted, the engine sends cancellation for
+exactly the already-admitted IDs under a fresh bounded context and closes all
+three routes. Every partial bracket returns a zero bracket and
+`*OrderRecoveryError`; `OrderIDs` contains every admitted leg because admitting
+a compensating cancellation to the local queue does not prove IBKR processed
+it. `CancelErr == nil` means all compensating cancellations entered that queue;
+a non-nil value identifies cancellation-admission failures. `PlacementErr` and
+`CancelErr` preserve their causes through `errors.Is`. `IsRetryable` is false
+because the caller must reconcile open orders before deciding whether to place
+again. Only failure before the first place admission returns the original
+placement error directly.
 
 `Orders().Preview(ctx, req)` is the one-shot counterpart: it forces the
 what-if flag and returns an `OrderState` (the nine margin decimals plus the

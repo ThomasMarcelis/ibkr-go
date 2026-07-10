@@ -305,13 +305,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   now surfaces on `SessionEvents()` while the real `OrderStatus` remains
   authoritative. This also preserves late executions and commissions inside
   the terminal drain window.
-- **`Orders().Place` no longer orphans a live order when its context is
-  cancelled.** If the context fires in the window after the `place_order`
-  frame reached the wire but before the caller received the handle,
-  `Place` now best-effort cancels the now-ownerless order (bounded background
-  context) and detaches the handle with the caller's cancellation cause,
-  instead of returning the error and leaving a live order resting at IB with
-  no handle to reach it.
+- **Order placement now transfers ownership at transport-queue admission.** An
+  admitted `Orders().Place` or complete `Orders().PlaceBracket` returns its
+  handle result even when caller cancellation or engine shutdown races with
+  delivery; before admission it returns only an error. Partial brackets cancel
+  exactly the admitted legs under a fresh bounded context and always return a
+  zero bracket with non-retryable `*OrderRecoveryError` containing every
+  admitted ID. A nil `CancelErr` means all compensating cancellations entered
+  the queue, not that IBKR acknowledged them. Only failure before the first
+  place admission returns the original placement error directly.
 - **Request-targeted `api_error` codes below 10000 with no matching route now
   surface as session events instead of vanishing.** Previously a `req_id`
   that matched no keyed route and no order route fell off the end of the

@@ -104,6 +104,13 @@
 // [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a
 // modified order with the same ID.
 //
+// Admission to the transport queue is the ownership boundary for Place and
+// PlaceBracket. Once admitted, the handle result wins context-cancellation and
+// session-close races. Every partially admitted bracket returns
+// [*OrderRecoveryError] identifying all admitted order IDs whose live state
+// must be reconciled before placing again; admission of a compensating cancel
+// to the local queue is not a Gateway acknowledgement.
+//
 // # Margin Previews
 //
 // [OrdersClient.Preview] runs a what-if order: a margin-and-commission preview,
@@ -143,12 +150,13 @@
 //
 // # Errors
 //
-// Four structured error types cover the main failure modes:
+// Five structured error types cover the main failure modes:
 //
 //   - [*ConnectError] — connection or handshake failure
 //   - [*ProtocolError] — wire protocol violation
 //   - [*APIError] — server-side rejection (error code + message)
 //   - [*ValidationError] — caller-side request validation failure
+//   - [*OrderRecoveryError] — uncertain live IDs after partial bracket rollback
 //
 // IBKR codes attested in live captures have named ErrCode constants (e.g.
 // [ErrCodeOrderCanceled], [ErrCodeMarketDataNotSubscribed]) and [*APIError]
@@ -158,7 +166,8 @@
 //
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
 // [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].
-// [IsRetryable] classifies final subscription errors for retry/backoff policy.
+// [IsRetryable] classifies final errors for retry/backoff policy. Recovery
+// errors are never retryable because retrying can duplicate live orders.
 //
 // # Financial Types
 //

@@ -67,6 +67,52 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("ibkr: api %s code=%d conn=%d: %s", e.OpKind, e.Code, e.ConnectionSeq, e.Message)
 }
 
+// OrderRecoveryError reports a bracket placement failure after at least one
+// place request entered the transport queue. OrderIDs contains every admitted
+// order ID; their live state remains uncertain until reconciled with the
+// Gateway. A nil CancelErr means every compensating cancellation also entered
+// the queue, not that the Gateway acknowledged any cancellation.
+type OrderRecoveryError struct {
+	OrderIDs     []int64
+	PlacementErr error
+	CancelErr    error
+}
+
+func newOrderRecoveryError(orderIDs []int64, placementErr, cancelErr error) *OrderRecoveryError {
+	return &OrderRecoveryError{
+		OrderIDs:     append([]int64(nil), orderIDs...),
+		PlacementErr: placementErr,
+		CancelErr:    cancelErr,
+	}
+}
+
+func (e *OrderRecoveryError) Error() string {
+	if e.CancelErr == nil {
+		return fmt.Sprintf(
+			"ibkr: order recovery required for IDs %v: placement failed: %v; cancellation requests admitted but not acknowledged",
+			e.OrderIDs,
+			e.PlacementErr,
+		)
+	}
+	return fmt.Sprintf(
+		"ibkr: order recovery required for IDs %v: placement failed: %v; cancellation admission failed: %v",
+		e.OrderIDs,
+		e.PlacementErr,
+		e.CancelErr,
+	)
+}
+
+func (e *OrderRecoveryError) Unwrap() []error {
+	errs := make([]error, 0, 2)
+	if e.PlacementErr != nil {
+		errs = append(errs, e.PlacementErr)
+	}
+	if e.CancelErr != nil {
+		errs = append(errs, e.CancelErr)
+	}
+	return errs
+}
+
 // ValidationError is a client-side input validation failure caught before
 // the request is sent to the Gateway.
 type ValidationError struct {
@@ -91,6 +137,11 @@ func IsRetryable(err error) bool {
 
 func isRetryableError(err error) bool {
 	if err == nil {
+		return false
+	}
+	// Retrying an uncertain bracket can duplicate orders that are still live
+	// at the Gateway, even when the underlying transport error is retryable.
+	if _, ok := errors.AsType[*OrderRecoveryError](err); ok {
 		return false
 	}
 	if _, ok := errors.AsType[*APIError](err); ok {

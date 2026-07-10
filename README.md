@@ -209,6 +209,18 @@ fmt.Println(bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.Stop
 and sends the required `Transmit=false`, `false`, `true` sequence. Each returned
 handle has the same lifecycle API as a regular order.
 
+Transport-queue admission is the ownership boundary for both placement calls.
+After admission, a concurrent context cancellation or client shutdown does not
+replace a successful result: you receive the handle (or bracket) and own its
+lifecycle. Before admission, placement returns an error and no handle. If a
+bracket is only partially admitted, the zero bracket is returned with an
+`*ibkr.OrderRecoveryError`; its `OrderIDs` contain every admitted leg to
+reconcile through open orders. `CancelErr == nil` means every compensating
+cancel entered the transport queue, not that IBKR acknowledged it. Recovery
+errors are deliberately not retryable, because blind retry could duplicate a
+live leg. Only failure before the parent enters the queue returns the original
+placement error directly.
+
 ### Account data
 
 ```go
