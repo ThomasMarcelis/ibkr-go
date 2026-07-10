@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
 
 // Option configures a [Client] at [DialContext] time.
@@ -31,7 +29,7 @@ type config struct {
 	host                string
 	port                int
 	clientID            int
-	dialer              transport.Dialer
+	dialer              Dialer
 	logger              *slog.Logger
 	reconnect           ReconnectPolicy
 	tcpKeepAlive        time.Duration

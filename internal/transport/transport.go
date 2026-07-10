@@ -13,10 +13,6 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
-type Dialer interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
-}
-
 // WriteRaw writes raw bytes directly to the connection without framing.
 func WriteRaw(conn net.Conn, data []byte) error {
 	_, err := conn.Write(data)
