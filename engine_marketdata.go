@@ -870,7 +870,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.TickOptionComputation:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					value, err := fromCodecOptionComputation(m)
 					if err != nil {
 						resp <- result{err: err}
@@ -880,11 +880,11 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpCalcImpliedVol, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -898,7 +898,7 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 			OptionPrice: req.OptionPrice.String(),
 			UnderPrice:  req.UnderPrice.String(),
 		}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -943,7 +943,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.TickOptionComputation:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					value, err := fromCodecOptionComputation(m)
 					if err != nil {
 						resp <- result{err: err}
@@ -953,11 +953,11 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpCalcOptionPrice, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -971,7 +971,7 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 			Volatility: req.Volatility.String(),
 			UnderPrice: req.UnderPrice.String(),
 		}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})

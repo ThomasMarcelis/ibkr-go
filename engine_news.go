@@ -156,16 +156,16 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.NewsArticleResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{article: NewsArticle{ArticleType: m.ArticleType, ArticleText: m.ArticleText}}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpNewsArticle, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -174,7 +174,7 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 			},
 		}
 		if err := e.sendContext(ctx, codec.NewsArticleRequest{ReqID: reqID, ProviderCode: string(req.ProviderCode), ArticleID: req.ArticleID}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})

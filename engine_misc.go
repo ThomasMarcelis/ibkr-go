@@ -428,7 +428,7 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.SoftDollarTiersResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					tiers := make([]SoftDollarTier, len(m.Tiers))
 					for i, t := range m.Tiers {
 						tiers[i] = SoftDollarTier{Name: t.Name, Value: t.Value, DisplayName: t.DisplayName}
@@ -437,11 +437,11 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpSoftDollarTiers, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -450,7 +450,7 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 			},
 		}
 		if err := e.sendContext(ctx, codec.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -484,16 +484,16 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.WSHMetaDataResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{dataJSON: m.DataJSON}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpWSHMetaData, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -502,7 +502,7 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 			},
 		}
 		if err := e.sendContext(ctx, codec.WSHMetaDataRequest{ReqID: reqID}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -534,16 +534,16 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.WSHEventDataResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{dataJSON: m.DataJSON}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpWSHEventData, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -562,7 +562,7 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 			EndDate:         formatWSHDate(req.EndDate),
 			TotalLimit:      req.TotalLimit,
 		}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -596,16 +596,16 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.DisplayGroupList:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{groups: m.Groups}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpDisplayGroups, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -614,7 +614,7 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 			},
 		}
 		if err := e.sendContext(ctx, codec.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})

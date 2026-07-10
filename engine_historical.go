@@ -45,22 +45,22 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 				case codec.HistoricalBar:
 					bar, err := fromCodecBar(m)
 					if err != nil {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						resp <- result{err: err}
 						return
 					}
 					values = append(values, bar)
 				case codec.HistoricalBarsEnd:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{values: values}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpHistoricalBars, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -69,7 +69,7 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 			},
 		}
 		if err := e.sendContext(ctx, request); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -117,7 +117,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalScheduleResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					sessions := make([]HistoricalScheduleSession, len(m.Sessions))
 					for i, s := range m.Sessions {
 						sessions[i] = HistoricalScheduleSession{
@@ -135,11 +135,11 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpHistoricalSchedule, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -148,7 +148,7 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 			},
 		}
 		if err := e.sendContext(ctx, request); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -385,7 +385,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistogramDataResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					entries := make([]HistogramEntry, len(m.Entries))
 					for i, entry := range m.Entries {
 						price, err := parseRequiredDecimal(entry.Price, "histogram price")
@@ -407,11 +407,11 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpHistogramData, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -425,7 +425,7 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 			UseRTH:   req.UseRTH,
 			Period:   req.Period,
 		}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})

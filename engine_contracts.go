@@ -43,7 +43,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 				case codec.ContractDetails:
 					detail, err := fromCodecContractDetails(m)
 					if err != nil {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						resp <- result{err: err}
 						return
 					}
@@ -51,22 +51,22 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 				case codec.BondContractDetails:
 					detail, err := fromCodecBondContractDetails(m)
 					if err != nil {
-						delete(e.keyed, reqID)
+						e.deleteKeyedRoute(reqID)
 						resp <- result{err: err}
 						return
 					}
 					values = append(values, detail)
 				case codec.ContractDetailsEnd:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{values: values}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpContractDetails, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -78,7 +78,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 			ReqID:    reqID,
 			Contract: toCodecContract(contract),
 		}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -266,7 +266,7 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 					for i, s := range m.Strikes {
 						strike, err := parseRequiredDecimal(s, "sec def opt params strike")
 						if err != nil {
-							delete(e.keyed, reqID)
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
@@ -281,16 +281,16 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 						Strikes:         strikes,
 					})
 				case codec.SecDefOptParamsEnd:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					resp <- result{values: values}
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpSecDefOptParams, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -305,7 +305,7 @@ func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest
 			UnderlyingSecType: string(req.UnderlyingSecType),
 			UnderlyingConID:   req.UnderlyingConID,
 		}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
@@ -337,7 +337,7 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.SmartComponentsResponse:
-					delete(e.keyed, reqID)
+					e.deleteKeyedRoute(reqID)
 					components := make([]SmartComponent, len(m.Components))
 					for i, c := range m.Components {
 						components[i] = SmartComponent{
@@ -350,11 +350,11 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: e.apiErr(OpSmartComponents, m)}
 			},
 			onDisconnect: func(e *engine, err error) bool {
-				delete(e.keyed, reqID)
+				e.deleteKeyedRoute(reqID)
 				resp <- result{err: ErrInterrupted}
 				return false
 			},
@@ -363,7 +363,7 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 			},
 		}
 		if err := e.sendContext(ctx, codec.SmartComponentsRequest{ReqID: reqID, BBOExchange: bboExchange}); err != nil {
-			delete(e.keyed, reqID)
+			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
 		}
 	})
