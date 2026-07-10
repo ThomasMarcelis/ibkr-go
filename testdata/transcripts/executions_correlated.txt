@@ -1,12 +1,22 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_executions {"req_id":"$req1","account":"DU12345","symbol":"AAPL"}
-client req_executions {"req_id":"$req2","account":"DU12345","symbol":"MSFT"}
-server commission_report {"exec_id":"exec-aapl","commission":"1.25","currency":"USD","realized_pnl":"0"}
-server execution_detail {"req_id":"$req1","exec_id":"exec-aapl","account":"DU12345","symbol":"AAPL","side":"BOT","shares":"10","price":"189.11","time":"2026-04-05T12:01:00Z"}
-server execution_detail {"req_id":"$req2","exec_id":"exec-msft","account":"DU12345","symbol":"MSFT","side":"SLD","shares":"5","price":"410.25","time":"2026-04-05T12:02:00Z"}
-server commission_report {"exec_id":"exec-msft","commission":"0.75","currency":"USD","realized_pnl":"10"}
-server executions_end {"req_id":"$req1"}
-server executions_end {"req_id":"$req2"}
+# Derived demultiplexing fixture from testdata/transcripts/executions.txt,
+# grounded by captures/20260611T133024Z-api_order_fill_aapl at
+# server_version=200; events.jsonl sha256
+# 4fa597ba1c4bc3690a076f44fe5b124f03c6849a580dc6e4edb7e872fc32c0a0.
+# The exact sanitized-fill-014 BUY and sanitized-fill-015 SELL execution and
+# commission rows are preserved. The source query was split into simultaneous
+# BUY- and SELL-filtered routes and only each response req_id was rebound.
+# The other 13 executions and 12 commissions were intentionally omitted; the
+# selected response rows retain their captured values, timestamps, and order.
+handshake {"server_version":200,"connection_time":"20260611 15:30:24 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":371}
+
+client req_executions {"req_id":"$buyReq","account":"DU9000001","symbol":"AAPL","side":"BUY"}
+client req_executions {"req_id":"$sellReq","account":"DU9000001","symbol":"AAPL","side":"SELL"}
+server execution_detail {"req_id":"$buyReq","order_id":368,"exec_id":"sanitized-fill-014","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"292.76","time":"20260611 09:30:10 US/Eastern"}
+server execution_detail {"req_id":"$sellReq","order_id":369,"exec_id":"sanitized-fill-015","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"1","price":"292.70","time":"20260611 09:30:12 US/Eastern"}
+server commission_report {"exec_id":"sanitized-fill-014","commission":"1.000003","currency":"USD","realized_pnl":"-1.636219"}
+server commission_report {"exec_id":"sanitized-fill-015","commission":"1.006228","currency":"USD","realized_pnl":"1.7976931348623157E308"}
+server executions_end {"req_id":"$buyReq"}
+server executions_end {"req_id":"$sellReq"}
 disconnect

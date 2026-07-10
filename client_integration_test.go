@@ -963,6 +963,9 @@ func TestExecutionsMissingEndReturnsContextDeadline(t *testing.T) {
 	}
 }
 
+// TestExecutionsCorrelateCommissionByExecID freezes partitioning across two
+// simultaneous, disjoint execution queries: a commission must reach only the
+// route that observed its ExecID.
 func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
 	t.Parallel()
 
@@ -973,59 +976,70 @@ func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	aaplCh := make(chan []ibkr.ExecutionUpdate, 1)
-	msftCh := make(chan []ibkr.ExecutionUpdate, 1)
+	buyCh := make(chan []ibkr.ExecutionUpdate, 1)
+	sellCh := make(chan []ibkr.ExecutionUpdate, 1)
 	errCh := make(chan error, 2)
 	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
+			Account: "DU9000001",
+			Symbol:  "AAPL",
+			Side:    ibkr.ExecutionFilterBuy,
+		})
 		if err != nil {
 			errCh <- err
 			return
 		}
-		aaplCh <- updates
+		buyCh <- updates
 	}()
 	time.Sleep(10 * time.Millisecond)
 	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU12345", Symbol: "MSFT"})
+		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
+			Account: "DU9000001",
+			Symbol:  "AAPL",
+			Side:    ibkr.ExecutionFilterSell,
+		})
 		if err != nil {
 			errCh <- err
 			return
 		}
-		msftCh <- updates
+		sellCh <- updates
 	}()
 
-	var aaplUpdates []ibkr.ExecutionUpdate
-	var msftUpdates []ibkr.ExecutionUpdate
+	var buyUpdates []ibkr.ExecutionUpdate
+	var sellUpdates []ibkr.ExecutionUpdate
 	for i := 0; i < 2; i++ {
 		select {
 		case err := <-errCh:
 			t.Fatalf("Executions() error = %v", err)
-		case aaplUpdates = <-aaplCh:
-		case msftUpdates = <-msftCh:
+		case buyUpdates = <-buyCh:
+		case sellUpdates = <-sellCh:
 		}
 	}
-	if len(aaplUpdates) != 2 || len(msftUpdates) != 2 {
-		t.Fatalf("updates len = AAPL %d, MSFT %d, want 2 each", len(aaplUpdates), len(msftUpdates))
-	}
-	aaplExec := aaplUpdates[0]
-	aaplCommission := aaplUpdates[1]
-	msftExec := msftUpdates[0]
-	msftCommission := msftUpdates[1]
 
-	if aaplExec.Execution == nil || aaplExec.Execution.Contract.Symbol != "AAPL" {
-		t.Fatalf("AAPL execution = %#v, want AAPL execution", aaplExec)
+	assertRoute := func(name string, updates []ibkr.ExecutionUpdate, execID string, side ibkr.ExecutionSide, price, commission string) {
+		t.Helper()
+		if len(updates) != 2 {
+			t.Fatalf("%s updates len = %d, want execution and commission only", name, len(updates))
+		}
+		execution := updates[0].Execution
+		if execution == nil || execution.ExecID != execID || execution.Side != side ||
+			!execution.Shares.Equal(decimal.RequireFromString("1")) ||
+			!execution.Price.Equal(decimal.RequireFromString(price)) {
+			t.Fatalf("%s execution = %#v, want %s %s 1 @ %s", name, execution, execID, side, price)
+		}
+		fees := updates[1].CommissionAndFees
+		if fees == nil || fees.ExecID != execID || fees.Amount == nil ||
+			!fees.Amount.Equal(decimal.RequireFromString(commission)) {
+			t.Fatalf("%s commission = %#v, want %s amount %s", name, fees, execID, commission)
+		}
 	}
-	if aaplCommission.CommissionAndFees == nil || aaplCommission.CommissionAndFees.ExecID != "exec-aapl" {
-		t.Fatalf("AAPL commission = %#v, want exec-aapl", aaplCommission)
-	}
-	if msftExec.Execution == nil || msftExec.Execution.Contract.Symbol != "MSFT" {
-		t.Fatalf("MSFT execution = %#v, want MSFT execution", msftExec)
-	}
-	if msftCommission.CommissionAndFees == nil || msftCommission.CommissionAndFees.ExecID != "exec-msft" {
-		t.Fatalf("MSFT commission = %#v, want exec-msft", msftCommission)
-	}
+	assertRoute("BUY", buyUpdates, "sanitized-fill-014", ibkr.ExecutionSideBought, "292.76", "1.000003")
+	assertRoute("SELL", sellUpdates, "sanitized-fill-015", ibkr.ExecutionSideSold, "292.70", "1.006228")
 }
 
+// TestExecutionsCorrelateCommissionForOverlappingSubscriptions freezes the
+// opposite invariant: a commission that races ahead of its execution must be
+// retained and delivered once to every overlapping route that observes it.
 func TestExecutionsCorrelateCommissionForOverlappingSubscriptions(t *testing.T) {
 	t.Parallel()
 
@@ -1036,57 +1050,61 @@ func TestExecutionsCorrelateCommissionForOverlappingSubscriptions(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	wideCh := make(chan []ibkr.ExecutionUpdate, 1)
-	narrowCh := make(chan []ibkr.ExecutionUpdate, 1)
+	allCh := make(chan []ibkr.ExecutionUpdate, 1)
+	sellCh := make(chan []ibkr.ExecutionUpdate, 1)
 	errCh := make(chan error, 2)
 	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU12345"})
+		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 		if err != nil {
 			errCh <- err
 			return
 		}
-		wideCh <- updates
+		allCh <- updates
 	}()
 	time.Sleep(10 * time.Millisecond)
 	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU12345", Symbol: "AAPL"})
+		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
+			Account: "DU9000001",
+			Symbol:  "AAPL",
+			Side:    ibkr.ExecutionFilterSell,
+		})
 		if err != nil {
 			errCh <- err
 			return
 		}
-		narrowCh <- updates
+		sellCh <- updates
 	}()
 
-	var wideUpdates []ibkr.ExecutionUpdate
-	var narrowUpdates []ibkr.ExecutionUpdate
+	var allUpdates []ibkr.ExecutionUpdate
+	var sellUpdates []ibkr.ExecutionUpdate
 	for i := 0; i < 2; i++ {
 		select {
 		case err := <-errCh:
 			t.Fatalf("Executions() error = %v", err)
-		case wideUpdates = <-wideCh:
-		case narrowUpdates = <-narrowCh:
+		case allUpdates = <-allCh:
+		case sellUpdates = <-sellCh:
 		}
 	}
-	if len(wideUpdates) != 2 || len(narrowUpdates) != 2 {
-		t.Fatalf("updates len = wide %d, narrow %d, want 2 each", len(wideUpdates), len(narrowUpdates))
-	}
-	wideExec := wideUpdates[0]
-	wideCommission := wideUpdates[1]
-	narrowExec := narrowUpdates[0]
-	narrowCommission := narrowUpdates[1]
 
-	if wideExec.Execution == nil || wideExec.Execution.ExecID != "exec-aapl" {
-		t.Fatalf("account-wide execution = %#v, want exec-aapl", wideExec)
+	assertRoute := func(name string, updates []ibkr.ExecutionUpdate) {
+		t.Helper()
+		if len(updates) != 2 {
+			t.Fatalf("%s updates len = %d, want one execution and one commission", name, len(updates))
+		}
+		execution := updates[0].Execution
+		if execution == nil || execution.ExecID != "sanitized-fill-012" || execution.Side != ibkr.ExecutionSideSold ||
+			!execution.Shares.Equal(decimal.RequireFromString("40")) ||
+			!execution.Price.Equal(decimal.RequireFromString("292.20")) {
+			t.Fatalf("%s execution = %#v, want sanitized-fill-012 SLD 40 @ 292.20", name, execution)
+		}
+		fees := updates[1].CommissionAndFees
+		if fees == nil || fees.ExecID != "sanitized-fill-012" || fees.Amount == nil ||
+			!fees.Amount.Equal(decimal.RequireFromString("0.248693")) {
+			t.Fatalf("%s commission = %#v, want sanitized-fill-012 amount 0.248693", name, fees)
+		}
 	}
-	if wideCommission.CommissionAndFees == nil || wideCommission.CommissionAndFees.ExecID != "exec-aapl" {
-		t.Fatalf("account-wide commission = %#v, want exec-aapl", wideCommission)
-	}
-	if narrowExec.Execution == nil || narrowExec.Execution.ExecID != "exec-aapl" {
-		t.Fatalf("AAPL-only execution = %#v, want exec-aapl", narrowExec)
-	}
-	if narrowCommission.CommissionAndFees == nil || narrowCommission.CommissionAndFees.ExecID != "exec-aapl" {
-		t.Fatalf("AAPL-only commission = %#v, want exec-aapl", narrowCommission)
-	}
+	assertRoute("all-side", allUpdates)
+	assertRoute("SELL", sellUpdates)
 }
 
 func TestSubscribeQuotesResumeNeverRequiresManualResumeOnDisconnect(t *testing.T) {
