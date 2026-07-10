@@ -1,6 +1,10 @@
 package codec
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+)
 
 type QuoteRequest struct {
 	ReqID        int
@@ -11,7 +15,7 @@ type QuoteRequest struct {
 
 func (m QuoteRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqMktData)
+	w.WriteInt(protocol.OutReqMktData)
 	w.WriteInt(11) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
@@ -43,7 +47,7 @@ type CancelQuote struct {
 }
 
 func (m CancelQuote) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelMktData), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelMktData), "1", itoa(m.ReqID)}, nil
 }
 
 type TickPrice struct {
@@ -78,7 +82,7 @@ type RealTimeBarsRequest struct {
 
 func (m RealTimeBarsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqRealTimeBars)
+	w.WriteInt(protocol.OutReqRealTimeBars)
 	w.WriteInt(3) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
@@ -95,7 +99,7 @@ type CancelRealTimeBars struct {
 }
 
 func (m CancelRealTimeBars) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelRealTimeBars), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelRealTimeBars), "1", itoa(m.ReqID)}, nil
 }
 
 type RealTimeBar struct {
@@ -148,13 +152,13 @@ type ReqMarketDataType struct {
 }
 
 func (m ReqMarketDataType) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqMarketDataType), "1", itoa(m.DataType)}, nil
+	return []string{itoa(protocol.OutReqMarketDataType), "1", itoa(m.DataType)}, nil
 }
 
 type MktDepthExchangesRequest struct{}
 
 func (m MktDepthExchangesRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqMktDepthExchanges)}, nil
+	return []string{itoa(protocol.OutReqMktDepthExchanges)}, nil
 }
 
 type MktDepthExchanges struct {
@@ -181,7 +185,7 @@ type TickByTickRequest struct {
 
 func (m TickByTickRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqTickByTickData)
+	w.WriteInt(protocol.OutReqTickByTickData)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
@@ -196,7 +200,7 @@ type CancelTickByTick struct {
 }
 
 func (m CancelTickByTick) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelTickByTickData), itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelTickByTickData), itoa(m.ReqID)}, nil
 }
 
 type TickByTickData struct {
@@ -231,7 +235,7 @@ func (m CalcImpliedVolatilityRequest) encodeWire(sv int) ([]string, error) {
 	// directly after tradingClass (code 320 evidence, capture
 	// 20260611T074859Z, sha 241a49023701e9ec).
 	w := fieldWriter{}
-	w.WriteInt(OutReqCalcImpliedVolatility)
+	w.WriteInt(protocol.OutReqCalcImpliedVolatility)
 	w.WriteInt(3) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
@@ -247,7 +251,7 @@ type CancelCalcImpliedVolatility struct {
 }
 
 func (m CancelCalcImpliedVolatility) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelCalcImpliedVolatility), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelCalcImpliedVolatility), "1", itoa(m.ReqID)}, nil
 }
 
 type CalcOptionPriceRequest struct {
@@ -260,7 +264,7 @@ type CalcOptionPriceRequest struct {
 func (m CalcOptionPriceRequest) encodeWire(sv int) ([]string, error) {
 	// No includeExpired field; see CalcImpliedVolatilityRequest.
 	w := fieldWriter{}
-	w.WriteInt(OutReqCalcOptionPrice)
+	w.WriteInt(protocol.OutReqCalcOptionPrice)
 	// Official REQ_CALC_OPTION_PRICE version is 2 (3 belongs to the
 	// implied-volatility request); the live Gateway tolerated 3 but the
 	// official client is the conformance contract.
@@ -279,7 +283,7 @@ type CancelCalcOptionPrice struct {
 }
 
 func (m CancelCalcOptionPrice) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelCalcOptionPrice), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelCalcOptionPrice), "1", itoa(m.ReqID)}, nil
 }
 
 type TickOptionComputation struct {
@@ -307,7 +311,7 @@ type MarketDepthRequest struct {
 
 func (m MarketDepthRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqMktDepth)
+	w.WriteInt(protocol.OutReqMktDepth)
 	w.WriteInt(5) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
@@ -325,10 +329,10 @@ type CancelMarketDepth struct {
 
 func (m CancelMarketDepth) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutCancelMktDepth)
+	w.WriteInt(protocol.OutCancelMktDepth)
 	w.WriteInt(1)
 	w.WriteInt(m.ReqID)
-	if sv >= MinServerVersionSmartDepth {
+	if sv >= protocol.MinServerVersionSmartDepth {
 		w.WriteBool(m.IsSmartDepth)
 	}
 	return w.Fields(), nil
@@ -366,7 +370,7 @@ func decodeTickPrice(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m TickPrice) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickPrice), "6", itoa(m.ReqID), itoa(m.TickType), m.Price, m.Size, itoa(m.AttrMask)}, nil
+	return []string{itoa(protocol.InTickPrice), "6", itoa(m.ReqID), itoa(m.TickType), m.Price, m.Size, itoa(m.AttrMask)}, nil
 }
 
 // [2, version, reqID, tickType, size]
@@ -379,7 +383,7 @@ func decodeTickSize(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m TickSize) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickSize), "6", itoa(m.ReqID), itoa(m.TickType), m.Size}, nil
+	return []string{itoa(protocol.InTickSize), "6", itoa(m.ReqID), itoa(m.TickType), m.Size}, nil
 }
 
 // [12, version, reqID, position, operation, side, price, size]
@@ -395,7 +399,7 @@ func decodeMarketDepth(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m MarketDepthUpdate) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InMarketDepth), "6", itoa(m.ReqID), itoa(m.Position), itoa(m.Operation), itoa(m.Side), m.Price, m.Size}, nil
+	return []string{itoa(protocol.InMarketDepth), "6", itoa(m.ReqID), itoa(m.Position), itoa(m.Operation), itoa(m.Side), m.Price, m.Size}, nil
 }
 
 // [13, version, reqID, position, marketMaker, operation, side, price, size, isSmartDepth]
@@ -414,7 +418,7 @@ func decodeMarketDepthL2(r *fieldReader, sv int) ([]Message, error) {
 
 func (m MarketDepthL2Update) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InMarketDepthL2)
+	w.WriteInt(protocol.InMarketDepthL2)
 	w.WriteInt(6) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Position)
@@ -453,7 +457,7 @@ func decodeTickOptionComputation(r *fieldReader, sv int) ([]Message, error) {
 
 func (m TickOptionComputation) encodeWire(sv int) ([]string, error) {
 	return []string{
-		itoa(InTickOptionComputation), itoa(m.ReqID), itoa(m.TickType), itoa(m.TickAttrib),
+		itoa(protocol.InTickOptionComputation), itoa(m.ReqID), itoa(m.TickType), itoa(m.TickAttrib),
 		m.ImpliedVol, m.Delta, m.OptPrice, m.PvDividend, m.Gamma, m.Vega, m.Theta, m.UndPrice,
 	}, nil
 }
@@ -468,7 +472,7 @@ func decodeTickGeneric(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m TickGeneric) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickGeneric), "6", itoa(m.ReqID), itoa(m.TickType), m.Value}, nil
+	return []string{itoa(protocol.InTickGeneric), "6", itoa(m.ReqID), itoa(m.TickType), m.Value}, nil
 }
 
 // [46, version, reqID, tickType, value]
@@ -481,7 +485,7 @@ func decodeTickString(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m TickString) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickString), "6", itoa(m.ReqID), itoa(m.TickType), m.Value}, nil
+	return []string{itoa(protocol.InTickString), "6", itoa(m.ReqID), itoa(m.TickType), m.Value}, nil
 }
 
 // [81, reqID, minTick, bboExchange, snapshotPermissions] — no version
@@ -498,7 +502,7 @@ func (m TickReqParams) encodeWire(sv int) ([]string, error) {
 	if m.SnapshotPermissions != nil {
 		permissions = *m.SnapshotPermissions
 	}
-	return []string{itoa(InTickReqParams), itoa(m.ReqID), m.MinTick, m.BBOExchange, itoa(permissions)}, nil
+	return []string{itoa(protocol.InTickReqParams), itoa(m.ReqID), m.MinTick, m.BBOExchange, itoa(permissions)}, nil
 }
 
 // [91, reqID, conID, exchange] — no version, including after server_version 200.
@@ -509,7 +513,7 @@ func decodeMarketDataReroute(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m MarketDataReroute) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InMarketDataReroute), itoa(m.ReqID), itoa(m.ConID), m.Exchange}, nil
+	return []string{itoa(protocol.InMarketDataReroute), itoa(m.ReqID), itoa(m.ConID), m.Exchange}, nil
 }
 
 // [92, reqID, conID, exchange] — no version, including after server_version 200.
@@ -520,7 +524,7 @@ func decodeMarketDepthReroute(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m MarketDepthReroute) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InMarketDepthReroute), itoa(m.ReqID), itoa(m.ConID), m.Exchange}, nil
+	return []string{itoa(protocol.InMarketDepthReroute), itoa(m.ReqID), itoa(m.ConID), m.Exchange}, nil
 }
 
 // [50, version, reqID, time, O, H, L, C, vol, wap, count]
@@ -536,7 +540,7 @@ func decodeRealTimeBars(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m RealTimeBar) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InRealTimeBars), "3", itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count}, nil
+	return []string{itoa(protocol.InRealTimeBars), "3", itoa(m.ReqID), m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count}, nil
 }
 
 // [57, version, reqID]
@@ -547,7 +551,7 @@ func decodeTickSnapshotEnd(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m TickSnapshotEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickSnapshotEnd), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.InTickSnapshotEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [58, version, reqID, dataType]
@@ -559,7 +563,7 @@ func decodeMarketDataType(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m MarketDataType) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InMarketDataType), "1", itoa(m.ReqID), itoa(m.DataType)}, nil
+	return []string{itoa(protocol.InMarketDataType), "1", itoa(m.ReqID), itoa(m.DataType)}, nil
 }
 
 func decodeMktDepthExchanges(r *fieldReader, sv int) ([]Message, error) {
@@ -584,7 +588,7 @@ func decodeMktDepthExchanges(r *fieldReader, sv int) ([]Message, error) {
 
 func (m MktDepthExchanges) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InMktDepthExchanges)
+	w.WriteInt(protocol.InMktDepthExchanges)
 	w.WriteInt(len(m.Exchanges))
 	for _, e := range m.Exchanges {
 		w.WriteString(e.Exchange)
@@ -623,7 +627,7 @@ func decodeTickByTick(r *fieldReader, sv int) ([]Message, error) {
 
 func (m TickByTickData) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InTickByTick)
+	w.WriteInt(protocol.InTickByTick)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.TickType)
 	w.WriteString(m.Time)

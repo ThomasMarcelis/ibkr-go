@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode/utf16"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 // Contract is the canonical internal contract model. Classic encoders select
@@ -44,7 +46,7 @@ type ContractDetailsRequest struct {
 
 func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqContractData)
+	w.WriteInt(protocol.OutReqContractData)
 	w.WriteInt(8) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
@@ -154,7 +156,7 @@ type MatchingSymbolsRequest struct {
 }
 
 func (m MatchingSymbolsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqMatchingSymbols), itoa(m.ReqID), m.Pattern}, nil
+	return []string{itoa(protocol.OutReqMatchingSymbols), itoa(m.ReqID), m.Pattern}, nil
 }
 
 type SymbolSample struct {
@@ -178,7 +180,7 @@ type MarketRuleRequest struct {
 }
 
 func (m MarketRuleRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqMarketRule), itoa(m.MarketRuleID)}, nil
+	return []string{itoa(protocol.OutReqMarketRule), itoa(m.MarketRuleID)}, nil
 }
 
 type PriceIncrement struct {
@@ -202,7 +204,7 @@ type SecDefOptParamsRequest struct {
 }
 
 func (m SecDefOptParamsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqSecDefOptParams), itoa(m.ReqID), m.UnderlyingSymbol, m.FutFopExchange, m.UnderlyingSecType, itoa(m.UnderlyingConID)}, nil
+	return []string{itoa(protocol.OutReqSecDefOptParams), itoa(m.ReqID), m.UnderlyingSymbol, m.FutFopExchange, m.UnderlyingSecType, itoa(m.UnderlyingConID)}, nil
 }
 
 type SecDefOptParamsResponse struct {
@@ -227,7 +229,7 @@ type SmartComponentsRequest struct {
 }
 
 func (m SmartComponentsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqSmartComponents), itoa(m.ReqID), m.BBOExchange}, nil
+	return []string{itoa(protocol.OutReqSmartComponents), itoa(m.ReqID), m.BBOExchange}, nil
 }
 
 type SmartComponentEntry struct {
@@ -250,7 +252,7 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	secType := r.ReadString()
 	expiry, lastTradeTime := splitLastTradeDate(r.ReadString())
 	lastTradeDate := ""
-	if sv >= MinServerVersionLastTradeDate {
+	if sv >= protocol.MinServerVersionLastTradeDate {
 		lastTradeDate = r.ReadString()
 	}
 	strike := r.ReadString()
@@ -286,10 +288,10 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 		return nil, err
 	}
 	trailerFields := 9
-	if sv >= MinServerVersionFundDataFields && secType == "FUND" {
+	if sv >= protocol.MinServerVersionFundDataFields && secType == "FUND" {
 		trailerFields += 17
 	}
-	if sv >= MinServerVersionIneligibilityReasons {
+	if sv >= protocol.MinServerVersionIneligibilityReasons {
 		trailerFields++
 	}
 	if err := r.RequireFixedEntryFields("contract security ids", securityIDCount, 2, trailerFields); err != nil {
@@ -314,7 +316,7 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	suggestedSizeIncrement := r.ReadDecimal()
 
 	var fund *FundDetails
-	if sv >= MinServerVersionFundDataFields && secType == "FUND" {
+	if sv >= protocol.MinServerVersionFundDataFields && secType == "FUND" {
 		fund = &FundDetails{
 			Name:                 r.ReadString(),
 			Family:               r.ReadString(),
@@ -337,7 +339,7 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	}
 
 	var ineligibilityReasons []IneligibilityReason
-	if sv >= MinServerVersionIneligibilityReasons {
+	if sv >= protocol.MinServerVersionIneligibilityReasons {
 		count, err := r.ReadCount("contract ineligibility reason count")
 		if err != nil {
 			return nil, err
@@ -384,7 +386,7 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 
 func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InContractData)
+	w.WriteInt(protocol.InContractData)
 	w.WriteInt(m.ReqID)
 	w.WriteString(m.Contract.Symbol)
 	w.WriteString(m.Contract.SecType)
@@ -396,7 +398,7 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 		}
 	}
 	w.WriteString(lastTradeDate)
-	if sv >= MinServerVersionLastTradeDate {
+	if sv >= protocol.MinServerVersionLastTradeDate {
 		explicitLastTradeDate := m.LastTradeDate
 		if explicitLastTradeDate == "" {
 			explicitLastTradeDate, _ = splitLastTradeDate(m.Contract.Expiry)
@@ -442,7 +444,7 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 	w.WriteDecimal(m.MinSize)
 	w.WriteDecimal(m.SizeIncrement)
 	w.WriteDecimal(m.SuggestedSizeIncrement)
-	if sv >= MinServerVersionFundDataFields && m.Contract.SecType == "FUND" {
+	if sv >= protocol.MinServerVersionFundDataFields && m.Contract.SecType == "FUND" {
 		fund := m.Fund
 		if fund == nil {
 			fund = &FundDetails{}
@@ -465,7 +467,7 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 		w.WriteString(fund.DistributionPolicy)
 		w.WriteString(fund.AssetType)
 	}
-	if sv >= MinServerVersionIneligibilityReasons {
+	if sv >= protocol.MinServerVersionIneligibilityReasons {
 		w.WriteInt(len(m.IneligibilityReasons))
 		for _, reason := range m.IneligibilityReasons {
 			w.WriteString(reason.ID)
@@ -509,7 +511,7 @@ func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
 	timeZoneID := maturityTimeZone
 	tradingHours := ""
 	liquidHours := ""
-	if sv >= MinServerVersionBondTradingHours {
+	if sv >= protocol.MinServerVersionBondTradingHours {
 		timeZoneID = r.ReadString()
 		tradingHours = r.ReadString()
 		liquidHours = r.ReadString()
@@ -568,7 +570,7 @@ func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
 
 func (m BondContractDetails) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InBondContractData)
+	w.WriteInt(protocol.InBondContractData)
 	w.WriteInt(m.ReqID)
 	w.WriteString(m.Contract.Symbol)
 	w.WriteString(m.Contract.SecType)
@@ -603,7 +605,7 @@ func (m BondContractDetails) encodeWire(sv int) ([]string, error) {
 	w.WriteBool(m.NextOptionPartial)
 	w.WriteString(m.Notes)
 	w.WriteString(m.LongName)
-	if sv >= MinServerVersionBondTradingHours {
+	if sv >= protocol.MinServerVersionBondTradingHours {
 		w.WriteString(m.TimeZoneID)
 		w.WriteString(m.TradingHours)
 		w.WriteString(m.LiquidHours)
@@ -706,7 +708,7 @@ func decodeContractDataEnd(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m ContractDetailsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InContractDataEnd), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.InContractDataEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, expirationsCount, expirations..., strikesCount, strikes...] — no version
@@ -751,7 +753,7 @@ func decodeSecDefOptParams(r *fieldReader, sv int) ([]Message, error) {
 
 func (m SecDefOptParamsResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InSecDefOptParams)
+	w.WriteInt(protocol.InSecDefOptParams)
 	w.WriteInt(m.ReqID)
 	w.WriteString(m.Exchange)
 	w.WriteInt(m.UnderlyingConID)
@@ -775,7 +777,7 @@ func decodeSecDefOptParamsEnd(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m SecDefOptParamsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InSecDefOptParamsEnd), itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.InSecDefOptParamsEnd), itoa(m.ReqID)}, nil
 }
 
 // [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)]
@@ -824,7 +826,7 @@ func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 
 func (m MatchingSymbols) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InSymbolSamples)
+	w.WriteInt(protocol.InSymbolSamples)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Symbols))
 	for _, s := range m.Symbols {
@@ -865,7 +867,7 @@ func decodeSmartComponents(r *fieldReader, sv int) ([]Message, error) {
 
 func (m SmartComponentsResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InSmartComponents)
+	w.WriteInt(protocol.InSmartComponents)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Components))
 	for _, c := range m.Components {
@@ -895,7 +897,7 @@ func decodeMarketRule(r *fieldReader, sv int) ([]Message, error) {
 
 func (m MarketRule) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InMarketRule)
+	w.WriteInt(protocol.InMarketRule)
 	w.WriteInt(m.MarketRuleID)
 	w.WriteInt(len(m.Increments))
 	for _, inc := range m.Increments {

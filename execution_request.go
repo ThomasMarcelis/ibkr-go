@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.ExecutionsRequest, error) {
@@ -14,10 +15,10 @@ func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.Executio
 	if req.LastDays < 0 || req.LastDays > 7 {
 		return codec.ExecutionsRequest{}, fmt.Errorf("ibkr: executions last days %d: want 0 through 7", req.LastDays)
 	}
-	if (req.LastDays != 0 || len(req.SpecificDates) != 0) && serverVersion < codec.MinServerVersionParametrizedDaysOfExecutions {
+	if (req.LastDays != 0 || len(req.SpecificDates) != 0) && serverVersion < protocol.MinServerVersionParametrizedDaysOfExecutions {
 		return codec.ExecutionsRequest{}, fmt.Errorf(
 			"ibkr: executions day filters require server_version %d, negotiated %d: %w",
-			codec.MinServerVersionParametrizedDaysOfExecutions, serverVersion, ErrUnsupportedServerVersion,
+			protocol.MinServerVersionParametrizedDaysOfExecutions, serverVersion, ErrUnsupportedServerVersion,
 		)
 	}
 

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -165,7 +166,7 @@ func BenchmarkDecodeHistoricalBars(b *testing.B) {
 	// same path testhost uses to pack transcript bars).
 	bars := benchHistoricalBars()
 	const repeats = 7
-	fields := []string{strconv.Itoa(InHistoricalData), "1001", strconv.Itoa(len(bars) * repeats)}
+	fields := []string{strconv.Itoa(protocol.InHistoricalData), "1001", strconv.Itoa(len(bars) * repeats)}
 	for range repeats {
 		for _, bar := range bars {
 			barFields, err := bar.encodeWire(200)
@@ -245,8 +246,8 @@ func BenchmarkEncodePlaceOrder(b *testing.B) {
 	if err != nil {
 		b.Fatalf("ParseFields() error = %v", err)
 	}
-	if fields[0] != strconv.Itoa(OutPlaceOrder) {
-		b.Fatalf("msg_id = %q, want %d", fields[0], OutPlaceOrder)
+	if fields[0] != strconv.Itoa(protocol.OutPlaceOrder) {
+		b.Fatalf("msg_id = %q, want %d", fields[0], protocol.OutPlaceOrder)
 	}
 	if !slices.Contains(fields, "adaptivePriority") {
 		b.Fatalf("encoded order is missing the algo-params section: %q", fields)

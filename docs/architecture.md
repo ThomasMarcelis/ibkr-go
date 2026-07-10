@@ -144,7 +144,7 @@ singleton open-orders observer.
   `placeOrder`, cancel, global-cancel, exercise-options, and executions
   fields; inbound `errMsg` layout, `contractData` last-trade-date,
   `openOrder` FA-profile and order-preview blocks, and historical-data inline
-  dataset dates. `internal/codec/version.go` names each gate after the
+  dataset dates. `internal/protocol/version.go` names each gate after the
   official client's `MIN_SERVER_VER_*` constant.
 - `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
   boundary it could not fully resolve, so a degraded parse is observable

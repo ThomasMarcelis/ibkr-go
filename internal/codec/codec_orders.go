@@ -2,6 +2,8 @@ package codec
 
 import (
 	"fmt"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 type OpenOrdersRequest struct {
@@ -11,20 +13,20 @@ type OpenOrdersRequest struct {
 func (m OpenOrdersRequest) encodeWire(sv int) ([]string, error) {
 	switch m.Scope {
 	case "all":
-		return []string{itoa(OutReqAllOpenOrders), "1"}, nil
+		return []string{itoa(protocol.OutReqAllOpenOrders), "1"}, nil
 	case "client":
-		return []string{itoa(OutReqOpenOrders), "1"}, nil
+		return []string{itoa(protocol.OutReqOpenOrders), "1"}, nil
 	case "auto":
-		return []string{itoa(OutReqAutoOpenOrders), "1", "1"}, nil
+		return []string{itoa(protocol.OutReqAutoOpenOrders), "1", "1"}, nil
 	default:
-		return []string{itoa(OutReqAllOpenOrders), "1"}, nil
+		return []string{itoa(protocol.OutReqAllOpenOrders), "1"}, nil
 	}
 }
 
 type CancelOpenOrders struct{}
 
 func (m CancelOpenOrders) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqAutoOpenOrders), "1", "0"}, nil
+	return []string{itoa(protocol.OutReqAutoOpenOrders), "1", "0"}, nil
 }
 
 type ComboLeg struct {
@@ -150,7 +152,7 @@ type ExecutionsRequest struct {
 
 func (m ExecutionsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqExecutions)
+	w.WriteInt(protocol.OutReqExecutions)
 	w.WriteInt(3) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.ClientID)
@@ -160,7 +162,7 @@ func (m ExecutionsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.SecType)
 	w.WriteString(m.Exchange)
 	w.WriteString(m.Side)
-	if sv >= MinServerVersionParametrizedDaysOfExecutions {
+	if sv >= protocol.MinServerVersionParametrizedDaysOfExecutions {
 		// The official clients encode an unset lastNDays as UNSET_INTEGER
 		// (2^31-1), followed by the specific YYYYMMDD dates.
 		if m.LastNDays == nil {
@@ -222,7 +224,7 @@ type CompletedOrdersRequest struct {
 
 func (m CompletedOrdersRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqCompletedOrders)
+	w.WriteInt(protocol.OutReqCompletedOrders)
 	w.WriteBool(m.APIOnly)
 	return w.Fields(), nil
 }
@@ -358,7 +360,7 @@ type SoftDollarTiersRequest struct {
 }
 
 func (m SoftDollarTiersRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqSoftDollarTiers), itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutReqSoftDollarTiers), itoa(m.ReqID)}, nil
 }
 
 type SoftDollarTier struct {
@@ -516,7 +518,7 @@ type PlaceOrderRequest struct {
 
 func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutPlaceOrder)
+	w.WriteInt(protocol.OutPlaceOrder)
 	// No version field at sv >= 145
 	w.WriteInt64(m.OrderID)
 	// Contract: 14 fields (conId, symbol, secType, lastTradeDate, strike, right,
@@ -583,7 +585,7 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.FAGroup)
 	w.WriteString(m.FAMethod)
 	w.WriteString(m.FAPercentage)
-	if sv < MinServerVersionFAProfileDesupport {
+	if sv < protocol.MinServerVersionFAProfileDesupport {
 		w.WriteString("") // deprecated faProfile (client.py:2463-2464)
 	}
 	w.WriteString(m.ModelCode)
@@ -689,25 +691,25 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.AdvancedErrorOverride)
 	w.WriteString(m.ManualOrderTime)
 	// [Exchange != IBKRATS, OrderType != PEG BEST/MID => skip peg offsets]
-	if sv >= MinServerVersionCustomerAccount {
+	if sv >= protocol.MinServerVersionCustomerAccount {
 		w.WriteString(m.CustomerAccount) // client.py:2746
 	}
-	if sv >= MinServerVersionProfessionalCustomer {
+	if sv >= protocol.MinServerVersionProfessionalCustomer {
 		w.WriteString(m.ProfessionalCustomer) // client.py:2749
 	}
-	if sv >= MinServerVersionRFQFields && sv < MinServerVersionUndoRFQFields {
+	if sv >= protocol.MinServerVersionRFQFields && sv < protocol.MinServerVersionUndoRFQFields {
 		// Legacy RFQ window (client.py:2752-2754): empty placeholder then
 		// UNSET_INTEGER (2^31-1). Removed at UndoRFQFields (190).
 		w.WriteString("")
 		w.WriteString("2147483647")
 	}
-	if sv >= MinServerVersionIncludeOvernight {
+	if sv >= protocol.MinServerVersionIncludeOvernight {
 		w.WriteString(m.IncludeOvernight) // client.py:2756
 	}
-	if sv >= MinServerVersionCMETaggingFields {
+	if sv >= protocol.MinServerVersionCMETaggingFields {
 		w.WriteString(m.ManualOrderIndicator) // client.py:2759
 	}
-	if sv >= MinServerVersionImbalanceOnly {
+	if sv >= protocol.MinServerVersionImbalanceOnly {
 		w.WriteString(m.ImbalanceOnly) // client.py:2762
 	}
 	return w.Fields(), nil
@@ -726,20 +728,20 @@ type CancelOrderRequest struct {
 
 func (m CancelOrderRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutCancelOrder)
-	if sv < MinServerVersionCMETaggingFields {
+	w.WriteInt(protocol.OutCancelOrder)
+	if sv < protocol.MinServerVersionCMETaggingFields {
 		w.WriteString("1") // legacy version field (client.py:2899-2900)
 	}
 	w.WriteInt64(m.OrderID)
 	w.WriteString(m.ManualOrderCancelTime)
-	if sv >= MinServerVersionRFQFields && sv < MinServerVersionUndoRFQFields {
+	if sv >= protocol.MinServerVersionRFQFields && sv < protocol.MinServerVersionUndoRFQFields {
 		// Legacy RFQ window (client.py:2905-2908): two empty placeholders
 		// then UNSET_INTEGER. Removed at UndoRFQFields (190).
 		w.WriteString("")
 		w.WriteString("")
 		w.WriteString("2147483647")
 	}
-	if sv >= MinServerVersionCMETaggingFields {
+	if sv >= protocol.MinServerVersionCMETaggingFields {
 		w.WriteString(m.ExtOperator)          // client.py:2911
 		w.WriteString(m.ManualOrderIndicator) // client.py:2912
 	}
@@ -756,11 +758,11 @@ type GlobalCancelRequest struct {
 
 func (m GlobalCancelRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqGlobalCancel)
-	if sv < MinServerVersionCMETaggingFields {
+	w.WriteInt(protocol.OutReqGlobalCancel)
+	if sv < protocol.MinServerVersionCMETaggingFields {
 		w.WriteString("1") // legacy version field (client.py:3131-3132)
 	}
-	if sv >= MinServerVersionCMETaggingFields {
+	if sv >= protocol.MinServerVersionCMETaggingFields {
 		w.WriteString(m.ExtOperator)          // client.py:3135
 		w.WriteString(m.ManualOrderIndicator) // client.py:3136
 	}
@@ -780,7 +782,7 @@ type ExerciseOptionsRequest struct {
 
 func (m ExerciseOptionsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutExerciseOptions)
+	w.WriteInt(protocol.OutExerciseOptions)
 	w.WriteInt(2) // version
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
@@ -806,13 +808,13 @@ func (m ExerciseOptionsRequest) encodeWire(sv int) ([]string, error) {
 	// and professional-customer tail; ending the frame at override drew
 	// code 10300 from the live Gateway (capture 20260611T074859Z,
 	// sha 241a49023701e9ec).
-	if sv >= MinServerVersionManualOrderTimeExerciseOptions {
+	if sv >= protocol.MinServerVersionManualOrderTimeExerciseOptions {
 		w.WriteString("") // manualOrderTime (client.py:1775)
 	}
-	if sv >= MinServerVersionCustomerAccount {
+	if sv >= protocol.MinServerVersionCustomerAccount {
 		w.WriteString("") // customerAccount (client.py:1779)
 	}
-	if sv >= MinServerVersionProfessionalCustomer {
+	if sv >= protocol.MinServerVersionProfessionalCustomer {
 		w.WriteBool(false) // professionalCustomer (client.py:1783)
 	}
 	return w.Fields(), nil
@@ -841,7 +843,7 @@ func decodeOrderStatus(r *fieldReader, sv int) ([]Message, error) {
 
 func (m OrderStatus) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InOrderStatus)
+	w.WriteInt(protocol.InOrderStatus)
 	w.WriteInt64(m.OrderID)
 	w.WriteString(m.Status)
 	w.WriteString(m.Filled)
@@ -893,7 +895,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	r.ReadString() // FAGroup
 	r.ReadString() // FAMethod
 	r.ReadString() // FAPercentage
-	if sv < MinServerVersionFAProfileDesupport {
+	if sv < protocol.MinServerVersionFAProfileDesupport {
 		r.ReadString() // deprecated faProfile (orderdecoder.py:136-137)
 	}
 	r.ReadString() // ModelCode
@@ -1055,7 +1057,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	minCommission := r.ReadString()
 	maxCommission := r.ReadString()
 	commissionCurrency := r.ReadString()
-	if sv >= MinServerVersionFullOrderPreviewFields {
+	if sv >= protocol.MinServerVersionFullOrderPreviewFields {
 		// FULL_ORDER_PREVIEW block (orderdecoder.py:369-395): marginCurrency,
 		// nine outside-RTH margin fields, suggestedSize, rejectReason, then
 		// the order-allocations vector. warningText below is unconditional.
@@ -1149,25 +1151,25 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	// per gated extension present at this version (orderdecoder.py:372-391).
 	// At sv200 the extensions sum to 8, giving the 32-field live tail.
 	expectedTail := 24
-	if sv >= MinServerVersionCustomerAccount {
+	if sv >= protocol.MinServerVersionCustomerAccount {
 		expectedTail++
 	}
-	if sv >= MinServerVersionProfessionalCustomer {
+	if sv >= protocol.MinServerVersionProfessionalCustomer {
 		expectedTail++
 	}
-	if sv >= MinServerVersionBondAccruedInterest {
+	if sv >= protocol.MinServerVersionBondAccruedInterest {
 		expectedTail++
 	}
-	if sv >= MinServerVersionIncludeOvernight {
+	if sv >= protocol.MinServerVersionIncludeOvernight {
 		expectedTail++
 	}
-	if sv >= MinServerVersionCMETaggingFieldsInOpenOrder {
+	if sv >= protocol.MinServerVersionCMETaggingFieldsInOpenOrder {
 		expectedTail += 2 // extOperator + manualOrderIndicator
 	}
-	if sv >= MinServerVersionSubmitter {
+	if sv >= protocol.MinServerVersionSubmitter {
 		expectedTail++
 	}
-	if sv >= MinServerVersionImbalanceOnly {
+	if sv >= protocol.MinServerVersionImbalanceOnly {
 		expectedTail++
 	}
 	if r.Remaining() != expectedTail {
@@ -1212,7 +1214,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 
 func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InOpenOrder)
+	w.WriteInt(protocol.InOpenOrder)
 	w.WriteInt64(m.OrderID)
 	writeObservedWireContract(&w, m.Contract)
 	w.WriteString(m.Action)
@@ -1426,13 +1428,13 @@ func decodeExecutionData(r *fieldReader, sv int) ([]Message, error) {
 	m.EconomicValueRule = r.ReadString()
 	m.EconomicValueMultiplier = r.ReadString()
 	m.ModelCode = r.ReadString()
-	if sv >= MinServerVersionLastLiquidity {
+	if sv >= protocol.MinServerVersionLastLiquidity {
 		m.LastLiquidity = r.ReadString()
 	}
-	if sv >= MinServerVersionPendingPriceRevision {
+	if sv >= protocol.MinServerVersionPendingPriceRevision {
 		m.PendingPriceRevision = r.ReadString()
 	}
-	if sv >= MinServerVersionSubmitter {
+	if sv >= protocol.MinServerVersionSubmitter {
 		m.Submitter = r.ReadString()
 	}
 	if remaining := r.Remaining(); remaining != 0 {
@@ -1443,7 +1445,7 @@ func decodeExecutionData(r *fieldReader, sv int) ([]Message, error) {
 
 func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InExecutionData)
+	w.WriteInt(protocol.InExecutionData)
 	w.WriteInt(m.ReqID)
 	w.WriteString(i64toa(m.OrderID))
 	w.WriteInt(m.Contract.ConID)
@@ -1473,13 +1475,13 @@ func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.EconomicValueRule)
 	w.WriteString(m.EconomicValueMultiplier)
 	w.WriteString(m.ModelCode)
-	if sv >= MinServerVersionLastLiquidity {
+	if sv >= protocol.MinServerVersionLastLiquidity {
 		w.WriteString(m.LastLiquidity)
 	}
-	if sv >= MinServerVersionPendingPriceRevision {
+	if sv >= protocol.MinServerVersionPendingPriceRevision {
 		w.WriteString(m.PendingPriceRevision)
 	}
-	if sv >= MinServerVersionSubmitter {
+	if sv >= protocol.MinServerVersionSubmitter {
 		w.WriteString(m.Submitter)
 	}
 	return w.Fields(), nil
@@ -1490,7 +1492,7 @@ func decodeOpenOrderEnd(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m OpenOrderEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InOpenOrderEnd), "1"}, nil
+	return []string{itoa(protocol.InOpenOrderEnd), "1"}, nil
 }
 
 // [55, version, reqID]
@@ -1501,7 +1503,7 @@ func decodeExecutionDataEnd(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m ExecutionsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
 }
 
 // [59, version, execID, commission, currency, realizedPNL, yield, redemptionDate]
@@ -1524,7 +1526,7 @@ func decodeCommissionReport(r *fieldReader, sv int) ([]Message, error) {
 
 func (m CommissionReport) encodeWire(sv int) ([]string, error) {
 	return []string{
-		itoa(InCommissionReport), "1", m.ExecID, m.Commission, m.Currency,
+		itoa(protocol.InCommissionReport), "1", m.ExecID, m.Commission, m.Currency,
 		m.RealizedPNL, m.Yield, m.YieldRedemptionDate,
 	}, nil
 }
@@ -1551,7 +1553,7 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	m.FAGroup = r.ReadString()
 	m.FAMethod = r.ReadString()
 	m.FAPercentage = r.ReadString()
-	if sv < MinServerVersionFAProfileDesupport {
+	if sv < protocol.MinServerVersionFAProfileDesupport {
 		r.ReadString() // deprecated FA profile
 	}
 	// Models are present throughout ibkr-go's supported server range (the
@@ -1731,13 +1733,13 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	m.CompeteAgainstBestOffset = r.ReadString()
 	m.MidOffsetAtWhole = r.ReadString()
 	m.MidOffsetAtHalf = r.ReadString()
-	if sv >= MinServerVersionCustomerAccount {
+	if sv >= protocol.MinServerVersionCustomerAccount {
 		m.CustomerAccount = r.ReadString()
 	}
-	if sv >= MinServerVersionProfessionalCustomer {
+	if sv >= protocol.MinServerVersionProfessionalCustomer {
 		m.ProfessionalCustomer = r.ReadString()
 	}
-	if sv >= MinServerVersionSubmitter {
+	if sv >= protocol.MinServerVersionSubmitter {
 		m.Submitter = r.ReadString()
 	}
 	if err := r.Err(); err != nil {
@@ -1751,7 +1753,7 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 
 func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InCompletedOrder)
+	w.WriteInt(protocol.InCompletedOrder)
 	w.WriteInt(m.Contract.ConID)
 	w.WriteString(m.Contract.Symbol)
 	w.WriteString(m.Contract.SecType)
@@ -1786,7 +1788,7 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.FAGroup)
 	w.WriteString(m.FAMethod)
 	w.WriteString(m.FAPercentage)
-	if sv < MinServerVersionFAProfileDesupport {
+	if sv < protocol.MinServerVersionFAProfileDesupport {
 		w.WriteString("") // deprecated FA profile
 	}
 	w.WriteString(m.ModelCode)
@@ -1909,13 +1911,13 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.CompeteAgainstBestOffset)
 	w.WriteString(m.MidOffsetAtWhole)
 	w.WriteString(m.MidOffsetAtHalf)
-	if sv >= MinServerVersionCustomerAccount {
+	if sv >= protocol.MinServerVersionCustomerAccount {
 		w.WriteString(m.CustomerAccount)
 	}
-	if sv >= MinServerVersionProfessionalCustomer {
+	if sv >= protocol.MinServerVersionProfessionalCustomer {
 		w.WriteString(m.ProfessionalCustomer)
 	}
-	if sv >= MinServerVersionSubmitter {
+	if sv >= protocol.MinServerVersionSubmitter {
 		w.WriteString(m.Submitter)
 	}
 	return w.Fields(), nil
@@ -1927,7 +1929,7 @@ func decodeCompletedOrderEnd(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m CompletedOrderEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InCompletedOrderEnd)}, nil
+	return []string{itoa(protocol.InCompletedOrderEnd)}, nil
 }
 
 // [77, reqId, count, (name, value, displayName) * count]
@@ -1949,7 +1951,7 @@ func decodeSoftDollarTiers(r *fieldReader, sv int) ([]Message, error) {
 
 func (m SoftDollarTiersResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InSoftDollarTiers)
+	w.WriteInt(protocol.InSoftDollarTiers)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Tiers))
 	for _, t := range m.Tiers {

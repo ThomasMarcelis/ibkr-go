@@ -3,6 +3,8 @@ package codec
 import (
 	"slices"
 	"testing"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 func TestScannerSubscriptionRequestMatchesLiveServer200Shape(t *testing.T) {
@@ -79,7 +81,7 @@ func TestReplaceFAEncodesTrailingReqID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("encodeWire() error = %v", err)
 	}
-	want := []string{itoa(OutReplaceFA), "1", "1", "<x/>", "9001"}
+	want := []string{itoa(protocol.OutReplaceFA), "1", "1", "<x/>", "9001"}
 	if len(fields) != len(want) {
 		t.Fatalf("encodeWire() = %v, want %v", fields, want)
 	}

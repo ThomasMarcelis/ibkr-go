@@ -3,6 +3,8 @@ package codec
 import (
 	"fmt"
 	"strings"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 type StartAPI struct {
@@ -11,7 +13,7 @@ type StartAPI struct {
 }
 
 func (m StartAPI) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
+	return []string{itoa(protocol.OutStartAPI), "2", itoa(m.ClientID), m.OptionalCapabilities}, nil
 }
 
 type ServerInfo struct {
@@ -41,7 +43,7 @@ type CurrentTime struct {
 type CurrentTimeRequest struct{}
 
 func (m CurrentTimeRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqCurrentTime), "1"}, nil
+	return []string{itoa(protocol.OutReqCurrentTime), "1"}, nil
 }
 
 // CurrentTimeMillis is the inbound currentTimeInMillis frame (IN 109): the
@@ -56,7 +58,7 @@ type CurrentTimeMillis struct {
 type CurrentTimeMillisRequest struct{}
 
 func (m CurrentTimeMillisRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqCurrentTimeInMillis)}, nil
+	return []string{itoa(protocol.OutReqCurrentTimeInMillis)}, nil
 }
 
 // ReqIDsRequest is the outbound reqIds message (OUT 8). The server responds
@@ -71,7 +73,7 @@ func (m ReqIDsRequest) encodeWire(sv int) ([]string, error) {
 	if numIDs <= 0 {
 		numIDs = 1
 	}
-	return []string{itoa(OutReqIds), "1", itoa(numIDs)}, nil
+	return []string{itoa(protocol.OutReqIds), "1", itoa(numIDs)}, nil
 }
 
 type APIError struct {
@@ -87,7 +89,7 @@ type UserInfoRequest struct {
 }
 
 func (m UserInfoRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqUserInfo), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutReqUserInfo), "1", itoa(m.ReqID)}, nil
 }
 
 type UserInfo struct {
@@ -97,7 +99,7 @@ type UserInfo struct {
 
 // [4, reqId, code, message, advancedJson, errorTimeMs]
 func decodeErrMsg(r *fieldReader, sv int) ([]Message, error) {
-	if sv < MinServerVersionErrorTime {
+	if sv < protocol.MinServerVersionErrorTime {
 		r.Skip(1) // legacy leading version int (decoder.py:2368-2369)
 	}
 	reqID, _ := r.ReadInt()
@@ -107,14 +109,14 @@ func decodeErrMsg(r *fieldReader, sv int) ([]Message, error) {
 	// below the 176 floor, so it is always on the wire.
 	advJSON := r.ReadString()
 	errTime := ""
-	if sv >= MinServerVersionErrorTime {
+	if sv >= protocol.MinServerVersionErrorTime {
 		errTime = r.ReadString() // decoder.py:2380-2382
 	}
 	return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
 }
 
 func (m APIError) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
+	return []string{itoa(protocol.InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
 }
 
 // [109, timeMs] — no version
@@ -123,7 +125,7 @@ func decodeCurrentTimeInMillis(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m CurrentTimeMillis) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InCurrentTimeInMillis), m.TimeMs}, nil
+	return []string{itoa(protocol.InCurrentTimeInMillis), m.TimeMs}, nil
 }
 
 // [9, version, orderID]
@@ -137,7 +139,7 @@ func decodeNextValidID(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m NextValidID) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InNextValidID), "1", i64toa(m.OrderID)}, nil
+	return []string{itoa(protocol.InNextValidID), "1", i64toa(m.OrderID)}, nil
 }
 
 // [15, version, accountsList]
@@ -152,7 +154,7 @@ func decodeManagedAccounts(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m ManagedAccounts) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
+	return []string{itoa(protocol.InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
 }
 
 // [49, version, time]
@@ -162,7 +164,7 @@ func decodeCurrentTime(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m CurrentTime) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InCurrentTime), "1", m.Time}, nil
+	return []string{itoa(protocol.InCurrentTime), "1", m.Time}, nil
 }
 
 // Wire fields after the message ID: [reqId, whiteBrandingId] — no version.
@@ -173,5 +175,5 @@ func decodeUserInfo(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m UserInfo) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InUserInfo), itoa(m.ReqID), m.WhiteBrandingID}, nil
+	return []string{itoa(protocol.InUserInfo), itoa(m.ReqID), m.WhiteBrandingID}, nil
 }

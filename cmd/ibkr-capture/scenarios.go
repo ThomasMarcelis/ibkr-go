@@ -390,7 +390,7 @@ var scenarios = map[string]scenario{
 				return err
 			}
 			// Stop on either an api_error or the historical_schedule callback
-			// (msg_id 106, InHistoricalSchedule in internal/codec/msgid.go)
+			// (msg_id 106, protocol.InHistoricalSchedule)
 			// for our reqID. The 15 s deadline is a safety net only.
 			stop := func(msgID int, fields []string) bool {
 				if len(fields) < 2 || fields[1] != strconv.Itoa(reqID) {

@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -234,9 +235,9 @@ func TestErrMsgVersionGate(t *testing.T) {
 	t.Parallel()
 
 	// Old layout (sv 193): [4, version, reqId, code, msg, advJson].
-	oldFields := []string{itoa(InErrMsg), "1", "-1", "2104", "Market data farm OK", ""}
+	oldFields := []string{itoa(protocol.InErrMsg), "1", "-1", "2104", "Market data farm OK", ""}
 	// New layout (sv 194): [4, reqId, code, msg, advJson, errorTime].
-	newFields := []string{itoa(InErrMsg), "-1", "2104", "Market data farm OK", "", "1712345678000"}
+	newFields := []string{itoa(protocol.InErrMsg), "-1", "2104", "Market data farm OK", "", "1712345678000"}
 
 	oldMsg := decodeSingle[APIError](t, 193, oldFields)
 	newMsg := decodeSingle[APIError](t, 194, newFields)
@@ -266,7 +267,7 @@ func TestContractDetailsVersionGate(t *testing.T) {
 	// decodeContractData's read order.
 	base := func(withLastTradeDate bool) []string {
 		f := []string{
-			itoa(InContractData), "7", // msg_id, reqId
+			itoa(protocol.InContractData), "7", // msg_id, reqId
 			"AAPL", "STK", // symbol, secType
 			"20260101", // lastTradeDateOrContractMonth
 		}
@@ -382,12 +383,12 @@ func TestHistoricalDataVersionGate(t *testing.T) {
 
 	// Old layout (sv 195): [17, reqId, startDate, endDate, barCount, bars...].
 	oldFields := []string{
-		itoa(InHistoricalData), "3", "20260101", "20260102", "1",
+		itoa(protocol.InHistoricalData), "3", "20260101", "20260102", "1",
 		"20260101", "1.0", "2.0", "0.5", "1.5", "100", "1.2", "7",
 	}
 	// New layout (sv 196): [17, reqId, barCount, bars...].
 	newFields := []string{
-		itoa(InHistoricalData), "3", "1",
+		itoa(protocol.InHistoricalData), "3", "1",
 		"20260101", "1.0", "2.0", "0.5", "1.5", "100", "1.2", "7",
 	}
 
@@ -417,18 +418,18 @@ func TestHistoricalDataVersionGate(t *testing.T) {
 func openOrderTailWidth(sv int) int {
 	n := 24
 	for _, gate := range []int{
-		MinServerVersionCustomerAccount,
-		MinServerVersionProfessionalCustomer,
-		MinServerVersionBondAccruedInterest,
-		MinServerVersionIncludeOvernight,
-		MinServerVersionSubmitter,
-		MinServerVersionImbalanceOnly,
+		protocol.MinServerVersionCustomerAccount,
+		protocol.MinServerVersionProfessionalCustomer,
+		protocol.MinServerVersionBondAccruedInterest,
+		protocol.MinServerVersionIncludeOvernight,
+		protocol.MinServerVersionSubmitter,
+		protocol.MinServerVersionImbalanceOnly,
 	} {
 		if sv >= gate {
 			n++
 		}
 	}
-	if sv >= MinServerVersionCMETaggingFieldsInOpenOrder {
+	if sv >= protocol.MinServerVersionCMETaggingFieldsInOpenOrder {
 		n += 2
 	}
 	return n
@@ -441,7 +442,7 @@ func openOrderTailWidth(sv int) int {
 // FULL_ORDER_PREVIEW 369-395, tail 372-391). Distinctive status/margin values
 // let callers assert the overlapping semantics decode identically.
 func buildOpenOrderFields(sv int) []string {
-	f := []string{itoa(InOpenOrder), "42"}
+	f := []string{itoa(protocol.InOpenOrder), "42"}
 	// contract (11)
 	f = append(f, "265598", "AAPL", "STK", "", "0.0", "", "", "SMART", "USD", "AAPL", "NMS")
 	// core order (8)
@@ -450,7 +451,7 @@ func buildOpenOrderFields(sv int) []string {
 	f = append(f, "O", "0", "ref1", "7", "123456", "0", "0", "0", "")
 	// sharesAllocation, FAGroup, FAMethod, FAPercentage
 	f = append(f, "", "", "", "")
-	if sv < MinServerVersionFAProfileDesupport {
+	if sv < protocol.MinServerVersionFAProfileDesupport {
 		f = append(f, "") // deprecated faProfile (orderdecoder.py:136-137)
 	}
 	// modelCode..NBBOPriceCap (23)
@@ -494,7 +495,7 @@ func buildOpenOrderFields(sv int) []string {
 		"im_a", "mm_a", "ewl_a",
 		"comm", "mincomm", "maxcomm", "USD",
 	)
-	if sv >= MinServerVersionFullOrderPreviewFields {
+	if sv >= protocol.MinServerVersionFullOrderPreviewFields {
 		// FULL_ORDER_PREVIEW: marginCurrency + 9 outsideRTH + suggestedSize +
 		// rejectReason + allocationsCount(0) = 13 (orderdecoder.py:369-395).
 		for range 12 {

@@ -1,5 +1,7 @@
 package codec
 
+import "github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+
 type HistoricalBarsRequest struct {
 	ReqID        int
 	Contract     Contract
@@ -13,7 +15,7 @@ type HistoricalBarsRequest struct {
 
 func (m HistoricalBarsRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqHistoricalData)
+	w.WriteInt(protocol.OutReqHistoricalData)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
@@ -64,7 +66,7 @@ type CancelHistoricalData struct {
 }
 
 func (m CancelHistoricalData) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelHistoricalData), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelHistoricalData), "1", itoa(m.ReqID)}, nil
 }
 
 type HeadTimestampRequest struct {
@@ -76,7 +78,7 @@ type HeadTimestampRequest struct {
 
 func (m HeadTimestampRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqHeadTimestamp)
+	w.WriteInt(protocol.OutReqHeadTimestamp)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
@@ -97,7 +99,7 @@ type CancelHeadTimestamp struct {
 }
 
 func (m CancelHeadTimestamp) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelHeadTimestamp), itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelHeadTimestamp), itoa(m.ReqID)}, nil
 }
 
 // HistogramData (OUT 88 / cancel OUT 89 / IN 89)
@@ -111,7 +113,7 @@ type HistogramDataRequest struct {
 
 func (m HistogramDataRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqHistogramData)
+	w.WriteInt(protocol.OutReqHistogramData)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
@@ -126,7 +128,7 @@ type CancelHistogramData struct {
 }
 
 func (m CancelHistogramData) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelHistogramData), itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutCancelHistogramData), itoa(m.ReqID)}, nil
 }
 
 type HistogramDataEntry struct {
@@ -154,7 +156,7 @@ type HistoricalTicksRequest struct {
 
 func (m HistoricalTicksRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(OutReqHistoricalTicks)
+	w.WriteInt(protocol.OutReqHistoricalTicks)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.Contract.ConID)
 	writeWireContract(&w, m.Contract)
@@ -261,7 +263,7 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 	// (decoder.py:897-922). At sv>=196 the end-of-data arrives as a separate
 	// frame and these fields are absent.
 	var startDate, endDate string
-	if sv < MinServerVersionHistoricalDataEnd {
+	if sv < protocol.MinServerVersionHistoricalDataEnd {
 		startDate = r.ReadString()
 		endDate = r.ReadString()
 	}
@@ -270,7 +272,7 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 		return nil, err
 	}
 	if barCount <= 0 {
-		if sv >= MinServerVersionHistoricalDataEnd {
+		if sv >= protocol.MinServerVersionHistoricalDataEnd {
 			return nil, nil
 		}
 		return []Message{HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate}}, nil
@@ -287,7 +289,7 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 			Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
 		})
 	}
-	if sv < MinServerVersionHistoricalDataEnd {
+	if sv < protocol.MinServerVersionHistoricalDataEnd {
 		msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate})
 	}
 	return msgs, nil
@@ -295,7 +297,7 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalBar) encodeWire(sv int) ([]string, error) {
 	return []string{
-		itoa(InHistoricalData), itoa(m.ReqID), "1",
+		itoa(protocol.InHistoricalData), itoa(m.ReqID), "1",
 		m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count,
 	}, nil
 }
@@ -304,10 +306,10 @@ func (m HistoricalBarsEnd) encodeWire(sv int) ([]string, error) {
 	// At sv >= 196 the live Gateway ends a batch with a standalone
 	// HISTORICAL_DATA_END frame; below that the range rides the packed IN 17
 	// frame, so a bare zero-bar batch is the only faithful representation.
-	if sv >= MinServerVersionHistoricalDataEnd {
-		return []string{itoa(InHistoricalDataEnd), itoa(m.ReqID), m.StartDate, m.EndDate}, nil
+	if sv >= protocol.MinServerVersionHistoricalDataEnd {
+		return []string{itoa(protocol.InHistoricalDataEnd), itoa(m.ReqID), m.StartDate, m.EndDate}, nil
 	}
-	return []string{itoa(InHistoricalData), itoa(m.ReqID), m.StartDate, m.EndDate, "0"}, nil
+	return []string{itoa(protocol.InHistoricalData), itoa(m.ReqID), m.StartDate, m.EndDate, "0"}, nil
 }
 
 // [88, reqId, headTimestamp] — no version
@@ -318,7 +320,7 @@ func decodeHeadTimestamp(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m HeadTimestamp) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InHeadTimestamp), itoa(m.ReqID), m.Timestamp}, nil
+	return []string{itoa(protocol.InHeadTimestamp), itoa(m.ReqID), m.Timestamp}, nil
 }
 
 // [89, reqID, count, entries(price, size)] — no version
@@ -340,7 +342,7 @@ func decodeHistogramData(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistogramDataResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistogramData)
+	w.WriteInt(protocol.InHistogramData)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Entries))
 	for _, e := range m.Entries {
@@ -374,7 +376,7 @@ func decodeHistoricalTicks(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalTicksResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistoricalTicks)
+	w.WriteInt(protocol.InHistoricalTicks)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Ticks))
 	for _, t := range m.Ticks {
@@ -413,7 +415,7 @@ func decodeHistoricalTicksBidAsk(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalTicksBidAskResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistoricalTicksBidAsk)
+	w.WriteInt(protocol.InHistoricalTicksBidAsk)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Ticks))
 	for _, t := range m.Ticks {
@@ -454,7 +456,7 @@ func decodeHistoricalTicksLast(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalTicksLastResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistoricalTicksLast)
+	w.WriteInt(protocol.InHistoricalTicksLast)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(len(m.Ticks))
 	for _, t := range m.Ticks {
@@ -498,7 +500,7 @@ func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalDataUpdate) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistoricalDataUpdate)
+	w.WriteInt(protocol.InHistoricalDataUpdate)
 	w.WriteInt(m.ReqID)
 	w.WriteInt(m.BarCount)
 	w.WriteString(m.Time)
@@ -558,7 +560,7 @@ func decodeHistoricalSchedule(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalScheduleResponse) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistoricalSchedule)
+	w.WriteInt(protocol.InHistoricalSchedule)
 	w.WriteInt(m.ReqID)
 	w.WriteString(m.StartDateTime)
 	w.WriteString(m.EndDateTime)

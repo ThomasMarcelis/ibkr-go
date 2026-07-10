@@ -71,7 +71,7 @@ func TestEncodeExecutionsRequestServer201Filter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeEnvelope() error = %v", err)
 	}
-	if envelope.MsgID != OutReqExecutions || envelope.Encoding != protocol.ProtobufBody {
+	if envelope.MsgID != protocol.OutReqExecutions || envelope.Encoding != protocol.ProtobufBody {
 		t.Fatalf("envelope = %+v", envelope)
 	}
 	// Official API 10.48.01 ExecutionRequest.proto / ExecutionFilter.proto
@@ -174,7 +174,7 @@ func TestDecodeProtobufCommissionAndErrorSchemas(t *testing.T) {
 	commissionBody = appendProtoTestDouble(commissionBody, 2, 1.006695)
 	commissionBody = appendProtoString(commissionBody, 3, "USD")
 	commissionBody = appendProtoTestDouble(commissionBody, 4, -2.116698)
-	commissionPayload, err := protocol.EncodeProtobufEnvelope(201, InCommissionReport, commissionBody)
+	commissionPayload, err := protocol.EncodeProtobufEnvelope(201, protocol.InCommissionReport, commissionBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestDecodeProtobufCommissionAndErrorSchemas(t *testing.T) {
 	errorBody = appendProtoVarint(errorBody, 2, 1783637704284)
 	errorBody = appendProtoVarint(errorBody, 3, 2104)
 	errorBody = appendProtoString(errorBody, 4, "Market data farm connection is OK:usfarm")
-	errorPayload, err := protocol.EncodeProtobufEnvelope(201, InErrMsg, errorBody)
+	errorPayload, err := protocol.EncodeProtobufEnvelope(201, protocol.InErrMsg, errorBody)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -273,7 +273,7 @@ func TestDecodeUnknownProtobufPreservesBinaryBody(t *testing.T) {
 func TestDecodeMalformedProtobuf(t *testing.T) {
 	t.Parallel()
 
-	payload, err := protocol.EncodeProtobufEnvelope(201, InExecutionDataEnd, []byte{0x08, 0x80})
+	payload, err := protocol.EncodeProtobufEnvelope(201, protocol.InExecutionDataEnd, []byte{0x08, 0x80})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestDecodeMalformedProtobuf(t *testing.T) {
 		t.Fatal("Decode() accepted a truncated varint")
 	}
 
-	payload, err = protocol.EncodeProtobufEnvelope(201, InExecutionDataEnd, []byte{0x0a, 0})
+	payload, err = protocol.EncodeProtobufEnvelope(201, protocol.InExecutionDataEnd, []byte{0x0a, 0})
 	if err != nil {
 		t.Fatal(err)
 	}

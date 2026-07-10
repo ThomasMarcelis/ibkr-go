@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -36,82 +37,82 @@ func mustNotPanic(t *testing.T, fn func()) {
 
 // allInboundMsgIDs is the complete set of known inbound (server -> client) message IDs.
 var allInboundMsgIDs = []int{
-	InTickPrice,             // 1
-	InTickSize,              // 2
-	InOrderStatus,           // 3
-	InErrMsg,                // 4
-	InOpenOrder,             // 5
-	InUpdateAccountValue,    // 6
-	InUpdatePortfolio,       // 7
-	InUpdateAccountTime,     // 8
-	InNextValidID,           // 9
-	InContractData,          // 10
-	InExecutionData,         // 11
-	InMarketDepth,           // 12
-	InMarketDepthL2,         // 13
-	InNewsBulletins,         // 14
-	InManagedAccounts,       // 15
-	InHistoricalData,        // 17
-	InBondContractData,      // 18
-	InScannerParameters,     // 19
-	InScannerData,           // 20
-	InTickOptionComputation, // 21
-	InTickGeneric,           // 45
-	InTickString,            // 46
-	InCurrentTime,           // 49
-	InRealTimeBars,          // 50
-	InContractDataEnd,       // 52
-	InOpenOrderEnd,          // 53
-	InAccountDownloadEnd,    // 54
-	InExecutionDataEnd,      // 55
-	InTickSnapshotEnd,       // 57
-	InMarketDataType,        // 58
-	InCommissionReport,      // 59
-	InPositionData,          // 61
-	InPositionEnd,           // 62
-	InAccountSummary,        // 63
-	InAccountSummaryEnd,     // 64
-	InPositionMulti,         // 71
-	InPositionMultiEnd,      // 72
-	InAccountUpdateMulti,    // 73
-	InAccountUpdateMultiEnd, // 74
-	InSecDefOptParams,       // 75
-	InSecDefOptParamsEnd,    // 76
-	InFamilyCodes,           // 78
-	InSymbolSamples,         // 79
-	InMktDepthExchanges,     // 80
-	InTickReqParams,         // 81
-	InSmartComponents,       // 82
-	InNewsArticle,           // 83
-	InTickNews,              // 84
-	InNewsProviders,         // 85
-	InHistoricalNews,        // 86
-	InHistoricalNewsEnd,     // 87
-	InHeadTimestamp,         // 88
-	InHistogramData,         // 89
-	InMarketDataReroute,     // 91
-	InMarketDepthReroute,    // 92
-	InMarketRule,            // 93
-	InPnL,                   // 94
-	InPnLSingle,             // 95
-	InHistoricalTicks,       // 96
-	InHistoricalTicksBidAsk, // 97
-	InHistoricalTicksLast,   // 98
-	InTickByTick,            // 99
-	InCompletedOrder,        // 101
-	InCompletedOrderEnd,     // 102
-	InReplaceFAEnd,          // 103
-	InUserInfo,              // 107
-	InHistoricalDataUpdate,  // 90
-	InHistoricalDataEnd,     // 108
-	InReceiveFA,             // 16
-	InSoftDollarTiers,       // 77
-	InDisplayGroupList,      // 67
-	InDisplayGroupUpdated,   // 68
-	InWSHMetaData,           // 104
-	InWSHEventData,          // 105
-	InHistoricalSchedule,    // 106
-	InCurrentTimeInMillis,   // 109
+	protocol.InTickPrice,             // 1
+	protocol.InTickSize,              // 2
+	protocol.InOrderStatus,           // 3
+	protocol.InErrMsg,                // 4
+	protocol.InOpenOrder,             // 5
+	protocol.InUpdateAccountValue,    // 6
+	protocol.InUpdatePortfolio,       // 7
+	protocol.InUpdateAccountTime,     // 8
+	protocol.InNextValidID,           // 9
+	protocol.InContractData,          // 10
+	protocol.InExecutionData,         // 11
+	protocol.InMarketDepth,           // 12
+	protocol.InMarketDepthL2,         // 13
+	protocol.InNewsBulletins,         // 14
+	protocol.InManagedAccounts,       // 15
+	protocol.InHistoricalData,        // 17
+	protocol.InBondContractData,      // 18
+	protocol.InScannerParameters,     // 19
+	protocol.InScannerData,           // 20
+	protocol.InTickOptionComputation, // 21
+	protocol.InTickGeneric,           // 45
+	protocol.InTickString,            // 46
+	protocol.InCurrentTime,           // 49
+	protocol.InRealTimeBars,          // 50
+	protocol.InContractDataEnd,       // 52
+	protocol.InOpenOrderEnd,          // 53
+	protocol.InAccountDownloadEnd,    // 54
+	protocol.InExecutionDataEnd,      // 55
+	protocol.InTickSnapshotEnd,       // 57
+	protocol.InMarketDataType,        // 58
+	protocol.InCommissionReport,      // 59
+	protocol.InPositionData,          // 61
+	protocol.InPositionEnd,           // 62
+	protocol.InAccountSummary,        // 63
+	protocol.InAccountSummaryEnd,     // 64
+	protocol.InPositionMulti,         // 71
+	protocol.InPositionMultiEnd,      // 72
+	protocol.InAccountUpdateMulti,    // 73
+	protocol.InAccountUpdateMultiEnd, // 74
+	protocol.InSecDefOptParams,       // 75
+	protocol.InSecDefOptParamsEnd,    // 76
+	protocol.InFamilyCodes,           // 78
+	protocol.InSymbolSamples,         // 79
+	protocol.InMktDepthExchanges,     // 80
+	protocol.InTickReqParams,         // 81
+	protocol.InSmartComponents,       // 82
+	protocol.InNewsArticle,           // 83
+	protocol.InTickNews,              // 84
+	protocol.InNewsProviders,         // 85
+	protocol.InHistoricalNews,        // 86
+	protocol.InHistoricalNewsEnd,     // 87
+	protocol.InHeadTimestamp,         // 88
+	protocol.InHistogramData,         // 89
+	protocol.InMarketDataReroute,     // 91
+	protocol.InMarketDepthReroute,    // 92
+	protocol.InMarketRule,            // 93
+	protocol.InPnL,                   // 94
+	protocol.InPnLSingle,             // 95
+	protocol.InHistoricalTicks,       // 96
+	protocol.InHistoricalTicksBidAsk, // 97
+	protocol.InHistoricalTicksLast,   // 98
+	protocol.InTickByTick,            // 99
+	protocol.InCompletedOrder,        // 101
+	protocol.InCompletedOrderEnd,     // 102
+	protocol.InReplaceFAEnd,          // 103
+	protocol.InUserInfo,              // 107
+	protocol.InHistoricalDataUpdate,  // 90
+	protocol.InHistoricalDataEnd,     // 108
+	protocol.InReceiveFA,             // 16
+	protocol.InSoftDollarTiers,       // 77
+	protocol.InDisplayGroupList,      // 67
+	protocol.InDisplayGroupUpdated,   // 68
+	protocol.InWSHMetaData,           // 104
+	protocol.InWSHEventData,          // 105
+	protocol.InHistoricalSchedule,    // 106
+	protocol.InCurrentTimeInMillis,   // 109
 }
 
 // FuzzDecodeBatch proves DecodeBatch never panics on arbitrary byte payloads.
@@ -455,70 +456,70 @@ func TestDecodeShortFields(t *testing.T) {
 		msgID     int
 		maxFields int
 	}{
-		{"TickPrice", InTickPrice, 7},                          // version, reqID, tickType, price, size, attrMask
-		{"TickSize", InTickSize, 5},                            // version, reqID, tickType, size
-		{"OrderStatus", InOrderStatus, 4},                      // orderID, status, filled, remaining
-		{"ErrMsg", InErrMsg, 5},                                // reqID, code, message, advJSON, errorTimeMs
-		{"OpenOrder", InOpenOrder, 165},                        // upper bound on the live walk: 29 base + pre-status block + "None" DN block + variable sections + status block + 32-field tail
-		{"UpdateAccountValue", InUpdateAccountValue, 5},        // version, key, value, currency, account
-		{"UpdatePortfolio", InUpdatePortfolio, 19},             // version, conID, symbol, secType, expiry, strike, right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice, marketValue, avgCost, unrealizedPNL, realizedPNL, account
-		{"UpdateAccountTime", InUpdateAccountTime, 2},          // version, timestamp
-		{"NextValidID", InNextValidID, 2},                      // version, orderID
-		{"ContractData", InContractData, 26},                   // reqID, symbol, secType, expiry, skip, strike, right, exchange, currency, localSymbol, marketName, tradingClass, conID, minTick, 5 skip, longName, primaryExchange, 4 skip, timeZoneID
-		{"ExecutionData", InExecutionData, 32},                 // complete classic sv200 execution detail
-		{"NewsBulletins", InNewsBulletins, 5},                  // version, msgId, msgType, headline, source
-		{"ManagedAccounts", InManagedAccounts, 2},              // version, accountsList
-		{"HistoricalData", InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end
-		{"BondContractData", InBondContractData, 42},           // reqID, 31 fixed bond/common fields, security IDs, and size-rule tail
-		{"ScannerParameters", InScannerParameters, 2},          // version, xml
-		{"ScannerData", InScannerData, 20},                     // version, reqID, count, entries(rank + 11 contract + 4 fields)
-		{"TickOptionComputation", InTickOptionComputation, 12}, // version, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice
-		{"TickGeneric", InTickGeneric, 4},                      // version, reqID, tickType, value
-		{"TickString", InTickString, 4},                        // version, reqID, tickType, value
-		{"CurrentTime", InCurrentTime, 2},                      // version, time
-		{"RealTimeBars", InRealTimeBars, 10},                   // version, reqID, time, O, H, L, C, vol, wap, count
-		{"ContractDataEnd", InContractDataEnd, 2},              // version, reqID
-		{"OpenOrderEnd", InOpenOrderEnd, 1},                    // version
-		{"AccountDownloadEnd", InAccountDownloadEnd, 2},        // version, account
-		{"ExecutionDataEnd", InExecutionDataEnd, 2},            // version, reqID
-		{"TickSnapshotEnd", InTickSnapshotEnd, 2},              // version, reqID
-		{"MarketDataType", InMarketDataType, 3},                // version, reqID, dataType
-		{"CommissionReport", InCommissionReport, 7},            // version plus six report fields
-		{"PositionData", InPositionData, 15},                   // version, account, 11 contract, position, avgCost
-		{"PositionEnd", InPositionEnd, 1},                      // version
-		{"AccountSummary", InAccountSummary, 6},                // version, reqID, account, tag, value, currency
-		{"AccountSummaryEnd", InAccountSummaryEnd, 2},          // version, reqID
-		{"PositionMulti", InPositionMulti, 17},                 // version, reqID, account, modelCode, 11 contract, position, avgCost
-		{"PositionMultiEnd", InPositionMultiEnd, 2},            // version, reqID
-		{"AccountUpdateMulti", InAccountUpdateMulti, 7},        // version, reqID, account, modelCode, key, value, currency
-		{"AccountUpdateMultiEnd", InAccountUpdateMultiEnd, 2},  // version, reqID
-		{"SecDefOptParams", InSecDefOptParams, 10},             // reqID, exchange, underConID, tradingClass, multiplier, marketRuleId, expirationCount, (expirations...), strikeCount, (strikes...)
-		{"SecDefOptParamsEnd", InSecDefOptParamsEnd, 1},        // reqID
-		{"FamilyCodes", InFamilyCodes, 5},                      // count, then pairs
-		{"MktDepthExchanges", InMktDepthExchanges, 10},         // count + entries(5 each)
-		{"TickReqParams", InTickReqParams, 4},                  // reqID, minTick, bboExchange, snapshotPermissions
-		{"SymbolSamples", InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)
-		{"SmartComponents", InSmartComponents, 5},              // reqID, count, entries(bitNumber, exchangeName, exchangeLetter)
-		{"NewsArticle", InNewsArticle, 3},                      // reqID, articleType, articleText
-		{"TickNews", InTickNews, 6},                            // reqID, time, providerCode, articleId, headline, extraData
-		{"NewsProviders", InNewsProviders, 5},                  // count, then pairs
-		{"HistoricalNews", InHistoricalNews, 5},                // reqID, time, providerCode, articleId, headline
-		{"HistoricalNewsEnd", InHistoricalNewsEnd, 2},          // reqID, hasMore
-		{"HeadTimestamp", InHeadTimestamp, 2},                  // reqID, headTimestamp
-		{"HistogramData", InHistogramData, 6},                  // reqID, count, then pairs
-		{"MarketRule", InMarketRule, 6},                        // marketRuleId, count, then pairs
-		{"PnL", InPnL, 4},                                      // reqID, dailyPnL, unrealizedPnL, realizedPnL
-		{"PnLSingle", InPnLSingle, 6},                          // reqID, pos, dailyPnL, unrealizedPnL, realizedPnL, value
-		{"HistoricalTicks", InHistoricalTicks, 8},              // reqID, count, entries(time, unused, price, size), done
-		{"HistoricalTicksBidAsk", InHistoricalTicksBidAsk, 10}, // reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done
-		{"HistoricalTicksLast", InHistoricalTicksLast, 10},     // reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done
-		{"TickByTick", InTickByTick, 10},                       // reqID, tickType, time, then type-dependent fields
-		{"CompletedOrder", InCompletedOrder, 95},               // 11 contract + action + qty + orderType + 4 skip + 71 skip + status + 3 skip + filled + remaining
-		{"CompletedOrderEnd", InCompletedOrderEnd, 0},          // no fields after msg_id
-		{"UserInfo", InUserInfo, 2},                            // reqID, whiteBrandingId
-		{"HistoricalSchedule", InHistoricalSchedule, 5},        // reqID, start, end, timezone, session count
-		{"HistoricalDataUpdate", InHistoricalDataUpdate, 9},    // reqID, barCount, time, O, C, H, L, wap, vol
-		{"HistoricalDataEnd", InHistoricalDataEnd, 3},          // reqID, startDateTime, endDateTime
+		{"TickPrice", protocol.InTickPrice, 7},                          // version, reqID, tickType, price, size, attrMask
+		{"TickSize", protocol.InTickSize, 5},                            // version, reqID, tickType, size
+		{"OrderStatus", protocol.InOrderStatus, 4},                      // orderID, status, filled, remaining
+		{"ErrMsg", protocol.InErrMsg, 5},                                // reqID, code, message, advJSON, errorTimeMs
+		{"OpenOrder", protocol.InOpenOrder, 165},                        // upper bound on the live walk: 29 base + pre-status block + "None" DN block + variable sections + status block + 32-field tail
+		{"UpdateAccountValue", protocol.InUpdateAccountValue, 5},        // version, key, value, currency, account
+		{"UpdatePortfolio", protocol.InUpdatePortfolio, 19},             // version, conID, symbol, secType, expiry, strike, right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice, marketValue, avgCost, unrealizedPNL, realizedPNL, account
+		{"UpdateAccountTime", protocol.InUpdateAccountTime, 2},          // version, timestamp
+		{"NextValidID", protocol.InNextValidID, 2},                      // version, orderID
+		{"ContractData", protocol.InContractData, 26},                   // reqID, symbol, secType, expiry, skip, strike, right, exchange, currency, localSymbol, marketName, tradingClass, conID, minTick, 5 skip, longName, primaryExchange, 4 skip, timeZoneID
+		{"ExecutionData", protocol.InExecutionData, 32},                 // complete classic sv200 execution detail
+		{"NewsBulletins", protocol.InNewsBulletins, 5},                  // version, msgId, msgType, headline, source
+		{"ManagedAccounts", protocol.InManagedAccounts, 2},              // version, accountsList
+		{"HistoricalData", protocol.InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end
+		{"BondContractData", protocol.InBondContractData, 42},           // reqID, 31 fixed bond/common fields, security IDs, and size-rule tail
+		{"ScannerParameters", protocol.InScannerParameters, 2},          // version, xml
+		{"ScannerData", protocol.InScannerData, 20},                     // version, reqID, count, entries(rank + 11 contract + 4 fields)
+		{"TickOptionComputation", protocol.InTickOptionComputation, 12}, // version, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice
+		{"TickGeneric", protocol.InTickGeneric, 4},                      // version, reqID, tickType, value
+		{"TickString", protocol.InTickString, 4},                        // version, reqID, tickType, value
+		{"CurrentTime", protocol.InCurrentTime, 2},                      // version, time
+		{"RealTimeBars", protocol.InRealTimeBars, 10},                   // version, reqID, time, O, H, L, C, vol, wap, count
+		{"ContractDataEnd", protocol.InContractDataEnd, 2},              // version, reqID
+		{"OpenOrderEnd", protocol.InOpenOrderEnd, 1},                    // version
+		{"AccountDownloadEnd", protocol.InAccountDownloadEnd, 2},        // version, account
+		{"ExecutionDataEnd", protocol.InExecutionDataEnd, 2},            // version, reqID
+		{"TickSnapshotEnd", protocol.InTickSnapshotEnd, 2},              // version, reqID
+		{"MarketDataType", protocol.InMarketDataType, 3},                // version, reqID, dataType
+		{"CommissionReport", protocol.InCommissionReport, 7},            // version plus six report fields
+		{"PositionData", protocol.InPositionData, 15},                   // version, account, 11 contract, position, avgCost
+		{"PositionEnd", protocol.InPositionEnd, 1},                      // version
+		{"AccountSummary", protocol.InAccountSummary, 6},                // version, reqID, account, tag, value, currency
+		{"AccountSummaryEnd", protocol.InAccountSummaryEnd, 2},          // version, reqID
+		{"PositionMulti", protocol.InPositionMulti, 17},                 // version, reqID, account, modelCode, 11 contract, position, avgCost
+		{"PositionMultiEnd", protocol.InPositionMultiEnd, 2},            // version, reqID
+		{"AccountUpdateMulti", protocol.InAccountUpdateMulti, 7},        // version, reqID, account, modelCode, key, value, currency
+		{"AccountUpdateMultiEnd", protocol.InAccountUpdateMultiEnd, 2},  // version, reqID
+		{"SecDefOptParams", protocol.InSecDefOptParams, 10},             // reqID, exchange, underConID, tradingClass, multiplier, marketRuleId, expirationCount, (expirations...), strikeCount, (strikes...)
+		{"SecDefOptParamsEnd", protocol.InSecDefOptParamsEnd, 1},        // reqID
+		{"FamilyCodes", protocol.InFamilyCodes, 5},                      // count, then pairs
+		{"MktDepthExchanges", protocol.InMktDepthExchanges, 10},         // count + entries(5 each)
+		{"TickReqParams", protocol.InTickReqParams, 4},                  // reqID, minTick, bboExchange, snapshotPermissions
+		{"SymbolSamples", protocol.InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)
+		{"SmartComponents", protocol.InSmartComponents, 5},              // reqID, count, entries(bitNumber, exchangeName, exchangeLetter)
+		{"NewsArticle", protocol.InNewsArticle, 3},                      // reqID, articleType, articleText
+		{"TickNews", protocol.InTickNews, 6},                            // reqID, time, providerCode, articleId, headline, extraData
+		{"NewsProviders", protocol.InNewsProviders, 5},                  // count, then pairs
+		{"HistoricalNews", protocol.InHistoricalNews, 5},                // reqID, time, providerCode, articleId, headline
+		{"HistoricalNewsEnd", protocol.InHistoricalNewsEnd, 2},          // reqID, hasMore
+		{"HeadTimestamp", protocol.InHeadTimestamp, 2},                  // reqID, headTimestamp
+		{"HistogramData", protocol.InHistogramData, 6},                  // reqID, count, then pairs
+		{"MarketRule", protocol.InMarketRule, 6},                        // marketRuleId, count, then pairs
+		{"PnL", protocol.InPnL, 4},                                      // reqID, dailyPnL, unrealizedPnL, realizedPnL
+		{"PnLSingle", protocol.InPnLSingle, 6},                          // reqID, pos, dailyPnL, unrealizedPnL, realizedPnL, value
+		{"HistoricalTicks", protocol.InHistoricalTicks, 8},              // reqID, count, entries(time, unused, price, size), done
+		{"HistoricalTicksBidAsk", protocol.InHistoricalTicksBidAsk, 10}, // reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done
+		{"HistoricalTicksLast", protocol.InHistoricalTicksLast, 10},     // reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done
+		{"TickByTick", protocol.InTickByTick, 10},                       // reqID, tickType, time, then type-dependent fields
+		{"CompletedOrder", protocol.InCompletedOrder, 95},               // 11 contract + action + qty + orderType + 4 skip + 71 skip + status + 3 skip + filled + remaining
+		{"CompletedOrderEnd", protocol.InCompletedOrderEnd, 0},          // no fields after msg_id
+		{"UserInfo", protocol.InUserInfo, 2},                            // reqID, whiteBrandingId
+		{"HistoricalSchedule", protocol.InHistoricalSchedule, 5},        // reqID, start, end, timezone, session count
+		{"HistoricalDataUpdate", protocol.InHistoricalDataUpdate, 9},    // reqID, barCount, time, O, C, H, L, wap, vol
+		{"HistoricalDataEnd", protocol.InHistoricalDataEnd, 3},          // reqID, startDateTime, endDateTime
 	}
 
 	for _, tc := range cases {

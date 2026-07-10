@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
@@ -80,7 +81,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 			resp <- result{err: ErrNotReady}
 			return
 		}
-		if e.serverVersion < codec.MinServerVersionCurrentTimeInMillis {
+		if e.serverVersion < protocol.MinServerVersionCurrentTimeInMillis {
 			resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", ErrUnsupportedServerVersion)}
 			return
 		}
@@ -399,7 +400,7 @@ func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml strin
 // server desupports it (FA_PROFILE_DESUPPORT, 177); the official client raises
 // FA_PROFILE_NOT_SUPPORTED for the same case (client.py:4740-4747, 4800-4802).
 func validateFADataType(faDataType FADataType, serverVersion int) error {
-	if faDataType == FADataProfiles && serverVersion >= codec.MinServerVersionFAProfileDesupport {
+	if faDataType == FADataProfiles && serverVersion >= protocol.MinServerVersionFAProfileDesupport {
 		return &ValidationError{
 			Field:   "FA data type",
 			Value:   faDataType.String(),

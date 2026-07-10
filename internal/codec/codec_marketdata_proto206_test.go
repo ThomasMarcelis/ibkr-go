@@ -143,7 +143,7 @@ func TestMarketDataEncodingBoundary206(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if classicEnvelope.WireID != OutCancelMktDepth || classicEnvelope.Encoding != protocol.ClassicBody {
+	if classicEnvelope.WireID != protocol.OutCancelMktDepth || classicEnvelope.Encoding != protocol.ClassicBody {
 		t.Fatalf("server_version 205 envelope = %+v, want classic base ID", classicEnvelope)
 	}
 	protobuf, err := Encode(206, msg)
@@ -154,7 +154,7 @@ func TestMarketDataEncodingBoundary206(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if protobufEnvelope.WireID != OutCancelMktDepth+protocol.ProtobufMessageID || protobufEnvelope.Encoding != protocol.ProtobufBody {
+	if protobufEnvelope.WireID != protocol.OutCancelMktDepth+protocol.ProtobufMessageID || protobufEnvelope.Encoding != protocol.ProtobufBody {
 		t.Fatalf("server_version 206 envelope = %+v, want protobuf raw ID", protobufEnvelope)
 	}
 }

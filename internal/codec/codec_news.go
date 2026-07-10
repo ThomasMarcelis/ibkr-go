@@ -1,9 +1,11 @@
 package codec
 
+import "github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+
 type NewsProvidersRequest struct{}
 
 func (m NewsProvidersRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqNewsProviders)}, nil
+	return []string{itoa(protocol.OutReqNewsProviders)}, nil
 }
 
 type NewsProviders struct {
@@ -22,13 +24,13 @@ type NewsBulletinsRequest struct {
 }
 
 func (m NewsBulletinsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqNewsBulletins), "1", btoa(m.AllMessages)}, nil
+	return []string{itoa(protocol.OutReqNewsBulletins), "1", btoa(m.AllMessages)}, nil
 }
 
 type CancelNewsBulletins struct{}
 
 func (m CancelNewsBulletins) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutCancelNewsBulletins), "1"}, nil
+	return []string{itoa(protocol.OutCancelNewsBulletins), "1"}, nil
 }
 
 type NewsBulletin struct {
@@ -47,7 +49,7 @@ type NewsArticleRequest struct {
 }
 
 func (m NewsArticleRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqNewsArticle), itoa(m.ReqID), m.ProviderCode, m.ArticleID, ""}, nil
+	return []string{itoa(protocol.OutReqNewsArticle), itoa(m.ReqID), m.ProviderCode, m.ArticleID, ""}, nil
 }
 
 type NewsArticleResponse struct {
@@ -79,7 +81,7 @@ type HistoricalNewsRequest struct {
 }
 
 func (m HistoricalNewsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(OutReqHistoricalNews), itoa(m.ReqID), itoa(m.ConID), m.ProviderCodes, m.StartDate, m.EndDate, itoa(m.TotalResults), ""}, nil
+	return []string{itoa(protocol.OutReqHistoricalNews), itoa(m.ReqID), itoa(m.ConID), m.ProviderCodes, m.StartDate, m.EndDate, itoa(m.TotalResults), ""}, nil
 }
 
 type HistoricalNewsItem struct {
@@ -104,7 +106,7 @@ func decodeNewsArticle(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m NewsArticleResponse) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InNewsArticle), itoa(m.ReqID), itoa(m.ArticleType), m.ArticleText}, nil
+	return []string{itoa(protocol.InNewsArticle), itoa(m.ReqID), itoa(m.ArticleType), m.ArticleText}, nil
 }
 
 // [84, reqID, time, providerCode, articleId, headline, extraData] — no version
@@ -121,7 +123,7 @@ func decodeTickNews(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m TickNews) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InTickNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline, m.ExtraData}, nil
+	return []string{itoa(protocol.InTickNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline, m.ExtraData}, nil
 }
 
 // [85, count, repeated(code, name)] — no version
@@ -142,7 +144,7 @@ func decodeNewsProviders(r *fieldReader, sv int) ([]Message, error) {
 
 func (m NewsProviders) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InNewsProviders)
+	w.WriteInt(protocol.InNewsProviders)
 	w.WriteInt(len(m.Providers))
 	for _, p := range m.Providers {
 		w.WriteString(p.Code)
@@ -162,7 +164,7 @@ func decodeHistoricalNews(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m HistoricalNewsItem) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InHistoricalNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline}, nil
+	return []string{itoa(protocol.InHistoricalNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline}, nil
 }
 
 // [87, reqID, hasMore]
@@ -174,7 +176,7 @@ func decodeHistoricalNewsEnd(r *fieldReader, sv int) ([]Message, error) {
 
 func (m HistoricalNewsEnd) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
-	w.WriteInt(InHistoricalNewsEnd)
+	w.WriteInt(protocol.InHistoricalNewsEnd)
 	w.WriteInt(m.ReqID)
 	w.WriteBool(m.HasMore)
 	return w.Fields(), nil
@@ -191,5 +193,5 @@ func decodeNewsBulletins(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m NewsBulletin) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(InNewsBulletins), "1", itoa(m.MsgID), itoa(m.MsgType), m.Headline, m.Source}, nil
+	return []string{itoa(protocol.InNewsBulletins), "1", itoa(m.MsgID), itoa(m.MsgType), m.Headline, m.Source}, nil
 }

@@ -24,8 +24,8 @@ import (
 //  1. Find every struct with a `ReqID int` field.
 //  2. Classify each such struct's direction by reading the msg_id constant
 //     its own encodeWire method writes onto the wire: constants are named
-//     InXxx for messages the Gateway/testhost sends downstream, OutXxx for
-//     requests the client sends upstream (see msgid.go). Outbound
+//     protocol.InXxx for messages the Gateway/testhost sends downstream,
+//     protocol.OutXxx for requests the client sends upstream. Outbound
 //     Request/Cancel structs are writer-only: they are never returned by an
 //     inboundDecoders entry, so they can never reach handleIncoming's keyed
 //     dispatch and are correctly exempt -- exempt because of what their own
@@ -130,11 +130,11 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 						if fnName != "itoa" && fnName != "i64toa" && fnName != "WriteInt" {
 							return true
 						}
-						argIdent, ok := call.Args[0].(*ast.Ident)
-						if !ok || !dirConst.MatchString(argIdent.Name) {
+						name := protocolConstantName(call.Args[0])
+						if !dirConst.MatchString(name) {
 							return true
 						}
-						if strings.HasPrefix(argIdent.Name, "In") {
+						if strings.HasPrefix(name, "In") {
 							direction[recv] = "In"
 						} else {
 							direction[recv] = "Out"
@@ -207,6 +207,18 @@ func receiverTypeName(d *ast.FuncDecl) string {
 		return ""
 	}
 	return ident.Name
+}
+
+func protocolConstantName(expr ast.Expr) string {
+	selector, ok := expr.(*ast.SelectorExpr)
+	if !ok {
+		return ""
+	}
+	pkg, ok := selector.X.(*ast.Ident)
+	if !ok || pkg.Name != "protocol" {
+		return ""
+	}
+	return selector.Sel.Name
 }
 
 // calleeName returns the identifier name of a call expression's function,

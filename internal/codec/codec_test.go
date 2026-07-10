@@ -5,6 +5,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -287,7 +288,7 @@ func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 func TestEncodeCancelMarketDepthSmartDepthGate(t *testing.T) {
 	t.Parallel()
 
-	oldPayload, err := Encode(MinServerVersionSmartDepth-1, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
+	oldPayload, err := Encode(protocol.MinServerVersionSmartDepth-1, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
 	if err != nil {
 		t.Fatalf("Encode(old CancelMarketDepth) error = %v", err)
 	}
@@ -299,7 +300,7 @@ func TestEncodeCancelMarketDepthSmartDepthGate(t *testing.T) {
 		t.Fatalf("old CancelMarketDepth fields = %v, want %v", oldFields, want)
 	}
 
-	newPayload, err := Encode(MinServerVersionSmartDepth, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
+	newPayload, err := Encode(protocol.MinServerVersionSmartDepth, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
 	if err != nil {
 		t.Fatalf("Encode(new CancelMarketDepth) error = %v", err)
 	}
@@ -322,7 +323,7 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	// Build a synthetic OpenOrder payload with extra fields (simulating a
 	// combo order with variable-length sections that expand the message).
 	fields := make([]string, 0, 180)
-	fields = append(fields, itoa(InOpenOrder))                                                  // msg_id
+	fields = append(fields, itoa(protocol.InOpenOrder))                                         // msg_id
 	fields = append(fields, "42")                                                               // r[0] orderID
 	fields = append(fields, "265598", "AAPL", "STK", "", "", "", "", "SMART", "USD", "", "NMS") // r[1..11] contract
 	fields = append(fields, "BUY", "10", "LMT", "150.00", "0", "DAY", "", "DU9000001")          // r[12..19]

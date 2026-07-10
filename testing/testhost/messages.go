@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
 
@@ -475,7 +476,7 @@ func buildPackedHistoricalBars(bars []step, bindings map[string]any) ([]byte, er
 
 	reqID := asString(resolve(bars[0].body["req_id"]))
 	fields := []string{
-		strconv.Itoa(codec.InHistoricalData),
+		strconv.Itoa(protocol.InHistoricalData),
 		reqID,
 		strconv.Itoa(len(bars)),
 	}

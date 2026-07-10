@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 // CancelOption adds operator-entered compliance metadata to an order
@@ -80,10 +81,10 @@ func cancelOrderRequest(orderID int64, cfg cancelConfig, serverVersion int) (cod
 		req.ManualOrderCancelTime = cfg.manualTime.UTC().Format("20060102-15:04:05")
 	}
 	if cfg.extOperator != nil || cfg.manualIndicator != nil {
-		if serverVersion < codec.MinServerVersionCMETaggingFields {
+		if serverVersion < protocol.MinServerVersionCMETaggingFields {
 			return codec.CancelOrderRequest{}, fmt.Errorf(
 				"ibkr: cancel compliance metadata requires server_version >= %d, got %d: %w",
-				codec.MinServerVersionCMETaggingFields, serverVersion, ErrUnsupportedServerVersion,
+				protocol.MinServerVersionCMETaggingFields, serverVersion, ErrUnsupportedServerVersion,
 			)
 		}
 	}
@@ -102,10 +103,10 @@ func globalCancelRequest(cfg cancelConfig, serverVersion int) (codec.GlobalCance
 			Field: "ManualCancelTime", Message: "is only valid for a single-order cancellation",
 		}
 	}
-	if (cfg.extOperator != nil || cfg.manualIndicator != nil) && serverVersion < codec.MinServerVersionCMETaggingFields {
+	if (cfg.extOperator != nil || cfg.manualIndicator != nil) && serverVersion < protocol.MinServerVersionCMETaggingFields {
 		return codec.GlobalCancelRequest{}, fmt.Errorf(
 			"ibkr: global-cancel compliance metadata requires server_version >= %d, got %d: %w",
-			codec.MinServerVersionCMETaggingFields, serverVersion, ErrUnsupportedServerVersion,
+			protocol.MinServerVersionCMETaggingFields, serverVersion, ErrUnsupportedServerVersion,
 		)
 	}
 	var req codec.GlobalCancelRequest

@@ -153,8 +153,8 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: handshake: decode start_api envelope: %w", err))
 				return
 			}
-			if startEnvelope.MsgID != codec.OutStartAPI || startEnvelope.Encoding != protocol.ClassicBody {
-				h.finish(fmt.Errorf("testhost: handshake: start_api envelope = {msg_id:%d encoding:%d}, want classic msg_id %d", startEnvelope.MsgID, startEnvelope.Encoding, codec.OutStartAPI))
+			if startEnvelope.MsgID != protocol.OutStartAPI || startEnvelope.Encoding != protocol.ClassicBody {
+				h.finish(fmt.Errorf("testhost: handshake: start_api envelope = {msg_id:%d encoding:%d}, want classic msg_id %d", startEnvelope.MsgID, startEnvelope.Encoding, protocol.OutStartAPI))
 				return
 			}
 			startFields, err := parseClassicEnvelopeBody(startEnvelope.Body)
@@ -517,7 +517,7 @@ func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[strin
 		return "", nil, err
 	}
 	if envelope.Encoding == protocol.ProtobufBody {
-		if envelope.MsgID != codec.OutReqExecutions {
+		if envelope.MsgID != protocol.OutReqExecutions {
 			return "", nil, fmt.Errorf("testhost: protobuf client msg_id %d is not supported", envelope.MsgID)
 		}
 		body, err := decodeProtoExecutionsRequest(envelope.Body)

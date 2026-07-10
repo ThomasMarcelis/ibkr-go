@@ -19,8 +19,8 @@ func TestContractDetailsMigrationStartsAtServer205(t *testing.T) {
 		encoding protocol.BodyEncoding
 		wireID   int
 	}{
-		{204, protocol.ClassicBody, OutReqContractData},
-		{205, protocol.ProtobufBody, OutReqContractData + protocol.ProtobufMessageID},
+		{204, protocol.ClassicBody, protocol.OutReqContractData},
+		{205, protocol.ProtobufBody, protocol.OutReqContractData + protocol.ProtobufMessageID},
 	} {
 		payload, err := Encode(tc.sv, msg)
 		if err != nil {
@@ -30,7 +30,7 @@ func TestContractDetailsMigrationStartsAtServer205(t *testing.T) {
 		if err != nil {
 			t.Fatalf("DecodeEnvelope(%d) error = %v", tc.sv, err)
 		}
-		if envelope.MsgID != OutReqContractData || envelope.WireID != tc.wireID || envelope.Encoding != tc.encoding {
+		if envelope.MsgID != protocol.OutReqContractData || envelope.WireID != tc.wireID || envelope.Encoding != tc.encoding {
 			t.Fatalf("server %d envelope = %+v", tc.sv, envelope)
 		}
 	}
