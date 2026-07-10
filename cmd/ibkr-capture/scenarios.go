@@ -149,33 +149,18 @@ var scenarios = map[string]*scenario{
 	},
 	"current_time": {
 		metadata:    meta("session", []string{"Client.CurrentTime"}, []int{49}, "read_only", nil, []string{"parsed server current time"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_CURRENT_TIME, drain until CURRENT_TIME (msg_id=49)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqCurrentTime(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(49))
-		},
+		description: "request and parse the Gateway's current time through the public API",
+		runAPI:      runAPICurrentTime,
 	},
 	"current_time_millis": {
 		metadata:    meta("session", []string{"Client.CurrentTimeMillis"}, []int{105, 109}, "read_only", nil, []string{"server current time in milliseconds"}, 1, "promoted", batchReadOnly),
-		description: "REQ_CURRENT_TIME_IN_MILLIS, drain until CURRENT_TIME_IN_MILLIS (msg_id=109)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqCurrentTimeInMillis(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(109))
-		},
+		description: "request and parse millisecond-precision Gateway time through the public API",
+		runAPI:      runAPICurrentTimeMillis,
 	},
 	"req_ids": {
-		metadata:    meta("session", []string{"DialContext"}, []int{8, 9}, "read_only", nil, []string{"next valid id from explicit reqIds"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_IDS numIds=1, drain until NEXT_VALID_ID (msg_id=9)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqIds(conn, 1); err != nil {
-				return err
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(9))
-		},
+		metadata:    meta("session", []string{"Orders().RefreshOrderID"}, []int{8, 9, 4}, "read_only", nil, []string{"refreshed order ID or real read-only Gateway rejection"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "refresh the engine-owned order ID seed through the public API",
+		runAPI:      runAPIRefreshOrderID,
 	},
 
 	// --- Contract details ---
@@ -620,57 +605,31 @@ var scenarios = map[string]*scenario{
 
 	"family_codes": {
 		metadata:    meta("accounts", []string{"Accounts().FamilyCodes"}, []int{80, 78}, "read_only", nil, []string{"family codes response"}, 1, "promoted", batchReadOnly),
-		description: "REQ_FAMILY_CODES, read FAMILY_CODES response (msg 78)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqFamilyCodes(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(78))
-		},
+		description: "request and decode account family codes through the public API",
+		runAPI:      runAPIFamilyCodes,
 	},
 	"news_providers": {
-		metadata:    meta("news", []string{"News().Providers"}, []int{85}, "read_only", nil, []string{"free news provider list"}, 1, "promoted", batchReadOnly),
-		description: "REQ_NEWS_PROVIDERS, read NEWS_PROVIDERS response (msg 86)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqNewsProviders(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(86))
-		},
+		metadata:    meta("news", []string{"News().Providers"}, []int{85}, "read_only", nil, []string{"subscribed news provider list"}, 1, "promoted", batchReadOnly),
+		description: "request and decode subscribed news providers through the public API",
+		runAPI:      runAPINewsProviders,
 	},
 	"mkt_depth_exchanges": {
-		metadata:    meta("contracts", []string{"Contracts().DepthExchanges"}, []int{82}, "read_only", nil, []string{"market-depth exchange metadata"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MKT_DEPTH_EXCHANGES, read response (msg 79)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMktDepthExchanges(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(79))
-		},
+		metadata:    meta("contracts", []string{"Contracts().DepthExchanges"}, []int{protocol.OutReqMktDepthExchanges, protocol.InMktDepthExchanges}, "read_only", nil, []string{"market-depth exchange metadata"}, 1, "promoted", batchReadOnly),
+		description: "request and decode market-depth exchanges through the public API",
+		runAPI:      runAPIDepthExchanges,
 	},
 	"scanner_parameters": {
 		metadata:    meta("scanner", []string{"Scanner().Parameters"}, []int{24, 19}, "read_only", nil, []string{"scanner XML parameters"}, 1, "promoted", batchReadOnly),
-		description: "REQ_SCANNER_PARAMETERS, read response (msg 19)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqScannerParameters(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 30*time.Second, logFrame, stopOnMsgID(19))
-		},
+		description: "request and receive scanner parameter XML through the public API",
+		runAPI:      runAPIScannerParameters,
 	},
 
 	// --- v1 expanded scope: Batch C2 — keyed one-shots ---
 
 	"user_info": {
 		metadata:    meta("tws", []string{"TWS().UserInfo"}, []int{protocol.OutReqUserInfo, protocol.InUserInfo}, "read_only", nil, []string{"user info response"}, 1, "promoted", batchReadOnly),
-		description: "REQ_USER_INFO, read USER_INFO response",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqUserInfo(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(protocol.InUserInfo))
-		},
+		description: "request and decode TWS user information through the public API",
+		runAPI:      runAPIUserInfo,
 	},
 	"matching_symbols_aapl": {
 		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"exact-ish symbol samples"}, 1, "promoted", batchReadOnly),
@@ -1157,14 +1116,8 @@ var scenarios = map[string]*scenario{
 	},
 	"market_rule": {
 		metadata:    meta("contracts", []string{"Contracts().MarketRule"}, []int{91, 93}, "read_only", nil, []string{"price increment ladder"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MARKET_RULE id=26 (common US equity rule), read response (msg 93)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			// Market rule 26 is common for US equities on SMART/ISLAND.
-			if err := sendReqMarketRule(conn, 26); err != nil {
-				return err
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(93))
-		},
+		description: "request and decode US equity market rule 26 through the public API",
+		runAPI:      runAPIMarketRule,
 	},
 
 	// --- Order management ---
@@ -1572,36 +1525,13 @@ var scenarios = map[string]*scenario{
 
 	"soft_dollar_tiers": {
 		metadata:    meta("advisors", []string{"Advisors().SoftDollarTiers"}, []int{79, 77}, "read_only", nil, []string{"soft-dollar tier list"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_SOFT_DOLLAR_TIERS, read response (msg 77)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqSoftDollarTiers(conn, reqID); err != nil {
-				return err
-			}
-			// SOFT_DOLLAR_TIERS: [77, reqID, count, ...] — reqID at fields[1].
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 77 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stop)
-		},
+		description: "request and decode soft-dollar tiers through the public API",
+		runAPI:      runAPISoftDollarTiers,
 	},
 	"display_groups": {
 		metadata:    meta("tws", []string{"TWS().DisplayGroups"}, []int{67}, "read_only", nil, []string{"display group list"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "QUERY_DISPLAY_GROUPS, read response (msg 67)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendQueryDisplayGroups(conn, reqID); err != nil {
-				return err
-			}
-			// DISPLAY_GROUP_LIST: [67, version, reqID, groups] — reqID at fields[2].
-			stop := func(msgID int, fields []string) bool {
-				if msgID == 67 && len(fields) >= 3 && fields[2] == strconv.Itoa(reqID) {
-					return true
-				}
-				return msgID == 4 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stop)
-		},
+		description: "request and decode TWS display groups through the public API",
+		runAPI:      runAPIDisplayGroups,
 	},
 	"display_group_subscribe": {
 		metadata:    meta("tws", []string{"TWS().SubscribeDisplayGroup", "DisplayGroupHandle.Update"}, []int{67, 68, 69, 70}, "read_only", []string{"tws_display_groups"}, []string{"display group subscribe/update/unsubscribe"}, 1, "promoted", batchNewV2, batchReadOnly),

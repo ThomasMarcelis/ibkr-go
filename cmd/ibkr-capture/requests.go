@@ -129,27 +129,6 @@ func boolField(b bool) string {
 	return "0"
 }
 
-// --- Session-level one-shots ---
-//
-//	reqCurrentTime:  [49, version=1]
-//	reqIds:          [8, version=1, numIds]
-func sendReqCurrentTime(conn net.Conn) error {
-	return sendMessage(conn, []string{"49", "1"})
-}
-
-func sendReqCurrentTimeInMillis(conn net.Conn) error {
-	// Bare message id, no version (official reqCurrentTimeInMillis,
-	// server_version 197+).
-	return sendMessage(conn, []string{"105"})
-}
-
-func sendReqIds(conn net.Conn, numIDs int) error {
-	if numIDs <= 0 {
-		numIDs = 1
-	}
-	return sendMessage(conn, []string{"8", "1", strconv.Itoa(numIDs)})
-}
-
 // --- Contract details (msg_id=9) ---
 //
 // Layout on server v200 (trading_class and issuer_id gates active):
@@ -333,53 +312,11 @@ func sendReqMarketDataType(conn net.Conn, dataType int) error {
 	return sendMessage(conn, []string{"59", "1", strconv.Itoa(dataType)})
 }
 
-// --- Family codes (msg_id=80) ---
-//
-//	[80]
-func sendReqFamilyCodes(conn net.Conn) error {
-	return sendMessage(conn, []string{"80"})
-}
-
-// --- News providers (msg_id=85) ---
-//
-//	[85]
-func sendReqNewsProviders(conn net.Conn) error {
-	return sendMessage(conn, []string{"85"})
-}
-
-// --- Market depth exchanges (msg_id=82) ---
-//
-//	[82]
-func sendReqMktDepthExchanges(conn net.Conn) error {
-	return sendMessage(conn, []string{"82"})
-}
-
-// --- Scanner parameters (msg_id=24) ---
-//
-//	[24, version=1]
-func sendReqScannerParameters(conn net.Conn) error {
-	return sendMessage(conn, []string{"24", "1"})
-}
-
-// --- User info (msg_id=104) ---
-//
-//	[104, version=1, reqId]
-func sendReqUserInfo(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"104", "1", strconv.Itoa(reqID)})
-}
-
 // --- Matching symbols (msg_id=81) ---
 //
 //	[81, reqId, pattern]
 func sendReqMatchingSymbols(conn net.Conn, reqID int, pattern string) error {
 	return sendMessage(conn, []string{"81", strconv.Itoa(reqID), pattern})
-}
-
-// --- Market rule (msg_id=91) ---
-//
-//	[91, marketRuleId]
-func sendReqMarketRule(conn net.Conn, marketRuleID int) error {
-	return sendMessage(conn, []string{"91", strconv.Itoa(marketRuleID)})
 }
 
 // --- Head timestamp (msg_id=87) ---
@@ -994,13 +931,6 @@ func sendRequestFA(conn net.Conn, faDataType int) error {
 
 func sendReplaceFA(conn net.Conn, faDataType int, xml string) error {
 	return sendMessage(conn, []string{"19", "1", strconv.Itoa(faDataType), xml})
-}
-
-// --- Soft dollar tiers (msg_id=79) ---
-//
-//	[79, reqId]
-func sendReqSoftDollarTiers(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"79", strconv.Itoa(reqID)})
 }
 
 // --- WSH meta data (msg_id=100) / cancel (msg_id=101) ---

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -432,6 +433,142 @@ func apiScenarioBase(ctx context.Context, addr string, clientID int, timeout tim
 		}
 	})
 	return runErr
+}
+
+func runAPICurrentTime(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		serverTime, err := client.CurrentTime(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("current_time", "", func(event *apiDriverEvent) {
+			event.EventTime = serverTime.Format(time.RFC3339Nano)
+		})
+		return nil
+	})
+}
+
+func runAPICurrentTimeMillis(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		serverTime, err := client.CurrentTimeMillis(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("current_time_millis", "", func(event *apiDriverEvent) {
+			event.EventTime = serverTime.Format(time.RFC3339Nano)
+		})
+		return nil
+	})
+}
+
+func runAPIRefreshOrderID(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		orderID, err := client.Orders().RefreshOrderID(ctx)
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if !ok || apiErr.Code != 321 || !strings.Contains(apiErr.Message, "Read-Only mode") {
+				return err
+			}
+			recordAPIEvent("order_id_refresh_refused", "", func(event *apiDriverEvent) { event.Error = err.Error() })
+			return nil
+		}
+		recordAPIEvent("order_id_refreshed", "", func(event *apiDriverEvent) {
+			event.NextOrderID = orderID
+		})
+		return nil
+	})
+}
+
+func runAPIFamilyCodes(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		codes, err := client.Accounts().FamilyCodes(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("family_codes", "", func(event *apiDriverEvent) { event.Count = len(codes) })
+		return nil
+	})
+}
+
+func runAPINewsProviders(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		providers, err := client.News().Providers(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("news_providers", "", func(event *apiDriverEvent) { event.Count = len(providers) })
+		return nil
+	})
+}
+
+func runAPIDepthExchanges(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		exchanges, err := client.Contracts().DepthExchanges(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("depth_exchanges", "", func(event *apiDriverEvent) { event.Count = len(exchanges) })
+		return nil
+	})
+}
+
+func runAPIScannerParameters(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 30*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		parameters, err := client.Scanner().Parameters(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("scanner_parameters", "", func(event *apiDriverEvent) {
+			event.Values = map[string]string{"bytes": strconv.Itoa(len(parameters))}
+		})
+		return nil
+	})
+}
+
+func runAPIUserInfo(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		userInfo, err := client.TWS().UserInfo(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("user_info", "", func(event *apiDriverEvent) {
+			event.Values = map[string]string{"bytes": strconv.Itoa(len(userInfo))}
+		})
+		return nil
+	})
+}
+
+func runAPIMarketRule(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		rule, err := client.Contracts().MarketRule(ctx, 26)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("market_rule", "", func(event *apiDriverEvent) { event.Count = len(rule.Increments) })
+		return nil
+	})
+}
+
+func runAPISoftDollarTiers(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		tiers, err := client.Advisors().SoftDollarTiers(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("soft_dollar_tiers", "", func(event *apiDriverEvent) { event.Count = len(tiers) })
+		return nil
+	})
+}
+
+func runAPIDisplayGroups(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		groups, err := client.TWS().DisplayGroups(ctx)
+		if err != nil {
+			return err
+		}
+		recordAPIEvent("display_groups", "", func(event *apiDriverEvent) { event.Count = len(groups) })
+		return nil
+	})
 }
 
 func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) error {
