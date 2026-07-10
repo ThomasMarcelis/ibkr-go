@@ -111,7 +111,7 @@ artifacts stay linked:
 go build -o /tmp/ibkr-recorder ./cmd/ibkr-recorder
 go build -o /tmp/ibkr-capture ./cmd/ibkr-capture
 go build -o /tmp/ibkr-normalize ./cmd/ibkr-normalize
-IBKR_CAPTURE_ROLE=readonly-live ./scripts/record-scenarios.sh quote_stream_multi_asset historical_ticks_aapl_timezone_window
+IBKR_CAPTURE_ROLE=readonly-live ./scripts/record-scenarios.sh quote_stream_multi_asset historical_ticks_aapl_timezone_start
 ./scripts/verify-captures.sh captures/<capture-dir>
 ```
 

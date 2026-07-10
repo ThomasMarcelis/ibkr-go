@@ -968,6 +968,238 @@ func runAPISetMarketDataDelayedFrozen(ctx context.Context, addr string, clientID
 	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataDelayedFrozen)
 }
 
+func runAPIAccountUpdatesMulti(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
+		values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{Account: account})
+		if err != nil {
+			return err
+		}
+		if len(values) == 0 {
+			return errors.New("multi-account updates returned no values")
+		}
+		for _, value := range values {
+			if value.Account != account || value.Key == "" {
+				return fmt.Errorf("invalid multi-account update: account=%q key=%q", value.Account, value.Key)
+			}
+		}
+		if err := fenceAPIWrites(ctx, client, "multi-account updates cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("account_updates_multi", "snapshot", func(event *apiDriverEvent) { event.Count = len(values) })
+		return nil
+	})
+}
+
+func runAPIPositionsMulti(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
+		positions, err := client.Accounts().PositionsMulti(ctx, ibkr.PositionsMultiRequest{Account: account})
+		if err != nil {
+			return err
+		}
+		for _, position := range positions {
+			if position.Account != account || position.Contract.Symbol == "" {
+				return fmt.Errorf("invalid multi-account position: account=%q symbol=%q", position.Account, position.Contract.Symbol)
+			}
+		}
+		if err := fenceAPIWrites(ctx, client, "multi-account positions cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("positions_multi", "snapshot", func(event *apiDriverEvent) { event.Count = len(positions) })
+		return nil
+	})
+}
+
+func runAPIHistoricalBars(ctx context.Context, addr string, clientID int, label string, req ibkr.HistoricalBarsRequest, allowUnavailable bool) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		bars, err := client.History().Bars(ctx, req)
+		if err != nil {
+			if !allowUnavailable || !isHistoricalDataUnavailable(err, ibkr.OpHistoricalBars) {
+				return err
+			}
+			recordAPIEvent("historical_data_unavailable", label, func(event *apiDriverEvent) { event.Error = err.Error() })
+			return nil
+		}
+		if len(bars) == 0 {
+			return fmt.Errorf("%s returned no historical bars", label)
+		}
+		recordAPIEvent("historical_bars", label, func(event *apiDriverEvent) { event.Count = len(bars) })
+		return nil
+	})
+}
+
+func runAPIHistoricalBars1Day1Hour(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalBars(ctx, addr, clientID, "1d_1h", ibkr.HistoricalBarsRequest{
+		Contract: apiAAPL, Duration: ibkr.Days(1), BarSize: ibkr.Bar1Hour, WhatToShow: ibkr.ShowTrades, UseRTH: true,
+	}, false)
+}
+
+func runAPIHistoricalBars30Days1Day(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalBars(ctx, addr, clientID, "30d_1day", ibkr.HistoricalBarsRequest{
+		Contract: apiAAPL, Duration: ibkr.Days(30), BarSize: ibkr.Bar1Day, WhatToShow: ibkr.ShowTrades, UseRTH: true,
+	}, false)
+}
+
+func runAPIHistoricalBarsBidAsk(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalBars(ctx, addr, clientID, "bidask", ibkr.HistoricalBarsRequest{
+		Contract: apiAAPL, Duration: ibkr.Days(1), BarSize: ibkr.Bar1Hour, WhatToShow: ibkr.ShowBidAsk, UseRTH: true,
+	}, true)
+}
+
+func runAPIHistoricalBarsError(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+			Contract: ibkr.Contract{Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
+			Duration: ibkr.Days(1), BarSize: ibkr.Bar1Hour, WhatToShow: ibkr.ShowTrades, UseRTH: true,
+		})
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok || apiErr.OpKind != ibkr.OpHistoricalBars || apiErr.Code != 200 || !strings.Contains(apiErr.Message, "No security definition") {
+			return fmt.Errorf("historical bars not-found error = %v", err)
+		}
+		recordAPIEvent("historical_bars_error", "not_found", func(event *apiDriverEvent) { event.Error = err.Error() })
+		return nil
+	})
+}
+
+func runAPIHistoricalScheduleAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
+			Contract: apiAAPL, Duration: ibkr.Months(1), BarSize: ibkr.Bar1Day, UseRTH: true,
+		})
+		if err != nil {
+			return err
+		}
+		if schedule.TimeZone == "" || len(schedule.Sessions) == 0 {
+			return fmt.Errorf("historical schedule returned timezone=%q sessions=%d", schedule.TimeZone, len(schedule.Sessions))
+		}
+		recordAPIEvent("historical_schedule", "aapl", func(event *apiDriverEvent) {
+			event.Count = len(schedule.Sessions)
+			event.Values = map[string]string{"timezone": schedule.TimeZone}
+		})
+		return nil
+	})
+}
+
+func runAPIHeadTimestampAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		timestamp, err := client.History().HeadTimestamp(ctx, ibkr.HeadTimestampRequest{
+			Contract: apiAAPL, WhatToShow: ibkr.ShowTrades, UseRTH: true,
+		})
+		if err != nil {
+			return err
+		}
+		if timestamp.IsZero() {
+			return errors.New("head timestamp is zero")
+		}
+		recordAPIEvent("head_timestamp", "aapl", func(event *apiDriverEvent) {
+			event.Values = map[string]string{"time": timestamp.UTC().Format(time.RFC3339)}
+		})
+		return nil
+	})
+}
+
+func runAPIHistogramAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		entries, err := client.History().Histogram(ctx, ibkr.HistogramDataRequest{Contract: apiAAPL, UseRTH: true, Period: "1 week"})
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			return errors.New("histogram returned no entries")
+		}
+		recordAPIEvent("histogram", "aapl", func(event *apiDriverEvent) { event.Count = len(entries) })
+		return nil
+	})
+}
+
+func isHistoricalDataUnavailable(err error, op ibkr.OpKind) bool {
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.OpKind != op || (apiErr.Code != 10187 && apiErr.Code != 162) {
+		return false
+	}
+	return strings.Contains(apiErr.Message, "No market data permissions") ||
+		strings.Contains(apiErr.Message, "Trading TWS session is connected from a different IP address")
+}
+
+func historicalTickCount(result ibkr.HistoricalTicksResult, what ibkr.WhatToShow) (int, error) {
+	populated := 0
+	if len(result.Ticks) > 0 {
+		populated++
+	}
+	if len(result.BidAsk) > 0 {
+		populated++
+	}
+	if len(result.Last) > 0 {
+		populated++
+	}
+	if populated != 1 {
+		return 0, fmt.Errorf("historical ticks populated %d result slices", populated)
+	}
+	switch what {
+	case ibkr.ShowTrades:
+		return len(result.Last), nil
+	case ibkr.ShowBidAsk:
+		return len(result.BidAsk), nil
+	case ibkr.ShowMidpoint:
+		return len(result.Ticks), nil
+	default:
+		return 0, fmt.Errorf("unsupported historical tick kind %q", what)
+	}
+}
+
+func captureHistoricalTicks(ctx context.Context, client *ibkr.Client, label string, req ibkr.HistoricalTicksRequest) error {
+	result, err := client.History().Ticks(ctx, req)
+	if err != nil {
+		if !isHistoricalDataUnavailable(err, ibkr.OpHistoricalTicks) {
+			return err
+		}
+		recordAPIEvent("historical_data_unavailable", label, func(event *apiDriverEvent) { event.Error = err.Error() })
+		return nil
+	}
+	count, err := historicalTickCount(result, req.WhatToShow)
+	if err != nil {
+		return err
+	}
+	if count == 0 {
+		return fmt.Errorf("%s returned no historical ticks", label)
+	}
+	recordAPIEvent("historical_ticks", label, func(event *apiDriverEvent) { event.Count = count })
+	return nil
+}
+
+func runAPIHistoricalTicks(ctx context.Context, addr string, clientID int, what ibkr.WhatToShow) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		return captureHistoricalTicks(ctx, client, strings.ToLower(string(what)), ibkr.HistoricalTicksRequest{
+			Contract: apiAAPL, EndTime: time.Now().UTC(), NumberOfTicks: 100, WhatToShow: what, UseRTH: true,
+		})
+	})
+}
+
+func runAPIHistoricalTicksTrades(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalTicks(ctx, addr, clientID, ibkr.ShowTrades)
+}
+
+func runAPIHistoricalTicksBidAsk(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalTicks(ctx, addr, clientID, ibkr.ShowBidAsk)
+}
+
+func runAPIHistoricalTicksMidpoint(ctx context.Context, addr string, clientID int) error {
+	return runAPIHistoricalTicks(ctx, addr, clientID, ibkr.ShowMidpoint)
+}
+
+func runAPIHistoricalTicksStartBound(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 45*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		start := time.Now().UTC().AddDate(0, 0, -7)
+		for _, what := range []ibkr.WhatToShow{ibkr.ShowTrades, ibkr.ShowBidAsk, ibkr.ShowMidpoint} {
+			if err := captureHistoricalTicks(ctx, client, "start_"+strings.ToLower(string(what)), ibkr.HistoricalTicksRequest{
+				Contract: apiAAPL, StartTime: start, NumberOfTicks: 50, WhatToShow: what, UseRTH: true,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
 func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))

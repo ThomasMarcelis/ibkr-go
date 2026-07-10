@@ -148,32 +148,6 @@ func sendReqPositions(conn net.Conn) error {
 	return sendMessage(conn, []string{"61", "1"})
 }
 
-// --- Historical bars (msg_id=20) / cancel (msg_id=25) ---
-//
-// On server v>=124 the version field is elided. Layout:
-//
-//	[20, reqId, <contract fields+tradingClass+includeExpired>,
-//	 endDateTime, barSize, duration, useRTH, whatToShow, formatDate,
-//	 (combo legs iff BAG), keepUpToDate, chartOptions]
-func sendReqHistoricalData(conn net.Conn, reqID, _ int, c contractSpec, endDateTime, duration, barSize, whatToShow string, useRTH bool) error {
-	fields := []string{"20", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		endDateTime,
-		barSize,
-		duration,
-		boolField(useRTH),
-		whatToShow,
-		"1", // formatDate=1 (Eastern Time string)
-	)
-	// BAG combo legs go here if sec_type == "BAG" — skipped for STK/FUT/CASH/OPT/IND.
-	fields = append(fields,
-		"0", // keepUpToDate=false
-		"",  // chartOptions (empty tag-value list)
-	)
-	return sendMessage(conn, fields)
-}
-
 // --- Market data (msg_id=1) / cancel (msg_id=2) ---
 //
 //	[1, version=11, reqId, <contract fields no includeExpired>,
@@ -289,28 +263,6 @@ func sendReqMarketDataType(conn net.Conn, dataType int) error {
 	return sendMessage(conn, []string{"59", "1", strconv.Itoa(dataType)})
 }
 
-// --- Head timestamp (msg_id=87) ---
-//
-//	[87, reqId, contract fields (13), includeExpired, useRTH, whatToShow, formatDate]
-func sendReqHeadTimestamp(conn net.Conn, reqID int, c contractSpec, whatToShow string, useRTH bool) error {
-	fields := []string{"87", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		"0", // includeExpired
-		boolField(useRTH),
-		whatToShow,
-		"1", // formatDate
-	)
-	return sendMessage(conn, fields)
-}
-
-// --- Cancel head timestamp (msg_id=90) ---
-//
-//	[90, reqId]
-func sendCancelHeadTimestamp(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"90", strconv.Itoa(reqID)})
-}
-
 // --- Completed orders (msg_id=99) ---
 //
 //	[99, apiOnly]
@@ -330,30 +282,6 @@ func sendCancelHistoricalData(conn net.Conn, reqID int) error {
 //	[6, version=2, subscribe, acctCode]
 func sendReqAccountUpdates(conn net.Conn, subscribe bool, acctCode string) error {
 	return sendMessage(conn, []string{"6", "2", boolField(subscribe), acctCode})
-}
-
-// --- Account updates multi (msg_id=76) / cancel (msg_id=77) ---
-//
-//	[76, version=1, reqId, account, modelCode, subscribe=true]
-//	[77, version=1, reqId]
-func sendReqAccountUpdatesMulti(conn net.Conn, reqID int, account, modelCode string) error {
-	return sendMessage(conn, []string{"76", "1", strconv.Itoa(reqID), account, modelCode, "1"})
-}
-
-func sendCancelAccountUpdatesMulti(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"77", "1", strconv.Itoa(reqID)})
-}
-
-// --- Positions multi (msg_id=74) / cancel (msg_id=75) ---
-//
-//	[74, version=1, reqId, account, modelCode]
-//	[75, version=1, reqId]
-func sendReqPositionsMulti(conn net.Conn, reqID int, account, modelCode string) error {
-	return sendMessage(conn, []string{"74", "1", strconv.Itoa(reqID), account, modelCode})
-}
-
-func sendCancelPositionsMulti(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"75", "1", strconv.Itoa(reqID)})
 }
 
 // --- PnL (msg_id=92) / cancel (msg_id=93) ---
@@ -409,40 +337,6 @@ func sendReqNewsBulletins(conn net.Conn, allMessages bool) error {
 
 func sendCancelNewsBulletins(conn net.Conn) error {
 	return sendMessage(conn, []string{"13", "1"})
-}
-
-// --- Histogram data (msg_id=88) / cancel (msg_id=89) ---
-//
-//	[88, reqId, contract(13), useRTH, timePeriod]
-//	[89, reqId]
-func sendReqHistogramData(conn net.Conn, reqID int, c contractSpec, useRTH bool, timePeriod string) error {
-	fields := []string{"88", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields, boolField(useRTH), timePeriod)
-	return sendMessage(conn, fields)
-}
-
-func sendCancelHistogramData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"89", strconv.Itoa(reqID)})
-}
-
-// --- Historical ticks (msg_id=96) ---
-//
-//	[96, reqId, contract(13), startDateTime, endDateTime, numberOfTicks,
-//	 whatToShow, useRTH, ignoreSize, miscOptions]
-func sendReqHistoricalTicks(conn net.Conn, reqID int, c contractSpec, startDateTime, endDateTime string, numberOfTicks int, whatToShow string, useRTH bool, ignoreSize bool) error {
-	fields := []string{"96", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		startDateTime,
-		endDateTime,
-		strconv.Itoa(numberOfTicks),
-		whatToShow,
-		boolField(useRTH),
-		boolField(ignoreSize),
-		"", // miscOptions
-	)
-	return sendMessage(conn, fields)
 }
 
 // --- Calc implied volatility (msg_id=54) / cancel (msg_id=56) ---
@@ -544,8 +438,7 @@ func sendCancelScannerSubscription(conn net.Conn, reqID int) error {
 
 // --- Historical data with keepUpToDate (msg_id=20) ---
 //
-// Same as sendReqHistoricalData but with keepUpToDate=true. Requires
-// endDateTime="" and barSize >= 5s.
+// Uses keepUpToDate=true; endDateTime must be empty and barSize at least 5s.
 func sendReqHistoricalDataKeepUp(conn net.Conn, reqID, _ int, c contractSpec, barSize, whatToShow string, useRTH bool) error {
 	fields := []string{"20", strconv.Itoa(reqID)}
 	fields = append(fields, contractRequestFields(c)...)

@@ -85,10 +85,6 @@ func nextReqID() int {
 	return scenarioReqIDCounter
 }
 
-func captureHistoricalTickTime(t time.Time) string {
-	return t.UTC().Format("20060102 15:04:05") + " UTC"
-}
-
 func captureHistoricalNewsTime(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04:05") + " UTC"
 }
@@ -225,78 +221,29 @@ var scenarios = map[string]*scenario{
 	// --- Historical bars ---
 
 	"historical_bars_1d_1h": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{20, 17}, "read_only", []string{"historical_data"}, []string{"hour bars for liquid stock"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTORICAL_DATA AAPL STK 1 D / 1 hour / TRADES",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "1 D", "1 hour", "TRADES", true); err != nil {
-				return err
-			}
-			// HISTORICAL_DATA msg_id=17 is a single frame containing all bars. Stop on it.
-			return readFrames(conn, 20*time.Second, logFrame, stopOnMsgIDWithReq(17, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd}, "read_only", []string{"historical_data"}, []string{"nonempty hourly trade bars for liquid stock"}, 1, "promoted", batchReadOnly),
+		description: "request and decode one day of hourly AAPL trade bars through the public API",
+		runAPI:      runAPIHistoricalBars1Day1Hour,
 	},
 	"historical_bars_30d_1day": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{20, 17}, "read_only", []string{"historical_data"}, []string{"daily bars over long window"}, 1, "candidate", batchReadOnly),
-		description: "REQ_HISTORICAL_DATA AAPL STK 30 D / 1 day / TRADES",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "30 D", "1 day", "TRADES", true); err != nil {
-				return err
-			}
-			return readFrames(conn, 20*time.Second, logFrame, stopOnMsgIDWithReq(17, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd}, "read_only", []string{"historical_data"}, []string{"nonempty daily trade bars over a 30-day window"}, 1, "candidate", batchReadOnly),
+		description: "request and decode 30 days of daily AAPL trade bars through the public API",
+		runAPI:      runAPIHistoricalBars30Days1Day,
 	},
 	"historical_bars_bidask": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{20, 17}, "read_only", []string{"historical_data"}, []string{"BID_ASK historical bars"}, 1, "candidate", batchReadOnly),
-		description: "REQ_HISTORICAL_DATA AAPL STK 1 D / 1 hour / BID_ASK",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "1 D", "1 hour", "BID_ASK", true); err != nil {
-				return err
-			}
-			return readFrames(conn, 20*time.Second, logFrame, stopOnMsgIDWithReq(17, strconv.Itoa(reqID), 1))
-		},
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty BID_ASK bars or exact historical-data permission error"}, 1, "candidate", batchReadOnly),
+		description: "request and decode hourly AAPL BID_ASK bars or the typed live permission error through the public API",
+		runAPI:      runAPIHistoricalBarsBidAsk,
 	},
 	"historical_bars_error": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{20, 4}, "read_only", []string{"historical_data"}, []string{"real historical API error"}, 1, "candidate", batchReadOnly),
-		description: "REQ_HISTORICAL_DATA with bogus symbol (expect ERR_MSG)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "ZZZZNONE", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "1 D", "1 hour", "TRADES", true); err != nil {
-				return err
-			}
-			stop := func(msgID int, fields []string) bool {
-				if msgID == 17 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID) {
-					return true
-				}
-				if msgID == 4 && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID) {
-					return true
-				}
-				return false
-			}
-			return readFrames(conn, 10*time.Second, logFrame, stop)
-		},
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"typed code 200 historical-bars contract-not-found error"}, 1, "candidate", batchReadOnly),
+		description: "request historical bars for a nonexistent stock and require the typed not-found error through the public API",
+		runAPI:      runAPIHistoricalBarsError,
 	},
 	"historical_schedule_aapl": {
-		metadata:    meta("history", []string{"History().Schedule"}, []int{20, 106}, "read_only", []string{"historical_data"}, []string{"historical session schedule entries"}, 1, "candidate", batchNewV2, batchReadOnly),
-		description: "REQ_HISTORICAL_DATA AAPL STK 1 M / 1 day / SCHEDULE",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", "1 M", "1 day", "SCHEDULE", true); err != nil {
-				return err
-			}
-			// Stop on either an api_error or the historical_schedule callback
-			// (msg_id 106, protocol.InHistoricalSchedule)
-			// for our reqID. The 15 s deadline is a safety net only.
-			stop := func(msgID int, fields []string) bool {
-				if len(fields) < 2 || fields[1] != strconv.Itoa(reqID) {
-					return false
-				}
-				return msgID == 4 || msgID == 106
-			}
-			return readFrames(conn, 15*time.Second, logFrame, stop)
-		},
+		metadata:    meta("history", []string{"History().Schedule"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalSchedule}, "read_only", []string{"historical_data"}, []string{"nonempty historical session schedule with timezone"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "request and decode one month of AAPL trading sessions through the public API",
+		runAPI:      runAPIHistoricalScheduleAAPL,
 	},
 
 	// --- Market data type control (MarketData().SetType) ---
@@ -519,15 +466,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIMatchingSymbolsPartial,
 	},
 	"head_timestamp_aapl": {
-		metadata:    meta("history", []string{"History().HeadTimestamp"}, []int{87, 88, 90}, "read_only", []string{"historical_data"}, []string{"head timestamp response"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HEAD_TIMESTAMP AAPL/STK/TRADES, read HEAD_TIMESTAMP (msg 88)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHeadTimestamp(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "TRADES", true); err != nil {
-				return err
-			}
-			return readFrames(conn, 15*time.Second, logFrame, stopOnMsgIDWithReq(88, strconv.Itoa(reqID), 0))
-		},
+		metadata:    meta("history", []string{"History().HeadTimestamp"}, []int{protocol.OutReqHeadTimestamp, protocol.InHeadTimestamp}, "read_only", []string{"historical_data"}, []string{"nonzero earliest AAPL trade timestamp"}, 1, "promoted", batchReadOnly),
+		description: "request and decode AAPL's earliest trade timestamp through the public API",
+		runAPI:      runAPIHeadTimestampAAPL,
 	},
 	"sec_def_opt_params_aapl": {
 		metadata:    meta("contracts", []string{"Contracts().SecDefOptParams"}, []int{protocol.OutReqSecDefOptParams, protocol.InSecDefOptParams, protocol.InSecDefOptParamsEnd}, "read_only", nil, []string{"option parameter surface"}, 1, "promoted", batchReadOnly),
@@ -535,62 +476,24 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPISecDefOptParamsAAPL,
 	},
 	"histogram_data_aapl": {
-		metadata:    meta("history", []string{"History().Histogram"}, []int{88, 89}, "read_only", []string{"historical_data"}, []string{"histogram bins"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTOGRAM_DATA AAPL/1 week, read response (msg 89)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistogramData(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, true, "1 week"); err != nil {
-				return err
-			}
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 89 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 15*time.Second, logFrame, stop)
-		},
+		metadata:    meta("history", []string{"History().Histogram"}, []int{protocol.OutReqHistogramData, protocol.InHistogramData}, "read_only", []string{"historical_data"}, []string{"nonempty one-week AAPL histogram"}, 1, "promoted", batchReadOnly),
+		description: "request and decode a one-week AAPL price histogram through the public API",
+		runAPI:      runAPIHistogramAAPL,
 	},
 	"historical_ticks_aapl_trades": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{96, 98}, "read_only", []string{"historical_data"}, []string{"historical last ticks and attributes"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTORICAL_TICKS AAPL/TRADES, read response (msg 98)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			// Request last 100 trade ticks ending now.
-			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", captureHistoricalTickTime(time.Now()), 100, "TRADES", true, false); err != nil {
-				return err
-			}
-			// historicalTicksLast msg_id=98
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 96 || msgID == 97 || msgID == 98 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 20*time.Second, logFrame, stop)
-		},
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical trades or exact permission error"}, 1, "promoted", batchReadOnly),
+		description: "request recent AAPL trade ticks or the typed live permission error through the public API",
+		runAPI:      runAPIHistoricalTicksTrades,
 	},
 	"historical_ticks_aapl_bidask": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{96, 97}, "read_only", []string{"historical_data"}, []string{"historical bid/ask ticks and attributes"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTORICAL_TICKS AAPL/BID_ASK, read response (msg 97)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", captureHistoricalTickTime(time.Now()), 100, "BID_ASK", true, false); err != nil {
-				return err
-			}
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 96 || msgID == 97 || msgID == 98 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 20*time.Second, logFrame, stop)
-		},
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical bid/ask ticks or exact permission error"}, 1, "promoted", batchReadOnly),
+		description: "request recent AAPL bid/ask ticks or the typed live permission error through the public API",
+		runAPI:      runAPIHistoricalTicksBidAsk,
 	},
 	"historical_ticks_aapl_midpoint": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{96}, "read_only", []string{"historical_data"}, []string{"historical midpoint ticks"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTORICAL_TICKS AAPL/MIDPOINT, read response (msg 96)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", captureHistoricalTickTime(time.Now()), 100, "MIDPOINT", true, false); err != nil {
-				return err
-			}
-			stop := func(msgID int, fields []string) bool {
-				return (msgID == 96 || msgID == 97 || msgID == 98 || msgID == 4) && len(fields) >= 2 && fields[1] == strconv.Itoa(reqID)
-			}
-			return readFrames(conn, 20*time.Second, logFrame, stop)
-		},
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical midpoint ticks or exact permission error"}, 1, "promoted", batchReadOnly),
+		description: "request recent AAPL midpoint ticks or the typed live permission error through the public API",
+		runAPI:      runAPIHistoricalTicksMidpoint,
 	},
 	"historical_news_aapl": {
 		metadata:    meta("news", []string{"News().Historical"}, []int{86, 87}, "read_only", []string{"news_or_historical_news"}, []string{"historical news items and end marker"}, 1, "promoted", batchReadOnly),
@@ -607,27 +510,10 @@ var scenarios = map[string]*scenario{
 			return readFrames(conn, 15*time.Second, logFrame, stop)
 		},
 	},
-	"historical_ticks_aapl_timezone_window": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{96, 97, 98}, "read_only", []string{"historical_data"}, []string{"explicit timezone tick windows for all tick kinds"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_HISTORICAL_TICKS AAPL with explicit UTC start/end timezone windows for TRADES, BID_ASK, MIDPOINT",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			end := time.Now()
-			start := end.Add(-30 * time.Minute)
-			for _, what := range []string{"TRADES", "BID_ASK", "MIDPOINT"} {
-				reqID := nextReqID()
-				if err := sendReqHistoricalTicks(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, captureHistoricalTickTime(start), captureHistoricalTickTime(end), 50, what, true, false); err != nil {
-					return err
-				}
-				reqIDStr := strconv.Itoa(reqID)
-				stop := func(msgID int, fields []string) bool {
-					return (msgID == 96 || msgID == 97 || msgID == 98 || msgID == 4) && len(fields) >= 2 && fields[1] == reqIDStr
-				}
-				if err := readFrames(conn, 20*time.Second, logFrame, stop); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
+	"historical_ticks_aapl_timezone_start": {
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"explicit UTC start-bound ticks for all kinds or exact permission errors"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "request AAPL trade, bid/ask, and midpoint ticks from an explicit UTC start bound through the public API",
+		runAPI:      runAPIHistoricalTicksStartBound,
 	},
 	"historical_news_aapl_timezone_window": {
 		metadata:    meta("news", []string{"News().Historical"}, []int{86, 87}, "read_only", []string{"news_or_historical_news"}, []string{"explicit timezone historical-news window"}, 1, "promoted", batchNewV2, batchReadOnly),
@@ -766,42 +652,14 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"account_updates_multi": {
-		metadata:    meta("accounts", []string{"Accounts().UpdatesMulti", "Accounts().SubscribeUpdatesMulti"}, []int{76, 77, 73, 74}, "read_only", nil, []string{"account updates multi stream"}, 1, "promoted", batchReadOnly),
-		description: "REQ_ACCOUNT_UPDATES_MULTI, read to end marker (msg 74), then cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			acct := sess.ManagedAccounts
-			if err := sendReqAccountUpdatesMulti(conn, reqID, acct, ""); err != nil {
-				return err
-			}
-			// ACCOUNT_UPDATE_MULTI_END msg_id=74
-			if err := readFrames(conn, 15*time.Second, logFrame, stopOnMsgIDWithReq(74, strconv.Itoa(reqID), 0)); err != nil {
-				return err
-			}
-			if err := sendCancelAccountUpdatesMulti(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().UpdatesMulti", "Client.CurrentTime"}, []int{protocol.OutReqAccountUpdatesMulti, protocol.InAccountUpdateMulti, protocol.InAccountUpdateMultiEnd, protocol.OutCancelAccountUpdatesMulti, protocol.OutReqCurrentTime}, "read_only", nil, []string{"nonempty multi-account update snapshot and protocol-fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "collect and close a multi-account update snapshot through the public API",
+		runAPI:      runAPIAccountUpdatesMulti,
 	},
 	"positions_multi": {
-		metadata:    meta("accounts", []string{"Accounts().PositionsMulti", "Accounts().SubscribePositionsMulti"}, []int{74, 75, 71, 72}, "read_only", nil, []string{"positions multi stream"}, 1, "promoted", batchReadOnly),
-		description: "REQ_POSITIONS_MULTI, read to POSITION_MULTI_END (msg 72), then cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			acct := sess.ManagedAccounts
-			if err := sendReqPositionsMulti(conn, reqID, acct, ""); err != nil {
-				return err
-			}
-			// POSITION_MULTI_END msg_id=72
-			if err := readFrames(conn, 15*time.Second, logFrame, stopOnMsgIDWithReq(72, strconv.Itoa(reqID), 0)); err != nil {
-				return err
-			}
-			if err := sendCancelPositionsMulti(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().PositionsMulti", "Client.CurrentTime"}, []int{protocol.OutReqPositionsMulti, protocol.InPositionMulti, protocol.InPositionMultiEnd, protocol.OutCancelPositionsMulti, protocol.OutReqCurrentTime}, "read_only", nil, []string{"completed multi-account positions snapshot and protocol-fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "collect and close a multi-account positions snapshot through the public API",
+		runAPI:      runAPIPositionsMulti,
 	},
 	"pnl": {
 		metadata:    meta("accounts", []string{"Accounts().SubscribePnL"}, []int{92, 93, 94}, "read_only", nil, []string{"account PnL stream"}, 1, "promoted", batchReadOnly),

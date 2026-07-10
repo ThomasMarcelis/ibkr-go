@@ -2,9 +2,37 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
+
+	ibkr "github.com/ThomasMarcelis/ibkr-go"
 )
+
+func TestHistoricalDataUnavailableRequiresExactTypedError(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name string
+		err  error
+		op   ibkr.OpKind
+		want bool
+	}{
+		{name: "permissions", err: &ibkr.APIError{Code: 10187, OpKind: ibkr.OpHistoricalTicks, Message: "No market data permissions for NASDAQ STK"}, op: ibkr.OpHistoricalTicks, want: true},
+		{name: "different IP", err: &ibkr.APIError{Code: 162, OpKind: ibkr.OpHistoricalBars, Message: "Trading TWS session is connected from a different IP address"}, op: ibkr.OpHistoricalBars, want: true},
+		{name: "wrong operation", err: &ibkr.APIError{Code: 10187, OpKind: ibkr.OpHistoricalBars, Message: "No market data permissions"}, op: ibkr.OpHistoricalTicks},
+		{name: "wrong code", err: &ibkr.APIError{Code: 200, OpKind: ibkr.OpHistoricalTicks, Message: "No market data permissions"}, op: ibkr.OpHistoricalTicks},
+		{name: "wrong message", err: &ibkr.APIError{Code: 10187, OpKind: ibkr.OpHistoricalTicks, Message: "unrelated"}, op: ibkr.OpHistoricalTicks},
+		{name: "untyped", err: errors.New("No market data permissions"), op: ibkr.OpHistoricalTicks},
+	}
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isHistoricalDataUnavailable(tt.err, tt.op); got != tt.want {
+				t.Fatalf("isHistoricalDataUnavailable() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
 
 // TestCancelsAllowedForRiskClass freezes the single source of truth for which
 // risk classes may mutate order state. Only the four paper-trading classes run

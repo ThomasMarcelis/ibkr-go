@@ -97,7 +97,7 @@ handled through dimensions rather than duplicate rows:
 | HIST-002 | Historical keep-up bars | `History().SubscribeBars`, official keepUpToDate, `historicalDataUpdate` | `historical_bars_keepup`, `historical_bars_stream.txt` | promoted | live updates, cancel path, reconnect behavior |
 | HIST-003 | Historical schedule | `History().Schedule`, official `whatToShow=SCHEDULE`, `historicalSchedule` | `historical_schedule_aapl`, `historical_schedule_aapl.txt`, `TestHistoricalSchedule`, `TestCaptureDecode_HistoricalSchedule` | candidate | grounded live decode from server_version 200, captures/20260411T175212Z events.jsonl sha256 1b207a57180e6197; extend to non-US exchanges |
 | HIST-004 | Head timestamp and histogram | `History().HeadTimestamp`, `History().Histogram`, official head/histogram calls | `head_timestamp_aapl`, `histogram_data_aapl`, `head_timestamp.txt`, `histogram_data.txt` | promoted | RTH true/false, whatToShow variants, invalid contract, entitlement errors |
-| HIST-005 | Historical ticks | `History().Ticks`, official historical midpoint/bidask/last callbacks | `historical_ticks_aapl_trades`, `historical_ticks_aapl_bidask`, `historical_ticks_aapl_midpoint`, `historical_ticks_aapl_timezone_window`, historical tick transcripts | promoted | start-only, end-only, explicit zone, UTC/local zone, no-data, tick attributes, ignoreSize |
+| HIST-005 | Historical ticks | `History().Ticks`, official historical midpoint/bidask/last callbacks | `historical_ticks_aapl_trades`, `historical_ticks_aapl_bidask`, `historical_ticks_aapl_midpoint`, `historical_ticks_aapl_timezone_start`, historical tick transcripts | promoted | Start-only and end-only public requests, explicit-zone formatting, tick attributes, and exact live permission failures. Multi-callback `done=false` accumulation remains unattested. |
 | HIST-006 | Historical news | `News().Historical`, official `reqHistoricalNews`, historical news callbacks | `historical_news_aapl`, `historical_news_aapl_timezone_window`, `api_news_article_aapl`, `historical_news.txt`, `historical_news_timezone_window.txt` | promoted | provider combinations, timezone windows, no-result window, invalid provider, article follow-up |
 
 ## Orders And Executions
@@ -259,7 +259,7 @@ one primary matrix row above.
 | `historical_schedule_aapl` | HIST-003 |
 | `historical_ticks_aapl_bidask` | HIST-005 |
 | `historical_ticks_aapl_midpoint` | HIST-005 |
-| `historical_ticks_aapl_timezone_window` | HIST-005 |
+| `historical_ticks_aapl_timezone_start` | HIST-005 |
 | `historical_ticks_aapl_trades` | HIST-005 |
 | `market_depth_aapl` | MD2-001 |
 | `market_depth_aapl_smart` | MD2-001 |
