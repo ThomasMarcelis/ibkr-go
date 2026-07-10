@@ -75,8 +75,9 @@ type bootstrapState struct {
 const (
 	// The codec gates post-176 wire fields and the sv201 envelope on the
 	// negotiated version. The classic sv200 layout, exact-sv201 executions
-	// migration, exact-sv202 zero-strike boundary, and exact-sv203 order
-	// protobuf lifecycle are live-validated;
+	// migration, exact-sv202 zero-strike boundary, exact-sv203 order
+	// protobuf lifecycle, exact-sv204 order queries, and exact-sv205 contract
+	// data are live-validated;
 	// 176..199 are compatibility paths.
 	minServerVersion = protocol.SupportedMinServerVersion
 	maxServerVersion = protocol.SupportedMaxServerVersion

@@ -269,8 +269,8 @@ against the local paper Gateway when applicable.
   families (price, time, margin, execution, volume, percent-change), IB algo
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
-- ~~Server-version coverage through exactly `server_version 204`~~ **Done.**
-  The client negotiates `server_version` 176..204 and gates every post-176
+- ~~Server-version coverage through exactly `server_version 205`~~ **Done.**
+  The client negotiates `server_version` 176..205 and gates every post-176
   wire field on the negotiated value; live-validated 2026-07-04/05 by
   down-negotiating the paper Gateway to 176/184/193/195/199/200 across
   contract details, historical bars, API-error frames, and the
@@ -283,7 +283,9 @@ against the local paper Gateway when applicable.
   cancel lifecycle and its sanitized protobuf replay. Exact 204 is covered by
   official-SDK client/all/auto/completed query captures, representative
   cancelled/filled completed-order replay, and a read-only public live probe.
-  Version 205 is the next gap.
+  Exact 205 is covered by official-source request vectors, live stock, bond,
+  fund, option, issuer, and ineligibility responses, a compact public replay,
+  and read-only public live probes. Version 206 is the next gap.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
@@ -326,7 +328,14 @@ and observed commission-and-fees amount/currency. The capture campaign left no
 working orders and a flat AAPL position. See
 [`protocol-audit-sv204.md`](protocol-audit-sv204.md).
 
-The production ceiling is 204. Server version 205 and later remain a deliberate
+Exact `server_version 205` is implemented and live-attested. Contract-details
+request, regular response, bond response, and end marker migrate to protobuf.
+The shared Contract schema has one internal codec, while combo, description,
+and delta-neutral branches remain out of the public Contract until a real
+contract-data response earns them. See
+[`protocol-audit-sv205.md`](protocol-audit-sv205.md).
+
+The production ceiling is 205. Server version 206 and later remain a deliberate
 wall: each later migration gate must add its encoder/decoder, live capture, and
 deterministic replay before the advertised maximum moves again. The migration
 table fails closed rather than sending a classic body after IBKR has retired
@@ -337,7 +346,7 @@ it.
 - SDK conformance oracle workflow: capture reference traces from the official
   SDK against the local Gateway when adding or hardening a protocol area, and
   fold sanitized live-derived captures into deterministic replay fixtures.
-- Protobuf migrations for `server_version` 204+; see above.
+- Protobuf migrations for `server_version` 206+; see above.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
 

@@ -390,6 +390,18 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 	if err != nil {
 		return ContractDetails{}, err
 	}
+	minAlgoSize, err := parseOptionalDecimalPointer(m.MinAlgoSize, "contract details minimum algorithmic size")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	lastPricePrecision, err := parseOptionalDecimalPointer(m.LastPricePrecision, "contract details last price precision")
+	if err != nil {
+		return ContractDetails{}, err
+	}
+	lastSizePrecision, err := parseOptionalDecimalPointer(m.LastSizePrecision, "contract details last size precision")
+	if err != nil {
+		return ContractDetails{}, err
+	}
 	var aggGroup *int
 	if m.AggGroup != math.MaxInt32 {
 		aggGroup = new(m.AggGroup)
@@ -437,36 +449,42 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 	}
 
 	return ContractDetails{
-		Contract:                fromCodecContract(m.Contract),
-		MarketName:              m.MarketName,
-		LongName:                m.LongName,
-		MinTick:                 minTick,
-		PriceMagnifier:          m.PriceMagnifier,
-		OrderTypes:              splitContractList(m.OrderTypes),
-		ValidExchanges:          exchanges,
-		UnderConID:              m.UnderConID,
-		ContractMonth:           m.ContractMonth,
-		Industry:                m.Industry,
-		Category:                m.Category,
-		Subcategory:             m.Subcategory,
-		TimeZoneID:              m.TimeZoneID,
-		TradingHours:            m.TradingHours,
-		LiquidHours:             m.LiquidHours,
-		EconomicValueRule:       m.EconomicValueRule,
-		EconomicValueMultiplier: economicValueMultiplier,
-		SecurityIDs:             securityIDs,
-		AggGroup:                aggGroup,
-		UnderSymbol:             m.UnderSymbol,
-		UnderSecType:            SecType(m.UnderSecType),
-		RealExpirationDate:      m.RealExpirationDate,
-		LastTradeDate:           m.LastTradeDate,
-		LastTradeTime:           m.LastTradeTime,
-		StockType:               m.StockType,
-		MinSize:                 minSize,
-		SizeIncrement:           sizeIncrement,
-		SuggestedSizeIncrement:  suggestedSizeIncrement,
-		Fund:                    fund,
-		IneligibilityReasons:    ineligibilityReasons,
+		Contract:                  fromCodecContract(m.Contract),
+		MarketName:                m.MarketName,
+		LongName:                  m.LongName,
+		MinTick:                   minTick,
+		PriceMagnifier:            m.PriceMagnifier,
+		OrderTypes:                splitContractList(m.OrderTypes),
+		ValidExchanges:            exchanges,
+		UnderConID:                m.UnderConID,
+		ContractMonth:             m.ContractMonth,
+		Industry:                  m.Industry,
+		Category:                  m.Category,
+		Subcategory:               m.Subcategory,
+		TimeZoneID:                m.TimeZoneID,
+		TradingHours:              m.TradingHours,
+		LiquidHours:               m.LiquidHours,
+		EconomicValueRule:         m.EconomicValueRule,
+		EconomicValueMultiplier:   economicValueMultiplier,
+		SecurityIDs:               securityIDs,
+		AggGroup:                  aggGroup,
+		UnderSymbol:               m.UnderSymbol,
+		UnderSecType:              SecType(m.UnderSecType),
+		RealExpirationDate:        m.RealExpirationDate,
+		LastTradeDate:             m.LastTradeDate,
+		LastTradeTime:             m.LastTradeTime,
+		StockType:                 m.StockType,
+		MinSize:                   minSize,
+		SizeIncrement:             sizeIncrement,
+		SuggestedSizeIncrement:    suggestedSizeIncrement,
+		EventContract1:            m.EventContract1,
+		EventContractDescription1: m.EventContractDescription1,
+		EventContractDescription2: m.EventContractDescription2,
+		MinAlgoSize:               minAlgoSize,
+		LastPricePrecision:        lastPricePrecision,
+		LastSizePrecision:         lastSizePrecision,
+		Fund:                      fund,
+		IneligibilityReasons:      ineligibilityReasons,
 	}, nil
 }
 

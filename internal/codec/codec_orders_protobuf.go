@@ -21,6 +21,9 @@ var inboundProtobufDecoders = map[int]protobufDecodeFunc{
 	InCommissionReport:  decodeCommissionAndFeesReportProto,
 	InCompletedOrder:    decodeCompletedOrderProto,
 	InCompletedOrderEnd: decodeCompletedOrdersEndProto,
+	InContractData:      decodeContractDataProto,
+	InBondContractData:  decodeBondContractDataProto,
+	InContractDataEnd:   decodeContractDataEndProto,
 }
 
 func decodeOpenOrdersEndProto(body []byte, sv int) ([]Message, error) {
@@ -144,63 +147,8 @@ func decodeExecutionDetailsProto(body []byte, sv int) ([]Message, error) {
 }
 
 func decodeContractProto(body []byte) (Contract, error) {
-	m := Contract{}
-	for {
-		number, typ, ok, err := consumeProtoTag(&body)
-		if err != nil {
-			return Contract{}, err
-		}
-		if !ok {
-			return m, nil
-		}
-		switch number {
-		case 1:
-			value, err := consumeProtoVarint(&body, typ)
-			if err != nil {
-				return Contract{}, protoFieldError("contract", number, err)
-			}
-			m.ConID = decodeProtoInt32(value)
-		case 2, 3, 4, 6, 8, 9, 10, 11, 12:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return Contract{}, protoFieldError("contract", number, err)
-			}
-			switch number {
-			case 2:
-				m.Symbol = string(value)
-			case 3:
-				m.SecType = string(value)
-			case 4:
-				m.Expiry = string(value)
-			case 6:
-				m.Right = string(value)
-			case 8:
-				m.Exchange = string(value)
-			case 9:
-				m.PrimaryExchange = string(value)
-			case 10:
-				m.Currency = string(value)
-			case 11:
-				m.LocalSymbol = string(value)
-			case 12:
-				m.TradingClass = string(value)
-			}
-		case 5, 7:
-			value, err := consumeProtoDouble(&body, typ)
-			if err != nil {
-				return Contract{}, protoFieldError("contract", number, err)
-			}
-			if number == 5 {
-				m.Strike = formatProtoDouble(value)
-			} else {
-				m.Multiplier = formatProtoDouble(value)
-			}
-		default:
-			if err := skipProtoField(&body, number, typ); err != nil {
-				return Contract{}, protoFieldError("contract", number, err)
-			}
-		}
-	}
+	decoded, err := decodeSharedContractProto(body)
+	return decoded.Contract, err
 }
 
 func decodeExecutionProto(body []byte, m *ExecutionDetail) error {

@@ -28,10 +28,10 @@ server version and managed-account bootstrap fields are known.
 
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
-| out | 9 | ContractDetailsRequest | landed |
-| in | 10 | ContractDetails | landed; complete classic v200 common and FUND shapes |
-| in | 18 | BondContractDetails | landed; live-attested classic v200 bond shape |
-| in | 52 | ContractDetailsEnd | landed |
+| out | 9 | ContractDetailsRequest | landed; classic through sv204 plus exact-sv205 protobuf selectors |
+| in | 10 | ContractDetails | landed; complete classic v200 common/FUND shapes plus exact-sv205 protobuf |
+| in | 18 | BondContractDetails | landed; live-attested classic v200 and exact-sv205 protobuf bond shapes |
+| in | 52 | ContractDetailsEnd | landed; classic plus exact-sv205 protobuf terminator |
 | out | 81 | reqMatchingSymbols | landed |
 | in | 79 | SymbolSamples | landed |
 | out | 91 | reqMarketRule | landed |

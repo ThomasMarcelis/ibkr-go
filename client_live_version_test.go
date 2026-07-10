@@ -279,6 +279,70 @@ func TestLiveServer204CompletedOrderBoundary(t *testing.T) {
 	}
 }
 
+// TestLiveServer205ContractDataBoundary verifies the exact 205 migration
+// through the public API. Every request is read-only, so the same test can run
+// against either Gateway role by selecting IBKR_LIVE_ADDR.
+func TestLiveServer205ContractDataBoundary(t *testing.T) {
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(205)
+	defer restore()
+
+	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	if got := client.Session().ServerVersion; got != 205 {
+		t.Fatalf("negotiated ServerVersion = %d, want 205", got)
+	}
+	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelReq()
+
+	stock, err := client.Contracts().Qualify(ctx, ibkr.Contract{ConID: 265598, Exchange: "SMART"})
+	if err != nil {
+		t.Fatalf("AAPL stock at sv205: %v", err)
+	}
+	if stock.SecType != ibkr.SecTypeStock || stock.MinAlgoSize == nil || !stock.MinAlgoSize.IsZero() ||
+		stock.LastPricePrecision == nil || !stock.LastPricePrecision.Equal(decimal.RequireFromString("0.000001")) ||
+		stock.LastSizePrecision == nil || !stock.LastSizePrecision.Equal(decimal.RequireFromString("0.000001")) {
+		t.Fatalf("AAPL stock at sv205 = %+v", stock)
+	}
+
+	bond, err := client.Contracts().Qualify(ctx, ibkr.Contract{ConID: 127128131, Exchange: "SMART"})
+	if err != nil {
+		t.Fatalf("Apple bond at sv205: %v", err)
+	}
+	if bond.SecType != ibkr.SecTypeBond || bond.Bond == nil || bond.Bond.CUSIP != "IBCID127128131" ||
+		bond.MinAlgoSize == nil || !bond.MinAlgoSize.IsZero() {
+		t.Fatalf("Apple bond at sv205 = %+v", bond)
+	}
+
+	fund, err := client.Contracts().Qualify(ctx, ibkr.Contract{ConID: 57041934, Exchange: "FUNDSERV"})
+	if err != nil {
+		t.Fatalf("fund at sv205: %v", err)
+	}
+	if fund.SecType != ibkr.SecTypeFund || fund.Fund == nil || fund.Fund.Family != "American Century" ||
+		fund.MinAlgoSize == nil || !fund.MinAlgoSize.IsZero() {
+		t.Fatalf("fund at sv205 = %+v", fund)
+	}
+
+	option, err := client.Contracts().Qualify(ctx, ibkr.Contract{ConID: 728937835, Exchange: "SMART"})
+	if err != nil {
+		t.Fatalf("option at sv205: %v", err)
+	}
+	if option.SecType != ibkr.SecTypeOption || option.Expiry != "20270115" || option.LastTradeDate != "20270115" ||
+		option.MinAlgoSize == nil || !option.MinAlgoSize.IsZero() {
+		t.Fatalf("option at sv205 = %+v", option)
+	}
+
+	ineligible, err := client.Contracts().Qualify(ctx, ibkr.Contract{ConID: 236491195, Exchange: "SMART"})
+	if err != nil {
+		t.Fatalf("ineligible bond at sv205: %v", err)
+	}
+	if len(ineligible.IneligibilityReasons) != 3 || ineligible.IneligibilityReasons[0].ID != "i155" ||
+		ineligible.IneligibilityReasons[1].ID != "i156" || ineligible.IneligibilityReasons[2].ID != "i30" {
+		t.Fatalf("ineligible bond reasons at sv205 = %+v", ineligible.IneligibilityReasons)
+	}
+}
+
 // TestLiveDownNegotiatedPreview validates the OpenOrder inbound gates with
 // real down-negotiated echoes: the what-if open_order reply crosses the
 // FULL_ORDER_PREVIEW block gate (195) and the width-gated tail

@@ -48,7 +48,7 @@ scenario.
 | 6 | reqAccountUpdates | yes | yes | yes | |
 | 7 | reqExecutions | yes | yes | yes | filter variants |
 | 8 | reqIds | yes | yes | yes | |
-| 9 | reqContractDetails | yes | yes | yes | BOND, FOP, IND, CRYPTO |
+| 9 | reqContractDetails | yes | yes | yes | Classic plus exact-sv205 protobuf stock/bond/fund/option/issuer vectors and public stock+bond replay; BAG and delta-neutral contract-data responses remain unattested |
 | 10 | reqMktDepth | yes | yes | yes | smart depth, entitlement error |
 | 11 | cancelMktDepth | yes | yes | yes | |
 | 12 | reqNewsBulletins | yes | yes | yes | |

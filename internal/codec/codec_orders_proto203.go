@@ -196,76 +196,8 @@ func decodeOpenOrderProto(body []byte, sv int) ([]Message, error) {
 }
 
 func decodeOpenOrderContractProto(body []byte) (Contract, []ComboLeg, []string, error) {
-	m := Contract{}
-	var legs []ComboLeg
-	var prices []string
-	for {
-		number, typ, ok, err := consumeProtoTag(&body)
-		if err != nil {
-			return Contract{}, nil, nil, err
-		}
-		if !ok {
-			return m, legs, prices, nil
-		}
-		switch number {
-		case 1:
-			value, err := consumeProtoVarint(&body, typ)
-			if err != nil {
-				return Contract{}, nil, nil, protoFieldError("contract", number, err)
-			}
-			m.ConID = decodeProtoInt32(value)
-		case 2, 3, 4, 6, 8, 9, 10, 11, 12:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return Contract{}, nil, nil, protoFieldError("contract", number, err)
-			}
-			switch number {
-			case 2:
-				m.Symbol = string(value)
-			case 3:
-				m.SecType = string(value)
-			case 4:
-				m.Expiry = string(value)
-			case 6:
-				m.Right = string(value)
-			case 8:
-				m.Exchange = string(value)
-			case 9:
-				m.PrimaryExchange = string(value)
-			case 10:
-				m.Currency = string(value)
-			case 11:
-				m.LocalSymbol = string(value)
-			case 12:
-				m.TradingClass = string(value)
-			}
-		case 5, 7:
-			value, err := consumeProtoDouble(&body, typ)
-			if err != nil {
-				return Contract{}, nil, nil, protoFieldError("contract", number, err)
-			}
-			if number == 5 {
-				m.Strike = formatProtoDouble(value)
-			} else {
-				m.Multiplier = formatProtoDouble(value)
-			}
-		case 20:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return Contract{}, nil, nil, protoFieldError("contract", number, err)
-			}
-			leg, price, err := decodeComboLegProto(value)
-			if err != nil {
-				return Contract{}, nil, nil, protoFieldError("contract combo leg", number, err)
-			}
-			legs = append(legs, leg)
-			prices = append(prices, price)
-		default:
-			if err := skipProtoField(&body, number, typ); err != nil {
-				return Contract{}, nil, nil, protoFieldError("contract", number, err)
-			}
-		}
-	}
+	decoded, err := decodeSharedContractProto(body)
+	return decoded.Contract, decoded.ComboLegs, decoded.ComboLegPrices, err
 }
 
 func decodeComboLegProto(body []byte) (ComboLeg, string, error) {
@@ -616,45 +548,7 @@ func encodeOrderCancelProto(manualTime, extOperator, manualIndicator string) ([]
 }
 
 func encodeOrderContractProto(contract Contract, legs []ComboLeg, legPrices []string) ([]byte, error) {
-	body := make([]byte, 0, 96)
-	var err error
-	if contract.ConID != 0 {
-		body, err = appendProtoInt(body, 1, contract.ConID, "contract conid")
-		if err != nil {
-			return nil, err
-		}
-	}
-	for _, field := range []struct {
-		number protowire.Number
-		value  string
-	}{
-		{2, contract.Symbol}, {3, contract.SecType}, {4, contract.Expiry},
-		{6, contract.Right}, {8, contract.Exchange}, {9, contract.PrimaryExchange},
-		{10, contract.Currency}, {11, contract.LocalSymbol}, {12, contract.TradingClass},
-	} {
-		if field.value != "" {
-			body = appendProtoString(body, field.number, field.value)
-		}
-	}
-	body, err = appendOptionalProtoDouble(body, 5, contract.Strike, "contract strike")
-	if err != nil {
-		return nil, err
-	}
-	body, err = appendOptionalProtoDouble(body, 7, contract.Multiplier, "contract multiplier")
-	if err != nil {
-		return nil, err
-	}
-	if len(legPrices) > len(legs) {
-		return nil, fmt.Errorf("codec: %d combo leg prices for %d combo legs", len(legPrices), len(legs))
-	}
-	for i, leg := range legs {
-		legBody, err := encodeComboLegProto(leg, legPriceAt(legPrices, i))
-		if err != nil {
-			return nil, fmt.Errorf("codec: combo leg %d: %w", i, err)
-		}
-		body = appendProtoMessage(body, 20, legBody)
-	}
-	return canonicalProtoFields(body), nil
+	return encodeSharedContractProto(contract, legs, legPrices, false)
 }
 
 func encodeComboLegProto(leg ComboLeg, price string) ([]byte, error) {

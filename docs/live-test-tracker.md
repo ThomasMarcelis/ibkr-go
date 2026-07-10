@@ -4,8 +4,8 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-09. Both readonly-live gateway 127.0.0.1:4001 and
-paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 200`.
+Last updated: 2026-07-10. Both readonly-live gateway 127.0.0.1:4001 and
+paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 205`.
 
 ## Current Campaign Contract
 
@@ -28,6 +28,19 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-07-10
+
+Exact-205 contract-data boundary verification. Both role-aware doctor runs
+connected at `server_version=205` and completed the read-only time probe. The
+readonly role returned its expected code 10089 AAPL market-data entitlement
+warning; paper-dev returned a delayed AAPL quote.
+
+`TestLiveServer205ContractDataBoundary` then passed independently against
+127.0.0.1:4001 and 127.0.0.1:4002. Through the public API it qualified exact
+stock, bond, fund, option, and ineligible-bond conIDs, preserving explicit zero
+algorithmic minimum, stock price/size precision, fund metadata, both option
+dates, and all three real ineligibility reasons. The test is read-only.
 
 ### 2026-07-09
 
@@ -364,6 +377,9 @@ against the role-aware `paper-dev` Gateway.
 | api_completed_orders_variants_aapl | 2026-04-15 | recorded, verified after fix; server_version=200, events sha256 prefix `6ac84daaf4084436`; apiOnly=false and apiOnly=true returned completed orders |
 | sdk_sv204_completed_order_boundary | 2026-07-09 | official SDK oracle recorded and replay-promoted; exact server_version=204, events sha256 `9be0a4fd1b27056803baf4dbfb16a0ec2daa02d7f43bdec06b5ceee4b6f817a5`; client/all/auto open-order queries, completed apiOnly=false, cancelled/filled results, and clean account state |
 | sdk_sv204_completed_orders_api_only | 2026-07-09 | official SDK oracle recorded; exact server_version=204, events sha256 `36acaedf6b155ce6f1f0d2433d99864e1248cd1b16bc56701f4300c46def8a90`; completed apiOnly=true presence vector |
+| sdk_sv205_contract_data_boundary | 2026-07-10 | official SDK oracle recorded; exact server_version=205, normalized frames sha256 `f9dc02ad6fd6b480c26be3e4628efbfa26821602f16e97f974a8d9ce61cd6d8c`; 58-row Apple issuer lookup plus a real three-reason ineligibility response |
+| sdk_sv205_contract_data_compact | 2026-07-10 | official SDK oracle recorded and replay-promoted; exact server_version=205, events sha256 `3d1e3c303295a88e1923fa8127a991d83ce9dc86e742b8423eff047ce8ce6a49`; exact AAPL stock and single Apple bond round trips |
+| sdk_sv205_contract_data_type_matrix | 2026-07-10 | official SDK oracle recorded; exact server_version=205, normalized frames sha256 `a55614fb9b32d35b8d0e3ba6479d5a111fe7db8bed83429527a20217a44c8ef5`; exact stock, bond, fund, and option responses |
 | api_transmit_false_then_transmit_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `003abb59dfced542` |
 | api_duplicate_quote_subscriptions_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `84f1e78a18616e0f` |
 | api_reconnect_active_order_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9d72a4711c25c788` |

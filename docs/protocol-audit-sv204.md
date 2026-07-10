@@ -109,5 +109,5 @@ checked-in fixture; duplicate historical orders and farm notices are trimmed.
 - The guarded exact-204 live test is read-only: it checks completed orders,
   verifies there are no working orders, and verifies the AAPL position is flat.
 
-Version 205 remains fail-closed until its contract-data migration receives the
-same source audit, exact live capture, deterministic replay, and public test.
+Version 205 contract data is audited separately in
+[`protocol-audit-sv205.md`](protocol-audit-sv205.md).

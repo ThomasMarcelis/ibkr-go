@@ -194,8 +194,8 @@ func serveUnsupportedVersionGateway(conn net.Conn, serverVersion string) error {
 	if err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if string(versionRange) != "v176..204" {
-		return fmt.Errorf("version range = %q, want v176..204", string(versionRange))
+	if string(versionRange) != "v176..205" {
+		return fmt.Errorf("version range = %q, want v176..205", string(versionRange))
 	}
 	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{serverVersion, "2026-04-14T12:00:00Z"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)

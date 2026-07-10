@@ -56,12 +56,13 @@ const (
 //
 // Setting ConID alone unambiguously identifies a contract the client has
 // already qualified; the descriptive fields can then be left zero. Through
-// the supported server_version 202 boundary, contract-bearing requests remain
-// classic and transmit a zero Strike in the numeric slot. The Gateway accepts
-// that value for conID-only lookup, and may also return an explicitly present
-// zero strike for a resolved contract. Empty Expiry, Right, and Multiplier
-// mean unset. Use [ContractsClient.Qualify] to resolve a partial contract to a
-// fully specified one.
+// server versions below 205, contract-bearing requests remain classic and
+// transmit a zero Strike in the numeric slot. At 205, contract-data requests
+// move to protobuf and preserve the same conID-only lookup semantics. The
+// Gateway may return an explicitly present zero strike for a resolved
+// contract. Empty Expiry, Right, and Multiplier mean unset. Use
+// [ContractsClient.Qualify] to resolve a partial contract to a fully specified
+// one.
 type Contract struct {
 	ConID           int             // IBKR contract ID; nonzero pins an exact contract
 	Symbol          string          // underlying symbol (ticker); base currency for forex
@@ -154,36 +155,42 @@ type OrderCondition struct {
 // canonical [Contract] plus descriptive metadata.
 type ContractDetails struct {
 	Contract
-	MarketName              string
-	LongName                string
-	MinTick                 decimal.Decimal // smallest price increment
-	PriceMagnifier          int
-	OrderTypes              []string // IBKR order capabilities; includes order types and modifiers
-	ValidExchanges          []ContractExchange
-	UnderConID              int
-	ContractMonth           string
-	Industry                string
-	Category                string
-	Subcategory             string
-	TimeZoneID              string // trading-hours time zone
-	TradingHours            string // raw IBKR trading-hours calendar
-	LiquidHours             string // raw IBKR liquid-hours calendar
-	EconomicValueRule       string
-	EconomicValueMultiplier *decimal.Decimal
-	SecurityIDs             []TagValue
-	AggGroup                *int
-	UnderSymbol             string
-	UnderSecType            SecType
-	RealExpirationDate      string
-	LastTradeDate           string // explicit YYYYMMDD date supplied by server versions 182+
-	LastTradeTime           string // local HH:MM:SS component; use TimeZoneID for its zone
-	StockType               string
-	MinSize                 *decimal.Decimal // nil when IBKR omits the size rule
-	SizeIncrement           *decimal.Decimal // nil when IBKR omits the size rule
-	SuggestedSizeIncrement  *decimal.Decimal // nil when IBKR omits the size rule
-	Bond                    *BondDetails
-	Fund                    *FundDetails
-	IneligibilityReasons    []IneligibilityReason
+	MarketName                string
+	LongName                  string
+	MinTick                   decimal.Decimal // smallest price increment
+	PriceMagnifier            int
+	OrderTypes                []string // IBKR order capabilities; includes order types and modifiers
+	ValidExchanges            []ContractExchange
+	UnderConID                int
+	ContractMonth             string
+	Industry                  string
+	Category                  string
+	Subcategory               string
+	TimeZoneID                string // trading-hours time zone
+	TradingHours              string // raw IBKR trading-hours calendar
+	LiquidHours               string // raw IBKR liquid-hours calendar
+	EconomicValueRule         string
+	EconomicValueMultiplier   *decimal.Decimal
+	SecurityIDs               []TagValue
+	AggGroup                  *int
+	UnderSymbol               string
+	UnderSecType              SecType
+	RealExpirationDate        string
+	LastTradeDate             string // explicit YYYYMMDD date supplied by server versions 182+
+	LastTradeTime             string // local HH:MM:SS component; use TimeZoneID for its zone
+	StockType                 string
+	MinSize                   *decimal.Decimal // nil when IBKR omits the size rule
+	SizeIncrement             *decimal.Decimal // nil when IBKR omits the size rule
+	SuggestedSizeIncrement    *decimal.Decimal // nil when IBKR omits the size rule
+	EventContract1            string           // first event-contract identifier, when supplied by IBKR
+	EventContractDescription1 string           // description paired with EventContract1
+	EventContractDescription2 string           // secondary event-contract description
+	MinAlgoSize               *decimal.Decimal // nil when IBKR omits the algorithmic-order size rule
+	LastPricePrecision        *decimal.Decimal // nil when IBKR omits last-price precision
+	LastSizePrecision         *decimal.Decimal // nil when IBKR omits last-size precision
+	Bond                      *BondDetails
+	Fund                      *FundDetails
+	IneligibilityReasons      []IneligibilityReason
 }
 
 // BondDetails carries the bond-only message-18 fields. IBKR's field named

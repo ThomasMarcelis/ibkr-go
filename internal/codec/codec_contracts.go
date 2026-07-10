@@ -47,38 +47,44 @@ func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 }
 
 type ContractDetails struct {
-	ReqID                   int
-	Contract                Contract
-	MarketName              string
-	MinTick                 string
-	PriceMagnifier          int
-	OrderTypes              string
-	ValidExchanges          string
-	UnderConID              int
-	LongName                string
-	ContractMonth           string
-	Industry                string
-	Category                string
-	Subcategory             string
-	TimeZoneID              string
-	TradingHours            string
-	LiquidHours             string
-	EconomicValueRule       string
-	EconomicValueMultiplier string
-	SecurityIDs             []TagValue
-	AggGroup                int
-	UnderSymbol             string
-	UnderSecType            string
-	MarketRuleIDs           string
-	RealExpirationDate      string
-	LastTradeDate           string
-	LastTradeTime           string
-	StockType               string
-	MinSize                 string
-	SizeIncrement           string
-	SuggestedSizeIncrement  string
-	Fund                    *FundDetails
-	IneligibilityReasons    []IneligibilityReason
+	ReqID                     int
+	Contract                  Contract
+	MarketName                string
+	MinTick                   string
+	PriceMagnifier            int
+	OrderTypes                string
+	ValidExchanges            string
+	UnderConID                int
+	LongName                  string
+	ContractMonth             string
+	Industry                  string
+	Category                  string
+	Subcategory               string
+	TimeZoneID                string
+	TradingHours              string
+	LiquidHours               string
+	EconomicValueRule         string
+	EconomicValueMultiplier   string
+	SecurityIDs               []TagValue
+	AggGroup                  int
+	UnderSymbol               string
+	UnderSecType              string
+	MarketRuleIDs             string
+	RealExpirationDate        string
+	LastTradeDate             string
+	LastTradeTime             string
+	StockType                 string
+	MinSize                   string
+	SizeIncrement             string
+	SuggestedSizeIncrement    string
+	EventContract1            string
+	EventContractDescription1 string
+	EventContractDescription2 string
+	MinAlgoSize               string
+	LastPricePrecision        string
+	LastSizePrecision         string
+	Fund                      *FundDetails
+	IneligibilityReasons      []IneligibilityReason
 }
 
 // BondContractDetails is the distinct classic message-18 response used for
