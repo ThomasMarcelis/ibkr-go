@@ -185,9 +185,9 @@ layout, so replay fixtures exercise the production decode path.
 
 | Direction | Msg ID | Name | Status | Notes |
 |-----------|--------|------|--------|-------|
-| out | 5 | ReqOpenOrders | landed | |
-| out | 15 | ReqAutoOpenOrders | landed | |
-| out | 16 | ReqAllOpenOrders | landed | |
+| out | 5 | ReqOpenOrders | landed | Classic plus exact-sv204 empty protobuf request. |
+| out | 15 | ReqAutoOpenOrders | landed | Classic plus exact-sv204 optional-true bind and absent-false unbind requests. |
+| out | 16 | ReqAllOpenOrders | landed | Classic plus exact-sv204 empty protobuf request. |
 | in | 5 | OpenOrder | landed | See Order Management notes |
 | in | 53 | OpenOrderEnd | landed | Classic plus exact-sv203 empty protobuf terminator after a still-classic `ReqAllOpenOrders`; live empty snapshot replay prevents request timeouts. |
 | in | 3 | OrderStatus | landed | |
@@ -195,9 +195,9 @@ layout, so replay fixtures exercise the production decode path.
 | in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. Exact sv202 adds a live vector with both Contract.conId and explicitly present strike=0. |
 | in | 55 | ExecutionsEnd | landed | Raw sv200 freeze, exact-sv201 protobuf live vector/public empty-query replay, and exact-sv202 nonempty replay. |
 | in | 59 | CommissionAndFeesReport | landed | Complete classic and sv201 protobuf decoders; the live sv201 round trip sent classic fee reports. Meaningful bond yield/redemption and a protobuf-encoded fee report remain unattested. |
-| out | 99 | reqCompletedOrders | landed | |
-| in | 101 | CompletedOrder | landed | Exact sequential classic decoder and typed public projection preserve the complete version-gated order, algo, condition, compliance, and completion layout. The raw system-cancel replay freezes unset-sentinel handling; advanced branches without a nondefault live frame remain unattested. |
-| in | 102 | CompletedOrdersEnd | landed | |
+| out | 99 | reqCompletedOrders | landed | Classic plus exact-sv204 protobuf request; absent false and present true are exact-vector frozen. |
+| in | 101 | CompletedOrder | landed | Exact sequential classic decoder plus exact-sv204 protobuf Contract/Order/OrderState decode. The public projection preserves presence-aware order/client/parent identities and observed completion commission/currency. Advanced branches without a nondefault live frame remain unattested. |
+| in | 102 | CompletedOrdersEnd | landed | Classic plus exact-sv204 empty protobuf terminator. |
 
 ## News
 

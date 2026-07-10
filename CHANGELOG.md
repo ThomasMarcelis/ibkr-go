@@ -55,6 +55,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   already introduced at 201. A guarded far-limit paper order was observed,
   cancelled, globally cleaned up, and promoted to a sanitized replay.
 
+- Exact `server_version 204` support migrates client/all/auto open-order
+  requests and completed-order request/results to protobuf. Completed orders
+  preserve presence-aware order, client, and parent identities plus observed
+  commission-and-fees amount/currency. Exact official-source vectors, a
+  sanitized cancelled/filled paper replay, and a read-only guarded live check
+  freeze the boundary without placing another order.
+
 ### Changed (breaking)
 
 - **Legacy Reuters fundamental data has been removed.** IBKR API 10.47
@@ -175,14 +182,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **The client negotiates IB Gateway `server_version` 176..203, with exact 201
-  adding raw message IDs and protobuf executions and exact 202 adding the
-  zero-strike contract boundary.** Fields are gated
+- **The client negotiates IB Gateway `server_version` 176..204, with exact 201
+  adding raw message IDs and protobuf executions, exact 202 adding the
+  zero-strike contract boundary, exact 203 migrating the order lifecycle, and
+  exact 204 migrating open/completed-order queries and completed results.** Fields are gated
   on the version the Gateway actually returns instead of assuming the latest
-  layout. The classic sv200, mixed-envelope sv201, zero-strike sv202, and
-  order-protobuf sv203
+  layout. The classic sv200, mixed-envelope sv201, zero-strike sv202,
+  order-protobuf sv203, and completed-order-protobuf sv204
   boundaries are live-attested; versions 176..199 remain compatibility paths
-  until independently evidenced, and 204+ is not advertised. The official API
+  until independently evidenced, and 205+ is not advertised. The official API
   10.48.01 migration table moves no message at 202; a sanitized live replay
   freezes a protobuf execution Contract with both conId and explicit strike=0.
   `CurrentTimeMillis` returns

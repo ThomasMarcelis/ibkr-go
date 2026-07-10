@@ -362,6 +362,8 @@ against the role-aware `paper-dev` Gateway.
 | api_wsh_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `65aeb0a3b716e4b6`; real 10276 entitlement errors |
 | api_completed_orders_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `6415ad97b4c9f33e`; exposed completed-order TRAIL LIMIT decode interruption |
 | api_completed_orders_variants_aapl | 2026-04-15 | recorded, verified after fix; server_version=200, events sha256 prefix `6ac84daaf4084436`; apiOnly=false and apiOnly=true returned completed orders |
+| sdk_sv204_completed_order_boundary | 2026-07-09 | official SDK oracle recorded and replay-promoted; exact server_version=204, events sha256 `9be0a4fd1b27056803baf4dbfb16a0ec2daa02d7f43bdec06b5ceee4b6f817a5`; client/all/auto open-order queries, completed apiOnly=false, cancelled/filled results, and clean account state |
+| sdk_sv204_completed_orders_api_only | 2026-07-09 | official SDK oracle recorded; exact server_version=204, events sha256 `36acaedf6b155ce6f1f0d2433d99864e1248cd1b16bc56701f4300c46def8a90`; completed apiOnly=true presence vector |
 | api_transmit_false_then_transmit_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `003abb59dfced542` |
 | api_duplicate_quote_subscriptions_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `84f1e78a18616e0f` |
 | api_reconnect_active_order_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `9d72a4711c25c788` |

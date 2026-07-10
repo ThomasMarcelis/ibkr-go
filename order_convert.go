@@ -325,6 +325,18 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	if strings.TrimSpace(m.PermID) != "" {
 		permID = new(int64Value(m.PermID, "permanent id"))
 	}
+	var orderID *int64
+	if strings.TrimSpace(m.OrderID) != "" {
+		orderID = new(int64Value(m.OrderID, "order id"))
+	}
+	var clientID *int
+	if strings.TrimSpace(m.ClientID) != "" {
+		clientID = new(intValue(m.ClientID, "client id"))
+	}
+	var parentID *int64
+	if strings.TrimSpace(m.ParentID) != "" {
+		parentID = new(int64Value(m.ParentID, "parent id"))
+	}
 	var exemptCode *int
 	if raw := strings.TrimSpace(m.ExemptCode); raw != "" && raw != "-1" {
 		exemptCode = new(intValue(raw, "exempt code"))
@@ -348,6 +360,9 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	result := CompletedOrderResult{
 		Contract: fromCodecContract(m.Contract),
 		Order: CompletedOrderDetails{
+			OrderID:       orderID,
+			ClientID:      clientID,
+			ParentID:      parentID,
 			Action:        OrderAction(m.Action),
 			Quantity:      quantity,
 			OrderType:     OrderType(m.OrderType),
@@ -461,13 +476,15 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 			},
 		},
 		Completion: CompletedOrderCompletion{
-			Status:           OrderStatus(m.Status),
-			Filled:           filled,
-			AutoCancelDate:   m.AutoCancelDate,
-			AutoCancelParent: boolValue(m.AutoCancelParent, "auto cancel parent"),
-			ParentPermID:     int64Pointer(m.ParentPermID, "parent permanent id"),
-			Time:             m.CompletedTime,
-			StatusText:       m.CompletedStatus,
+			Status:                    OrderStatus(m.Status),
+			Filled:                    filled,
+			CommissionAndFees:         decimalPointer(m.CommissionAndFees, "commission and fees"),
+			CommissionAndFeesCurrency: m.CommissionCurrency,
+			AutoCancelDate:            m.AutoCancelDate,
+			AutoCancelParent:          boolValue(m.AutoCancelParent, "auto cancel parent"),
+			ParentPermID:              int64Pointer(m.ParentPermID, "parent permanent id"),
+			Time:                      m.CompletedTime,
+			StatusText:                m.CompletedStatus,
 		},
 	}
 	if parseErr != nil {

@@ -231,6 +231,54 @@ func TestLiveServer203OrderProtobufBoundary(t *testing.T) {
 	cleaned = true
 }
 
+// TestLiveServer204CompletedOrderBoundary verifies the exact 204 migration
+// through the public API without placing or cancelling an order. It also
+// asserts the local paper account is left with no working order and no AAPL
+// position after the earlier guarded capture campaign.
+func TestLiveServer204CompletedOrderBoundary(t *testing.T) {
+	ibkrlive.RequireTrading(t)
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(204)
+	defer restore()
+
+	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second, ibkr.WithClientID(0))
+	defer cancel()
+	defer client.Close()
+
+	if got := client.Session().ServerVersion; got != 204 {
+		t.Fatalf("negotiated ServerVersion = %d, want 204", got)
+	}
+	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancelReq()
+
+	open, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
+	if err != nil {
+		t.Fatalf("Open(all) at sv204: %v", err)
+	}
+	if len(open) != 0 {
+		t.Fatalf("Open(all) at sv204 returned %d working orders; account must be clean", len(open))
+	}
+
+	completed, err := client.Orders().Completed(ctx, false)
+	if err != nil {
+		t.Fatalf("Completed(false) at sv204: %v", err)
+	}
+	for i, order := range completed {
+		if order.Order.OrderID == nil || order.Order.ClientID == nil || order.Order.ParentID == nil {
+			t.Fatalf("completed[%d] lost protobuf identities: %+v", i, order.Order)
+		}
+	}
+
+	positions, err := client.Accounts().Positions(ctx)
+	if err != nil {
+		t.Fatalf("Positions() after sv204 queries: %v", err)
+	}
+	for _, position := range positions {
+		if position.Contract.Symbol == "AAPL" && !position.Position.IsZero() {
+			t.Fatalf("AAPL position after sv204 queries = %s; account must remain flat", position.Position)
+		}
+	}
+}
+
 // TestLiveDownNegotiatedPreview validates the OpenOrder inbound gates with
 // real down-negotiated echoes: the what-if open_order reply crosses the
 // FULL_ORDER_PREVIEW block gate (195) and the width-gated tail

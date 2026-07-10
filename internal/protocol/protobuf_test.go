@@ -11,6 +11,10 @@ func TestOutboundProtobufMigrationGates(t *testing.T) {
 	}{
 		{OutReqExecutions, 201},
 		{OutPlaceOrder, 203},
+		{OutReqOpenOrders, 204},
+		{OutReqAutoOpenOrders, 204},
+		{OutReqAllOpenOrders, 204},
+		{OutReqCompletedOrders, 204},
 		{OutReqAccountSummary, 207},
 		{OutStartAPI, 213},
 		{OutReqConfig, 219},

@@ -12,13 +12,15 @@ import (
 // an unknown base ID remains observable as UnknownInbound; it is never fed to
 // a classic field decoder.
 var inboundProtobufDecoders = map[int]protobufDecodeFunc{
-	InErrMsg:           decodeErrorProto,
-	InOrderStatus:      decodeOrderStatusProto,
-	InOpenOrder:        decodeOpenOrderProto,
-	InOpenOrderEnd:     decodeOpenOrdersEndProto,
-	InExecutionData:    decodeExecutionDetailsProto,
-	InExecutionDataEnd: decodeExecutionDetailsEndProto,
-	InCommissionReport: decodeCommissionAndFeesReportProto,
+	InErrMsg:            decodeErrorProto,
+	InOrderStatus:       decodeOrderStatusProto,
+	InOpenOrder:         decodeOpenOrderProto,
+	InOpenOrderEnd:      decodeOpenOrdersEndProto,
+	InExecutionData:     decodeExecutionDetailsProto,
+	InExecutionDataEnd:  decodeExecutionDetailsEndProto,
+	InCommissionReport:  decodeCommissionAndFeesReportProto,
+	InCompletedOrder:    decodeCompletedOrderProto,
+	InCompletedOrderEnd: decodeCompletedOrdersEndProto,
 }
 
 func decodeOpenOrdersEndProto(body []byte, sv int) ([]Message, error) {

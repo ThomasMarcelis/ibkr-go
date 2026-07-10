@@ -511,6 +511,12 @@ type CompletedOrderResult struct {
 // classic completed-order message. Pointer-valued numbers distinguish an
 // explicit zero from an IBKR unset sentinel.
 type CompletedOrderDetails struct {
+	// OrderID, ClientID, and ParentID are nil for classic completed-order
+	// replies, whose wire shape does not carry those identities. A non-nil
+	// pointer preserves an explicit zero from protobuf replies.
+	OrderID       *int64
+	ClientID      *int
+	ParentID      *int64
 	Action        OrderAction
 	Quantity      decimal.Decimal
 	OrderType     OrderType
@@ -546,14 +552,18 @@ type CompletedOrderDetails struct {
 // CompletedOrderCompletion is the terminal state returned with a completed
 // order. Time and StatusText preserve IBKR's exact strings; they can contain
 // named zones and free-form cancellation or rejection text.
+// CommissionAndFees is nil when the completed OrderState omitted an amount;
+// the currency may still be present independently.
 type CompletedOrderCompletion struct {
-	Status           OrderStatus
-	Filled           decimal.Decimal
-	AutoCancelDate   string
-	AutoCancelParent bool
-	ParentPermID     *int64
-	Time             string
-	StatusText       string
+	Status                    OrderStatus
+	Filled                    decimal.Decimal
+	CommissionAndFees         *decimal.Decimal
+	CommissionAndFeesCurrency string
+	AutoCancelDate            string
+	AutoCancelParent          bool
+	ParentPermID              *int64
+	Time                      string
+	StatusText                string
 }
 
 // CompletedOrderPrices contains price and quantity-like optional values from

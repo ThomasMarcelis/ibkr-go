@@ -230,6 +230,9 @@ func (m CompletedOrdersRequest) encodeWire(sv int) ([]string, error) {
 type CompletedOrder struct {
 	Contract Contract
 
+	ClientID           string
+	OrderID            string
+	ParentID           string
 	Action             string
 	Quantity           string
 	OrderType          string
@@ -348,6 +351,8 @@ type CompletedOrder struct {
 	CustomerAccount          string
 	ProfessionalCustomer     string
 	Submitter                string
+	CommissionAndFees        string
+	CommissionCurrency       string
 }
 
 type CompletedOrderEnd struct{}

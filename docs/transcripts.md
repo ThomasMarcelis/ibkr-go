@@ -13,8 +13,9 @@ Current state:
   partial frames, lifecycle edges, and other protocol failures
 - live-grounded behavior includes the classic IB Gateway `server_version 200`
   baseline, the exact-201 protobuf executions migration, and the exact-202
-  zero-strike execution-contract boundary, plus the exact-203 protobuf order
-  lifecycle, frozen into replay artifacts
+  zero-strike execution-contract boundary, the exact-203 protobuf order
+  lifecycle, and the exact-204 completed-order boundary, frozen into replay
+  artifacts
 - raw capture logs record per-leg connect/disconnect events plus TCP chunks;
   normalized replay artifacts reconstruct framed payloads from those chunks
 
@@ -180,7 +181,7 @@ header should say that account-specific identifiers are sanitized.
 - prefer complex live scenarios over one-request smoke captures when adding
   new coverage, especially for order, execution, account, PnL, historical
   window, and multi-subscription behavior
-- broaden live capture coverage from exact `server_version 203` onward, one
+- broaden live capture coverage from exact `server_version 204` onward, one
   migration gate at a time
 - use the recorder and normalization tooling to derive new scenarios from
   contributor-owned Gateway or TWS sessions

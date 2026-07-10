@@ -127,6 +127,9 @@ func TestFromCodecCompletedOrderProjectsLiveTrailLimitFields(t *testing.T) {
 	if order.Order.PermID == nil || *order.Order.PermID != 1426085924 {
 		t.Fatalf("permanent id = %v, want 1426085924", order.Order.PermID)
 	}
+	if order.Order.OrderID != nil || order.Order.ClientID != nil || order.Order.ParentID != nil {
+		t.Fatalf("classic completed-order identities = %v/%v/%v, want absent", order.Order.OrderID, order.Order.ClientID, order.Order.ParentID)
+	}
 	prices := order.Order.Prices
 	if prices.LmtPrice == nil || prices.LmtPrice.String() != "2000.05" ||
 		prices.AuxPrice == nil || prices.AuxPrice.String() != "1" ||

@@ -106,7 +106,7 @@ scenario.
 | 96 | reqHistoricalTicks | yes | yes | yes | |
 | 97 | reqTickByTickData | yes | yes | partial | AllLast, ignoreSize variants |
 | 98 | cancelTickByTickData | yes | yes | partial | |
-| 99 | reqCompletedOrders | yes | yes | partial | apiOnly filter is replay-promoted and the full classic response layout is decoded; expose every preserved field through the public result |
+| 99 | reqCompletedOrders | yes | yes | partial | classic and exact-sv204 absent-false/present-true requests are live-frozen; nondefault advanced completed-order branches remain |
 | 100 | reqWSHMetaData | yes | yes | partial | entitlement error |
 | 101 | cancelWSHMetaData | partial | partial | yes | |
 | 102 | reqWSHEventData | yes | yes | partial | filter/date/portfolio variants |
@@ -123,7 +123,7 @@ All are exercised through the outbound scenarios above. Individual gaps:
 | 14 | newsBulletins | live capture exists; allMessages variant untested |
 | 21 | tickOptionComputation | live calc scenarios exist; streaming OPT tick untested |
 | 83 | newsArticle | captured through `api_news_article_aapl`; invalid article/provider variants remain |
-| 101 | completedOrder | full field extraction deferred |
+| 101 | completedOrder | classic full-field and exact-sv204 protobuf projection landed; nondefault combo, scale, hedge, active delta-neutral, PEG BENCH, condition, and FA frames remain |
 | 90 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
 | 108 | historicalDataEnd | standalone end marker at server_version >= 196; edge cases untested |
 
