@@ -446,26 +446,6 @@ var scenarios = map[string]*scenario{
 			return readFrames(conn, 15*time.Second, logFrame, stopOnMsgID(102))
 		},
 	},
-	"quote_with_generic_ticks": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"generic tick list and delayed data"}, 1, "promoted", batchReadOnly),
-		description: "REQ_MKT_DATA with generic ticks 100,101,104,106,233,236,258 to observe TickGeneric/TickString/TickReqParams",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "100,101,104,106,233,236,258", false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
-	},
 	"tick_efp_probe": {
 		metadata:    meta("market_data", []string{"official reqMktData EFP BAG"}, []int{1, 2, 4, 58, 59, 81}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"TickEFP callback or real contract, entitlement, or no-data result"}, 1, "candidate", batchReadOnly),
 		description: "live EFP market-data probe using DTE/EUREX and Tencent/HKFE single-stock-future BAGs",
