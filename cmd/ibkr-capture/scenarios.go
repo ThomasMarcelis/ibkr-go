@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 // scenario describes a single live capture scenario. It runs against an
@@ -646,13 +648,13 @@ var scenarios = map[string]scenario{
 
 	"user_info": {
 		name:        "user_info",
-		description: "REQ_USER_INFO, read USER_INFO response (msg 103)",
+		description: "REQ_USER_INFO, read USER_INFO response",
 		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
 			reqID := nextReqID()
 			if err := sendReqUserInfo(conn, reqID); err != nil {
 				return err
 			}
-			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(103))
+			return readFrames(conn, 10*time.Second, logFrame, stopOnMsgID(protocol.InUserInfo))
 		},
 	},
 	"matching_symbols_aapl": {

@@ -19,7 +19,7 @@ server_version 200 captures.
 | in | 4 | APIError / status codes | landed |
 | out | 59 | reqMarketDataType | landed |
 | out | 104 | reqUserInfo | landed |
-| in | 103 | UserInfo | landed |
+| in | 107 | UserInfo | landed |
 
 Bootstrap is load-bearing. `DialContext` is not ready until the negotiated
 server version and managed-account bootstrap fields are known.
@@ -323,7 +323,7 @@ recorded in [`live-test-tracker.md`](live-test-tracker.md).
 | out | 82 | reqMktDepthExchanges | landed |
 | in | 80 | MktDepthExchanges | landed |
 | out | 104 | reqUserInfo | landed |
-| in | 103 | UserInfo | landed |
+| in | 107 | UserInfo | landed |
 
 ## Session-Level Status
 
@@ -347,5 +347,5 @@ Snapshot and one-shot flows rely on explicit end markers:
 | 74 | AccountUpdateMultiEnd | landed |
 | 72 | PositionMultiEnd | landed |
 | 76 | SecurityDefinitionOptionParameterEnd | landed |
-| 80 | HistoricalNewsEnd | landed |
+| 87 | HistoricalNewsEnd | landed |
 | 102 | CompletedOrdersEnd | landed |

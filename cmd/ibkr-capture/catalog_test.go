@@ -3,9 +3,11 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -47,6 +49,16 @@ func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
 		if entry.PromotionStatus == "" {
 			t.Errorf("%s missing promotion status", entry.Name)
 		}
+	}
+}
+
+func TestUserInfoCatalogMessageIDs(t *testing.T) {
+	t.Parallel()
+
+	got := scenarioMetadataByName["user_info"].MessageIDs
+	want := []int{protocol.OutReqUserInfo, protocol.InUserInfo}
+	if !slices.Equal(got, want) {
+		t.Fatalf("user_info message IDs = %v, want request/response %v", got, want)
 	}
 }
 

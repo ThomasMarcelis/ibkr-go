@@ -6,6 +6,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 type scenarioMetadata struct {
@@ -93,7 +95,7 @@ var scenarioMetadataByName = map[string]scenarioMetadata{
 	"news_providers":                        meta("news", []string{"News().Providers"}, []int{85}, "read_only", nil, []string{"free news provider list"}, 1, "promoted", batchReadOnly),
 	"mkt_depth_exchanges":                   meta("contracts", []string{"Contracts().DepthExchanges"}, []int{82}, "read_only", nil, []string{"market-depth exchange metadata"}, 1, "promoted", batchReadOnly),
 	"scanner_parameters":                    meta("scanner", []string{"Scanner().Parameters"}, []int{24, 19}, "read_only", nil, []string{"scanner XML parameters"}, 1, "promoted", batchReadOnly),
-	"user_info":                             meta("tws", []string{"TWS().UserInfo"}, []int{104, 103}, "read_only", nil, []string{"user info response"}, 1, "promoted", batchReadOnly),
+	"user_info":                             meta("tws", []string{"TWS().UserInfo"}, []int{protocol.OutReqUserInfo, protocol.InUserInfo}, "read_only", nil, []string{"user info response"}, 1, "promoted", batchReadOnly),
 	"matching_symbols_aapl":                 meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"exact-ish symbol samples"}, 1, "promoted", batchReadOnly),
 	"matching_symbols_partial":              meta("contracts", []string{"Contracts().Search"}, []int{81, 79}, "read_only", nil, []string{"broad symbol samples"}, 1, "promoted", batchReadOnly),
 	"head_timestamp_aapl":                   meta("history", []string{"History().HeadTimestamp"}, []int{87, 88, 90}, "read_only", []string{"historical_data"}, []string{"head timestamp response"}, 1, "promoted", batchReadOnly),

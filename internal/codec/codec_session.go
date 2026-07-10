@@ -165,7 +165,7 @@ func (m CurrentTime) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(InCurrentTime), "1", m.Time}, nil
 }
 
-// [103, reqId, whiteBrandingId] — no version
+// Wire fields after the message ID: [reqId, whiteBrandingId] — no version.
 func decodeUserInfo(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	whiteBrandingID := r.ReadString()
