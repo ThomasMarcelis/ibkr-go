@@ -197,28 +197,16 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 		}
 		reqID = e.allocReqID()
 
-		e.keyed[reqID] = &route{
-			opKind: OpUserInfo,
-			handle: func(msg any, eng *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpUserInfo,
+			func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.UserInfo:
 					eng.deleteKeyedRoute(reqID)
 					resp <- result{whiteBrandingID: m.WhiteBrandingID}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, eng *engine) {
-				eng.deleteKeyedRoute(reqID)
-				resp <- result{err: eng.apiErr(OpUserInfo, m)}
-			},
-			onDisconnect: func(eng *engine, err error) bool {
-				eng.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.UserInfoRequest{ReqID: reqID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -423,9 +411,8 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpSoftDollarTiers,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSoftDollarTiers,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.SoftDollarTiersResponse:
 					e.deleteKeyedRoute(reqID)
@@ -435,20 +422,9 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 					}
 					resp <- result{tiers: tiers}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpSoftDollarTiers, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.SoftDollarTiersRequest{ReqID: reqID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -479,28 +455,16 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpWSHMetaData,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpWSHMetaData,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.WSHMetaDataResponse:
 					e.deleteKeyedRoute(reqID)
 					resp <- result{dataJSON: m.DataJSON}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpWSHMetaData, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.WSHMetaDataRequest{ReqID: reqID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -529,28 +493,16 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpWSHEventData,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpWSHEventData,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.WSHEventDataResponse:
 					e.deleteKeyedRoute(reqID)
 					resp <- result{dataJSON: m.DataJSON}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpWSHEventData, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.WSHEventDataRequest{
 			ReqID:           reqID,
 			ConID:           req.ConID,
@@ -591,28 +543,16 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpDisplayGroups,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpDisplayGroups,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.DisplayGroupList:
 					e.deleteKeyedRoute(reqID)
 					resp <- result{groups: m.Groups}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpDisplayGroups, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.QueryDisplayGroupsRequest{ReqID: reqID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
