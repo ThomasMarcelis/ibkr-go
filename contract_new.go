@@ -16,33 +16,24 @@ func Stock(symbol string) Contract {
 	}
 }
 
-// Forex returns an IDEALPRO forex pair [Contract] from a 6-letter pair code
-// such as "EURUSD" (base EUR, quote/currency USD). pair must be exactly 6
-// uppercase ASCII letters; anything else is a caller error, and Forex
-// returns a zero Contract whose use will fail validation downstream rather
-// than panicking or guessing at a split.
-func Forex(pair string) Contract {
-	if !isValidForexPair(pair) {
-		return Contract{}
+// Forex returns an IDEALPRO forex pair [Contract] from a six-letter pair code
+// such as "EURUSD" (base EUR, quote/currency USD). pair must be exactly six
+// uppercase ASCII letters; invalid pairs return a [*ValidationError].
+func Forex(pair string) (Contract, error) {
+	if len(pair) != 6 {
+		return Contract{}, &ValidationError{Field: "Pair", Value: pair, Message: "must be exactly six uppercase ASCII letters"}
+	}
+	for _, c := range pair {
+		if c < 'A' || c > 'Z' {
+			return Contract{}, &ValidationError{Field: "Pair", Value: pair, Message: "must be exactly six uppercase ASCII letters"}
+		}
 	}
 	return Contract{
 		Symbol:   pair[:3],
 		Currency: pair[3:],
 		SecType:  SecTypeForex,
 		Exchange: "IDEALPRO",
-	}
-}
-
-func isValidForexPair(pair string) bool {
-	if len(pair) != 6 {
-		return false
-	}
-	for _, c := range pair {
-		if c < 'A' || c > 'Z' {
-			return false
-		}
-	}
-	return true
+	}, nil
 }
 
 // OptionContract returns a SMART-routed, USD-denominated, 100-multiplier

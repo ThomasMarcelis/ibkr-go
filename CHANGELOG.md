@@ -86,6 +86,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **`Forex` now returns `(Contract, error)`.** Pair codes that are not exactly
+  six uppercase ASCII letters return a zero contract and `*ValidationError`
+  instead of silently returning only a zero contract that fails later.
+
 - **Subscription admission now transfers ownership deterministically.** Once a
   subscribe frame enters the transport queue, the returned handle wins races
   with caller cancellation and client shutdown; before admission, callers

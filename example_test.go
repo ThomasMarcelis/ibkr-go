@@ -258,7 +258,10 @@ func ExampleStock() {
 }
 
 func ExampleForex() {
-	c := ibkr.Forex("EURUSD")
+	c, err := ibkr.Forex("EURUSD")
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(c.Symbol, c.Currency, c.SecType, c.Exchange)
 	// Output:
 	// EUR USD CASH IDEALPRO

@@ -92,11 +92,12 @@ if err != nil {
 fmt.Println(details.LongName, details.MinTick) // APPLE INC 0.01
 ```
 
-`ibkr.Stock`, `ibkr.Forex`, `ibkr.OptionContract`, and `ibkr.Future` fill the
-common fields (SMART/IDEALPRO routing, USD, 100-share option multiplier) for
-the contract shapes IBKR actually trades; build a `Contract{}` literal
-directly for anything more exotic (combos, non-USD listings, a specific
-primary exchange).
+`ibkr.Stock`, `ibkr.OptionContract`, and `ibkr.Future` fill the common fields
+(SMART routing, USD, and the 100-share option multiplier) for their standard
+contract shapes. `ibkr.Forex` returns a contract and an error; it accepts
+exactly six uppercase ASCII letters such as `EURUSD` and configures IDEALPRO
+routing. Build a `Contract{}` literal directly for anything more exotic
+(combos, non-USD listings, a specific primary exchange).
 
 ### Stream live quotes
 
