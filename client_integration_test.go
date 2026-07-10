@@ -2152,13 +2152,13 @@ func TestDirectCancelOrder(t *testing.T) {
 	client, host := newClient(t, "direct_cancel_order.txt")
 	defer client.Close()
 	defer waitHost(t, host)
+	events := client.SessionEvents()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
-			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -2168,7 +2168,7 @@ func TestDirectCancelOrder(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("150"),
+			LmtPrice:  decimal.RequireFromString("50"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -2176,11 +2176,27 @@ func TestDirectCancelOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
+	if handle.OrderID() != 350 {
+		t.Fatalf("OrderID = %d, want 350", handle.OrderID())
+	}
 
-	// Wait for PreSubmitted before sending the direct-by-ID cancel.
-	preSubmitted := waitForEvent(t, handle.Events())
-	for preSubmitted.Status == nil || preSubmitted.Status.Status != "PreSubmitted" {
-		preSubmitted = waitForEvent(t, handle.Events())
+	// Preserve the captured rest chronology before sending the direct cancel.
+	sawPreSubmitted := false
+statuses:
+	for {
+		evt := waitForEvent(t, handle.Events())
+		if evt.Status == nil {
+			continue
+		}
+		switch evt.Status.Status {
+		case ibkr.OrderStatusPreSubmitted:
+			sawPreSubmitted = true
+		case ibkr.OrderStatusSubmitted:
+			break statuses
+		}
+	}
+	if !sawPreSubmitted {
+		t.Fatal("Submitted arrived without the captured PreSubmitted transition")
 	}
 
 	// Direct-by-ID cancel path: skip OrderHandle.Cancel and call the
@@ -2220,6 +2236,10 @@ directCancelDone:
 
 	if !sawCancelled {
 		t.Fatal("never received Cancelled status event after direct-by-ID cancel")
+	}
+	notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
+	if notice.Message != "Order Canceled - reason:" {
+		t.Fatalf("code-202 message = %q, want %q", notice.Message, "Order Canceled - reason:")
 	}
 
 	select {

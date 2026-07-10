@@ -1,18 +1,26 @@
-# LMT BUY 1 AAPL, cancelled via Orders().Cancel(ctx, orderID) direct-by-ID path.
-# Same wire bytes as cancel_order.txt (both emit OutCancelOrder=4), but the
-# integration test exercises the direct-by-ID public facade instead of
-# OrderHandle.Cancel, which proves both code paths reach the same wire
-# message. Grounded from captures/20260407T195717Z-place_order_cancel.
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 US/Eastern"}
+# Grounded by live paper-Gateway capture
+# captures/20260610T195928Z-place_order_direct_cancel, server_version=200,
+# events.jsonl sha256 2dcef3d40bd5fc58a6ac1593a5a10d7388d97bb7c648222d93263a3a06e5c75a.
+# The capture freezes Orders().Cancel(ctx, orderID) after order 350 rests:
+# PreSubmitted -> Submitted -> direct five-field cancel -> Cancelled -> code 202.
+# Transformations: the account identifier is redacted to DU9000001 and the
+# perm ID to 900350. The captured client price 50.00 is represented by this
+# client's canonical decimal encoding, 50. No status, order ID, response
+# value, timestamp, or event ordering is changed.
+handshake {"server_version":200,"connection_time":"20260610 21:59:28 Central European Standard Time"}
 server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":""}
-client place_order {"order_id":"1","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"150","tif":"DAY","account":"DU9000001"}
-sleep 100ms
-server open_order {"order_id":1,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"1","lmt_price":"150.00","aux_price":"0","tif":"DAY","perm_id":"12345","client_id":"1","origin":"0"}
-server order_status {"order_id":1,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-client cancel_order {"field_count":"5","order_id":"1","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-sleep 500ms
-server order_status {"order_id":1,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"12345","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-sleep 100ms
+server next_valid_id {"order_id":350}
+server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1781121568510"}
+server api_error {"req_id":-1,"code":2107,"message":"HMDS data farm connection is inactive but should be available upon demand.ushmds","advanced_order_reject_json":"","error_time_ms":"1781121568510"}
+server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1781121568510"}
+
+client place_order {"order_id":"350","contract":{"con_id":"0","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"50","tif":"DAY","account":"DU9000001"}
+server open_order {"order_id":350,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"1","lmt_price":"50.0","aux_price":"0.0","tif":"DAY","perm_id":"900350","client_id":"1","origin":"0"}
+server order_status {"order_id":350,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server open_order {"order_id":350,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"Submitted","quantity":"1","lmt_price":"50.0","aux_price":"0.0","tif":"DAY","perm_id":"900350","client_id":"1","origin":"0"}
+server order_status {"order_id":350,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+
+client cancel_order {"field_count":"5","order_id":"350","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
+server order_status {"order_id":350,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
+server api_error {"req_id":350,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121571000"}
 disconnect
