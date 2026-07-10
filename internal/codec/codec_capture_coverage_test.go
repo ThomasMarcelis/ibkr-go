@@ -110,6 +110,7 @@ var rawFrameAttested = map[int]string{
 	InTickReqParams:         "TestCaptureDecode_QuoteAncillaryTicksLive",
 	InTickNews:              "TestCaptureDecode_TickNewsLive",
 	InScannerData:           "TestCaptureDecode_ScannerDataLive",
+	InCurrentTimeInMillis:   "TestCaptureDecode_CurrentTimeMillis",
 }
 
 // pendingLiveAttestation maps a decoder's msg_id to a one-line reason it has no
@@ -157,7 +158,6 @@ var pendingLiveAttestation = map[int]string{
 	InCompletedOrderEnd:     "needs the completedOrdersEnd frame that follows the msg-101 batch",
 	InWSHMetaData:           "needs a reqWSHMetaData capture (WSH entitlement)",
 	InWSHEventData:          "needs a reqWSHEventData capture (WSH entitlement)",
-	InCurrentTimeInMillis:   "needs a reqCurrentTimeInMillis capture",
 }
 
 // TestInboundDecoderRawFrameCoverage enforces that the two catalogs above

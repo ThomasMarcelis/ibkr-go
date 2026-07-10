@@ -128,6 +128,29 @@ func TestCaptureDecode_NextValidID(t *testing.T) {
 	}
 }
 
+func TestCaptureDecode_CurrentTimeMillis(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 109 frame from the readonly-live server_version 200 capture
+	// 20260710T000300Z-current_time_millis. events.jsonl SHA-256:
+	// b3ca14922df144e09de0bd58a81bee132c0759d0acf516481cf59b455c2fc54e.
+	payload := []byte("109\x001783641780497\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("got %d messages, want 1", len(msgs))
+	}
+	m, ok := msgs[0].(CurrentTimeMillis)
+	if !ok {
+		t.Fatalf("type = %T, want CurrentTimeMillis", msgs[0])
+	}
+	if m.TimeMs != "1783641780497" {
+		t.Errorf("TimeMs = %q, want 1783641780497", m.TimeMs)
+	}
+}
+
 func TestCaptureDecode_APIError_2104(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214926Z-bootstrap, second frame in multi-frame chunk at line 7
