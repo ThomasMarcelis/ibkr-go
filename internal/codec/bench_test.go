@@ -145,9 +145,7 @@ func BenchmarkDecodeContractDetails(b *testing.B) {
 // benchHistoricalBars returns the seven live AAPL hourly bars (2026-04-02)
 // from captures/20260405T215056Z-historical_bars_1d_1h — the values frozen in
 // TestCaptureDecode_HistoricalData and testdata/transcripts/grounded_historical_bars.txt.
-// The grounded transcript is the value source rather than
-// testdata/transcripts/historical_bars.txt, whose bars carry placeholder
-// prices and a non-wire time format.
+// The grounded transcript is the benchmark's value source.
 func benchHistoricalBars() []HistoricalBar {
 	return []HistoricalBar{
 		{ReqID: 1001, Time: "20260402 09:30:00 US/Eastern", Open: "254.20", High: "254.80", Low: "250.65", Close: "252.53", Volume: "2829736", WAP: "252.266", Count: "13633"},
