@@ -648,31 +648,6 @@ var scenarios = map[string]*scenario{
 	},
 
 	// --- v1 expanded scope: Batch C5 — option calculations and scanner ---
-
-	"scanner_subscription": {
-		metadata:    meta("scanner", []string{"Scanner().SubscribeResults"}, []int{22, 23, 20}, "read_only", nil, []string{"scanner rows or real subscription error"}, 1, "candidate", batchReadOnly),
-		description: "REQ_SCANNER_SUBSCRIPTION top 10 hot US stocks, read response, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqScannerSubscription(conn, reqID, 10, "STK", "STK.US.MAJOR", "HOT_BY_VOLUME"); err != nil {
-				return err
-			}
-			// SCANNER_DATA msg_id=20: wire [20, version=3, reqID, ...] — reqID at fields[2].
-			reqIDStr := strconv.Itoa(reqID)
-			endPred := stopOnMsgIDWithReq(20, reqIDStr, 0)
-			stop := func(msgID int, fields []string) bool {
-				return endPred(msgID, fields) ||
-					(msgID == 4 && len(fields) >= 2 && fields[1] == reqIDStr)
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, stop); err != nil {
-				return err
-			}
-			if err := sendCancelScannerSubscription(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
-	},
 	"smart_components": {
 		metadata:    meta("contracts", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Contracts().SmartComponents"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.InTickReqParams, protocol.OutReqSmartComponents, protocol.InSmartComponents, protocol.OutCancelMktData}, "read_only", []string{"market_hours", "market_data_or_delayed_data"}, []string{"quote-derived smart component mapping"}, 1, "promoted", batchReadOnly, batchExhaustiveMarketHours),
 		description: "derive AAPL's BBO mapping from quote parameters and decode its SMART components through the public API",
@@ -1246,8 +1221,8 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPITickNewsAAPLProbe,
 	},
 	"api_scanner_subscription": {
-		metadata:    metaWithAssets("scanner", []string{"Scanner().SubscribeResults"}, []int{22, 23, 20, 4}, "entitlement_probe", []string{"scanner_permissions_or_real_error"}, []string{"complete public scanner request returns ranked rows or the real Gateway subscription error"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchReplayAll),
-		description: "public API probe for a complete HOT_BY_VOLUME scanner subscription request",
+		metadata:    metaWithAssets("scanner", []string{"Scanner().SubscribeResults", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqScannerSubscription, protocol.OutCancelScannerSubscription, protocol.OutReqCurrentTime, protocol.InScannerData, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"scanner_permissions_or_real_error"}, []string{"complete ranked or empty result with fenced cancellation, or an exact permission refusal"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchReplayAll),
+		description: "request a complete HOT_BY_VOLUME result, including a valid empty result, or the exact live permission refusal through the public API",
 		runAPI:      runAPIScannerSubscription,
 	},
 	"api_historical_matrix_aapl": {

@@ -318,51 +318,6 @@ func sendReqNewsArticle(conn net.Conn, reqID int, providerCode, articleID string
 	return sendMessage(conn, []string{"84", strconv.Itoa(reqID), providerCode, articleID, ""})
 }
 
-// --- Scanner subscription (msg_id=22) / cancel (msg_id=23) ---
-//
-//	[22, reqId, numberOfRows, instrument, locationCode, scanCode,
-//	 abovePrice, belowPrice, aboveVolume, marketCapAbove, marketCapBelow,
-//	 moodyRatingAbove, moodyRatingBelow, spRatingAbove, spRatingBelow,
-//	 maturityDateAbove, maturityDateBelow, couponRateAbove, couponRateBelow,
-//	 excludeConvertible, averageOptionVolumeAbove, scannerSettingPairs,
-//	 stockTypeFilter, scannerSubscriptionFilterOptions,
-//	 scannerSubscriptionOptions]
-func sendReqScannerSubscription(conn net.Conn, reqID int, numberOfRows int, instrument, locationCode, scanCode string) error {
-	const maxDouble = "1.7976931348623157E308"
-	const maxInt = "2147483647"
-	fields := []string{
-		"22", strconv.Itoa(reqID),
-		strconv.Itoa(numberOfRows),
-		instrument,
-		locationCode,
-		scanCode,
-		maxDouble, // abovePrice
-		maxDouble, // belowPrice
-		maxInt,    // aboveVolume
-		maxDouble, // marketCapAbove
-		maxDouble, // marketCapBelow
-		"",        // moodyRatingAbove
-		"",        // moodyRatingBelow
-		"",        // spRatingAbove
-		"",        // spRatingBelow
-		"",        // maturityDateAbove
-		"",        // maturityDateBelow
-		maxDouble, // couponRateAbove
-		maxDouble, // couponRateBelow
-		"",        // excludeConvertible
-		maxInt,    // averageOptionVolumeAbove
-		"",        // scannerSettingPairs
-		"",        // stockTypeFilter
-		"",        // scannerSubscriptionFilterOptions (tag-value list)
-		"",        // scannerSubscriptionOptions (tag-value list)
-	}
-	return sendMessage(conn, fields)
-}
-
-func sendCancelScannerSubscription(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"23", "1", strconv.Itoa(reqID)})
-}
-
 // --- Historical data with keepUpToDate (msg_id=20) ---
 //
 // Uses keepUpToDate=true; endDateTime must be empty and barSize at least 5s.

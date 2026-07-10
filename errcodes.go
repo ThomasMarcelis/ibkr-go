@@ -10,6 +10,10 @@ const (
 	// the live Gateway appends the order's permId to the message. This is a
 	// cancellation reply, not an order-placement failure.
 	ErrCodeCancelNotCancellableState = 161
+	// ErrCodeHistoricalDataQueryMessage: an HMDS query message. The scanner
+	// route recognizes its exact live "no items retrieved" form as
+	// nonterminal because the Gateway follows it with a valid empty result.
+	ErrCodeHistoricalDataQueryMessage = 165
 	// ErrCodeNoSecurityDefinition: no security definition has been found
 	// for the request, or the contract description is ambiguous.
 	ErrCodeNoSecurityDefinition = 200

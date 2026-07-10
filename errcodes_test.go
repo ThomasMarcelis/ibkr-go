@@ -16,6 +16,7 @@ func TestAPIErrorClassification(t *testing.T) {
 		warning      bool
 	}{
 		{code: ErrCodeCancelNotCancellableState},
+		{code: ErrCodeHistoricalDataQueryMessage},
 		{code: ErrCodeNoSecurityDefinition},
 		{code: ErrCodeOrderRejected},
 		{code: ErrCodeOrderCanceled},

@@ -2114,46 +2114,50 @@ func runAPIMarketDataCompletenessAAPL(ctx context.Context, addr string, clientID
 }
 
 func runAPIScannerSubscription(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 45*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
-		_ = account
-		caseCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
-
-		sub, err := client.Scanner().SubscribeResults(caseCtx, ibkr.ScannerSubscriptionRequest{
+	return apiScenario(ctx, addr, clientID, 30*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		sub, err := client.Scanner().SubscribeResults(ctx, ibkr.ScannerSubscriptionRequest{
 			NumberOfRows: 10,
 			Instrument:   ibkr.ScannerInstrument("STK"),
 			LocationCode: ibkr.ScannerLocationCode("STK.US.MAJOR"),
 			ScanCode:     ibkr.ScannerCode("HOT_BY_VOLUME"),
 		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 		if err != nil {
-			recordProbeResult("scanner_subscription", "hot_by_volume", 0, err)
-			log.Printf("scanner subscription setup: %v", err)
-			return nil
+			return fmt.Errorf("subscribe HOT_BY_VOLUME scanner: %w", err)
 		}
-		defer func() { _ = sub.Close() }()
-
-		select {
-		case rows, ok := <-sub.Events():
-			if !ok {
-				err = sub.Wait()
-				recordProbeResult("scanner_subscription", "hot_by_volume", 0, err)
-				log.Printf("scanner subscription closed: %v", err)
-				return nil
+		rowCount := 0
+		_, err = awaitSubscriptionEvidence(ctx, sub, 20*time.Second, func(rows []ibkr.ScannerResult) bool {
+			rowCount = len(rows)
+			return true
+		})
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if !ok || !isExactScannerRefusal(apiErr) {
+				return fmt.Errorf("observe HOT_BY_VOLUME scanner: %w", err)
 			}
-			recordProbeResult("scanner_subscription", "hot_by_volume", len(rows), nil)
-			log.Printf("scanner subscription rows=%d", len(rows))
-			_ = sub.Close()
-			return sub.Wait()
-		case <-sub.Done():
-			err = sub.Wait()
-			recordProbeResult("scanner_subscription", "hot_by_volume", 0, err)
-			log.Printf("scanner subscription: %v", err)
-			return nil
-		case <-caseCtx.Done():
-			recordProbeResult("scanner_subscription", "hot_by_volume", 0, caseCtx.Err())
+			if err := fenceAPIWrites(ctx, client, "HOT_BY_VOLUME scanner refusal"); err != nil {
+				return err
+			}
+			recordSubscriptionRefusal("scanner_subscription", "hot_by_volume", apiErr)
 			return nil
 		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "HOT_BY_VOLUME scanner cancellation"); err != nil {
+			return err
+		}
+		recordProbeResult("scanner_subscription", "hot_by_volume", rowCount, nil)
+		return nil
 	})
+}
+
+func isExactScannerRefusal(err *ibkr.APIError) bool {
+	if err.OpKind != ibkr.OpScannerSubscription {
+		return false
+	}
+	switch err.Code {
+	case 490:
+		return strings.HasPrefix(err.Message, "You must subscribe for additional permissions to run the scanner.")
+	default:
+		return false
+	}
 }
 
 func runAPIGenericTickMatrixAAPL(ctx context.Context, addr string, clientID int) error {

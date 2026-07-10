@@ -10,6 +10,8 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
+const scannerNoItemsMessage = "Historical Market Data Service query message:no items retrieved"
+
 func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 	type result struct {
 		ts  time.Time
@@ -262,6 +264,10 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
+				if m.Code == ErrCodeHistoricalDataQueryMessage && m.Message == scannerNoItemsMessage {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpScannerSubscription, m))
 			},
