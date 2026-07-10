@@ -151,6 +151,134 @@ func TestCaptureDecode_CurrentTimeMillis(t *testing.T) {
 	}
 }
 
+func TestCaptureDecode_CurrentTimeLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 49 frame from readonly-live server_version 200 capture
+	// captures/20260611T074046Z-current_time. events.jsonl SHA-256 prefix:
+	// efe321755946a395.
+	msgs, err := DecodeBatch(200, []byte("49\x001\x001781163646\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(CurrentTime)
+	if !ok {
+		t.Fatalf("type = %T, want CurrentTime", msgs[0])
+	}
+	if m.Time != "1781163646" {
+		t.Errorf("Time = %q, want 1781163646", m.Time)
+	}
+}
+
+func TestCaptureDecode_FamilyCodesLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 78 frame from paper server_version 200 capture
+	// captures/v1/family_codes.log, SHA-256
+	// af810a715150cca78a18bcb9c37f4546276a7e7d264a7d2ab6a4f0c7da33768c.
+	msgs, err := DecodeBatch(200, []byte("78\x001\x00*\x00\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(FamilyCodes)
+	if !ok {
+		t.Fatalf("type = %T, want FamilyCodes", msgs[0])
+	}
+	if len(m.Codes) != 1 || m.Codes[0] != (FamilyCodeEntry{AccountID: "*"}) {
+		t.Errorf("Codes = %+v, want wildcard account with empty family code", m.Codes)
+	}
+}
+
+func TestCaptureDecode_NewsProvidersLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 85 frame from paper server_version 200 capture
+	// captures/v1/news_providers.log, SHA-256
+	// 7c54a1a50c60aef5af5de634b7a23cb1b04269dd92d0ea98dda29b451bbc862f.
+	payload := []byte("85\x003\x00BRFG\x00Briefing.com General Market Columns\x00" +
+		"BRFUPDN\x00Briefing.com Analyst Actions\x00DJNL\x00Dow Jones Newsletters\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(NewsProviders)
+	if !ok {
+		t.Fatalf("type = %T, want NewsProviders", msgs[0])
+	}
+	want := []NewsProviderEntry{
+		{Code: "BRFG", Name: "Briefing.com General Market Columns"},
+		{Code: "BRFUPDN", Name: "Briefing.com Analyst Actions"},
+		{Code: "DJNL", Name: "Dow Jones Newsletters"},
+	}
+	if !slices.Equal(m.Providers, want) {
+		t.Errorf("Providers = %+v, want %+v", m.Providers, want)
+	}
+}
+
+func TestCaptureDecode_PositionMultiEndLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact IN 72 frame from paper server_version 200 capture
+	// captures/v1/positions_multi.log, SHA-256
+	// 083e158d5335c7326d23117e842c479fcecf0e6786172f003d479449dbb304b8.
+	msgs, err := DecodeBatch(200, []byte("72\x001\x001001\x00"))
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(PositionMultiEnd)
+	if !ok {
+		t.Fatalf("type = %T, want PositionMultiEnd", msgs[0])
+	}
+	if m.ReqID != 1001 {
+		t.Errorf("ReqID = %d, want 1001", m.ReqID)
+	}
+}
+
+func TestCaptureDecode_PnLLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact first IN 94 update from paper server_version 200 capture
+	// captures/20260611T134246Z-api_algorithmic_campaign_aapl. events.jsonl
+	// SHA-256: 2e3781761e68dbe5bea8ac9fe62c38b6657bcad56bdceb949b24881c27f3d0bb.
+	payload := []byte("94\x004\x0011340.427636781911\x0054385.58271885987\x00-103.92738339177643\x00")
+	msgs, err := DecodeBatch(200, payload)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(PnLValue)
+	if !ok {
+		t.Fatalf("type = %T, want PnLValue", msgs[0])
+	}
+	if m.ReqID != 4 || m.DailyPnL != "11340.427636781911" ||
+		m.UnrealizedPnL != "54385.58271885987" || m.RealizedPnL != "-103.92738339177643" {
+		t.Errorf("PnLValue = %+v, want exact captured update", m)
+	}
+}
+
+func TestCaptureDecode_NewsBulletinLive(t *testing.T) {
+	t.Parallel()
+
+	// Exact second IN 14 frame from readonly-live server_version 200 capture
+	// 20260710T133034Z-news_bulletins. raw.txt SHA-256:
+	// 5bdf4ea73165335b485a96f5a694e92583e06f785039d6553b2e2b8f7c5b5e4e.
+	framed, err := base64.StdEncoding.DecodeString("AAABhzE0ADEAMTc4MzU3MDExOAAxAD09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PQpUbyBIS0ZFLFNHWCB0cmFkZXJzOgpUaHUgMDkgSnVsIDIwMjYgMTA6Mzg6MTkgUE0gRURUClBsZWFzZSBub3RlIHRoYXQgd2hpbGUgdGhlIG9uc2hvcmUgVGFpd2FuZXNlIG1hcmtldHMgYXJlIGNsb3NlZCB0b2RheSBkdWUgdG8gdGhlIHR5cGhvb24sIFNHWCBGVFNFIFRhaXdhbiAoIlRXTiIpIGFuZCBNaWNybyBGVFNFIFRhaXdhbiBGdXR1cmVzICgiTVRXTiIpIGFzIHdlbGwgYXMgSEtGRSBNU0NJIFRhaXdhbiAoIk1UVyIpIHdpbGwgY29udGludWUgdG8gdHJhZGUgYWNjb3JkaW5nIHRvIHRoZWlyIG5vcm1hbCB0cmFkaW5nIHNjaGVkdWxlLgBIS0ZFLFNHWAA=")
+	if err != nil {
+		t.Fatalf("decode captured frame: %v", err)
+	}
+	msgs, err := DecodeBatch(200, framed[4:])
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	m, ok := msgs[0].(NewsBulletin)
+	if !ok {
+		t.Fatalf("type = %T, want NewsBulletin", msgs[0])
+	}
+	if m.MsgID != 1783570118 || m.MsgType != 1 || m.Source != "HKFE,SGX" ||
+		!strings.Contains(m.Headline, "continue to trade according to their normal trading schedule") {
+		t.Errorf("NewsBulletin = %+v, want captured HKFE/SGX notice", m)
+	}
+}
+
 func TestCaptureDecode_APIError_2104(t *testing.T) {
 	t.Parallel()
 	// captures/20260405T214926Z-bootstrap, second frame in multi-frame chunk at line 7
