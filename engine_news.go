@@ -151,28 +151,16 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = &route{
-			opKind: OpNewsArticle,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpNewsArticle,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.NewsArticleResponse:
 					e.deleteKeyedRoute(reqID)
 					resp <- result{article: NewsArticle{ArticleType: m.ArticleType, ArticleText: m.ArticleText}}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpNewsArticle, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.NewsArticleRequest{ReqID: reqID, ProviderCode: string(req.ProviderCode), ArticleID: req.ArticleID}); err != nil {
 			e.deleteKeyedRoute(reqID)
 			resp <- result{err: err}
@@ -203,9 +191,8 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 		}
 		reqID = e.allocReqID()
 		var collected []HistoricalNewsItem
-		e.keyed[reqID] = &route{
-			opKind: OpHistoricalNews,
-			handle: func(msg any, e *engine) {
+		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalNews,
+			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalNewsItem:
 					timestamp, err := parseHistoricalNewsTime(m.Time)
@@ -222,20 +209,9 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 					e.deleteKeyedRoute(reqID)
 					resp <- result{items: collected}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: e.apiErr(OpHistoricalNews, m)}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				e.deleteKeyedRoute(reqID)
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
+			}, func(err error) {
 				resp <- result{err: err}
-			},
-		}
+			})
 		if err := e.sendContext(ctx, codec.HistoricalNewsRequest{
 			ReqID: reqID, ConID: req.ConID, ProviderCodes: providerCodes,
 			StartDate: formatHistoricalNewsTime(req.StartTime), EndDate: formatHistoricalNewsTime(req.EndTime), TotalResults: req.TotalResults,
