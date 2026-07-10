@@ -1838,6 +1838,11 @@ var scenarios = map[string]scenario{
 		description: "public API campaign for live-qualified AAPL option data, order, execution, and exercise/lapse responses",
 		runAPI:      runAPIOptionCampaignAAPL,
 	},
+	"api_option_calculations_aapl": {
+		name:        "api_option_calculations_aapl",
+		description: "read-only public API probe for live-qualified AAPL option price and implied-volatility calculations",
+		runAPI:      runAPIOptionCalculationsAAPL,
+	},
 	"api_future_campaign_mes": {
 		name:        "api_future_campaign_mes",
 		description: "public API campaign for live-qualified MES futures order behavior",

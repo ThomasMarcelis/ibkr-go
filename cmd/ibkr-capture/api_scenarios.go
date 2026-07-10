@@ -1564,6 +1564,68 @@ func runAPIOptionCampaignAAPL(ctx context.Context, addr string, clientID int) er
 	})
 }
 
+func runAPIOptionCalculationsAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		_ = account
+		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
+		opt, err := qualifyAAPLCall(ctx, client, anchor)
+		if err != nil {
+			recordProbeResult("option_qualify", "aapl call", 0, err)
+			return nil
+		}
+		recordAPIEvent("option_qualified", "aapl call", func(event *apiDriverEvent) {
+			event.Symbol = opt.Symbol
+			event.SecType = string(opt.SecType)
+			event.Values = map[string]string{
+				"con_id":      strconv.Itoa(opt.ConID),
+				"expiry":      opt.Expiry,
+				"strike":      opt.Strike.String(),
+				"right":       string(opt.Right),
+				"under_price": anchor.String(),
+			}
+		})
+
+		record := func(label string, value ibkr.OptionComputation, err error) {
+			recordAPIEvent("option_computation", label, func(event *apiDriverEvent) {
+				if err != nil {
+					event.Error = err.Error()
+					return
+				}
+				event.Values = map[string]string{
+					"available":    strconv.FormatUint(uint64(value.Available), 10),
+					"implied_vol":  value.ImpliedVol.String(),
+					"delta":        value.Delta.String(),
+					"option_price": value.OptPrice.String(),
+					"pv_dividend":  value.PvDividend.String(),
+					"gamma":        value.Gamma.String(),
+					"vega":         value.Vega.String(),
+					"theta":        value.Theta.String(),
+					"under_price":  value.UndPrice.String(),
+				}
+			})
+		}
+
+		price, priceErr := client.Options().Price(ctx, ibkr.CalcOptionPriceRequest{
+			Contract:   opt,
+			Volatility: decimal.RequireFromString("0.30"),
+			UnderPrice: anchor,
+		})
+		record("price", price, priceErr)
+
+		optionPrice := decimal.RequireFromString("5")
+		if priceErr == nil && price.Available&ibkr.OptionComputationPrice != 0 {
+			optionPrice = price.OptPrice
+		}
+		implied, impliedErr := client.Options().ImpliedVolatility(ctx, ibkr.CalcImpliedVolatilityRequest{
+			Contract:    opt,
+			OptionPrice: optionPrice,
+			UnderPrice:  anchor,
+		})
+		record("implied_volatility", implied, impliedErr)
+		return nil
+	})
+}
+
 func runAPIFutureCampaignMES(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		fut, err := qualifyFrontFuture(ctx, client, "MES")
