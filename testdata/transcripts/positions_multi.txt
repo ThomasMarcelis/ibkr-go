@@ -1,8 +1,14 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_positions_multi {"req_id":"$req1","account":"DU12345","model_code":""}
-server position_multi {"req_id":"$req1","account":"DU12345","model_code":"","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":"","trading_class":""},"position":"10","avg_cost":"189.12"}
+# Grounded by paper IB Gateway server_version 200 capture
+# captures/v1/positions_multi.log.
+# capture sha256: 083e158d5335c7326d23117e842c479fcecf0e6786172f003d479449dbb304b8
+#
+# The account, request id, and connection time are sanitized/rebound. Ambient
+# farm-status frames are omitted. The live request produced only the exact
+# positionMultiEnd response: this is an empty snapshot, not a synthesized row.
+handshake {"server_version":200,"connection_time":"20260405 14:35:26 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
+client req_positions_multi {"req_id":"$req1","account":"DU9000001","model_code":""}
 server position_multi_end {"req_id":"$req1"}
 client cancel_positions_multi {"req_id":"$req1"}
 disconnect

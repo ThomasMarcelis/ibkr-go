@@ -1,6 +1,12 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
+# Grounded by paper IB Gateway server_version 200 capture
+# captures/v1/news_providers.log.
+# capture sha256: 7c54a1a50c60aef5af5de634b7a23cb1b04269dd92d0ea98dda29b451bbc862f
+#
+# The bootstrap account and connection time are sanitized. Ambient farm-status
+# frames are omitted. The ordered provider response is exact.
+handshake {"server_version":200,"connection_time":"20260405 14:28:53 Central European Standard Time"}
+server managed_accounts {"accounts":["DU9000001"]}
+server next_valid_id {"order_id":1}
 client req_news_providers {}
-server news_providers {"providers":[{"code":"BZ","name":"Benzinga Pro"},{"code":"FLY","name":"Fly On The Wall"}]}
+server news_providers {"providers":[{"code":"BRFG","name":"Briefing.com General Market Columns"},{"code":"BRFUPDN","name":"Briefing.com Analyst Actions"},{"code":"DJNL","name":"Dow Jones Newsletters"}]}
 disconnect

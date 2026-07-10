@@ -1156,11 +1156,11 @@ func TestFamilyCodes(t *testing.T) {
 	if len(codes) != 1 {
 		t.Fatalf("codes len = %d, want 1", len(codes))
 	}
-	if codes[0].AccountID != "DU9000001" {
-		t.Fatalf("account_id = %q, want DU9000001", codes[0].AccountID)
+	if codes[0].AccountID != "*" {
+		t.Fatalf("account_id = %q, want *", codes[0].AccountID)
 	}
-	if codes[0].FamilyCode != "F12345" {
-		t.Fatalf("family_code = %q, want F12345", codes[0].FamilyCode)
+	if codes[0].FamilyCode != "" {
+		t.Fatalf("family_code = %q, want empty", codes[0].FamilyCode)
 	}
 }
 
@@ -1206,14 +1206,18 @@ func TestNewsProviders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewsProviders() error = %v", err)
 	}
-	if len(providers) != 2 {
-		t.Fatalf("providers len = %d, want 2", len(providers))
+	if len(providers) != 3 {
+		t.Fatalf("providers len = %d, want 3", len(providers))
 	}
-	if providers[0].Code != "BZ" {
-		t.Fatalf("first code = %q, want BZ", providers[0].Code)
+	wantProviders := []ibkr.NewsProvider{
+		{Code: "BRFG", Name: "Briefing.com General Market Columns"},
+		{Code: "BRFUPDN", Name: "Briefing.com Analyst Actions"},
+		{Code: "DJNL", Name: "Dow Jones Newsletters"},
 	}
-	if providers[1].Name != "Fly On The Wall" {
-		t.Fatalf("second name = %q, want Fly On The Wall", providers[1].Name)
+	for i, want := range wantProviders {
+		if providers[i] != want {
+			t.Errorf("providers[%d] = %+v, want %+v", i, providers[i], want)
+		}
 	}
 }
 
@@ -1381,14 +1385,11 @@ func TestMarketRule(t *testing.T) {
 	if rule.MarketRuleID != 26 {
 		t.Fatalf("market_rule_id = %d, want 26", rule.MarketRuleID)
 	}
-	if len(rule.Increments) != 2 {
-		t.Fatalf("increments len = %d, want 2", len(rule.Increments))
+	if len(rule.Increments) != 1 {
+		t.Fatalf("increments len = %d, want 1", len(rule.Increments))
 	}
-	if rule.Increments[0].Increment.String() != "0.01" {
-		t.Fatalf("first increment = %s, want 0.01", rule.Increments[0].Increment.String())
-	}
-	if rule.Increments[1].LowEdge.String() != "1" {
-		t.Fatalf("second low_edge = %s, want 1", rule.Increments[1].LowEdge.String())
+	if rule.Increments[0].LowEdge.String() != "0" || rule.Increments[0].Increment.String() != "0.01" {
+		t.Fatalf("increment = %+v, want low edge 0 increment 0.01", rule.Increments[0])
 	}
 }
 
@@ -2895,20 +2896,14 @@ func TestPositionsMultiSnapshot(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().PositionsMulti(ctx, ibkr.PositionsMultiRequest{
-		Account:   "DU12345",
+		Account:   "DU9000001",
 		ModelCode: "",
 	})
 	if err != nil {
 		t.Fatalf("PositionsMultiSnapshot() error = %v", err)
 	}
-	if len(values) != 1 {
-		t.Fatalf("values len = %d, want 1", len(values))
-	}
-	if values[0].Contract.Symbol != "AAPL" {
-		t.Fatalf("symbol = %q, want AAPL", values[0].Contract.Symbol)
-	}
-	if values[0].Position.String() != "10" {
-		t.Fatalf("position = %s, want 10", values[0].Position.String())
+	if len(values) != 0 {
+		t.Fatalf("values = %+v, want empty live snapshot", values)
 	}
 }
 
@@ -2923,7 +2918,7 @@ func TestSubscribePnL(t *testing.T) {
 	defer cancel()
 
 	sub, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{
-		Account:   "DU12345",
+		Account:   "DU9000001",
 		ModelCode: "",
 	})
 	if err != nil {
@@ -2933,14 +2928,14 @@ func TestSubscribePnL(t *testing.T) {
 	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
 	update := waitForEvent(t, sub.Events())
-	if update.DailyPnL.String() != "150.25" {
-		t.Fatalf("daily pnl = %s, want 150.25", update.DailyPnL.String())
+	if update.DailyPnL.String() != "11340.427636781911" {
+		t.Fatalf("daily pnl = %s, want 11340.427636781911", update.DailyPnL.String())
 	}
-	if update.UnrealizedPnL.String() != "45" {
-		t.Fatalf("unrealized pnl = %s, want 45", update.UnrealizedPnL.String())
+	if update.UnrealizedPnL.String() != "54385.58271885987" {
+		t.Fatalf("unrealized pnl = %s, want 54385.58271885987", update.UnrealizedPnL.String())
 	}
-	if update.RealizedPnL.String() != "105.25" {
-		t.Fatalf("realized pnl = %s, want 105.25", update.RealizedPnL.String())
+	if update.RealizedPnL.String() != "-103.92738339177643" {
+		t.Fatalf("realized pnl = %s, want -103.92738339177643", update.RealizedPnL.String())
 	}
 
 	if err := sub.Close(); err != nil {
