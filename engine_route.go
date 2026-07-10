@@ -3,6 +3,7 @@ package ibkr
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
@@ -203,11 +204,18 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		return
 	}
 
-	// reqIds has no request ID. The read-only Gateway's live-attested failure
-	// is req_id=-1/code 321, so it can only be attributed while the singleton
-	// refresh is active.
-	if msg.ReqID <= 0 && msg.Code == 321 {
-		if route, ok := e.singletons[singletonOrderID]; ok && route.handleAPIErr != nil {
+	// These no-request-ID code-321 failures carry stable operation markers in
+	// the Gateway's validation text. Route by that live-attested identity, not
+	// by whichever singleton happens to be active concurrently.
+	if singleton := unkeyedAPIErrorSingleton(msg); singleton != "" {
+		if route, ok := e.singletons[singleton]; ok && route.handleAPIErr != nil {
+			if singleton == singletonOpenOrders {
+				request, ok := route.request.(codec.OpenOrdersRequest)
+				if !ok || request.Scope != string(OpenOrdersScopeClient) {
+					e.emitEvent(msg.Code, msg.Message)
+					return
+				}
+			}
 			route.handleAPIErr(msg, e)
 			return
 		}
@@ -297,6 +305,25 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// option-exercise refusal on an id whose route is already gone).
 		e.emitEvent(msg.Code, msg.Message)
 		return
+	}
+
+	// An unattributable request-range error with no request ID is still
+	// operational evidence. Keep it visible without guessing which concurrent
+	// singleton caller owns it.
+	e.emitEvent(msg.Code, msg.Message)
+}
+
+func unkeyedAPIErrorSingleton(msg codec.APIError) string {
+	if msg.ReqID > 0 || msg.Code != 321 || !strings.Contains(msg.Message, "The API interface is currently in Read-Only mode") {
+		return ""
+	}
+	switch {
+	case strings.Contains(msg.Message, "-'b7'"):
+		return singletonOrderID
+	case strings.Contains(msg.Message, "-'as'"):
+		return singletonOpenOrders
+	default:
+		return ""
 	}
 }
 

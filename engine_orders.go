@@ -140,6 +140,13 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 					}
 				}
 			},
+			handleAPIErr: func(m codec.APIError, e *engine) {
+				if e.singletons[singletonOpenOrders] != ownedRoute {
+					return
+				}
+				delete(e.singletons, singletonOpenOrders)
+				sub.closeWithErr(e.apiErr(OpOpenOrders, m))
+			},
 			onDisconnect: func(e *engine, err error) bool {
 				sub.closeWithErr(ErrResumeRequired)
 				return false

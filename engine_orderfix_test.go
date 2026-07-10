@@ -229,6 +229,77 @@ func TestHandleAPIErrorEmitsUnroutedRequestError(t *testing.T) {
 	}
 }
 
+func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
+	t.Parallel()
+
+	// Both code-321 messages are exact live Gateway text. reqIds is from
+	// 20260611T074047Z (events SHA-256 prefix 00b11cbce4cefc31);
+	// open orders is from 20260710T225552Z (events SHA-256
+	// 0e838de9d463070ac711be4950948c682c01e8ad02546d8be32f47f35ce68d25).
+	const cause = " : cause - The API interface is currently in Read-Only mode."
+	for _, tc := range []struct {
+		name    string
+		marker  string
+		wantHit string
+	}{
+		{name: "order ID", marker: "b7", wantHit: singletonOrderID},
+		{name: "open orders", marker: "as", wantHit: singletonOpenOrders},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			hit := ""
+			e := newEngineForErrorTest()
+			e.singletons[singletonOrderID] = &route{handleAPIErr: func(codec.APIError, *engine) { hit = singletonOrderID }}
+			e.singletons[singletonOpenOrders] = &route{
+				request:      codec.OpenOrdersRequest{Scope: string(OpenOrdersScopeClient)},
+				handleAPIErr: func(codec.APIError, *engine) { hit = singletonOpenOrders },
+			}
+			e.handleAPIError(codec.APIError{ReqID: -1, Code: 321, Message: "Error validating request.-'" + tc.marker + "'" + cause})
+			if hit != tc.wantHit {
+				t.Fatalf("routed singleton = %q, want %q", hit, tc.wantHit)
+			}
+		})
+	}
+
+	e := newEngineForErrorTest()
+	hit := false
+	e.singletons[singletonOpenOrders] = &route{
+		request:      codec.OpenOrdersRequest{Scope: string(OpenOrdersScopeClient)},
+		handleAPIErr: func(codec.APIError, *engine) { hit = true },
+	}
+	e.handleAPIError(codec.APIError{ReqID: -1, Code: 321, Message: "Error validating request.-'b7'" + cause})
+	if hit {
+		t.Fatal("late reqIds rejection was assigned to open orders")
+	}
+	select {
+	case event := <-e.events.Chan():
+		if event.Code != 321 {
+			t.Fatalf("session event code = %d, want 321", event.Code)
+		}
+	default:
+		t.Fatal("unowned reqIds rejection was not surfaced as a session event")
+	}
+
+	e = newEngineForErrorTest()
+	hit = false
+	e.singletons[singletonOpenOrders] = &route{
+		request:      codec.OpenOrdersRequest{Scope: string(OpenOrdersScopeAll)},
+		handleAPIErr: func(codec.APIError, *engine) { hit = true },
+	}
+	e.handleAPIError(codec.APIError{ReqID: -1, Code: 321, Message: "Error validating request.-'as'" + cause})
+	if hit {
+		t.Fatal("late client-scope refusal was assigned to all-scope open orders")
+	}
+	select {
+	case event := <-e.events.Chan():
+		if event.Code != 321 {
+			t.Fatalf("session event code = %d, want 321", event.Code)
+		}
+	default:
+		t.Fatal("unowned open-orders rejection was not surfaced as a session event")
+	}
+}
+
 // TestHandleAPIErrorExerciseRouteShieldsCollidingOrder freezes the Bug 3
 // id-collision invariant: when an exercise request id numerically collides
 // with a live order id, the exercise's keyed route (checked before the order

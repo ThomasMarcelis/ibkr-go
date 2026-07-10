@@ -2,6 +2,8 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,5 +81,21 @@ func TestMarketDataServer206Replay(t *testing.T) {
 	}
 	if err := sub.Wait(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestOpenOrdersReadOnlyRefusalServer206Replay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "open_orders_readonly_refusal_sv206_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	_, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.OpKind != ibkr.OpOpenOrders || apiErr.Code != 321 || !strings.Contains(apiErr.Message, "Read-Only mode") {
+		t.Fatalf("Open() error = %v, want live code 321 read-only refusal", err)
 	}
 }
