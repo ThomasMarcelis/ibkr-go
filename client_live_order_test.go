@@ -2322,7 +2322,7 @@ func TestLiveAlgorithmicCampaign(t *testing.T) {
 
 	// Step 2: Account summary.
 	summary, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: account, Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
+		AccountFilter: account, Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary: %v", err)

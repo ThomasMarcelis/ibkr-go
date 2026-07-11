@@ -98,6 +98,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Account summary group selection is explicit.** `AccountSummaryRequest.Group`
+  now selects the IBKR account group and defaults to `"All"` when empty.
+  `AccountSummaryRequest.AccountFilter` is the separate optional exact-account
+  filter applied to returned rows; the ambiguous `Account` field has been
+  removed.
+
 - **Automatic resume is configured only per supported subscription.**
   `WithDefaultResumePolicy` has been removed. A client-wide automatic default
   could make unrelated account, position, and order one-shots fail validation;

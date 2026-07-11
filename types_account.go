@@ -4,12 +4,14 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// AccountSummaryRequest selects the account and summary tags for
-// [AccountsClient.Summary]. An empty Account and Tags request the default group
-// and all tags.
+// AccountSummaryRequest selects the IBKR account group, optional local account
+// filter, and summary tags for [AccountsClient.Summary]. An empty Group requests
+// "All", an empty AccountFilter accepts every returned account, and empty Tags
+// request all tags.
 type AccountSummaryRequest struct {
-	Account string
-	Tags    []string // summary tag names, e.g. "NetLiquidation"; empty requests all
+	Group         string   // IBKR account group; empty requests "All"
+	AccountFilter string   // exact returned account to accept; empty accepts all
+	Tags          []string // summary tag names, e.g. "NetLiquidation"; empty requests all
 }
 
 // AccountValue is one account summary tag/value pair. Value is always a string

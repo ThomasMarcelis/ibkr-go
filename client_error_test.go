@@ -359,8 +359,8 @@ func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 	defer cancel()
 
 	_, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation"},
 	})
 	if err == nil {
 		t.Fatal("AccountSummary() error = nil, want error on disconnect before end marker")

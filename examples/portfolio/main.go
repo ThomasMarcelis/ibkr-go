@@ -44,8 +44,8 @@ func run() (err error) {
 
 	// Account summary — one-shot.
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation", "TotalCashValue", "UnrealizedPnL"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "TotalCashValue", "UnrealizedPnL"},
 	})
 	if err != nil {
 		return err

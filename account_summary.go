@@ -14,19 +14,18 @@ func cloneAccountSummaryRequest(req AccountSummaryRequest) AccountSummaryRequest
 }
 
 func newAccountSummaryPlan(reqID int, req AccountSummaryRequest) accountSummaryPlan {
-	wildcard := req.Account == "" || req.Account == "All"
-	account := req.Account
-	if wildcard {
-		account = ""
+	group := req.Group
+	if group == "" {
+		group = "All"
 	}
 	return accountSummaryPlan{
 		request: codec.AccountSummaryRequest{
 			ReqID:   reqID,
-			Account: "All",
+			Account: group,
 			Tags:    req.Tags,
 		},
-		wildcard: wildcard,
-		account:  account,
+		wildcard: req.AccountFilter == "",
+		account:  req.AccountFilter,
 	}
 }
 

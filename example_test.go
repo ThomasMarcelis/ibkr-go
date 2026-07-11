@@ -79,7 +79,7 @@ func Example_accountSummary() {
 	defer stop()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
+		Group: "All",
 		Tags: []string{
 			"NetLiquidation",
 			"TotalCashValue",
@@ -227,7 +227,7 @@ func Example_awaitSnapshot() {
 	defer stop()
 
 	sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
+		Group: "All",
 		Tags: []string{
 			"NetLiquidation",
 			"TotalCashValue",

@@ -434,24 +434,29 @@ func TestValidateHistoricalNewsRequest(t *testing.T) {
 	}
 }
 
-func TestNewAccountSummaryPlanUsesAllGroup(t *testing.T) {
+func TestNewAccountSummaryPlanSelectsGroup(t *testing.T) {
 	t.Parallel()
 
-	plan := newAccountSummaryPlan(7, AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"NetLiquidation"},
+	defaultPlan := newAccountSummaryPlan(7, AccountSummaryRequest{})
+	if defaultPlan.request.Account != "All" {
+		t.Fatalf("newAccountSummaryPlan(default).request.Account = %q, want %q", defaultPlan.request.Account, "All")
+	}
+
+	groupPlan := newAccountSummaryPlan(7, AccountSummaryRequest{
+		Group: "AdvisorGroup",
+		Tags:  []string{"NetLiquidation"},
 	})
-	if plan.request.Account != "All" {
-		t.Fatalf("newAccountSummaryPlan().request.Account = %q, want %q", plan.request.Account, "All")
+	if groupPlan.request.Account != "AdvisorGroup" {
+		t.Fatalf("newAccountSummaryPlan(group).request.Account = %q, want %q", groupPlan.request.Account, "AdvisorGroup")
 	}
 }
 
 func TestAccountSummaryPlanMatchesWildcardAndConcreteAccounts(t *testing.T) {
 	t.Parallel()
 
-	allPlan := newAccountSummaryPlan(7, AccountSummaryRequest{Account: "All"})
+	allPlan := newAccountSummaryPlan(7, AccountSummaryRequest{Group: "All"})
 	if !allPlan.matches("DU12345") || !allPlan.matches("DU99999") {
-		t.Fatal("newAccountSummaryPlan(Account=All) did not match all accounts")
+		t.Fatal("newAccountSummaryPlan(Group=All) did not match all accounts")
 	}
 
 	emptyPlan := newAccountSummaryPlan(7, AccountSummaryRequest{})
@@ -459,7 +464,7 @@ func TestAccountSummaryPlanMatchesWildcardAndConcreteAccounts(t *testing.T) {
 		t.Fatal("newAccountSummaryPlan(Account=\"\") did not match all accounts")
 	}
 
-	concretePlan := newAccountSummaryPlan(7, AccountSummaryRequest{Account: "DU12345"})
+	concretePlan := newAccountSummaryPlan(7, AccountSummaryRequest{AccountFilter: "DU12345"})
 	if !concretePlan.matches("DU12345") {
 		t.Fatal("newAccountSummaryPlan(concrete).matches() = false, want true")
 	}

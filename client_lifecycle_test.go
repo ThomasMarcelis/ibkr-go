@@ -596,16 +596,16 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 	defer cancel()
 
 	sub1, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation"},
 	})
 	if err != nil {
 		t.Fatalf("SubscribeAccountSummary() first error = %v", err)
 	}
 
 	sub2, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"TotalCashValue"},
+		Group: "All",
+		Tags:  []string{"TotalCashValue"},
 	})
 	if err != nil {
 		t.Fatalf("SubscribeAccountSummary() second error = %v", err)
@@ -617,8 +617,8 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 
 	// Third subscription must be rejected.
 	sub3, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"ExcessLiquidity"},
+		Group: "All",
+		Tags:  []string{"ExcessLiquidity"},
 	})
 	if err == nil {
 		if sub3 != nil {

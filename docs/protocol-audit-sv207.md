@@ -62,6 +62,10 @@ encoding until their later official migration groups.
   must decode raw 215 before the session can become ready.
 - Account-update time callbacks are exposed as `AccountUpdate.UpdateTime`
   instead of being silently discarded after decode.
+- `AccountSummaryRequest.Group` is sent as the official account-summary group
+  and defaults to `"All"`. `AccountSummaryRequest.AccountFilter` is an
+  independent exact filter applied locally to returned rows; it never changes
+  the wire request.
 
 Production remains pure Go and uses `protowire` directly. No SDK code,
 generated protobuf type, cgo dependency, or private capture is on the default
@@ -93,6 +97,11 @@ protobuf bootstrap and explicit refresh exchange with a deterministic,
 length-preserving account substitution. Codec tests retain one exact vector
 for every migrated request and callback family rather than copying the large
 account snapshots into the repository.
+
+The exact-207 account-summary capture attests the `"All"` group. Explicit
+advisor-group selection is frozen by the official request schema and public
+plan tests; a named-group live capture requires a real FA account and remains
+an evidence target rather than fabricated replay data.
 
 ## Regression gates
 

@@ -238,8 +238,8 @@ placement error directly.
 ```go
 // snapshot
 values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-    Account: "All",
-    Tags:    []string{"NetLiquidation", "TotalCashValue"},
+    Group: "All",
+    Tags:  []string{"NetLiquidation", "TotalCashValue"},
 })
 if err != nil {
     return err

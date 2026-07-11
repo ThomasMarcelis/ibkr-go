@@ -3535,7 +3535,7 @@ func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID in
 		}
 		drainObservers(quotes, updates, pnl, openOrders)
 
-		if _, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{Account: account, Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"}}); err != nil {
+		if _, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{AccountFilter: account, Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"}}); err != nil {
 			log.Printf("algorithmic summary: %v", err)
 		}
 		_, _ = client.Accounts().Positions(ctx)

@@ -160,8 +160,8 @@ func TestAccountSummary(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"NetLiquidation", "BuyingPower"},
+		AccountFilter: "DU12345",
+		Tags:          []string{"NetLiquidation", "BuyingPower"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
@@ -188,8 +188,8 @@ func TestAccountSummaryAllReturnsAllAccounts(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation", "BuyingPower"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "BuyingPower"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
@@ -210,8 +210,8 @@ func TestAccountSummarySucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"NetLiquidation"},
+		AccountFilter: "DU12345",
+		Tags:          []string{"NetLiquidation"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
@@ -235,8 +235,8 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 	defer cancel()
 
 	sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "DU12345",
-		Tags:    []string{"NetLiquidation"},
+		AccountFilter: "DU12345",
+		Tags:          []string{"NetLiquidation"},
 	})
 	if err != nil {
 		t.Fatalf("SubscribeAccountSummary() error = %v", err)
@@ -829,8 +829,8 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 			name: "account_summary",
 			subscribe: func(ctx context.Context, client *ibkr.Client) error {
 				sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-					Account: "DU12345",
-					Tags:    []string{"NetLiquidation"},
+					AccountFilter: "DU12345",
+					Tags:          []string{"NetLiquidation"},
 				}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
 				if sub != nil {
 					_ = sub.Close()
@@ -2357,8 +2357,8 @@ func TestGroundedAccountSummaryBurstExceedsSubscriptionBuffer(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)

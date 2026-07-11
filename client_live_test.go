@@ -62,8 +62,8 @@ func TestLiveAccountSummary(t *testing.T) {
 	defer cancelReq()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation", "BuyingPower"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "BuyingPower"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
@@ -376,8 +376,8 @@ func TestLiveSubscribeAccountSummary(t *testing.T) {
 	defer cancelReq()
 
 	sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Account: "All",
-		Tags:    []string{"NetLiquidation", "BuyingPower"},
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "BuyingPower"},
 	}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 	if err != nil {
 		t.Fatalf("SubscribeAccountSummary() error = %v", err)
@@ -736,8 +736,8 @@ func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
 	account := snapshot.ManagedAccounts[0]
 
 	beforeSummary, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Account: account,
-		Tags:    []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
+		AccountFilter: account,
+		Tags:          []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
 	})
 	if err != nil {
 		t.Fatalf("pre-trade account summary: %v", err)
