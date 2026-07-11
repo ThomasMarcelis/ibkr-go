@@ -600,7 +600,7 @@ rejections or no-status cleanup evidence.
 
 - [x] Duplicate same-contract quote subscriptions (`api_duplicate_quote_subscriptions_aapl` captured 2026-04-15, replay-promoted from `84f1e78a18616e0f`)
 - [x] Public generic-tick matrix preserves observed mark-price, shortable, volume-rate, and delayed-timestamp callbacks (`api_generic_tick_matrix_aapl`, 2026-07-09 raw `5c40260d783971d2`)
-- [x] Contract-specific BRFG `tickNews` callback through the public quote stream (`api_tick_news_aapl_probe`, exact server-version-201 frames `e3e1901503f7d1dc`)
+- [x] Contract-specific BRFG `tickNews` callback through the public quote stream (`api_tick_news_aapl_probe`, exact server-version-201 decoder frame `e3e1901503f7d1dc` and exact server-version-207 public lifecycle `739f3c2caa3d5379`)
 - [ ] All historical bar sizes (1sec through 1month)
 - [ ] All whatToShow values
 - [ ] Real-time bars BID_ASK and MIDPOINT

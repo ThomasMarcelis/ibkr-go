@@ -1,0 +1,20 @@
+# Exact public API capture from read-only IB Gateway server_version 207.
+# Source: /tmp/ibkr-tick-news-current-20260711/
+# 20260711T040718Z-api_tick_news_aapl_probe
+# events.jsonl sha256:
+# 739f3c2caa3d5379bbe33cd2d8be4ff769266a7514727b7c2a7041c853c915b1
+#
+# The account is length-preserving redacted to DU9000001. Ambient farm-status
+# frames, post-cancellation headlines, and the final current-time write fence
+# are omitted. The delayed-data selection, quote request, typed callbacks, and
+# cancellation are otherwise exact and retain their captured request ID.
+handshake {"server_version":207,"connection_time":"20260711 06:07:18 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAAQMIAw==
+raw client AAAAMwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEGg5tZG9mZiwyOTI6QlJGRw==
+raw server AAAACAAAAQIIARAD
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw server AAAArAAAAFQxADE3NTgyOTQ3NTkwMDAAQlJGRwBCUkZHJDFjMmQ1NzI4AEFwcGxlJ3MgaVBob25lIDE3IGRlYnV0cyB0byBsb25nIGxpbmVzIGFuZCBoaWdoIGRlbWFuZCBhcyBjb21wYW55IGV5ZXMgdXBncmFkZSBjeWNsZSBib29zdABBOjgwMDAxNTpMOmVuOks6MS4wMDpDOjAuOTk5OTUzMzI5NTYzMTQwOQA=
+raw client AAAABgAAAMoIAQ==
+disconnect

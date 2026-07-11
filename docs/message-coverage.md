@@ -131,7 +131,7 @@ option computation is attested by
 `captures/20260611T080111Z-api_option_campaign_aapl`. Contract-specific BRFG
 TickNews is attested by the exact server-version-201 frames in
 `captures/20260709T230825Z-api_tick_news_aapl_probe` and frozen at the public
-API boundary by `tick_news_aapl_sv201_live.txt`.
+API boundary by `tick_news_aapl_live.txt`.
 Exact server-version-206 request/callback protobuf vectors, parameter
 precision, and transparent classic CFD reroutes are frozen by codec/engine
 tests backed by `protocol-audit-sv206.md`; the quote-focused

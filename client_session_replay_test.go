@@ -324,7 +324,7 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 func TestTickNewsReplay(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "tick_news_aapl_sv201_live.txt")
+	client, host := newClient(t, "tick_news_aapl_live.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 

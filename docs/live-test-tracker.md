@@ -138,10 +138,14 @@ Latest API 10.48 (released 2026-07-07), Stable API 10.45 (released
   `a0784d2eddda74681cc301befb98440a96bb76242efd43aec88a9f177a5411df`,
   normalized frames sha256
   `e3e1901503f7d1dc52489bccb2bce64467e35bad48bc025e438b916a5c639e60`).
-  The first frame is frozen byte-for-byte in the codec and public transcript;
-  its timestamp, provider code, article ID, headline, and extra-data string are
-  projected without mutating the accumulated quote. Repeat probes may return
-  no headlines when the Gateway has no new provider item for that session.
+  The first frame remains frozen byte-for-byte in the codec. Its timestamp,
+  provider code, article ID, headline, and extra-data string are projected
+  without mutating the accumulated quote. The public subscription lifecycle is
+  separately frozen from the exact server-version-207 capture
+  `20260711T040718Z-api_tick_news_aapl_probe` (events sha256
+  `739f3c2caa3d5379bbe33cd2d8be4ff769266a7514727b7c2a7041c853c915b1`),
+  including its quote request and cancellation. Repeat probes may return no
+  headlines when the Gateway has no new provider item for that session.
 
 ### 2026-07-04
 

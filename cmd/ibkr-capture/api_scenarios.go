@@ -2978,6 +2978,10 @@ func runAPITickNewsAAPLProbe(ctx context.Context, addr string, clientID int) err
 		}
 		defer sub.Close()
 
+		closeSubscription := func() error {
+			return closeAndFenceSubscription(ctx, client, sub, "AAPL tick-news cancellation")
+		}
+
 		timer := time.NewTimer(30 * time.Second)
 		defer timer.Stop()
 		count := 0
@@ -2996,14 +3000,14 @@ func runAPITickNewsAAPLProbe(ctx context.Context, addr string, clientID int) err
 				})
 				if update.Kind == ibkr.QuoteUpdateNewsTick {
 					recordProbeResult("tick_news", "aapl_brfg", count, nil)
-					return nil
+					return closeSubscription()
 				}
 			case <-sub.Done():
 				recordProbeResult("tick_news", "aapl_brfg", count, sub.Err())
 				return nil
 			case <-timer.C:
 				recordProbeResult("tick_news", "aapl_brfg", count, nil)
-				return nil
+				return closeSubscription()
 			case <-ctx.Done():
 				recordProbeResult("tick_news", "aapl_brfg", count, ctx.Err())
 				return nil
