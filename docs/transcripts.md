@@ -204,3 +204,9 @@ capture pipeline already produces the raw bytes); the JSON message form is a
 human-readable view, kept where a consistency check against the decoded raw
 frame exists or where the flow is low-risk and sv200-only. Existing sv200
 transcripts migrate opportunistically, orders and executions first.
+
+Raw transcript files record the source capture hash and negotiated server
+version. Use `splitraw <server|client> <sizes> <base64-frame>` when a transport
+test must deliver or read an exact captured frame in partial chunks; chunking
+changes transport behavior without reconstructing the protocol message through
+the codec under test.

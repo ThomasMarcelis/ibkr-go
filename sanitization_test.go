@@ -94,3 +94,33 @@ func TestNoAccountIdentifiersInTrackedFiles(t *testing.T) {
 		}
 	}
 }
+
+func TestRawTranscriptsRecordCaptureProvenance(t *testing.T) {
+	t.Parallel()
+
+	entries, err := os.ReadDir("testdata/transcripts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".txt" {
+			continue
+		}
+		path := filepath.Join("testdata", "transcripts", entry.Name())
+		// #nosec G304 -- path is a direct entry from the fixed transcript directory.
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(data)
+		if !strings.Contains(text, "raw server ") && !strings.Contains(text, "raw client ") {
+			continue
+		}
+		if !strings.Contains(strings.ToLower(text), "sha256") {
+			t.Errorf("%s: raw transcript must name its source capture hash", path)
+		}
+		if !strings.Contains(text, `"server_version":`) {
+			t.Errorf("%s: raw transcript must declare its negotiated server version", path)
+		}
+	}
+}

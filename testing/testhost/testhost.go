@@ -291,26 +291,9 @@ func (h *Host) run() {
 			frame := appendLengthPrefix(payload)
 			switch cur.direction {
 			case "server":
-				cursor := 0
-				for _, size := range cur.sizes {
-					if cursor >= len(frame) {
-						break
-					}
-					end := cursor + size
-					if end > len(frame) {
-						end = len(frame)
-					}
-					if _, err := conn.Write(frame[cursor:end]); err != nil {
-						h.finish(err)
-						return
-					}
-					cursor = end
-				}
-				if cursor < len(frame) {
-					if _, err := conn.Write(frame[cursor:]); err != nil {
-						h.finish(err)
-						return
-					}
+				if err := writeChunked(conn, frame, cur.sizes); err != nil {
+					h.finish(err)
+					return
 				}
 			case "client":
 				got, err := readChunked(conn, len(frame), cur.sizes)
@@ -326,7 +309,7 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: unsupported split direction %q", cur.direction))
 				return
 			}
-		case "raw":
+		case "raw", "splitraw":
 			if conn == nil {
 				var err error
 				conn, err = h.listener.Accept()
@@ -337,12 +320,24 @@ func (h *Host) run() {
 			}
 			switch cur.direction {
 			case "server":
-				if _, err := conn.Write(cur.raw); err != nil {
+				var err error
+				if cur.kind == "splitraw" {
+					err = writeChunked(conn, cur.raw, cur.sizes)
+				} else {
+					_, err = conn.Write(cur.raw)
+				}
+				if err != nil {
 					h.finish(err)
 					return
 				}
 			case "client":
-				got, err := readExact(conn, len(cur.raw))
+				var got []byte
+				var err error
+				if cur.kind == "splitraw" {
+					got, err = readChunked(conn, len(cur.raw), cur.sizes)
+				} else {
+					got, err = readExact(conn, len(cur.raw))
+				}
 				if err != nil {
 					h.finish(err)
 					return
@@ -402,6 +397,16 @@ func parse(script string) ([]step, error) {
 				return nil, fmt.Errorf("line %d: %w", idx+1, err)
 			}
 			steps = append(steps, step{kind: "raw", direction: parts[1], raw: raw})
+		case strings.HasPrefix(line, "splitraw "):
+			parts := strings.SplitN(line, " ", 4)
+			if len(parts) != 4 {
+				return nil, fmt.Errorf("line %d: invalid splitraw step", idx+1)
+			}
+			raw, err := base64.StdEncoding.DecodeString(parts[3])
+			if err != nil {
+				return nil, fmt.Errorf("line %d: %w", idx+1, err)
+			}
+			steps = append(steps, step{kind: "splitraw", direction: parts[1], sizes: parseSizes(parts[2]), raw: raw})
 		case strings.HasPrefix(line, "split "):
 			parts := strings.SplitN(line, " ", 5)
 			if len(parts) != 5 {
@@ -503,6 +508,25 @@ func readChunked(r io.Reader, total int, sizes []int) ([]byte, error) {
 		buf = append(buf, chunk...)
 	}
 	return buf, nil
+}
+
+func writeChunked(w io.Writer, frame []byte, sizes []int) error {
+	cursor := 0
+	for _, size := range sizes {
+		if cursor >= len(frame) {
+			break
+		}
+		end := min(cursor+size, len(frame))
+		if _, err := w.Write(frame[cursor:end]); err != nil {
+			return err
+		}
+		cursor = end
+	}
+	if cursor < len(frame) {
+		_, err := w.Write(frame[cursor:])
+		return err
+	}
+	return nil
 }
 
 // decodeClientMessage decodes a real wire format client message into
