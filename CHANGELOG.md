@@ -98,6 +98,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **The legacy `ibkr-probe` diagnostic command has been removed.** Maintained
+  workflows use `ibkr-doctor` for session diagnostics and
+  `ibkr-recorder`/`ibkr-capture`/`ibkr-normalize` for raw protocol evidence.
+
 - **Account summary group selection is explicit.** `AccountSummaryRequest.Group`
   now selects the IBKR account group and defaults to `"All"` when empty.
   `AccountSummaryRequest.AccountFilter` is the separate optional exact-account

@@ -193,7 +193,7 @@ child; sizing draws 10032), and the pairs/DCA/algorithmic reconciliation
 tails that timed out in April. Exercise-scenario residue: two long AAPL
 Jun-12 calls (282.5, 292.5) remain in the paper account and expire the
 next session. `paper-dev` healthy throughout. Operational incident on
-`readonly-live`: two raw `cmd/ibkr-probe` attempts at the
+`readonly-live`: two historical raw `ibkr-probe` attempts at the
 `reqCurrentTimeInMillis` drift check (one pre-handshake payload that the
 Gateway answered as a legacy version greeting, one framed message injected
 before `startApi`) left the 4001 API listener refusing handshakes with
