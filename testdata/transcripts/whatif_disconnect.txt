@@ -1,14 +1,14 @@
-# Derived regression fixture for the Preview transport-loss path: the
-# connection drops after the what-if place_order and before any open_order
-# echo. Request line shape from captures/20260610T200009Z-api_whatif_margin
-# _aapl (e8ee70b24de3fe2f, server_version 200). Before 2026-07-05 the
-# disconnect walked the order routes and dereferenced the preview route's
-# nil handle, crashing the actor goroutine; the caller must instead get
-# ErrInterrupted.
-handshake {"server_version":200,"connection_time":"20260704 22:00:08 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":355}
-
-client place_order {"order_id":"355","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","transmit":true,"what_if":true}
+# Fault-injection replay using the exact what-if order request from paper IB
+# Gateway server_version 207 capture 20260711T040155Z-api_whatif_margin_aapl.
+# events.jsonl sha256:
+# c03cddc62e4694577a62b6c679487f30a0c243565d3cc1bd508fbbf1a8283548
+#
+# Account and order-reference values are length-preserving redactions. Ambient
+# farm-status and startup-cleanup frames are omitted. The transport closes after
+# the captured request and before its captured open-order preview response.
+handshake {"server_version":207,"connection_time":"20260711 06:01:54 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACgAAAAkxADQ1NAA=
+raw client AAAAkwAAAMsIxgMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBprIAAqA0JVWTIDMTAwOABCA01LVFoDREFZYglEVTkwMDAwMDHiASRpYmtyZ28tcmVkYWN0ZWQtMjAyNjA3MTFUMDQwMTU1Wi0wMDHwAQD4AQCIBAGQBAGoBADABP///////////wGQBgDKBgAiAA==
 sleep 50ms
 disconnect

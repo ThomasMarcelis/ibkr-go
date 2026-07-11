@@ -133,6 +133,7 @@ func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "ibkrgo-redacted-20260711T040155Z-001",
 		},
 	})
 	if !errors.Is(err, ibkr.ErrInterrupted) {
