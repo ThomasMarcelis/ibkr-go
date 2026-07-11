@@ -1,19 +1,14 @@
-# Live-derived from local IB Gateway 127.0.0.1:4002.
-# Scenario: issue 8 real-time-bars request-scoped API error, server_version=200.
-# Raw evidence kept local:
-# /tmp/ibkr-go-issue-8-captures/20260412T212310Z-realtime_bars_api_error
-# events.jsonl sha256 prefix: fb799bbd0db35430
+# Exact public API capture from read-only IB Gateway server_version 206.
+# Source: /tmp/ibkr-go-subscriptions-20260710/20260710T233237Z-realtime_bars_aapl
+# events.jsonl sha256: ec740c40846dc4ad8183d694bd8882b0d7cd5185dc760e3e6cd779243cdf1fa0
 #
-# Gateway accepted reqRealTimeBars for AAPL STK SMART/USD, then rejected the
-# request asynchronously with a request-scoped APIError. The subscription must
-# close with a non-retryable APIError rather than looking like a reconnect gap.
-# Account identifier is sanitized to DU9000001.
-handshake {"server_version":200,"connection_time":"20260412 23:23:15 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1776028995218"}
-server api_error {"req_id":-1,"code":2107,"message":"HMDS data farm connection is inactive but should be available upon demand.ushmds","advanced_order_reject_json":"","error_time_ms":"1776028995218"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1776028995218"}
-client req_realtime_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"what_to_show":"TRADES","use_rth":true}
-server api_error {"req_id":"$req1","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776028995389"}
+# The account bootstrap is length-preserving redacted to DU9000001. Ambient
+# farm-status frames and the later current-time fence are omitted. Delayed
+# selection, the resolved AAPL request, and code-420 refusal are exact.
+handshake {"server_version":206,"connection_time":"20260711 01:32:37 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAAQMIAw==
+raw client AAAANQAAADIzADEAMjY1NTk4AEFBUEwAU1RLAAAAAABTTUFSVAAAVVNEAAAANQBUUkFERVMAMQAA
+raw server AAAA1AAAAMwIARDQ/IDz9DMYpAMiwQFJbnZhbGlkIFJlYWwtdGltZSBRdWVyeTpObyBtYXJrZXQgZGF0YSBwZXJtaXNzaW9ucyBmb3IgSVNMQU5EIFNUSy4gUmVxdWVzdGVkIG1hcmtldCBkYXRhIHJlcXVpcmVzIGFkZGl0aW9uYWwgc3Vic2NyaXB0aW9uIGZvciBBUEkuIFNlZSBsaW5rIGluICdNYXJrZXQgRGF0YSBDb25uZWN0aW9ucycgZGlhbG9nIGZvciBtb3JlIGRldGFpbHMu
 disconnect

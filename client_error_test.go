@@ -133,9 +133,13 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType() error = %v", err)
+	}
 
 	sub, err := client.MarketData().SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -161,8 +165,8 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	if !ok {
 		t.Fatalf("closed.Err type = %T, want *ibkr.APIError", closed.Err)
 	}
-	if apiErr.Code != 10089 {
-		t.Fatalf("APIError.Code = %d, want 10089", apiErr.Code)
+	if apiErr.Code != 420 {
+		t.Fatalf("APIError.Code = %d, want 420", apiErr.Code)
 	}
 
 	waitErr := sub.Wait()
@@ -184,8 +188,8 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	if !ok {
 		t.Fatalf("sub.Wait() error type = %T, want *ibkr.APIError", waitErr)
 	}
-	if waitAPIErr.Code != 10089 {
-		t.Fatalf("sub.Wait() APIError.Code = %d, want 10089", waitAPIErr.Code)
+	if waitAPIErr.Code != 420 {
+		t.Fatalf("sub.Wait() APIError.Code = %d, want 420", waitAPIErr.Code)
 	}
 }
 
