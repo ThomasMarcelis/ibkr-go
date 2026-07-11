@@ -1709,10 +1709,11 @@ func TestHistoricalTicksTrades(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	end := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 7, 10, 22, 44, 44, 0, time.UTC)
 
 	result, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -1726,17 +1727,19 @@ func TestHistoricalTicksTrades(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HistoricalTicks() error = %v", err)
 	}
-	if len(result.Last) != 1 {
-		t.Fatalf("last ticks len = %d, want 1", len(result.Last))
+	if len(result.Last) != 367 {
+		t.Fatalf("last ticks len = %d, want 367", len(result.Last))
 	}
-	if result.Last[0].Price.String() != "170.5" {
-		t.Fatalf("price = %s, want 170.5", result.Last[0].Price.String())
+	first := result.Last[0]
+	if first.Price.String() != "315.3" || first.Size.String() != "3" {
+		t.Fatalf("first trade price/size = %s/%s, want 315.3/3", first.Price, first.Size)
 	}
-	if result.Last[0].Exchange != "ARCA" {
-		t.Fatalf("exchange = %q, want ARCA", result.Last[0].Exchange)
+	if first.Exchange != "NASDAQ" || first.TickAttrib != 2 || first.SpecialConditions != " F I" {
+		t.Fatalf("first trade metadata = exchange %q attrib %d conditions %q", first.Exchange, first.TickAttrib, first.SpecialConditions)
 	}
-	if result.Last[0].TickAttrib != 2 {
-		t.Fatalf("tick attrib = %d, want 2", result.Last[0].TickAttrib)
+	last := result.Last[len(result.Last)-1]
+	if last.Price.String() != "315.3299" || last.Size.String() != "190" || last.Exchange != "FINRA" {
+		t.Fatalf("last trade = price %s size %s exchange %q", last.Price, last.Size, last.Exchange)
 	}
 }
 
