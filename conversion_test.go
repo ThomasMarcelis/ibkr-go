@@ -475,12 +475,13 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 
 	const sentinel = "1.7976931348623157E308"
 
-	_, state, err := decodeCodecOpenOrder(codec.OpenOrder{
+	order, state, err := decodeCodecOpenOrder(codec.OpenOrder{
 		OrderID:              1,
 		Account:              "DU12345",
 		Contract:             codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
 		Action:               "BUY",
 		OrderType:            "LMT",
+		Status:               "PreSubmitted",
 		Quantity:             "1",
 		LmtPrice:             "150.00",
 		AuxPrice:             "0",
@@ -500,6 +501,9 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("decodeCodecOpenOrder() error = %v, want nil", err)
 	}
+	if order.State.Status != OrderStatusPreSubmitted || state.Status != OrderStatusPreSubmitted {
+		t.Fatalf("open order/state status = %s/%s, want PreSubmitted", order.State.Status, state.Status)
+	}
 	for name, got := range map[string]*decimal.Decimal{
 		"InitMarginBefore":     state.InitMarginBefore,
 		"MaintMarginBefore":    state.MaintMarginBefore,
@@ -517,6 +521,9 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 		if got != nil {
 			t.Errorf("%s = %s, want nil (sentinel should decode as absent)", name, got)
 		}
+	}
+	if order.State.CommissionAndFees != nil || order.State.InitMarginAfter != nil {
+		t.Errorf("OpenOrder.State retained unset values: %+v", order.State)
 	}
 }
 

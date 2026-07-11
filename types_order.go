@@ -83,9 +83,10 @@ const (
 	OpenOrdersScopeAuto   OpenOrdersScope = "auto"   // persistently bind future manual TWS orders; client ID 0 only, no snapshot
 )
 
-// OpenOrder is the typed open_order echo from the Gateway. Live open_order
-// frames carry no fill progress; track fills through [OrderStatusUpdate] and
-// executions instead.
+// OpenOrder is the typed open_order echo from the Gateway. State preserves the
+// margin, commission, allocation, and rejection details carried by the same
+// frame. Live open_order frames carry no fill progress; track fills through
+// [OrderStatusUpdate] and executions instead.
 type OpenOrder struct {
 	OrderID   int64
 	Account   string
@@ -94,6 +95,7 @@ type OpenOrder struct {
 	OrderType OrderType
 	Status    OrderStatus
 	Quantity  decimal.Decimal
+	State     OrderState
 
 	LmtPrice              *decimal.Decimal
 	AuxPrice              *decimal.Decimal

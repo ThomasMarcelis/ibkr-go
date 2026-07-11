@@ -72,10 +72,52 @@ func cloneOrderCombo(combo OrderCombo) OrderCombo {
 
 func cloneOpenOrder(order OpenOrder) OpenOrder {
 	order.Contract = cloneContract(order.Contract)
+	if order.LmtPrice != nil {
+		order.LmtPrice = new(*order.LmtPrice)
+	}
+	if order.AuxPrice != nil {
+		order.AuxPrice = new(*order.AuxPrice)
+	}
 	order.Combo = cloneOrderCombo(order.Combo)
 	order.AlgoParams = append([]TagValue(nil), order.AlgoParams...)
 	order.Conditions = append([]OrderCondition(nil), order.Conditions...)
+	order.State = cloneOrderState(order.State)
 	return order
+}
+
+func cloneOrderState(state OrderState) OrderState {
+	for _, field := range []**decimal.Decimal{
+		&state.InitMarginBefore, &state.MaintMarginBefore, &state.EquityWithLoanBefore,
+		&state.InitMarginChange, &state.MaintMarginChange, &state.EquityWithLoanChange,
+		&state.InitMarginAfter, &state.MaintMarginAfter, &state.EquityWithLoanAfter,
+		&state.CommissionAndFees, &state.MinCommissionAndFees, &state.MaxCommissionAndFees,
+		&state.InitMarginBeforeOutsideRTH, &state.MaintMarginBeforeOutsideRTH, &state.EquityWithLoanBeforeOutsideRTH,
+		&state.InitMarginChangeOutsideRTH, &state.MaintMarginChangeOutsideRTH, &state.EquityWithLoanChangeOutsideRTH,
+		&state.InitMarginAfterOutsideRTH, &state.MaintMarginAfterOutsideRTH, &state.EquityWithLoanAfterOutsideRTH,
+		&state.SuggestedSize,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	state.Allocations = append([]OrderAllocation(nil), state.Allocations...)
+	for i := range state.Allocations {
+		for _, field := range []**decimal.Decimal{
+			&state.Allocations[i].Position,
+			&state.Allocations[i].PositionDesired,
+			&state.Allocations[i].PositionAfter,
+			&state.Allocations[i].DesiredAllocQty,
+			&state.Allocations[i].AllowedAllocQty,
+		} {
+			if *field != nil {
+				*field = new(**field)
+			}
+		}
+		if state.Allocations[i].IsMonetary != nil {
+			state.Allocations[i].IsMonetary = new(*state.Allocations[i].IsMonetary)
+		}
+	}
+	return state
 }
 
 func cloneContract(contract Contract) Contract {
