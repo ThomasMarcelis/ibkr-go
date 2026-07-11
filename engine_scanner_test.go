@@ -44,7 +44,7 @@ func TestScannerNoItemsMessagePreservesLiveRoute(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 	(<-e.cmds)()
-	wantCancel := liveScannerFrame(t, "AAAACjIzADEAMTAwMQA=")
+	wantCancel := liveCapturedFrame(t, "AAAACjIzADEAMTAwMQA=")
 	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantCancel) {
 		t.Fatalf("scanner cancel = %x, want exact live cancel %x", got, wantCancel)
 	}
@@ -74,14 +74,14 @@ func installObservedScannerRoute(t *testing.T, e *engine) *Subscription[[]Scanne
 
 func decodeLiveScannerFrame(t *testing.T, value string) any {
 	t.Helper()
-	message, err := codec.Decode(200, liveScannerFrame(t, value))
+	message, err := codec.Decode(200, liveCapturedFrame(t, value))
 	if err != nil {
 		t.Fatalf("decode exact live scanner frame: %v", err)
 	}
 	return message
 }
 
-func liveScannerFrame(t *testing.T, value string) []byte {
+func liveCapturedFrame(t *testing.T, value string) []byte {
 	t.Helper()
 	frame, err := base64.StdEncoding.DecodeString(value)
 	if err != nil {

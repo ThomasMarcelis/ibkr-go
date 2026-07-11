@@ -606,26 +606,6 @@ func sendGlobalCancel(conn net.Conn) error {
 	return sendMessage(conn, []string{"58", "", ""})
 }
 
-// --- Market depth (msg_id=10) / cancel (msg_id=11) ---
-//
-//	[10, version=5, reqId, conId, symbol, secType, expiry, strike, right,
-//	 multiplier, exchange, primaryExchange, currency, localSymbol, tradingClass,
-//	 numRows, isSmartDepth, mktDepthOptions]
-func sendReqMktDepth(conn net.Conn, reqID int, c contractSpec, numRows int, isSmartDepth bool) error {
-	fields := []string{"10", "5", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFieldsNoExpired(c)...)
-	fields = append(fields,
-		strconv.Itoa(numRows),
-		boolField(isSmartDepth),
-		"", // mktDepthOptions
-	)
-	return sendMessage(conn, fields)
-}
-
-func sendCancelMktDepth(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"11", "1", strconv.Itoa(reqID)})
-}
-
 // --- Exercise options (msg_id=21) ---
 //
 //	[21, version=2, reqId, conId, symbol, secType, expiry, strike, right,

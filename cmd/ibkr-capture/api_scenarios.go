@@ -1268,6 +1268,110 @@ func isExactTickByTickEntitlementRefusal(err *ibkr.APIError) bool {
 	}
 }
 
+func runAPIMarketDepthAAPL(ctx context.Context, addr string, clientID int) error {
+	return runAPIMarketDepth(ctx, addr, clientID, false)
+}
+
+func runAPIMarketDepthSmartAAPL(ctx context.Context, addr string, clientID int) error {
+	return runAPIMarketDepth(ctx, addr, clientID, true)
+}
+
+func runAPIMarketDepth(ctx context.Context, addr string, clientID int, smart bool) error {
+	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		sub, err := client.MarketData().SubscribeDepth(ctx, ibkr.MarketDepthRequest{
+			Contract: apiAAPL, NumRows: 5, IsSmartDepth: smart,
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL market depth smart=%t: %w", smart, err)
+		}
+		label := "regular"
+		if smart {
+			label = "smart"
+		}
+		count, unavailable, err := awaitMarketDepthEvidence(ctx, client, sub, 15*time.Second)
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if !ok || smart || !isExactMarketDepthRefusal(apiErr) {
+				return fmt.Errorf("observe AAPL %s market depth: %w", label, err)
+			}
+			if err := fenceAPIWrites(ctx, client, "AAPL "+label+" market-depth refusal"); err != nil {
+				return err
+			}
+			recordSubscriptionRefusal("market_depth", label, apiErr)
+			return nil
+		}
+		if unavailable != nil {
+			if err := closeAndFenceSubscription(ctx, client, sub, "AAPL SMART market-depth unavailable cancellation"); err != nil {
+				return err
+			}
+			recordAPIEvent("market_depth_unavailable", label, func(event *apiDriverEvent) {
+				event.Symbol = apiAAPL.Symbol
+				event.SecType = string(apiAAPL.SecType)
+				event.Values = map[string]string{
+					"code":    strconv.Itoa(unavailable.Code),
+					"message": unavailable.Message,
+				}
+			})
+			return nil
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "AAPL "+label+" market-depth cancellation"); err != nil {
+			return err
+		}
+		recordProbeResult("market_depth", label, count, nil)
+		return nil
+	})
+}
+
+func isExactMarketDepthRefusal(err *ibkr.APIError) bool {
+	return err.Code == ibkr.ErrCodeDeepMarketDataNotSupported &&
+		err.OpKind == ibkr.OpMarketDepth &&
+		err.Message == "Deep market data is not supported for this combination of security type/exchange"
+}
+
+func awaitMarketDepthEvidence(ctx context.Context, client *ibkr.Client, sub *ibkr.Subscription[ibkr.DepthRow], timeout time.Duration) (int, *ibkr.Event, error) {
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	sessionEvents := client.SessionEvents()
+	count := 0
+	for {
+		select {
+		case row, ok := <-sub.Events():
+			if !ok {
+				if err := sub.Wait(); err != nil {
+					return count, nil, err
+				}
+				return count, nil, errors.New("market-depth subscription closed before required evidence")
+			}
+			count++
+			if row.Position >= 0 {
+				return count, nil, nil
+			}
+		case event, ok := <-sessionEvents:
+			if !ok {
+				sessionEvents = nil
+				continue
+			}
+			if event.Code == ibkr.ErrCodeSmartDepthExchanges && isNoMarketDepthAvailable(event.Message) {
+				return count, &event, nil
+			}
+		case <-sub.Done():
+			if err := sub.Wait(); err != nil {
+				return count, nil, err
+			}
+			return count, nil, errors.New("market-depth subscription closed before required evidence")
+		case <-timer.C:
+			return count, nil, fmt.Errorf("required market-depth evidence not observed within %s", timeout)
+		case <-ctx.Done():
+			return count, nil, ctx.Err()
+		}
+	}
+}
+
+func isNoMarketDepthAvailable(message string) bool {
+	return strings.Contains(message, "Need additional market data permissions - Depth:") &&
+		!strings.Contains(message, "Exchanges - Depth:")
+}
+
 func awaitSubscriptionEvidence[T any](ctx context.Context, sub *ibkr.Subscription[T], timeout time.Duration, accept func(T) bool) (int, error) {
 	timer := time.NewTimer(timeout)
 	defer timer.Stop()

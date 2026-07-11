@@ -521,6 +521,7 @@ func TestLiveSubscribeMarketDepth(t *testing.T) {
 	// Read a few depth events or accept timeout.
 	var events int
 	deadline := time.After(10 * time.Second)
+	sessionEvents := client.SessionEvents()
 	for {
 		select {
 		case _, ok := <-sub.Events():
@@ -535,9 +536,19 @@ func TestLiveSubscribeMarketDepth(t *testing.T) {
 			}
 		case evt := <-sub.Lifecycle():
 			if evt.Err != nil {
-				// Market depth errors (e.g. 10092, 2152) arrive as subscription errors.
+				// Terminal market-depth errors such as 10092 close the subscription.
 				t.Logf("SubscribeMarketDepth state error: %v (expected without deep data subscription)", evt.Err)
 				return
+			}
+		case evt, ok := <-sessionEvents:
+			if !ok {
+				sessionEvents = nil
+				continue
+			}
+			if evt.Code == ibkr.ErrCodeSmartDepthExchanges {
+				// Code 2152 is a nonterminal availability notice; rows may still
+				// follow when its payload lists an entitled depth exchange.
+				t.Logf("SubscribeMarketDepth availability: %s", evt.Message)
 			}
 		case <-deadline:
 			t.Logf("SubscribeMarketDepth: timed out after %d events (may need market data subscription)", events)

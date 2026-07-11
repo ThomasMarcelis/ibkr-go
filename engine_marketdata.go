@@ -572,6 +572,10 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 				}
 			},
 			handleAPIErr: func(m codec.APIError, e *engine) {
+				if m.Code == ErrCodeSmartDepthExchanges {
+					e.emitEvent(m.Code, m.Message)
+					return
+				}
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(e.apiErr(OpMarketDepth, m))
 			},

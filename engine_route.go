@@ -221,7 +221,19 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		}
 	}
 
-	// 2xxx: bootstrap/farm-status informational codes (reqID -1).
+	// Code 2152 is an exact live request-scoped market-depth availability
+	// notice. Route it before the otherwise session-scoped 2xxx band so the
+	// subscription can preserve its route while publishing the notice.
+	if msg.Code == ErrCodeSmartDepthExchanges && msg.ReqID > 0 {
+		if route, ok := e.keyed[msg.ReqID]; ok && route.opKind == OpMarketDepth && route.handleAPIErr != nil {
+			route.handleAPIErr(msg, e)
+			return
+		}
+		e.emitEvent(msg.Code, msg.Message)
+		return
+	}
+
+	// Other 2xxx: bootstrap/farm-status informational codes (reqID -1).
 	// Emitted as session events for observability; they never target a
 	// request or subscription and must not interfere with bootstrap.
 	if msg.Code >= 2000 && msg.Code < 3000 {

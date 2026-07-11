@@ -158,6 +158,55 @@ func TestMarketDepthRouteRejectsRepeatedLiveRerouteWithSmartCancel(t *testing.T)
 	}
 }
 
+func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
+	// /tmp/ibkr-go-depth-public-final-20260711/
+	// 20260711T000232Z-market_depth_aapl_smart, server_version 206,
+	// events.jsonl sha256 a5df84945a10440ab4ef4a6336f837570cd53d036314c2461104a2555f94e8a3.
+	// The exact request-scoped code 2152 frame must reach the keyed depth route
+	// without closing it: the official notice may precede valid rows when any
+	// listed depth venue is available.
+	e, peer := newObservedMarketDataEngine(t)
+	e.serverVersion = 206
+	e.nextReqID = 1
+	sub := installObservedDepthRoute(t, e, MarketDepthRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+		NumRows:  5, IsSmartDepth: true,
+	})
+	_ = readObservedFrame(t, peer)
+
+	message, err := codec.Decode(206, liveCapturedFrame(t, "AAAA3QAAAMwIARDwxe7z9DMY6BAiygFFeGNoYW5nZXMgLSBUb3A6IElCRU9TOyBPVkVSTklHSFQ7IE5lZWQgYWRkaXRpb25hbCBtYXJrZXQgZGF0YSBwZXJtaXNzaW9ucyAtIERlcHRoOiBOQVNEQVE7IEJBVFM7IEFSQ0E7IEJFWDsgTllTRTsgSUVYOyBUb3A6IEJZWDsgQU1FWDsgUEVBUkw7IFQyNFg7IE1FTVg7IEVER0VBOyBDSFg7IE5ZU0VOQVQ7IFBTWDsgTFRTRTsgSVNFOyBEUkNURURHRTsg"))
+	if err != nil {
+		t.Fatalf("decode exact live SMART-depth exchange notice: %v", err)
+	}
+	e.handleIncoming(message)
+
+	if _, ok := e.keyed[1]; !ok {
+		t.Fatal("live code-2152 SMART-depth exchange notice deleted the route")
+	}
+	event := <-e.SessionEvents()
+	if event.Code != ErrCodeSmartDepthExchanges || event.Message == "" {
+		t.Fatalf("market-depth session event = %+v, want code-2152 availability notice", event)
+	}
+	if err := sub.Err(); err != nil {
+		t.Fatalf("market-depth subscription error after notice = %v", err)
+	}
+
+	if err := sub.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	(<-e.cmds)()
+	wantCancel, err := codec.Encode(206, codec.CancelMarketDepth{ReqID: 1, IsSmartDepth: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantCancel) {
+		t.Fatalf("market-depth cancel = %x, want %x", got, wantCancel)
+	}
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+}
+
 func TestQuoteRoutePreservesSV206ParameterPresenceAndPrecision(t *testing.T) {
 	e := newBenchEngine(t)
 	e.serverVersion = 206

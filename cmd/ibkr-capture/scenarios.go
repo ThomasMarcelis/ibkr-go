@@ -1006,38 +1006,14 @@ var scenarios = map[string]*scenario{
 	// --- Market depth ---
 
 	"market_depth_aapl": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth"}, []int{10, 11, 12, 13}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"regular depth rows or entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_MKT_DEPTH AAPL numRows=5 isSmartDepth=false, read 10s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqMktDepth(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, 5, false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktDepth(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMktDepth, protocol.OutCancelMktDepth, protocol.OutReqCurrentTime, protocol.InMarketDepth, protocol.InMarketDepthL2, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"typed regular depth row with fenced cancellation, or an exact live refusal"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "observe an AAPL regular depth row or an exact live refusal through the public API",
+		runAPI:      runAPIMarketDepthAAPL,
 	},
 	"market_depth_aapl_smart": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth"}, []int{10, 11, 12, 13}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"smart depth rows or entitlement error"}, 1, "candidate", batchNewV2, batchReadOnly),
-		description: "REQ_MKT_DEPTH AAPL numRows=5 isSmartDepth=true, read 10s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqMktDepth(conn, reqID, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, 5, true); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktDepth(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth", "Client.SessionEvents", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMktDepth, protocol.OutCancelMktDepth, protocol.OutReqCurrentTime, protocol.InMarketDepth, protocol.InMarketDepthL2, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"typed smart depth row or exact no-available-depth notice, followed by fenced cancellation"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "observe an AAPL SMART depth row or the exact live no-available-depth notice through the public API",
+		runAPI:      runAPIMarketDepthSmartAAPL,
 	},
 
 	// --- Reference data ---

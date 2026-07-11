@@ -1,9 +1,9 @@
 package ibkr
 
 // IBKR error and message codes attested in this repository's live-derived
-// captures against IB Gateway server_version 200. Meanings follow the
-// official TWS API message-code tables. Only attested codes are registered;
-// the set grows as live captures attest new ones.
+// IB Gateway captures. Meanings follow the official TWS API message-code
+// tables. Only attested codes are registered; the set grows as live captures
+// attest new ones.
 const (
 	// ErrCodeCancelNotCancellableState: a cancel was attempted while the
 	// order was not in a cancellable state (already cancelled or filled);
@@ -82,6 +82,10 @@ const (
 	// ErrCodeHistoricalDataFarmInactive: historical (HMDS) data farm
 	// connection is inactive but should be available upon demand.
 	ErrCodeHistoricalDataFarmInactive = 2107
+	// ErrCodeSmartDepthExchanges: a SMART market-depth availability notice
+	// listing exchanges that can supply depth and exchanges that need
+	// additional permissions. It is nonterminal; depth rows may follow.
+	ErrCodeSmartDepthExchanges = 2152
 	// ErrCodeSecDefDataFarmOK: security-definition data farm connection is
 	// OK.
 	ErrCodeSecDefDataFarmOK = 2158
@@ -179,13 +183,15 @@ func (e *APIError) IsFarmStatus() bool {
 // IsWarning reports whether the code is informational rather than a request
 // failure: the farm-status set (see [APIError.IsFarmStatus]),
 // [ErrCodeDelayedMarketDataDisplayed] (the stream continues with delayed
-// ticks), and [ErrCodeOrderMessage] (the order stays working at IB; live
-// replays show it still cancellable after the warning).
+// ticks), [ErrCodeSmartDepthExchanges] (available depth venues), and
+// [ErrCodeOrderMessage] (the order stays working at IB; live replays show it
+// still cancellable after the warning).
 //
 // The engine consults this predicate for order-targeted sub-10000 codes to
 // deliver [OrderEvent].Warning without closing the handle; the 10xxx band's
 // order handling is attestation-gated separately, so a newly attested
 // order-targeted 10xxx warning needs its own wiring there.
 func (e *APIError) IsWarning() bool {
-	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed || e.Code == ErrCodeOrderMessage
+	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed ||
+		e.Code == ErrCodeSmartDepthExchanges || e.Code == ErrCodeOrderMessage
 }

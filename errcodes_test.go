@@ -37,6 +37,7 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeHistoricalDataFarmOK, farmStatus: true, warning: true},
 		{code: ErrCodeHistoricalDataFarmInactive, farmStatus: true, warning: true},
 		{code: ErrCodeSecDefDataFarmOK, farmStatus: true, warning: true},
+		{code: ErrCodeSmartDepthExchanges, warning: true},
 		{code: ErrCodeAdditionalSubscriptionRequired, entitlement: true},
 		{code: ErrCodeInvalidFXHedgeOrder},
 		{code: ErrCodeDeepMarketDataNotSupported},
