@@ -1,6 +1,12 @@
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_soft_dollar_tiers {"req_id":"$req1"}
-server soft_dollar_tiers {"req_id":"$req1","tiers":[]}
+# Live-derived from captures/20260711T021018Z-soft_dollar_tiers at
+# server_version 207; events.jsonl sha256:
+# eb77ab22b2e6be7edcdd14a9769aa66ec1885ecc8942aad1381d958c41d249c3.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted. The request and empty tier response
+# are exact captured frames.
+handshake {"server_version":207,"connection_time":"20260711 04:10:18 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAAE8xAA==
+raw server AAAACAAAAE0xADAA
 disconnect

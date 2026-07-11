@@ -105,7 +105,7 @@ func writeTranscriptSkeleton(path string, meta capturelog.Meta, replayEvents []c
 	if _, err := fmt.Fprintf(file, "# Raw transcript skeleton for %s.\n", meta.Scenario); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(file, "# Curate raw steps into typed client/server lines before promotion."); err != nil {
+	if _, err := fmt.Fprintln(file, "# Sanitize sensitive values and retain exact raw frames before promotion."); err != nil {
 		return err
 	}
 	frameState := newCaptureFrameState()

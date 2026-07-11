@@ -1,13 +1,14 @@
 # Transcripts
 
-Behavioral scenarios use a canonical line-based script format. Raw frame
-goldens remain separate and are used only for `internal/wire` and malformed
-frame cases.
+Behavioral scenarios use a canonical line-based script format. Exact raw
+frames are the executable protocol truth; symbolic steps remain only while
+older `server_version 200` fixtures are migrated.
 
 Current state:
 
-- `testing/testhost` uses the production codec in both directions; transcript
-  message names map to real IBKR integer message IDs
+- `testing/testhost` matches exact raw client frames and writes exact raw server
+  frames for migrated fixtures; remaining symbolic steps still use the
+  production codec in both directions
 - checked-in transcripts cover live-grounded scenarios plus deliberate
   transport fault-injection around real message shapes for disconnects,
   partial frames, lifecycle edges, and other protocol failures
@@ -21,7 +22,7 @@ Current state:
 
 ## Goals
 
-- human-diffable
+- traceable to human-readable capture metadata and hashes
 - ordered by runtime sequence
 - machine-validated by repo tooling
 - expressive enough for delays, disconnects, partial frames, and bindings
@@ -69,9 +70,10 @@ server contract_details_end {"req_id":"$req1"}
 it should be treated as replay tooling rather than as a place to define IBKR
 protocol semantics.
 
-- Client traffic is decoded and matched against the script.
-- Server traffic is encoded from the script and written through the same wire
-  framing as production code.
+- Raw client traffic is matched byte-for-byte. Remaining symbolic client
+  traffic is decoded and matched against the script.
+- Raw server traffic is written byte-for-byte. Remaining symbolic server
+  traffic is encoded from the script through the production codec.
 - Partial writes, malformed frames, delays, and disconnects are driven by the
   script rather than by ad hoc per-test logic.
 

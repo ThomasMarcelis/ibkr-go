@@ -1,6 +1,12 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_user_info {"req_id":"$req_id"}
-server user_info {"req_id":"$req_id","white_branding_id":""}
+# Live-derived from captures/20260711T021018Z-user_info at
+# server_version 207; events.jsonl sha256:
+# 239f07e9f9ee0773b0d09dafd683a2a9bbbe2db6e62b2bd4e79692f5434f740c.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted. The request and empty white-branding
+# response are exact captured frames.
+handshake {"server_version":207,"connection_time":"20260711 04:10:18 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAACAAAAGgxADEA
+raw server AAAABwAAAGsxAAA=
 disconnect

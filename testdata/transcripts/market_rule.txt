@@ -1,12 +1,12 @@
-# Grounded by paper IB Gateway server_version 200 capture
-# captures/v1/market_rule.log.
-# capture sha256: 5e605cb62a4888d45ccd6f7efa3d57cde9b50f0c6b07d4387cd924c46b4b2f10
-#
-# The bootstrap account and connection time are sanitized. Ambient farm-status
-# frames are omitted. The market-rule response is exact.
-handshake {"server_version":200,"connection_time":"20260405 14:33:48 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_market_rule {"market_rule_id":"26"}
-server market_rule {"market_rule_id":26,"increments":[{"low_edge":"0","increment":"0.01"}]}
+# Live-derived from captures/20260711T021018Z-market_rule at
+# server_version 207; events.jsonl sha256:
+# d058b67db2771775dba39e0f8efd7e5dcb76d6953ad666c682cf289f9bd02c1b.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted. The request and rule-26 response are
+# exact captured frames.
+handshake {"server_version":207,"connection_time":"20260711 04:10:17 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAABwAAAFsyNgA=
+raw server AAAAEAAAAF0yNgAxADAAMC4wMQA=
 disconnect
