@@ -953,6 +953,16 @@ var scenarios = map[string]*scenario{
 		description: "public API campaign for AAPL resting order types and cancel/reject behavior",
 		runAPI:      runAPIOrderRestCancelAAPL,
 	},
+	"api_order_direct_cancel_aapl": {
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Cancel", "Client.CurrentTime"}, []int{protocol.OutPlaceOrder, protocol.InOpenOrder, protocol.InOrderStatus, protocol.OutCancelOrder, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "paper_order", []string{"paper_trading"}, []string{"same-client top-level direct cancel reaches typed terminal cancellation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+		description: "place a resting AAPL limit order and cancel it through Orders().Cancel",
+		runAPI:      runAPIOrderDirectCancelAAPL,
+	},
+	"api_bracket_place_aapl": {
+		metadata:    metaWithAssets("orders", []string{"Orders().PlaceBracket", "Orders().CancelAll", "Orders().Open", "Client.CurrentTime"}, []int{protocol.OutPlaceOrder, protocol.InOpenOrder, protocol.InOrderStatus, protocol.OutReqGlobalCancel, protocol.OutReqOpenOrders, protocol.InOpenOrderEnd, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "paper_order", []string{"paper_trading"}, []string{"direct PlaceBracket allocates consecutive IDs, binds child parent IDs, stages false/false/true transmit frames, and cleans every leg"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+		description: "place and clean up a nonmarketable AAPL bracket through Orders().PlaceBracket",
+		runAPI:      runAPIBracketPlaceAAPL,
+	},
 	"api_order_relative_cancel_aapl": {
 		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading"}, []string{"REL rest/cancel behavior isolated because Gateway can reconnect during relative order validation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for AAPL relative order behavior",

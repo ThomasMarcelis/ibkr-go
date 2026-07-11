@@ -2127,6 +2127,124 @@ func runAPIOrderRestCancelAAPL(ctx context.Context, addr string, clientID int) e
 	})
 }
 
+func runAPIOrderDirectCancelAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
+		order := withLimit(baseAPIOrder(account, apiSingleContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
+		handle, err := placeAPIOrder(ctx, client, "direct cancel resting", apiAAPL, order)
+		if err != nil {
+			return fmt.Errorf("place direct-cancel order: %w", err)
+		}
+		open, err := awaitOpenOrderEvidence(ctx, handle, "direct cancel resting", 15*time.Second)
+		if err != nil {
+			return err
+		}
+		if ibkr.IsTerminalOrderStatus(open.Status) {
+			return fmt.Errorf("direct-cancel order reached terminal status %s before cancellation", open.Status)
+		}
+
+		recordAPIEvent("direct_cancel_start", "direct cancel resting", func(event *apiDriverEvent) {
+			event.OrderID = handle.OrderID()
+		})
+		if err := guardedCancelOrder(ctx, client, account, handle.OrderID(), "direct order cancellation"); err != nil {
+			return fmt.Errorf("direct cancel order %d: %w", handle.OrderID(), err)
+		}
+		recordAPIEvent("direct_cancel_sent", "direct cancel resting", func(event *apiDriverEvent) {
+			event.OrderID = handle.OrderID()
+		})
+		obs := observeOrder(ctx, handle, "direct cancel terminal", 20*time.Second)
+		if obs.lastStatus != ibkr.OrderStatusCancelled && obs.lastStatus != ibkr.OrderStatusApiCancelled {
+			return fmt.Errorf("direct-cancel order status = %s, want Cancelled or ApiCancelled", obs.lastStatus)
+		}
+		return fenceAPIWrites(ctx, client, "direct order cancellation")
+	})
+}
+
+func runAPIBracketPlaceAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
+		quantity := apiSingleContractQuantity
+		request := ibkr.PlaceBracketRequest{
+			Contract: apiAAPL,
+			Parent: withLimit(
+				baseAPIOrder(account, quantity, ibkr.ActionBuy, ibkr.OrderTypeLimit),
+				farBuy(anchor),
+			),
+			TakeProfit: withLimit(
+				baseAPIOrder(account, quantity, ibkr.ActionSell, ibkr.OrderTypeLimit),
+				farSell(anchor),
+			),
+			StopLoss: withAux(
+				baseAPIOrder(account, quantity, ibkr.ActionSell, ibkr.OrderTypeStop),
+				farBuy(anchor).Div(decimal.NewFromInt(2)).Round(2),
+			),
+		}
+		recordAPIEvent("place_bracket_start", "resting bracket", func(event *apiDriverEvent) {
+			event.Account = account
+			event.Symbol = apiAAPL.Symbol
+			event.Quantity = quantity.String()
+		})
+		bracket, err := client.Orders().PlaceBracket(ctx, request)
+		if err != nil {
+			return fmt.Errorf("place resting bracket: %w", err)
+		}
+		parentID := bracket.Parent.OrderID()
+		if bracket.TakeProfit.OrderID() != parentID+1 || bracket.StopLoss.OrderID() != parentID+2 {
+			return fmt.Errorf("bracket order IDs = %d/%d/%d, want consecutive IDs", parentID, bracket.TakeProfit.OrderID(), bracket.StopLoss.OrderID())
+		}
+		recordAPIEvent("place_bracket_sent", "resting bracket", func(event *apiDriverEvent) {
+			event.OrderID = parentID
+			event.Values = map[string]string{
+				"take_profit_id": strconv.FormatInt(bracket.TakeProfit.OrderID(), 10),
+				"stop_loss_id":   strconv.FormatInt(bracket.StopLoss.OrderID(), 10),
+			}
+		})
+
+		parentOpen, err := awaitOpenOrderEvidence(ctx, bracket.Parent, "bracket parent", 15*time.Second)
+		if err != nil {
+			return err
+		}
+		takeProfitOpen, err := awaitOpenOrderEvidence(ctx, bracket.TakeProfit, "bracket take-profit", 15*time.Second)
+		if err != nil {
+			return err
+		}
+		stopLossOpen, err := awaitOpenOrderEvidence(ctx, bracket.StopLoss, "bracket stop-loss", 15*time.Second)
+		if err != nil {
+			return err
+		}
+		if parentOpen.ParentID != 0 || takeProfitOpen.ParentID != parentID || stopLossOpen.ParentID != parentID {
+			return fmt.Errorf("bracket callback parent IDs = %d/%d/%d, want 0/%d/%d", parentOpen.ParentID, takeProfitOpen.ParentID, stopLossOpen.ParentID, parentID, parentID)
+		}
+
+		if err := guardedCancelAll(ctx, client, account, "resting bracket cleanup"); err != nil {
+			return fmt.Errorf("cancel resting bracket: %w", err)
+		}
+		for _, leg := range []struct {
+			label  string
+			handle *ibkr.OrderHandle
+		}{
+			{"bracket parent cleanup", bracket.Parent},
+			{"bracket take-profit cleanup", bracket.TakeProfit},
+			{"bracket stop-loss cleanup", bracket.StopLoss},
+		} {
+			obs := observeOrder(ctx, leg.handle, leg.label, 15*time.Second)
+			if obs.lastStatus != ibkr.OrderStatusCancelled && obs.lastStatus != ibkr.OrderStatusApiCancelled {
+				return fmt.Errorf("%s status = %s, want Cancelled or ApiCancelled", leg.label, obs.lastStatus)
+			}
+		}
+		openOrders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
+		if err != nil {
+			return fmt.Errorf("verify bracket cleanup: %w", err)
+		}
+		for _, open := range openOrders {
+			if open.OrderID == parentID || open.OrderID == parentID+1 || open.OrderID == parentID+2 {
+				return fmt.Errorf("bracket order %d survived cleanup", open.OrderID)
+			}
+		}
+		return fenceAPIWrites(ctx, client, "resting bracket cleanup")
+	})
+}
+
 func runAPIOrderRelativeCancelAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
@@ -4179,6 +4297,36 @@ type orderObservation struct {
 	filledQty    decimal.Decimal
 	lastStatus   ibkr.OrderStatus
 	terminal     bool
+}
+
+func awaitOpenOrderEvidence(ctx context.Context, handle *ibkr.OrderHandle, label string, wait time.Duration) (ibkr.OpenOrder, error) {
+	timer := time.NewTimer(wait)
+	defer timer.Stop()
+	for {
+		select {
+		case event, ok := <-handle.Events():
+			if !ok {
+				if err := handle.Wait(); err != nil {
+					return ibkr.OpenOrder{}, fmt.Errorf("%s closed before open-order evidence: %w", label, err)
+				}
+				return ibkr.OpenOrder{}, fmt.Errorf("%s closed before open-order evidence", label)
+			}
+			logOrderEvent(label, event)
+			recordOrderEvent(label, event)
+			if event.OpenOrder != nil {
+				return *event.OpenOrder, nil
+			}
+		case <-handle.Done():
+			if err := handle.Wait(); err != nil {
+				return ibkr.OpenOrder{}, fmt.Errorf("%s ended before open-order evidence: %w", label, err)
+			}
+			return ibkr.OpenOrder{}, fmt.Errorf("%s ended before open-order evidence", label)
+		case <-timer.C:
+			return ibkr.OpenOrder{}, fmt.Errorf("%s produced no open-order evidence within %s", label, wait)
+		case <-ctx.Done():
+			return ibkr.OpenOrder{}, ctx.Err()
+		}
+	}
 }
 
 func (o orderObservation) AnyFill() bool {
