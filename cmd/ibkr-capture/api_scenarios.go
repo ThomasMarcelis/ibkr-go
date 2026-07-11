@@ -2853,9 +2853,9 @@ func runAPIPnL(ctx context.Context, addr string, clientID int) error {
 		recordAPIEvent("pnl", "account", func(event *apiDriverEvent) {
 			event.Count = count
 			event.Values = map[string]string{
-				"daily":      update.DailyPnL.String(),
-				"unrealized": update.UnrealizedPnL.String(),
-				"realized":   update.RealizedPnL.String(),
+				"daily":      optionalDecimalString(update.DailyPnL),
+				"unrealized": optionalDecimalString(update.UnrealizedPnL),
+				"realized":   optionalDecimalString(update.RealizedPnL),
 			}
 		})
 		return nil
@@ -2912,10 +2912,10 @@ func runAPIPnLSingle(ctx context.Context, addr string, clientID int) error {
 			event.Values = map[string]string{
 				"con_id":     strconv.Itoa(held.Contract.ConID),
 				"position":   update.Position.String(),
-				"daily":      update.DailyPnL.String(),
-				"unrealized": update.UnrealizedPnL.String(),
-				"realized":   update.RealizedPnL.String(),
-				"value":      update.Value.String(),
+				"daily":      optionalDecimalString(update.DailyPnL),
+				"unrealized": optionalDecimalString(update.UnrealizedPnL),
+				"realized":   optionalDecimalString(update.RealizedPnL),
+				"value":      optionalDecimalString(update.Value),
 			}
 		})
 		return nil
