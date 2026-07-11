@@ -315,9 +315,13 @@ func TestQuoteSnapshot(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType() error = %v", err)
+	}
 
 	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -327,11 +331,14 @@ func TestQuoteSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QuoteSnapshot() error = %v", err)
 	}
-	if quote.Bid.String() != "189.1" {
-		t.Fatalf("bid = %s, want 189.1", quote.Bid.String())
+	if quote.Bid.String() != "314.9" {
+		t.Fatalf("bid = %s, want 314.9", quote.Bid.String())
 	}
-	if quote.Ask.String() != "189.15" {
-		t.Fatalf("ask = %s, want 189.15", quote.Ask.String())
+	if quote.Ask.String() != "315.05" {
+		t.Fatalf("ask = %s, want 315.05", quote.Ask.String())
+	}
+	if quote.MarketDataType != ibkr.MarketDataDelayed {
+		t.Fatalf("market data type = %s, want delayed", quote.MarketDataType)
 	}
 }
 
@@ -2239,38 +2246,6 @@ func TestBootstrapWithFarmStatusCodes(t *testing.T) {
 		if !farmCodes[code] {
 			t.Errorf("farm-status code %d not observed in session events", code)
 		}
-	}
-}
-
-func TestQuoteSnapshotDelayedData(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "quote_delayed_data.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	})
-	if err != nil {
-		t.Fatalf("QuoteSnapshot() error = %v", err)
-	}
-	if quote.Bid.String() != "188.5" {
-		t.Fatalf("bid = %s, want 188.5", quote.Bid.String())
-	}
-	if quote.Ask.String() != "188.6" {
-		t.Fatalf("ask = %s, want 188.6", quote.Ask.String())
-	}
-	if quote.MarketDataType != 3 {
-		t.Fatalf("market data type = %d, want 3 (delayed)", quote.MarketDataType)
 	}
 }
 

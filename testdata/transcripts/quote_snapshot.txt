@@ -1,10 +1,25 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":true,"generic_ticks":[]}
-server market_data_type {"req_id":"$req1","data_type":1}
-server tick_price {"req_id":"$req1","field":1,"price":"189.10"}
-server tick_size {"req_id":"$req1","field":0,"size":"400"}
-server tick_price {"req_id":"$req1","field":2,"price":"189.15"}
-server tick_snapshot_end {"req_id":"$req1"}
+# Exact public API capture from read-only IB Gateway server_version 206.
+# Source: /tmp/ibkr-go-subscriptions-20260710/20260710T233236Z-quote_snapshot_aapl
+# events.jsonl sha256: a854ac41c4e0073f7578f2d2ac4a2c4b1f0954bd243c49167beda62f5f159e3e
+#
+# The account bootstrap is length-preserving redacted to DU9000001. Ambient
+# farm-status frames are omitted. The delayed-data selection, resolved AAPL
+# snapshot request, all twelve typed quote fields, and snapshot end are exact.
+handshake {"server_version":206,"connection_time":"20260711 01:32:36 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAAQMIAw==
+raw client AAAAJQAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+raw server AAAACAAAAQIIARAD
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw server AAAAFwAAAMkIARBEGQAAAAAAsHNAIgI2NCgA
+raw server AAAAFAAAAPYIARBYGgoxNzgzNzI1MjQw
+raw server AAAAFgAAAMkIARBIGcP1KFyPznNAIgEwKAA=
+raw server AAAAFgAAAMkIARBJGR+F61G4gnNAIgEwKAA=
+raw server AAAAFQAAAMoIARBKGgstMTU1MzU1NjE3NQ==
+raw server AAAAFgAAAMkIARBLGexRuB6Fw3NAIgEwKAA=
+raw server AAAAFgAAAMkIARBMGTMzMzMzq3NAIgEwKAA=
+raw server AAAAFwAAAMkIARBCGWZmZmZmrnNAIgI0MCgA
+raw server AAAAFwAAAMkIARBDGc3MzMzMsHNAIgI4MCgA
+raw server AAAABgAAAQEIAQ==
 disconnect
