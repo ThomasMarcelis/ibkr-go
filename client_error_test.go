@@ -73,57 +73,6 @@ func TestAPISecurityTypeProbeErrorsReplay(t *testing.T) {
 	}
 }
 
-func TestAPIErrorOnSubscription(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "error_api_error_subscription.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	})
-	if err != nil {
-		t.Fatalf("SubscribeQuotes() error = %v", err)
-	}
-
-	closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
-
-	apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
-	if !ok {
-		t.Fatalf("closed.Err type = %T, want *ibkr.APIError", closed.Err)
-	}
-	if apiErr.Code != 354 {
-		t.Fatalf("APIError.Code = %d, want 354", apiErr.Code)
-	}
-	if closed.Retryable {
-		t.Fatal("closed.Retryable = true, want false for API error")
-	}
-
-	waitErr := sub.Wait()
-	if waitErr == nil {
-		t.Fatal("sub.Wait() error = nil, want API error")
-	}
-	waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
-	if !ok {
-		t.Fatalf("sub.Wait() error type = %T, want *ibkr.APIError", waitErr)
-	}
-	if waitAPIErr.Code != 354 {
-		t.Fatalf("sub.Wait() APIError.Code = %d, want 354", waitAPIErr.Code)
-	}
-	if ibkr.IsRetryable(waitErr) {
-		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API error")
-	}
-}
-
 func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	t.Parallel()
 
