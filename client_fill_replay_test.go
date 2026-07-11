@@ -786,7 +786,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	events := client.SessionEvents()
 
 	ref := func(n int) string {
-		return fmt.Sprintf("ibkrgo-sanitized-20260611T133103Z-%03d", n)
+		return fmt.Sprintf("ibkrgo-redacted-20260611T133104Z-%03d", n)
 	}
 	place := func(t *testing.T, order ibkr.Order, refNum int, wantID int64) (*ibkr.OrderHandle, *orderEventLog) {
 		t.Helper()
