@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -154,9 +155,14 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("ibkr: invalid %s %q: %s", e.Field, e.Value, e.Message)
 }
 
-// IsRetryable reports whether err represents a transient client/session
-// condition that a caller may retry. IBKR API errors are server-side request
-// rejections and are not retryable by default.
+// IsRetryable reports whether retrying with backoff is safe and useful.
+// It returns true for [ErrNotReady], [ErrInterrupted], [ErrResumeRequired],
+// transient [ConnectError] values, and [APIError.IsPacingViolation]. It returns
+// false for caller context cancellation, protocol and validation failures,
+// ordinary API rejections, [ErrSlowConsumer], [ErrClosed],
+// [OrderRecoveryError], and [SubscriptionCancelError]. The two recovery error
+// types remain non-retryable even when they wrap a transient error because a
+// blind retry could duplicate a live order or subscription.
 func IsRetryable(err error) bool {
 	return isRetryableError(err)
 }
@@ -176,8 +182,23 @@ func isRetryableError(err error) bool {
 	if _, ok := errors.AsType[*SubscriptionCancelError](err); ok {
 		return false
 	}
-	if _, ok := errors.AsType[*APIError](err); ok {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	return errors.Is(err, ErrInterrupted) || errors.Is(err, ErrResumeRequired)
+	if apiErr, ok := errors.AsType[*APIError](err); ok {
+		return apiErr.IsPacingViolation()
+	}
+	if errors.Is(err, ErrNotReady) || errors.Is(err, ErrInterrupted) || errors.Is(err, ErrResumeRequired) {
+		return true
+	}
+	if _, ok := errors.AsType[*ValidationError](err); ok {
+		return false
+	}
+	if _, ok := errors.AsType[*ProtocolError](err); ok {
+		return false
+	}
+	if _, ok := errors.AsType[*ConnectError](err); ok {
+		return !errors.Is(err, ErrUnsupportedServerVersion)
+	}
+	return false
 }

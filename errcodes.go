@@ -1,15 +1,25 @@
 package ibkr
 
+import "strings"
+
 // IBKR error and message codes attested in this repository's live-derived
-// IB Gateway captures. Meanings follow the official TWS API message-code
-// tables. Only attested codes are registered; the set grows as live captures
-// attest new ones.
+// IB Gateway captures or defined by the official TWS API message-code tables.
+// The set stays deliberately narrow: register a code only when its public
+// classification is useful and its meaning is grounded in primary evidence.
 const (
+	// ErrCodeMaxMessageRate means the client exceeded the Gateway's maximum
+	// outbound message rate. The official table says the Gateway will likely
+	// disconnect the client after this error.
+	ErrCodeMaxMessageRate = 100
 	// ErrCodeCancelNotCancellableState: a cancel was attempted while the
 	// order was not in a cancellable state (already cancelled or filled);
 	// the live Gateway appends the order's permId to the message. This is a
 	// cancellation reply, not an order-placement failure.
 	ErrCodeCancelNotCancellableState = 161
+	// ErrCodeHistoricalDataService is the generic HMDS service-error envelope.
+	// The message, not this code alone, distinguishes pacing violations from
+	// other historical-data failures.
+	ErrCodeHistoricalDataService = 162
 	// ErrCodeHistoricalDataQueryMessage: an HMDS query message. The scanner
 	// route recognizes its exact live "no items retrieved" form as
 	// nonterminal because the Gateway follows it with a valid empty result.
@@ -194,4 +204,37 @@ func (e *APIError) IsFarmStatus() bool {
 func (e *APIError) IsWarning() bool {
 	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed ||
 		e.Code == ErrCodeSmartDepthExchanges || e.Code == ErrCodeOrderMessage
+}
+
+// IsPacingViolation reports whether the error requires retrying with backoff.
+// Code [ErrCodeMaxMessageRate] is always a pacing violation. Historical and
+// real-time query errors use generic codes, so they qualify only when the
+// Gateway message explicitly identifies a pacing violation.
+func (e *APIError) IsPacingViolation() bool {
+	if e.Code == ErrCodeMaxMessageRate {
+		return true
+	}
+	return (e.Code == ErrCodeHistoricalDataService || e.Code == ErrCodeInvalidRealTimeQuery) &&
+		strings.Contains(strings.ToLower(e.Message), "pacing violation")
+}
+
+// IsOrderRejection reports whether the error is in the live-attested set that
+// proves a placement failed before the Gateway exposed working-order evidence.
+// Unknown order-targeted errors are deliberately excluded because detaching a
+// live order is more dangerous than retaining its handle and surfacing a
+// warning.
+func (e *APIError) IsOrderRejection() bool {
+	return isOrderRejectionCode(e.Code)
+}
+
+func isOrderRejectionCode(code int) bool {
+	switch code {
+	case ErrCodeNoSecurityDefinition, ErrCodeOrderRejected,
+		ErrCodeServerErrorReadingRequest, ErrCodeServerErrorValidatingRequest,
+		ErrCodeTrailingStopAttachRejected, ErrCodeUnsupportedOrderType,
+		ErrCodeAlgoDefinitionNotFound, ErrCodeUnknownAlgoAttribute,
+		ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed:
+		return true
+	}
+	return false
 }

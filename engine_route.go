@@ -420,15 +420,7 @@ func isOrderCancellationReply(code int) bool {
 // and every error after working evidence remain warnings: detaching a live
 // order is the dangerous failure direction.
 func isInitialOrderRejection(code int) bool {
-	switch code {
-	case ErrCodeNoSecurityDefinition, ErrCodeOrderRejected,
-		ErrCodeServerErrorReadingRequest, ErrCodeServerErrorValidatingRequest,
-		ErrCodeTrailingStopAttachRejected, ErrCodeUnsupportedOrderType,
-		ErrCodeAlgoDefinitionNotFound, ErrCodeUnknownAlgoAttribute,
-		ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed:
-		return true
-	}
-	return false
+	return isOrderRejectionCode(code)
 }
 
 func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
