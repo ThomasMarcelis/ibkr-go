@@ -144,25 +144,6 @@ func sendReqPositions(conn net.Conn) error {
 	return sendMessage(conn, []string{"61", "1"})
 }
 
-// --- Market data (msg_id=1) / cancel (msg_id=2) ---
-//
-//	[1, version=11, reqId, <contract fields no includeExpired>,
-//	 (combo legs if BAG), (delta neutral if v>=40),
-//	 genericTickList, snapshot, regulatorySnapshot, mktDataOptions]
-func sendReqMktData(conn net.Conn, reqID, _ int, c contractSpec, genericTicks string, snapshot bool) error {
-	fields := []string{"1", "11", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFieldsNoExpired(c)...)
-	// Skip BAG combo legs (not used for STK here).
-	fields = append(fields, "0") // deltaNeutralContract present bool = false
-	fields = append(fields,
-		genericTicks,
-		boolField(snapshot),
-		"0", // regulatorySnapshot=false
-		"",  // mktDataOptions empty tag-value list
-	)
-	return sendMessage(conn, fields)
-}
-
 // sendReqEFPMarketData sends the BAG shape used by IBKR's EFP sample: one
 // single-stock future leg against the future multiplier's number of shares.
 // EFP tick IDs 38-44 are default outputs for this contract, not values for the

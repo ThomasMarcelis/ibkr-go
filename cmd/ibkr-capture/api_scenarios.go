@@ -1113,6 +1113,43 @@ func runAPISetMarketDataDelayedFrozen(ctx context.Context, addr string, clientID
 	return runAPISetMarketDataType(ctx, addr, clientID, ibkr.MarketDataDelayedFrozen)
 }
 
+func runAPISetTypeSwitchWhileStreaming(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiAAPL}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL quotes: %w", err)
+		}
+		var sawDelayedType, sawPriceOrSize bool
+		count, err := awaitSubscriptionEvidence(ctx, sub, 12*time.Second, func(update ibkr.QuoteUpdate) bool {
+			sawDelayedType = sawDelayedType || update.Snapshot.MarketDataType == ibkr.MarketDataDelayed
+			sawPriceOrSize = sawPriceOrSize || update.Changed&apiQuotePriceOrSizeFields != 0
+			return sawDelayedType && sawPriceOrSize
+		})
+		if err != nil {
+			_ = sub.Close()
+			return fmt.Errorf("observe delayed AAPL quote stream: %w", err)
+		}
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
+			_ = sub.Close()
+			return fmt.Errorf("switch AAPL quote stream to live: %w", err)
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "market-data type switch cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("market_data_type_switch", "delayed_to_live", func(event *apiDriverEvent) {
+			event.Count = count
+			event.Values = map[string]string{
+				"delayed_type_observed":  strconv.FormatBool(sawDelayedType),
+				"price_or_size_observed": strconv.FormatBool(sawPriceOrSize),
+			}
+		})
+		return nil
+	})
+}
+
 func runAPIQuoteSnapshotAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {

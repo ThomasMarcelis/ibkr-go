@@ -264,41 +264,10 @@ var scenarios = map[string]*scenario{
 		description: "select delayed-frozen market data through the public API",
 		runAPI:      runAPISetMarketDataDelayedFrozen,
 	},
-	"set_type_invalid": {
-		metadata:    meta("market_data", []string{"MarketData().SetType"}, []int{59, 4}, "read_only", nil, []string{"real IBKR invalid data type error"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQ_MARKET_DATA_TYPE=99 (invalid), drain for real IBKR API error",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 99); err != nil {
-				return err
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stopOnMsgID(4))
-		},
-	},
 	"set_type_switch_while_streaming": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{59, 1, 2, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"setType push observed mid-stream"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "Start delayed quote stream, switch SetType to live mid-stream, drain, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqID := nextReqID()
-			if err := sendReqMktData(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "", false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendReqMarketDataType(conn, 1); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 2*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InMarketDataType, protocol.InTickPrice, protocol.InTickSize, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"delayed type and price/size evidence followed by accepted live switch and fenced cancellation"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "switch an active delayed AAPL quote stream to live through the public API",
+		runAPI:      runAPISetTypeSwitchWhileStreaming,
 	},
 
 	// --- Market data quotes ---
