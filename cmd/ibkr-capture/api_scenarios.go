@@ -28,6 +28,10 @@ var apiAAPL = ibkr.Contract{
 	Currency: "USD",
 }
 
+const apiQuotePriceOrSizeFields = ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldLast |
+	ibkr.QuoteFieldBidSize | ibkr.QuoteFieldAskSize | ibkr.QuoteFieldLastSize |
+	ibkr.QuoteFieldOpen | ibkr.QuoteFieldHigh | ibkr.QuoteFieldLow | ibkr.QuoteFieldClose
+
 func optionalDecimalString(value *decimal.Decimal) string {
 	if value == nil {
 		return ""
@@ -1118,10 +1122,7 @@ func runAPIQuoteSnapshotAAPL(ctx context.Context, addr string, clientID int) err
 		if err != nil {
 			return fmt.Errorf("AAPL quote snapshot: %w", err)
 		}
-		const priceOrSize = ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldLast |
-			ibkr.QuoteFieldBidSize | ibkr.QuoteFieldAskSize | ibkr.QuoteFieldLastSize |
-			ibkr.QuoteFieldOpen | ibkr.QuoteFieldHigh | ibkr.QuoteFieldLow | ibkr.QuoteFieldClose
-		if quote.Available == 0 || quote.Available&priceOrSize == 0 {
+		if quote.Available == 0 || quote.Available&apiQuotePriceOrSizeFields == 0 {
 			return fmt.Errorf("AAPL quote snapshot availability %d contains no price or size", quote.Available)
 		}
 		recordAPIEvent("quote_snapshot", "aapl", func(event *apiDriverEvent) {
@@ -1145,11 +1146,8 @@ func runAPIQuoteStreamAAPL(ctx context.Context, addr string, clientID int) error
 		if err != nil {
 			return fmt.Errorf("subscribe AAPL quotes: %w", err)
 		}
-		const priceOrSize = ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldLast |
-			ibkr.QuoteFieldBidSize | ibkr.QuoteFieldAskSize | ibkr.QuoteFieldLastSize |
-			ibkr.QuoteFieldOpen | ibkr.QuoteFieldHigh | ibkr.QuoteFieldLow | ibkr.QuoteFieldClose
 		count, err := awaitSubscriptionEvidence(ctx, sub, 12*time.Second, func(update ibkr.QuoteUpdate) bool {
-			return update.Changed&priceOrSize != 0
+			return update.Changed&apiQuotePriceOrSizeFields != 0
 		})
 		if err != nil {
 			return fmt.Errorf("observe AAPL quote stream: %w", err)
@@ -1161,6 +1159,63 @@ func runAPIQuoteStreamAAPL(ctx context.Context, addr string, clientID int) error
 			event.Symbol = apiAAPL.Symbol
 			event.SecType = string(apiAAPL.SecType)
 			event.Count = count
+		})
+		return nil
+	})
+}
+
+func runAPIQuoteStreamMultiAsset(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("set delayed market data: %w", err)
+		}
+		aapl, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiAAPL}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL quotes: %w", err)
+		}
+		eurusd, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiEURUSD}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			_ = aapl.Close()
+			return fmt.Errorf("subscribe EUR.USD quotes: %w", err)
+		}
+		aaplCount, err := awaitSubscriptionEvidence(ctx, aapl, 15*time.Second, func(update ibkr.QuoteUpdate) bool {
+			return update.Changed&apiQuotePriceOrSizeFields != 0
+		})
+		if err != nil {
+			_ = aapl.Close()
+			_ = eurusd.Close()
+			return fmt.Errorf("observe AAPL quote stream: %w", err)
+		}
+		eurusdCount, err := awaitSubscriptionEvidence(ctx, eurusd, 15*time.Second, func(update ibkr.QuoteUpdate) bool {
+			return update.Changed&apiQuotePriceOrSizeFields != 0
+		})
+		if err != nil {
+			_ = aapl.Close()
+			_ = eurusd.Close()
+			return fmt.Errorf("observe EUR.USD quote stream: %w", err)
+		}
+		if err := aapl.Close(); err != nil {
+			_ = eurusd.Close()
+			return fmt.Errorf("AAPL quote stream cancellation: %w", err)
+		}
+		if err := eurusd.Close(); err != nil {
+			return fmt.Errorf("EUR.USD quote stream cancellation: %w", err)
+		}
+		if err := aapl.Wait(); err != nil {
+			return fmt.Errorf("AAPL quote stream cancellation wait: %w", err)
+		}
+		if err := eurusd.Wait(); err != nil {
+			return fmt.Errorf("EUR.USD quote stream cancellation wait: %w", err)
+		}
+		if err := fenceAPIWrites(ctx, client, "multi-asset quote cancellations"); err != nil {
+			return err
+		}
+		recordAPIEvent("quote_stream_multi_asset", "aapl_eurusd", func(event *apiDriverEvent) {
+			event.Count = aaplCount + eurusdCount
+			event.Values = map[string]string{
+				"aapl_count":   strconv.Itoa(aaplCount),
+				"eurusd_count": strconv.Itoa(eurusdCount),
+			}
 		})
 		return nil
 	})

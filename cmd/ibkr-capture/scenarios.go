@@ -480,31 +480,9 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"quote_stream_multi_asset": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58}, "read_only", []string{"market_data_or_delayed_data"}, []string{"concurrent quote streams for multiple asset classes"}, 1, "candidate", batchNewV2, batchReadOnly),
-		description: "concurrent delayed REQ_MKT_DATA streams for AAPL stock and EUR.USD cash, then cancel both",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqMarketDataType(conn, 3); err != nil {
-				return err
-			}
-			reqAAPL := nextReqID()
-			reqEURUSD := nextReqID()
-			if err := sendReqMktData(conn, reqAAPL, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "100,101,104,106,233,236,258", false); err != nil {
-				return err
-			}
-			if err := sendReqMktData(conn, reqEURUSD, sess.ServerVersion, contractSpec{Symbol: "EUR", SecType: "CASH", Exchange: "IDEALPRO", Currency: "USD"}, "", false); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 20*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelMktData(conn, reqAAPL); err != nil {
-				return err
-			}
-			if err := sendCancelMktData(conn, reqEURUSD); err != nil {
-				return err
-			}
-			return readFrames(conn, 2*time.Second, logFrame, nil)
-		},
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickGeneric, protocol.InTickString}, "read_only", []string{"market_data_or_delayed_data"}, []string{"concurrent stock and FX quote streams with real price or size evidence and fenced cancellation"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "observe concurrent delayed AAPL and EUR.USD quote streams through the public API",
+		runAPI:      runAPIQuoteStreamMultiAsset,
 	},
 
 	// --- v1 expanded scope: Batch C4 — streaming subscriptions ---
