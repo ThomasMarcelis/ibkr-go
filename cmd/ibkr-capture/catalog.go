@@ -25,7 +25,6 @@ type scenarioMetadata struct {
 type scenarioCatalogEntry struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
-	Driver      string `json:"driver"`
 	scenarioMetadata
 }
 
@@ -47,9 +46,6 @@ const (
 	batchExhaustiveMarketHours      = "exhaustive-market-hours"
 	batchExhaustivePremarket        = "exhaustive-premarket"
 	batchExhaustivePermissionProbes = "exhaustive-permission-probes"
-
-	driverWire = "wire"
-	driverAPI  = "api"
 
 	captureRoleReadOnlyLive = "readonly-live"
 	captureRolePaperDev     = "paper-dev"
@@ -86,14 +82,12 @@ func catalogEntries() ([]scenarioCatalogEntry, error) {
 	entries := make([]scenarioCatalogEntry, 0, len(names))
 	for _, name := range names {
 		sc := scenarios[name]
-		driver, err := sc.driver()
-		if err != nil {
-			return nil, fmt.Errorf("scenario %s: %w", name, err)
+		if sc.run == nil {
+			return nil, fmt.Errorf("scenario %s: missing runner", name)
 		}
 		entries = append(entries, scenarioCatalogEntry{
 			Name:             name,
 			Description:      sc.description,
-			Driver:           driver,
 			scenarioMetadata: sc.metadata,
 		})
 	}

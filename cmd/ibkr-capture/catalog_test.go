@@ -28,9 +28,6 @@ func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
 		if entry.Domain == "" {
 			t.Errorf("%s missing domain", entry.Name)
 		}
-		if entry.Driver != driverWire && entry.Driver != driverAPI {
-			t.Errorf("%s driver = %q, want %q or %q", entry.Name, entry.Driver, driverWire, driverAPI)
-		}
 		if len(entry.PublicAPI) == 0 {
 			t.Errorf("%s missing public API", entry.Name)
 		}

@@ -1440,6 +1440,116 @@ func runAPIQuoteStreamGenericTicksAAPL(ctx context.Context, addr string, clientI
 	})
 }
 
+func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 35*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
+			return fmt.Errorf("set live market data: %w", err)
+		}
+		contracts := []struct {
+			label    string
+			contract ibkr.Contract
+		}{
+			{
+				label: "dte_eurex",
+				contract: ibkr.Contract{
+					Symbol: "USD", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "EUR",
+					ComboLegs: []ibkr.ComboLeg{
+						{ConID: 667336572, Ratio: 1, Action: ibkr.ActionBuy, Exchange: "EUREX"},
+						{ConID: 2254332, Ratio: 100, Action: ibkr.ActionSell, Exchange: "SMART"},
+					},
+				},
+			},
+			{
+				label: "tencent_hkfe",
+				contract: ibkr.Contract{
+					Symbol: "USD", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "HKD",
+					ComboLegs: []ibkr.ComboLeg{
+						{ConID: 842557048, Ratio: 1, Action: ibkr.ActionBuy, Exchange: "HKFE"},
+						{ConID: 152791428, Ratio: 100, Action: ibkr.ActionSell, Exchange: "SEHK"},
+					},
+				},
+			},
+		}
+
+		type probe struct {
+			label string
+			sub   *ibkr.Subscription[ibkr.QuoteUpdate]
+			count int
+		}
+		probes := make([]probe, 0, len(contracts))
+		for _, candidate := range contracts {
+			sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: candidate.contract}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+			if err != nil {
+				for i := range probes {
+					_ = probes[i].sub.Close()
+					_ = probes[i].sub.Wait()
+				}
+				return fmt.Errorf("subscribe %s EFP quotes: %w", candidate.label, err)
+			}
+			probes = append(probes, probe{label: candidate.label, sub: sub})
+		}
+
+		timer := time.NewTimer(20 * time.Second)
+		defer timer.Stop()
+		firstEvents := probes[0].sub.Events()
+		secondEvents := probes[1].sub.Events()
+		sessionEvents := client.SessionEvents()
+		finished := false
+		for !finished && (firstEvents != nil || secondEvents != nil) {
+			select {
+			case _, ok := <-firstEvents:
+				if ok {
+					probes[0].count++
+				} else {
+					firstEvents = nil
+				}
+			case _, ok := <-secondEvents:
+				if ok {
+					probes[1].count++
+				} else {
+					secondEvents = nil
+				}
+			case event, ok := <-sessionEvents:
+				if !ok {
+					sessionEvents = nil
+					continue
+				}
+				if strings.Contains(event.Message, "unknown msg_id 47") {
+					recordAPIEvent("tick_efp_raw_observed", "", func(driverEvent *apiDriverEvent) {
+						driverEvent.Values = map[string]string{"session_event": event.Message}
+					})
+					finished = true
+				}
+			case <-timer.C:
+				finished = true
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+
+		for i := range probes {
+			_ = probes[i].sub.Close()
+			if err := probes[i].sub.Wait(); err != nil {
+				if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {
+					recordSubscriptionRefusal("tick_efp_probe", probes[i].label, apiErr)
+					continue
+				}
+				return fmt.Errorf("wait for %s EFP cancellation: %w", probes[i].label, err)
+			}
+		}
+		if err := fenceAPIWrites(ctx, client, "EFP quote cancellations"); err != nil {
+			return err
+		}
+		recordAPIEvent("tick_efp_probe", "complete", func(event *apiDriverEvent) {
+			event.Count = probes[0].count + probes[1].count
+			event.Values = map[string]string{
+				probes[0].label + "_updates": strconv.Itoa(probes[0].count),
+				probes[1].label + "_updates": strconv.Itoa(probes[1].count),
+			}
+		})
+		return nil
+	})
+}
 func runAPIRealTimeBarsAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {

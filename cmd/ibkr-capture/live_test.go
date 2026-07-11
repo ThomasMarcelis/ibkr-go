@@ -57,7 +57,7 @@ func runLiveCaptureScenario(t *testing.T, name string, timeout time.Duration) []
 	if !ok {
 		t.Fatalf("scenario %q is not registered", name)
 	}
-	if sc.runAPI == nil {
+	if sc.run == nil {
 		t.Fatalf("scenario %q is not an API scenario", name)
 	}
 
@@ -74,7 +74,7 @@ func runLiveCaptureScenario(t *testing.T, name string, timeout time.Duration) []
 
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	if err := sc.runAPI(ctx, cfg.Addr, sc.metadata.DefaultClientID); err != nil {
+	if err := sc.run(ctx, cfg.Addr, sc.metadata.DefaultClientID); err != nil {
 		t.Fatalf("%s live run: %v", name, err)
 	}
 	events := rec.Events()

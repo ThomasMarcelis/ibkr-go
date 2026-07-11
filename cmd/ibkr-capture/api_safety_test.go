@@ -168,14 +168,14 @@ func TestAPIRunFunctionsUseWrapperMatchingRiskClass(t *testing.T) {
 	t.Cleanup(func() { apiDriver = prev })
 
 	for name, sc := range scenarios {
-		if sc.runAPI == nil {
+		if sc.run == nil {
 			continue
 		}
 		apiDriver = &apiDriverRecorder{scenario: name, definition: sc}
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
-		err := sc.runAPI(ctx, "127.0.0.1:0", 1)
+		err := sc.run(ctx, "127.0.0.1:0", 1)
 		if err != nil && strings.Contains(err.Error(), "trading-wrapper") {
 			t.Errorf("scenario %q is wired to the wrong capture wrapper: %v", name, err)
 		}
@@ -195,13 +195,5 @@ func TestScenarioCaptureRoleMatchesCancelPolicy(t *testing.T) {
 		if wantPaper != gotPaper {
 			t.Errorf("scenario %q: cancels=%t but capture role paper-dev=%t", name, wantPaper, gotPaper)
 		}
-	}
-}
-
-func TestVerifyRawScenarioForSessionAllowsVersion200Probe(t *testing.T) {
-	t.Parallel()
-
-	if err := verifyRawScenarioForSession("tick_efp_probe", &sessionInfo{ServerVersion: 200}); err != nil {
-		t.Fatalf("verifyRawScenarioForSession(tick_efp_probe) = %v, want nil", err)
 	}
 }
