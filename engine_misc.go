@@ -318,6 +318,10 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 
 		e.singletons[singletonFA] = &route{
 			opKind: OpFAConfig,
+			handleAPIErr: func(msg codec.APIError, eng *engine) {
+				delete(eng.singletons, singletonFA)
+				resp <- result{err: eng.apiErr(OpFAConfig, msg)}
+			},
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.ReceiveFA:

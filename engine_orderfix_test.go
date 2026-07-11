@@ -334,6 +334,35 @@ func TestCompletedOrdersReturnsExactLiveReadOnlyRefusal(t *testing.T) {
 	}
 }
 
+func TestFAConfigReturnsExactLiveNonFARefusal(t *testing.T) {
+	// /tmp/ibkr-go-fa-config-public-20260711/20260711T004703Z-request_fa,
+	// server_version 206, events.jsonl sha256
+	// 137e972fe8fa61a398e61c145544c3052753744a27237f3f5f844986f9ae1eb2.
+	e, peer := newObservedMarketDataEngine(t)
+	e.serverVersion = 206
+	result := make(chan error, 1)
+	go func() {
+		_, err := e.RequestFA(context.Background(), FADataGroups)
+		result <- err
+	}()
+	(<-e.cmds)()
+	_ = readObservedFrame(t, peer)
+
+	message, err := codec.Decode(206, liveCapturedFrame(t, "AAAAaQAAAMwQ/7yR9fQzGMECIllFcnJvciB2YWxpZGF0aW5nIHJlcXVlc3QuLSdiNCcgOiBjYXVzZSAtIEZBIGRhdGEgb3BlcmF0aW9ucyBpZ25vcmVkIGZvciBub24gRkEgY3VzdG9tZXJzLg=="))
+	if err != nil {
+		t.Fatalf("decode exact live non-FA refusal: %v", err)
+	}
+	e.handleIncoming(message)
+
+	apiErr, ok := errors.AsType[*APIError](<-result)
+	if !ok || apiErr.OpKind != OpFAConfig || apiErr.Code != ErrCodeServerErrorValidatingRequest {
+		t.Fatalf("Config error = %#v, want typed code-321 FA refusal", apiErr)
+	}
+	if _, ok := e.singletons[singletonFA]; ok {
+		t.Fatal("FA refusal left the singleton route active")
+	}
+}
+
 // TestHandleAPIErrorExerciseRouteShieldsCollidingOrder freezes the Bug 3
 // id-collision invariant: when an exercise request id numerically collides
 // with a live order id, the exercise's keyed route (checked before the order

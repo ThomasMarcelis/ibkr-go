@@ -326,16 +326,18 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 }
 
 func unkeyedAPIErrorSingleton(msg codec.APIError) string {
-	if msg.ReqID > 0 || msg.Code != 321 || !strings.Contains(msg.Message, "The API interface is currently in Read-Only mode") {
+	if msg.ReqID > 0 || msg.Code != 321 {
 		return ""
 	}
 	switch {
-	case strings.Contains(msg.Message, "-'b7'"):
+	case strings.Contains(msg.Message, "-'b7'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonOrderID
-	case strings.Contains(msg.Message, "-'as'"):
+	case strings.Contains(msg.Message, "-'as'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonOpenOrders
-	case strings.Contains(msg.Message, "-'S'"):
+	case strings.Contains(msg.Message, "-'S'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonCompletedOrders
+	case strings.Contains(msg.Message, "-'b4'") && strings.Contains(msg.Message, "FA data operations ignored for non FA customers"):
+		return singletonFA
 	default:
 		return ""
 	}

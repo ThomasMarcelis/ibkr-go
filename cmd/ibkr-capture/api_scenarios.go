@@ -615,6 +615,32 @@ func runAPIDisplayGroups(ctx context.Context, addr string, clientID int) error {
 	})
 }
 
+func runAPIFAConfigGroups(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		document, err := client.Advisors().Config(ctx, ibkr.FADataGroups)
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if ok && apiErr.OpKind == ibkr.OpFAConfig && apiErr.Code == ibkr.ErrCodeServerErrorValidatingRequest &&
+				strings.Contains(apiErr.Message, "Error validating request.-'b4'") && strings.Contains(apiErr.Message, "FA data operations ignored for non FA customers") {
+				if err := fenceAPIWrites(ctx, client, "FA groups refusal"); err != nil {
+					return err
+				}
+				recordAPIEvent("fa_config_refused", "groups", func(event *apiDriverEvent) { event.Error = err.Error() })
+				return nil
+			}
+			return fmt.Errorf("request FA groups: %w", err)
+		}
+		if len(document) == 0 {
+			return errors.New("FA groups response is empty")
+		}
+		if err := fenceAPIWrites(ctx, client, "FA groups response"); err != nil {
+			return err
+		}
+		recordAPIEvent("fa_config", "groups", func(event *apiDriverEvent) { event.Count = len(document) })
+		return nil
+	})
+}
+
 func runAPIOpenOrders(ctx context.Context, addr string, clientID int, scope ibkr.OpenOrdersScope, label string, allowReadOnlyRefusal bool) error {
 	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		orders, err := client.Orders().Open(ctx, scope)

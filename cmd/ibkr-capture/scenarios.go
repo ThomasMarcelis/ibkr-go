@@ -943,28 +943,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIWSHEventDataAAPL,
 	},
 	"request_fa": {
-		metadata:    meta("advisors", []string{"Advisors().Config"}, []int{18, 16}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"FA XML or non-FA error"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "REQUEST_FA groups (faDataType=1), read response (may error on non-FA accounts)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendRequestFA(conn, 1); err != nil {
-				return err
-			}
-			// RECEIVE_FA msg_id=16 or ERR_MSG msg_id=4.
-			stop := func(msgID int, fields []string) bool {
-				if msgID == 16 {
-					return true
-				}
-				if msgID == 4 && len(fields) >= 4 {
-					code, err := strconv.Atoi(fields[3])
-					if err == nil && code >= 2000 && code < 3000 {
-						return false // skip farm-status bootstrap messages
-					}
-					return true
-				}
-				return false
-			}
-			return readFrames(conn, 5*time.Second, logFrame, stop)
-		},
+		metadata:    meta("advisors", []string{"Advisors().Config", "Client.CurrentTime"}, []int{protocol.OutRequestFA, protocol.InReceiveFA, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"typed FA groups XML or exact non-FA refusal"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "request the FA groups document through the public API",
+		runAPI:      runAPIFAConfigGroups,
 	},
 	"qualify_contract_aapl_exact": {
 		metadata:    meta("contracts", []string{"Contracts().Qualify"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"single qualified contract"}, 1, "promoted", batchNewV2, batchReadOnly),

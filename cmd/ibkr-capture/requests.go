@@ -458,13 +458,6 @@ func sendGlobalCancel(conn net.Conn) error {
 	return sendMessage(conn, []string{"58", "", ""})
 }
 
-// --- Request FA (msg_id=18) ---
-//
-//	[18, version=1, faDataType]
-func sendRequestFA(conn net.Conn, faDataType int) error {
-	return sendMessage(conn, []string{"18", "1", strconv.Itoa(faDataType)})
-}
-
 // --- Query display groups (msg_id=67) ---
 //
 //	[67, version=1, reqId]
