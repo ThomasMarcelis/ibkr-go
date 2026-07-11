@@ -211,13 +211,6 @@ func sendCancelHistoricalData(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"25", "1", strconv.Itoa(reqID)})
 }
 
-// --- Account updates (msg_id=6) ---
-//
-//	[6, version=2, subscribe, acctCode]
-func sendReqAccountUpdates(conn net.Conn, subscribe bool, acctCode string) error {
-	return sendMessage(conn, []string{"6", "2", boolField(subscribe), acctCode})
-}
-
 // --- PnL (msg_id=92) / cancel (msg_id=93) ---
 //
 //	[92, reqId, account, modelCode]

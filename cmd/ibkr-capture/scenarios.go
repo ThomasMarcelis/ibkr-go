@@ -457,22 +457,9 @@ var scenarios = map[string]*scenario{
 	// --- v1 expanded scope: Batch C4 — streaming subscriptions ---
 
 	"account_updates": {
-		metadata:    meta("accounts", []string{"Accounts().Updates", "Accounts().SubscribeUpdates"}, []int{6, 7, 8, 54}, "read_only", nil, []string{"account and portfolio update stream"}, 1, "promoted", batchReadOnly),
-		description: "REQ_ACCOUNT_UPDATES subscribe=true, read for 10s, then unsubscribe",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			acct := sess.ManagedAccounts
-			if err := sendReqAccountUpdates(conn, true, acct); err != nil {
-				return err
-			}
-			// Read until ACCOUNT_DOWNLOAD_END (msg 54) then a bit more for streaming.
-			if err := readFrames(conn, 10*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendReqAccountUpdates(conn, false, acct); err != nil {
-				return err
-			}
-			return readFrames(conn, 2*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().Updates", "Client.CurrentTime"}, []int{protocol.OutReqAccountUpdates, protocol.InUpdateAccountValue, protocol.InUpdatePortfolio, protocol.InUpdateAccountTime, protocol.InAccountDownloadEnd, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", nil, []string{"nonempty typed account and portfolio snapshot with protocol-fenced unsubscribe"}, 1, "promoted", batchReadOnly),
+		description: "collect and close the account updates snapshot through the public API",
+		runAPI:      runAPIAccountUpdates,
 	},
 	"account_updates_multi": {
 		metadata:    meta("accounts", []string{"Accounts().UpdatesMulti", "Client.CurrentTime"}, []int{protocol.OutReqAccountUpdatesMulti, protocol.InAccountUpdateMulti, protocol.InAccountUpdateMultiEnd, protocol.OutCancelAccountUpdatesMulti, protocol.OutReqCurrentTime}, "read_only", nil, []string{"nonempty multi-account update snapshot and protocol-fenced cancellation"}, 1, "promoted", batchReadOnly),

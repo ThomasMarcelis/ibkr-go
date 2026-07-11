@@ -1580,6 +1580,40 @@ func recordSubscriptionRefusal(kind, label string, err *ibkr.APIError) {
 	})
 }
 
+func runAPIAccountUpdates(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
+		updates, err := client.Accounts().Updates(ctx, account)
+		if err != nil {
+			return fmt.Errorf("account updates snapshot: %w", err)
+		}
+		if len(updates) == 0 {
+			return errors.New("account updates snapshot is empty")
+		}
+		var accountValues, portfolioValues int
+		for i, update := range updates {
+			if (update.AccountValue == nil) == (update.Portfolio == nil) {
+				return fmt.Errorf("account update %d must contain exactly one payload", i)
+			}
+			if update.AccountValue != nil {
+				accountValues++
+			} else {
+				portfolioValues++
+			}
+		}
+		if err := fenceAPIWrites(ctx, client, "account updates snapshot cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("account_updates", "snapshot", func(event *apiDriverEvent) {
+			event.Count = len(updates)
+			event.Values = map[string]string{
+				"account_values":   strconv.Itoa(accountValues),
+				"portfolio_values": strconv.Itoa(portfolioValues),
+			}
+		})
+		return nil
+	})
+}
+
 func runAPIAccountUpdatesMulti(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
 		values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{Account: account})
