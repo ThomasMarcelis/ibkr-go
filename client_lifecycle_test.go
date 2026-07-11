@@ -175,7 +175,7 @@ func serveProtocolErrorGateway(conn net.Conn) error {
 		return fmt.Errorf("server read succeeded after protocol error; want client-side close")
 	}
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
-		return fmt.Errorf("client did not close transport after protocol error")
+		return fmt.Errorf("client did not close transport after malformed-frame test")
 	}
 	return nil
 }
@@ -451,7 +451,7 @@ func TestContextCancelDuringOneShot(t *testing.T) {
 	_ = host.Close()
 }
 
-func TestProtocolErrorClosesTransport(t *testing.T) {
+func TestKnownMalformedInboundDoesNotCloseTransport(t *testing.T) {
 	t.Parallel()
 
 	gateway := newProtocolErrorGateway(t)
@@ -467,20 +467,30 @@ func TestProtocolErrorClosesTransport(t *testing.T) {
 		t.Fatalf("DialContext() error = %v", err)
 	}
 
-	select {
-	case <-client.Done():
-	case <-time.After(2 * time.Second):
-		client.Close()
-		t.Fatal("client did not close after protocol error")
-	}
-
-	waitErr := client.Wait()
-	protocolErr, ok := errors.AsType[*ibkr.ProtocolError](waitErr)
-	if !ok {
-		t.Fatalf("client.Wait() error = %v, want *ProtocolError", waitErr)
+	var protocolErr *ibkr.ProtocolError
+	timer := time.NewTimer(2 * time.Second)
+	defer timer.Stop()
+	for protocolErr == nil {
+		select {
+		case event := <-client.SessionEvents():
+			protocolErr, _ = errors.AsType[*ibkr.ProtocolError](event.Err)
+		case <-client.Done():
+			t.Fatalf("client closed after message-scoped decode error: %v", client.Wait())
+		case <-timer.C:
+			t.Fatal("timeout waiting for malformed inbound session event")
+		}
 	}
 	if protocolErr.Direction != "inbound" {
 		t.Fatalf("ProtocolError.Direction = %q, want inbound", protocolErr.Direction)
+	}
+	select {
+	case <-client.Done():
+		t.Fatalf("client closed after malformed inbound event: %v", client.Wait())
+	default:
+	}
+	client.Close()
+	if err := client.Wait(); err != nil {
+		t.Fatalf("client.Wait() error = %v, want nil after Close", err)
 	}
 	gateway.Wait(t)
 }

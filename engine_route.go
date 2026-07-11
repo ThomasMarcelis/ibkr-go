@@ -108,6 +108,22 @@ func (e *engine) handleIncoming(msg any) {
 			e.emitEvent(0, fmt.Sprintf("dropping inbound frames with unknown msg_id %d (%d fields, %d binary body bytes)", m.MsgID, len(m.Fields), len(m.Payload)))
 		}
 		return
+	case codec.MalformedInbound:
+		// The outer length frame and message ID decoded successfully, so this
+		// failure is confined to one self-contained message. Keep unrelated
+		// routes alive, but surface the first failure for each known msg_id.
+		if _, seen := e.malformedInboundSeen[m.MsgID]; !seen {
+			e.malformedInboundSeen[m.MsgID] = struct{}{}
+			protocolErr := &ProtocolError{
+				Direction: "inbound",
+				Message:   fmt.Sprintf("msg_id %d", m.MsgID),
+				Err:       m.Err,
+			}
+			e.cfg.logger.Warn("ibkr: dropping malformed inbound frame",
+				"msg_id", m.MsgID, "field_count", len(m.Fields), "binary_body_bytes", len(m.Payload), "error", m.Err)
+			e.emitSessionEvent(0, fmt.Sprintf("dropping malformed inbound frame with msg_id %d", m.MsgID), protocolErr)
+		}
+		return
 	}
 
 	if keyed, ok := msg.(codec.ReqIDer); ok {

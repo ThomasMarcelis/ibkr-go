@@ -54,8 +54,9 @@ type engine struct {
 	execDeliveries map[string]*execDelivery
 	// unknownInboundSeen records msg ids already reported as unknown, so a
 	// hot misdecoded feed logs and emits once instead of per frame.
-	unknownInboundSeen map[int]struct{}
-	readySetups        []*readySetup
+	unknownInboundSeen   map[int]struct{}
+	malformedInboundSeen map[int]struct{}
+	readySetups          []*readySetup
 
 	nextReqID                int
 	orderIDHighWater         int64
@@ -197,6 +198,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		pendingOrderWrites:       make(map[transportWriteKey]int64),
 		execDeliveries:           make(map[string]*execDelivery),
 		unknownInboundSeen:       make(map[int]struct{}),
+		malformedInboundSeen:     make(map[int]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
 		snapshot: Snapshot{

@@ -37,13 +37,14 @@ func TestDecodeHistoricalScheduleRejectsMalformedSessionCounts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			var err error
+			var (
+				msgs []Message
+				err  error
+			)
 			mustNotPanic(t, func() {
-				_, err = DecodeBatch(200, encodeTestFields(tt.fields...))
+				msgs, err = DecodeBatch(200, encodeTestFields(tt.fields...))
 			})
-			if err == nil {
-				t.Fatal("DecodeBatch() error = nil, want malformed count error")
-			}
+			requireMalformedInbound(t, msgs, err)
 		})
 	}
 }

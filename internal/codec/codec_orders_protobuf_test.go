@@ -260,6 +260,11 @@ func TestDecodeMalformedProtobuf(t *testing.T) {
 	if _, err := Decode(201, payload); err == nil {
 		t.Fatal("Decode() accepted a truncated varint")
 	}
+	msgs, err := DecodeBatch(201, payload)
+	malformed := requireMalformedInbound(t, msgs, err)
+	if malformed.MsgID != protocol.InExecutionDataEnd || malformed.Encoding != protocol.ProtobufBody {
+		t.Fatalf("MalformedInbound = %+v, want protobuf execution-data-end", malformed)
+	}
 
 	payload, err = protocol.EncodeProtobufEnvelope(201, protocol.InExecutionDataEnd, []byte{0x0a, 0})
 	if err != nil {

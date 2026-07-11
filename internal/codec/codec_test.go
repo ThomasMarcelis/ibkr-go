@@ -265,12 +265,46 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := DecodeBatch(200, wire.EncodeFields(tt.fields))
-			if err == nil {
-				t.Fatal("DecodeBatch() error = nil, want malformed count error")
+			msgs, err := DecodeBatch(200, wire.EncodeFields(tt.fields))
+			malformed := requireMalformedInbound(t, msgs, err)
+			if malformed.MsgID == 0 || malformed.Err == nil {
+				t.Fatalf("MalformedInbound = %+v, want message id and cause", malformed)
 			}
 		})
 	}
+}
+
+func TestDecodeKnownMalformedBodyIsMessageScoped(t *testing.T) {
+	t.Parallel()
+
+	msgs, err := DecodeBatch(200, []byte("49\x001\x001712345678"))
+	malformed := requireMalformedInbound(t, msgs, err)
+	if malformed.MsgID != 49 {
+		t.Fatalf("MalformedInbound.MsgID = %d, want 49", malformed.MsgID)
+	}
+}
+
+func TestDecodeMalformedMessageIDRemainsProtocolError(t *testing.T) {
+	t.Parallel()
+
+	if _, err := DecodeBatch(200, []byte("bad\x001\x00")); err == nil {
+		t.Fatal("DecodeBatch() error = nil, want malformed envelope error")
+	}
+}
+
+func requireMalformedInbound(t *testing.T, msgs []Message, err error) MalformedInbound {
+	t.Helper()
+	if err != nil {
+		t.Fatalf("DecodeBatch() error = %v, want message-scoped malformed result", err)
+	}
+	if len(msgs) != 1 {
+		t.Fatalf("DecodeBatch() returned %d messages, want 1", len(msgs))
+	}
+	malformed, ok := msgs[0].(MalformedInbound)
+	if !ok {
+		t.Fatalf("DecodeBatch() message = %T, want MalformedInbound", msgs[0])
+	}
+	return malformed
 }
 
 func TestDecodeHistoricalDataEnd(t *testing.T) {

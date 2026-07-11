@@ -3,6 +3,7 @@ package codec
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
@@ -55,12 +56,25 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 		}
 		msgs, err := dec(envelope.Body, sv)
 		if err != nil {
-			return nil, fmt.Errorf("codec: protobuf msg_id %d: %w", envelope.MsgID, err)
+			return []Message{MalformedInbound{
+				MsgID:    envelope.MsgID,
+				Encoding: protocol.ProtobufBody,
+				Payload:  append([]byte(nil), envelope.Body...),
+				Err:      fmt.Errorf("codec: protobuf msg_id %d: %w", envelope.MsgID, err),
+			}}, nil
 		}
 		return msgs, nil
 	}
 
 	if len(envelope.Body) > 0 && envelope.Body[len(envelope.Body)-1] != 0 {
+		if _, known := inboundDecoders[envelope.MsgID]; known {
+			return []Message{MalformedInbound{
+				MsgID:    envelope.MsgID,
+				Encoding: protocol.ClassicBody,
+				Fields:   copyClassicFields(envelope.Body),
+				Err:      wire.ErrMalformedFrame,
+			}}, nil
+		}
 		return nil, wire.ErrMalformedFrame
 	}
 	r := newFieldReaderBytes(envelope.Body)
@@ -71,7 +85,12 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 	r.total++
 	msgs, err := decodeByMsgID(sv, envelope.MsgID, r)
 	if err != nil {
-		return nil, fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err)
+		return []Message{MalformedInbound{
+			MsgID:    envelope.MsgID,
+			Encoding: protocol.ClassicBody,
+			Fields:   copyClassicFields(envelope.Body),
+			Err:      fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err),
+		}}, nil
 	}
 	return msgs, nil
 }
@@ -84,6 +103,9 @@ func Decode(sv int, payload []byte) (Message, error) {
 	}
 	if len(msgs) != 1 {
 		return nil, fmt.Errorf("codec: expected 1 message, got %d", len(msgs))
+	}
+	if malformed, ok := msgs[0].(MalformedInbound); ok {
+		return nil, malformed.Err
 	}
 	return msgs[0], nil
 }
@@ -228,6 +250,32 @@ type UnknownInbound struct {
 
 func (m UnknownInbound) encodeWire(sv int) ([]string, error) {
 	return append([]string{itoa(m.MsgID)}, m.Fields...), nil
+}
+
+// MalformedInbound carries a self-contained frame with a known message ID
+// whose body did not match the registered decoder. The frame boundary remains
+// trustworthy, so callers can report and skip this message without tearing
+// down unrelated routes on the connection.
+type MalformedInbound struct {
+	MsgID    int
+	Encoding protocol.BodyEncoding
+	Fields   []string
+	Payload  []byte
+	Err      error
+}
+
+func (m MalformedInbound) encodeWire(sv int) ([]string, error) {
+	return nil, fmt.Errorf("codec: cannot encode malformed inbound msg_id %d", m.MsgID)
+}
+
+func copyClassicFields(body []byte) []string {
+	if len(body) == 0 {
+		return nil
+	}
+	if body[len(body)-1] == 0 {
+		body = body[:len(body)-1]
+	}
+	return strings.Split(string(body), "\x00")
 }
 
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
