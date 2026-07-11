@@ -23,4 +23,5 @@ server order_status {"order_id":350,"status":"Submitted","filled":"0","remaining
 client cancel_order {"field_count":"5","order_id":"350","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
 server order_status {"order_id":350,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
 server api_error {"req_id":350,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121571000"}
+sleep 500ms
 disconnect
