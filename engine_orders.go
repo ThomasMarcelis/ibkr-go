@@ -1138,7 +1138,7 @@ func fromCodecCommission(m codec.CommissionReport) (CommissionAndFeesReport, err
 		ExecID:              m.ExecID,
 		Amount:              commissionAndFees,
 		Currency:            m.Currency,
-		RealizedPNL:         realized,
+		RealizedPnL:         realized,
 		BondYield:           bondYield,
 		YieldRedemptionDate: yieldRedemptionDate,
 	}, nil

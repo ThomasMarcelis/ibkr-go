@@ -502,9 +502,23 @@ type HistoricalTick struct {
 	Size  decimal.Decimal
 }
 
+// HistoricalBidAskAttributes is the exact attribute bitmask attached to a
+// historical bid/ask tick. Unknown bits remain preserved in the value.
+type HistoricalBidAskAttributes int
+
+func (a HistoricalBidAskAttributes) BidPastLow() bool  { return a&1 != 0 }
+func (a HistoricalBidAskAttributes) AskPastHigh() bool { return a&2 != 0 }
+
+// HistoricalLastAttributes is the exact attribute bitmask attached to a
+// historical trade tick. Unknown bits remain preserved in the value.
+type HistoricalLastAttributes int
+
+func (a HistoricalLastAttributes) PastLimit() bool  { return a&1 != 0 }
+func (a HistoricalLastAttributes) Unreported() bool { return a&2 != 0 }
+
 // HistoricalTickBidAsk is a single bid/ask historical tick.
 type HistoricalTickBidAsk struct {
-	TickAttrib int // bitmask of tick attributes (e.g. bid/ask past high/low)
+	TickAttrib HistoricalBidAskAttributes
 	Time       time.Time
 	BidPrice   decimal.Decimal
 	AskPrice   decimal.Decimal
@@ -514,7 +528,7 @@ type HistoricalTickBidAsk struct {
 
 // HistoricalTickLast is a single trade (last) historical tick.
 type HistoricalTickLast struct {
-	TickAttrib        int // bitmask of tick attributes (e.g. unreported, past limit)
+	TickAttrib        HistoricalLastAttributes
 	Time              time.Time
 	Price             decimal.Decimal
 	Size              decimal.Decimal

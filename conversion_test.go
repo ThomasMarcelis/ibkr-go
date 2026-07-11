@@ -563,11 +563,11 @@ func TestFromCodecCommissionAcceptsSentinelFields(t *testing.T) {
 			if (report.Amount == nil) != tt.wantCommissionNil {
 				t.Errorf("Amount = %v, want nil=%v", report.Amount, tt.wantCommissionNil)
 			}
-			if (report.RealizedPNL == nil) != tt.wantRealizedPNLNil {
-				t.Errorf("RealizedPNL = %v, want nil=%v", report.RealizedPNL, tt.wantRealizedPNLNil)
+			if (report.RealizedPnL == nil) != tt.wantRealizedPNLNil {
+				t.Errorf("RealizedPnL = %v, want nil=%v", report.RealizedPnL, tt.wantRealizedPNLNil)
 			}
-			if tt.realized == "0" && (report.RealizedPNL == nil || !report.RealizedPNL.IsZero()) {
-				t.Errorf("literal zero RealizedPNL = %v, want non-nil zero", report.RealizedPNL)
+			if tt.realized == "0" && (report.RealizedPnL == nil || !report.RealizedPnL.IsZero()) {
+				t.Errorf("literal zero RealizedPnL = %v, want non-nil zero", report.RealizedPnL)
 			}
 		})
 	}
@@ -588,8 +588,8 @@ func TestFromCodecCommissionPreservesRealValues(t *testing.T) {
 	if got := report.Amount.String(); got != "1.25" {
 		t.Errorf("Commission = %s, want 1.25", got)
 	}
-	if got := report.RealizedPNL.String(); got != "-50" {
-		t.Errorf("RealizedPNL = %s, want -50", got)
+	if got := report.RealizedPnL.String(); got != "-50" {
+		t.Errorf("RealizedPnL = %s, want -50", got)
 	}
 	if report.BondYield == nil || report.BondYield.String() != "2.75" || report.YieldRedemptionDate != "20301231" {
 		t.Errorf("yield/date = %v/%q", report.BondYield, report.YieldRedemptionDate)

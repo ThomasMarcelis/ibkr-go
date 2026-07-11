@@ -2312,7 +2312,7 @@ func runAPIOrderDirectCancelAAPL(ctx context.Context, addr string, clientID int)
 			event.OrderID = handle.OrderID()
 		})
 		obs := observeOrder(ctx, handle, "direct cancel terminal", 20*time.Second)
-		if obs.lastStatus != ibkr.OrderStatusCancelled && obs.lastStatus != ibkr.OrderStatusApiCancelled {
+		if obs.lastStatus != ibkr.OrderStatusCancelled && obs.lastStatus != ibkr.OrderStatusAPICancelled {
 			return fmt.Errorf("direct-cancel order status = %s, want Cancelled or ApiCancelled", obs.lastStatus)
 		}
 		return fenceAPIWrites(ctx, client, "direct order cancellation")
@@ -2387,7 +2387,7 @@ func runAPIBracketPlaceAAPL(ctx context.Context, addr string, clientID int) erro
 			{"bracket stop-loss cleanup", bracket.StopLoss},
 		} {
 			obs := observeOrder(ctx, leg.handle, leg.label, 15*time.Second)
-			if obs.lastStatus != ibkr.OrderStatusCancelled && obs.lastStatus != ibkr.OrderStatusApiCancelled {
+			if obs.lastStatus != ibkr.OrderStatusCancelled && obs.lastStatus != ibkr.OrderStatusAPICancelled {
 				return fmt.Errorf("%s status = %s, want Cancelled or ApiCancelled", leg.label, obs.lastStatus)
 			}
 		}
@@ -4625,7 +4625,7 @@ func logOrderEvent(label string, evt ibkr.OrderEvent) {
 	}
 	if evt.CommissionAndFees != nil {
 		log.Printf("%s commission exec_id=%s commission=%s currency=%s pnl=%s",
-			label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPNL)
+			label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPnL)
 	}
 }
 
@@ -4686,7 +4686,7 @@ func recordOrderEvent(label string, evt ibkr.OrderEvent) {
 			event.ExecID = commission.ExecID
 			event.Commission = optionalDecimalString(commission.Amount)
 			event.Currency = commission.Currency
-			event.RealizedPNL = optionalDecimalString(commission.RealizedPNL)
+			event.RealizedPNL = optionalDecimalString(commission.RealizedPnL)
 		})
 	}
 }

@@ -133,7 +133,7 @@ func liveObserveOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandl
 			if evt.Status.Status == ibkr.OrderStatusFilled {
 				result.filled = true
 			}
-			if evt.Status.Status == ibkr.OrderStatusCancelled || evt.Status.Status == ibkr.OrderStatusApiCancelled {
+			if evt.Status.Status == ibkr.OrderStatusCancelled || evt.Status.Status == ibkr.OrderStatusAPICancelled {
 				result.cancelled = true
 			}
 			if evt.Status.Status == ibkr.OrderStatusInactive {
@@ -147,7 +147,7 @@ func liveObserveOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandl
 		}
 		if evt.CommissionAndFees != nil {
 			t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s",
-				label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPNL)
+				label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPnL)
 			result.sawCommission = true
 		}
 	}

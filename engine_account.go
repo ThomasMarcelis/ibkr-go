@@ -344,8 +344,8 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					MarketPrice:   marketPrice,
 					MarketValue:   marketValue,
 					AvgCost:       avgCost,
-					UnrealizedPNL: unrealizedPNL,
-					RealizedPNL:   realizedPNL,
+					UnrealizedPnL: unrealizedPNL,
+					RealizedPnL:   realizedPNL,
 				}})
 			case codec.UpdateAccountTime:
 				sub.emit(AccountUpdate{UpdateTime: new(m.Timestamp)})

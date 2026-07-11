@@ -256,7 +256,7 @@ func TestPlaceOrderMktBuyFillReplay(t *testing.T) {
 	}
 	comms := log.commissions()
 	requireCommissions(t, "mkt buy", comms, []string{"1.000003"})
-	if comms[0].Currency != "USD" || !comms[0].RealizedPNL.Equal(decimal.RequireFromString("-1.636219")) {
+	if comms[0].Currency != "USD" || !comms[0].RealizedPnL.Equal(decimal.RequireFromString("-1.636219")) {
 		t.Fatalf("commission report = %+v, want USD with realized PnL -1.636219", comms[0])
 	}
 	if err := handle.Wait(); err != nil {
@@ -320,8 +320,8 @@ func TestPlaceOrderMktSellFillReplay(t *testing.T) {
 	}
 	comms := log.commissions()
 	requireCommissions(t, "mkt sell", comms, []string{"1.006228"})
-	if comms[0].RealizedPNL != nil {
-		t.Fatalf("realized PnL = %s, want nil (unset sentinel)", comms[0].RealizedPNL)
+	if comms[0].RealizedPnL != nil {
+		t.Fatalf("realized PnL = %s, want nil (unset sentinel)", comms[0].RealizedPnL)
 	}
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("Wait() = %v, want nil terminal close", err)
@@ -504,8 +504,8 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	}
 	comms := restLog.commissions()
 	requireCommissions(t, "modify", comms, []string{"1.0003"})
-	if !comms[0].RealizedPNL.Equal(decimal.RequireFromString("-9.622032")) {
-		t.Fatalf("realized PnL = %s, want -9.622032", comms[0].RealizedPNL)
+	if !comms[0].RealizedPnL.Equal(decimal.RequireFromString("-9.622032")) {
+		t.Fatalf("realized PnL = %s, want -9.622032", comms[0].RealizedPnL)
 	}
 	requireCancelNotCancellableNotice(t, ctx, events, "9000000377")
 	requireOrderWaitNil(t, "modify", rest)

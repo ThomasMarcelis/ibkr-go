@@ -200,8 +200,8 @@ func TestRouteCommissionResendWithChangedContentReachesHandle(t *testing.T) {
 	if comms != 2 {
 		t.Fatalf("handle saw %d commissions, want 2 (initial + changed re-send)", comms)
 	}
-	if !last.RealizedPNL.Equal(decimal.RequireFromString("42.10")) {
-		t.Fatalf("last commission realizedPNL = %s, want 42.10", last.RealizedPNL)
+	if !last.RealizedPnL.Equal(decimal.RequireFromString("42.10")) {
+		t.Fatalf("last commission realizedPnL = %s, want 42.10", last.RealizedPnL)
 	}
 }
 

@@ -466,7 +466,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 			return
 		}
-		if order.Status != OrderStatusInactive && order.Status != OrderStatusApiCancelled {
+		if order.Status != OrderStatusInactive && order.Status != OrderStatusAPICancelled {
 			orderRoute.working = true
 		}
 		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
@@ -503,7 +503,7 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 			return
 		}
-		if status.Status != OrderStatusInactive && status.Status != OrderStatusApiCancelled {
+		if status.Status != OrderStatusInactive && status.Status != OrderStatusAPICancelled {
 			orderRoute.working = true
 		}
 		if !orderRoute.handle.emitStatus(status) {

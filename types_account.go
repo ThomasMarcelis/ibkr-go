@@ -58,8 +58,8 @@ type PortfolioUpdate struct {
 	MarketPrice   *decimal.Decimal
 	MarketValue   *decimal.Decimal
 	AvgCost       *decimal.Decimal
-	UnrealizedPNL *decimal.Decimal
-	RealizedPNL   *decimal.Decimal
+	UnrealizedPnL *decimal.Decimal
+	RealizedPnL   *decimal.Decimal
 }
 
 // AccountUpdate is a union event from SubscribeAccountUpdates. Exactly one field is non-nil.

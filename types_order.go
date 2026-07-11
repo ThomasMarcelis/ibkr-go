@@ -54,7 +54,7 @@ const (
 	OrderStatusPendingCancel OrderStatus = "PendingCancel" // cancel requested, not yet confirmed
 	OrderStatusPreSubmitted  OrderStatus = "PreSubmitted"  // held by IBKR pending a trigger or market open
 	OrderStatusSubmitted     OrderStatus = "Submitted"     // working at the venue
-	OrderStatusApiCancelled  OrderStatus = "ApiCancelled"  // cancelled by an API request
+	OrderStatusAPICancelled  OrderStatus = "ApiCancelled"  // cancelled by an API request
 	OrderStatusCancelled     OrderStatus = "Cancelled"     // cancelled
 	OrderStatusFilled        OrderStatus = "Filled"        // fully filled
 	OrderStatusInactive      OrderStatus = "Inactive"      // rejected or deactivated by IBKR
@@ -212,7 +212,7 @@ type CommissionAndFeesReport struct {
 	ExecID              string
 	Amount              *decimal.Decimal
 	Currency            string
-	RealizedPNL         *decimal.Decimal
+	RealizedPnL         *decimal.Decimal
 	BondYield           *decimal.Decimal
 	YieldRedemptionDate string // YYYYMMDD, or empty when unavailable
 }

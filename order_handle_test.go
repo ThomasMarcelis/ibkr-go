@@ -151,7 +151,7 @@ func TestIsTerminalOrderStatus(t *testing.T) {
 	}{
 		{OrderStatusFilled, true},
 		{OrderStatusCancelled, true},
-		{OrderStatusApiCancelled, true},
+		{OrderStatusAPICancelled, true},
 		{OrderStatusInactive, true},
 		{OrderStatusPendingCancel, false},
 		{OrderStatusSubmitted, false},

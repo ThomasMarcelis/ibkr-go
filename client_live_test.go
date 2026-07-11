@@ -903,7 +903,7 @@ func waitLiveOrderFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 				t.Logf("%s execution: execID=%s side=%s shares=%s price=%s", label, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price)
 			}
 			if evt.CommissionAndFees != nil {
-				t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPNL)
+				t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPnL)
 			}
 			if evt.Status != nil {
 				t.Logf("%s status: %s filled=%s remaining=%s", label, evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
@@ -921,7 +921,7 @@ func waitLiveOrderFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 					t.Logf("%s execution: execID=%s side=%s shares=%s price=%s", label, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price)
 				}
 				if evt.CommissionAndFees != nil {
-					t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPNL)
+					t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPnL)
 				}
 				if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
 					filled = true
