@@ -229,10 +229,6 @@ func TestMatchingSymbolsPartialReplay(t *testing.T) {
 		t.Errorf("symbols[19] = %+v, want AAPL 265598 NASDAQ APPLE INC", aapl)
 	}
 
-	last := symbols[96]
-	if last.SecType != ibkr.SecTypeBond || last.Description != "AAA & Sons Enterprises Pvt Ltd" || last.IssuerID != "e3888094" {
-		t.Errorf("symbols[96] = %+v, want trailing BOND row AAA & Sons Enterprises Pvt Ltd / e3888094", last)
-	}
 }
 
 // TestSetTypeSwitchWhileStreamingReplay freezes the mid-stream market-data

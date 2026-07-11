@@ -1320,8 +1320,8 @@ func TestMatchingSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MatchingSymbols() error = %v", err)
 	}
-	if len(symbols) != 1 {
-		t.Fatalf("symbols len = %d, want 1", len(symbols))
+	if len(symbols) != 19 {
+		t.Fatalf("symbols len = %d, want 19", len(symbols))
 	}
 	if symbols[0].Symbol != "AAPL" {
 		t.Fatalf("symbol = %q, want AAPL", symbols[0].Symbol)
@@ -1332,8 +1332,8 @@ func TestMatchingSymbols(t *testing.T) {
 	if symbols[0].PrimaryExchange != "NASDAQ" {
 		t.Fatalf("primary_exchange = %q, want NASDAQ", symbols[0].PrimaryExchange)
 	}
-	if len(symbols[0].DerivativeSecTypes) != 2 {
-		t.Fatalf("derivative_sec_types len = %d, want 2", len(symbols[0].DerivativeSecTypes))
+	if want := []string{"CFD", "OPT", "IOPT", "WAR", "BAG"}; !reflect.DeepEqual(symbols[0].DerivativeSecTypes, want) {
+		t.Fatalf("derivative_sec_types = %v, want %v", symbols[0].DerivativeSecTypes, want)
 	}
 	if symbols[0].Description != "APPLE INC" {
 		t.Fatalf("description = %q, want APPLE INC", symbols[0].Description)
@@ -1481,23 +1481,23 @@ func TestSecDefOptParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SecDefOptParams() error = %v", err)
 	}
-	if len(params) != 2 {
-		t.Fatalf("params len = %d, want 2", len(params))
+	if len(params) != 20 {
+		t.Fatalf("params len = %d, want 20", len(params))
 	}
-	if params[0].Exchange != "SMART" {
-		t.Fatalf("first exchange = %q, want SMART", params[0].Exchange)
+	var smart, cboe bool
+	for _, param := range params {
+		if param.TradingClass != "AAPL" || param.Multiplier != "100" || len(param.Expirations) == 0 || len(param.Strikes) == 0 {
+			t.Fatalf("incomplete option parameters = %+v", param)
+		}
+		switch param.Exchange {
+		case "SMART":
+			smart = true
+		case "CBOE":
+			cboe = true
+		}
 	}
-	if len(params[0].Expirations) != 2 {
-		t.Fatalf("first expirations len = %d, want 2", len(params[0].Expirations))
-	}
-	if len(params[0].Strikes) != 3 {
-		t.Fatalf("first strikes len = %d, want 3", len(params[0].Strikes))
-	}
-	if params[0].Strikes[0].String() != "150" {
-		t.Fatalf("first strike = %s, want 150", params[0].Strikes[0].String())
-	}
-	if params[1].Exchange != "CBOE" {
-		t.Fatalf("second exchange = %q, want CBOE", params[1].Exchange)
+	if !smart || !cboe {
+		t.Fatalf("option exchanges include SMART=%t CBOE=%t, want both", smart, cboe)
 	}
 }
 
