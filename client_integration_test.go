@@ -4211,6 +4211,7 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("cancel confirmed on the wire but no status event delivered to SubscribeOpen")
 	}
+	waitHost(t, host)
 }
 
 // TestSubscribeOpenRefreshDeliversFreshSnapshot freezes the fix for
