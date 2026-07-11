@@ -1,15 +1,13 @@
-# Grounded by live API capture captures/20260405T215014Z-contract_details_eurusd_cash.
-# server_version=200, events.jsonl sha256 prefix: 3fe2c642b2379984.
-# EUR/USD CASH on IDEALPRO resolves to exactly one contract (conID 12087792,
-# local symbol EUR.USD, min tick 0.00005).
-# Account identifiers are sanitized to the DU9000001 redaction token; frames otherwise verbatim.
-handshake {"server_version":200,"connection_time":"20260405 23:50:14 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425814717"}
-server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425814717"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425814717"}
-client req_contract_details {"req_id":"$req1","contract":{"con_id":"0","symbol":"EUR","sec_type":"CASH","exchange":"IDEALPRO","currency":"USD","primary_exchange":"","local_symbol":""}}
-server contract_details {"req_id":"$req1","contract":{"con_id":12087792,"symbol":"EUR","sec_type":"CASH","expiry":"","strike":"0","right":"","exchange":"IDEALPRO","currency":"USD","local_symbol":"EUR.USD","trading_class":"EUR.USD","primary_exchange":""},"market_name":"EUR.USD","min_tick":"0.00005","price_magnifier":1,"order_types":"ACTIVETIM,AD,ADJUST,ALERT,ALGO,ALLOC,AVGCOST,BASKET,BENCHPX,CASHQTY,COND,CONDORDER,DAY,DEACT,DEACTDIS,DEACTEOD,GAT,GTC,GTD,GTT,HID,IOC,LIT,LMT,MIT,MKT,NONALGO,OCA,REL,RELPCTOFS,SCALE,SCALERST,STP,STPLMT,TRAIL,TRAILLIT,TRAILLMT,TRAILMIT,WHATIF","valid_exchanges":"IDEALPRO","under_con_id":0,"long_name":"European Monetary Union Euro","time_zone_id":"US/Eastern","trading_hours":";20260405:2000-20260406:1700;20260406:1715-20260407:1700;20260407:1715-20260408:1700;20260408:1715-20260409:1700;20260409:1715-20260410:1700","liquid_hours":";20260405:2000-20260406:1700;20260406:1715-20260407:1700;20260407:1715-20260408:1700;20260408:1715-20260409:1700;20260409:1715-20260410:1700","security_ids":[],"agg_group":4,"market_rule_ids":"3188","min_size":"0.01","size_increment":"0.01","suggested_size_increment":"0.01","ineligibility_reasons":[]}
-server contract_details_end {"req_id":"$req1"}
+# Live-derived from /tmp/ibkr-contract-migration-captures/
+# 20260710T220550Z-contract_details_eurusd_cash at server_version 206;
+# events.jsonl sha256:
+# 7e06489f5f5592011e20b30c8f24f4d258e6573be5397af134d4080e91789ae6.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted; request, result, and end are exact.
+handshake {"server_version":206,"connection_time":"20260711 00:05:50 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAAJAAAANEIARIcCAASA0VVUhoEQ0FTSEIISURFQUxQUk9SA1VTRA==
+raw server AAAC4QAAANIIARI6CPDj4QUSA0VVUhoEQ0FTSCkAAAAAAAAAAEIISURFQUxQUk9SA1VTRFoHRVVSLlVTRGIHRVVSLlVTRBqcBQoHRVVSLlVTRBIHMC4wMDAwNRryAUFDVElWRVRJTSxBRCxBREpVU1QsQUxFUlQsQUxHTyxBTExPQyxBVkdDT1NULEJBU0tFVCxCRU5DSFBYLENBU0hRVFksQ09ORCxDT05ET1JERVIsREFZLERFQUNULERFQUNURElTLERFQUNURU9ELEdBVCxHVEMsR1RELEdUVCxISUQsSU9DLExJVCxMTVQsTUlULE1LVCxOT05BTEdPLE9DQSxSRUwsUkVMUENUT0ZTLFNDQUxFLFNDQUxFUlNULFNUUCxTVFBMTVQsVFJBSUwsVFJBSUxMSVQsVFJBSUxMTVQsVFJBSUxNSVQsV0hBVElGIghJREVBTFBSTygBOhxFdXJvcGVhbiBNb25ldGFyeSBVbmlvbiBFdXJvYgpVUy9FYXN0ZXJuapsBMjAyNjA3MDk6MTcxNS0yMDI2MDcxMDoxNzAwOzIwMjYwNzExOkNMT1NFRDsyMDI2MDcxMjoxNzE1LTIwMjYwNzEzOjE3MDA7MjAyNjA3MTM6MTcxNS0yMDI2MDcxNDoxNzAwOzIwMjYwNzE0OjE3MTUtMjAyNjA3MTU6MTcwMDsyMDI2MDcxNToxNzE1LTIwMjYwNzE2OjE3MDBymwEyMDI2MDcwOToxNzE1LTIwMjYwNzEwOjE3MDA7MjAyNjA3MTE6Q0xPU0VEOzIwMjYwNzEyOjE3MTUtMjAyNjA3MTM6MTcwMDsyMDI2MDcxMzoxNzE1LTIwMjYwNzE0OjE3MDA7MjAyNjA3MTQ6MTcxNS0yMDI2MDcxNToxNzAwOzIwMjYwNzE1OjE3MTUtMjAyNjA3MTY6MTcwMJABBKoBBDMxODjCAQQwLjAxygEEMC4wMdIBBDAuMDHyAwEw
+raw server AAAABgAAAPwIAQ==
 disconnect

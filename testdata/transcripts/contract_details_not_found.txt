@@ -1,15 +1,13 @@
-# Grounded by live API capture captures/20260405T215022Z-contract_details_not_found.
-# server_version=200, events.jsonl sha256 prefix: 65e1cebdad9b7e7e.
-# An unknown symbol (ZZZZNONE STK SMART/USD) is rejected with error code 200
-# ("No security definition has been found for the request") and no
-# contractData or contractDataEnd frame follows.
-# Account identifiers are sanitized to the DU9000001 redaction token; frames otherwise verbatim.
-handshake {"server_version":200,"connection_time":"20260405 23:50:20 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425820751"}
-server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425820751"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425820751"}
-client req_contract_details {"req_id":"$req1","contract":{"con_id":"0","symbol":"ZZZZNONE","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
-server api_error {"req_id":"$req1","code":200,"message":"No security definition has been found for the request","advanced_order_reject_json":"","error_time_ms":"1775425820931"}
+# Live-derived from /tmp/ibkr-contract-migration-captures/
+# 20260710T220551Z-contract_details_not_found at server_version 206;
+# events.jsonl sha256:
+# dbd36400f9fe65b9d60d58af3f7da94ec6d7f4bb9bfc138a3dafb372189075d8.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted. The exact code-200 error follows the
+# exact request; the Gateway emitted no contract result or end marker.
+handshake {"server_version":206,"connection_time":"20260711 00:05:51 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAAJQAAANEIARIdCAASCFpaWlpOT05FGgNTVEtCBVNNQVJUUgNVU0Q=
+raw server AAAARwAAAMwIARDnmMPw9DMYyAEiNU5vIHNlY3VyaXR5IGRlZmluaXRpb24gaGFzIGJlZW4gZm91bmQgZm9yIHRoZSByZXF1ZXN0
 disconnect

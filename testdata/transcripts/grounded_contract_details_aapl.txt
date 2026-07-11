@@ -1,12 +1,13 @@
-# Grounded contract details from captures/20260405T214938Z-contract_details_aapl_stk/raw.txt
-# AAPL STK contract fixture: conID=265598, SMART/USD, APPLE INC, NMS, NASDAQ
-handshake {"server_version":200,"connection_time":"20260405 23:49:38 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425778445"}
-server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425778445"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425778445"}
-client req_contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""}}
-server contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"NASDAQ","local_symbol":"AAPL","con_id":265598,"trading_class":"NMS"},"market_name":"NMS","min_tick":"0.01","long_name":"APPLE INC","time_zone_id":"US/Eastern"}
-server contract_details_end {"req_id":"$req1"}
+# Live-derived from /tmp/ibkr-contract-migration-captures/
+# 20260710T220357Z-contract_details_aapl_stk at server_version 206;
+# events.jsonl sha256:
+# 1c75e99a9e517b0001b43b99d79617645d6fc9fe264d4935682008ce0bb2ab9b.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted; request, result, and end are exact.
+handshake {"server_version":206,"connection_time":"20260711 00:03:56 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAAIQAAANEIARIZCAASBEFBUEwaA1NUS0IFU01BUlRSA1VTRA==
+raw server AAAE5gAAANIIARI3CP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgVTTUFSVEoGTkFTREFRUgNVU0RaBEFBUExiA05NUxqkCQoDTk1TEgQwLjAxGsgDQUNUSVZFVElNLEFELEFERE9OVCxBREpVU1QsQUxFUlQsQUxHTyxBTExPQyxBT04sQVZHQ09TVCxCQVNLRVQsQkVOQ0hQWCxDQVNIUVRZLENPTkQsQ09ORE9SREVSLERBUktPTkxZLERBUktQT0xMLERBWSxERUFDVCxERUFDVERJUyxERUFDVEVPRCxESVMsRFVSLEdBVCxHVEMsR1RELEdUVCxISUQsSUJLUkFUUyxJQ0UsSU1CLElPQyxMSVQsTE1ULExPQyxNSURQWCxNSVQsTUtULE1PQyxNVEwsTkdDT01CLE5PREFSSyxOT05BTEdPLE9DQSxPUEcsT1BHUkVST1VULFBFR0JFTkNILFBFR01JRCxQT1NUQVRTLFBPU1RPTkxZLFBSRU9QR1JUSCxQUklDRUNISyxSRUwsUkVMMk1JRCxSRUxQQ1RPRlMsUlBJLFJUSCxTQ0FMRSxTQ0FMRU9ERCxTQ0FMRVJTVCxTSVpFQ0hLLFNOQVBNSUQsU05BUE1LVCxTTkFQUkVMLFNUUCxTVFBMTVQsU1dFRVAsVFJBSUwsVFJBSUxMSVQsVFJBSUxMTVQsVFJBSUxNSVQsV0hBVElGIpMBU01BUlQsQU1FWCxOWVNFLENCT0UsUEhMWCxJU0UsQ0hYLEFSQ0EsTkFTREFRLERSQ1RFREdFLEJFWCxCQVRTLEVER0VBLEJZWCxJRVgsRURHWCxGT1hSSVZFUixQRUFSTCxOWVNFTkFULExUU0UsTUVNWCxJQkVPUyxPVkVSTklHSFQsVFBMVVMwLFBTWCxUMjRYKAE6CUFQUExFIElOQ0oKVGVjaG5vbG9neVIJQ29tcHV0ZXJzWglDb21wdXRlcnNiClVTL0Vhc3Rlcm5qjwEyMDI2MDcxMDowNDAwLTIwMjYwNzEwOjIwMDA7MjAyNjA3MTE6Q0xPU0VEOzIwMjYwNzEyOkNMT1NFRDsyMDI2MDcxMzowNDAwLTIwMjYwNzEzOjIwMDA7MjAyNjA3MTQ6MDQwMC0yMDI2MDcxNDoyMDAwOzIwMjYwNzE1OjA0MDAtMjAyNjA3MTU6MjAwMHKPATIwMjYwNzEwOjA5MzAtMjAyNjA3MTA6MTYwMDsyMDI2MDcxMTpDTE9TRUQ7MjAyNjA3MTI6Q0xPU0VEOzIwMjYwNzEzOjA5MzAtMjAyNjA3MTM6MTYwMDsyMDI2MDcxNDowOTMwLTIwMjYwNzE0OjE2MDA7MjAyNjA3MTU6MDkzMC0yMDI2MDcxNToxNjAwigEUCgRJU0lOEgxVUzAzNzgzMzEwMDWQAQGqAYEBNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzLDQ1NjMsNDU2Myw0NTYzugEGQ09NTU9OwgEGMC4wMDAxygEGMC4wMDAx0gECNDDyAwEw+gMIMC4wMDAwMDGCBAgwLjAwMDAwMQ==
+raw server AAAABgAAAPwIAQ==
 disconnect
