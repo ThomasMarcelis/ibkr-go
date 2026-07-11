@@ -1,20 +1,22 @@
-# Grounded by live API capture captures/20260415T162255Z-api_wsh_variants_aapl.
-# server_version=200, events.jsonl sha256 prefix: 65aeb0a3b716e4b6.
-# Account identifier is sanitized to DU9000001.
+# Exact public API capture from read-only IB Gateway server_version 200.
+# Source: captures/20260415T162255Z-api_wsh_variants_aapl
+# events.jsonl sha256:
+# 65aeb0a3b716e4b61f60a5dbeea2690a93492426e1f95139b262b9ace4529a05
+#
+# The account is length-preserving redacted to DU9000001. Ambient farm-status
+# frames and the campaign's unrelated global-cancel cleanup are omitted. The
+# metadata request and three event-data request/error pairs are otherwise exact
+# and retain their captured order and request IDs.
 handshake {"server_version":200,"connection_time":"20260415 18:22:55 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":291}
-
-client req_wsh_meta_data {"req_id":"$meta"}
-server api_error {"req_id":"$meta","code":10276,"message":"News feed is not allowed.","advanced_order_reject_json":"","error_time_ms":"1776270176974"}
-
-client req_wsh_event_data {"req_id":"$conid","con_id":"265598","filter":"","fill_watchlist":"0","fill_portfolio":"0","fill_competitors":"0","start_date":"20260408","end_date":"20260515","total_limit":"10"}
-server api_error {"req_id":"$conid","code":10276,"message":"News feed is not allowed.","advanced_order_reject_json":"","error_time_ms":"1776270176990"}
-
-client req_wsh_event_data {"req_id":"$portfolio","con_id":"0","filter":"","fill_watchlist":"0","fill_portfolio":"1","fill_competitors":"0","start_date":"20260408","end_date":"20260515","total_limit":"10"}
-server api_error {"req_id":"$portfolio","code":10276,"message":"News feed is not allowed.","advanced_order_reject_json":"","error_time_ms":"1776270177010"}
-
-client req_wsh_event_data {"req_id":"$watchlist","con_id":"265598","filter":"","fill_watchlist":"1","fill_portfolio":"0","fill_competitors":"1","start_date":"","end_date":"","total_limit":"10"}
-server api_error {"req_id":"$watchlist","code":10276,"message":"News feed is not allowed.","advanced_order_reject_json":"","error_time_ms":"1776270177030"}
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAACDkAMQAyOTEA
+raw client AAAABjEwMAAxAA==
+raw server AAAAMzQAMQAxMDI3NgBOZXdzIGZlZWQgaXMgbm90IGFsbG93ZWQuAAAxNzc2MjcwMTc2OTc0AA==
+raw client AAAAKTEwMgAyADI2NTU5OAAAMAAwADAAMjAyNjA0MDgAMjAyNjA1MTUAMTAA
+raw server AAAAMzQAMgAxMDI3NgBOZXdzIGZlZWQgaXMgbm90IGFsbG93ZWQuAAAxNzc2MjcwMTc2OTkwAA==
+raw client AAAAJDEwMgAzADAAADAAMQAwADIwMjYwNDA4ADIwMjYwNTE1ADEwAA==
+raw server AAAAMzQAMwAxMDI3NgBOZXdzIGZlZWQgaXMgbm90IGFsbG93ZWQuAAAxNzc2MjcwMTc3MDEwAA==
+raw client AAAAGTEwMgA0ADI2NTU5OAAAMQAwADEAAAAxMAA=
+raw server AAAAMzQANAAxMDI3NgBOZXdzIGZlZWQgaXMgbm90IGFsbG93ZWQuAAAxNzc2MjcwMTc3MDMwAA==
 sleep 100ms
 disconnect
