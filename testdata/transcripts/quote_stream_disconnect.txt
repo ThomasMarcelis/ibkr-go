@@ -1,5 +1,21 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_quote {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"snapshot":false,"generic_ticks":[]}
+# Exact prefix of a public API capture from read-only IB Gateway server_version 206.
+# Source: /tmp/ibkr-go-subscriptions-20260710/20260710T233236Z-quote_stream_aapl
+# events.jsonl sha256: 6c51009bdfe158b8ea07caf8b44896181b0e827b89e674186c1667d39791a491
+#
+# The account bootstrap is length-preserving redacted to DU9000001. Ambient
+# farm-status frames are omitted. The delayed-data selection, resolved AAPL
+# stream request, warning, type, parameters, and initial ticks are exact. The
+# transport closes before the captured cancellation to inject the tested fault.
+handshake {"server_version":206,"connection_time":"20260711 01:32:36 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAAQMIAw==
+raw client AAAAIwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNE
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw server AAAACAAAAQIIARAD
+raw server AAAAWgAAAMwIARCg7IDz9DMYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+raw server AAAAFgAAAMkIARBIGcP1KFyPznNAIgEwKAA=
+raw server AAAAFgAAAMkIARBJGR+F61G4gnNAIgEwKAA=
+raw server AAAAFQAAAMoIARBKGgstMTU1MzU1NjE3NQ==
+raw server AAAAFgAAAMkIARBLGexRuB6Fw3NAIgEwKAA=
 disconnect

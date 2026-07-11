@@ -1137,9 +1137,13 @@ func TestSubscribeQuotesResumeNeverRequiresManualResumeOnDisconnect(t *testing.T
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType() error = %v", err)
+	}
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
