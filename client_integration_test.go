@@ -2437,6 +2437,7 @@ func TestGroundedHistoricalBars(t *testing.T) {
 
 	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -2454,34 +2455,34 @@ func TestGroundedHistoricalBars(t *testing.T) {
 		t.Fatalf("bars len = %d, want 7", len(bars))
 	}
 
-	// First bar: 2026-04-02 09:30 US/Eastern
+	// First bar: 2026-07-10 09:30 US/Eastern
 	first := bars[0]
-	if first.Open.String() != "254.2" {
-		t.Errorf("first bar Open = %s, want 254.2", first.Open.String())
+	if first.Open.String() != "314.66" {
+		t.Errorf("first bar Open = %s, want 314.66", first.Open.String())
 	}
-	if first.High.String() != "254.8" {
-		t.Errorf("first bar High = %s, want 254.8", first.High.String())
+	if first.High.String() != "316.4" {
+		t.Errorf("first bar High = %s, want 316.4", first.High.String())
 	}
-	if first.Low.String() != "250.65" {
-		t.Errorf("first bar Low = %s, want 250.65", first.Low.String())
+	if first.Low.String() != "313.21" {
+		t.Errorf("first bar Low = %s, want 313.21", first.Low.String())
 	}
-	if first.Close.String() != "252.53" {
-		t.Errorf("first bar Close = %s, want 252.53", first.Close.String())
+	if first.Close.String() != "314.3" {
+		t.Errorf("first bar Close = %s, want 314.3", first.Close.String())
 	}
-	if first.Volume.String() != "2829736" {
-		t.Errorf("first bar Volume = %s, want 2829736", first.Volume.String())
+	if first.Volume.String() != "3293552" {
+		t.Errorf("first bar Volume = %s, want 3293552", first.Volume.String())
 	}
-	if first.Count != 13633 {
-		t.Errorf("first bar Count = %d, want 13633", first.Count)
+	if first.Count != 31704 {
+		t.Errorf("first bar Count = %d, want 31704", first.Count)
 	}
 
-	// Last bar: 2026-04-02 15:00 US/Eastern
+	// Last bar: 2026-07-10 15:00 US/Eastern
 	last := bars[6]
-	if last.Close.String() != "255.89" {
-		t.Errorf("last bar Close = %s, want 255.89", last.Close.String())
+	if last.Close.String() != "315.33" {
+		t.Errorf("last bar Close = %s, want 315.33", last.Close.String())
 	}
-	if last.Volume.String() != "2938382" {
-		t.Errorf("last bar Volume = %s, want 2938382", last.Volume.String())
+	if last.Volume.String() != "4884566" {
+		t.Errorf("last bar Volume = %s, want 4884566", last.Volume.String())
 	}
 }
 

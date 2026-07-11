@@ -52,6 +52,7 @@ func Example_historicalBars() {
 
 	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -68,7 +69,7 @@ func Example_historicalBars() {
 
 	fmt.Println(len(bars), bars[0].Close, bars[len(bars)-1].Close)
 	// Output:
-	// 7 252.53 255.89
+	// 7 314.3 315.33
 }
 
 func Example_accountSummary() {
