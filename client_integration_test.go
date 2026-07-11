@@ -2222,53 +2222,6 @@ func waitForEvent[T any](t *testing.T, ch <-chan T) T {
 	}
 }
 
-func TestBootstrapWithFarmStatusCodes(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "grounded_bootstrap.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	snapshot := client.Session()
-	if snapshot.State != ibkr.StateReady {
-		t.Fatalf("state = %s, want %s", snapshot.State, ibkr.StateReady)
-	}
-	if snapshot.ServerVersion != 200 {
-		t.Fatalf("server version = %d, want 200", snapshot.ServerVersion)
-	}
-	if len(snapshot.ManagedAccounts) != 1 || snapshot.ManagedAccounts[0] != "DU9000001" {
-		t.Fatalf("managed accounts = %v, want [DU9000001]", snapshot.ManagedAccounts)
-	}
-
-	// Drain session events and verify farm-status codes arrived as events
-	// without triggering a state change (State == Previous == Ready).
-	farmCodes := map[int]bool{}
-	events := client.SessionEvents()
-	for {
-		select {
-		case ev, ok := <-events:
-			if !ok {
-				break
-			}
-			if ev.Code >= 2000 && ev.Code < 3000 {
-				farmCodes[ev.Code] = true
-				if ev.State != ev.Previous {
-					t.Fatalf("farm-status code %d caused state change: %s -> %s", ev.Code, ev.Previous, ev.State)
-				}
-			}
-			continue
-		case <-time.After(500 * time.Millisecond):
-		}
-		break
-	}
-
-	for _, code := range []int{2104, 2106, 2158} {
-		if !farmCodes[code] {
-			t.Errorf("farm-status code %d not observed in session events", code)
-		}
-	}
-}
-
 // Grounded fixture tests: real field values extracted from live IB Gateway captures.
 
 func TestGroundedBootstrap(t *testing.T) {
@@ -2303,6 +2256,9 @@ func TestGroundedBootstrap(t *testing.T) {
 			}
 			if ev.Code >= 2000 && ev.Code < 3000 {
 				farmCodes[ev.Code] = true
+				if ev.State != ev.Previous {
+					t.Fatalf("farm-status code %d caused state change: %s -> %s", ev.Code, ev.Previous, ev.State)
+				}
 			}
 			continue
 		case <-time.After(500 * time.Millisecond):

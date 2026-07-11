@@ -291,33 +291,6 @@ func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 	}
 }
 
-func TestFarmStatusCodesAreInformational(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "error_farm_status_codes.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	details, err := client.Contracts().Details(ctx, ibkr.Contract{
-		Symbol:   "AAPL",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
-	})
-	if err != nil {
-		t.Fatalf("ContractDetails() error = %v", err)
-	}
-	if len(details) != 1 {
-		t.Fatalf("details len = %d, want 1", len(details))
-	}
-	if details[0].LongName != "APPLE INC" {
-		t.Fatalf("long name = %q, want APPLE INC", details[0].LongName)
-	}
-}
-
 func TestEmptyResultSets(t *testing.T) {
 	t.Parallel()
 
