@@ -102,6 +102,7 @@ func (m CancelScannerSubscription) encodeWire(sv int) ([]string, error) {
 type ScannerDataEntry struct {
 	Rank       int
 	Contract   Contract
+	MarketName string
 	Distance   string
 	Benchmark  string
 	Projection string
@@ -249,7 +250,7 @@ func (m ScannerParameters) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(protocol.InScannerParameters), "1", m.XML}, nil
 }
 
-// [20, version=3, reqID, numberOfElements, entries(rank, contract(11), distance, benchmark, projection, legsStr)]
+// [20, version=3, reqID, numberOfElements, entries(rank, contract(10), marketName, distance, benchmark, projection, legsStr)]
 func decodeScannerData(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
@@ -263,12 +264,14 @@ func decodeScannerData(r *fieldReader, sv int) ([]Message, error) {
 	entries := make([]ScannerDataEntry, count)
 	for i := range entries {
 		rank, _ := r.ReadInt()
-		contract := readWireContract(r)
+		contract := readScannerContract(r)
+		marketName := r.ReadString()
+		contract.TradingClass = r.ReadString()
 		distance := r.ReadString()
 		benchmark := r.ReadString()
 		projection := r.ReadString()
 		legsStr := r.ReadString()
-		entries[i] = ScannerDataEntry{Rank: rank, Contract: contract, Distance: distance, Benchmark: benchmark, Projection: projection, LegsStr: legsStr}
+		entries[i] = ScannerDataEntry{Rank: rank, Contract: contract, MarketName: marketName, Distance: distance, Benchmark: benchmark, Projection: projection, LegsStr: legsStr}
 	}
 	return []Message{ScannerDataResponse{ReqID: reqID, Entries: entries}}, nil
 }
@@ -281,7 +284,8 @@ func (m ScannerDataResponse) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(len(m.Entries))
 	for _, e := range m.Entries {
 		w.WriteInt(e.Rank)
-		// Server->client 11-field contract: conID, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass
+		// Scanner data has its own contract-details block. Unlike the common
+		// server contract block, it omits multiplier and includes marketName.
 		w.WriteInt(e.Contract.ConID)
 		w.WriteString(e.Contract.Symbol)
 		w.WriteString(e.Contract.SecType)
@@ -292,10 +296,10 @@ func (m ScannerDataResponse) encodeWire(sv int) ([]string, error) {
 			w.WriteString(e.Contract.Strike)
 		}
 		w.WriteString(e.Contract.Right)
-		w.WriteString(e.Contract.Multiplier)
 		w.WriteString(e.Contract.Exchange)
 		w.WriteString(e.Contract.Currency)
 		w.WriteString(e.Contract.LocalSymbol)
+		w.WriteString(e.MarketName)
 		w.WriteString(e.Contract.TradingClass)
 		w.WriteString(e.Distance)
 		w.WriteString(e.Benchmark)
@@ -303,6 +307,21 @@ func (m ScannerDataResponse) encodeWire(sv int) ([]string, error) {
 		w.WriteString(e.LegsStr)
 	}
 	return w.Fields(), nil
+}
+
+func readScannerContract(r *fieldReader) Contract {
+	conID, _ := r.ReadInt()
+	return Contract{
+		ConID:       conID,
+		Symbol:      r.ReadString(),
+		SecType:     r.ReadString(),
+		Expiry:      r.ReadString(),
+		Strike:      r.ReadString(),
+		Right:       r.ReadString(),
+		Exchange:    r.ReadString(),
+		Currency:    r.ReadString(),
+		LocalSymbol: r.ReadString(),
+	}
 }
 
 // [16, version, faDataType, xml]

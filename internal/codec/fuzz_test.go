@@ -472,7 +472,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"HistoricalData", protocol.InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end
 		{"BondContractData", protocol.InBondContractData, 42},           // reqID, 31 fixed bond/common fields, security IDs, and size-rule tail
 		{"ScannerParameters", protocol.InScannerParameters, 2},          // version, xml
-		{"ScannerData", protocol.InScannerData, 20},                     // version, reqID, count, entries(rank + 11 contract + 4 fields)
+		{"ScannerData", protocol.InScannerData, 20},                     // version, reqID, count, entries(rank + 10 contract + market name + 4 fields)
 		{"TickOptionComputation", protocol.InTickOptionComputation, 12}, // version, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice
 		{"TickGeneric", protocol.InTickGeneric, 4},                      // version, reqID, tickType, value
 		{"TickString", protocol.InTickString, 4},                        // version, reqID, tickType, value

@@ -422,9 +422,8 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  ScannerParameters{XML: "<ScannerParameters/>"},
 		},
 		{
-			// ScannerDataResponse: the encoder writes contract fields
-			// directly (not via writeWireContract) matching readWireContract.
-			// Strike "0" default applies.
+			// ScannerDataResponse has a dedicated contract-details shape that
+			// omits multiplier and includes market name. Strike "0" is the default.
 			name: "ScannerDataResponse",
 			msg: ScannerDataResponse{
 				ReqID: 1,
@@ -434,7 +433,8 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 						ConID: 265598, Symbol: "AAPL", SecType: "STK",
 						Strike: "0", Exchange: "SMART", Currency: "USD",
 					},
-					Distance: "", Benchmark: "", Projection: "", LegsStr: "",
+					MarketName: "NMS",
+					Distance:   "", Benchmark: "", Projection: "", LegsStr: "",
 				}},
 			},
 		},

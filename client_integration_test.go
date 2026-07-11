@@ -1244,8 +1244,11 @@ func TestScannerSubscriptionReturnsLiveRankedResults(t *testing.T) {
 	if len(results) != 10 {
 		t.Fatalf("results len = %d, want 10", len(results))
 	}
-	if got := results[0]; got.Rank != 0 || got.Contract.ConID != 888872117 || got.Contract.Symbol != "BGIA" {
-		t.Fatalf("first result = %+v, want live rank 0 BGIA contract 888872117", got)
+	if got := results[0]; got.Rank != 0 || got.Contract.ConID != 888872117 ||
+		got.Contract.Symbol != "BGIA" || got.Contract.Exchange != "SMART" ||
+		got.Contract.Currency != "USD" || got.Contract.LocalSymbol != "BGIA" ||
+		got.MarketName != "NMS" || got.Contract.TradingClass != "NMS" {
+		t.Fatalf("first result = %+v, want exact live BGIA scanner result", got)
 	}
 	if got := results[9]; got.Rank != 9 || got.Contract.Symbol != "FAB" {
 		t.Fatalf("last result = %+v, want live rank 9 FAB", got)

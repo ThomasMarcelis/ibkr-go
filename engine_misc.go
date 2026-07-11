@@ -239,6 +239,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 					results[i] = ScannerResult{
 						Rank:       entry.Rank,
 						Contract:   contract,
+						MarketName: entry.MarketName,
 						Distance:   entry.Distance,
 						Benchmark:  entry.Benchmark,
 						Projection: entry.Projection,

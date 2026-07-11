@@ -111,6 +111,7 @@ type ScannerSubscriptionRequest struct {
 type ScannerResult struct {
 	Rank       int
 	Contract   Contract
+	MarketName string
 	Distance   string
 	Benchmark  string
 	Projection string

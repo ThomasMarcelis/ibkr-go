@@ -66,7 +66,7 @@ func run() error {
 	}
 	for _, result := range results {
 		fmt.Printf("%2d  %-8s %s\n", result.Rank+1,
-			result.Contract.Symbol, result.Contract.PrimaryExchange)
+			result.Contract.Symbol, result.MarketName)
 	}
 
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {

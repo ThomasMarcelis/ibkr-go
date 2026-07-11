@@ -23,8 +23,12 @@ func TestCaptureDecode_ScannerDataLive(t *testing.T) {
 	if response.ReqID != 1 || len(response.Entries) != 10 {
 		t.Fatalf("response = req_id %d entries %d, want req_id 1 entries 10", response.ReqID, len(response.Entries))
 	}
-	if got := response.Entries[0]; got.Rank != 0 || got.Contract.ConID != 888872117 || got.Contract.Symbol != "BGIA" {
-		t.Fatalf("first entry = %+v, want live rank 0 BGIA contract 888872117", got)
+	if got := response.Entries[0]; got.Rank != 0 ||
+		got.Contract.ConID != 888872117 || got.Contract.Symbol != "BGIA" ||
+		got.Contract.Multiplier != "" || got.Contract.Exchange != "SMART" ||
+		got.Contract.Currency != "USD" || got.Contract.LocalSymbol != "BGIA" ||
+		got.MarketName != "NMS" || got.Contract.TradingClass != "NMS" {
+		t.Fatalf("first entry = %+v, want exact live BGIA scanner contract mapping", got)
 	}
 	if got := response.Entries[9]; got.Rank != 9 || got.Contract.ConID != 44000292 || got.Contract.Symbol != "FAB" {
 		t.Fatalf("last entry = %+v, want live rank 9 FAB contract 44000292", got)
