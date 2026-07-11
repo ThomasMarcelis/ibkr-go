@@ -77,15 +77,14 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 	}
 }
 
-// TestPreviewRejectedByGatewayReplay freezes the Preview rejection path: a
-// code-201 api_error targeting the what-if order ID must resolve the blocked
-// Preview caller with an *ibkr.APIError instead of dereferencing the nil
-// handle of the preview route (actor crash before 2026-07-05). Frame shapes
-// are live-attested; see the fixture header.
-func TestPreviewRejectedByGatewayReplay(t *testing.T) {
+// TestPreviewRejectionsReplay freezes both preview error-routing branches from
+// one exact live campaign: an ordinary request error and a 10xxx placement
+// rejection. Neither request gets an open-order echo, so each targeted error
+// must resolve the blocked Preview caller without an OrderHandle.
+func TestPreviewRejectionsReplay(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "whatif_rejected.txt")
+	client, host := newClient(t, "whatif_rejections.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
@@ -93,21 +92,60 @@ func TestPreviewRejectedByGatewayReplay(t *testing.T) {
 	defer cancel()
 
 	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
+		Contract: ibkr.Contract{
+			Symbol:   "ZZZZNONE",
+			SecType:  ibkr.SecTypeStock,
+			Exchange: "SMART",
+			Currency: "USD",
+		},
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("100"),
+			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "ibkrgo-redacted-20260711T041916Z-001",
 		},
 	})
 	var apiErr *ibkr.APIError
 	if !errors.As(err, &apiErr) {
-		t.Fatalf("Preview error = %v, want *ibkr.APIError", err)
+		t.Fatalf("invalid-contract Preview error = %v, want *ibkr.APIError", err)
 	}
-	if apiErr.Code != 201 {
-		t.Fatalf("Preview rejection code = %d, want 201", apiErr.Code)
+	if apiErr.Code != ibkr.ErrCodeNoSecurityDefinition {
+		t.Fatalf("invalid-contract Preview code = %d, want %d", apiErr.Code, ibkr.ErrCodeNoSecurityDefinition)
+	}
+
+	_, err = client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+		Contract: orderReplayAAPL,
+		Order: ibkr.Order{
+			Action:      ibkr.ActionBuy,
+			OrderType:   ibkr.OrderTypeLimit,
+			Quantity:    decimal.RequireFromString("1"),
+			LmtPrice:    decimal.RequireFromString("150"),
+			TIF:         ibkr.TIFDay,
+			Account:     "DU9000001",
+			OrderRef:    "ibkrgo-redacted-20260711T041916Z-002",
+			DisplaySize: 1,
+			Algorithm: ibkr.OrderAlgorithm{
+				Strategy: "DarkIce",
+				Params: []ibkr.TagValue{
+					{Tag: "displaySize", Value: "1"},
+					{Tag: "startTime", Value: "20260711 04:22:17 UTC"},
+					{Tag: "endTime", Value: "20260711 04:39:17 UTC"},
+					{Tag: "allowPastEndTime", Value: "1"},
+				},
+			},
+		},
+	})
+	apiErr = nil
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("DarkIce Preview error = %v, want *ibkr.APIError", err)
+	}
+	if apiErr.Code != ibkr.ErrCodeDisplaySizeNotAllowed {
+		t.Fatalf("DarkIce Preview code = %d, want %d", apiErr.Code, ibkr.ErrCodeDisplaySizeNotAllowed)
+	}
+	if apiErr.Message != "The 'Display Size' order attribute may not be specified for this order." {
+		t.Fatalf("DarkIce Preview message = %q", apiErr.Message)
 	}
 }
 
@@ -138,58 +176,6 @@ func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
 	})
 	if !errors.Is(err, ibkr.ErrInterrupted) {
 		t.Fatalf("Preview error after disconnect = %v, want ErrInterrupted", err)
-	}
-}
-
-// TestPreviewRejected10xxxReplay freezes the Preview 10xxx rejection path,
-// recaptured on 2026-07-11 against paper Gateway server_version 207
-// (api_whatif_margin_aapl, events sha256 prefix bea3a57952da4b93): a
-// what-if DarkIce order carrying a
-// display size draws an api_error code 10255 whose req_id is the what-if
-// order id, and no open_order echo ever follows. The order-targeted error
-// must resolve the blocked Preview caller; before the fix it rode the 10xxx
-// session-event fallback and Preview hung until its context deadline.
-func TestPreviewRejected10xxxReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "whatif_rejected_10255.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
-		Order: ibkr.Order{
-			Action:      ibkr.ActionBuy,
-			OrderType:   ibkr.OrderTypeLimit,
-			Quantity:    decimal.RequireFromString("1"),
-			LmtPrice:    decimal.RequireFromString("150"),
-			TIF:         ibkr.TIFDay,
-			Account:     "DU9000001",
-			OrderRef:    "ibkrgo-redacted-20260711T041644Z-001",
-			DisplaySize: 1,
-			Algorithm: ibkr.OrderAlgorithm{
-				Strategy: "DarkIce",
-				Params: []ibkr.TagValue{
-					{Tag: "displaySize", Value: "1"},
-					{Tag: "startTime", Value: "20260711 04:19:45 UTC"},
-					{Tag: "endTime", Value: "20260711 04:36:45 UTC"},
-					{Tag: "allowPastEndTime", Value: "1"},
-				},
-			},
-		},
-	})
-	var apiErr *ibkr.APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("Preview error = %v, want *ibkr.APIError", err)
-	}
-	if apiErr.Code != ibkr.ErrCodeDisplaySizeNotAllowed {
-		t.Fatalf("Preview rejection code = %d, want %d", apiErr.Code, ibkr.ErrCodeDisplaySizeNotAllowed)
-	}
-	if apiErr.Message != "The 'Display Size' order attribute may not be specified for this order." {
-		t.Fatalf("Preview rejection message = %q", apiErr.Message)
 	}
 }
 
