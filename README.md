@@ -56,8 +56,9 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
   `EClient` callback surface.
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
-  configuration, WSH, display groups, and more. The supported baseline is
-  `server_version 200`; remaining and partially decoded official branches are
+  configuration, WSH, display groups, and more. The client negotiates
+  `server_version` 176..207: 200 is the classic-wire live baseline, with exact
+  post-200 protocol migrations through 207. Remaining official branches are
   tracked explicitly in the roadmap and coverage matrix.
 - **Reconnects are explicit.** Session transitions and subscription lifecycle
   events — `Gap`, `Resumed`, `SnapshotComplete`, `Closed` — are part of the
@@ -328,11 +329,12 @@ stressed, and extended without guessing. For more on that approach, see
 ## Status
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
-domains through an idiomatic Go facade. The supported and live-attested
-classic baseline is `server_version 200`. The client does not yet implement
-the raw-ID/protobuf protocol used above 200, and some advanced v200 response
-layouts remain explicitly partial. See the coverage matrix for the evidence
-behind each claim.
+domains through an idiomatic Go facade. It negotiates `server_version`
+176..207. Version 200 is the live-attested classic-wire baseline; exact
+raw-ID/protobuf migrations from 201 through 207 are implemented and
+live-attested. Protocol boundaries from 208 onward and remaining advanced
+branches stay explicit in the coverage matrix rather than being claimed as
+supported.
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full
