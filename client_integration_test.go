@@ -3,6 +3,7 @@ package ibkr_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"path/filepath"
 	"reflect"
@@ -3326,7 +3327,7 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 		Exchange: "SMART",
 		Currency: "USD",
 	}
-	prices := []string{"12.98", "13.98", "14.98", "15.98", "16.98", "17.98", "18.98", "19.98", "20.98", "21.98"}
+	prices := []string{"15.81", "16.81", "17.81", "18.81", "19.81", "20.81", "21.81", "22.81", "23.81", "24.81"}
 	handles := make([]*ibkr.OrderHandle, 0, len(prices))
 	orderIDs := map[int64]bool{}
 	for i, price := range prices {
@@ -3335,10 +3336,11 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 			Order: ibkr.Order{
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
-				Quantity:  decimal.RequireFromString("1"),
+				Quantity:  decimal.RequireFromString("100"),
 				LmtPrice:  decimal.RequireFromString(price),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
+				OrderRef:  fmt.Sprintf("ibkrgo-redacted-20260711T045307Z-%03d", i+1),
 			},
 		})
 		if err != nil {
@@ -3355,7 +3357,7 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 	}
 
 	for i, handle := range handles {
-		waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+		waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
 		if got := handle.OrderID(); got == 0 {
 			t.Fatalf("stress order[%d] order ID = 0", i)
 		}

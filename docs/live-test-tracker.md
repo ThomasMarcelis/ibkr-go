@@ -409,7 +409,7 @@ against the role-aware `paper-dev` Gateway.
 | scanner_subscription_no_items | 2026-07-10 | private recorder evidence from paper server_version=200; exact request-scoped code 165 `Historical Market Data Service query message:no items retrieved` is followed by a valid zero-row ScannerData response and grounds the engine's nonterminal scanner route; events sha256 `14cdc2913735bb3c3839beff106ab0524f5b8d509340a49d8d07470e39728e7e` |
 | api_whatif_margin_aapl | 2026-04-14 | recorded, not promoted; `20260414T164207Z` produced no usable preview callback and cleanup timed out (`ac70de98ef2c239a`); `20260414T182608Z` returned live code 320 after the WhatIf place request (`e431bf7f0b84abd1`) |
 | api_forex_lifecycle_eurusd | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `641eab5c0e6909f7`; real paper-account code 201 leverage rejection |
-| api_stress_rapid_fire_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `69ee6be4cdf7d577` |
+| api_stress_rapid_fire_aapl | 2026-07-11 | re-recorded and verified through the current public API on paper server_version=207; ten 100-share far AAPL limits reached PreSubmitted, global cancel closed every handle, events sha256 `d66113abb8382887a09014f30b38afbb1b215b6f3c23a90be9dc3abe75ba6115` |
 | api_scale_in_campaign_aapl | 2026-04-14 | recorded, verified; server_version=200, events sha256 prefix `63db2db7cba21b68`; two AAPL market fills plus protective stop-loss, with later flatten/executions/cleanup tail timing out |
 | api_bracket_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `682a1390b2acf04c`; bracket parent fill, child OCA echo, and real price-band cancel/reject on take-profit modify |
 | api_oca_trigger_aapl | 2026-04-13 | recorded, verified; server_version=200, events sha256 prefix `2dc16869778bc497`; OCA group echo plus real price-band cancellation |
@@ -497,7 +497,7 @@ against the role-aware `paper-dev` Gateway.
 | api_pairs_trading_aapl_msft.txt | 20260415T161858Z | promoted; covers paired AAPL long/MSFT short entries and per-symbol flatten replay; source execution-query tail timed out |
 | api_dollar_cost_averaging_aapl.txt | 20260415T161924Z | promoted; covers three staged AAPL entries and aggregate flatten replay; source execution-query tail timed out |
 | api_bracket_trailing_stop_aapl.txt | 20260415T161944Z | promoted; covers live code 328 rejection for TRAIL child attached under a market bracket parent; source tail entered execution-query timeout and cleanup |
-| api_stress_rapid_fire_aapl.txt | 20260414T171824Z | promoted; covers ten far AAPL LMT orders, distinct order IDs, and global-cancel terminal replay |
+| api_stress_rapid_fire_aapl.txt | 20260711T045307Z | promoted from exact current sv207 raw frames; covers ten far AAPL LMT orders, distinct order IDs, repeated live open/status echoes, and global-cancel terminal replay (`d66113abb8382887a09014f30b38afbb1b215b6f3c23a90be9dc3abe75ba6115`) |
 | api_forex_lifecycle_eurusd.txt | 20260414T182627Z | promoted; covers EUR.USD far LMT OpenOrder, Inactive status, and real code 201 leverage rejection replay |
 | api_bracket_trigger_aapl.txt | 20260413T174517Z | promoted; covers bracket parent fill, child OCA group echo, and real price-band cancel/reject on forced take-profit modify |
 | api_oca_trigger_aapl.txt | 20260413T174546Z | promoted; covers OCA group echo on both AAPL peers and real PendingCancel/Cancelled price-band rejection for the aggressive peer |
