@@ -1,10 +1,15 @@
-# Grounded bootstrap from captures/20260405T214926Z-bootstrap/raw.txt
-# IB Gateway session fixture: server_version=200, account DU9000001, orderID=1
+# Exact session bootstrap from paper IB Gateway server_version 200.
+# Source: captures/20260405T214926Z-bootstrap
+# events.jsonl sha256: 8ea1dff420928fb3cc5a128072eae1672d83997f24bf66c69248b2205ee9b16c
+#
+# The account is length-preserving redacted to DU9000001. The managed account,
+# next order ID, and farm-status frames are exact. Testhost holds the transport
+# open briefly after the captured frames so callers can inspect the ready session.
 handshake {"server_version":200,"connection_time":"20260405 23:49:26 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425766350"}
-server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425766350"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425766351"}
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAABjkAMQAxAA==
+raw server AAAAQjQALTEAMjEwNABNYXJrZXQgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNmYXJtAAAxNzc1NDI1NzY2MzUwAA==
+raw server AAAAQDQALTEAMjEwNgBITURTIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnVzaG1kcwAAMTc3NTQyNTc2NjM1MAA=
+raw server AAAARTQALTEAMjE1OABTZWMtZGVmIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnNlY2RlZm5qAAAxNzc1NDI1NzY2MzUxAA==
 sleep 500ms
 disconnect

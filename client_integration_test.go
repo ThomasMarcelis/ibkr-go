@@ -22,8 +22,8 @@ func TestDialContextWithClientID(t *testing.T) {
 	defer client.Close()
 	defer waitHost(t, host)
 
-	if got := client.Session().NextValidID; got != 1001 {
-		t.Fatalf("next valid id = %d, want 1001", got)
+	if got := client.Session().NextValidID; got != 1 {
+		t.Fatalf("next valid id = %d, want 1", got)
 	}
 }
 
@@ -123,7 +123,7 @@ func TestHistoricalSchedule(t *testing.T) {
 func TestHistoricalBarsWithScheduleRejects(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "handshake.txt")
+	client, host := newClient(t, "grounded_bootstrap.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
@@ -426,7 +426,7 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 func TestSetMarketDataType(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "handshake.txt")
+	client, host := newClient(t, "grounded_bootstrap.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 	ctx := context.Background()
@@ -469,7 +469,7 @@ func TestAPIMarketDataTypeCycleReplay(t *testing.T) {
 func TestQuoteSnapshotRejectsGenericTicks(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "handshake.txt")
+	client, host := newClient(t, "grounded_bootstrap.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
@@ -823,7 +823,7 @@ func TestOpenOrdersSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T
 func TestOpenOrdersAutoRequiresClientIDZero(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "handshake.txt")
+	client, host := newClient(t, "grounded_bootstrap.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
@@ -886,7 +886,7 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			client, host := newClient(t, "handshake.txt")
+			client, host := newClient(t, "grounded_bootstrap.txt")
 			defer client.Close()
 			defer waitHost(t, host)
 
@@ -2209,7 +2209,7 @@ func waitForEvent[T any](t *testing.T, ch <-chan T) T {
 func TestBootstrapWithFarmStatusCodes(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "bootstrap_with_farm_status.txt")
+	client, host := newClient(t, "grounded_bootstrap.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
@@ -2220,8 +2220,8 @@ func TestBootstrapWithFarmStatusCodes(t *testing.T) {
 	if snapshot.ServerVersion != 200 {
 		t.Fatalf("server version = %d, want 200", snapshot.ServerVersion)
 	}
-	if len(snapshot.ManagedAccounts) != 1 || snapshot.ManagedAccounts[0] != "DU12345" {
-		t.Fatalf("managed accounts = %v, want [DU12345]", snapshot.ManagedAccounts)
+	if len(snapshot.ManagedAccounts) != 1 || snapshot.ManagedAccounts[0] != "DU9000001" {
+		t.Fatalf("managed accounts = %v, want [DU9000001]", snapshot.ManagedAccounts)
 	}
 
 	// Drain session events and verify farm-status codes arrived as events
