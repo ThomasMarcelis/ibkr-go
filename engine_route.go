@@ -292,13 +292,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				route.handleAPIErr(msg, e)
 				return
 			}
-			if preview, ok := e.previews[int64(msg.ReqID)]; ok {
-				// A what-if rejected in the 10xxx band never gets an echo
-				// (live-attested: code 10255 on a what-if DarkIce placement,
-				// captures/20260705T011725Z), so the order-targeted error is
-				// the preview's only completion signal.
-				preview.resolve(previewResult{err: e.apiErr(OpPlaceOrder, msg)})
-				delete(e.previews, int64(msg.ReqID))
+			if e.handlePreviewAPIError(msg) {
 				return
 			}
 			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
@@ -332,9 +326,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			route.handleAPIErr(msg, e)
 			return
 		}
-		if preview, ok := e.previews[int64(msg.ReqID)]; ok {
-			preview.resolve(previewResult{err: e.apiErr(OpPlaceOrder, msg)})
-			delete(e.previews, int64(msg.ReqID))
+		if e.handlePreviewAPIError(msg) {
 			return
 		}
 		// Order-specific API errors: the reqID field carries the orderID
@@ -413,6 +405,24 @@ func isOrderCancellationReply(code int) bool {
 	return code == ErrCodeCancelNotCancellableState || code == ErrCodeOrderCanceled ||
 		code == ErrCodeOrderToCancelNotFound || code == ErrCodeOrderCannotBeCancelled ||
 		code == ErrCodeImbalanceOnlyNotAllowed
+}
+
+func (e *engine) handlePreviewAPIError(msg codec.APIError) bool {
+	preview, ok := e.previews[int64(msg.ReqID)]
+	if !ok {
+		return false
+	}
+	apiErr, _ := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
+	if apiErr.IsWarning() {
+		e.emitAPIEvent(msg)
+		return true
+	}
+	// Rejected what-if requests do not get an open-order echo (live-attested:
+	// code 10255 in captures/20260705T011725Z), so the targeted error is the
+	// preview's only completion signal.
+	preview.resolve(previewResult{err: apiErr})
+	delete(e.previews, int64(msg.ReqID))
+	return true
 }
 
 // isInitialOrderRejection is the attested set of errors that prove a placement

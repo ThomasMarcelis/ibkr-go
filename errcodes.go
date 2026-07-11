@@ -195,7 +195,8 @@ func (e *APIError) IsFarmStatus() bool {
 // [ErrCodeDelayedMarketDataDisplayed] (the stream continues with delayed
 // ticks), [ErrCodeSmartDepthExchanges] (available depth venues), and
 // [ErrCodeOrderMessage] (the order stays working at IB; live replays show it
-// still cancellable after the warning).
+// still cancellable after the warning), and [ErrCodeOrderTIFSetFromPreset]
+// (the Gateway supplies a missing TIF and continues processing the request).
 //
 // The engine consults this predicate for order-targeted sub-10000 codes to
 // deliver [OrderEvent].Warning without closing the handle; the 10xxx band's
@@ -203,7 +204,8 @@ func (e *APIError) IsFarmStatus() bool {
 // order-targeted 10xxx warning needs its own wiring there.
 func (e *APIError) IsWarning() bool {
 	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed ||
-		e.Code == ErrCodeSmartDepthExchanges || e.Code == ErrCodeOrderMessage
+		e.Code == ErrCodeSmartDepthExchanges || e.Code == ErrCodeOrderMessage ||
+		e.Code == ErrCodeOrderTIFSetFromPreset
 }
 
 // IsPacingViolation reports whether the error requires retrying with backoff.

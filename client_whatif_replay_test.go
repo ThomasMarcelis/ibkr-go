@@ -102,6 +102,43 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 	}
 }
 
+// TestPreviewContinuesAfterTIFDefaultWarning freezes the exact paper Gateway
+// server_version 207 sequence captured on 2026-07-11: a preview with no TIF
+// receives code 10349 and then a valid open-order preview. The warning is
+// observable at session scope but must not resolve the preview as an error.
+func TestPreviewContinuesAfterTIFDefaultWarning(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "whatif_tif_default_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	events := client.SessionEvents()
+
+	order := ibkr.MarketOrder(ibkr.ActionBuy, decimal.NewFromInt(100))
+	order.Account = "DU9000001"
+	state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
+		Contract: ibkr.Stock("AAPL"),
+		Order:    order,
+	})
+	if err != nil {
+		t.Fatalf("Preview: %v", err)
+	}
+	if state.Status != ibkr.OrderStatusPreSubmitted || state.MarginCurrency != "EUR" {
+		t.Fatalf("preview status/currency = %s/%q, want PreSubmitted/EUR", state.Status, state.MarginCurrency)
+	}
+	if state.CommissionAndFees == nil || !state.CommissionAndFees.Equal(decimal.RequireFromString("1.0003")) {
+		t.Fatalf("preview commission = %v, want 1.0003", state.CommissionAndFees)
+	}
+
+	warning := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderTIFSetFromPreset)
+	if warning.APIError == nil || !warning.APIError.IsWarning() {
+		t.Fatalf("code-10349 event = %+v, want classified warning", warning)
+	}
+}
+
 // TestPreviewRejectionsReplay freezes both preview error-routing branches from
 // one exact live campaign: an ordinary request error and a 10xxx placement
 // rejection. Neither request gets an open-order echo, so each targeted error
