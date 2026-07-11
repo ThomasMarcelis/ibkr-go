@@ -70,3 +70,19 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 		t.Fatalf("dual dispatch shares mutable storage: handle=%+v subscription=%+v", *handleOrder, openOrdersOrder)
 	}
 }
+
+func TestRequestIDSkipsPendingPreview(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		nextReqID: 41,
+		orders:    make(map[int64]*orderRoute),
+		previews: map[int64]*previewRoute{
+			41: {result: make(chan previewResult, 1)},
+		},
+	}
+
+	if got := e.allocReqID(); got != 42 {
+		t.Fatalf("allocReqID() = %d, want 42 after pending preview 41", got)
+	}
+}

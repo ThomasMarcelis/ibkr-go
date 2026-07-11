@@ -322,7 +322,10 @@ func (e *engine) allocReqID() int {
 	for {
 		id := e.nextReqID
 		e.nextReqID++
-		if _, conflict := e.orders[int64(id)]; !conflict {
+		if _, conflict := e.orders[int64(id)]; conflict {
+			continue
+		}
+		if _, conflict := e.previews[int64(id)]; !conflict {
 			return id
 		}
 	}
