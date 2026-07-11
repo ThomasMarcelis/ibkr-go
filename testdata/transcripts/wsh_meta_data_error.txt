@@ -1,6 +1,12 @@
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_wsh_meta_data {"req_id":"$req1"}
-server api_error {"req_id":"$req1","code":10276,"message":"News is not allowed.","advanced_order_reject_json":"","error_time_ms":""}
+# Live-derived from /tmp/ibkr-go-finite-orders-news-v2/
+# 20260710T230042Z-wsh_meta_data at server_version 206; events.jsonl sha256:
+# cda9d532c7edb7195c5adca10323cbedb9eab0ac33bc1a1d168a85602199dc50.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted.
+# The request and current live entitlement refusal are exact.
+handshake {"server_version":206,"connection_time":"20260711 01:00:42 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAAGQxAA==
+raw server AAAAKwAAAMwIARCEhYzy9DMYpFAiGU5ld3MgZmVlZCBpcyBub3QgYWxsb3dlZC4=
 disconnect

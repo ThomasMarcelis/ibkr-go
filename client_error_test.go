@@ -552,13 +552,13 @@ func TestMarketDepthError10xxx(t *testing.T) {
 
 	sub, err := client.MarketData().SubscribeDepth(ctx, ibkr.MarketDepthRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
-		NumRows:      5,
-		IsSmartDepth: true,
+		NumRows: 5,
 	}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 	if err != nil {
 		t.Fatalf("SubscribeMarketDepth() error = %v", err)

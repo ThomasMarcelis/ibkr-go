@@ -519,7 +519,10 @@ against the role-aware `paper-dev` Gateway.
 | api_order_trailing_cancel_aapl.txt | 20260610T195819Z | promoted; covers TRAIL off-hours partial-then-full fill with cancel-after-fill 10148, TRAIL LIMIT rest/cancel, and the UTC-dash execution times the parser now accepts (both fills and commissions reach the handle in replay) |
 | api_order_relative_cancel_aapl.txt | 20260610T195833Z | promoted; covers REL with Gateway-assigned 0.01 offset echo and full cancel lifecycle |
 | api_order_rejects_aapl.txt | 20260610T195923Z | promoted; covers 321 invalid order type, price-band 202 cancel text, 10147 unknown-order cancel, 10148 re-cancel, and 161 safety re-cancel |
-| current_time_live.txt | 20260611T074046Z | promoted; covers explicit reqCurrentTime with the live epoch reply and the Session snapshot |
+| current_time_live.txt | 20260710T215126Z | promoted; exact sv206 reqCurrentTime and seconds-resolution reply update both the call and Session snapshot (`c4ad2ec73d6d2a92`) |
+| news_bulletins_live.txt | 20260710T133034Z | promoted; exact sv200 subscribe, two exchange bulletins, and cancel (`164407d1aa7df6bf`) |
+| market_depth_error.txt | 20260711T000616Z | promoted; exact sv206 resolved-AAPL regular-depth request and terminal code-10092 refusal (`c45b90e97854b1cb`) |
+| wsh_meta_data_error.txt | 20260710T230042Z | promoted; exact sv206 request and code-10276 entitlement refusal (`cda9d532c7edb719`) |
 | req_ids_read_only.txt | 20260611T074047Z | promoted; freezes the read-only Gateway's code-321 rejection of explicit reqIds as an unsolicited push (no public API sends reqIds; the client frame is omitted and disclosed in the header) and the drop-without-perturbation session surface |
 | matching_symbols_partial.txt | 20260611T074053Z | promoted; covers the 97-row partial-pattern symbolSamples reply including BOND issuer ids, round-tripped field-for-field against the capture |
 | set_type_switch_while_streaming.txt | 20260611T074112Z | promoted; covers the stream-tied marketDataType(3) push, delayed ticks, mid-stream SetType(Live) acceptance, and 10167 as a session event; the four bare set_type captures add nothing beyond api_market_data_type_cycle.txt and set_type_invalid is inconclusive (driver disconnected before any reply; public API validates 1..4 client-side) |

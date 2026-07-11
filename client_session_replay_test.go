@@ -10,14 +10,14 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go"
 )
 
-// Replay freezes for the 2026-06-11 read-only live-Gateway session and
-// reference captures (server_version 200). Each test replays a transcript
+// Replay freezes for read-only live-Gateway sessions and reference captures.
+// Each test replays a transcript
 // derived frame-for-frame from a sanitized live capture; the capture dir and
 // sha256 prefix are recorded in the transcript headers.
 
 // TestCurrentTimeExplicitReplay freezes the explicit reqCurrentTime exchange
-// (SESS-002): client [49, 1] is answered by [49, 1, 1781163646] after the
-// bootstrap farm-status triple. Capture 20260611T074046Z-current_time.
+// (SESS-002): client [49, 1] is answered by a seconds-resolution epoch.
+// Capture 20260710T215126Z-current_time at server version 206.
 func TestCurrentTimeExplicitReplay(t *testing.T) {
 	t.Parallel()
 
@@ -32,9 +32,7 @@ func TestCurrentTimeExplicitReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentTime() error = %v", err)
 	}
-	// 1781163646 epoch seconds = 2026-06-11 07:40:46 UTC (transcript header
-	// shows 09:40:46 CEST).
-	want := time.Unix(1781163646, 0).UTC()
+	want := time.Unix(1783720285, 0).UTC()
 	if !ts.Equal(want) {
 		t.Errorf("CurrentTime() = %v, want %v", ts, want)
 	}
