@@ -2375,6 +2375,36 @@ func runAPIMarketDataCompletenessAAPL(ctx context.Context, addr string, clientID
 	})
 }
 
+func runAPIPnL(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
+		sub, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: account}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe account PnL: %w", err)
+		}
+		var update ibkr.PnLUpdate
+		count, err := awaitSubscriptionEvidence(ctx, sub, 10*time.Second, func(value ibkr.PnLUpdate) bool {
+			update = value
+			return true
+		})
+		if err != nil {
+			_ = sub.Close()
+			return fmt.Errorf("observe account PnL: %w", err)
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "account PnL cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("pnl", "account", func(event *apiDriverEvent) {
+			event.Count = count
+			event.Values = map[string]string{
+				"daily":      update.DailyPnL.String(),
+				"unrealized": update.UnrealizedPnL.String(),
+				"realized":   update.RealizedPnL.String(),
+			}
+		})
+		return nil
+	})
+}
+
 func runAPIScannerSubscription(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 30*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		sub, err := client.Scanner().SubscribeResults(ctx, ibkr.ScannerSubscriptionRequest{

@@ -485,22 +485,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIPositionsMulti,
 	},
 	"pnl": {
-		metadata:    meta("accounts", []string{"Accounts().SubscribePnL"}, []int{92, 93, 94}, "read_only", nil, []string{"account PnL stream"}, 1, "promoted", batchReadOnly),
-		description: "REQ_PNL for account, read for 5s, then cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			acct := sess.ManagedAccounts
-			if err := sendReqPnL(conn, reqID, acct, ""); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelPnL(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().SubscribePnL", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqPnL, protocol.InPnL, protocol.OutCancelPnL, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", nil, []string{"typed account PnL update, including an all-zero snapshot, followed by fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "observe and close the account PnL stream through the public API",
+		runAPI:      runAPIPnL,
 	},
 	"pnl_single": {
 		metadata:    meta("accounts", []string{"Accounts().SubscribePnLSingle"}, []int{94, 95}, "read_only", nil, []string{"single-position PnL stream or real error"}, 1, "promoted", batchReadOnly),
