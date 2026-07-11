@@ -22,7 +22,6 @@ func TestApplyOptionsRejectsInvalidConfigurationBeforeDial(t *testing.T) {
 		{name: "zero subscription buffer", opts: []Option{WithSubscriptionBuffer(0)}, field: "SubscriptionBuffer"},
 		{name: "zero order event buffer", opts: []Option{WithOrderEventBuffer(0)}, field: "OrderEventBuffer"},
 		{name: "unknown reconnect", opts: []Option{WithReconnectPolicy("sometimes")}, field: "ReconnectPolicy"},
-		{name: "unknown default resume", opts: []Option{WithDefaultResumePolicy("sometimes")}, field: "DefaultResumePolicy"},
 		{name: "unknown default slow consumer", opts: []Option{WithDefaultSlowConsumerPolicy("sometimes")}, field: "DefaultSlowConsumerPolicy"},
 	}
 

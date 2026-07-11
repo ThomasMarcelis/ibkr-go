@@ -37,7 +37,6 @@ type config struct {
 	eventBuffer         int
 	subscriptionBuffer  int
 	orderEventBuffer    int
-	defaultResume       ResumePolicy
 	defaultSlowConsumer SlowConsumerPolicy
 }
 
@@ -61,14 +60,13 @@ func defaultConfig() config {
 		eventBuffer:         64,
 		subscriptionBuffer:  64,
 		orderEventBuffer:    64,
-		defaultResume:       ResumeNever,
 		defaultSlowConsumer: SlowConsumerClose,
 	}
 }
 
 func defaultSubscriptionConfig(cfg config) subscriptionConfig {
 	return subscriptionConfig{
-		resume:       cfg.defaultResume,
+		resume:       ResumeNever,
 		slowConsumer: cfg.defaultSlowConsumer,
 		buffer:       cfg.subscriptionBuffer,
 	}
@@ -109,9 +107,6 @@ func validateConfig(cfg config) error {
 	}
 	if !cfg.reconnect.valid() {
 		return &ValidationError{Field: "ReconnectPolicy", Value: string(cfg.reconnect), Message: "must be ReconnectOff or ReconnectAuto"}
-	}
-	if !cfg.defaultResume.valid() {
-		return &ValidationError{Field: "DefaultResumePolicy", Value: string(cfg.defaultResume), Message: "must be ResumeNever or ResumeAuto"}
 	}
 	if !cfg.defaultSlowConsumer.valid() {
 		return &ValidationError{Field: "DefaultSlowConsumerPolicy", Value: string(cfg.defaultSlowConsumer), Message: "must be SlowConsumerClose or SlowConsumerDropOldest"}
@@ -234,14 +229,6 @@ func WithSubscriptionBuffer(size int) Option {
 func WithOrderEventBuffer(size int) Option {
 	return func(cfg *config) {
 		cfg.orderEventBuffer = size
-	}
-}
-
-// WithDefaultResumePolicy sets the default [ResumePolicy] for subscriptions.
-// Default: [ResumeNever]. Override per subscription with [WithResumePolicy].
-func WithDefaultResumePolicy(policy ResumePolicy) Option {
-	return func(cfg *config) {
-		cfg.defaultResume = policy
 	}
 }
 

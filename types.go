@@ -138,8 +138,7 @@ func (p ReconnectPolicy) valid() bool {
 }
 
 // ResumePolicy controls whether a subscription re-establishes itself after a
-// reconnect. Set the default with [WithDefaultResumePolicy] or per-subscription
-// with [WithResumePolicy].
+// reconnect. Set it per subscription with [WithResumePolicy].
 type ResumePolicy string
 
 const (

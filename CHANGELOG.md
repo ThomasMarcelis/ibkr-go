@@ -92,6 +92,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- **Automatic resume is configured only per supported subscription.**
+  `WithDefaultResumePolicy` has been removed. A client-wide automatic default
+  could make unrelated account, position, and order one-shots fail validation;
+  use `WithResumePolicy(ResumeAuto)` on quote or real-time-bar subscriptions
+  that should resume after reconnect.
+
 - **`Forex` now returns `(Contract, error)`.** Pair codes that are not exactly
   six uppercase ASCII letters return a zero contract and `*ValidationError`
   instead of silently returning only a zero contract that fails later.
