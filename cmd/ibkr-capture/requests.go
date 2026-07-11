@@ -273,51 +273,6 @@ func sendCancelNewsBulletins(conn net.Conn) error {
 	return sendMessage(conn, []string{"13", "1"})
 }
 
-// --- Calc implied volatility (msg_id=54) / cancel (msg_id=56) ---
-//
-//	[54, version=3, reqId, contract(13), optionPrice, underPrice, implVolOptions]
-//	[56, version=1, reqId]
-func sendReqCalcImpliedVolatility(conn net.Conn, reqID int, c contractSpec, optionPrice, underPrice float64) error {
-	fields := []string{"54", "3", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		strconv.FormatFloat(optionPrice, 'f', -1, 64),
-		strconv.FormatFloat(underPrice, 'f', -1, 64),
-		"", // implVolOptions
-	)
-	return sendMessage(conn, fields)
-}
-
-func sendCancelCalcImpliedVolatility(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"56", "1", strconv.Itoa(reqID)})
-}
-
-// --- Calc option price (msg_id=55) / cancel (msg_id=57) ---
-//
-//	[55, version=3, reqId, contract(13), volatility, underPrice, optPxOptions]
-//	[57, version=1, reqId]
-func sendReqCalcOptionPrice(conn net.Conn, reqID int, c contractSpec, volatility, underPrice float64) error {
-	fields := []string{"55", "3", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		strconv.FormatFloat(volatility, 'f', -1, 64),
-		strconv.FormatFloat(underPrice, 'f', -1, 64),
-		"", // optPxOptions
-	)
-	return sendMessage(conn, fields)
-}
-
-func sendCancelCalcOptionPrice(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"57", "1", strconv.Itoa(reqID)})
-}
-
-// --- News article (msg_id=84) ---
-//
-//	[84, reqId, providerCode, articleId, newsArticleOptions]
-func sendReqNewsArticle(conn net.Conn, reqID int, providerCode, articleID string) error {
-	return sendMessage(conn, []string{"84", strconv.Itoa(reqID), providerCode, articleID, ""})
-}
-
 // --- Historical data with keepUpToDate (msg_id=20) ---
 //
 // Uses keepUpToDate=true; endDateTime must be empty and barSize at least 5s.
@@ -606,42 +561,11 @@ func sendGlobalCancel(conn net.Conn) error {
 	return sendMessage(conn, []string{"58", "", ""})
 }
 
-// --- Exercise options (msg_id=21) ---
-//
-//	[21, version=2, reqId, conId, symbol, secType, expiry, strike, right,
-//	 multiplier, exchange, currency, localSymbol, tradingClass,
-//	 exerciseAction, exerciseQuantity, account, override]
-func sendExerciseOptions(conn net.Conn, reqID int, c contractSpec, exerciseAction, exerciseQuantity int, account string, override int) error {
-	return sendMessage(conn, []string{
-		"21", "2", strconv.Itoa(reqID),
-		strconv.Itoa(c.ConID),
-		c.Symbol,
-		c.SecType,
-		c.LastTradeDateOrContractMonth,
-		strconv.FormatFloat(c.Strike, 'f', -1, 64),
-		c.Right,
-		c.Multiplier,
-		c.Exchange,
-		c.Currency,
-		c.LocalSymbol,
-		c.TradingClass,
-		strconv.Itoa(exerciseAction),
-		strconv.Itoa(exerciseQuantity),
-		account,
-		strconv.Itoa(override),
-	})
-}
-
-// --- Request FA (msg_id=18) / Replace FA (msg_id=19) ---
+// --- Request FA (msg_id=18) ---
 //
 //	[18, version=1, faDataType]
-//	[19, version=1, faDataType, xml]
 func sendRequestFA(conn net.Conn, faDataType int) error {
 	return sendMessage(conn, []string{"18", "1", strconv.Itoa(faDataType)})
-}
-
-func sendReplaceFA(conn net.Conn, faDataType int, xml string) error {
-	return sendMessage(conn, []string{"19", "1", strconv.Itoa(faDataType), xml})
 }
 
 // --- Query display groups (msg_id=67) ---
@@ -656,13 +580,6 @@ func sendQueryDisplayGroups(conn net.Conn, reqID int) error {
 //	[68, version=1, reqId, groupId]
 func sendSubscribeToGroupEvents(conn net.Conn, reqID, groupID int) error {
 	return sendMessage(conn, []string{"68", "1", strconv.Itoa(reqID), strconv.Itoa(groupID)})
-}
-
-// --- Update display group (msg_id=69) ---
-//
-//	[69, version=1, reqId, contractInfo]
-func sendUpdateDisplayGroup(conn net.Conn, reqID int, contractInfo string) error {
-	return sendMessage(conn, []string{"69", "1", strconv.Itoa(reqID), contractInfo})
 }
 
 // --- Unsubscribe from group events (msg_id=70) ---
