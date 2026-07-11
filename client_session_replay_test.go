@@ -230,11 +230,10 @@ func TestMatchingSymbolsPartialReplay(t *testing.T) {
 }
 
 // TestSetTypeSwitchWhileStreamingReplay freezes the mid-stream market-data
-// type switch (MD1-001): SetType(Delayed) plus an AAPL quote stream draws the
-// marketDataType(3) push, the code-10167 warning as a session event, and
-// delayed ticks; switching to SetType(Live) mid-stream drew no
-// marketDataType(1) re-ack in the captured window and the delayed ticks kept
-// flowing. Capture 20260611T074112Z-set_type_switch_while_streaming.
+// type switch (MD1-001): SetType(Delayed) plus an AAPL quote stream draws its
+// parameters, marketDataType(3), the code-10167 warning, and delayed ticks;
+// switching to SetType(Live) draws no type-1 re-ack before the next delayed
+// tick. Capture 20260711T003316Z-set_type_switch_while_streaming.
 func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	t.Parallel()
 
@@ -251,6 +250,7 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -262,86 +262,48 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
-	// 1. The marketDataType(3) push arrives before any tick.
+	// 1. The live tickReqParams callback is ancillary and does not mutate the
+	// accumulated quote.
 	update := waitForEvent(t, sub.Events())
-	if update.Changed != ibkr.QuoteFieldMarketDataType {
-		t.Fatalf("update 1 Changed = %v, want QuoteFieldMarketDataType", update.Changed)
-	}
-	if update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
-		t.Fatalf("update 1 MarketDataType = %v, want %v", update.Snapshot.MarketDataType, ibkr.MarketDataDelayed)
-	}
-
-	// 2. The live tickReqParams callback is an ancillary event and does not
-	// mutate the accumulated quote.
-	update = waitForEvent(t, sub.Events())
-	if update.Kind != ibkr.QuoteUpdateParameters {
-		t.Fatalf("update 2 Kind = %v, want QuoteUpdateParameters", update.Kind)
-	}
-	if update.Parameters == nil {
-		t.Fatal("update 2 Parameters = nil")
+	if update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
+		t.Fatalf("update 1 = %+v, want QuoteUpdateParameters", update)
 	}
 	if update.Parameters.MinTick == nil || update.Parameters.MinTick.String() != "0.01" ||
 		update.Parameters.BBOExchange != "9c0001" ||
 		update.Parameters.SnapshotPermissions == nil || *update.Parameters.SnapshotPermissions != 4 {
-		t.Fatalf("update 2 Parameters = %+v", update.Parameters)
+		t.Fatalf("update 1 Parameters = %+v", update.Parameters)
 	}
 
-	// 3. Delayed volume (tick 74) lands in the normalized Volume field, just
-	// like live volume (tick 8).
+	// 2. The Gateway then identifies the stream as delayed.
 	update = waitForEvent(t, sub.Events())
-	if update.Kind != ibkr.QuoteUpdateSizeTick || update.Changed != ibkr.QuoteFieldVolume {
-		t.Fatalf("update 3 = Kind %v Changed %v, want QuoteFieldVolume", update.Kind, update.Changed)
-	}
-	if update.SizeTick == nil || update.SizeTick.TickType != 74 || update.SizeTick.Size == nil || !update.SizeTick.Size.IsZero() {
-		t.Fatalf("update 3 SizeTick = %+v, want delayed volume tick 74 value 0", update.SizeTick)
-	}
-	if !update.Snapshot.Volume.IsZero() {
-		t.Fatalf("update 3 Volume = %s, want 0", update.Snapshot.Volume)
+	if update.Changed != ibkr.QuoteFieldMarketDataType || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
+		t.Fatalf("update 2 = %+v, want delayed market-data type", update)
 	}
 
-	// 4. Delayed close (tick 75) lands in the normalized Close field.
+	// 3. Delayed last (tick 68) lands in the normalized Last field.
 	update = waitForEvent(t, sub.Events())
-	if update.Changed != ibkr.QuoteFieldClose {
-		t.Fatalf("update 4 Changed = %v, want QuoteFieldClose", update.Changed)
-	}
-	if update.Snapshot.Close.String() != "291.58" {
-		t.Fatalf("close = %s, want 291.58", update.Snapshot.Close.String())
+	if update.Changed != ibkr.QuoteFieldLast|ibkr.QuoteFieldLastSize ||
+		update.Snapshot.Last.String() != "314.96" || update.Snapshot.LastSize.String() != "53" {
+		t.Fatalf("update 3 = %+v, want delayed last 314.96 x 53", update)
 	}
 
-	// 5. Delayed last (tick 68) lands in the normalized Last field.
-	update = waitForEvent(t, sub.Events())
-	if update.Changed != ibkr.QuoteFieldLast {
-		t.Fatalf("update 5 Changed = %v, want QuoteFieldLast", update.Changed)
-	}
-	if update.Snapshot.Last.String() != "0" {
-		t.Fatalf("last = %s, want 0", update.Snapshot.Last.String())
-	}
-
-	// Switch back to live mid-stream. The Gateway accepted the request...
+	// Switch back to live mid-stream. The Gateway accepts the request without
+	// sending a marketDataType(1) acknowledgement in the captured window.
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
 		t.Fatalf("SetType(MarketDataLive) error = %v", err)
 	}
 
-	// 6-8. ...but sent no marketDataType(1) re-ack in the captured window:
-	// the stream continues with delayed open/bid/ask ticks (wire value -1.00
-	// = no delayed quote available outside market hours).
+	// The delayed last timestamp was already in flight before the switch.
 	update = waitForEvent(t, sub.Events())
-	if update.Changed != ibkr.QuoteFieldOpen {
-		t.Fatalf("update 6 Changed = %v, want QuoteFieldOpen", update.Changed)
+	if update.Kind != ibkr.QuoteUpdateStringTick || update.StringTick == nil ||
+		update.StringTick.TickType != 88 || update.StringTick.Value != "1783727950" {
+		t.Fatalf("update 4 = %+v, want delayed last timestamp", update)
 	}
+
+	// The next callback remains a delayed open tick, proving no type-1 re-ack.
 	update = waitForEvent(t, sub.Events())
-	if update.Changed != ibkr.QuoteFieldBid {
-		t.Fatalf("update 7 Changed = %v, want QuoteFieldBid", update.Changed)
-	}
-	if update.Snapshot.Bid.String() != "-1" {
-		t.Fatalf("bid = %s, want -1", update.Snapshot.Bid.String())
-	}
-	update = waitForEvent(t, sub.Events())
-	if update.Changed != ibkr.QuoteFieldAsk {
-		t.Fatalf("update 8 Changed = %v, want QuoteFieldAsk", update.Changed)
-	}
-	if update.Snapshot.Ask.String() != "-1" {
-		t.Fatalf("ask = %s, want -1", update.Snapshot.Ask.String())
+	if update.Changed != ibkr.QuoteFieldOpen || update.Snapshot.Open.String() != "314.7" {
+		t.Fatalf("update 5 = %+v, want delayed open 314.7", update)
 	}
 	if update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
 		t.Fatalf("MarketDataType after switch = %v, want still %v (no type-1 re-ack in capture window)",
