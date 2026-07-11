@@ -155,7 +155,7 @@ func awaitOneShotResponse[T any](ctx context.Context, e *engine, resp <-chan T, 
 		if cancel != nil {
 			cancel()
 		}
-		return zero, ctx.Err()
+		return zero, context.Cause(ctx)
 	case <-e.done:
 		return zero, e.closedOperationError()
 	}
@@ -199,7 +199,7 @@ func awaitSubscriptionResponse[T any](ctx context.Context, e *engine, resp <-cha
 	if admitted(out) {
 		return out, nil
 	}
-	if err := ctx.Err(); err != nil {
+	if err := context.Cause(ctx); err != nil {
 		var zero T
 		return zero, err
 	}
@@ -211,7 +211,7 @@ func awaitSubscriptionResponse[T any](ctx context.Context, e *engine, resp <-cha
 func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context) error) error {
 	resp := make(chan error, 1)
 	enqueueReadySetup(ctx, e, func() {
-		resp <- ctx.Err()
+		resp <- context.Cause(ctx)
 	}, func() {
 		resp <- fn(ctx)
 	})
@@ -219,7 +219,7 @@ func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context)
 	case err := <-resp:
 		return err
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	case <-e.done:
 		return e.closedOperationError()
 	}

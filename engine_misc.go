@@ -18,6 +18,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 		err error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueClockSetup(ctx, e, singletonCurrentTime, nil, func() {
 		resp <- result{err: fmt.Errorf("%w: current time", ErrOperationActive)}
@@ -25,7 +26,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 		// No handleAPIErr: req_current_time carries no reqID, so the engine
 		// cannot route an APIError to this singleton. ctx cancellation and
 		// onDisconnect are the only failure paths.
-		e.singletons[singletonCurrentTime] = &route{
+		ownedRoute = &route{
 			opKind: OpCurrentTime,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.CurrentTime)
@@ -48,13 +49,16 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonCurrentTime] = ownedRoute
 		if err := e.sendContext(ctx, codec.CurrentTimeRequest{}); err != nil {
 			delete(e.singletons, singletonCurrentTime)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonCurrentTime, ownedRoute) })
+	})
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -67,6 +71,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 		err error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueClockSetup(ctx, e, singletonCurrentTimeMillis, nil, func() {
 		resp <- result{err: fmt.Errorf("%w: current time millis", ErrOperationActive)}
@@ -74,7 +79,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 		// Like reqCurrentTime, the request carries no reqID, so APIErrors
 		// cannot route here; ctx cancellation and onDisconnect are the only
 		// failure paths.
-		e.singletons[singletonCurrentTimeMillis] = &route{
+		ownedRoute = &route{
 			opKind: OpCurrentTime,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.CurrentTimeMillis)
@@ -97,13 +102,16 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonCurrentTimeMillis] = ownedRoute
 		if err := e.sendContext(ctx, codec.CurrentTimeMillisRequest{}); err != nil {
 			delete(e.singletons, singletonCurrentTimeMillis)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonCurrentTimeMillis, ownedRoute) })
+	})
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -116,6 +124,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 		err error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonScannerParameters]; exists {
@@ -123,7 +132,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 			return
 		}
 
-		e.singletons[singletonScannerParameters] = &route{
+		ownedRoute = &route{
 			opKind: OpScannerParameters,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
@@ -140,13 +149,16 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonScannerParameters] = ownedRoute
 		if err := e.sendContext(ctx, codec.ScannerParametersRequest{}); err != nil {
 			delete(e.singletons, singletonScannerParameters)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonScannerParameters, ownedRoute) })
+	})
 	if err != nil {
 		return "", err
 	}
@@ -276,6 +288,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 		err error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if err := validateFADataType(faDataType); err != nil {
@@ -287,7 +300,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 			return
 		}
 
-		e.singletons[singletonFA] = &route{
+		ownedRoute = &route{
 			opKind: OpFAConfig,
 			handleAPIErr: func(msg codec.APIError, eng *engine) {
 				delete(eng.singletons, singletonFA)
@@ -308,13 +321,16 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonFA] = ownedRoute
 		if err := e.sendContext(ctx, codec.RequestFA{FADataType: int(faDataType)}); err != nil {
 			delete(e.singletons, singletonFA)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonFA, ownedRoute) })
+	})
 	if err != nil {
 		return "", err
 	}

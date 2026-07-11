@@ -286,18 +286,19 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 	peer, client := net.Pipe()
 	cfg := defaultConfig()
 	cfg.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	tr := transport.New(client, cfg.logger, 0)
 	e := &engine{
 		cfg: cfg, cmds: make(chan func(), 8), incoming: make(chan any, 8),
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
-		events: newObserver[Event](cfg.eventBuffer), transport: transport.New(client, cfg.logger, 0),
+		events: newObserver[Event](cfg.eventBuffer), transport: tr,
 		serverVersion: 206, keyed: make(map[int]*route), singletons: make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
 		execDeliveries: make(map[string]*execDelivery), snapshot: Snapshot{State: StateReady, ConnectionSeq: 1},
 	}
 	t.Cleanup(func() {
-		_ = e.transport.Close()
+		_ = tr.Close()
 		_ = peer.Close()
-		_ = e.transport.Wait()
+		_ = tr.Wait()
 	})
 	return e, peer
 }

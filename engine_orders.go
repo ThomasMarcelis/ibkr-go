@@ -19,12 +19,13 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 		err     error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonOrderID]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: order ID refresh already in progress")}
 			return
 		}
-		e.singletons[singletonOrderID] = &route{
+		ownedRoute = &route{
 			opKind: OpOrderID,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.NextValidID)
@@ -48,12 +49,15 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 			},
 			close: func(err error) { resp <- result{err: err} },
 		}
+		e.singletons[singletonOrderID] = ownedRoute
 		if err := e.sendContext(ctx, codec.ReqIDsRequest{NumIDs: 1}); err != nil {
 			delete(e.singletons, singletonOrderID)
 			resp <- result{err: err}
 		}
 	})
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonOrderID, ownedRoute) })
+	})
 	if err != nil {
 		return 0, err
 	}
@@ -275,6 +279,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 		err    error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonCompletedOrders]; exists {
@@ -284,7 +289,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 
 		var collected []CompletedOrderResult
 
-		e.singletons[singletonCompletedOrders] = &route{
+		ownedRoute = &route{
 			opKind: OpCompletedOrders,
 			handleAPIErr: func(msg codec.APIError, eng *engine) {
 				delete(eng.singletons, singletonCompletedOrders)
@@ -313,13 +318,16 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonCompletedOrders] = ownedRoute
 		if err := e.sendContext(ctx, codec.CompletedOrdersRequest{APIOnly: apiOnly}); err != nil {
 			delete(e.singletons, singletonCompletedOrders)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonCompletedOrders, ownedRoute) })
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -383,7 +391,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	// enqueueReadySetup with a drop callback guarantees resp receives exactly
 	// one result even when ctx is canceled before the actor runs the setup.
 	enqueueReadySetup(ctx, e, func() {
-		resp <- placeOrderResult{err: ctx.Err()}
+		resp <- placeOrderResult{err: context.Cause(ctx)}
 	}, func() {
 		if err := validateContractFieldSupport(req.Contract, "place order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
 			resp <- placeOrderResult{err: err}
@@ -419,7 +427,7 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 	req = prepared
 	resp := make(chan bracketOrderResult, 1)
 	enqueueReadySetup(ctx, e, func() {
-		resp <- bracketOrderResult{err: ctx.Err()}
+		resp <- bracketOrderResult{err: context.Cause(ctx)}
 	}, func() {
 		if err := validateContractFieldSupport(req.Contract, "place bracket", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
 			resp <- bracketOrderResult{err: err}
@@ -601,13 +609,13 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 			return pr.state, nil
 		case <-ctx.Done():
 			cleanup()
-			return OrderState{}, ctx.Err()
+			return OrderState{}, context.Cause(ctx)
 		case <-e.done:
 			return OrderState{}, e.closedOperationError()
 		}
 	case <-ctx.Done():
 		cleanup()
-		return OrderState{}, ctx.Err()
+		return OrderState{}, context.Cause(ctx)
 	case <-e.done:
 		return OrderState{}, e.closedOperationError()
 	}
@@ -707,7 +715,7 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 		err    error
 	}
 	resp := make(chan result, 1)
-	enqueueReadySetup(ctx, e, func() { resp <- result{err: ctx.Err()} }, func() {
+	enqueueReadySetup(ctx, e, func() { resp <- result{err: context.Cause(ctx)} }, func() {
 		if err := validateContractFieldSupport(req.Contract, "exercise options", e.serverVersion, 0); err != nil {
 			resp <- result{err: err}
 			return

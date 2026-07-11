@@ -62,7 +62,7 @@ func run() (err error) {
 		select {
 		case event, ok := <-events:
 			if !ok {
-				return errors.Join(ctx.Err(), sub.Wait())
+				return errors.Join(context.Cause(ctx), sub.Wait())
 			}
 			if event.Kind == ibkr.StreamData {
 				update := event.Value
@@ -80,7 +80,7 @@ func run() (err error) {
 			return nil
 		case <-ctx.Done():
 			sub.Close()
-			return errors.Join(ctx.Err(), sub.Wait())
+			return errors.Join(context.Cause(ctx), sub.Wait())
 		}
 	}
 }

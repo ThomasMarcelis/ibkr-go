@@ -144,6 +144,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 		err  error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonMarketRule]; exists {
@@ -151,7 +152,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 			return
 		}
 
-		e.singletons[singletonMarketRule] = &route{
+		ownedRoute = &route{
 			opKind: OpMarketRule,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
@@ -193,13 +194,16 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonMarketRule] = ownedRoute
 		if err := e.sendContext(ctx, codec.MarketRuleRequest{MarketRuleID: marketRuleID}); err != nil {
 			delete(e.singletons, singletonMarketRule)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonMarketRule, ownedRoute) })
+	})
 	if err != nil {
 		return MarketRuleResult{}, err
 	}

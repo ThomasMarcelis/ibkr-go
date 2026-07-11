@@ -8,13 +8,12 @@ import (
 	"strings"
 	"testing"
 	"testing/synctest"
-	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
-func TestCanceledSingletonDrainsBeforeReplacement(t *testing.T) {
+func TestCanceledSingletonRecyclesTransportBeforeReplacement(t *testing.T) {
 	t.Parallel()
 
 	e, peer := newObservedMarketDataEngine(t)
@@ -30,44 +29,15 @@ func TestCanceledSingletonDrainsBeforeReplacement(t *testing.T) {
 	if err := <-first; !errors.Is(err, context.Canceled) {
 		t.Fatalf("canceled CurrentTime() error = %v, want context.Canceled", err)
 	}
-	if _, ok := e.singletons[singletonCurrentTime]; !ok {
-		t.Fatal("canceled CurrentTime() released its unkeyed route before the response drained")
-	}
-
-	second := make(chan error, 1)
-	go func() {
-		_, err := e.CurrentTime(context.Background())
-		second <- err
-	}()
 	(<-e.cmds)()
-	if err := <-second; !errors.Is(err, ErrOperationActive) {
-		t.Fatalf("replacement CurrentTime() error = %v, want ErrOperationActive", err)
-	}
-
-	e.handleIncoming(codec.CurrentTime{Time: "1711929600"})
 	if _, ok := e.singletons[singletonCurrentTime]; ok {
-		t.Fatal("late CurrentTime response did not release the route")
+		t.Fatal("canceled CurrentTime() left its unkeyed route active")
 	}
-	// This test exercises late-response draining, not the clock pacing gate.
-	e.nextClockRequest = time.Time{}
-
-	third := make(chan struct {
-		ts  time.Time
-		err error
-	}, 1)
-	go func() {
-		ts, err := e.CurrentTime(context.Background())
-		third <- struct {
-			ts  time.Time
-			err error
-		}{ts: ts, err: err}
-	}()
-	(<-e.cmds)()
-	_ = readObservedFrame(t, peer)
-	e.handleIncoming(codec.CurrentTime{Time: "1711929601"})
-	result := <-third
-	if result.err != nil || result.ts.Unix() != 1711929601 {
-		t.Fatalf("CurrentTime() after drain = %v, %v", result.ts, result.err)
+	if e.transport != nil {
+		t.Fatal("canceled CurrentTime() retained the ambiguous transport generation")
+	}
+	if e.snapshot.State != StateReconnecting {
+		t.Fatalf("state = %s, want Reconnecting", e.snapshot.State)
 	}
 }
 

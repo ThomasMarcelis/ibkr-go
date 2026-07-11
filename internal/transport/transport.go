@@ -163,7 +163,7 @@ func (c *Conn) admit(ctx context.Context, payload []byte, tracked bool) (WriteID
 
 	select {
 	case <-ctx.Done():
-		return 0, ctx.Err()
+		return 0, context.Cause(ctx)
 	case <-c.done:
 		return 0, c.terminalError()
 	default:

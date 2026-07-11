@@ -29,6 +29,10 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	if e.connectCancel != nil {
 		e.connectCancel()
 	}
+	var timeoutCancel context.CancelFunc
+	if reconnect {
+		ctx, timeoutCancel = context.WithTimeout(ctx, 5*time.Second)
+	}
 	e.bootstrap = bootstrapState{}
 	if reconnect {
 		e.setState(StateReconnecting, 0, "reconnect attempt", nil)
@@ -51,6 +55,9 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	cfg := e.cfg
 	advertisedMax := advertisedServerVersionMax
 	go func() {
+		if timeoutCancel != nil {
+			defer timeoutCancel()
+		}
 		result := dialConnection(attemptCtx, cfg, advertisedMax)
 		result.attempt = attempt
 		result.reconnect = reconnect

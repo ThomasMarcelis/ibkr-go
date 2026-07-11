@@ -51,10 +51,22 @@ func (e *engine) scheduleReconnect() {
 			if lifetime == nil {
 				lifetime = context.Background()
 			}
-			dialCtx, _ := context.WithTimeout(lifetime, 5*time.Second)
-			e.startConnect(dialCtx, true)
+			e.startConnect(lifetime, true)
 		})
 	})
+}
+
+// cancelSingletonOneShot retires the connection generation that owns an
+// unresolved request-ID-less reply. Merely deleting target would let a late
+// reply satisfy a newer call of the same operation, so reconnecting is the
+// only safe way to release the singleton slot.
+func (e *engine) cancelSingletonOneShot(key string, target *route) {
+	if target == nil || e.singletons[key] != target || e.transport == nil {
+		return
+	}
+	tr := e.transport
+	_ = tr.Close()
+	e.handleTransportLoss(transportLoss{transport: tr, err: ErrInterrupted})
 }
 
 func reconnectDelay(attempt int) time.Duration {

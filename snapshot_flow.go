@@ -18,7 +18,7 @@ func bindContext[T any](ctx context.Context, sub *Subscription[T]) {
 	go func() {
 		select {
 		case <-ctx.Done():
-			sub.Close()
+			sub.cancel(context.Cause(ctx), sub.cancelFn)
 		case <-sub.Done():
 		}
 	}()
@@ -35,7 +35,7 @@ func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], ma
 		}
 		return values, sub.Wait()
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, context.Cause(ctx)
 	}
 }
 

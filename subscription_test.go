@@ -2,7 +2,9 @@ package ibkr
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"testing/synctest"
 )
 
 func TestSubscriptionCloseWaitsForCloseWithErr(t *testing.T) {
@@ -17,6 +19,24 @@ func TestSubscriptionCloseWaitsForCloseWithErr(t *testing.T) {
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
 	}
+}
+
+func TestSubscriptionCreationContextCauseTerminatesStream(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		var sub *Subscription[int]
+		sub = newSubscription[int](defaultSubscriptionConfig(defaultConfig()), func() {
+			sub.closeWithErr(nil)
+		})
+		ctx, cancel := context.WithCancelCause(context.Background())
+		bindContext(ctx, sub)
+		want := errors.New("caller stopped quote owner")
+		cancel(want)
+		synctest.Wait()
+
+		if err := sub.Wait(); !errors.Is(err, want) {
+			t.Fatalf("Wait() = %v, want context cause %v", err, want)
+		}
+	})
 }
 
 func TestAllYieldsEventsUntilClose(t *testing.T) {

@@ -14,6 +14,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 		err       error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonNewsProviders]; exists {
@@ -21,7 +22,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 			return
 		}
 
-		e.singletons[singletonNewsProviders] = &route{
+		ownedRoute = &route{
 			opKind: OpNewsProviders,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
@@ -42,13 +43,16 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonNewsProviders] = ownedRoute
 		if err := e.sendContext(ctx, codec.NewsProvidersRequest{}); err != nil {
 			delete(e.singletons, singletonNewsProviders)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonNewsProviders, ownedRoute) })
+	})
 	if err != nil {
 		return nil, err
 	}

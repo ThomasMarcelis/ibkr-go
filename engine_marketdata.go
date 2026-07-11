@@ -48,7 +48,7 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 				return latest, nil
 			}
 		case <-ctx.Done():
-			return Quote{}, ctx.Err()
+			return Quote{}, context.Cause(ctx)
 		}
 	}
 }
@@ -544,6 +544,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 		err       error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonMktDepthExchanges]; exists {
@@ -551,7 +552,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 			return
 		}
 
-		e.singletons[singletonMktDepthExchanges] = &route{
+		ownedRoute = &route{
 			opKind: OpMktDepthExchanges,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
@@ -576,13 +577,16 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonMktDepthExchanges] = ownedRoute
 		if err := e.sendContext(ctx, codec.MktDepthExchangesRequest{}); err != nil {
 			delete(e.singletons, singletonMktDepthExchanges)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonMktDepthExchanges, ownedRoute) })
+	})
 	if err != nil {
 		return nil, err
 	}

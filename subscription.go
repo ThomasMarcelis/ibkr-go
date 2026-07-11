@@ -130,7 +130,7 @@ func (s *Subscription[T]) AwaitSnapshot(ctx context.Context) error {
 		}
 		return ErrInterrupted
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	}
 }
 

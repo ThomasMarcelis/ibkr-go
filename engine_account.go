@@ -104,6 +104,7 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 		err      error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonManagedAccounts]; exists {
@@ -111,7 +112,7 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 			return
 		}
 
-		e.singletons[singletonManagedAccounts] = &route{
+		ownedRoute = &route{
 			opKind: OpManagedAccounts,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.ManagedAccounts)
@@ -129,13 +130,16 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonManagedAccounts] = ownedRoute
 		if err := e.sendContext(ctx, codec.ManagedAccountsRequest{}); err != nil {
 			delete(e.singletons, singletonManagedAccounts)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonManagedAccounts, ownedRoute) })
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +211,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 		err   error
 	}
 	resp := make(chan result, 1)
+	var ownedRoute *route
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonFamilyCodes]; exists {
@@ -214,7 +219,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 			return
 		}
 
-		e.singletons[singletonFamilyCodes] = &route{
+		ownedRoute = &route{
 			opKind: OpFamilyCodes,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
@@ -235,13 +240,16 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 				resp <- result{err: err}
 			},
 		}
+		e.singletons[singletonFamilyCodes] = ownedRoute
 		if err := e.sendContext(ctx, codec.FamilyCodesRequest{}); err != nil {
 			delete(e.singletons, singletonFamilyCodes)
 			resp <- result{err: err}
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, nil)
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { e.cancelSingletonOneShot(singletonFamilyCodes, ownedRoute) })
+	})
 	if err != nil {
 		return nil, err
 	}
