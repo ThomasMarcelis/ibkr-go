@@ -138,6 +138,7 @@ var rawFrameAttested = map[int]string{
 	protocol.InHistoricalNewsEnd:     "TestCaptureDecode_HistoricalNewsFlowLive",
 	protocol.InHeadTimestamp:         "TestCaptureDecode_HeadTimestampLive",
 	protocol.InCompletedOrderEnd:     "TestCaptureDecode_CompletedOrderEndLive",
+	protocol.InHistoricalTicksLast:   "TestHistoricalTicksTrades",
 }
 
 // pendingLiveAttestation maps a decoder's msg_id to a one-line reason it has no
@@ -153,7 +154,6 @@ var pendingLiveAttestation = map[int]string{
 	protocol.InPnLSingle:             "needs a reqPnLSingle capture",
 	protocol.InHistoricalTicks:       "needs a reqHistoricalTicks whatToShow=MIDPOINT capture",
 	protocol.InHistoricalTicksBidAsk: "needs a reqHistoricalTicks whatToShow=BID_ASK capture",
-	protocol.InHistoricalTicksLast:   "needs a reqHistoricalTicks whatToShow=TRADES capture",
 	protocol.InTickByTick:            "needs a reqTickByTickData capture (market hours)",
 	protocol.InReplaceFAEnd:          "source-referenced decoder coverage only — needs a live replaceFAEnd frame from an FA-entitled account",
 	protocol.InWSHMetaData:           "needs a reqWSHMetaData capture (WSH entitlement)",
