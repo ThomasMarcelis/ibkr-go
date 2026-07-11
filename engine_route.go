@@ -254,15 +254,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				route.handleAPIErr(msg, e)
 				return
 			}
-			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
+			if preview, ok := e.previews[int64(msg.ReqID)]; ok {
 				// A what-if rejected in the 10xxx band never gets an echo
 				// (live-attested: code 10255 on a what-if DarkIce placement,
 				// captures/20260705T011725Z), so the order-targeted error is
 				// the preview's only completion signal.
-				if or.resolvePreview(previewResult{err: e.apiErr(OpPlaceOrder, msg)}) {
-					delete(e.orders, int64(msg.ReqID))
-					return
-				}
+				preview.resolve(previewResult{err: e.apiErr(OpPlaceOrder, msg)})
+				delete(e.previews, int64(msg.ReqID))
+				return
+			}
+			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 				// Live handles terminate only on 10xxx codes attested as
 				// outright placement rejections: no order_status ever follows
 				// them, so this error is the handle's only completion signal.
@@ -285,18 +286,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			route.handleAPIErr(msg, e)
 			return
 		}
+		if preview, ok := e.previews[int64(msg.ReqID)]; ok {
+			preview.resolve(previewResult{err: e.apiErr(OpPlaceOrder, msg)})
+			delete(e.previews, int64(msg.ReqID))
+			return
+		}
 		// Order-specific API errors: the reqID field carries the orderID
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 			if isOrderCancellationReply(msg.Code) {
 				e.emitEvent(msg.Code, msg.Message)
-				return
-			}
-			// The gateway rejecting a what-if order is Preview's ordinary
-			// failure mode; resolve the blocked caller instead of touching
-			// the handle no preview route has.
-			if or.resolvePreview(previewResult{err: e.apiErr(OpPlaceOrder, msg)}) {
-				delete(e.orders, int64(msg.ReqID))
 				return
 			}
 			// A warning targeting a live order (e.g. code 399, the off-hours
@@ -377,22 +376,17 @@ func isOrderPlacementRejection(code int) bool {
 }
 
 func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
-	orderRoute, orderObserved := e.orders[msg.OrderID]
-
 	// A what-if preview route resolves on its single open_order echo: decode,
 	// tear the route down, and hand the result (OpenOrder or decode error) to
 	// the blocked PreviewOrder caller. No OrderHandle is ever involved.
-	if orderObserved && orderRoute.preview != nil {
-		if orderRoute.closed {
-			return
-		}
-		orderRoute.closed = true
-		delete(e.orders, msg.OrderID)
+	if preview, ok := e.previews[msg.OrderID]; ok {
+		delete(e.previews, msg.OrderID)
 		order, err := fromCodecOpenOrder(msg)
-		orderRoute.preview <- previewResult{order: order, err: err}
+		preview.resolve(previewResult{order: order, err: err})
 		return
 	}
 
+	orderRoute, orderObserved := e.orders[msg.OrderID]
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
 	if (!orderObserved || orderRoute.closed) && !singletonObserved {
 		return
@@ -416,17 +410,12 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 		}
 	}
 	if singletonObserved {
-		singletonRoute.handle(parsedOpenOrder{order: cloneOpenOrder(order)}, e)
+		singletonRoute.handle(cloneOpenOrder(order), e)
 	}
 }
 
 func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	orderRoute, orderObserved := e.orders[msg.OrderID]
-	// A what-if preview route has no handle and resolves only on its open_order
-	// echo; a live what-if never emits order status, so ignore the order side.
-	if orderObserved && orderRoute.preview != nil {
-		orderObserved = false
-	}
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
 	if (!orderObserved || orderRoute.closed) && !singletonObserved {
 		return
@@ -465,9 +454,7 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 // drop at the missing-route check, identical to the closed-route behavior.
 func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 	or.closed = true
-	if or.handle != nil {
-		or.handle.closeWithErr(err)
-	}
+	or.handle.closeWithErr(err)
 	delete(e.orders, orderID)
 	e.forgetOrderExecutions(orderID)
 }
@@ -604,9 +591,6 @@ func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.Commiss
 			"order_id", st.orderID, "exec_id", report.ExecID, "err", err)
 		return
 	}
-	if or.handle == nil {
-		return
-	}
 	if !or.handle.emitCommissionAndFees(cr) {
 		e.closeOrderRoute(st.orderID, or, nil)
 		return
@@ -637,9 +621,6 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	if err != nil {
 		e.cfg.logger.Warn("ibkr: drop execution detail on decode error",
 			"order_id", m.OrderID, "exec_id", m.ExecID, "err", err)
-		return
-	}
-	if or.handle == nil {
 		return
 	}
 	if !or.handle.emitExecution(*exec.Execution) {

@@ -25,7 +25,7 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 		orders: map[int64]*orderRoute{443: {orderID: 443, handle: handle}},
 		singletons: map[string]*route{singletonOpenOrders: {
 			handle: func(msg any, _ *engine) {
-				openOrders <- msg.(parsedOpenOrder).order
+				openOrders <- msg.(OpenOrder)
 			},
 		}},
 	}

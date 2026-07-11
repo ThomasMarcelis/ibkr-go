@@ -130,8 +130,8 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			request:      codec.OpenOrdersRequest{Scope: string(scope)},
 			handle: func(msg any, e *engine) {
 				switch m := msg.(type) {
-				case parsedOpenOrder:
-					emitSubscription(sub, OpenOrderUpdate{Order: &m.order})
+				case OpenOrder:
+					emitSubscription(sub, OpenOrderUpdate{Order: &m})
 				case OrderStatusUpdate:
 					emitSubscription(sub, OpenOrderUpdate{Status: &m})
 				case codec.OpenOrderEnd:
@@ -538,7 +538,7 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 				return err
 			}
 			or, ok := e.orders[orderID]
-			if !ok || or.closed || or.handle == nil || or.handle.isDone() {
+			if !ok || or.closed || or.handle.isDone() {
 				return ErrClosed
 			}
 			return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
@@ -588,10 +588,10 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 		orderID := e.allocOrderID()
 		orderIDCh <- orderID
 		ch := make(chan previewResult, 1)
-		e.orders[orderID] = &orderRoute{orderID: orderID, preview: ch}
+		e.previews[orderID] = &previewRoute{result: ch}
 
 		if err := e.sendContext(ctx, toCodecPreviewOrder(orderID, req)); err != nil {
-			delete(e.orders, orderID)
+			delete(e.previews, orderID)
 			setupResp <- setup{err: err}
 			return
 		}
@@ -602,9 +602,7 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 		select {
 		case orderID := <-orderIDCh:
 			e.enqueue(func() {
-				if or, ok := e.orders[orderID]; ok && or.preview != nil {
-					delete(e.orders, orderID)
-				}
+				delete(e.previews, orderID)
 			})
 		default:
 		}

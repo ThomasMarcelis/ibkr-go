@@ -33,6 +33,7 @@ type engine struct {
 	keyed      map[int]*route
 	singletons map[string]*route
 	orders     map[int64]*orderRoute
+	previews   map[int64]*previewRoute
 	executions executionCorrelator
 	// execDeliveries is the order-handle leg's per-ExecID delivery record.
 	// orderID routes commissions to the owning handle and its presence dedupes
@@ -115,10 +116,14 @@ type route struct {
 type orderRoute struct {
 	orderID          int64
 	handle           *OrderHandle
-	preview          chan previewResult // non-nil for a what-if preview route; no handle is created
 	closed           bool
 	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
 	terminalCloseSeq uint64
+}
+
+type previewRoute struct {
+	result   chan previewResult
+	resolved bool
 }
 
 // previewResult carries the single what-if open_order echo back to a blocked
@@ -128,24 +133,14 @@ type previewResult struct {
 	err   error
 }
 
-// resolvePreview resolves a pending what-if preview route and reports whether
-// the route was a preview. Preview routes have no OrderHandle, so every
-// dispatch path that would touch or.handle must divert through this first:
-// the buffered channel is resolved at most once, guarded by closed. Callers
-// on the actor goroutine only.
-func (or *orderRoute) resolvePreview(res previewResult) bool {
-	if or.preview == nil {
-		return false
+// resolve completes a pending what-if preview at most once. Callers run on
+// the actor goroutine; the buffered result channel lets the caller disappear
+// concurrently without blocking engine shutdown.
+func (pr *previewRoute) resolve(res previewResult) {
+	if !pr.resolved {
+		pr.resolved = true
+		pr.result <- res
 	}
-	if !or.closed {
-		or.closed = true
-		or.preview <- res
-	}
-	return true
-}
-
-type parsedOpenOrder struct {
-	order OpenOrder
 }
 
 func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
@@ -165,6 +160,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		keyed:                    make(map[int]*route),
 		singletons:               make(map[string]*route),
 		orders:                   make(map[int64]*orderRoute),
+		previews:                 make(map[int64]*previewRoute),
 		executions:               newExecutionCorrelator(),
 		execDeliveries:           make(map[string]*execDelivery),
 		unknownInboundSeen:       make(map[int]struct{}),
