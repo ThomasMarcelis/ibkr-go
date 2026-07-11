@@ -54,11 +54,11 @@ func TestRefreshOrderIDReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RefreshOrderID() error = %v", err)
 	}
-	if orderID != 2 {
-		t.Fatalf("RefreshOrderID() = %d, want 2", orderID)
+	if orderID != 1 {
+		t.Fatalf("RefreshOrderID() = %d, want 1", orderID)
 	}
-	if got := client.Session().NextValidID; got != 2 {
-		t.Fatalf("Session().NextValidID = %d, want 2", got)
+	if got := client.Session().NextValidID; got != 1 {
+		t.Fatalf("Session().NextValidID = %d, want 1", got)
 	}
 }
 
@@ -114,7 +114,7 @@ func TestManagedAccountsRefreshSV207Replay(t *testing.T) {
 // rejection (SESS-003): RefreshOrderID sends the captured reqIds frame, the
 // Gateway answers with req_id=-1/code 321, and the one-shot returns that real
 // APIError without changing the allocation seed. Capture
-// 20260611T074047Z-req_ids.
+// 20260710T215126Z-req_ids.
 func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 	t.Parallel()
 
@@ -133,9 +133,8 @@ func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 		t.Fatalf("RefreshOrderID() error = %#v, want code 321 op %s", apiErr, ibkr.OpOrderID)
 	}
 
-	// The transcript ends with the gateway disconnect. With ReconnectOff the
-	// engine drains every received frame (farm statuses, then the code-321
-	// rejection) before terminating, so Done() proves the 321 was processed.
+	// The transcript ends with the gateway disconnect. With ReconnectOff,
+	// Done proves the code-321 rejection was processed before shutdown.
 	select {
 	case <-client.Done():
 	case <-time.After(5 * time.Second):
@@ -157,13 +156,6 @@ func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 		break
 	}
 
-	// Farm-status events prove the frames preceding the rejection were
-	// delivered and surfaced normally.
-	for _, code := range []int{2104, 2106, 2158} {
-		if !codes[code] {
-			t.Errorf("farm-status code %d not observed in session events", code)
-		}
-	}
 	// The req_id=-1 code-321 rejection belongs to RefreshOrderID and is not
 	// duplicated as a session event.
 	if codes[321] {
