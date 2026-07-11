@@ -2725,14 +2725,14 @@ func TestSubscribePnL(t *testing.T) {
 	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 
 	update := waitForEvent(t, sub.Events())
-	if update.DailyPnL.String() != "11340.427636781911" {
-		t.Fatalf("daily pnl = %s, want 11340.427636781911", update.DailyPnL.String())
+	if update.DailyPnL.String() != "-24.44306605249274" {
+		t.Fatalf("daily pnl = %s, want -24.44306605249274", update.DailyPnL.String())
 	}
-	if update.UnrealizedPnL.String() != "54385.58271885987" {
-		t.Fatalf("unrealized pnl = %s, want 54385.58271885987", update.UnrealizedPnL.String())
+	if update.UnrealizedPnL.String() != "467.50415673150746" {
+		t.Fatalf("unrealized pnl = %s, want 467.50415673150746", update.UnrealizedPnL.String())
 	}
-	if update.RealizedPnL.String() != "-103.92738339177643" {
-		t.Fatalf("realized pnl = %s, want -103.92738339177643", update.RealizedPnL.String())
+	if update.RealizedPnL.String() != "0" {
+		t.Fatalf("realized pnl = %s, want 0", update.RealizedPnL.String())
 	}
 
 	if err := sub.Close(); err != nil {

@@ -1,15 +1,14 @@
-# Grounded by paper IB Gateway server_version 200 capture
-# captures/20260611T134246Z-api_algorithmic_campaign_aapl.
-# events.jsonl sha256: 2e3781761e68dbe5bea8ac9fe62c38b6657bcad56bdceb949b24881c27f3d0bb
-# normalized frames sha256: 71a1a8f96c9a352cefba746ff0f0e351147a841bd920ac481dc930768e367ff8
+# Exact public API capture from read-only IB Gateway server_version 206.
+# Source: /tmp/ibkr-go-pnl-public-20260711/20260711T003645Z-pnl
+# events.jsonl sha256: eeba9a0ab7c6e1e210a5dc83aad7a2af3521795d2fba9f6571be996bc2b5c189
 #
-# The account and request id are sanitized/rebound. Concurrent campaign frames,
-# ambient farm-status frames, and the duplicate second copy of this update are
-# omitted. The request, first PnL values, cancellation, and chronology are exact.
-handshake {"server_version":200,"connection_time":"20260611 15:42:46 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":429}
-client req_pnl {"req_id":"$req1","account":"DU9000001","model_code":""}
-server pnl {"req_id":"$req1","daily_pnl":"11340.427636781911","unrealized_pnl":"54385.58271885987","realized_pnl":"-103.92738339177643"}
-client cancel_pnl {"req_id":"$req1"}
+# The account is length-preserving redacted to DU9000001. Ambient farm-status
+# frames and the later current-time fence are omitted. The request, update, and
+# cancellation frames are otherwise exact and retain their captured order.
+handshake {"server_version":206,"connection_time":"20260711 02:36:45 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAAEQAAAFwxAERVOTAwMDAwMQAA
+raw server AAAAMAAAAF4xAC0yNC40NDMwNjYwNTI0OTI3NAA0NjcuNTA0MTU2NzMxNTA3NDYAMC4wAA==
+raw client AAAABgAAAF0xAA==
 disconnect
