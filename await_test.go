@@ -310,3 +310,76 @@ func TestEnqueueHistoricalSetupPrunesStalePacingKeys(t *testing.T) {
 		t.Fatal("new historical pacing key was not recorded")
 	}
 }
+
+func TestEnqueueClockSetupCancelsBeforeWrite(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		e := &engine{
+			cmds:             make(chan func(), 4),
+			done:             make(chan struct{}),
+			transport:        &transport.Conn{},
+			nextClockRequest: time.Now().Add(clockRequestSpacing),
+			singletons:       make(map[string]*route),
+			snapshot:         Snapshot{State: StateReady},
+		}
+		go e.run()
+		defer close(e.done)
+
+		canceled := make(chan struct{}, 1)
+		called := false
+		enqueueClockSetup(ctx, e, singletonCurrentTime, func() {
+			canceled <- struct{}{}
+		}, func() {
+			t.Fatal("inactive clock route reported active")
+		}, func() {
+			called = true
+		})
+		synctest.Wait()
+		if called {
+			t.Fatal("clock setup ran before the pacing boundary")
+		}
+
+		cancel()
+		<-canceled
+		if called {
+			t.Fatal("clock setup ran after cancellation")
+		}
+	})
+}
+
+func TestEnqueueClockSetupUsesSharedGate(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := &engine{
+			cmds:       make(chan func(), 2),
+			done:       make(chan struct{}),
+			transport:  &transport.Conn{},
+			singletons: make(map[string]*route),
+			snapshot:   Snapshot{State: StateReady},
+		}
+		go e.run()
+		defer close(e.done)
+		firstCalled := false
+		secondCalled := false
+		enqueueClockSetup(context.Background(), e, singletonCurrentTime, nil, func() {}, func() {
+			firstCalled = true
+		})
+		synctest.Wait()
+		ctx, cancel := context.WithCancel(context.Background())
+		enqueueClockSetup(ctx, e, singletonCurrentTimeMillis, nil, func() {}, func() {
+			secondCalled = true
+		})
+		synctest.Wait()
+
+		if !firstCalled {
+			t.Fatal("first clock opcode did not run")
+		}
+		if secondCalled {
+			t.Fatal("millisecond clock opcode bypassed the shared pacing gate")
+		}
+		cancel()
+		synctest.Wait()
+		if secondCalled {
+			t.Fatal("canceled millisecond clock opcode ran after pacing")
+		}
+	})
+}

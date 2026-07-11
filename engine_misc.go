@@ -19,12 +19,9 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 	}
 	resp := make(chan result, 1)
 
-	enqueueOneShotSetup(ctx, e, func() {
-		if _, exists := e.singletons[singletonCurrentTime]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: current time request already in progress")}
-			return
-		}
-
+	enqueueClockSetup(ctx, e, singletonCurrentTime, nil, func() {
+		resp <- result{err: fmt.Errorf("%w: current time", ErrOperationActive)}
+	}, func() {
 		// No handleAPIErr: req_current_time carries no reqID, so the engine
 		// cannot route an APIError to this singleton. ctx cancellation and
 		// onDisconnect are the only failure paths.
@@ -71,12 +68,9 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	}
 	resp := make(chan result, 1)
 
-	enqueueOneShotSetup(ctx, e, func() {
-		if _, exists := e.singletons[singletonCurrentTimeMillis]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: current time millis request already in progress")}
-			return
-		}
-
+	enqueueClockSetup(ctx, e, singletonCurrentTimeMillis, nil, func() {
+		resp <- result{err: fmt.Errorf("%w: current time millis", ErrOperationActive)}
+	}, func() {
 		// Like reqCurrentTime, the request carries no reqID, so APIErrors
 		// cannot route here; ctx cancellation and onDisconnect are the only
 		// failure paths.

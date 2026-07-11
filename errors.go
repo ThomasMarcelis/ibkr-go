@@ -18,6 +18,7 @@ var (
 	ErrNoMatch                  = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
 	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")                    // Qualify matched more than one contract
 	ErrNoSubscription           = errors.New("ibkr: no active subscription")                // RefreshOpen with no active open-orders subscription
+	ErrOperationActive          = errors.New("ibkr: operation already active")              // singleton operation already owns its response route
 )
 
 // ConnectError wraps a failure during the connection phase (dial, TLS

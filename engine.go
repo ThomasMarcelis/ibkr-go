@@ -55,6 +55,7 @@ type engine struct {
 	readySetups        []*readySetup
 
 	nextReqID                int
+	nextClockRequest         time.Time
 	nextHistoricalRequest    time.Time
 	recentHistoricalRequests map[string]time.Time
 
@@ -106,6 +107,10 @@ const (
 
 	historicalRequestSpacing   = 2 * time.Second
 	historicalIdenticalSpacing = 15 * time.Second
+	// Live Gateway observations show reqCurrentTime requests inside four
+	// seconds may be silently suppressed. Keep one conservative shared clock
+	// gate until the seconds and milliseconds opcodes can be re-measured live.
+	clockRequestSpacing = 4250 * time.Millisecond
 )
 
 // advertisedServerVersionMax is the upper bound sent in the v100+ handshake.

@@ -40,14 +40,16 @@ func TestCanceledSingletonDrainsBeforeReplacement(t *testing.T) {
 		second <- err
 	}()
 	(<-e.cmds)()
-	if err := <-second; err == nil || !strings.Contains(err.Error(), "already in progress") {
-		t.Fatalf("replacement CurrentTime() error = %v, want already in progress", err)
+	if err := <-second; !errors.Is(err, ErrOperationActive) {
+		t.Fatalf("replacement CurrentTime() error = %v, want ErrOperationActive", err)
 	}
 
 	e.handleIncoming(codec.CurrentTime{Time: "1711929600"})
 	if _, ok := e.singletons[singletonCurrentTime]; ok {
 		t.Fatal("late CurrentTime response did not release the route")
 	}
+	// This test exercises late-response draining, not the clock pacing gate.
+	e.nextClockRequest = time.Time{}
 
 	third := make(chan struct {
 		ts  time.Time

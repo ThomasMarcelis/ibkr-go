@@ -105,6 +105,24 @@ func enqueueHistoricalSetup(ctx context.Context, e *engine, key string, onCancel
 	})
 }
 
+func enqueueClockSetup(ctx context.Context, e *engine, key string, onCanceled, onActive func(), fn func()) {
+	enqueueReadySetup(ctx, e, onCanceled, func() {
+		if _, exists := e.singletons[key]; exists {
+			onActive()
+			return
+		}
+		now := time.Now()
+		if wait := e.nextClockRequest.Sub(now); wait > 0 {
+			time.AfterFunc(wait, func() {
+				enqueueClockSetup(ctx, e, key, onCanceled, onActive, fn)
+			})
+			return
+		}
+		e.nextClockRequest = now.Add(clockRequestSpacing)
+		fn()
+	})
+}
+
 func (e *engine) pruneHistoricalRequests(now time.Time) {
 	cutoff := now.Add(-historicalIdenticalSpacing)
 	for key, at := range e.recentHistoricalRequests {
