@@ -440,6 +440,17 @@ func apiScenarioBase(ctx context.Context, addr string, clientID int, timeout tim
 	return runErr
 }
 
+func runAPIBootstrap(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, _ *ibkr.Client, _ string) error {
+		select {
+		case <-time.After(3 * time.Second):
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	})
+}
+
 func runAPICurrentTime(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		serverTime, err := client.CurrentTime(ctx)

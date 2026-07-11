@@ -89,17 +89,12 @@ var scenarios = map[string]*scenario{
 	"bootstrap": {
 		metadata:    meta("session", []string{"DialContext"}, []int{71, 15, 9}, "read_only", nil, []string{"ready session", "farm status drain"}, 1, "promoted", batchReadOnly),
 		description: "clean handshake + START_API + farm-status drain (no feature request)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			// Already bootstrapped. Read a few more frames to catch any late farm-status info.
-			return readFramesAt(conn, sess.ServerVersion, 3*time.Second, logFrame, nil)
-		},
+		runAPI:      runAPIBootstrap,
 	},
 	"bootstrap_client_id_0": {
 		metadata:    meta("session", []string{"DialContext"}, []int{71, 15, 9}, "read_only", []string{"client_id_0"}, []string{"ready session scoped to client ID 0"}, 0, "promoted", batchReadOnly),
 		description: "same as bootstrap but client_id=0 (required for REQ_ALL_OPEN_ORDERS scope)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			return readFramesAt(conn, sess.ServerVersion, 3*time.Second, logFrame, nil)
-		},
+		runAPI:      runAPIBootstrap,
 	},
 	"current_time": {
 		metadata:    meta("session", []string{"Client.CurrentTime"}, []int{49}, "read_only", nil, []string{"parsed server current time"}, 1, "promoted", batchNewV2, batchReadOnly),
