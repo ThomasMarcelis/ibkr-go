@@ -33,4 +33,4 @@ A client that silently reconnects without signaling the event to the caller hide
 
 When the only way to exercise a protocol library's tests is against a live Interactive Brokers Gateway, CI becomes fragile, contributors are locked out unless they have credentials, and regressions go uncaught until a human runs the tests manually.
 
-`ibkr-go` rejects live-only CI as the default path. Deterministic replay remains necessary for routine verification, but protocol-adjacent design and manual verification are expected to use the local live Gateway or TWS when available. The `testing/testhost` package is replay tooling for live-derived behavior, not a substitute protocol source.
+`ibkr-go` rejects live-only CI as the default path. Deterministic replay remains necessary for routine verification, but protocol-adjacent design and manual verification are expected to use the local live Gateway or TWS when available. The `internal/testhost` package is replay tooling for live-derived behavior, not a substitute protocol source.

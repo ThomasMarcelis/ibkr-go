@@ -24,7 +24,7 @@ All five must pass locally before opening a pull request. CI runs the same five 
 
 The test suite is this library's primary asset. It is grown deliberately. Every test must improve confidence or diagnosis quality — tests that only prove the code was written are rejected. Every bug fix lands with the transcript or test that would have caught the bug; that test becomes a permanent regression freeze.
 
-Tests are organised in layers: invariants, state transitions, behavioral scenarios, stress and edge cases. Routine CI stays deterministic, but protocol-adjacent development is grounded in the local live TWS or IB Gateway when available. The `testing/testhost` package and checked-in fixtures are replay tools for live-derived behavior, not a source of truth for invented protocol semantics.
+Tests are organised in layers: invariants, state transitions, behavioral scenarios, stress and edge cases. Routine CI stays deterministic, but protocol-adjacent development is grounded in the local live TWS or IB Gateway when available. The `internal/testhost` package and checked-in fixtures are replay tools for live-derived behavior, not a source of truth for invented protocol semantics.
 
 Wire framing and codec round-trips are also fuzzed. The intent is not just to
 have broad coverage, but to keep the protocol surface diagnosable and safe to

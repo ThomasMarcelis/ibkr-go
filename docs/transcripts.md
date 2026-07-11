@@ -6,7 +6,7 @@ older `server_version 200` fixtures are migrated.
 
 Current state:
 
-- `testing/testhost` matches exact raw client frames and writes exact raw server
+- `internal/testhost` matches exact raw client frames and writes exact raw server
   frames for migrated fixtures; remaining symbolic steps still use the
   production codec in both directions
 - checked-in transcripts cover live-grounded scenarios plus deliberate
@@ -66,7 +66,7 @@ server contract_details_end {"req_id":"$req1"}
 
 ## Testhost Contract
 
-`testing/testhost` currently uses the production codec in both directions, but
+`internal/testhost` currently uses the production codec in both directions, but
 it should be treated as replay tooling rather than as a place to define IBKR
 protocol semantics.
 

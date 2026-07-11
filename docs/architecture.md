@@ -32,7 +32,7 @@ until their staged protobuf migrations are implemented and live-attested.
   (`codec_orders.go`, `codec_marketdata.go`, etc.), the inbound decode
   registry, and protocol-owned version-gate aliases
 - `internal/wire/`: frame and field framing
-- `testing/testhost/`: deterministic replay and fault-injection harness for
+- `internal/testhost/`: deterministic replay and fault-injection harness for
   checked-in fixtures
 
 ## Runtime Model

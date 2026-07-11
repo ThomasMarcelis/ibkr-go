@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
-	"github.com/ThomasMarcelis/ibkr-go/v2/testing/testhost"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/testhost"
 	"github.com/shopspring/decimal"
 )
 
