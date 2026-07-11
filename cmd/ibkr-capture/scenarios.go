@@ -437,14 +437,9 @@ var scenarios = map[string]*scenario{
 	// --- v1 expanded scope: Batch C3 — completed orders and tick types ---
 
 	"completed_orders": {
-		metadata:    meta("orders", []string{"Orders().Completed"}, []int{99, 101, 102}, "read_only", nil, []string{"completed order snapshot"}, 1, "promoted", batchReadOnly),
-		description: "REQ_COMPLETED_ORDERS apiOnly=true, read to COMPLETED_ORDERS_END (msg 102)",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqCompletedOrders(conn, true); err != nil {
-				return err
-			}
-			return readFrames(conn, 15*time.Second, logFrame, stopOnMsgID(102))
-		},
+		metadata:    meta("orders", []string{"Orders().Completed", "Client.CurrentTime"}, []int{protocol.OutReqCompletedOrders, protocol.InCompletedOrder, protocol.InCompletedOrderEnd, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", nil, []string{"finite apiOnly completed-order snapshot and protocol fence"}, 1, "promoted", batchReadOnly),
+		description: "collect the apiOnly completed-order snapshot through the public API",
+		runAPI:      runAPICompletedOrders,
 	},
 	"tick_efp_probe": {
 		metadata:    meta("market_data", []string{"official reqMktData EFP BAG"}, []int{1, 2, 4, 58, 59, 81}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"TickEFP callback or real contract, entitlement, or no-data result"}, 1, "candidate", batchReadOnly),

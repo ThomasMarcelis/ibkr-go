@@ -334,6 +334,8 @@ func unkeyedAPIErrorSingleton(msg codec.APIError) string {
 		return singletonOrderID
 	case strings.Contains(msg.Message, "-'as'"):
 		return singletonOpenOrders
+	case strings.Contains(msg.Message, "-'S'"):
+		return singletonCompletedOrders
 	default:
 		return ""
 	}

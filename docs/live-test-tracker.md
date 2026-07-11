@@ -4,7 +4,7 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-10. Both readonly-live gateway 127.0.0.1:4001 and
+Last updated: 2026-07-11. Both readonly-live gateway 127.0.0.1:4001 and
 paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 206`.
 
 ## Current Campaign Contract
@@ -412,6 +412,8 @@ against the role-aware `paper-dev` Gateway.
 | open_orders_empty | 2026-07-10 | public API recorded on read-only Gateway; server_version=206, events sha256 `0e838de9d463070ac711be4950948c682c01e8ad02546d8be32f47f35ce68d25`; req_id=-1/code 321 now terminates `Orders().Open` as a typed error |
 | historical_news_aapl_timezone_window | 2026-07-10 | public API recorded on read-only Gateway; server_version=206, events sha256 `72f0bc03fb2e796685be47580d79b5e9363a9de9590702ee78da1e15c95f0629`; `.0 UTC` lower end bound returned 17 in-bound items and a clean end marker |
 | sdk_exact206_historical_news_end_bound | 2026-07-10 | official SDK 10.48.01 oracle; exact server_version=206, events sha256 `77f0031eef632b2779333eefc051f6731bb0d77daa8b35d3585771e7eccb854c`; `.0 UTC` lower end bound returned 17 items |
+| completed_orders | 2026-07-11 | public API recorded on read-only Gateway; server_version=206, events sha256 `ff9808ba8f3f33f2eb14e6da059e1e4437ab7c19553f4ebb4d0b9a7bfc97c289`; exact unkeyed `-'S'` code-321 refusal now terminates `Orders().Completed` as a typed error and the scenario completes with a current-time fence |
+| completed_orders | 2026-07-11 | public API recorded on paper Gateway; server_version=206, events sha256 `9f7bdc11f8012a5ebf1c33f5ed979bfc0ac192476a8b5f9033a2ab9459ff352f`; empty apiOnly snapshot ended with `completedOrdersEnd` and a current-time fence |
 | sdk_exact206_historical_news_end_bound_missing_fraction | 2026-07-10 | official SDK 10.48.01 negative oracle; exact server_version=206, events sha256 `63ca8e1ae5e99e8544491a051dd8f771d228b5d2b33b9f0baec8311b3b6e2b58`; identical bound without `.0` returned no items |
 | sdk_exact206_historical_news_both_bounds | 2026-07-10 | official SDK 10.48.01 negative oracle; exact server_version=206, events sha256 `b099280f7ddbd26041358218f9b2c9fa3667e0e9be0af804180559b051465023`; Gateway ignored the lower `EndTime` and returned 127 rows through 2023, grounding the public both-bound rejection |
 | quote_snapshot_aapl | 2026-07-10 | public API recorded and verified on readonly server_version=206; all twelve typed quote fields and the snapshot-end boundary were observed; events sha256 `a854ac41c4e0073f7578f2d2ac4a2c4b1f0954bd243c49167beda62f5f159e3e` |

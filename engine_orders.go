@@ -299,6 +299,10 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 
 		e.singletons[singletonCompletedOrders] = &route{
 			opKind: OpCompletedOrders,
+			handleAPIErr: func(msg codec.APIError, eng *engine) {
+				delete(eng.singletons, singletonCompletedOrders)
+				resp <- result{err: eng.apiErr(OpCompletedOrders, msg)}
+			},
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.CompletedOrder:

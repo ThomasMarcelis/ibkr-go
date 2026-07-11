@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -232,10 +233,12 @@ func TestHandleAPIErrorEmitsUnroutedRequestError(t *testing.T) {
 func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 	t.Parallel()
 
-	// Both code-321 messages are exact live Gateway text. reqIds is from
+	// All code-321 messages are exact live Gateway text. reqIds is from
 	// 20260611T074047Z (events SHA-256 prefix 00b11cbce4cefc31);
 	// open orders is from 20260710T225552Z (events SHA-256
-	// 0e838de9d463070ac711be4950948c682c01e8ad02546d8be32f47f35ce68d25).
+	// 0e838de9d463070ac711be4950948c682c01e8ad02546d8be32f47f35ce68d25);
+	// completed orders is from 20260711T002138Z (events SHA-256
+	// cd040a11301e6106b0f532af65192ed7da0a621f8e61d9faff8fc02d684ea5d3).
 	const cause = " : cause - The API interface is currently in Read-Only mode."
 	for _, tc := range []struct {
 		name    string
@@ -244,6 +247,7 @@ func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 	}{
 		{name: "order ID", marker: "b7", wantHit: singletonOrderID},
 		{name: "open orders", marker: "as", wantHit: singletonOpenOrders},
+		{name: "completed orders", marker: "S", wantHit: singletonCompletedOrders},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -254,6 +258,7 @@ func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 				request:      codec.OpenOrdersRequest{Scope: string(OpenOrdersScopeClient)},
 				handleAPIErr: func(codec.APIError, *engine) { hit = singletonOpenOrders },
 			}
+			e.singletons[singletonCompletedOrders] = &route{handleAPIErr: func(codec.APIError, *engine) { hit = singletonCompletedOrders }}
 			e.handleAPIError(codec.APIError{ReqID: -1, Code: 321, Message: "Error validating request.-'" + tc.marker + "'" + cause})
 			if hit != tc.wantHit {
 				t.Fatalf("routed singleton = %q, want %q", hit, tc.wantHit)
@@ -297,6 +302,35 @@ func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 		}
 	default:
 		t.Fatal("unowned open-orders rejection was not surfaced as a session event")
+	}
+}
+
+func TestCompletedOrdersReturnsExactLiveReadOnlyRefusal(t *testing.T) {
+	// /tmp/ibkr-go-completed-public-20260711/
+	// 20260711T002138Z-completed_orders, server_version 206, events.jsonl
+	// sha256 cd040a11301e6106b0f532af65192ed7da0a621f8e61d9faff8fc02d684ea5d3.
+	e, peer := newObservedMarketDataEngine(t)
+	e.serverVersion = 206
+	result := make(chan error, 1)
+	go func() {
+		_, err := e.CompletedOrders(context.Background(), true)
+		result <- err
+	}()
+	(<-e.cmds)()
+	_ = readObservedFrame(t, peer)
+
+	message, err := codec.Decode(206, liveCapturedFrame(t, "AAAAdAAAAMwI////////////ARCDvLT09DMYwQIiWUVycm9yIHZhbGlkYXRpbmcgcmVxdWVzdC4tJ1MnIDogY2F1c2UgLSBUaGUgQVBJIGludGVyZmFjZSBpcyBjdXJyZW50bHkgaW4gUmVhZC1Pbmx5IG1vZGUu"))
+	if err != nil {
+		t.Fatalf("decode exact live completed-orders refusal: %v", err)
+	}
+	e.handleIncoming(message)
+
+	apiErr, ok := errors.AsType[*APIError](<-result)
+	if !ok || apiErr.OpKind != OpCompletedOrders || apiErr.Code != ErrCodeServerErrorValidatingRequest {
+		t.Fatalf("CompletedOrders error = %#v, want typed code-321 completed-orders refusal", apiErr)
+	}
+	if _, ok := e.singletons[singletonCompletedOrders]; ok {
+		t.Fatal("completed-orders refusal left the singleton route active")
 	}
 }
 

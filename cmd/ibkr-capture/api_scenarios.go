@@ -614,6 +614,32 @@ func runAPIExecutionsSnapshot(ctx context.Context, addr string, clientID int) er
 	})
 }
 
+func runAPICompletedOrders(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		orders, err := client.Orders().Completed(ctx, true)
+		if err != nil {
+			apiErr, ok := errors.AsType[*ibkr.APIError](err)
+			if ok && apiErr.OpKind == ibkr.OpCompletedOrders && apiErr.Code == ibkr.ErrCodeServerErrorValidatingRequest &&
+				strings.Contains(apiErr.Message, "Error validating request.-'S'") && strings.Contains(apiErr.Message, "Read-Only mode") {
+				if err := fenceAPIWrites(ctx, client, "completed-orders refusal"); err != nil {
+					return err
+				}
+				recordAPIEvent("completed_orders_refused", "api_only", func(event *apiDriverEvent) { event.Error = err.Error() })
+				return nil
+			}
+			return fmt.Errorf("completed API orders: %w", err)
+		}
+		if err := fenceAPIWrites(ctx, client, "completed-orders snapshot"); err != nil {
+			return err
+		}
+		recordAPIEvent("completed_orders", "api_only", func(event *apiDriverEvent) {
+			event.Count = len(orders)
+			event.Values = map[string]string{"api_only": "true"}
+		})
+		return nil
+	})
+}
+
 func runAPIHistoricalNews(ctx context.Context, addr string, clientID int, label string, start, end time.Time, totalResults int) error {
 	return apiScenario(ctx, addr, clientID, 25*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
