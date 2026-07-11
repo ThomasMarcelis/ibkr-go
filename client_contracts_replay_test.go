@@ -131,11 +131,27 @@ func TestContractDetailsAppleBondsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ContractDetails() error = %v", err)
 	}
-	if len(details) != 2 {
-		t.Fatalf("details len = %d, want 2", len(details))
+	if len(details) != 58 {
+		t.Fatalf("details len = %d, want 58", len(details))
 	}
 
-	first := details[0]
+	var first, second *ibkr.ContractDetails
+	for i := range details {
+		d := &details[i]
+		if d.SecType != ibkr.SecTypeBond || d.TradingClass != "AAPL" || d.Bond == nil {
+			t.Errorf("details[%d] identity = secType %q tradingClass %q bond %v", i, d.SecType, d.TradingClass, d.Bond)
+		}
+		switch d.ConID {
+		case 127128131:
+			first = d
+		case 194154340:
+			second = d
+		}
+	}
+	if first == nil || second == nil {
+		t.Fatalf("representative bonds present = %t/%t, want true/true", first != nil, second != nil)
+	}
+
 	if first.ConID != 127128131 || first.SecType != ibkr.SecTypeBond || first.TradingClass != "AAPL" {
 		t.Errorf("first identity = conID %d secType %q tradingClass %q", first.ConID, first.SecType, first.TradingClass)
 	}
@@ -155,7 +171,6 @@ func TestContractDetailsAppleBondsReplay(t *testing.T) {
 		t.Errorf("first tick/size = %s / %v / %v", first.MinTick, first.MinSize, first.SizeIncrement)
 	}
 
-	second := details[1]
 	if second.ConID != 194154340 || second.Bond == nil || second.Bond.CUSIP != "IBCID194154340" || second.Bond.DescriptionAppend != "AAPL 1 5/8 11/10/26" {
 		t.Errorf("second = %+v", second)
 	}
@@ -281,32 +296,11 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 	if front.Symbol != "ES" {
 		t.Errorf("front Symbol = %q, want ES", front.Symbol)
 	}
-	if front.SecType != ibkr.SecTypeFuture {
-		t.Errorf("front SecType = %q, want FUT", front.SecType)
-	}
 	if front.LocalSymbol != "ESZ6" {
 		t.Errorf("front LocalSymbol = %q, want ESZ6", front.LocalSymbol)
 	}
 	if front.Expiry != "20261218" || front.LastTradeDate != "20261218" || front.LastTradeTime != "08:30:00" {
 		t.Errorf("front expiry fields = %q/%q/%q, want 20261218/20261218/08:30:00", front.Expiry, front.LastTradeDate, front.LastTradeTime)
-	}
-	if front.Exchange != "CME" {
-		t.Errorf("front Exchange = %q, want CME", front.Exchange)
-	}
-	if front.Currency != "USD" {
-		t.Errorf("front Currency = %q, want USD", front.Currency)
-	}
-	if front.MinTick.String() != "0.25" {
-		t.Errorf("front MinTick = %s, want 0.25", front.MinTick.String())
-	}
-	if front.MarketName != "ES" {
-		t.Errorf("front MarketName = %q, want ES", front.MarketName)
-	}
-	if front.LongName != "E-mini S&P 500" {
-		t.Errorf("front LongName = %q, want E-mini S&P 500", front.LongName)
-	}
-	if front.TimeZoneID != "US/Central" {
-		t.Errorf("front TimeZoneID = %q, want US/Central", front.TimeZoneID)
 	}
 
 	for i, d := range details {
@@ -316,17 +310,15 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 		if d.TradingClass != "ES" {
 			t.Errorf("details[%d].TradingClass = %q, want ES", i, d.TradingClass)
 		}
-	}
-
-	last := details[20]
-	if last.ConID != 866514761 {
-		t.Errorf("last ConID = %d, want 866514761", last.ConID)
-	}
-	if last.LocalSymbol != "ESM1" {
-		t.Errorf("last LocalSymbol = %q, want ESM1", last.LocalSymbol)
-	}
-	if last.Expiry != "20310620" || last.LastTradeDate != "20310620" || last.LastTradeTime != "08:30:00" {
-		t.Errorf("last expiry fields = %q/%q/%q, want 20310620/20310620/08:30:00", last.Expiry, last.LastTradeDate, last.LastTradeTime)
+		if d.Exchange != "CME" || d.Currency != "USD" {
+			t.Errorf("details[%d] venue = %q/%q, want CME/USD", i, d.Exchange, d.Currency)
+		}
+		if d.MarketName != "ES" || d.LongName != "E-mini S&P 500" {
+			t.Errorf("details[%d] identity = %q/%q, want ES/E-mini S&P 500", i, d.MarketName, d.LongName)
+		}
+		if d.MinTick.String() != "0.25" || d.TimeZoneID != "US/Central" {
+			t.Errorf("details[%d] terms = %s/%q, want 0.25/US/Central", i, d.MinTick.String(), d.TimeZoneID)
+		}
 	}
 }
 

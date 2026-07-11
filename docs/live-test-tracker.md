@@ -508,11 +508,11 @@ against the role-aware `paper-dev` Gateway.
 | api_wsh_variants_aapl.txt | 20260415T162255Z | promoted; covers WSH metadata plus conid, portfolio, watchlist, and competitor event-data variants returning real code 10276 entitlement errors |
 | contract_details_aapl_opt.txt | 20260710T221210Z | promoted; same-request sv206 replay retains three calls, one put, and ContractDetailsEnd from a complete 106-row nearest-expiry response selected through SecDefOptParams (`cff9f2c77e522104`) |
 | smart_components.txt | 20260710T221437Z | promoted; same-session sv206 replay derives `9c0001` from AAPL TickReqParams while the quote is active, then returns the complete current 20-exchange smart-component mapping (`c32ec635ec50ff69`) |
-| contract_details_apple_bonds.txt | 20260709T232431Z | promoted; covers message-18 Apple bond details by issuer ID with live one- and two-security-ID variants |
+| contract_details_apple_bonds.txt | 20260710T220545Z | promoted; exact sv206 request, all 58 message-18 Apple bond results by issuer ID, and end (`a433e9b0d181201c`) |
 | contract_details_eurusd_cash.txt | 20260405T215014Z | promoted; covers single-match EUR.USD CASH details on IDEALPRO |
-| contract_details_es_fut.txt | 20260405T215018Z | promoted; covers 21-expiry ES futures ladder including a full-session lastTradeDate timestamp (`20261218 08:30:00 US/Central`) |
+| contract_details_es_fut.txt | 20260710T220551Z | promoted; exact sv206 request, complete 21-expiry ES futures result set, and end (`8dd8b4b2b1aa6469`) |
 | contract_details_not_found.txt | 20260405T215022Z | promoted; covers real code 200 not-found error surfaced as `APIError` with `OpContractDetails` |
-| qualify_contract_ambiguous.txt | 20260407T190656Z | promoted; covers 26-row ambiguous MSFT qualify resolving to `ErrAmbiguousContract` |
+| qualify_contract_ambiguous.txt | 20260710T220554Z | promoted; exact sv206 request, all 26 exchange-specific MSFT results, and end resolve to `ErrAmbiguousContract` (`4ee1d7204e71e3f1`) |
 | api_conditions_matrix_aapl.txt | 20260610T200935Z | promoted; covers all six condition families accepted to PreSubmitted after the field-order fix, the non-terminal off-hours code-399 warning (handle stays open, then closes cleanly on the cancel's Cancelled status), and 5-field cancel acknowledgements; Gateway condition echoes decode fully since the None-sentinel fix (frozen by capture-decode tests) |
 | api_order_rest_cancel_161_aapl.txt | 20260610T195745Z | promoted; covers LMT rest/cancel plus the code-161 safety re-cancel remaining a session notice while the handle closes cleanly |
 | api_order_stop_cancel_aapl.txt | 20260610T195758Z | promoted; covers STP and STP LMT rest/cancel with Gateway-computed echo limits and why_held=trigger |
