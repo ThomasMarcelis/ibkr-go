@@ -111,6 +111,11 @@ var scenarios = map[string]*scenario{
 		description: "request and parse millisecond-precision Gateway time through the public API",
 		runAPI:      runAPICurrentTimeMillis,
 	},
+	"managed_accounts_refresh": {
+		metadata:    meta("session", []string{"Client.ManagedAccounts"}, []int{protocol.OutReqManagedAccounts, protocol.InManagedAccounts}, "read_only", nil, []string{"nonempty managed-account refresh and session snapshot update"}, 1, "promoted", batchReadOnly),
+		description: "refresh the login's managed accounts through the public API",
+		runAPI:      runAPIManagedAccounts,
+	},
 	"req_ids": {
 		metadata:    meta("session", []string{"Orders().RefreshOrderID"}, []int{8, 9, 4}, "read_only", nil, []string{"refreshed order ID or real read-only Gateway rejection"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "refresh the engine-owned order ID seed through the public API",

@@ -29,6 +29,17 @@ class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
 
+### 2026-07-11
+
+Managed-account refresh was added as `Client.ManagedAccounts` and verified
+against `readonly-live` at exact `server_version=206`. Official API 10.48.01
+first established the `17,1` request and second managed-accounts callback; the
+public scenario then reproduced the exchange and updated the session snapshot.
+The public capture is `20260711T011427Z-managed_accounts_refresh` (events
+SHA-256 `dc7a53d00e621d95e1f55ce518f225e0c1fa26e8806d5b7acf9bcbbaa252a095`),
+and `managed_accounts_refresh.txt` retains the length-preserving sanitized
+frames.
+
 ### 2026-07-10
 
 Order preview ownership was revalidated after removing caller-settable

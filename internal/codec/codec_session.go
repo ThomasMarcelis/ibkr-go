@@ -29,6 +29,14 @@ type ManagedAccounts struct {
 	Accounts []string
 }
 
+// ManagedAccountsRequest is the outbound reqManagedAccts message (OUT 17).
+// The server answers with the same ManagedAccounts callback used at bootstrap.
+type ManagedAccountsRequest struct{}
+
+func (m ManagedAccountsRequest) encodeWire(sv int) ([]string, error) {
+	return []string{itoa(protocol.OutReqManagedAccounts), "1"}, nil
+}
+
 type NextValidID struct {
 	OrderID int64
 }

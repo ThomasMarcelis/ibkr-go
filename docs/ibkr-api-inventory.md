@@ -46,7 +46,7 @@ committed.
 
 | Group | Official Methods | ibkr-go Status |
 |-------|------------------|----------------|
-| Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is implemented as `Client.CurrentTime`; `reqIds` is `Orders().RefreshOrderID`. `reqManagedAccts`, server log level, redirect, and old connection toggles are matrix targets or explicit non-goals. |
+| Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close are implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is `Client.CurrentTime`; `reqIds` is `Orders().RefreshOrderID`; `reqManagedAccts` is `Client.ManagedAccounts`. Server log level, redirect, and old connection toggles are explicit non-goals. |
 | Verification/internal auth | `verifyRequest`, `verifyMessage`, `verifyAndAuthRequest`, `verifyAndAuthMessage` | Officially internal-purpose. Matrix as out of public scope unless live Gateway emits callbacks. |
 | Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Quote streams preserve every classic price/size callback, including unmapped numeric tick types, price attributes, and optional companion size, while also delivering normalized fields plus generic, string, request-parameter, option-computation, and contract-specific news callbacks. The remaining matrix needs live/frozen families, tickEFP, and more generic tick IDs. |
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
@@ -267,7 +267,7 @@ Inbound message IDs:
 These are not all defects. They are explicit matrix targets until live evidence
 and project scope decide whether to implement, defer, or mark out of scope.
 
-- `reqManagedAccts`, `setServerLogLevel`.
+- `setServerLogLevel`.
 - Verification/auth callbacks and redirect callbacks.
 - `tickEFP` and `deltaNeutralValidation`.
 - `orderBound` and rare OpenOrder branches.

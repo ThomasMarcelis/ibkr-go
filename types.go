@@ -35,6 +35,7 @@ const (
 	OpRealTimeBars         OpKind = "realtime_bars"
 	OpOpenOrders           OpKind = "open_orders"
 	OpExecutions           OpKind = "executions"
+	OpManagedAccounts      OpKind = "managed_accounts"
 	OpFamilyCodes          OpKind = "family_codes"
 	OpMktDepthExchanges    OpKind = "mkt_depth_exchanges"
 	OpNewsProviders        OpKind = "news_providers"

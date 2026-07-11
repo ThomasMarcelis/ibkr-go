@@ -82,6 +82,23 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestManagedAccountsRequestExactServer206(t *testing.T) {
+	t.Parallel()
+
+	// Exact request from official API 10.48.01 against the readonly live
+	// Gateway capped at server_version 206. Capture
+	// 20260711T011054Z-sdk_exact206_managed_accounts_refresh,
+	// events.jsonl SHA-256 433a03994d7fb1ec2af34870fdf156f8406fafabc8cb0ccbd1c5dedc70942e58.
+	payload, err := Encode(206, ManagedAccountsRequest{})
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	want := []byte("\x00\x00\x00\x111\x00")
+	if !slices.Equal(payload, want) {
+		t.Fatalf("Encode() = %x, want %x", payload, want)
+	}
+}
+
 func TestDecodeLiveSymbolSamplesFrameShape(t *testing.T) {
 	t.Parallel()
 

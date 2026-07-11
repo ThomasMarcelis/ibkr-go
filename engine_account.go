@@ -119,6 +119,52 @@ func (e *engine) PositionsSnapshot(ctx context.Context) ([]Position, error) {
 	return collectSnapshotAndClose(ctx, sub, func(update PositionUpdate) (Position, bool) { return update.Position, true })
 }
 
+func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
+	type result struct {
+		accounts []string
+		err      error
+	}
+	resp := make(chan result, 1)
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if _, exists := e.singletons[singletonManagedAccounts]; exists {
+			resp <- result{err: fmt.Errorf("ibkr: managed accounts request already in progress")}
+			return
+		}
+
+		e.singletons[singletonManagedAccounts] = &route{
+			opKind: OpManagedAccounts,
+			handle: func(msg any, eng *engine) {
+				m, ok := msg.(codec.ManagedAccounts)
+				if !ok {
+					return
+				}
+				delete(eng.singletons, singletonManagedAccounts)
+				resp <- result{accounts: append([]string(nil), m.Accounts...)}
+			},
+			onDisconnect: func(eng *engine, err error) bool {
+				resp <- result{err: ErrInterrupted}
+				return false
+			},
+			close: func(err error) {
+				resp <- result{err: err}
+			},
+		}
+		if err := e.sendContext(ctx, codec.ManagedAccountsRequest{}); err != nil {
+			delete(e.singletons, singletonManagedAccounts)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() { delete(e.singletons, singletonManagedAccounts) })
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out.accounts, out.err
+}
+
 func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[PositionUpdate], error) {
 	type result struct {
 		sub *Subscription[PositionUpdate]

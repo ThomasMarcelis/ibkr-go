@@ -61,6 +61,13 @@ func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTimeMillis(ctx)
 }
 
+// ManagedAccounts asks the Gateway for the account IDs controlled by this
+// login. It refreshes [Client.Session]'s ManagedAccounts snapshot and returns
+// an independently owned copy. Only one refresh may be in flight at a time.
+func (c *Client) ManagedAccounts(ctx context.Context) ([]string, error) {
+	return c.engine.ManagedAccounts(ctx)
+}
+
 // Accounts returns the sub-client for account values, positions, and PnL.
 func (c *Client) Accounts() AccountsClient { return AccountsClient{engine: c.engine} }
 

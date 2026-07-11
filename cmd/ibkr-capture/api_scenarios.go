@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -460,6 +461,25 @@ func runAPICurrentTimeMillis(ctx context.Context, addr string, clientID int) err
 		}
 		recordAPIEvent("current_time_millis", "", func(event *apiDriverEvent) {
 			event.EventTime = serverTime.Format(time.RFC3339Nano)
+		})
+		return nil
+	})
+}
+
+func runAPIManagedAccounts(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		accounts, err := client.ManagedAccounts(ctx)
+		if err != nil {
+			return err
+		}
+		if len(accounts) == 0 {
+			return fmt.Errorf("managed accounts refresh returned no accounts")
+		}
+		if !slices.Equal(accounts, client.Session().ManagedAccounts) {
+			return fmt.Errorf("managed accounts refresh and session snapshot disagree")
+		}
+		recordAPIEvent("managed_accounts", "refresh", func(event *apiDriverEvent) {
+			event.Count = len(accounts)
 		})
 		return nil
 	})

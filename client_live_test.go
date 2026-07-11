@@ -3,6 +3,7 @@ package ibkr_test
 import (
 	"context"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -216,6 +217,27 @@ func TestLiveCurrentTime(t *testing.T) {
 	// Sanity check: server time should be within 5 minutes of local now.
 	if delta := time.Since(ts); delta > 5*time.Minute || delta < -5*time.Minute {
 		t.Errorf("CurrentTime() drift = %v, want < 5 minutes", delta)
+	}
+}
+
+func TestLiveManagedAccountsRefresh(t *testing.T) {
+	t.Parallel()
+
+	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancelReq()
+	accounts, err := client.ManagedAccounts(ctx)
+	if err != nil {
+		t.Fatalf("ManagedAccounts() error = %v", err)
+	}
+	if len(accounts) == 0 {
+		t.Fatal("ManagedAccounts() returned no accounts")
+	}
+	if !slices.Equal(accounts, client.Session().ManagedAccounts) {
+		t.Fatalf("ManagedAccounts() = %v, Session().ManagedAccounts = %v", accounts, client.Session().ManagedAccounts)
 	}
 }
 

@@ -21,6 +21,7 @@ const (
 	singletonAccountUpdates    = "account_updates"
 	singletonNewsBulletins     = "news_bulletins"
 	singletonFA                = "fa"
+	singletonManagedAccounts   = "managed_accounts"
 	singletonCurrentTime       = "current_time"
 	singletonCurrentTimeMillis = "current_time_millis"
 	singletonOrderID           = "order_id"
@@ -50,6 +51,9 @@ func (e *engine) handleIncoming(msg any) {
 		})
 		e.bootstrap.managed = true
 		e.maybeReady()
+		if route, ok := e.singletons[singletonManagedAccounts]; ok {
+			route.handle(m, e)
+		}
 		return
 	case codec.NextValidID:
 		e.updateSnapshot(func(s *Snapshot) {
