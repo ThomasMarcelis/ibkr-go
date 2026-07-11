@@ -1,6 +1,14 @@
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_account_summary {"req_id":"$req1","account":"All","tags":["NetLiquidation"]}
-server account_summary {"req_id":"$req1","account":"DU9000001","tag":"NetLiquidation","value":"100000.00","currency":"USD"}
+# Exact prefix of read-only IB Gateway server_version 206 public API capture
+# 20260710T223024Z-account_summary_snapshot.
+# events.jsonl sha256:
+# 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db
+#
+# Account identifiers are deterministic length-preserving substitutions.
+# Ambient farm-status frames are omitted. The transport closes after the first
+# captured value and before the captured end marker to inject snapshot loss.
+handshake {"server_version":206,"connection_time":"20260711 00:30:24 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAARgAAAD4xADEAQWxsAE5ldExpcXVpZGF0aW9uLFRvdGFsQ2FzaFZhbHVlLEJ1eWluZ1Bvd2VyLEV4Y2Vzc0xpcXVpZGl0eQA=
+raw server AAAALAAAAD8xADEARFU5MDAwMDAxAEJ1eWluZ1Bvd2VyADE3MzM5Mi45NQBFVVIA
 disconnect
