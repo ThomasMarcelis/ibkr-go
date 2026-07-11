@@ -94,12 +94,8 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			return
 		}
 
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpOpenOrders, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpOpenOrders, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -193,12 +189,8 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpExecutions, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpExecutions, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}

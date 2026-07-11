@@ -71,12 +71,8 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			return
 		}
 
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpNewsBulletins, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpNewsBulletins, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}

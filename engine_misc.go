@@ -215,12 +215,8 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpScannerSubscription, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpScannerSubscription, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -538,12 +534,8 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 	var reqID int
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpDisplayGroupEvents, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpDisplayGroupEvents, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}

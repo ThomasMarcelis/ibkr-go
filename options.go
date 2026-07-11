@@ -134,6 +134,17 @@ func applySubscriptionOptions(client config, opts []SubscriptionOption) (subscri
 	return cfg, nil
 }
 
+func applySubscriptionOptionsFor(client config, opKind OpKind, opts []SubscriptionOption) (subscriptionConfig, error) {
+	cfg, err := applySubscriptionOptions(client, opts)
+	if err != nil {
+		return subscriptionConfig{}, err
+	}
+	if err := validateResumePolicy(opKind, cfg.resume); err != nil {
+		return subscriptionConfig{}, err
+	}
+	return cfg, nil
+}
+
 // WithHost sets the Gateway/TWS host. Default: "127.0.0.1". An empty host is
 // rejected by [DialContext] with a [ValidationError] before dialing.
 func WithHost(host string) Option {

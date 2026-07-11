@@ -82,12 +82,8 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			return
 		}
 
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpQuotes, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpQuotes, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -373,12 +369,8 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			return
 		}
 
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpRealTimeBars, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpRealTimeBars, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -696,12 +688,8 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			return
 		}
 
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpTickByTick, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpTickByTick, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}
