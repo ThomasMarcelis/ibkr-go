@@ -2663,21 +2663,22 @@ func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
-		Account:      "DU12345",
+		Account:      "DU9000001",
 		ModelCode:    "",
 		LedgerAndNLV: true,
 	})
 	if err != nil {
 		t.Fatalf("AccountUpdatesMultiSnapshot() error = %v", err)
 	}
-	if len(values) != 2 {
-		t.Fatalf("values len = %d, want 2", len(values))
+	if len(values) != 125 {
+		t.Fatalf("values len = %d, want 125", len(values))
 	}
-	if values[0].Key != "NetLiquidation" {
-		t.Fatalf("first key = %q, want NetLiquidation", values[0].Key)
+	if values[0].Account != "DU9000001" || values[0].Key != "Currency" || values[0].Value != "HKD" || values[0].Currency != "HKD" {
+		t.Fatalf("first value = %+v, want HKD currency row", values[0])
 	}
-	if values[1].Key != "BuyingPower" {
-		t.Fatalf("second key = %q, want BuyingPower", values[1].Key)
+	last := values[124]
+	if last.Account != "DU9000001" || last.Key != "Cryptocurrency" || last.Value != "0.00" || last.Currency != "BASE" {
+		t.Fatalf("last value = %+v, want base cryptocurrency row", last)
 	}
 }
 
