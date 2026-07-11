@@ -189,13 +189,16 @@ func TestRecordReadyFileNamesCaptureDirectory(t *testing.T) {
 			scenario:       "recorder-ready",
 			readyFile:      readyFile,
 			maxLegs:        1,
-			captureTimeout: time.Second,
+			captureTimeout: 10 * time.Second,
 		})
 	}()
 
 	var captureDir string
-	deadline := time.Now().Add(time.Second)
-	for captureDir == "" && time.Now().Before(deadline) {
+	deadline := time.NewTimer(5 * time.Second)
+	defer deadline.Stop()
+	poll := time.NewTicker(time.Millisecond)
+	defer poll.Stop()
+	for captureDir == "" {
 		// #nosec G304 -- readyFile is rooted in this test's temporary directory.
 		data, err := os.ReadFile(readyFile)
 		if err == nil {
@@ -205,10 +208,13 @@ func TestRecordReadyFileNamesCaptureDirectory(t *testing.T) {
 		if !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("read ready file: %v", err)
 		}
-		time.Sleep(time.Millisecond)
-	}
-	if captureDir == "" {
-		t.Fatal("recorder did not publish readiness")
+		select {
+		case err := <-result:
+			t.Fatalf("record() ended before readiness: %v", err)
+		case <-poll.C:
+		case <-deadline.C:
+			t.Fatal("recorder did not publish readiness within 5s")
+		}
 	}
 	if want := onlyCaptureDir(t, root); captureDir != want {
 		t.Fatalf("ready capture directory = %q, want %q", captureDir, want)

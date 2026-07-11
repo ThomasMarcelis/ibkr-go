@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -135,7 +136,7 @@ func record(ctx context.Context, cfg recorderConfig) (err error) {
 		return fmt.Errorf("capture context: %w", err)
 	}
 	if cfg.readyFile != "" {
-		if err := os.WriteFile(cfg.readyFile, []byte(session.Dir()+"\n"), 0o600); err != nil {
+		if err := publishReadyFile(cfg.readyFile, session.Dir()); err != nil {
 			return fmt.Errorf("write ready file: %w", err)
 		}
 	}
@@ -181,6 +182,35 @@ func record(ctx context.Context, cfg recorderConfig) (err error) {
 
 	if acceptedLegs == 0 {
 		return fmt.Errorf("capture timed out")
+	}
+	return nil
+}
+
+func publishReadyFile(path, captureDir string) error {
+	file, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	tempPath := file.Name()
+	cleanup := func() {
+		_ = file.Close()
+		_ = os.Remove(tempPath)
+	}
+	if _, err := io.WriteString(file, captureDir+"\n"); err != nil {
+		cleanup()
+		return err
+	}
+	if err := file.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		cleanup()
+		return err
 	}
 	return nil
 }
