@@ -360,8 +360,10 @@ func TestLiveCompletedOrders(t *testing.T) {
 
 	orders, err := client.Orders().Completed(ctx, true)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			t.Logf("CompletedOrders() returned: %v (acceptable when Gateway has no completed-order response for this account/session)", err)
+		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok &&
+			apiErr.Code == ibkr.ErrCodeServerErrorValidatingRequest &&
+			strings.Contains(apiErr.Message, "API interface is currently in Read-Only mode") {
+			t.Logf("CompletedOrders() returned the expected read-only Gateway response: %v", err)
 			return
 		}
 		t.Fatalf("CompletedOrders() error = %v", err)
