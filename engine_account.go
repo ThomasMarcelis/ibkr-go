@@ -345,7 +345,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					RealizedPNL:   realizedPNL,
 				}})
 			case codec.UpdateAccountTime:
-				// Informational timestamp — silently consumed.
+				sub.emit(AccountUpdate{UpdateTime: new(m.Timestamp)})
 			case codec.AccountDownloadEnd:
 				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 			}

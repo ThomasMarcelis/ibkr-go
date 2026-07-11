@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- Account-update subscriptions expose the Gateway's update timestamp through
+  `AccountUpdate.UpdateTime` instead of silently discarding the callback.
+
 - `WithOrderEventBuffer` configures the bounded event capacity shared by newly
   created `OrderHandle` values (default 64). Order events remain lossless:
   overflow closes local observation with `ErrSlowConsumer` instead of silently

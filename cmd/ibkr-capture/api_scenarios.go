@@ -1686,15 +1686,23 @@ func runAPIAccountUpdates(ctx context.Context, addr string, clientID int) error 
 		if len(updates) == 0 {
 			return errors.New("account updates snapshot is empty")
 		}
-		var accountValues, portfolioValues int
+		var accountValues, portfolioValues, updateTimes int
 		for i, update := range updates {
-			if (update.AccountValue == nil) == (update.Portfolio == nil) {
-				return fmt.Errorf("account update %d must contain exactly one payload", i)
-			}
+			payloads := 0
 			if update.AccountValue != nil {
+				payloads++
 				accountValues++
-			} else {
+			}
+			if update.Portfolio != nil {
+				payloads++
 				portfolioValues++
+			}
+			if update.UpdateTime != nil {
+				payloads++
+				updateTimes++
+			}
+			if payloads != 1 {
+				return fmt.Errorf("account update %d must contain exactly one payload", i)
 			}
 		}
 		if err := fenceAPIWrites(ctx, client, "account updates snapshot cancellation"); err != nil {
@@ -1705,6 +1713,7 @@ func runAPIAccountUpdates(ctx context.Context, addr string, clientID int) error 
 			event.Values = map[string]string{
 				"account_values":   strconv.Itoa(accountValues),
 				"portfolio_values": strconv.Itoa(portfolioValues),
+				"update_times":     strconv.Itoa(updateTimes),
 			}
 		})
 		return nil

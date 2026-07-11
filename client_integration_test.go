@@ -2597,8 +2597,8 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AccountUpdatesSnapshot() error = %v", err)
 	}
-	if len(values) != 2 {
-		t.Fatalf("values len = %d, want 2", len(values))
+	if len(values) != 3 {
+		t.Fatalf("values len = %d, want 3", len(values))
 	}
 	// First is an account value
 	if values[0].AccountValue == nil {
@@ -2616,6 +2616,9 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 	}
 	if values[1].Portfolio.Position.String() != "10" {
 		t.Fatalf("portfolio position = %s, want 10", values[1].Portfolio.Position.String())
+	}
+	if values[2].UpdateTime == nil || *values[2].UpdateTime != "12:00:00" {
+		t.Fatalf("update time = %v, want 12:00:00", values[2].UpdateTime)
 	}
 }
 

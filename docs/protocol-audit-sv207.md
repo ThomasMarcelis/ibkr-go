@@ -60,6 +60,8 @@ encoding until their later official migration groups.
   earlier protobuf migrations.
 - Bootstrap managed accounts is load-bearing at this boundary: `DialContext`
   must decode raw 215 before the session can become ready.
+- Account-update time callbacks are exposed as `AccountUpdate.UpdateTime`
+  instead of being silently discarded after decode.
 
 Production remains pure Go and uses `protowire` directly. No SDK code,
 generated protobuf type, cgo dependency, or private capture is on the default

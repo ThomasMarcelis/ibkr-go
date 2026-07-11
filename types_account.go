@@ -73,6 +73,7 @@ type PortfolioUpdate struct {
 type AccountUpdate struct {
 	AccountValue *AccountUpdateValue
 	Portfolio    *PortfolioUpdate
+	UpdateTime   *string // Gateway account-update time, formatted as received
 }
 
 // AccountUpdatesMultiRequest selects the account and advisor model for a
