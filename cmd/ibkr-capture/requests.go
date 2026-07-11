@@ -242,18 +242,6 @@ func sendCancelPnLSingle(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"95", strconv.Itoa(reqID)})
 }
 
-// --- News bulletins (msg_id=12) / cancel (msg_id=13) ---
-//
-//	[12, version=1, allMessages]
-//	[13, version=1]
-func sendReqNewsBulletins(conn net.Conn, allMessages bool) error {
-	return sendMessage(conn, []string{"12", "1", boolField(allMessages)})
-}
-
-func sendCancelNewsBulletins(conn net.Conn) error {
-	return sendMessage(conn, []string{"13", "1"})
-}
-
 // --- Historical data with keepUpToDate (msg_id=20) ---
 //
 // Uses keepUpToDate=true; endDateTime must be empty and barSize at least 5s.

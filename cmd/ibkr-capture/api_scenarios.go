@@ -505,6 +505,46 @@ func runAPINewsProviders(ctx context.Context, addr string, clientID int) error {
 	})
 }
 
+func runAPINewsBulletins(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		sub, err := client.News().SubscribeBulletins(ctx, true, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe news bulletins: %w", err)
+		}
+		timer := time.NewTimer(5 * time.Second)
+		defer timer.Stop()
+		count := 0
+	collect:
+		for {
+			select {
+			case _, ok := <-sub.Events():
+				if !ok {
+					if err := sub.Wait(); err != nil {
+						return fmt.Errorf("news bulletin subscription: %w", err)
+					}
+					return errors.New("news bulletin subscription closed before observation window ended")
+				}
+				count++
+			case <-sub.Done():
+				if err := sub.Wait(); err != nil {
+					return fmt.Errorf("news bulletin subscription: %w", err)
+				}
+				return errors.New("news bulletin subscription closed before observation window ended")
+			case <-timer.C:
+				break collect
+			case <-ctx.Done():
+				_ = sub.Close()
+				return ctx.Err()
+			}
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "news bulletin cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("news_bulletins", "all_messages", func(event *apiDriverEvent) { event.Count = count })
+		return nil
+	})
+}
+
 func runAPIDepthExchanges(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 10*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		exchanges, err := client.Contracts().DepthExchanges(ctx)

@@ -553,20 +553,9 @@ var scenarios = map[string]*scenario{
 		},
 	},
 	"news_bulletins": {
-		metadata:    meta("news", []string{"News().SubscribeBulletins"}, []int{12, 13, 14}, "read_only", []string{"news_or_bulletins"}, []string{"news bulletin subscribe/cancel"}, 1, "promoted", batchReadOnly),
-		description: "REQ_NEWS_BULLETINS allMessages=true, read for 5s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			if err := sendReqNewsBulletins(conn, true); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelNewsBulletins(conn); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"bounded typed bulletin observation, including a valid empty window, followed by fenced cancellation"}, 1, "promoted", batchReadOnly),
+		description: "observe the live bulletin stream through the public API and close it cleanly",
+		runAPI:      runAPINewsBulletins,
 	},
 
 	// --- v1 expanded scope: Batch C5 — option calculations and scanner ---
