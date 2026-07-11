@@ -34,6 +34,9 @@ jobs:
           go mod tidy -diff
           go mod verify
 
+      - name: Verify public API compatibility
+        run: ./scripts/check-api.sh
+
       - name: Verify formatting
         run: |
           diff=$(gofmt -l .)

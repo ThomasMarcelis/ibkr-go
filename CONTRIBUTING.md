@@ -14,11 +14,15 @@ Prerequisites: Go 1.26+, `golangci-lint` (latest), and optionally `gofmt` and `g
 go build ./...
 go vet ./...
 gofmt -l .           # must produce no output
+./scripts/check-api.sh
 golangci-lint run
 go test ./...
 ```
 
-All five must pass locally before opening a pull request. CI runs the same five steps on every push and pull request against `main`.
+All six must pass locally before opening a pull request. The API check rejects
+incompatible changes from the v2 release-candidate baseline while allowing
+additive APIs. CI runs the same checks on every push and pull request against
+`main`.
 
 ## Testing discipline
 
