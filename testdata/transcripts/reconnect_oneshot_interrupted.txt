@@ -1,5 +1,13 @@
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_historical_bars {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"end_time":"20260406-12:00:00","duration":"1 D","bar_size":"1 hour","what_to_show":"TRADES","use_rth":true}
+# Fault-injection replay using the exact historical-bars request from read-only
+# IB Gateway server_version 206 capture 20260710T224440Z-historical_bars_1d_1h.
+# events.jsonl sha256:
+# 6f1ef54ef12ce885da44a863e9194aad751c0ad080833db4459f485d51da7edc
+#
+# The account is length-preserving redacted to DU9000001. The transport closes
+# after the captured request and before its captured response to freeze one-shot
+# interruption without synthesizing a server payload.
+handshake {"server_version":206,"connection_time":"20260711 00:44:40 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAAQwAAABQxADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAADAAADEgaG91cgAxIEQAMQBUUkFERVMAMQAwAAA=
 disconnect

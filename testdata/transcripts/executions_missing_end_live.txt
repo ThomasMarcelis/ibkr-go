@@ -1,15 +1,14 @@
-# Live-derived from local IB Gateway 127.0.0.1:4002.
-# Scenario: executions_snapshot, server_version=200.
-# Raw evidence kept local:
-# /tmp/ibkr-go-issue-6-7-captures/20260412T183938Z-executions_snapshot
-# events.jsonl sha256 prefix: ebfbbca30c20af97
+# Fault-injection replay using the exact unfiltered execution request from
+# read-only IB Gateway server_version 207 capture 20260711T035816Z-executions_snapshot.
+# events.jsonl sha256:
+# c73df531322d01d762188d0792c12214ccc4ae4caad366f2658efaee57a06264
 #
-# The live response to reqExecutions contained no ExecutionDataEnd (msg 55).
-# This fixture keeps the connection open long enough for the caller's context
-# deadline to be the only completion signal.
-handshake {"server_version":200,"connection_time":"20260412 18:39:38 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_executions {"req_id":"$req1","account":"","symbol":""}
+# The account is length-preserving redacted to DU9000001. Ambient farm-status
+# frames and the captured execution-end response are omitted so the caller's
+# context deadline remains the only completion signal.
+handshake {"server_version":207,"connection_time":"20260711 05:58:16 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAACAAAAM8IARIA
 sleep 200ms
 disconnect

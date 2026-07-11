@@ -91,12 +91,12 @@ func TestReconnectOneShotInterrupted(t *testing.T) {
 
 	_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
-		EndTime:    time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC),
 		Duration:   ibkr.Days(1),
 		BarSize:    ibkr.Bar1Hour,
 		WhatToShow: ibkr.ShowTrades,
