@@ -135,7 +135,7 @@ func newBenchEngine(tb testing.TB) *engine {
 // installQuoteRoute registers a real production quote route by running the
 // subscribeQuotes setup closure synchronously (the closure the actor would
 // run), so route.handle is the exact shipped code path.
-func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) *Subscription[QuoteUpdate] {
+func installQuoteRoute(tb testing.TB, e *engine) *Subscription[QuoteUpdate] {
 	tb.Helper()
 	type result struct {
 		sub *Subscription[QuoteUpdate]
@@ -143,7 +143,7 @@ func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) *Su
 	}
 	res := make(chan result, 1)
 	go func() {
-		sub, err := e.subscribeQuotes(context.Background(), QuoteRequest{Contract: benchContract}, false, false, opts...)
+		sub, err := e.subscribeQuotes(context.Background(), QuoteRequest{Contract: benchContract}, false, false)
 		res <- result{sub, err}
 	}()
 	fn := <-e.cmds

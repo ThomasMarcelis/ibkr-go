@@ -69,6 +69,9 @@ func EncodeFrame(payload []byte) ([]byte, error) {
 	}
 
 	frame := make([]byte, 4+len(payload))
+	// MaxFrameSize is 64 MiB, so the length is proven to fit uint32 above.
+	// The analyzer does not carry that bound through the conversion.
+	//nolint:gosec // G115: payload length is bounded by MaxFrameSize.
 	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
 	copy(frame[4:], payload)
 	return frame, nil

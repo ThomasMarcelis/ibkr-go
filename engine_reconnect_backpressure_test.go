@@ -60,8 +60,8 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 				},
 			},
 			emitResubscribed: func(*engine) { resumed <- id },
-			close:       func(error) {},
-			gapped:      true,
+			close:            func(error) {},
+			gapped:           true,
 		}
 	}
 
@@ -160,8 +160,8 @@ func TestResumeTransportFailureRetainsRouteForNextReconnect(t *testing.T) {
 			},
 		},
 		emitResubscribed: func(*engine) { resumed <- struct{}{} },
-		close:       func(err error) { closed <- err },
-		gapped:      true,
+		close:            func(err error) { closed <- err },
+		gapped:           true,
 	}
 	e := &engine{
 		transport:     tr,
