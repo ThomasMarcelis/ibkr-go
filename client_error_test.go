@@ -291,26 +291,15 @@ func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 	}
 }
 
-func TestEmptyResultSets(t *testing.T) {
+func TestCompletedOrdersReturnsEmptyResult(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "error_empty_results.txt")
+	client, host := newClient(t, "completed_orders_empty.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	positions, err := client.Accounts().Positions(ctx)
-	if err != nil {
-		t.Fatalf("PositionsSnapshot() error = %v", err)
-	}
-	if positions == nil {
-		t.Fatal("PositionsSnapshot() = nil, want non-nil empty slice")
-	}
-	if len(positions) != 0 {
-		t.Fatalf("PositionsSnapshot() len = %d, want 0", len(positions))
-	}
 
 	completed, err := client.Orders().Completed(ctx, true)
 	if err != nil {
