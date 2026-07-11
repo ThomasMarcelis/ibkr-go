@@ -79,37 +79,37 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 			name:      "price",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionPrice, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "2918.1", TriggerMethod: 4},
 			orderID:   356,
-			permID:    900356,
+			permID:    9000000356,
 		},
 		{
 			name:      "time",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionTime, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "20260610-20:11:37"},
 			orderID:   357,
-			permID:    900357,
+			permID:    9000000357,
 		},
 		{
 			name:      "margin",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionMargin, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "10"},
 			orderID:   358,
-			permID:    900358,
+			permID:    9000000358,
 		},
 		{
 			name:      "execution",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionExecution, Conjunction: ibkr.ConditionAnd, SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"},
 			orderID:   359,
-			permID:    900359,
+			permID:    9000000359,
 		},
 		{
 			name:      "volume",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionVolume, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "999999999"},
 			orderID:   360,
-			permID:    900360,
+			permID:    9000000360,
 		},
 		{
 			name:      "percent_change",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionPercentChange, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "50"},
 			orderID:   361,
-			permID:    900361,
+			permID:    9000000361,
 		},
 	}
 
@@ -124,7 +124,7 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 				LmtPrice:  decimal.RequireFromString("14.59"),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
-				OrderRef:  "ibkrgo-sanitized-20260610T200935Z-001",
+				OrderRef:  "ibkrgo-redacted-20260610T200936Z-001",
 				Conditions: ibkr.OrderConditions{
 					Values:    []ibkr.OrderCondition{tc.condition},
 					IgnoreRTH: true,
@@ -139,10 +139,8 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		}
 		handles = append(handles, handle)
 
-		// Live open_order echoes for conditioned orders decode as the base
-		// open-order shape (the conditioned frame takes the partial decode
-		// path), so the assertions cover the base fields the live client
-		// surfaced.
+		// The exact live open_order frame fully decodes; these assertions pin
+		// the base fields needed by every condition family.
 		open := waitForOpenOrder(t, ctx, handle)
 		if open.OrderID != tc.orderID {
 			t.Fatalf("%s open order id = %d, want %d", tc.name, open.OrderID, tc.orderID)
@@ -150,7 +148,7 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		if open.PermID != tc.permID {
 			t.Fatalf("%s perm id = %d, want %d", tc.name, open.PermID, tc.permID)
 		}
-		if open.OrderRef != "ibkrgo-sanitized-20260610T200935Z-001" {
+		if open.OrderRef != "ibkrgo-redacted-20260610T200936Z-001" {
 			t.Fatalf("%s order ref = %q", tc.name, open.OrderRef)
 		}
 		if !open.LmtPrice.Equal(decimal.RequireFromString("14.59")) {
