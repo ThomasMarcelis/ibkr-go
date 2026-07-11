@@ -501,101 +501,67 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			return
 		}
 		reqID := e.allocReqID()
-		var depthRoute *route
 		rerouted := false
-		var sub *Subscription[DepthRow]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			request := depthRoute.request.(codec.MarketDepthRequest)
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth}))
-		}
-		sub = newEngineSubscription[DepthRow](cfg, e, actorCancel)
+		sub, depthRoute := newKeyedSubscriptionRoute[DepthRow](
+			e, cfg, reqID, OpMarketDepth,
+			codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: req.IsSmartDepth},
+		)
 
-		depthRoute = &route{
-			opKind:       OpMarketDepth,
-			subscription: true,
-			resume:       cfg.resume,
-			request: codec.MarketDepthRequest{
-				ReqID:        reqID,
-				Contract:     toCodecContract(req.Contract),
-				NumRows:      req.NumRows,
-				IsSmartDepth: req.IsSmartDepth,
-			},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.MarketDepthReroute:
-					if rerouted {
-						request := depthRoute.request.(codec.MarketDepthRequest)
-						cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(errors.Join(
-							fmt.Errorf("ibkr: market depth request %d was rerouted more than once", reqID),
-							cancelErr,
-						))
-						return
-					}
+		depthRoute.request = codec.MarketDepthRequest{
+			ReqID:        reqID,
+			Contract:     toCodecContract(req.Contract),
+			NumRows:      req.NumRows,
+			IsSmartDepth: req.IsSmartDepth,
+		}
+		depthRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.MarketDepthReroute:
+				if rerouted {
 					request := depthRoute.request.(codec.MarketDepthRequest)
-					request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
-					depthRoute.request = request
-					rerouted = true
-					if err := e.send(request); err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(fmt.Errorf("ibkr: reroute market depth request %d: %w", reqID, err))
-					}
-				case codec.MarketDepthUpdate:
-					row, err := fromCodecMarketDepth(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, row)
-				case codec.MarketDepthL2Update:
-					row, err := fromCodecMarketDepthL2(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, row)
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				if m.Code == ErrCodeSmartDepthExchanges {
-					e.emitEvent(m.Code, m.Message)
+					cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(errors.Join(
+						fmt.Errorf("ibkr: market depth request %d was rerouted more than once", reqID),
+						cancelErr,
+					))
 					return
 				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpMarketDepth, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
-					sub.emitState(SubscriptionStateEvent{
-						Kind:          SubscriptionGap,
-						ConnectionSeq: e.connectionSeq(),
-						Err:           err,
-					})
-					return true
+				request := depthRoute.request.(codec.MarketDepthRequest)
+				request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
+				depthRoute.request = request
+				rerouted = true
+				if err := e.send(request); err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(fmt.Errorf("ibkr: reroute market depth request %d: %w", reqID, err))
 				}
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			emitGap: func(e *engine) {
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionGap,
-					ConnectionSeq: e.connectionSeq(),
-				})
-			},
-			emitResumed: func(e *engine) {
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionResumed,
-					ConnectionSeq: e.connectionSeq(),
-				})
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+			case codec.MarketDepthUpdate:
+				row, err := fromCodecMarketDepth(m)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				emitSubscription(sub, row)
+			case codec.MarketDepthL2Update:
+				row, err := fromCodecMarketDepthL2(m)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				emitSubscription(sub, row)
+			}
+		}
+		depthRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.keyed[reqID] != depthRoute {
+				return
+			}
+			if m.Code == ErrCodeSmartDepthExchanges {
+				e.emitEvent(m.Code, m.Message)
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.apiErr(OpMarketDepth, m))
 		}
 		e.keyed[reqID] = depthRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})

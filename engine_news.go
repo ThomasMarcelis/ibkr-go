@@ -76,32 +76,15 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			resp <- result{err: err}
 			return
 		}
-		var ownedRoute *route
-		var sub *Subscription[NewsBulletin]
-		actorCancel := func() {
-			if e.singletons[singletonNewsBulletins] != ownedRoute {
-				return
-			}
-			delete(e.singletons, singletonNewsBulletins)
-			sub.closeWithErr(e.cancelSubscription(OpNewsBulletins, codec.CancelNewsBulletins{}))
-		}
-		sub = newEngineSubscription[NewsBulletin](cfg, e, actorCancel)
+		sub, ownedRoute := newSingletonSubscriptionRoute[NewsBulletin](
+			e, cfg, singletonNewsBulletins, OpNewsBulletins, codec.CancelNewsBulletins{},
+		)
 
-		ownedRoute = &route{
-			opKind:       OpNewsBulletins,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.NewsBulletinsRequest{AllMessages: allMessages},
-			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.NewsBulletin); ok {
-					emitSubscription(sub, NewsBulletin{MsgID: m.MsgID, MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
-				}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+		ownedRoute.request = codec.NewsBulletinsRequest{AllMessages: allMessages}
+		ownedRoute.handle = func(msg any, e *engine) {
+			if m, ok := msg.(codec.NewsBulletin); ok {
+				emitSubscription(sub, NewsBulletin{MsgID: m.MsgID, MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
+			}
 		}
 		e.singletons[singletonNewsBulletins] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})

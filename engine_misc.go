@@ -540,36 +540,17 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			return
 		}
 		reqID = e.allocReqID()
-		var sub *Subscription[DisplayGroupUpdate]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpDisplayGroupEvents, codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[DisplayGroupUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[DisplayGroupUpdate](
+			e, cfg, reqID, OpDisplayGroupEvents, codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID},
+		)
 
-		e.keyed[reqID] = &route{
-			opKind:       OpDisplayGroupEvents,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: int(groupID)},
-			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.DisplayGroupUpdated); ok {
-					emitSubscription(sub, DisplayGroupUpdate{ContractInfo: m.ContractInfo})
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpDisplayGroupEvents, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+		ownedRoute.request = codec.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: int(groupID)}
+		ownedRoute.handle = func(msg any, e *engine) {
+			if m, ok := msg.(codec.DisplayGroupUpdated); ok {
+				emitSubscription(sub, DisplayGroupUpdate{ContractInfo: m.ContractInfo})
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)

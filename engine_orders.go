@@ -99,55 +99,38 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			resp <- result{err: err}
 			return
 		}
-		var ownedRoute *route
-		var sub *Subscription[OpenOrderUpdate]
-		actorCancel := func() {
-			if e.singletons[singletonOpenOrders] != ownedRoute {
-				return
-			}
-			delete(e.singletons, singletonOpenOrders)
-			if scope == OpenOrdersScopeAuto {
-				sub.closeWithErr(e.cancelSubscription(OpOpenOrders, codec.CancelOpenOrders{}))
-				return
-			}
-			sub.closeWithErr(nil)
+		var cancel codec.Message
+		if scope == OpenOrdersScopeAuto {
+			cancel = codec.CancelOpenOrders{}
 		}
-		sub = newEngineSubscription[OpenOrderUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newSingletonSubscriptionRoute[OpenOrderUpdate](
+			e, cfg, singletonOpenOrders, OpOpenOrders, cancel,
+		)
 		// Auto scope binds future manual orders and emits no open_order_end, so
 		// it is a stream with no initial snapshot phase.
 		if scope != OpenOrdersScopeAuto {
 			sub.expectSnapshot()
 		}
 
-		ownedRoute = &route{
-			opKind:       OpOpenOrders,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.OpenOrdersRequest{Scope: string(scope)},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case OpenOrder:
-					emitSubscription(sub, OpenOrderUpdate{Order: &m})
-				case OrderStatusUpdate:
-					emitSubscription(sub, OpenOrderUpdate{Status: &m})
-				case codec.OpenOrderEnd:
-					if scope != OpenOrdersScopeAuto {
-						sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
-					}
+		ownedRoute.request = codec.OpenOrdersRequest{Scope: string(scope)}
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case OpenOrder:
+				emitSubscription(sub, OpenOrderUpdate{Order: &m})
+			case OrderStatusUpdate:
+				emitSubscription(sub, OpenOrderUpdate{Status: &m})
+			case codec.OpenOrderEnd:
+				if scope != OpenOrdersScopeAuto {
+					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				if e.singletons[singletonOpenOrders] != ownedRoute {
-					return
-				}
-				delete(e.singletons, singletonOpenOrders)
-				sub.closeWithErr(e.apiErr(OpOpenOrders, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+			}
+		}
+		ownedRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.singletons[singletonOpenOrders] != ownedRoute {
+				return
+			}
+			delete(e.singletons, singletonOpenOrders)
+			sub.closeWithErr(e.apiErr(OpOpenOrders, m))
 		}
 		e.singletons[singletonOpenOrders] = ownedRoute
 

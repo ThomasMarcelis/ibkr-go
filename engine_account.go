@@ -38,55 +38,34 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 
 		reqID := e.allocReqID()
 		plan := newAccountSummaryPlan(reqID, req)
-		var sub *Subscription[AccountSummaryUpdate]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[AccountSummaryUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[AccountSummaryUpdate](
+			e, cfg, reqID, OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID},
+		)
 		sub.expectSnapshot()
 
-		e.keyed[reqID] = &route{
-			opKind:       OpAccountSummary,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      plan.request,
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.AccountSummaryValue:
-					if !plan.matches(m.Account) {
-						return
-					}
-					emitSubscription(sub, AccountSummaryUpdate{
-						Value: AccountValue{
-							Account:  m.Account,
-							Tag:      m.Tag,
-							Value:    m.Value,
-							Currency: m.Currency,
-						},
-					})
-				case codec.AccountSummaryEnd:
-					sub.emitState(SubscriptionStateEvent{
-						Kind:          SubscriptionSnapshotComplete,
-						ConnectionSeq: e.connectionSeq(),
-					})
+		ownedRoute.request = plan.request
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.AccountSummaryValue:
+				if !plan.matches(m.Account) {
+					return
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpAccountSummary, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) {
-				sub.closeWithErr(err)
-			},
+				emitSubscription(sub, AccountSummaryUpdate{
+					Value: AccountValue{
+						Account:  m.Account,
+						Tag:      m.Tag,
+						Value:    m.Value,
+						Currency: m.Currency,
+					},
+				})
+			case codec.AccountSummaryEnd:
+				sub.emitState(SubscriptionStateEvent{
+					Kind:          SubscriptionSnapshotComplete,
+					ConnectionSeq: e.connectionSeq(),
+				})
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -179,44 +158,25 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			resp <- result{err: err}
 			return
 		}
-		var ownedRoute *route
-		var sub *Subscription[PositionUpdate]
-		actorCancel := func() {
-			if e.singletons[singletonPositions] != ownedRoute {
-				return
-			}
-			delete(e.singletons, singletonPositions)
-			sub.closeWithErr(e.cancelSubscription(OpPositions, codec.CancelPositions{}))
-		}
-		sub = newEngineSubscription[PositionUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newSingletonSubscriptionRoute[PositionUpdate](
+			e, cfg, singletonPositions, OpPositions, codec.CancelPositions{},
+		)
 		sub.expectSnapshot()
 
-		ownedRoute = &route{
-			opKind:       OpPositions,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.PositionsRequest{},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.Position:
-					position, err := fromCodecPosition(m)
-					if err != nil {
-						delete(e.singletons, singletonPositions)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, PositionUpdate{Position: position})
-				case codec.PositionEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+		ownedRoute.request = codec.PositionsRequest{}
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.Position:
+				position, err := fromCodecPosition(m)
+				if err != nil {
+					delete(e.singletons, singletonPositions)
+					sub.closeWithErr(err)
+					return
 				}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) {
-				sub.closeWithErr(err)
-			},
+				emitSubscription(sub, PositionUpdate{Position: position})
+			case codec.PositionEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+			}
 		}
 		e.singletons[singletonPositions] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
@@ -316,95 +276,79 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			resp <- result{err: err}
 			return
 		}
-		var ownedRoute *route
-		var sub *Subscription[AccountUpdate]
-		actorCancel := func() {
-			if e.singletons[singletonAccountUpdates] != ownedRoute {
-				return
-			}
-			delete(e.singletons, singletonAccountUpdates)
-			sub.closeWithErr(e.cancelSubscription(OpAccountUpdates, codec.AccountUpdatesRequest{Subscribe: false, Account: account}))
-		}
-		sub = newEngineSubscription[AccountUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newSingletonSubscriptionRoute[AccountUpdate](
+			e, cfg, singletonAccountUpdates, OpAccountUpdates,
+			codec.AccountUpdatesRequest{Subscribe: false, Account: account},
+		)
 		sub.expectSnapshot()
 
-		ownedRoute = &route{
-			opKind:       OpAccountUpdates,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.AccountUpdatesRequest{Subscribe: true, Account: account},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.UpdateAccountValue:
-					if !emitSubscription(sub, AccountUpdate{AccountValue: &AccountUpdateValue{
-						Key: m.Key, Value: m.Value, Currency: m.Currency, Account: m.Account,
-					}}) {
-						return
-					}
-				case codec.UpdatePortfolio:
-					contract, err := fromCodecContract(m.Contract)
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					position, err := parseOptionalDecimal(m.Position, "account updates position")
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					marketPrice, err := parseOptionalDecimal(m.MarketPrice, "account updates market price")
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					marketValue, err := parseOptionalDecimal(m.MarketValue, "account updates market value")
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					avgCost, err := parseOptionalDecimal(m.AvgCost, "account updates average cost")
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					unrealizedPNL, err := parseOptionalDecimal(m.UnrealizedPNL, "account updates unrealized pnl")
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					realizedPNL, err := parseOptionalDecimal(m.RealizedPNL, "account updates realized pnl")
-					if err != nil {
-						delete(e.singletons, singletonAccountUpdates)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, AccountUpdate{Portfolio: &PortfolioUpdate{
-						Account:       m.Account,
-						Contract:      contract,
-						Position:      position,
-						MarketPrice:   marketPrice,
-						MarketValue:   marketValue,
-						AvgCost:       avgCost,
-						UnrealizedPNL: unrealizedPNL,
-						RealizedPNL:   realizedPNL,
-					}})
-				case codec.UpdateAccountTime:
-					// Informational timestamp — silently consumed.
-				case codec.AccountDownloadEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+		ownedRoute.request = codec.AccountUpdatesRequest{Subscribe: true, Account: account}
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.UpdateAccountValue:
+				if !emitSubscription(sub, AccountUpdate{AccountValue: &AccountUpdateValue{
+					Key: m.Key, Value: m.Value, Currency: m.Currency, Account: m.Account,
+				}}) {
+					return
 				}
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+			case codec.UpdatePortfolio:
+				contract, err := fromCodecContract(m.Contract)
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				position, err := parseOptionalDecimal(m.Position, "account updates position")
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				marketPrice, err := parseOptionalDecimal(m.MarketPrice, "account updates market price")
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				marketValue, err := parseOptionalDecimal(m.MarketValue, "account updates market value")
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				avgCost, err := parseOptionalDecimal(m.AvgCost, "account updates average cost")
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				unrealizedPNL, err := parseOptionalDecimal(m.UnrealizedPNL, "account updates unrealized pnl")
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				realizedPNL, err := parseOptionalDecimal(m.RealizedPNL, "account updates realized pnl")
+				if err != nil {
+					delete(e.singletons, singletonAccountUpdates)
+					sub.closeWithErr(err)
+					return
+				}
+				emitSubscription(sub, AccountUpdate{Portfolio: &PortfolioUpdate{
+					Account:       m.Account,
+					Contract:      contract,
+					Position:      position,
+					MarketPrice:   marketPrice,
+					MarketValue:   marketValue,
+					AvgCost:       avgCost,
+					UnrealizedPNL: unrealizedPNL,
+					RealizedPNL:   realizedPNL,
+				}})
+			case codec.UpdateAccountTime:
+				// Informational timestamp — silently consumed.
+			case codec.AccountDownloadEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+			}
 		}
 		e.singletons[singletonAccountUpdates] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
@@ -450,43 +394,24 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[AccountUpdateMultiValue]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpAccountUpdatesMulti, codec.CancelAccountUpdatesMulti{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[AccountUpdateMultiValue](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[AccountUpdateMultiValue](
+			e, cfg, reqID, OpAccountUpdatesMulti, codec.CancelAccountUpdatesMulti{ReqID: reqID},
+		)
 		sub.expectSnapshot()
 
-		e.keyed[reqID] = &route{
-			opKind:       OpAccountUpdatesMulti,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.AccountUpdatesMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.AccountUpdateMultiValue:
-					emitSubscription(sub, AccountUpdateMultiValue{
-						Account: m.Account, ModelCode: m.ModelCode,
-						Key: m.Key, Value: m.Value, Currency: m.Currency,
-					})
-				case codec.AccountUpdateMultiEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpAccountUpdatesMulti, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+		ownedRoute.request = codec.AccountUpdatesMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode}
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.AccountUpdateMultiValue:
+				emitSubscription(sub, AccountUpdateMultiValue{
+					Account: m.Account, ModelCode: m.ModelCode,
+					Key: m.Key, Value: m.Value, Currency: m.Currency,
+				})
+			case codec.AccountUpdateMultiEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -530,62 +455,43 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[PositionMulti]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpPositionsMulti, codec.CancelPositionsMulti{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[PositionMulti](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[PositionMulti](
+			e, cfg, reqID, OpPositionsMulti, codec.CancelPositionsMulti{ReqID: reqID},
+		)
 		sub.expectSnapshot()
 
-		e.keyed[reqID] = &route{
-			opKind:       OpPositionsMulti,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.PositionsMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.PositionMulti:
-					contract, err := fromCodecContract(m.Contract)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					position, err := parseRequiredDecimal(m.Position, "positions multi position")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					avgCost, err := parseRequiredDecimal(m.AvgCost, "positions multi average cost")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, PositionMulti{
-						Account: m.Account, ModelCode: m.ModelCode,
-						Contract: contract,
-						Position: position, AvgCost: avgCost,
-					})
-				case codec.PositionMultiEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+		ownedRoute.request = codec.PositionsMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode}
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.PositionMulti:
+				contract, err := fromCodecContract(m.Contract)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpPositionsMulti, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+				position, err := parseRequiredDecimal(m.Position, "positions multi position")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				avgCost, err := parseRequiredDecimal(m.AvgCost, "positions multi average cost")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				emitSubscription(sub, PositionMulti{
+					Account: m.Account, ModelCode: m.ModelCode,
+					Contract: contract,
+					Position: position, AvgCost: avgCost,
+				})
+			case codec.PositionMultiEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -620,54 +526,35 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[PnLUpdate]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpPnL, codec.CancelPnL{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[PnLUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[PnLUpdate](
+			e, cfg, reqID, OpPnL, codec.CancelPnL{ReqID: reqID},
+		)
 
-		e.keyed[reqID] = &route{
-			opKind:       OpPnL,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode},
-			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.PnLValue); ok {
-					daily, err := parseOptionalDecimal(m.DailyPnL, "pnl daily")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl unrealized")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl realized")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
+		ownedRoute.request = codec.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode}
+		ownedRoute.handle = func(msg any, e *engine) {
+			if m, ok := msg.(codec.PnLValue); ok {
+				daily, err := parseOptionalDecimal(m.DailyPnL, "pnl daily")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpPnL, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+				unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl unrealized")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl realized")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				emitSubscription(sub, PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -702,66 +589,47 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[PnLSingleUpdate]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[PnLSingleUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[PnLSingleUpdate](
+			e, cfg, reqID, OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID},
+		)
 
-		e.keyed[reqID] = &route{
-			opKind:       OpPnLSingle,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID},
-			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.PnLSingleValue); ok {
-					pos, err := parseOptionalDecimal(m.Position, "pnl single position")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					daily, err := parseOptionalDecimal(m.DailyPnL, "pnl single daily")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl single unrealized")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl single realized")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					value, err := parseOptionalDecimal(m.Value, "pnl single value")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
+		ownedRoute.request = codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID}
+		ownedRoute.handle = func(msg any, e *engine) {
+			if m, ok := msg.(codec.PnLSingleValue); ok {
+				pos, err := parseOptionalDecimal(m.Position, "pnl single position")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpPnLSingle, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+				daily, err := parseOptionalDecimal(m.DailyPnL, "pnl single daily")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl single unrealized")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl single realized")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				value, err := parseOptionalDecimal(m.Value, "pnl single value")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				emitSubscription(sub, PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
