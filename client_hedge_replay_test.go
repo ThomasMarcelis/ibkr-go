@@ -64,7 +64,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("14.61"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260611T134021Z-001",
+			OrderRef:  "ibkrgo-redacted-20260611T134022Z-001",
 		},
 	})
 	if err != nil {
@@ -93,7 +93,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 
 	t.Run("delta_hedge_compliant", func(t *testing.T) {
 		child, err := client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-sanitized-20260611T134021Z-002", decimal.Zero, optionParent.OrderID(), "D", "0.5"))
+			hedgeChild("ibkrgo-redacted-20260611T134022Z-002", decimal.Zero, optionParent.OrderID(), "D", "0.5"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
@@ -130,7 +130,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("14.61"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260611T134021Z-003",
+			OrderRef:  "ibkrgo-redacted-20260611T134022Z-003",
 		},
 	})
 	if err != nil {
@@ -142,7 +142,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 
 	t.Run("delta_hedge_stock_parent", func(t *testing.T) {
 		child, err := client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-sanitized-20260611T134021Z-004", decimal.RequireFromString("100"), stockParent.OrderID(), "D", "0.5"))
+			hedgeChild("ibkrgo-redacted-20260611T134022Z-004", decimal.RequireFromString("100"), stockParent.OrderID(), "D", "0.5"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
@@ -165,7 +165,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	t.Run("beta_hedge_zero_size", func(t *testing.T) {
 		var err error
 		beta, err = client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-sanitized-20260611T134021Z-005", decimal.Zero, stockParent.OrderID(), "B", "1.0"))
+			hedgeChild("ibkrgo-redacted-20260611T134022Z-005", decimal.Zero, stockParent.OrderID(), "B", "1.0"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
@@ -175,8 +175,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 
 		// The stock parent's first echo lands now.
 		parentOpen := waitForOpenOrder(t, ctx, stockParent)
-		if parentOpen.PermID != 900420 {
-			t.Fatalf("stock parent perm id = %d, want 900420", parentOpen.PermID)
+		if parentOpen.PermID != 9000000420 {
+			t.Fatalf("stock parent perm id = %d, want 9000000420", parentOpen.PermID)
 		}
 		waitForOrderStatus(t, ctx, stockParent, ibkr.OrderStatusSubmitted)
 
@@ -190,11 +190,11 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		if !open.LmtPrice.Equal(decimal.RequireFromString("0.01")) {
 			t.Fatalf("gateway-floored lmt price = %s, want 0.01", open.LmtPrice)
 		}
-		if open.OcaGroup != "900420" {
-			t.Fatalf("oca group = %q, want parent perm id 900420", open.OcaGroup)
+		if open.OcaGroup != "9000000420" {
+			t.Fatalf("oca group = %q, want parent perm id 9000000420", open.OcaGroup)
 		}
-		if open.ParentID != 420 || open.PermID != 900422 {
-			t.Fatalf("parent/perm = %d/%d, want 420/900422", open.ParentID, open.PermID)
+		if open.ParentID != 420 || open.PermID != 9000000422 {
+			t.Fatalf("parent/perm = %d/%d, want 420/9000000422", open.ParentID, open.PermID)
 		}
 		held := waitOrderStatusUpdate(t, ctx, beta, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "child" {
@@ -218,7 +218,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	t.Run("fx_hedge", func(t *testing.T) {
 		var err error
 		fx, err = client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-sanitized-20260611T134021Z-006", decimal.Zero, stockParent.OrderID(), "F", ""))
+			hedgeChild("ibkrgo-redacted-20260611T134022Z-006", decimal.Zero, stockParent.OrderID(), "F", ""))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
@@ -240,8 +240,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		// The option parent's cancel from before the stock-parent stage
 		// finally processes: PendingCancel -> Cancelled + code 202.
 		parentOpen := waitForOpenOrder(t, ctx, optionParent)
-		if parentOpen.PermID != 900418 || parentOpen.Contract.ConID != 886441502 {
-			t.Fatalf("option parent echo = perm %d con %d, want 900418/886441502", parentOpen.PermID, parentOpen.Contract.ConID)
+		if parentOpen.PermID != 9000000418 || parentOpen.Contract.ConID != 886441502 {
+			t.Fatalf("option parent echo = perm %d con %d, want 9000000418/886441502", parentOpen.PermID, parentOpen.Contract.ConID)
 		}
 		waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusPendingCancel)
 		waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusCancelled)
@@ -265,7 +265,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	t.Run("pair_hedge_zero_size", func(t *testing.T) {
 		var err error
 		pair, err = client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-sanitized-20260611T134021Z-007", decimal.Zero, stockParent.OrderID(), "P", "0.8"))
+			hedgeChild("ibkrgo-redacted-20260611T134022Z-007", decimal.Zero, stockParent.OrderID(), "P", "0.8"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
@@ -279,8 +279,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		if !open.Quantity.Equal(decimal.RequireFromString("80")) {
 			t.Fatalf("gateway-computed quantity = %s, want 80", open.Quantity)
 		}
-		if open.OcaGroup != "900420" || open.ParentID != 420 || open.PermID != 900424 {
-			t.Fatalf("oca/parent/perm = %q/%d/%d, want 900420/420/900424", open.OcaGroup, open.ParentID, open.PermID)
+		if open.OcaGroup != "9000000420" || open.ParentID != 420 || open.PermID != 9000000424 {
+			t.Fatalf("oca/parent/perm = %q/%d/%d, want 9000000420/420/9000000424", open.OcaGroup, open.ParentID, open.PermID)
 		}
 		held := waitOrderStatusUpdate(t, ctx, pair, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "child" {
@@ -307,7 +307,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900420")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000420")
 	waitForOrderStatus(t, ctx, pair, ibkr.OrderStatusCancelled)
 	waitForOrderStatus(t, ctx, stockParent, ibkr.OrderStatusCancelled)
 	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)

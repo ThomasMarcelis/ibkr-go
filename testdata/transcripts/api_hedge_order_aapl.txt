@@ -1,113 +1,57 @@
-# Grounded by live API capture captures/20260611T134021Z-api_hedge_order_aapl.
-# server_version=200, events.jsonl sha256 prefix: 96145b1775c02629.
-# Replays the hedge-order rule matrix (AORD-006) observed on 2026-06-11
-# against live paper Gateway, five live-attested rules on far-from-market
-# LMT parents:
-#   - delta_hedge_compliant (419): zero-size stock delta child (D, ratio
-#     0.5) of an OPTION parent (418) -> code 320 "Invalid hedge ratio".
-#   - delta_hedge_stock_parent (421): sized stock delta child of a STOCK
-#     parent (420) -> code 320 "Invalid delta hedge order. The parent order
-#     has to be option order ...".
-#   - beta_hedge_zero_size (422, B ratio 1.0) and pair_hedge_zero_size (424,
-#     P ratio 0.8): zero-quantity hedge children of the stock parent are
-#     ACCEPTED; the Gateway assigns the working quantity itself (100 for the
-#     beta child, 80 = 0.8 x parent for the pair child), floors the limit to
-#     0.01, binds the child to the parent's perm id via oca_group, holds it
-#     PreSubmitted with why_held=child, and cancels it cleanly with
-#     Cancelled + the code-202 notice.
-#   - fx_hedge (423): FX hedge child on the stock parent -> code 10063
-#     "Invalid FX hedge order..." delivered in the 10xxx range, so it
-#     surfaces as a session event and the child handle never hears about it.
-# Sibling capture 20260611T133853Z-api_hedge_order_aapl (events.jsonl sha256
-# prefix 833e9477724d4c8f, same Gateway/session settings, separate session
-# not replayed here) additionally attested code 10032 "Specifying size for
-# hedge order is not allowed, send zero." for SIZED beta/FX/pair hedge
-# children, which is why the children here carry zero quantity (empty
-# total_quantity on the wire).
-# The option parent (418) drew no open_order echo until its cancel was
-# processed much later (PendingCancel -> Cancelled + 202), preserved here at
-# its live position. The final global cancel raced the parent cancel and
-# drew code 161 for order 420 before its Cancelled status. The 161 remains a
-# session notice, so the later Cancelled status and code 202 still arrive.
-# Sanitized: account identifiers redacted to DU9000001, perm ids ->
-# 900418/900420/900422/900424 (including inside oca_group and the code-161
-# message), order refs -> ibkrgo-sanitized-20260611T134021Z-001..-007.
-# Trimmed: farm-status 2104/2107/2119/2158, the driver's startup safety
-# global cancel and its code-161 replies, the delayed-quote anchor exchange,
-# the sec-def option parameter and contract-details qualification exchange,
-# and the teardown global cancel's code-161 replies for previous scenarios'
-# orders.
+# Exact public-API capture from paper IB Gateway server_version 200:
+# captures/20260611T134021Z-api_hedge_order_aapl
+# events.jsonl sha256:
+# 96145b1775c02629a58918301c18188bde65d6a22e00eef112d9c27f07babbcd.
+# replay/frames.jsonl sha256:
+# 677670d7f6a175a708a058a04dda5a75f46a8d675b8818b977b1c268146032e8.
+# Retained capture frames 4-5, 55-72, 75-94, and 99-102. Startup, quote
+# and option qualification, late farm notices, and unrelated prior-order
+# notices are omitted. Account, order refs, perm IDs, and username use
+# deterministic same-width substitutions; retained application frames are exact.
 handshake {"server_version":200,"connection_time":"20260611 15:40:22 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":418}
-
-# option parent: far LMT BUY 1 of the AAPL Jun-12 292.5 call (no echo until
-# its cancel is processed later in the session)
-client place_order {"order_id":"418","contract":{"con_id":"886441502","symbol":"AAPL","sec_type":"OPT","expiry":"20260612 16:00:00 US/Eastern","strike":"292.5","right":"C","multiplier":"100","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260612C00292500","trading_class":"AAPL"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"14.61","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-001","transmit":true}
-
-# delta_hedge_compliant: zero-size stock delta child of the option parent,
-# hedge ratio 0.5 -> rejected outright, code 320 "Invalid hedge ratio"
-client place_order {"order_id":"419","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"","order_type":"LMT","lmt_price":"2922.4","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-002","transmit":true,"parent_id":"418","hedge_type":"D","hedge_param":"0.5"}
-server api_error {"req_id":419,"code":320,"message":"Error reading request. Invalid hedge ratio","advanced_order_reject_json":"","error_time_ms":"1781185225948"}
-client cancel_order {"field_count":"5","order_id":"419","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":419,"code":10147,"message":"OrderId 419 that needs to be cancelled is not found.","advanced_order_reject_json":"","error_time_ms":"1781185225968"}
-client cancel_order {"field_count":"5","order_id":"418","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-
-# stock parent: far LMT BUY 100 AAPL
-client place_order {"order_id":"420","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"LMT","lmt_price":"14.61","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-003","transmit":true}
-
-# delta_hedge_stock_parent: sized stock delta child of the stock parent ->
-# code 320 names the rule: the parent has to be an option order
-client place_order {"order_id":"421","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"100","order_type":"LMT","lmt_price":"2922.4","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-004","transmit":true,"parent_id":"420","hedge_type":"D","hedge_param":"0.5"}
-server api_error {"req_id":421,"code":320,"message":"Error reading request. Invalid delta hedge order. The parent order has to be option order and hedge order can only be Stock, CFD or (in case of option on Index) Futures order. server: 0 order: 0 parent: 420 hedge:[D]","advanced_order_reject_json":"","error_time_ms":"1781185226028"}
-client cancel_order {"field_count":"5","order_id":"421","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":421,"code":10147,"message":"OrderId 421 that needs to be cancelled is not found.","advanced_order_reject_json":"","error_time_ms":"1781185226048"}
-
-# beta_hedge_zero_size: zero-quantity beta child (B, ratio 1.0) is ACCEPTED;
-# the parent finally echoes Submitted, then the child echoes PreSubmitted
-# twice with Gateway-assigned quantity 100, floored limit 0.01, and the
-# parent's perm id as oca_group
-client place_order {"order_id":"422","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"","order_type":"LMT","lmt_price":"2922.4","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-005","transmit":true,"parent_id":"420","hedge_type":"B","hedge_param":"1.0"}
-server open_order {"order_id":420,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","lmt_price":"14.61","aux_price":"0.0","tif":"DAY","perm_id":"900420","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T134021Z-003"}
-server order_status {"order_id":420,"status":"Submitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900420","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server open_order {"order_id":422,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"100","lmt_price":"0.01","aux_price":"0.0","tif":"DAY","oca_group":"900420","perm_id":"900422","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T134021Z-005","parent_id":"420"}
-server order_status {"order_id":422,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900422","parent_id":"420","last_fill_price":"0","client_id":"1","why_held":"child","mkt_cap_price":"0"}
-server open_order {"order_id":422,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"100","lmt_price":"0.01","aux_price":"0.0","tif":"DAY","oca_group":"900420","perm_id":"900422","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T134021Z-005","parent_id":"420"}
-server order_status {"order_id":422,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900422","parent_id":"420","last_fill_price":"0","client_id":"1","why_held":"child","mkt_cap_price":"0"}
-client cancel_order {"field_count":"5","order_id":"422","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-
-# fx_hedge: FX hedge child on the stock parent -> code 10063 in the 10xxx
-# range (session event; the child handle never hears). The beta child's
-# cancel then acknowledges (Cancelled + 202), and the option parent's cancel
-# from earlier finally processes (PendingCancel -> Cancelled + 202)
-client place_order {"order_id":"423","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"","order_type":"LMT","lmt_price":"2922.4","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-006","transmit":true,"parent_id":"420","hedge_type":"F","hedge_param":""}
-server api_error {"req_id":423,"code":10063,"message":"Invalid FX hedge order. Hedging contract can only be a currency pair where one of the currencies is the same as in parent order.","advanced_order_reject_json":"","error_time_ms":"1781185233727"}
-server order_status {"order_id":422,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900422","parent_id":"420","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":422,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781185234000"}
-server open_order {"order_id":418,"account":"DU9000001","contract":{"con_id":886441502,"symbol":"AAPL","sec_type":"OPT","expiry":"20260612","strike":"292.5","right":"C","multiplier":"100","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260612C00292500","trading_class":"AAPL"},"action":"BUY","order_type":"LMT","quantity":"1","lmt_price":"14.61","aux_price":"0.0","tif":"DAY","perm_id":"900418","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T134021Z-001"}
-server order_status {"order_id":418,"status":"PendingCancel","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900418","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server order_status {"order_id":418,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900418","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":418,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781185238000"}
-client cancel_order {"field_count":"5","order_id":"423","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":423,"code":10147,"message":"OrderId 423 that needs to be cancelled is not found.","advanced_order_reject_json":"","error_time_ms":"1781185241717"}
-
-# pair_hedge_zero_size: zero-quantity pair child (P, ratio 0.8) is ACCEPTED
-# with Gateway-computed quantity 80 (= 0.8 x parent 100)
-client place_order {"order_id":"424","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"","order_type":"LMT","lmt_price":"2922.4","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260611T134021Z-007","transmit":true,"parent_id":"420","hedge_type":"P","hedge_param":"0.8"}
-server open_order {"order_id":424,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"80","lmt_price":"0.01","aux_price":"0.0","tif":"DAY","oca_group":"900420","perm_id":"900424","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T134021Z-007","parent_id":"420"}
-server order_status {"order_id":424,"status":"PreSubmitted","filled":"0","remaining":"80","avg_fill_price":"0","perm_id":"900424","parent_id":"420","last_fill_price":"0","client_id":"1","why_held":"child","mkt_cap_price":"0"}
-server open_order {"order_id":424,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"80","lmt_price":"0.01","aux_price":"0.0","tif":"DAY","oca_group":"900420","perm_id":"900424","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260611T134021Z-007","parent_id":"420"}
-server order_status {"order_id":424,"status":"PreSubmitted","filled":"0","remaining":"80","avg_fill_price":"0","perm_id":"900424","parent_id":"420","last_fill_price":"0","client_id":"1","why_held":"child","mkt_cap_price":"0"}
-
-# teardown: cancel the pair child and the stock parent, then the safety
-# global cancel; the 161 for order 420 races ahead of its Cancelled status
-# but remains a session notice, preserving the route for the terminal update
-client cancel_order {"field_count":"5","order_id":"424","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-client cancel_order {"field_count":"5","order_id":"420","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":420,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900420","advanced_order_reject_json":"","error_time_ms":"1781185249746"}
-server order_status {"order_id":424,"status":"Cancelled","filled":"0","remaining":"80","avg_fill_price":"0","perm_id":"900424","parent_id":"420","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":424,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781185250000"}
-server order_status {"order_id":420,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900420","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":420,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781185250000"}
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAACDkAMQA0MTgA
+raw client AAABGzMANDE4ADg4NjQ0MTUwMgBBQVBMAE9QVAAyMDI2MDYxMiAxNjowMDowMCBVUy9FYXN0ZXJuADI5Mi41AEMAMTAwAFNNQVJUAABVU0QAQUFQTCAgMjYwNjEyQzAwMjkyNTAwAEFBUEwAAABCVVkAMQBMTVQAMTQuNjEAAERBWQAARFU5MDAwMDAxAAAwAGlia3Jnby1yZWRhY3RlZC0yMDI2MDYxMVQxMzQwMjJaLTAwMQAxADAAAAAwADAAMAAAAAAAAAAAAAAAAC0xADAAAAAAAAAwADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw client AAAA4jMANDE5ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAU0VMTAAATE1UADI5MjIuNAAAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjExVDEzNDAyMlotMDAyADEANDE4AAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEADAuNQAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw server AAAARDQANDE5ADMyMABFcnJvciByZWFkaW5nIHJlcXVlc3QuIEludmFsaWQgaGVkZ2UgcmF0aW8AADE3ODExODUyMjU5NDgA
+raw client AAAACTQANDE5AAAAAA==
+raw server AAAAUDQANDE5ADEwMTQ3AE9yZGVySWQgNDE5IHRoYXQgbmVlZHMgdG8gYmUgY2FuY2VsbGVkIGlzIG5vdCBmb3VuZC4AADE3ODExODUyMjU5NjgA
+raw client AAAACTQANDE4AAAAAA==
+raw client AAAA3DMANDIwADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAQlVZADEwMABMTVQAMTQuNjEAAERBWQAARFU5MDAwMDAxAAAwAGlia3Jnby1yZWRhY3RlZC0yMDI2MDYxMVQxMzQwMjJaLTAwMwAxADAAAAAwADAAMAAAAAAAAAAAAAAAAC0xADAAAAAAAAAwADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw client AAAA5TMANDIxADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAU0VMTAAxMDAATE1UADI5MjIuNAAAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjExVDEzNDAyMlotMDA0ADEANDIwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABEADAuNQAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw server AAAA8jQANDIxADMyMABFcnJvciByZWFkaW5nIHJlcXVlc3QuIEludmFsaWQgZGVsdGEgaGVkZ2Ugb3JkZXIuIFRoZSBwYXJlbnQgb3JkZXIgaGFzIHRvIGJlIG9wdGlvbiBvcmRlciBhbmQgaGVkZ2Ugb3JkZXIgY2FuIG9ubHkgYmUgU3RvY2ssIENGRCBvciAoaW4gY2FzZSBvZiBvcHRpb24gb24gSW5kZXgpIEZ1dHVyZXMgb3JkZXIuIHNlcnZlcjogMCBvcmRlcjogMCBwYXJlbnQ6IDQyMCBoZWRnZTpbRF0AADE3ODExODUyMjYwMjgA
+raw client AAAACTQANDIxAAAAAA==
+raw server AAAAUDQANDIxADEwMTQ3AE9yZGVySWQgNDIxIHRoYXQgbmVlZHMgdG8gYmUgY2FuY2VsbGVkIGlzIG5vdCBmb3VuZC4AADE3ODExODUyMjYwNDgA
+raw client AAAA4jMANDIyADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAU0VMTAAATE1UADI5MjIuNAAAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjExVDEzNDAyMlotMDA1ADEANDIwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABCADEuMAAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw server AAADqjUANDIwADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABMTVQAMTQuNjEAMC4wAERBWQAARFU5MDAwMDAxAAAwAGlia3Jnby1yZWRhY3RlZC0yMDI2MDYxMVQxMzQwMjJaLTAwMwAxADkwMDAwMDA0MjAAMAAwADAAADkwMDAwMDA0MjAuMC9EVTkwMDAwMDEvMTAwAAAAAAAAAAAAMAAALTEAMAAAAAAAADIxNDc0ODM2NDcAMAAwADAAADMAMAAwAAAwADAAADAATm9uZQAAMAAAAAA/ADAAMAAAMAAwAAAAAAAAMAAwADAAMjE0NzQ4MzY0NwAyMTQ3NDgzNjQ3AAAAMAAASUIAMAAwAAAwADAAU3VibWl0dGVkADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4AAAAAAAAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgALTkyMjMzNzIwMzY4NTQ3NzU4MDgAADAAADAAMAAwAE5vbmUAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxNS42MQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAxADAAMAAwAAAAMAAAMTAwADAuMDIAAAAAMAAAMAAAMABwYXBlcnRyYWRlcjAxADAA
+raw server AAAALDMANDIwAFN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDA0MjAAMAAwADEAADAA
+raw server AAADwTUANDIyADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAU0VMTAAxMDAATE1UADAuMDEAMC4wAERBWQA5MDAwMDAwNDIwAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTFUMTM0MDIyWi0wMDUAMQA5MDAwMDAwNDIyADAAMAAwAAA5MDAwMDAwNDIyLjAvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAANDIwADAAADAATm9uZQAAMAAAAAA/ADAAMAAAMAAwAAAAAAAAMAAwADAAMjE0NzQ4MzY0NwAyMTQ3NDgzNjQ3AABCADEuMAAwAABJQgAwADAAADAAMABQcmVTdWJtaXR0ZWQAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjMuNAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAwADAAMAAwAAAAMAAAAAAAAAAwAAAwAAAyMTQ3NDgzNjQ3AHBhcGVydHJhZGVyMDEAMAA=
+raw server AAAANjMANDIyAFByZVN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDA0MjIANDIwADAAMQBjaGlsZAAwAA==
+raw server AAADwTUANDIyADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAU0VMTAAxMDAATE1UADAuMDEAMC4wAERBWQA5MDAwMDAwNDIwAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTFUMTM0MDIyWi0wMDUAMQA5MDAwMDAwNDIyADAAMAAwAAA5MDAwMDAwNDIyLjAvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAANDIwADAAADAATm9uZQAAMAAAAAA/ADAAMAAAMAAwAAAAAAAAMAAwADAAMjE0NzQ4MzY0NwAyMTQ3NDgzNjQ3AABCADEuMAAwAABJQgAwADAAADAAMABQcmVTdWJtaXR0ZWQAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjMuNAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAwADAAMAAwAAAAMAAAAAAAAAAwAAAwAAAyMTQ3NDgzNjQ3AHBhcGVydHJhZGVyMDEAMAA=
+raw server AAAANjMANDIyAFByZVN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDA0MjIANDIwADAAMQBjaGlsZAAwAA==
+raw client AAAACTQANDIyAAAAAA==
+raw client AAAA3zMANDIzADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAU0VMTAAATE1UADI5MjIuNAAAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjExVDEzNDAyMlotMDA2ADEANDIwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABGAAAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw server AAAAnDQANDIzADEwMDYzAEludmFsaWQgRlggaGVkZ2Ugb3JkZXIuIEhlZGdpbmcgY29udHJhY3QgY2FuIG9ubHkgYmUgYSBjdXJyZW5jeSBwYWlyIHdoZXJlIG9uZSBvZiB0aGUgY3VycmVuY2llcyBpcyB0aGUgc2FtZSBhcyBpbiBwYXJlbnQgb3JkZXIuAAAxNzgxMTg1MjMzNzI3AA==
+raw server AAAALjMANDIyAENhbmNlbGxlZAAwADEwMAAwADkwMDAwMDA0MjIANDIwADAAMQAAMAA=
+raw server AAAAMjQANDIyADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjoAADE3ODExODUyMzQwMDAA
+raw server AAADzjUANDE4ADg4NjQ0MTUwMgBBQVBMAE9QVAAyMDI2MDYxMgAyOTIuNQBDADEwMABTTUFSVABVU0QAQUFQTCAgMjYwNjEyQzAwMjkyNTAwAEFBUEwAQlVZADEATE1UADE0LjYxADAuMABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTFUMTM0MDIyWi0wMDEAMQA5MDAwMDAwNDE4ADAAMAAwAAA5MDAwMDAwNDE4LjEvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAAMAAwAAAwAE5vbmUAADAAAAAAPwAwADAAADAAMAAAAAAAADAAMAAwADIxNDc0ODM2NDcAMjE0NzQ4MzY0NwAAADAAAElCADAAMAAAMAAwAFBlbmRpbmdDYW5jZWwAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADE1LjYxADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMAAAAAAwADEAMAAwADAAAAAwAAAxADAuMDIAAAAAMAAAMAAAMABwYXBlcnRyYWRlcjAxADAA
+raw server AAAALjMANDE4AFBlbmRpbmdDYW5jZWwAMAAxADAAOTAwMDAwMDQxOAAwADAAMQAAMAA=
+raw server AAAAKjMANDE4AENhbmNlbGxlZAAwADEAMAA5MDAwMDAwNDE4ADAAMAAxAAAwAA==
+raw server AAAAMjQANDE4ADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjoAADE3ODExODUyMzgwMDAA
+raw client AAAACTQANDIzAAAAAA==
+raw server AAAAUDQANDIzADEwMTQ3AE9yZGVySWQgNDIzIHRoYXQgbmVlZHMgdG8gYmUgY2FuY2VsbGVkIGlzIG5vdCBmb3VuZC4AADE3ODExODUyNDE3MTcA
+raw client AAAA4jMANDI0ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAU0VMTAAATE1UADI5MjIuNAAAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjExVDEzNDAyMlotMDA3ADEANDIwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABQADAuOAAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw server AAADwDUANDI0ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAU0VMTAA4MABMTVQAMC4wMQAwLjAAREFZADkwMDAwMDA0MjAARFU5MDAwMDAxAAAwAGlia3Jnby1yZWRhY3RlZC0yMDI2MDYxMVQxMzQwMjJaLTAwNwAxADkwMDAwMDA0MjQAMAAwADAAADkwMDAwMDA0MjQuMC9EVTkwMDAwMDEvMTAwAAAAAAAAAAAAMAAALTEAMAAAAAAAADIxNDc0ODM2NDcAMAAwADAAADMAMAAwAAA0MjAAMAAAMABOb25lAAAwAAAAAD8AMAAwAAAwADAAAAAAAAAwADAAMAAyMTQ3NDgzNjQ3ADIxNDc0ODM2NDcAAFAAMC44ADAAAElCADAAMAAAMAAwAFByZVN1Ym1pdHRlZAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAAAAAAADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4AC05MjIzMzcyMDM2ODU0Nzc1ODA4AAAwAAAwADAAMABOb25lADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMjkyMy40ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMAAAAAAwADAAMAAwADAAAAAwAAAAAAAAADAAADAAADIxNDc0ODM2NDcAcGFwZXJ0cmFkZXIwMQAwAA==
+raw server AAAANTMANDI0AFByZVN1Ym1pdHRlZAAwADgwADAAOTAwMDAwMDQyNAA0MjAAMAAxAGNoaWxkADAA
+raw server AAADwDUANDI0ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAU0VMTAA4MABMTVQAMC4wMQAwLjAAREFZADkwMDAwMDA0MjAARFU5MDAwMDAxAAAwAGlia3Jnby1yZWRhY3RlZC0yMDI2MDYxMVQxMzQwMjJaLTAwNwAxADkwMDAwMDA0MjQAMAAwADAAADkwMDAwMDA0MjQuMC9EVTkwMDAwMDEvMTAwAAAAAAAAAAAAMAAALTEAMAAAAAAAADIxNDc0ODM2NDcAMAAwADAAADMAMAAwAAA0MjAAMAAAMABOb25lAAAwAAAAAD8AMAAwAAAwADAAAAAAAAAwADAAMAAyMTQ3NDgzNjQ3ADIxNDc0ODM2NDcAAFAAMC44ADAAAElCADAAMAAAMAAwAFByZVN1Ym1pdHRlZAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAAAAAAADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4AC05MjIzMzcyMDM2ODU0Nzc1ODA4AAAwAAAwADAAMABOb25lADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMjkyMy40ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMAAAAAAwADAAMAAwADAAAAAwAAAAAAAAADAAADAAADIxNDc0ODM2NDcAcGFwZXJ0cmFkZXIwMQAwAA==
+raw server AAAANTMANDI0AFByZVN1Ym1pdHRlZAAwADgwADAAOTAwMDAwMDQyNAA0MjAAMAAxAGNoaWxkADAA
+raw client AAAACTQANDI0AAAAAA==
+raw client AAAACTQANDIwAAAAAA==
+raw client AAAABTU4AAAA
+raw server AAAAbjQANDIwADE2MQBDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTkwMDAwMDA0MjAAADE3ODExODUyNDk3NDYA
+raw server AAAALTMANDI0AENhbmNlbGxlZAAwADgwADAAOTAwMDAwMDQyNAA0MjAAMAAxAAAwAA==
+raw server AAAAMjQANDI0ADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjoAADE3ODExODUyNTAwMDAA
+raw server AAAALDMANDIwAENhbmNlbGxlZAAwADEwMAAwADkwMDAwMDA0MjAAMAAwADEAADAA
+raw server AAAAMjQANDIwADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjoAADE3ODExODUyNTAwMDAA
+sleep 100ms
 disconnect
