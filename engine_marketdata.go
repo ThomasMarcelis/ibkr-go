@@ -92,244 +92,232 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[QuoteUpdate]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[QuoteUpdate](cfg, e, actorCancel)
+		sub, quoteRoute := newKeyedSubscriptionRoute[QuoteUpdate](
+			e, cfg, reqID, OpQuotes, codec.CancelQuote{ReqID: reqID},
+		)
 		if snapshot {
 			sub.expectSnapshot()
 		}
 		quote := Quote{}
-		var quoteRoute *route
 		rerouted := false
 		resumeContract := cloneContract(req.Contract)
 
-		quoteRoute = &route{
-			opKind:       OpQuotes,
-			subscription: true,
-			resume:       cfg.resume,
-			request: codec.QuoteRequest{
-				ReqID:        reqID,
-				Contract:     toCodecContract(req.Contract),
-				Snapshot:     snapshot,
-				GenericTicks: genericTicks,
-			},
-			validateResume: func(e *engine) error {
-				return validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion))
-			},
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.MarketDataReroute:
-					if rerouted {
-						cancelErr := e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID})
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(errors.Join(
-							fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID),
-							cancelErr,
-						))
-						return
-					}
-					request := quoteRoute.request.(codec.QuoteRequest)
-					request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
-					quoteRoute.request = request
-					resumeContract = Contract{ConID: m.ConID, Exchange: m.Exchange}
-					rerouted = true
-					if err := e.send(request); err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(fmt.Errorf("ibkr: reroute market data request %d: %w", reqID, err))
-					}
-				case codec.TickPrice:
-					price, err := parseRequiredDecimal(m.Price, "quote price tick")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					size, err := parseOptionalDecimalPointer(m.Size, "quote price tick companion size")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					changed := applyTickPrice(&quote, m.TickType, price)
-					if sizeField, ok := companionSizeTickType(m.TickType); ok && size != nil {
-						changed |= applyTickSize(&quote, sizeField, *size)
-					}
-					emitSubscription(sub, QuoteUpdate{
-						Kind:     QuoteUpdatePriceTick,
-						Snapshot: quote,
-						Changed:  changed,
-						PriceTick: new(QuotePriceTick{
-							TickType: m.TickType,
-							Price:    price,
-							Size:     size,
-							AttrMask: QuotePriceAttributes(m.AttrMask),
-						}),
-						ReceivedAt: time.Now().UTC(),
-					})
-				case codec.TickSize:
-					size, err := parseOptionalDecimalPointer(m.Size, "quote size tick")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					var changed QuoteFields
-					if size != nil {
-						changed = applyTickSize(&quote, m.TickType, *size)
-					}
-					emitSubscription(sub, QuoteUpdate{
-						Kind:       QuoteUpdateSizeTick,
-						Snapshot:   quote,
-						Changed:    changed,
-						SizeTick:   new(QuoteSizeTick{TickType: m.TickType, Size: size}),
-						ReceivedAt: time.Now().UTC(),
-					})
-				case codec.MarketDataType:
-					quote.MarketDataType = MarketDataType(m.DataType)
-					quote.Available |= QuoteFieldMarketDataType
-					emitSubscription(sub, QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
-				case codec.TickGeneric:
-					value, err := parseRequiredDecimal(m.Value, "generic tick value")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, QuoteUpdate{
-						Kind:        QuoteUpdateGenericTick,
-						Snapshot:    quote,
-						GenericTick: new(QuoteGenericTick{TickType: m.TickType, Value: value}),
-						ReceivedAt:  time.Now().UTC(),
-					})
-				case codec.TickString:
-					emitSubscription(sub, QuoteUpdate{
-						Kind:       QuoteUpdateStringTick,
-						Snapshot:   quote,
-						StringTick: new(QuoteStringTick{TickType: m.TickType, Value: m.Value}),
-						ReceivedAt: time.Now().UTC(),
-					})
-				case codec.TickNews:
-					timestamp, err := parseEpochMilliseconds(m.Time)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, QuoteUpdate{
-						Kind:     QuoteUpdateNewsTick,
-						Snapshot: quote,
-						NewsTick: new(QuoteNewsTick{
-							Time:         timestamp,
-							ProviderCode: NewsProviderCode(m.ProviderCode),
-							ArticleID:    m.ArticleID,
-							Headline:     m.Headline,
-							ExtraData:    m.ExtraData,
-						}),
-						ReceivedAt: time.Now().UTC(),
-					})
-				case codec.TickReqParams:
-					minTick, err := parseOptionalDecimalPointer(m.MinTick, "quote parameters minimum tick")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					lastPricePrecision, err := parseOptionalDecimalPointer(m.LastPricePrecision, "quote parameters last price precision")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					lastSizePrecision, err := parseOptionalDecimalPointer(m.LastSizePrecision, "quote parameters last size precision")
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, QuoteUpdate{
-						Kind:     QuoteUpdateParameters,
-						Snapshot: quote,
-						Parameters: new(QuoteParameters{
-							MinTick:             minTick,
-							BBOExchange:         m.BBOExchange,
-							SnapshotPermissions: m.SnapshotPermissions,
-							LastPricePrecision:  lastPricePrecision,
-							LastSizePrecision:   lastSizePrecision,
-						}),
-						ReceivedAt: time.Now().UTC(),
-					})
-				case codec.TickOptionComputation:
-					computation, err := fromCodecOptionComputation(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, QuoteUpdate{
-						Kind:     QuoteUpdateOptionComputation,
-						Snapshot: quote,
-						OptionComputation: new(QuoteOptionComputation{
-							TickType:    m.TickType,
-							TickAttrib:  m.TickAttrib,
-							Computation: computation,
-						}),
-						ReceivedAt: time.Now().UTC(),
-					})
-				case codec.TickSnapshotEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
-					if snapshot {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(nil)
-					}
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				// 10167: delayed market data warning — the subscription
-				// stays open and will receive delayed ticks.
-				if m.Code == 10167 {
-					e.emitEvent(m.Code, m.Message)
+		quoteRoute.request = codec.QuoteRequest{
+			ReqID:        reqID,
+			Contract:     toCodecContract(req.Contract),
+			Snapshot:     snapshot,
+			GenericTicks: genericTicks,
+		}
+		quoteRoute.validateResume = func(e *engine) error {
+			return validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion))
+		}
+		quoteRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.MarketDataReroute:
+				if rerouted {
+					cancelErr := e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID})
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(errors.Join(
+						fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID),
+						cancelErr,
+					))
 					return
 				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpQuotes, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
+				request := quoteRoute.request.(codec.QuoteRequest)
+				request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
+				quoteRoute.request = request
+				resumeContract = Contract{ConID: m.ConID, Exchange: m.Exchange}
+				rerouted = true
+				if err := e.send(request); err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(fmt.Errorf("ibkr: reroute market data request %d: %w", reqID, err))
+				}
+			case codec.TickPrice:
+				price, err := parseRequiredDecimal(m.Price, "quote price tick")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				size, err := parseOptionalDecimalPointer(m.Size, "quote price tick companion size")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				changed := applyTickPrice(&quote, m.TickType, price)
+				if sizeField, ok := companionSizeTickType(m.TickType); ok && size != nil {
+					changed |= applyTickSize(&quote, sizeField, *size)
+				}
+				sub.emit(QuoteUpdate{
+					Kind:     QuoteUpdatePriceTick,
+					Snapshot: quote,
+					Changed:  changed,
+					PriceTick: new(QuotePriceTick{
+						TickType: m.TickType,
+						Price:    price,
+						Size:     size,
+						AttrMask: QuotePriceAttributes(m.AttrMask),
+					}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.TickSize:
+				size, err := parseOptionalDecimalPointer(m.Size, "quote size tick")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				var changed QuoteFields
+				if size != nil {
+					changed = applyTickSize(&quote, m.TickType, *size)
+				}
+				sub.emit(QuoteUpdate{
+					Kind:       QuoteUpdateSizeTick,
+					Snapshot:   quote,
+					Changed:    changed,
+					SizeTick:   new(QuoteSizeTick{TickType: m.TickType, Size: size}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.MarketDataType:
+				quote.MarketDataType = MarketDataType(m.DataType)
+				quote.Available |= QuoteFieldMarketDataType
+				sub.emit(QuoteUpdate{Kind: QuoteUpdateFields, Snapshot: quote, Changed: QuoteFieldMarketDataType, ReceivedAt: time.Now().UTC()})
+			case codec.TickGeneric:
+				value, err := parseRequiredDecimal(m.Value, "generic tick value")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				sub.emit(QuoteUpdate{
+					Kind:        QuoteUpdateGenericTick,
+					Snapshot:    quote,
+					GenericTick: new(QuoteGenericTick{TickType: m.TickType, Value: value}),
+					ReceivedAt:  time.Now().UTC(),
+				})
+			case codec.TickString:
+				sub.emit(QuoteUpdate{
+					Kind:       QuoteUpdateStringTick,
+					Snapshot:   quote,
+					StringTick: new(QuoteStringTick{TickType: m.TickType, Value: m.Value}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.TickNews:
+				timestamp, err := parseEpochMilliseconds(m.Time)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				sub.emit(QuoteUpdate{
+					Kind:     QuoteUpdateNewsTick,
+					Snapshot: quote,
+					NewsTick: new(QuoteNewsTick{
+						Time:         timestamp,
+						ProviderCode: NewsProviderCode(m.ProviderCode),
+						ArticleID:    m.ArticleID,
+						Headline:     m.Headline,
+						ExtraData:    m.ExtraData,
+					}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.TickReqParams:
+				minTick, err := parseOptionalDecimalPointer(m.MinTick, "quote parameters minimum tick")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				lastPricePrecision, err := parseOptionalDecimalPointer(m.LastPricePrecision, "quote parameters last price precision")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				lastSizePrecision, err := parseOptionalDecimalPointer(m.LastSizePrecision, "quote parameters last size precision")
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				sub.emit(QuoteUpdate{
+					Kind:     QuoteUpdateParameters,
+					Snapshot: quote,
+					Parameters: new(QuoteParameters{
+						MinTick:             minTick,
+						BBOExchange:         m.BBOExchange,
+						SnapshotPermissions: m.SnapshotPermissions,
+						LastPricePrecision:  lastPricePrecision,
+						LastSizePrecision:   lastSizePrecision,
+					}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.TickOptionComputation:
+				computation, err := fromCodecOptionComputation(m)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				sub.emit(QuoteUpdate{
+					Kind:     QuoteUpdateOptionComputation,
+					Snapshot: quote,
+					OptionComputation: new(QuoteOptionComputation{
+						TickType:    m.TickType,
+						TickAttrib:  m.TickAttrib,
+						Computation: computation,
+					}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.TickSnapshotEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				if snapshot {
-					sub.closeWithErr(ErrInterrupted)
-					return false
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(nil)
 				}
-				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
-					sub.emitState(SubscriptionStateEvent{
-						Kind:          SubscriptionGap,
-						ConnectionSeq: e.connectionSeq(),
-						Err:           err,
-					})
-					return true
-				}
-				sub.closeWithErr(ErrResumeRequired)
+			}
+		}
+		quoteRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.keyed[reqID] != quoteRoute {
+				return
+			}
+			// 10167: delayed market data warning — the subscription
+			// stays open and will receive delayed ticks.
+			if m.Code == 10167 {
+				e.emitEvent(m.Code, m.Message)
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.apiErr(OpQuotes, m))
+		}
+		quoteRoute.onDisconnect = func(e *engine, err error) bool {
+			if snapshot {
+				sub.closeWithErr(ErrInterrupted)
 				return false
-			},
-			emitGap: func(e *engine) {
+			}
+			if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
 				sub.emitState(SubscriptionStateEvent{
 					Kind:          SubscriptionGap,
 					ConnectionSeq: e.connectionSeq(),
+					Err:           err,
 				})
-			},
-			emitResumed: func(e *engine) {
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionResumed,
-					ConnectionSeq: e.connectionSeq(),
-				})
-			},
-			close: func(err error) {
-				sub.closeWithErr(err)
-			},
+				return true
+			}
+			sub.closeWithErr(ErrResumeRequired)
+			return false
+		}
+		quoteRoute.emitGap = func(e *engine) {
+			sub.emitState(SubscriptionStateEvent{
+				Kind:          SubscriptionGap,
+				ConnectionSeq: e.connectionSeq(),
+			})
+		}
+		quoteRoute.emitResumed = func(e *engine) {
+			sub.emitState(SubscriptionStateEvent{
+				Kind:          SubscriptionResumed,
+				ConnectionSeq: e.connectionSeq(),
+			})
 		}
 		e.keyed[reqID] = quoteRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
@@ -376,76 +364,68 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 		}
 		reqID := e.allocReqID()
 		resumeContract := cloneContract(req.Contract)
-		var sub *Subscription[Bar]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
+		sub, ownedRoute := newKeyedSubscriptionRoute[Bar](
+			e, cfg, reqID, OpRealTimeBars, codec.CancelRealTimeBars{ReqID: reqID},
+		)
+
+		ownedRoute.request = codec.RealTimeBarsRequest{
+			ReqID:      reqID,
+			Contract:   toCodecContract(req.Contract),
+			WhatToShow: string(req.WhatToShow),
+			UseRTH:     req.UseRTH,
+		}
+		ownedRoute.validateResume = func(e *engine) error {
+			return validateContractFieldSupport(resumeContract, "resume real-time bars", e.serverVersion, contractFieldPrimaryExchange)
+		}
+		ownedRoute.handle = func(msg any, e *engine) {
+			barMsg, ok := msg.(codec.RealTimeBar)
+			if !ok {
+				return
+			}
+			bar, err := fromCodecRealtimeBar(barMsg)
+			if err != nil {
+				e.deleteKeyedRoute(reqID)
+				sub.closeWithErr(err)
+				return
+			}
+			sub.emit(bar)
+		}
+		ownedRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.keyed[reqID] != ownedRoute {
+				return
+			}
+			if m.Code == 10167 {
+				e.emitEvent(m.Code, m.Message)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpRealTimeBars, codec.CancelRealTimeBars{ReqID: reqID}))
+			sub.closeWithErr(e.apiErr(OpRealTimeBars, m))
 		}
-		sub = newEngineSubscription[Bar](cfg, e, actorCancel)
-
-		e.keyed[reqID] = &route{
-			opKind:       OpRealTimeBars,
-			subscription: true,
-			resume:       cfg.resume,
-			request: codec.RealTimeBarsRequest{
-				ReqID:      reqID,
-				Contract:   toCodecContract(req.Contract),
-				WhatToShow: string(req.WhatToShow),
-				UseRTH:     req.UseRTH,
-			},
-			validateResume: func(e *engine) error {
-				return validateContractFieldSupport(resumeContract, "resume real-time bars", e.serverVersion, contractFieldPrimaryExchange)
-			},
-			handle: func(msg any, e *engine) {
-				barMsg, ok := msg.(codec.RealTimeBar)
-				if !ok {
-					return
-				}
-				bar, err := fromCodecRealtimeBar(barMsg)
-				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
-					return
-				}
-				emitSubscription(sub, bar)
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				if m.Code == 10167 {
-					e.emitEvent(m.Code, m.Message)
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpRealTimeBars, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
-					sub.emitState(SubscriptionStateEvent{
-						Kind:          SubscriptionGap,
-						ConnectionSeq: e.connectionSeq(),
-						Err:           err,
-					})
-					return true
-				}
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			emitGap: func(e *engine) {
+		ownedRoute.onDisconnect = func(e *engine, err error) bool {
+			if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
 				sub.emitState(SubscriptionStateEvent{
 					Kind:          SubscriptionGap,
 					ConnectionSeq: e.connectionSeq(),
+					Err:           err,
 				})
-			},
-			emitResumed: func(e *engine) {
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionResumed,
-					ConnectionSeq: e.connectionSeq(),
-				})
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+				return true
+			}
+			sub.closeWithErr(ErrResumeRequired)
+			return false
 		}
+		ownedRoute.emitGap = func(e *engine) {
+			sub.emitState(SubscriptionStateEvent{
+				Kind:          SubscriptionGap,
+				ConnectionSeq: e.connectionSeq(),
+			})
+		}
+		ownedRoute.emitResumed = func(e *engine) {
+			sub.emitState(SubscriptionStateEvent{
+				Kind:          SubscriptionResumed,
+				ConnectionSeq: e.connectionSeq(),
+			})
+		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -541,7 +521,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, row)
+				sub.emit(row)
 			case codec.MarketDepthL2Update:
 				row, err := fromCodecMarketDepthL2(m)
 				if err != nil {
@@ -549,7 +529,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, row)
+				sub.emit(row)
 			}
 		}
 		depthRoute.handleAPIErr = func(m codec.APIError, e *engine) {
@@ -660,99 +640,87 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[TickByTickData]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpTickByTick, codec.CancelTickByTick{ReqID: reqID}))
-		}
-		sub = newEngineSubscription[TickByTickData](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[TickByTickData](
+			e, cfg, reqID, OpTickByTick, codec.CancelTickByTick{ReqID: reqID},
+		)
 
-		e.keyed[reqID] = &route{
-			opKind:       OpTickByTick,
-			subscription: true,
-			resume:       cfg.resume,
-			request: codec.TickByTickRequest{
-				ReqID: reqID, Contract: toCodecContract(req.Contract),
-				TickType: string(req.TickType), NumberOfTicks: req.NumberOfTicks, IgnoreSize: req.IgnoreSize,
-			},
-			handle: func(msg any, e *engine) {
-				if m, ok := msg.(codec.TickByTickData); ok {
-					ts, err := parseTickByTickTime(m.Time)
+		ownedRoute.request = codec.TickByTickRequest{
+			ReqID: reqID, Contract: toCodecContract(req.Contract),
+			TickType: string(req.TickType), NumberOfTicks: req.NumberOfTicks, IgnoreSize: req.IgnoreSize,
+		}
+		ownedRoute.handle = func(msg any, e *engine) {
+			if m, ok := msg.(codec.TickByTickData); ok {
+				ts, err := parseTickByTickTime(m.Time)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				tick := TickByTickData{Time: ts, TickType: m.TickType}
+				switch m.TickType {
+				case 1, 2:
+					tick.Price, err = parseOptionalDecimal(m.Price, "tick by tick price")
 					if err != nil {
 						e.deleteKeyedRoute(reqID)
 						sub.closeWithErr(err)
 						return
 					}
-					tick := TickByTickData{Time: ts, TickType: m.TickType}
-					switch m.TickType {
-					case 1, 2:
-						tick.Price, err = parseOptionalDecimal(m.Price, "tick by tick price")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						tick.Size, err = parseOptionalDecimal(m.Size, "tick by tick size")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						tick.Exchange = m.Exchange
-						tick.SpecialConditions = m.SpecialConditions
-					case 3:
-						tick.BidPrice, err = parseOptionalDecimal(m.BidPrice, "tick by tick bid price")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						tick.AskPrice, err = parseOptionalDecimal(m.AskPrice, "tick by tick ask price")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						tick.BidSize, err = parseOptionalDecimal(m.BidSize, "tick by tick bid size")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						tick.AskSize, err = parseOptionalDecimal(m.AskSize, "tick by tick ask size")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-					case 4:
-						tick.MidPoint, err = parseOptionalDecimal(m.MidPoint, "tick by tick midpoint")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
+					tick.Size, err = parseOptionalDecimal(m.Size, "tick by tick size")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
 					}
-					emitSubscription(sub, tick)
+					tick.Exchange = m.Exchange
+					tick.SpecialConditions = m.SpecialConditions
+				case 3:
+					tick.BidPrice, err = parseOptionalDecimal(m.BidPrice, "tick by tick bid price")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					tick.AskPrice, err = parseOptionalDecimal(m.AskPrice, "tick by tick ask price")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					tick.BidSize, err = parseOptionalDecimal(m.BidSize, "tick by tick bid size")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					tick.AskSize, err = parseOptionalDecimal(m.AskSize, "tick by tick ask size")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+				case 4:
+					tick.MidPoint, err = parseOptionalDecimal(m.MidPoint, "tick by tick midpoint")
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				if m.Code == 10167 {
-					e.emitEvent(m.Code, m.Message)
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpTickByTick, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+				sub.emit(tick)
+			}
 		}
+		ownedRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.keyed[reqID] != ownedRoute {
+				return
+			}
+			if m.Code == 10167 {
+				e.emitEvent(m.Code, m.Message)
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(e.apiErr(OpTickByTick, m))
+		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)

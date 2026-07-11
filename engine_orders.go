@@ -116,9 +116,9 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case OpenOrder:
-				emitSubscription(sub, OpenOrderUpdate{Order: &m})
+				sub.emit(OpenOrderUpdate{Order: &m})
 			case OrderStatusUpdate:
-				emitSubscription(sub, OpenOrderUpdate{Status: &m})
+				sub.emit(OpenOrderUpdate{Status: &m})
 			case codec.OpenOrderEnd:
 				if scope != OpenOrdersScopeAuto {
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
@@ -184,59 +184,38 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		}
 		reqID := e.allocReqID()
 		wireReq.ReqID = reqID
-		var sub *Subscription[ExecutionUpdate]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(nil)
-		}
-		sub = newEngineSubscription[ExecutionUpdate](cfg, e, actorCancel)
+		sub, ownedRoute := newKeyedSubscriptionRoute[ExecutionUpdate](e, cfg, reqID, OpExecutions, nil)
 		sub.expectSnapshot()
 		e.executions.registerRoute(reqID)
 
-		e.keyed[reqID] = &route{
-			opKind:       OpExecutions,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      wireReq,
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.ExecutionDetail:
-					update, err := fromCodecExecution(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					e.executions.observeExecution(reqID, m)
-					if !emitSubscription(sub, update) {
-						return
-					}
-					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
-						return
-					}
-				case codec.ExecutionsEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+		ownedRoute.request = wireReq
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.ExecutionDetail:
+				update, err := fromCodecExecution(m)
+				if err != nil {
 					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(nil)
-				case codec.CommissionReport:
-					if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
-						return
-					}
+					sub.closeWithErr(err)
+					return
 				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
+				e.executions.observeExecution(reqID, m)
+				if !sub.emit(update) {
+					return
+				}
+				if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
+					return
+				}
+			case codec.ExecutionsEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpExecutions, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
+				sub.closeWithErr(nil)
+			case codec.CommissionReport:
+				if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
+					return
+				}
+			}
 		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)

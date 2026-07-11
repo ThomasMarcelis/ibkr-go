@@ -82,7 +82,3 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 	}
 	return sub, ownedRoute
 }
-
-func emitSubscription[T any](sub *Subscription[T], value T) bool {
-	return sub.emit(value)
-}

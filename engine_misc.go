@@ -221,58 +221,46 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			return
 		}
 		reqID := e.allocReqID()
-		var sub *Subscription[[]ScannerResult]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
+		sub, ownedRoute := newKeyedSubscriptionRoute[[]ScannerResult](
+			e, cfg, reqID, OpScannerSubscription, codec.CancelScannerSubscription{ReqID: reqID},
+		)
+
+		ownedRoute.request = toCodecScannerSubscriptionRequest(reqID, req)
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.ScannerDataResponse:
+				results := make([]ScannerResult, len(m.Entries))
+				for i, entry := range m.Entries {
+					contract, err := fromCodecContract(entry.Contract)
+					if err != nil {
+						e.deleteKeyedRoute(reqID)
+						sub.closeWithErr(err)
+						return
+					}
+					results[i] = ScannerResult{
+						Rank:       entry.Rank,
+						Contract:   contract,
+						Distance:   entry.Distance,
+						Benchmark:  entry.Benchmark,
+						Projection: entry.Projection,
+						LegsStr:    entry.LegsStr,
+					}
+				}
+				sub.emit(results)
+			}
+		}
+		ownedRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.keyed[reqID] != ownedRoute {
+				return
+			}
+			if m.Code == ErrCodeHistoricalDataQueryMessage && m.Message == scannerNoItemsMessage {
+				e.emitEvent(m.Code, m.Message)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpScannerSubscription, codec.CancelScannerSubscription{ReqID: reqID}))
+			sub.closeWithErr(e.apiErr(OpScannerSubscription, m))
 		}
-		sub = newEngineSubscription[[]ScannerResult](cfg, e, actorCancel)
-
-		e.keyed[reqID] = &route{
-			opKind:       OpScannerSubscription,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      toCodecScannerSubscriptionRequest(reqID, req),
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.ScannerDataResponse:
-					results := make([]ScannerResult, len(m.Entries))
-					for i, entry := range m.Entries {
-						contract, err := fromCodecContract(entry.Contract)
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							sub.closeWithErr(err)
-							return
-						}
-						results[i] = ScannerResult{
-							Rank:       entry.Rank,
-							Contract:   contract,
-							Distance:   entry.Distance,
-							Benchmark:  entry.Benchmark,
-							Projection: entry.Projection,
-							LegsStr:    entry.LegsStr,
-						}
-					}
-					emitSubscription(sub, results)
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				if m.Code == ErrCodeHistoricalDataQueryMessage && m.Message == scannerNoItemsMessage {
-					e.emitEvent(m.Code, m.Message)
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpScannerSubscription, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
-		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -547,7 +535,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 		ownedRoute.request = codec.SubscribeToGroupEventsRequest{ReqID: reqID, GroupID: int(groupID)}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.DisplayGroupUpdated); ok {
-				emitSubscription(sub, DisplayGroupUpdate{ContractInfo: m.ContractInfo})
+				sub.emit(DisplayGroupUpdate{ContractInfo: m.ContractInfo})
 			}
 		}
 		e.keyed[reqID] = ownedRoute

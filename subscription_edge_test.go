@@ -122,10 +122,10 @@ func TestEmitKeyedSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 		e.deleteKeyedRoute(7)
 		sub.closeWithErr(nil)
 	})
-	if !emitSubscription(sub, 1) {
+	if !sub.emit(1) {
 		t.Fatal("first emit returned false, want true")
 	}
-	if emitSubscription(sub, 2) {
+	if sub.emit(2) {
 		t.Fatal("second emit returned true, want slow-consumer close")
 	}
 	if _, ok := e.keyed[7]; ok {
@@ -145,10 +145,10 @@ func TestEmitSingletonSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 		delete(e.singletons, singletonOpenOrders)
 		sub.closeWithErr(nil)
 	})
-	if !emitSubscription(sub, 1) {
+	if !sub.emit(1) {
 		t.Fatal("first emit returned false, want true")
 	}
-	if emitSubscription(sub, 2) {
+	if sub.emit(2) {
 		t.Fatal("second emit returned true, want slow-consumer close")
 	}
 	if _, ok := e.singletons[singletonOpenOrders]; ok {

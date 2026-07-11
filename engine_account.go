@@ -50,7 +50,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 				if !plan.matches(m.Account) {
 					return
 				}
-				emitSubscription(sub, AccountSummaryUpdate{
+				sub.emit(AccountSummaryUpdate{
 					Value: AccountValue{
 						Account:  m.Account,
 						Tag:      m.Tag,
@@ -173,7 +173,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, PositionUpdate{Position: position})
+				sub.emit(PositionUpdate{Position: position})
 			case codec.PositionEnd:
 				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 			}
@@ -286,7 +286,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.UpdateAccountValue:
-				if !emitSubscription(sub, AccountUpdate{AccountValue: &AccountUpdateValue{
+				if !sub.emit(AccountUpdate{AccountValue: &AccountUpdateValue{
 					Key: m.Key, Value: m.Value, Currency: m.Currency, Account: m.Account,
 				}}) {
 					return
@@ -334,7 +334,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, AccountUpdate{Portfolio: &PortfolioUpdate{
+				sub.emit(AccountUpdate{Portfolio: &PortfolioUpdate{
 					Account:       m.Account,
 					Contract:      contract,
 					Position:      position,
@@ -403,7 +403,7 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.AccountUpdateMultiValue:
-				emitSubscription(sub, AccountUpdateMultiValue{
+				sub.emit(AccountUpdateMultiValue{
 					Account: m.Account, ModelCode: m.ModelCode,
 					Key: m.Key, Value: m.Value, Currency: m.Currency,
 				})
@@ -482,7 +482,7 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, PositionMulti{
+				sub.emit(PositionMulti{
 					Account: m.Account, ModelCode: m.ModelCode,
 					Contract: contract,
 					Position: position, AvgCost: avgCost,
@@ -551,7 +551,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
+				sub.emit(PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
 			}
 		}
 		e.keyed[reqID] = ownedRoute
@@ -626,7 +626,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 					sub.closeWithErr(err)
 					return
 				}
-				emitSubscription(sub, PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
+				sub.emit(PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})
 			}
 		}
 		e.keyed[reqID] = ownedRoute

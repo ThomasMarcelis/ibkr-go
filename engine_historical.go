@@ -226,62 +226,50 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 		}
 		codecReq.KeepUpToDate = true
 
-		var sub *Subscription[Bar]
-		actorCancel := func() {
-			if _, ok := e.keyed[reqID]; !ok {
+		sub, ownedRoute := newKeyedSubscriptionRoute[Bar](
+			e, cfg, reqID, OpHistoricalBarsStream, codec.CancelHistoricalData{ReqID: reqID},
+		)
+		sub.expectSnapshot()
+
+		ownedRoute.request = codecReq
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.HistoricalBar:
+				bar, err := fromCodecBar(m)
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				sub.emit(bar)
+			case codec.HistoricalBarsEnd:
+				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+			case codec.HistoricalDataUpdate:
+				// Streaming updates carry no per-bar trade count on the wire.
+				bar, err := fromCodecBar(codec.HistoricalBar{
+					ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
+					Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP,
+				})
+				if err != nil {
+					e.deleteKeyedRoute(reqID)
+					sub.closeWithErr(err)
+					return
+				}
+				sub.emit(bar)
+			}
+		}
+		ownedRoute.handleAPIErr = func(m codec.APIError, e *engine) {
+			if e.keyed[reqID] != ownedRoute {
+				return
+			}
+			if m.Code == 10167 {
+				e.emitEvent(m.Code, m.Message)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(e.cancelSubscription(OpHistoricalBarsStream, codec.CancelHistoricalData{ReqID: reqID}))
+			sub.closeWithErr(e.apiErr(OpHistoricalBarsStream, m))
 		}
-		sub = newEngineSubscription[Bar](cfg, e, actorCancel)
-		sub.expectSnapshot()
-
-		e.keyed[reqID] = &route{
-			opKind:       OpHistoricalBarsStream,
-			subscription: true,
-			resume:       cfg.resume,
-			request:      codecReq,
-			handle: func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.HistoricalBar:
-					bar, err := fromCodecBar(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, bar)
-				case codec.HistoricalBarsEnd:
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
-				case codec.HistoricalDataUpdate:
-					// Streaming updates carry no per-bar trade count on the wire.
-					bar, err := fromCodecBar(codec.HistoricalBar{
-						ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
-						Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP,
-					})
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
-						return
-					}
-					emitSubscription(sub, bar)
-				}
-			},
-			handleAPIErr: func(m codec.APIError, e *engine) {
-				if m.Code == 10167 {
-					e.emitEvent(m.Code, m.Message)
-					return
-				}
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(e.apiErr(OpHistoricalBarsStream, m))
-			},
-			onDisconnect: func(e *engine, err error) bool {
-				sub.closeWithErr(ErrResumeRequired)
-				return false
-			},
-			close: func(err error) { sub.closeWithErr(err) },
-		}
+		e.keyed[reqID] = ownedRoute
 		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
 		if err := e.sendContext(ctx, codecReq); err != nil {
 			e.deleteKeyedRoute(reqID)
