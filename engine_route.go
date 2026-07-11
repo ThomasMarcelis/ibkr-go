@@ -143,6 +143,7 @@ func (e *engine) handleIncoming(msg any) {
 	case codec.OrderBound:
 		binding := OrderBinding{PermID: msg.PermID, ClientID: msg.ClientID, OrderID: msg.OrderID}
 		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
+			or.working = true
 			if !e.ensureOrderStarted(or) || !or.handle.emitBinding(binding) {
 				e.closeOrderRoute(msg.OrderID, or, nil)
 			}
@@ -289,15 +290,19 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 					e.closeOrderRoute(int64(msg.ReqID), or, nil)
 					return
 				}
-				// Live handles terminate only on 10xxx codes attested as
-				// outright placement rejections: no order_status ever follows
-				// them, so this error is the handle's only completion signal.
-				// Order-targeted notices (10147/10148 cancel replies) stay
-				// session events; the handle already holds its real state.
-				if isOrderPlacementRejection(msg.Code) {
+				if isOrderCancellationReply(msg.Code) {
+					e.emitAPIEvent(msg)
+					return
+				}
+				if !or.working && isInitialOrderRejection(msg.Code) {
 					e.closeOrderRoute(int64(msg.ReqID), or, e.apiErr(OpPlaceOrder, msg))
 					return
 				}
+				apiErr, _ := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
+				if !or.handle.emitWarning(apiErr) {
+					e.closeOrderRoute(int64(msg.ReqID), or, nil)
+				}
+				return
 			}
 		}
 		e.emitAPIEvent(msg)
@@ -327,20 +332,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				e.emitAPIEvent(msg)
 				return
 			}
-			// A warning targeting a live order (e.g. code 399, the off-hours
-			// deferral) leaves the order working at IB and still cancellable,
-			// so it is delivered non-terminally and the handle stays open.
-			// Only genuine failures close the handle.
 			orderErr, isAPIErr := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
-			if isAPIErr && orderErr.IsWarning() {
+			if or.working || !isInitialOrderRejection(msg.Code) {
 				if !or.handle.emitWarning(orderErr) {
 					e.closeOrderRoute(int64(msg.ReqID), or, nil)
 				}
 				return
 			}
-			// A terminal rejection ends the order at the Gateway; no further
-			// traffic for this id is legitimate, so the route goes with it.
-			e.closeOrderRoute(int64(msg.ReqID), or, orderErr)
+			if isAPIErr {
+				e.closeOrderRoute(int64(msg.ReqID), or, orderErr)
+			}
 			return
 		}
 		// A reqID-targeted error that matches no keyed route and no order
@@ -393,20 +394,22 @@ func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
 }
 
 func isOrderCancellationReply(code int) bool {
-	return code == ErrCodeCancelNotCancellableState || code == ErrCodeOrderCanceled
+	return code == ErrCodeCancelNotCancellableState || code == ErrCodeOrderCanceled ||
+		code == ErrCodeOrderToCancelNotFound || code == ErrCodeOrderCannotBeCancelled ||
+		code == ErrCodeImbalanceOnlyNotAllowed
 }
 
-// isOrderPlacementRejection reports whether a 10xxx code is live-attested as
-// an outright placement rejection: the Gateway discards the order and never
-// sends an order_status for it, so the order-targeted api_error is the only
-// signal the handle will ever receive. The set grows as live captures attest
-// new codes; unattested 10xxx codes conservatively stay session events
-// because closing a handle on a notice for a live order would detach it.
-// ErrCodeImbalanceOnlyNotAllowed (10342) is deliberately absent: its attested
-// context is a reply to cancelling a silently accepted resting order.
-func isOrderPlacementRejection(code int) bool {
+// isInitialOrderRejection is the attested set of errors that prove a placement
+// failed before the Gateway exposed any working-order evidence. Unknown codes
+// and every error after working evidence remain warnings: detaching a live
+// order is the dangerous failure direction.
+func isInitialOrderRejection(code int) bool {
 	switch code {
-	case ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed:
+	case ErrCodeNoSecurityDefinition, ErrCodeOrderRejected,
+		ErrCodeServerErrorReadingRequest, ErrCodeServerErrorValidatingRequest,
+		ErrCodeTrailingStopAttachRejected, ErrCodeUnsupportedOrderType,
+		ErrCodeAlgoDefinitionNotFound, ErrCodeUnknownAlgoAttribute,
+		ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed:
 		return true
 	}
 	return false
@@ -446,6 +449,9 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 			return
 		}
+		if order.Status != OrderStatusInactive && order.Status != OrderStatusApiCancelled {
+			orderRoute.working = true
+		}
 		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 		}
@@ -478,6 +484,9 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 		if !e.ensureOrderStarted(orderRoute) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 			return
+		}
+		if status.Status != OrderStatusInactive && status.Status != OrderStatusApiCancelled {
+			orderRoute.working = true
 		}
 		if !orderRoute.handle.emitStatus(status) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
@@ -627,6 +636,7 @@ func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.Commiss
 	if !ok || or.closed {
 		return
 	}
+	or.working = true
 	cr, err := fromCodecCommission(report)
 	if err != nil {
 		e.cfg.logger.Warn("ibkr: drop commission report on decode error",
@@ -648,6 +658,7 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	if !ok || or.closed {
 		return
 	}
+	or.working = true
 	if !e.ensureOrderStarted(or) {
 		e.closeOrderRoute(m.OrderID, or, nil)
 		return

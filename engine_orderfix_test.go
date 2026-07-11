@@ -467,3 +467,49 @@ func TestHandleAPIErrorRejectionDropsOrderRoute(t *testing.T) {
 		t.Fatal("rejected order's execution correlations retained; want forgotten")
 	}
 }
+
+func TestHandleAPIErrorKeepsUnattestedOrderNotice(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	handle := newOrderHandle(42, 64)
+	e.orders[42] = &orderRoute{orderID: 42, handle: handle}
+
+	e.handleAPIError(codec.APIError{
+		ReqID:   42,
+		Code:    404,
+		Message: "Order held while shares are located",
+	})
+
+	if _, retained := e.orders[42]; !retained {
+		t.Fatal("unattested order notice detached the live route")
+	}
+	event := <-handle.Events()
+	if event.Warning == nil || event.Warning.Code != 404 {
+		t.Fatalf("order event = %#v, want code-404 warning", event)
+	}
+	handle.Close()
+}
+
+func TestHandleAPIErrorKeepsRejectionAfterWorkingEvidence(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	handle := newOrderHandle(42, 64)
+	e.orders[42] = &orderRoute{orderID: 42, handle: handle, working: true}
+
+	e.handleAPIError(codec.APIError{
+		ReqID:   42,
+		Code:    ErrCodeOrderRejected,
+		Message: "late order validation notice",
+	})
+
+	if _, retained := e.orders[42]; !retained {
+		t.Fatal("late rejection detached an order with working evidence")
+	}
+	event := <-handle.Events()
+	if event.Warning == nil || event.Warning.Code != ErrCodeOrderRejected {
+		t.Fatalf("order event = %#v, want code-201 warning", event)
+	}
+	handle.Close()
+}

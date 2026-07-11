@@ -142,6 +142,7 @@ type orderRoute struct {
 	closed           bool
 	gapped           bool // true after Gap emitted; prevents duplicate gap events
 	recoveryRequired bool
+	working          bool
 	pendingWrite     transportWriteKey
 }
 
