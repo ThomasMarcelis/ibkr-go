@@ -76,6 +76,7 @@ jobs:
             found { print }
           ' CHANGELOG.md > notes.md
           sed -i -e '/./,$!d' -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' notes.md
+          sed -i "s#](docs/migration-v2.md)#](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/docs/migration-v2.md)#g" notes.md
           if [ ! -s notes.md ]; then
             echo "CHANGELOG.md has no release notes for $base_tag"
             exit 1
