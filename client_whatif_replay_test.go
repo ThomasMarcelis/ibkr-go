@@ -41,7 +41,7 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T200009Z-001",
+			OrderRef:  "ibkrgo-redacted-20260610T200009Z-001",
 		},
 	})
 	if err != nil {

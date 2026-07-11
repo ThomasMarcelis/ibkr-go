@@ -1,28 +1,14 @@
-# Grounded by live API capture captures/20260610T200009Z-api_whatif_margin_aapl.
-# server_version=200, events.jsonl sha256 prefix: e8ee70b24de3fe2f.
-# Replays the WhatIf margin preview (AORD-010): a WhatIf MKT BUY 100 AAPL
-# draws exactly ONE open_order reply (156 NUL-terminated wire fields including the msg id) whose order-state
-# block carries the complete preview — status PreSubmitted, then
-# initMargin/maintMargin/equityWithLoan before/change/after, and
-# commissionAndFees 1.0003 USD (min/max commission unset). No order_status
-# lifecycle ever follows: a what-if order computes margin and leaves nothing
-# resting on the server. The public one-shot returns the OrderState without
-# creating an OrderHandle.
-# The live frame's fill echo is absent on the v200 live layout
-# (fills arrive on order_status, which a what-if never produces), and the
-# wire marginCurrency EUR is skipped by the codec.
-# Sanitized: account identifiers redacted to the DU9000001 redaction token,
-# perm id -> 900355, order ref -> ibkrgo-sanitized-20260610T200009Z-001.
-# Trimmed: farm-status 2104/2107/2158, the driver's startup safety global
-# cancel and its stale code-161 reply for the prior scenario's order 354,
-# and the driver's cleanup global cancel — which drew no per-order response,
-# because the what-if left nothing to cancel.
+# Exact public-API capture from paper IB Gateway server_version 200:
+# captures/20260610T200009Z-api_whatif_margin_aapl
+# events.jsonl sha256:
+# e8ee70b24de3fe2ff14ac67be49b17ca235d0845981e5328e6ed2f3414dac7b7.
+# Farm-status traffic and safety cleanup are omitted. Account, order ref,
+# perm ID, and username use deterministic same-width substitutions; all
+# retained application frames are otherwise exact.
 handshake {"server_version":200,"connection_time":"20260610 22:00:08 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":355}
-
-client place_order {"order_id":"355","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T200009Z-001","transmit":true,"what_if":true}
-server open_order {"order_id":355,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","status":"PreSubmitted","quantity":"100","lmt_price":"0.0","aux_price":"0.0","tif":"DAY","perm_id":"900355","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T200009Z-001","init_margin_before":"156037.86","maint_margin_before":"141852.6","equity_with_loan_before":"1127799.82","init_margin_change":"0.0","maint_margin_change":"0.0","equity_with_loan_change":"-0.8600000001024455","init_margin_after":"156037.86","maint_margin_after":"141852.6","equity_with_loan_after":"1127798.96","commission":"1.0003","commission_currency":"USD"}
-
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAACDkAMQAzNTUA
+raw client AAAA2DMAMzU1ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAQlVZADEwMABNS1QAAABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMjAwMDA5Wi0wMDEAMQAwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAxAAAAAAAwAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+raw server AAADUTUAMzU1ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABNS1QAMC4wADAuMABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMjAwMDA5Wi0wMDEAMQA5MDAwMDAwMzU1ADAAMAAwAAA5MDAwMDAwMzU1LjAvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAAMAAwAAAwAE5vbmUAADAAAAAAPwAwADAAADAAMAAAAAAAADAAMAAwADIxNDc0ODM2NDcAMjE0NzQ4MzY0NwAAADAAAElCADAAMAAAMAAxAFByZVN1Ym1pdHRlZAAxNTYwMzcuODYAMTQxODUyLjYAMTEyNzc5OS44MgAwLjAAMC4wAC0wLjg2MDAwMDAwMDEwMjQ0NTUAMTU2MDM3Ljg2ADE0MTg1Mi42ADExMjc3OTguOTYAMS4wMDAzAAAAVVNEAEVVUgAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAwAAAAADAAMQAwADAAMAAAADAAADEwMAAwLjAyAAAAADAAADAAADAAcGFwZXJ0cmFkZXIwMQAwAA==
 sleep 100ms
 disconnect
