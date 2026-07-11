@@ -1,68 +1,32 @@
-# Grounded by live API capture captures/20260610T195923Z-api_order_rejects_aapl.
-# server_version=200, events.jsonl sha256 prefix: 69d0e71dadb875c3.
-# Replays the order-reject family observed on 2026-06-10 against live paper
-# Gateway. Four real rejects:
-#   - order 347 with bogus order type FEELINGS draws code 321 "Invalid order
-#     type was entered" (Gateway names the mangled token 'bC'); no
-#     open_order/order_status ever arrives, the handle errors terminally.
-#   - order 348, a LMT BUY at 2922.3 (10x the 292.23 delayed-quote anchor),
-#     is accepted to PreSubmitted and then price-band cancelled by the
-#     Gateway itself: PendingCancel twice, Cancelled, and a code-202 notice
-#     carrying the "limit price at or more aggressive than" reject text.
-#   - the driver's follow-up cancel of the already-cancelled order 348 draws
-#     code 10148 "cannot be cancelled, state: Cancelled.".
-#   - order 349 on unknown symbol ZZZZNONE (con_id 0) draws code 200 "No
-#     security definition has been found for the request".
-#   - a cancel for unknown order id 999999999 draws code 10147 "is not
-#     found.".
-# The final safety global cancel drew code-161 replies for order 348 and for
-# the previous scenario's order 346 (still bound to this client id on the
-# Gateway). They remain session notices; order 348's Cancelled status owns
-# the clean handle close.
-# Sanitized: account identifiers redacted to the DU9000001 redaction token,
-# perm ids -> 900348/900346 (including inside the code-161 message texts),
-# order refs -> ibkrgo-sanitized-20260610T195923Z-001/-002/-003. Trimmed:
-# farm-status 2104/2107/2158, the driver's startup safety global cancel and
-# its code-161 reply for the previous scenario's order, and the driver's
-# delayed-quote anchor exchange (market-data-type toggles, the req 1/2 tick
-# stream, and the code-10089 entitlement notice).
+# Exact public-API capture from paper IB Gateway server_version 200:
+# captures/20260610T195923Z-api_order_rejects_aapl
+# events.jsonl sha256:
+# 69d0e71dadb875c30a0799ee0a09ca92f7167bcfb36453f0d9e9a37ba19ec8e6.
+# Ambient quote qualification, farm-status traffic, startup cleanup, and a
+# prior scenario's safety notice are omitted. Account, order refs, perm ID,
+# and username use deterministic same-width substitutions; all retained
+# application frames are otherwise exact.
 handshake {"server_version":200,"connection_time":"20260610 21:59:22 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":347}
-
-# bogus order type: rejected outright with code 321
-client place_order {"order_id":"347","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"FEELINGS","lmt_price":"14.61","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195923Z-001","transmit":true}
-server api_error {"req_id":347,"code":321,"message":"Error validating request.-'bC' : cause - Invalid order type was entered","advanced_order_reject_json":"","error_time_ms":"1781121564445"}
-
-# aggressive limit: accepted, then price-band cancelled by the Gateway with
-# the reject text on the code-202 notice
-client place_order {"order_id":"348","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"LMT","lmt_price":"2922.3","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195923Z-002","transmit":true}
-server open_order {"order_id":348,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","lmt_price":"2922.3","aux_price":"0.0","tif":"DAY","perm_id":"900348","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195923Z-002"}
-server order_status {"order_id":348,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900348","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server open_order {"order_id":348,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","lmt_price":"2922.3","aux_price":"0.0","tif":"DAY","perm_id":"900348","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195923Z-002"}
-server order_status {"order_id":348,"status":"PendingCancel","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900348","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server open_order {"order_id":348,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","quantity":"100","lmt_price":"2922.3","aux_price":"0.0","tif":"DAY","perm_id":"900348","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195923Z-002"}
-server order_status {"order_id":348,"status":"PendingCancel","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900348","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server order_status {"order_id":348,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900348","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":348,"code":202,"message":"Order Canceled - reason:We cannot accept an order at a limit price at or more aggressive than 300.934796. Please submit your order <br>using a limit price that is closer to the current market price of 292.34. or convert your order to an <br>algorithmic Order (IBALGO)","advanced_order_reject_json":"","error_time_ms":"1781121565000"}
-
-# cancelling the already-cancelled order draws code 10148
-client cancel_order {"field_count":"5","order_id":"348","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":348,"code":10148,"message":"OrderId 348 that needs to be cancelled cannot be cancelled, state: Cancelled.","advanced_order_reject_json":"","error_time_ms":"1781121564610"}
-
-# unknown symbol: no security definition, code 200
-client place_order {"order_id":"349","contract":{"con_id":"0","symbol":"ZZZZNONE","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"MKT","lmt_price":"","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195923Z-003","transmit":true}
-server api_error {"req_id":349,"code":200,"message":"No security definition has been found for the request","advanced_order_reject_json":"","error_time_ms":"1781121565450"}
-
-# cancelling an unknown order id draws code 10147
-client cancel_order {"field_count":"5","order_id":"999999999","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":999999999,"code":10147,"message":"OrderId 999999999 that needs to be cancelled is not found.","advanced_order_reject_json":"","error_time_ms":"1781121565452"}
-
-# final safety global cancel: code 161 for the price-band-cancelled order 348
-# and for the previous scenario's order 346
-client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":348,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900348","advanced_order_reject_json":"","error_time_ms":"1781121565459"}
-server api_error {"req_id":346,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900346","advanced_order_reject_json":"","error_time_ms":"1781121565459"}
-
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAACDkAMQAzNDcA
+raw client AAAA4TMAMzQ3ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAQlVZADEwMABGRUVMSU5HUwAxNC42MQAAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjEwVDE5NTkyM1otMDAxADEAMAAAADAAMAAwAAAAAAAAAAAAAAAALTEAMAAAAAAAADAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAwAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+raw server AAAAYTQAMzQ3ADMyMQBFcnJvciB2YWxpZGF0aW5nIHJlcXVlc3QuLSdiQycgOiBjYXVzZSAtIEludmFsaWQgb3JkZXIgdHlwZSB3YXMgZW50ZXJlZAAAMTc4MTEyMTU2NDQ0NQA=
+raw client AAAA3TMAMzQ4ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAQlVZADEwMABMTVQAMjkyMi4zAABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMTk1OTIzWi0wMDIAMQAwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAADAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+raw server AAADsTUAMzQ4ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABMTVQAMjkyMi4zADAuMABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMTk1OTIzWi0wMDIAMQA5MDAwMDAwMzQ4ADAAMAAwAAA5MDAwMDAwMzQ4LjAvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAAMAAwAAAwAE5vbmUAADAAAAAAPwAwADAAADAAMAAAAAAAADAAMAAwADIxNDc0ODM2NDcAMjE0NzQ4MzY0NwAAADAAAElCADAAMAAAMAAwAFByZVN1Ym1pdHRlZAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAAAAAAADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4AC05MjIzMzcyMDM2ODU0Nzc1ODA4AAAwAAAwADAAMABOb25lADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMjkyMy4zADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMAAAAAAwADEAMAAwADAAAAAwAAAAAAAAADAAADAAADIxNDc0ODM2NDcAcGFwZXJ0cmFkZXIwMQAwAA==
+raw server AAAALzMAMzQ4AFByZVN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDAzNDgAMAAwADEAADAA
+raw server AAADsjUAMzQ4ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABMTVQAMjkyMi4zADAuMABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMTk1OTIzWi0wMDIAMQA5MDAwMDAwMzQ4ADAAMAAwAAA5MDAwMDAwMzQ4LjAvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAAMAAwAAAwAE5vbmUAADAAAAAAPwAwADAAADAAMAAAAAAAADAAMAAwADIxNDc0ODM2NDcAMjE0NzQ4MzY0NwAAADAAAElCADAAMAAAMAAwAFBlbmRpbmdDYW5jZWwAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjMuMwAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAxADAAMAAwAAAAMAAAAAAAAAAwAAAwAAAyMTQ3NDgzNjQ3AHBhcGVydHJhZGVyMDEAMAA=
+raw server AAAAMDMAMzQ4AFBlbmRpbmdDYW5jZWwAMAAxMDAAMAA5MDAwMDAwMzQ4ADAAMAAxAAAwAA==
+raw server AAADsjUAMzQ4ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABMTVQAMjkyMi4zADAuMABEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMTk1OTIzWi0wMDIAMQA5MDAwMDAwMzQ4ADAAMAAwAAA5MDAwMDAwMzQ4LjAvRFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAAMAAwAAAwAE5vbmUAADAAAAAAPwAwADAAADAAMAAAAAAAADAAMAAwADIxNDc0ODM2NDcAMjE0NzQ4MzY0NwAAADAAAElCADAAMAAAMAAwAFBlbmRpbmdDYW5jZWwAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjMuMwAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAxADAAMAAwAAAAMAAAAAAAAAAwAAAwAAAyMTQ3NDgzNjQ3AHBhcGVydHJhZGVyMDEAMAA=
+raw server AAAAMDMAMzQ4AFBlbmRpbmdDYW5jZWwAMAAxMDAAMAA5MDAwMDAwMzQ4ADAAMAAxAAAwAA==
+raw server AAAALDMAMzQ4AENhbmNlbGxlZAAwADEwMAAwADkwMDAwMDAzNDgAMAAwADEAADAA
+raw server AAABJTQAMzQ4ADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjpXZSBjYW5ub3QgYWNjZXB0IGFuIG9yZGVyIGF0IGEgbGltaXQgcHJpY2UgYXQgb3IgbW9yZSBhZ2dyZXNzaXZlIHRoYW4gMzAwLjkzNDc5Ni4gUGxlYXNlIHN1Ym1pdCB5b3VyIG9yZGVyIDxicj51c2luZyBhIGxpbWl0IHByaWNlIHRoYXQgaXMgY2xvc2VyIHRvIHRoZSBjdXJyZW50IG1hcmtldCBwcmljZSBvZiAyOTIuMzQuIG9yIGNvbnZlcnQgeW91ciBvcmRlciB0byBhbiA8YnI+YWxnb3JpdGhtaWMgT3JkZXIgKElCQUxHTykAADE3ODExMjE1NjUwMDAA
+raw client AAAACTQAMzQ4AAAAAA==
+raw server AAAAaTQAMzQ4ADEwMTQ4AE9yZGVySWQgMzQ4IHRoYXQgbmVlZHMgdG8gYmUgY2FuY2VsbGVkIGNhbm5vdCBiZSBjYW5jZWxsZWQsIHN0YXRlOiBDYW5jZWxsZWQuAAAxNzgxMTIxNTY0NjEwAA==
+raw client AAAA1jMAMzQ5ADAAWlpaWk5PTkUAU1RLAAAAAABTTUFSVAAAVVNEAAAAAABCVVkAMTAwAE1LVAAAAERBWQAARFU5MDAwMDAxAAAwAGlia3Jnby1yZWRhY3RlZC0yMDI2MDYxMFQxOTU5MjNaLTAwMwAxADAAAAAwADAAMAAAAAAAAAAAAAAAAC0xADAAAAAAAAAwADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAAAAAAAAMAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+raw server AAAATzQAMzQ5ADIwMABObyBzZWN1cml0eSBkZWZpbml0aW9uIGhhcyBiZWVuIGZvdW5kIGZvciB0aGUgcmVxdWVzdAAAMTc4MTEyMTU2NTQ1MAA=
+raw client AAAADzQAOTk5OTk5OTk5AAAAAA==
+raw server AAAAXDQAOTk5OTk5OTk5ADEwMTQ3AE9yZGVySWQgOTk5OTk5OTk5IHRoYXQgbmVlZHMgdG8gYmUgY2FuY2VsbGVkIGlzIG5vdCBmb3VuZC4AADE3ODExMjE1NjU0NTIA
+raw client AAAABTU4AAAA
+raw server AAAAbjQAMzQ4ADE2MQBDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTkwMDAwMDAzNDgAADE3ODExMjE1NjU0NTkA
 sleep 100ms
 disconnect

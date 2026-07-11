@@ -506,8 +506,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 // api_order_relative_cancel_aapl, events.jsonl sha256 prefix
 // 65c28d7faea45243): the Gateway assigns offset 0.01 to a REL order placed
 // with only a price cap, the order moves PreSubmitted to Submitted, cancels
-// with Cancelled + 202, and the final global cancel draws code 161 (plus a
-// second session notice for a previous scenario's order).
+// with Cancelled + 202, and the final global cancel draws code 161.
 func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	t.Parallel()
 
@@ -528,7 +527,7 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("14.61"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195833Z-001",
+			OrderRef:  "ibkrgo-redacted-20260610T195833Z-001",
 		},
 	})
 	if err != nil {
@@ -549,8 +548,8 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	if !open.AuxPrice.Equal(decimal.RequireFromString("0.01")) {
 		t.Fatalf("gateway-assigned offset = %s, want 0.01", open.AuxPrice)
 	}
-	if open.PermID != 900342 {
-		t.Fatalf("perm id = %d, want 900342", open.PermID)
+	if open.PermID != 9000000342 {
+		t.Fatalf("perm id = %d, want 9000000342", open.PermID)
 	}
 
 	waitForOrderStatus(t, ctx, rel, ibkr.OrderStatusPreSubmitted)
@@ -565,13 +564,10 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 		t.Fatalf("202 message = %q", notice.Message)
 	}
 
-	// The replayed global-cancel response also carries a 161 for the
-	// previous scenario's order 340; both it and this order's notice remain
-	// observable at session scope.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900342")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000342")
 	requireOrderWaitNil(t, "relative", rel)
 }
 
@@ -603,7 +599,7 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("14.61"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195923Z-001",
+			OrderRef:  "ibkrgo-redacted-20260610T195923Z-001",
 		},
 	})
 	if err != nil {
@@ -627,7 +623,7 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("2922.3"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195923Z-002",
+			OrderRef:  "ibkrgo-redacted-20260610T195923Z-002",
 		},
 	})
 	if err != nil {
@@ -638,8 +634,8 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, aggressive)
-	if open.PermID != 900348 {
-		t.Fatalf("aggressive perm id = %d, want 900348", open.PermID)
+	if open.PermID != 9000000348 {
+		t.Fatalf("aggressive perm id = %d, want 9000000348", open.PermID)
 	}
 	if !open.LmtPrice.Equal(decimal.RequireFromString("2922.3")) {
 		t.Fatalf("aggressive lmt price = %s, want 2922.3", open.LmtPrice)
@@ -676,7 +672,7 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195923Z-003",
+			OrderRef:  "ibkrgo-redacted-20260610T195923Z-003",
 		},
 	})
 	if err != nil {
@@ -697,11 +693,10 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 		t.Fatalf("10147 message = %q", notFound.Message)
 	}
 
-	// Safety global cancel: code 161 for order 348 plus a session notice for
-	// the previous scenario's order 346, which has no route here.
+	// Safety global cancel: code 161 for the price-band-cancelled order.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900348")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000348")
 	requireOrderWaitNil(t, "aggressive", aggressive)
 }
