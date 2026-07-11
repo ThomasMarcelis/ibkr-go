@@ -935,19 +935,19 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 		}
 	}
 	wantExecutionIDs := []string{
-		"sanitized-fill-014", "sanitized-fill-015",
-		"sanitized-fill-001", "sanitized-fill-002", "sanitized-fill-003",
-		"sanitized-fill-004", "sanitized-fill-005", "sanitized-fill-006",
-		"sanitized-fill-007", "sanitized-fill-008", "sanitized-fill-009",
-		"sanitized-fill-010", "sanitized-fill-011", "sanitized-fill-012",
-		"sanitized-fill-013",
+		"redacted-fill-000000014", "redacted-fill-000000015",
+		"redacted-fill-000000001", "redacted-fill-000000002", "redacted-fill-000000003",
+		"redacted-fill-000000004", "redacted-fill-000000005", "redacted-fill-000000006",
+		"redacted-fill-000000007", "redacted-fill-000000008", "redacted-fill-000000009",
+		"redacted-fill-000000010", "redacted-fill-000000011", "redacted-fill-000000012",
+		"redacted-fill-000000013",
 	}
 	wantCommissionIDs := []string{
-		"sanitized-fill-014", "sanitized-fill-015",
-		"sanitized-fill-001", "sanitized-fill-002", "sanitized-fill-003",
-		"sanitized-fill-004", "sanitized-fill-005", "sanitized-fill-006",
-		"sanitized-fill-007", "sanitized-fill-008", "sanitized-fill-009",
-		"sanitized-fill-010", "sanitized-fill-011", "sanitized-fill-012",
+		"redacted-fill-000000014", "redacted-fill-000000015",
+		"redacted-fill-000000001", "redacted-fill-000000002", "redacted-fill-000000003",
+		"redacted-fill-000000004", "redacted-fill-000000005", "redacted-fill-000000006",
+		"redacted-fill-000000007", "redacted-fill-000000008", "redacted-fill-000000009",
+		"redacted-fill-000000010", "redacted-fill-000000011", "redacted-fill-000000012",
 	}
 	if !reflect.DeepEqual(executionIDs, wantExecutionIDs) {
 		t.Fatalf("execution IDs = %v, want %v", executionIDs, wantExecutionIDs)
