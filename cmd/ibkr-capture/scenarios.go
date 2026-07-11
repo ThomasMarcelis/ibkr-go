@@ -510,21 +510,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPITickByTickMidPointAAPL,
 	},
 	"historical_bars_keepup": {
-		metadata:    meta("history", []string{"History().SubscribeBars"}, []int{20, 25, 17, 90, 108}, "read_only", []string{"historical_data"}, []string{"keep-up-to-date historical bars"}, 1, "promoted", batchReadOnly),
-		description: "REQ_HISTORICAL_DATA keepUpToDate=true for AAPL 5 secs bars, read 15s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			if err := sendReqHistoricalDataKeepUp(conn, reqID, sess.ServerVersion, contractSpec{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, "5 secs", "TRADES", true); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 15*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelHistoricalData(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("history", []string{"History().SubscribeBars", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InHistoricalDataUpdate, protocol.OutCancelHistoricalData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty initial one-minute bar snapshot and fenced cancellation; a real streaming update remains a market-hours target"}, 1, "candidate", batchReadOnly),
+		description: "collect the initial AAPL keep-up bar snapshot through the public API and close the stream",
+		runAPI:      runAPIHistoricalBarsKeepUp,
 	},
 	"news_bulletins": {
 		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"bounded typed bulletin observation, including a valid empty window, followed by fenced cancellation"}, 1, "promoted", batchReadOnly),

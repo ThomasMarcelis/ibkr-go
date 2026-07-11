@@ -72,35 +72,10 @@ type contractSpec struct {
 	Currency                     string
 	LocalSymbol                  string
 	TradingClass                 string
-	IncludeExpired               bool
-	IssuerID                     string
 }
 
-// contractFields returns the standard contract field layout used by most
-// feature requests. It covers conId, symbol, secType, lastTradeDate, strike,
-// right, multiplier, exchange, primaryExchange, currency, localSymbol,
-// tradingClass, includeExpired. The caller is responsible for appending
-// sec_id_type/sec_id/etc if needed.
-func contractRequestFields(c contractSpec) []string {
-	return []string{
-		strconv.Itoa(c.ConID),
-		c.Symbol,
-		c.SecType,
-		c.LastTradeDateOrContractMonth,
-		strconv.FormatFloat(c.Strike, 'f', -1, 64),
-		c.Right,
-		c.Multiplier,
-		c.Exchange,
-		c.PrimaryExchange,
-		c.Currency,
-		c.LocalSymbol,
-		c.TradingClass,
-		boolField(c.IncludeExpired),
-	}
-}
-
-// contractRequestFieldsNoExpired is the same minus the includeExpired flag,
-// for requests like REQ_MKT_DATA that don't carry it.
+// contractRequestFieldsNoExpired is the contract shape used by market-data
+// and order requests, which do not carry includeExpired.
 func contractRequestFieldsNoExpired(c contractSpec) []string {
 	return []string{
 		strconv.Itoa(c.ConID),
@@ -204,13 +179,6 @@ func sendReqCompletedOrders(conn net.Conn, apiOnly bool) error {
 	return sendMessage(conn, []string{"99", boolField(apiOnly)})
 }
 
-// --- Cancel historical data (msg_id=25) ---
-//
-//	[25, version=1, reqId]
-func sendCancelHistoricalData(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"25", "1", strconv.Itoa(reqID)})
-}
-
 // --- PnL (msg_id=92) / cancel (msg_id=93) ---
 //
 //	[92, reqId, account, modelCode]
@@ -233,27 +201,6 @@ func sendReqPnLSingle(conn net.Conn, reqID int, account, modelCode string, conID
 
 func sendCancelPnLSingle(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"95", strconv.Itoa(reqID)})
-}
-
-// --- Historical data with keepUpToDate (msg_id=20) ---
-//
-// Uses keepUpToDate=true; endDateTime must be empty and barSize at least 5s.
-func sendReqHistoricalDataKeepUp(conn net.Conn, reqID, _ int, c contractSpec, barSize, whatToShow string, useRTH bool) error {
-	fields := []string{"20", strconv.Itoa(reqID)}
-	fields = append(fields, contractRequestFields(c)...)
-	fields = append(fields,
-		"",       // endDateTime must be empty for keepUpToDate
-		barSize,  // e.g. "5 secs"
-		"3600 S", // duration
-		boolField(useRTH),
-		whatToShow,
-		"1", // formatDate
-	)
-	fields = append(fields,
-		"1", // keepUpToDate=true
-		"",  // chartOptions
-	)
-	return sendMessage(conn, fields)
 }
 
 // --- Place order (msg_id=3) ---

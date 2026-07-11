@@ -1706,6 +1706,64 @@ func runAPIHistoricalBarsError(ctx context.Context, addr string, clientID int) e
 	})
 }
 
+func runAPIHistoricalBarsKeepUp(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 30*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		sub, err := client.History().SubscribeBars(ctx, ibkr.HistoricalBarsRequest{
+			Contract:   apiAAPL,
+			Duration:   ibkr.Weeks(1),
+			BarSize:    ibkr.Bar1Min,
+			WhatToShow: ibkr.ShowTrades,
+			UseRTH:     true,
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever), ibkr.WithQueueSize(4096))
+		if err != nil {
+			return fmt.Errorf("subscribe AAPL keep-up bars: %w", err)
+		}
+		timer := time.NewTimer(20 * time.Second)
+		defer timer.Stop()
+		count := 0
+		snapshotComplete := false
+		for count == 0 || !snapshotComplete {
+			select {
+			case _, ok := <-sub.Events():
+				if !ok {
+					if err := sub.Wait(); err != nil {
+						return fmt.Errorf("AAPL keep-up bars: %w", err)
+					}
+					return errors.New("AAPL keep-up bars closed before the initial snapshot completed")
+				}
+				count++
+			case state, ok := <-sub.Lifecycle():
+				if !ok {
+					if err := sub.Wait(); err != nil {
+						return fmt.Errorf("AAPL keep-up bars: %w", err)
+					}
+					return errors.New("AAPL keep-up bars closed before the initial snapshot completed")
+				}
+				snapshotComplete = snapshotComplete || state.Kind == ibkr.SubscriptionSnapshotComplete
+			case <-sub.Done():
+				if err := sub.Wait(); err != nil {
+					return fmt.Errorf("AAPL keep-up bars: %w", err)
+				}
+				return errors.New("AAPL keep-up bars closed before the initial snapshot completed")
+			case <-timer.C:
+				_ = sub.Close()
+				return errors.New("AAPL keep-up bars did not produce a nonempty initial snapshot within 20s")
+			case <-ctx.Done():
+				_ = sub.Close()
+				return ctx.Err()
+			}
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "AAPL keep-up bars cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("historical_bars_keepup", "aapl_1min", func(event *apiDriverEvent) {
+			event.Count = count
+			event.Values = map[string]string{"initial_snapshot_complete": "true"}
+		})
+		return nil
+	})
+}
+
 func runAPIHistoricalScheduleAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
