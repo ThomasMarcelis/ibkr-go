@@ -1,16 +1,20 @@
-# Grounded account summary from captures/20260405T215025Z-account_summary_snapshot/raw.txt
-# IB Gateway fixture: DU9000001, EUR values: BuyingPower, ExcessLiquidity, NetLiquidation, TotalCashValue
+# Grounded account summary from captures/20260405T215025Z-account_summary_snapshot
+# at server_version 200; events.jsonl sha256:
+# 1ab2c3494dfe8b37b7b6ba626766e2f1f415de9a5838b85d9d6d2624a70912ca.
+# The account, financial values, and request ID are deterministic sanitized
+# substitutions; framing, message layout, tags, currencies, and farm notices
+# remain capture-derived.
 handshake {"server_version":200,"connection_time":"20260405 23:50:23 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1775425823939"}
-server api_error {"req_id":-1,"code":2106,"message":"HMDS data farm connection is OK:ushmds","advanced_order_reject_json":"","error_time_ms":"1775425823939"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1775425823939"}
-client req_account_summary {"req_id":"$req1","account":"All","tags":["NetLiquidation","TotalCashValue","BuyingPower","ExcessLiquidity"]}
-server account_summary {"req_id":"$req1","account":"DU9000001","tag":"BuyingPower","value":"300000.00","currency":"EUR"}
-server account_summary {"req_id":"$req1","account":"DU9000001","tag":"ExcessLiquidity","value":"50000.00","currency":"EUR"}
-server account_summary {"req_id":"$req1","account":"DU9000001","tag":"NetLiquidation","value":"68000.00","currency":"EUR"}
-server account_summary {"req_id":"$req1","account":"DU9000001","tag":"TotalCashValue","value":"12000.00","currency":"EUR"}
-server account_summary_end {"req_id":"$req1"}
-client cancel_account_summary {"req_id":"$req1"}
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAABjkAMQAxAA==
+raw server AAAAQjQALTEAMjEwNABNYXJrZXQgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNmYXJtAAAxNzc1NDI1ODIzOTM5AA==
+raw server AAAAQDQALTEAMjEwNgBITURTIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnVzaG1kcwAAMTc3NTQyNTgyMzkzOQA=
+raw server AAAARTQALTEAMjE1OABTZWMtZGVmIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnNlY2RlZm5qAAAxNzc1NDI1ODIzOTM5AA==
+raw client AAAARTYyADEAMQBBbGwATmV0TGlxdWlkYXRpb24sVG90YWxDYXNoVmFsdWUsQnV5aW5nUG93ZXIsRXhjZXNzTGlxdWlkaXR5AA==
+raw server AAAAKzYzADEAMQBEVTkwMDAwMDEAQnV5aW5nUG93ZXIAMzAwMDAwLjAwAEVVUgA=
+raw server AAAALjYzADEAMQBEVTkwMDAwMDEARXhjZXNzTGlxdWlkaXR5ADUwMDAwLjAwAEVVUgA=
+raw server AAAALTYzADEAMQBEVTkwMDAwMDEATmV0TGlxdWlkYXRpb24ANjgwMDAuMDAARVVSAA==
+raw server AAAALTYzADEAMQBEVTkwMDAwMDEAVG90YWxDYXNoVmFsdWUAMTIwMDAuMDAARVVSAA==
+raw server AAAABzY0ADEAMQA=
+raw client AAAABzYzADEAMQA=
 disconnect
