@@ -269,8 +269,8 @@ against the local paper Gateway when applicable.
   families (price, time, margin, execution, volume, percent-change), IB algo
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
-- ~~Server-version coverage through exactly `server_version 206`~~ **Done.**
-  The client negotiates `server_version` 176..206 and gates every post-176
+- ~~Server-version coverage through exactly `server_version 207`~~ **Done.**
+  The client negotiates `server_version` 176..207 and gates every post-176
   wire field on the negotiated value; live-validated 2026-07-04/05 by
   down-negotiating the paper Gateway to 176/184/193/195/199/200 across
   contract details, historical bars, API-error frames, and the
@@ -288,7 +288,9 @@ against the local paper Gateway when applicable.
   and read-only public live probes. Exact 206 is covered by official-source
   schemas, byte-exact quote/depth request and callback captures, classic CFD
   reroute captures, a curated public replay, and a read-only public live probe.
-  Version 207 is the next gap.
+  Exact 207 is covered by the complete official accounts/positions request and
+  callback family, an exact SDK capture, a compact bootstrap/refresh replay,
+  and native public account scenarios. Version 208 is the next gap.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
@@ -345,7 +347,12 @@ along with ten L1/depth callbacks. CFD reroute callbacks 91 and 92 remain
 classic and transparently replace the active quote/depth request. See
 [`protocol-audit-sv206.md`](protocol-audit-sv206.md).
 
-The production ceiling is 206. Server version 207 and later remain a deliberate
+Exact `server_version 207` is implemented and live-attested. Managed accounts,
+account updates, account summary, positions, and their multi-account variants
+move to protobuf together. Public routing and lifecycle semantics remain
+unchanged. See [`protocol-audit-sv207.md`](protocol-audit-sv207.md).
+
+The production ceiling is 207. Server version 208 and later remain a deliberate
 wall: each later migration gate must add its encoder/decoder, live capture, and
 deterministic replay before the advertised maximum moves again. The migration
 table fails closed rather than sending a classic body after IBKR has retired
@@ -356,7 +363,7 @@ it.
 - SDK conformance oracle workflow: capture reference traces from the official
   SDK against the local Gateway when adding or hardening a protocol area, and
   fold sanitized live-derived captures into deterministic replay fixtures.
-- Protobuf migrations for `server_version` 207+; see above.
+- Protobuf migrations for `server_version` 208+; see above.
 - Expanded test coverage and replay scenarios.
 - API ergonomics and documentation improvements.
 

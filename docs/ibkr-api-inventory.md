@@ -121,6 +121,7 @@ Outbound message IDs:
 | `OutCancelNewsBulletins` | 13 | News bulletins cancel |
 | `OutReqAutoOpenOrders` | 15 | Open orders auto-bind |
 | `OutReqAllOpenOrders` | 16 | Open orders all |
+| `OutReqManagedAccounts` | 17 | Managed accounts refresh |
 | `OutRequestFA` | 18 | FA config |
 | `OutReplaceFA` | 19 | FA replace config |
 | `OutReqHistoricalData` | 20 | Historical bars/schedule |

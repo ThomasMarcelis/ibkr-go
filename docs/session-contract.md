@@ -7,7 +7,7 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates `server_version` 176..206; the Gateway's answer below
+The client negotiates `server_version` 176..207; the Gateway's answer below
 176 is rejected during handshake, and wire fields introduced above 176 are
 gated on whatever version the Gateway actually negotiates. `sv200` remains
 the classic live-validated layout; exact `sv201` adds the raw-ID envelope and
@@ -20,7 +20,10 @@ open-order requests, completed-order request, and completed-order result/end
 pair. Exact `sv205` migrates contract-details requests and regular, bond, and
 end responses to protobuf while retaining the same typed public operation.
 Exact `sv206` migrates market-data, market-depth, and market-data-type requests
-and their quote/depth callbacks. Versions 207 and newer are not advertised.
+and their quote/depth callbacks. Exact `sv207` migrates managed accounts,
+account updates and summaries, positions, and their multi-account variants to
+protobuf without changing the public operations. Versions 208 and newer are
+not advertised.
 
 ```go
 type Client struct{ /* opaque */ }
@@ -47,8 +50,8 @@ facades: `Accounts`, `Contracts`, `MarketData`, `History`, `Orders`, `Options`,
 `News`, `Scanner`, `Advisors`, `WSH`, and `TWS`. These facades are namespaces
 only; they do not create independent connections.
 
-Managed accounts are bootstrap state on `Snapshot`, not a request-shaped
-API.
+Managed accounts are loaded into `Snapshot` during bootstrap and can be
+refreshed explicitly with `Client.ManagedAccounts`.
 
 ## Subscriptions
 

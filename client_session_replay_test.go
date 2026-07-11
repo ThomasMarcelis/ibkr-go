@@ -91,6 +91,27 @@ func TestManagedAccountsRefreshReplay(t *testing.T) {
 	}
 }
 
+func TestManagedAccountsRefreshSV207Replay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "managed_accounts_sv207_live.txt")
+	defer client.Close()
+	defer waitHost(t, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	accounts, err := client.ManagedAccounts(ctx)
+	if err != nil {
+		t.Fatalf("ManagedAccounts() error = %v", err)
+	}
+	if want := []string{"DU9000001"}; !reflect.DeepEqual(accounts, want) {
+		t.Fatalf("ManagedAccounts() = %v, want %v", accounts, want)
+	}
+	if got := client.Session().ServerVersion; got != 207 {
+		t.Fatalf("Session().ServerVersion = %d, want 207", got)
+	}
+}
+
 // TestReqIDsReadOnlyRejectedReplay freezes the read-only-mode reqIds
 // rejection (SESS-003): RefreshOrderID sends the captured reqIds frame, the
 // Gateway answers with req_id=-1/code 321, and the one-shot returns that real

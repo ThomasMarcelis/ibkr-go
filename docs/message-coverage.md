@@ -10,8 +10,9 @@ server_version 200 captures.
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
 | out | 71 | StartAPI | landed |
+| out | 17 | ManagedAccountsRequest | landed; classic through sv206 plus exact-sv207 protobuf |
 | in | — | server hello ack | landed |
-| in | 15 | ManagedAccounts | landed |
+| in | 15 | ManagedAccounts | landed; classic through sv206 plus exact-sv207 protobuf bootstrap/refresh |
 | in | 9 | NextValidID | landed |
 | in | 49 | CurrentTime | landed |
 | out | 105 | ReqCurrentTimeInMillis | landed |
@@ -59,27 +60,27 @@ respectively.
 
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
-| out | 62 | AccountSummaryRequest | landed |
-| out | 63 | CancelAccountSummary | landed |
-| in | 63 | AccountSummaryValue | landed |
-| in | 64 | AccountSummaryEnd | landed |
-| out | 61 | PositionsRequest | landed |
-| out | 64 | CancelPositions | landed |
-| in | 61 | Position | landed |
-| in | 62 | PositionEnd | landed |
-| out | 6 | reqAccountUpdates | landed |
-| in | 6 | UpdateAccountValue | landed |
-| in | 7 | UpdatePortfolio | landed |
-| in | 8 | UpdateAccountTime | landed |
-| in | 54 | AccountDownloadEnd | landed |
-| out | 76 | reqAccountUpdatesMulti | landed |
-| out | 77 | cancelAccountUpdatesMulti | landed |
-| in | 73 | AccountUpdateMulti | landed |
-| in | 74 | AccountUpdateMultiEnd | landed |
-| out | 74 | reqPositionsMulti | landed |
-| out | 75 | cancelPositionsMulti | landed |
-| in | 71 | PositionMulti | landed |
-| in | 72 | PositionMultiEnd | landed |
+| out | 62 | AccountSummaryRequest | landed; classic through sv206 plus exact-sv207 protobuf |
+| out | 63 | CancelAccountSummary | landed; classic through sv206 plus exact-sv207 protobuf |
+| in | 63 | AccountSummaryValue | landed; classic plus exact-sv207 protobuf |
+| in | 64 | AccountSummaryEnd | landed; classic plus exact-sv207 protobuf |
+| out | 61 | PositionsRequest | landed; classic through sv206 plus exact-sv207 protobuf |
+| out | 64 | CancelPositions | landed; classic through sv206 plus exact-sv207 protobuf |
+| in | 61 | Position | landed; classic plus exact-sv207 protobuf |
+| in | 62 | PositionEnd | landed; classic plus exact-sv207 protobuf |
+| out | 6 | reqAccountUpdates | landed; classic through sv206 plus exact-sv207 protobuf |
+| in | 6 | UpdateAccountValue | landed; classic plus exact-sv207 protobuf |
+| in | 7 | UpdatePortfolio | landed; classic plus exact-sv207 protobuf |
+| in | 8 | UpdateAccountTime | landed; classic plus exact-sv207 protobuf |
+| in | 54 | AccountDownloadEnd | landed; classic plus exact-sv207 protobuf |
+| out | 76 | reqAccountUpdatesMulti | landed; classic through sv206 plus exact-sv207 protobuf |
+| out | 77 | cancelAccountUpdatesMulti | landed; classic through sv206 plus exact-sv207 protobuf |
+| in | 73 | AccountUpdateMulti | landed; classic plus exact-sv207 protobuf |
+| in | 74 | AccountUpdateMultiEnd | landed; classic plus exact-sv207 protobuf |
+| out | 74 | reqPositionsMulti | landed; classic through sv206 plus exact-sv207 protobuf |
+| out | 75 | cancelPositionsMulti | landed; classic through sv206 plus exact-sv207 protobuf |
+| in | 71 | PositionMulti | landed; classic plus exact-sv207 protobuf |
+| in | 72 | PositionMultiEnd | landed; classic plus exact-sv207 protobuf |
 | out | 80 | reqFamilyCodes | landed |
 | in | 78 | FamilyCodes | landed |
 

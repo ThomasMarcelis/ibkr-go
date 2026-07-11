@@ -226,6 +226,9 @@ func TestLiveManagedAccountsRefresh(t *testing.T) {
 	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
 	defer cancel()
 	defer client.Close()
+	if got := client.Session().ServerVersion; got != 207 {
+		t.Fatalf("ServerVersion = %d, want exact 207", got)
+	}
 
 	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelReq()

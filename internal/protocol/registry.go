@@ -7,7 +7,7 @@ import "slices"
 
 const (
 	SupportedMinServerVersion = 176
-	SupportedMaxServerVersion = 206
+	SupportedMaxServerVersion = 207
 )
 
 // Direction identifies which peer sends a message.
@@ -218,6 +218,7 @@ var messages = [...]Message{
 	{"OutCancelNewsBulletins", OutCancelNewsBulletins, ClientToServer},
 	{"OutReqAutoOpenOrders", OutReqAutoOpenOrders, ClientToServer},
 	{"OutReqAllOpenOrders", OutReqAllOpenOrders, ClientToServer},
+	{"OutReqManagedAccounts", OutReqManagedAccounts, ClientToServer},
 	{"OutRequestFA", OutRequestFA, ClientToServer},
 	{"OutReplaceFA", OutReplaceFA, ClientToServer},
 	{"OutReqHistoricalData", OutReqHistoricalData, ClientToServer},

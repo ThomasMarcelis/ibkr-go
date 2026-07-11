@@ -8,34 +8,6 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
-// inboundProtobufDecoders is deliberately explicit. A protobuf envelope with
-// an unknown base ID remains observable as UnknownInbound; it is never fed to
-// a classic field decoder.
-var inboundProtobufDecoders = map[int]protobufDecodeFunc{
-	protocol.InTickPrice:             decodeTickPriceProto,
-	protocol.InTickSize:              decodeTickSizeProto,
-	protocol.InMarketDepth:           decodeMarketDepthProto,
-	protocol.InMarketDepthL2:         decodeMarketDepthL2Proto,
-	protocol.InTickOptionComputation: decodeTickOptionComputationProto,
-	protocol.InTickGeneric:           decodeTickGenericProto,
-	protocol.InTickString:            decodeTickStringProto,
-	protocol.InTickSnapshotEnd:       decodeTickSnapshotEndProto,
-	protocol.InMarketDataType:        decodeMarketDataTypeProto,
-	protocol.InTickReqParams:         decodeTickReqParamsProto,
-	protocol.InErrMsg:                decodeErrorProto,
-	protocol.InOrderStatus:           decodeOrderStatusProto,
-	protocol.InOpenOrder:             decodeOpenOrderProto,
-	protocol.InOpenOrderEnd:          decodeOpenOrdersEndProto,
-	protocol.InExecutionData:         decodeExecutionDetailsProto,
-	protocol.InExecutionDataEnd:      decodeExecutionDetailsEndProto,
-	protocol.InCommissionReport:      decodeCommissionAndFeesReportProto,
-	protocol.InCompletedOrder:        decodeCompletedOrderProto,
-	protocol.InCompletedOrderEnd:     decodeCompletedOrdersEndProto,
-	protocol.InContractData:          decodeContractDataProto,
-	protocol.InBondContractData:      decodeBondContractDataProto,
-	protocol.InContractDataEnd:       decodeContractDataEndProto,
-}
-
 func decodeOpenOrdersEndProto(body []byte, sv int) ([]Message, error) {
 	for {
 		number, typ, ok, err := consumeProtoTag(&body)

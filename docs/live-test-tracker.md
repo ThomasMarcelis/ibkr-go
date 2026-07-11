@@ -4,8 +4,10 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-11. Both readonly-live gateway 127.0.0.1:4001 and
-paper-dev gateway 127.0.0.1:4002 were live-checked at `server_version 206`.
+Last updated: 2026-07-11. Both local Gateway roles are available. The current
+production ceiling and latest read-only account campaign were live-checked at
+exact `server_version 207`; earlier campaign rows retain their negotiated
+version as recorded.
 
 ## Current Campaign Contract
 
@@ -30,6 +32,19 @@ class, and promoted transcript or remaining blocker.
 ## Gateway Bring-Up Runs
 
 ### 2026-07-11
+
+The complete accounts/positions protobuf boundary was implemented and checked
+at exact `server_version=207`. Official Python SDK 10.48.01 capture
+`20260711T011842Z-sdk_sv207_accounts_positions_boundary` covers all ten
+request types and thirteen callback types (events SHA-256
+`936f9f4ea1633770071d9bd07a5ec721b7ddd481fcae6ad1aac95a9c1287a153`).
+The native client then completed managed-account refresh, account summary,
+positions, account updates, account updates multi, and positions multi. The
+five-leg native capture is
+`20260711T012845Z-public_sv207_accounts_positions_boundary` (events SHA-256
+`951ea55770f30d410cf971a5bf7bbf94da0183017cac0984b6b5d0370ab7ad86`).
+`managed_accounts_sv207_live.txt` promotes the load-bearing protobuf bootstrap
+and explicit refresh exchange.
 
 Managed-account refresh was added as `Client.ManagedAccounts` and verified
 against `readonly-live` at exact `server_version=206`. Official API 10.48.01

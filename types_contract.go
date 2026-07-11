@@ -77,7 +77,7 @@ type SecurityID struct {
 // already qualified; the descriptive fields can then be left zero. Request
 // families migrate independently: place order at server version 203, contract
 // details at 205, and market data at 206; the remaining supported families
-// stay on their classic request-specific layouts through 206. A nil Strike is
+// stay on their classic request-specific layouts through 207. A nil Strike is
 // absent where the protocol preserves presence; a non-nil zero is an explicitly
 // selected or returned zero strike. The legacy
 // option-exercise layout requires a numeric zero when strike is absent. Empty
