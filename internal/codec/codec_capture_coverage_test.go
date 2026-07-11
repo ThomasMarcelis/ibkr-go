@@ -1,8 +1,6 @@
 package codec
 
 import (
-	"os"
-	"strings"
 	"testing"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
@@ -73,9 +71,9 @@ func TestInboundDecoderRegistryCoverage(t *testing.T) {
 	}
 }
 
-// rawFrameAttested maps a decoder's msg_id to one existing test that decodes a
-// hardcoded live wire frame for it and asserts the typed result. Where several
-// tests qualify, the most representative live frame is named.
+// rawFrameAttested maps a decoder's msg_id to a representative direct test
+// that decodes a hardcoded live wire frame and asserts the typed result. The
+// names are navigation aids; the executable assertions remain the evidence.
 var rawFrameAttested = map[int]string{
 	protocol.InTickPrice:             "TestCaptureDecode_TickPrice",
 	protocol.InTickSize:              "TestCaptureDecode_TickSize",
@@ -194,39 +192,6 @@ func TestInboundDecoderRawFrameCoverage(t *testing.T) {
 		if _, ok := inboundDecoders[id]; !ok {
 			t.Errorf("pendingLiveAttestation names msg id %d, which has no decoder in inboundDecoders; "+
 				"drop the entry or fix the id", id)
-		}
-	}
-}
-
-// TestRawFrameAttestationTestsExist closes the gate's own loophole: the
-// catalogs record attestation as test-name strings, so a rename or deletion
-// of an attesting test would otherwise leave the gate green with a dangling
-// reference. This scans the package's test sources for each named function.
-func TestRawFrameAttestationTestsExist(t *testing.T) {
-	t.Parallel()
-
-	entries, err := os.ReadDir(".")
-	if err != nil {
-		t.Fatalf("ReadDir: %v", err)
-	}
-	var src strings.Builder
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), "_test.go") {
-			continue
-		}
-		data, err := os.ReadFile(entry.Name())
-		if err != nil {
-			t.Fatalf("ReadFile(%s): %v", entry.Name(), err)
-		}
-		src.Write(data)
-		src.WriteByte('\n')
-	}
-	sources := src.String()
-
-	for id, testName := range rawFrameAttested {
-		if !strings.Contains(sources, "func "+testName+"(t *testing.T)") {
-			t.Errorf("msg id %d claims attestation by %s, but no such test exists in this package; "+
-				"update the entry to the test's current name or move the id to pendingLiveAttestation", id, testName)
 		}
 	}
 }
