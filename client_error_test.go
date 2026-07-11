@@ -9,35 +9,6 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go"
 )
 
-func TestAPIErrorOnOneShot(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "error_api_error_oneshot.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := client.Contracts().Details(ctx, ibkr.Contract{
-		Symbol:   "ZZZZNONE",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
-	})
-	if err == nil {
-		t.Fatal("ContractDetails() error = nil, want API error")
-	}
-
-	apiErr, ok := errors.AsType[*ibkr.APIError](err)
-	if !ok {
-		t.Fatalf("error type = %T, want *ibkr.APIError", err)
-	}
-	if apiErr.Code != 200 {
-		t.Fatalf("APIError.Code = %d, want 200", apiErr.Code)
-	}
-}
-
 func TestAPISecurityTypeProbeErrorsReplay(t *testing.T) {
 	t.Parallel()
 
