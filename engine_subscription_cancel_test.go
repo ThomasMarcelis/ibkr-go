@@ -8,10 +8,66 @@ import (
 	"strings"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
+
+func TestCanceledSingletonDrainsBeforeReplacement(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	first := make(chan error, 1)
+	go func() {
+		_, err := e.CurrentTime(ctx)
+		first <- err
+	}()
+	(<-e.cmds)()
+	_ = readObservedFrame(t, peer)
+	cancel()
+	if err := <-first; !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled CurrentTime() error = %v, want context.Canceled", err)
+	}
+	if _, ok := e.singletons[singletonCurrentTime]; !ok {
+		t.Fatal("canceled CurrentTime() released its unkeyed route before the response drained")
+	}
+
+	second := make(chan error, 1)
+	go func() {
+		_, err := e.CurrentTime(context.Background())
+		second <- err
+	}()
+	(<-e.cmds)()
+	if err := <-second; err == nil || !strings.Contains(err.Error(), "already in progress") {
+		t.Fatalf("replacement CurrentTime() error = %v, want already in progress", err)
+	}
+
+	e.handleIncoming(codec.CurrentTime{Time: "1711929600"})
+	if _, ok := e.singletons[singletonCurrentTime]; ok {
+		t.Fatal("late CurrentTime response did not release the route")
+	}
+
+	third := make(chan struct {
+		ts  time.Time
+		err error
+	}, 1)
+	go func() {
+		ts, err := e.CurrentTime(context.Background())
+		third <- struct {
+			ts  time.Time
+			err error
+		}{ts: ts, err: err}
+	}()
+	(<-e.cmds)()
+	_ = readObservedFrame(t, peer)
+	e.handleIncoming(codec.CurrentTime{Time: "1711929601"})
+	result := <-third
+	if result.err != nil || result.ts.Unix() != 1711929601 {
+		t.Fatalf("CurrentTime() after drain = %v, %v", result.ts, result.err)
+	}
+}
 
 func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 	t.Parallel()
@@ -26,9 +82,7 @@ func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 	_ = readObservedFrame(t, peer)
 	fillTransportQueue(t, e.transport, peer)
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	sub.Close()
 	(<-e.cmds)()
 
 	waitErr := sub.Wait()
@@ -133,12 +187,15 @@ func TestActorSlowConsumerCancelsWhilePublicCloseWaitsOnFullCommandQueue(t *test
 		}, e, actorCancel)
 		e.cmds <- func() {}
 
-		closeResult := make(chan error, 1)
-		go func() { closeResult <- sub.Close() }()
+		closed := make(chan struct{})
+		go func() {
+			sub.Close()
+			close(closed)
+		}()
 		synctest.Wait()
 		select {
-		case err := <-closeResult:
-			t.Fatalf("Close() returned with full command queue: %v", err)
+		case <-closed:
+			t.Fatal("Close() returned with full command queue")
 		default:
 		}
 
@@ -154,9 +211,7 @@ func TestActorSlowConsumerCancelsWhilePublicCloseWaitsOnFullCommandQueue(t *test
 
 		<-e.cmds // Admit the public cancellation that already owns cancelOnce.
 		synctest.Wait()
-		if err := <-closeResult; err != nil {
-			t.Fatalf("Close() error = %v", err)
-		}
+		<-closed
 		(<-e.cmds)()
 		if cancelCalls != 1 {
 			t.Fatalf("queued public cancellation calls = %d, want actor-owned callback once", cancelCalls)
@@ -224,9 +279,7 @@ func TestClosedSingletonCannotCancelReplacement(t *testing.T) {
 		t.Fatalf("replacement route = %p, old route = %p", replacementRoute, oldRoute)
 	}
 
-	if err := oldSub.Close(); err != nil {
-		t.Fatalf("old Close() error = %v", err)
-	}
+	oldSub.Close()
 	(<-e.cmds)()
 	if got := e.singletons[singletonPositions]; got != replacementRoute {
 		t.Fatalf("singleton route after stale Close() = %p, want replacement %p", got, replacementRoute)
@@ -257,9 +310,7 @@ func TestDisplayGroupUpdateAfterCloseReturnsErrClosed(t *testing.T) {
 	handle := installObservedDisplayGroup(t, e)
 	_ = readObservedFrame(t, peer)
 
-	if err := handle.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	handle.Close()
 	(<-e.cmds)()
 	_ = readObservedFrame(t, peer)
 	if err := handle.Wait(); err != nil {
@@ -330,9 +381,7 @@ func TestDisplayGroupUpdateRechecksRouteAfterReconnectWait(t *testing.T) {
 	go func() { updateErr <- handle.Update(context.Background(), "265598@SMART") }()
 	(<-e.cmds)()
 	(<-e.cmds)()
-	if err := handle.Close(); err != nil {
-		t.Fatalf("Close() while update waits = %v", err)
-	}
+	handle.Close()
 	(<-e.cmds)()
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("Wait() after close during reconnect = %v", err)
@@ -360,8 +409,8 @@ func TestAccountSnapshotRetainsRowsWhenCleanupFails(t *testing.T) {
 	t.Parallel()
 
 	cancelErr := &SubscriptionCancelError{OpKind: OpAccountSummary, Err: ErrInterrupted}
-	var sub *Subscription[AccountSummaryUpdate]
-	sub = newSubscription[AccountSummaryUpdate](subscriptionConfig{
+	var sub *Subscription[AccountValue]
+	sub = newSubscription[AccountValue](subscriptionConfig{
 		buffer:          1,
 		slowConsumer:    SlowConsumerClose,
 		collectSnapshot: true,
@@ -371,13 +420,13 @@ func TestAccountSnapshotRetainsRowsWhenCleanupFails(t *testing.T) {
 	sub.expectSnapshot()
 	// captures/20260405T215025Z-account_summary_snapshot, server_version 200;
 	// retained exactly in testdata/transcripts/grounded_account_summary.txt.
-	sub.emit(AccountSummaryUpdate{Value: AccountValue{
+	sub.emit(AccountValue{
 		Account: "DU9000001", Tag: "NetLiquidation", Value: "68000.00", Currency: "EUR",
-	}})
+	})
 	sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
 
-	values, err := collectSnapshotAndClose(context.Background(), sub, func(update AccountSummaryUpdate) (AccountValue, bool) {
-		return update.Value, true
+	values, err := collectSnapshotAndClose(context.Background(), sub, func(value AccountValue) (AccountValue, bool) {
+		return value, true
 	})
 	if len(values) != 1 || values[0].Account != "DU9000001" || values[0].Value != "68000.00" || values[0].Currency != "EUR" {
 		t.Fatalf("snapshot values = %+v, want retained live-derived row", values)
@@ -387,16 +436,16 @@ func TestAccountSnapshotRetainsRowsWhenCleanupFails(t *testing.T) {
 	}
 }
 
-func installObservedPositionsRoute(t *testing.T, e *engine) *Subscription[PositionUpdate] {
+func installObservedPositionsRoute(t *testing.T, e *engine) *Subscription[Position] {
 	t.Helper()
 	result := make(chan struct {
-		sub *Subscription[PositionUpdate]
+		sub *Subscription[Position]
 		err error
 	}, 1)
 	go func() {
 		sub, err := e.SubscribePositions(context.Background())
 		result <- struct {
-			sub *Subscription[PositionUpdate]
+			sub *Subscription[Position]
 			err error
 		}{sub: sub, err: err}
 	}()

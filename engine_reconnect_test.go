@@ -20,7 +20,6 @@ func TestHandleTransportLossPreservesReconnectAttempt(t *testing.T) {
 		keyed:            make(map[int]*route),
 		singletons:       make(map[string]*route),
 		orders:           make(map[int64]*orderRoute),
-		executions:       newExecutionCorrelator(),
 		execDeliveries:   make(map[string]*execDelivery),
 		reconnectAttempt: 2,
 		snapshot: Snapshot{
@@ -51,7 +50,6 @@ func TestHandleTransportLossIgnoresStaleTransport(t *testing.T) {
 		keyed:            make(map[int]*route),
 		singletons:       make(map[string]*route),
 		orders:           make(map[int64]*orderRoute),
-		executions:       newExecutionCorrelator(),
 		execDeliveries:   make(map[string]*execDelivery),
 		reconnectAttempt: 2,
 		snapshot: Snapshot{

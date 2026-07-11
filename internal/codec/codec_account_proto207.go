@@ -1,27 +1,11 @@
 package codec
 
 import (
-	"fmt"
 	"strings"
-
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
-func requireAccountProto(sv int, operation string) error {
-	if sv < protocol.MinServerVersionProtobufAccountsPositions {
-		return fmt.Errorf("codec: %s protobuf requires server_version %d", operation, protocol.MinServerVersionProtobufAccountsPositions)
-	}
-	return nil
-}
-
-func (AccountUpdatesRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
+//nolint:unparam // protobuf encoders share one fallible contract.
 func (m AccountUpdatesRequest) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "account updates"); err != nil {
-		return nil, err
-	}
 	var body []byte
 	if m.Subscribe {
 		body = appendProtoVarint(body, 1, 1)
@@ -32,47 +16,19 @@ func (m AccountUpdatesRequest) encodeProto(sv int) ([]byte, error) {
 	return body, nil
 }
 
-func (ManagedAccountsRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (ManagedAccountsRequest) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "managed accounts"); err != nil {
-		return nil, err
-	}
 	return []byte{}, nil
-}
-
-func (PositionsRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
 }
 
 func (PositionsRequest) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "positions"); err != nil {
-		return nil, err
-	}
 	return []byte{}, nil
-}
-
-func (CancelPositions) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
 }
 
 func (CancelPositions) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "cancel positions"); err != nil {
-		return nil, err
-	}
 	return []byte{}, nil
 }
 
-func (AccountSummaryRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (m AccountSummaryRequest) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "account summary"); err != nil {
-		return nil, err
-	}
 	body, err := appendProtoInt(nil, 1, m.ReqID, "account summary request id")
 	if err != nil {
 		return nil, err
@@ -86,25 +42,11 @@ func (m AccountSummaryRequest) encodeProto(sv int) ([]byte, error) {
 	return body, nil
 }
 
-func (CancelAccountSummary) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (m CancelAccountSummary) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "cancel account summary"); err != nil {
-		return nil, err
-	}
 	return appendProtoInt(nil, 1, m.ReqID, "cancel account summary request id")
 }
 
-func (PositionsMultiRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (m PositionsMultiRequest) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "positions multi"); err != nil {
-		return nil, err
-	}
 	body, err := appendProtoInt(nil, 1, m.ReqID, "positions multi request id")
 	if err != nil {
 		return nil, err
@@ -118,25 +60,11 @@ func (m PositionsMultiRequest) encodeProto(sv int) ([]byte, error) {
 	return body, nil
 }
 
-func (CancelPositionsMulti) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (m CancelPositionsMulti) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "cancel positions multi"); err != nil {
-		return nil, err
-	}
 	return appendProtoInt(nil, 1, m.ReqID, "cancel positions multi request id")
 }
 
-func (AccountUpdatesMultiRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (m AccountUpdatesMultiRequest) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "account updates multi"); err != nil {
-		return nil, err
-	}
 	body, err := appendProtoInt(nil, 1, m.ReqID, "account updates multi request id")
 	if err != nil {
 		return nil, err
@@ -153,14 +81,7 @@ func (m AccountUpdatesMultiRequest) encodeProto(sv int) ([]byte, error) {
 	return body, nil
 }
 
-func (CancelAccountUpdatesMulti) protobufVersion() int {
-	return protocol.MinServerVersionProtobufAccountsPositions
-}
-
 func (m CancelAccountUpdatesMulti) encodeProto(sv int) ([]byte, error) {
-	if err := requireAccountProto(sv, "cancel account updates multi"); err != nil {
-		return nil, err
-	}
 	return appendProtoInt(nil, 1, m.ReqID, "cancel account updates multi request id")
 }
 

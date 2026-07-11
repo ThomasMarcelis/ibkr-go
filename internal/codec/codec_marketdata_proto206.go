@@ -1,18 +1,10 @@
 package codec
 
 import (
-	"fmt"
 	"strings"
-
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
-func (QuoteRequest) protobufVersion() int { return protocol.MinServerVersionProtobufMarketData }
-
 func (m QuoteRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: market data protobuf requires server_version %d", m.protobufVersion())
-	}
 	body, err := appendProtoInt(nil, 1, m.ReqID, "market data request id")
 	if err != nil {
 		return nil, err
@@ -31,23 +23,11 @@ func (m QuoteRequest) encodeProto(sv int) ([]byte, error) {
 	return canonicalProtoFields(body), nil
 }
 
-func (CancelQuote) protobufVersion() int { return protocol.MinServerVersionProtobufMarketData }
-
 func (m CancelQuote) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: cancel market data protobuf requires server_version %d", m.protobufVersion())
-	}
 	return appendProtoInt(nil, 1, m.ReqID, "cancel market data request id")
 }
 
-func (MarketDepthRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufMarketData
-}
-
 func (m MarketDepthRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: market depth protobuf requires server_version %d", m.protobufVersion())
-	}
 	body, err := appendProtoInt(nil, 1, m.ReqID, "market depth request id")
 	if err != nil {
 		return nil, err
@@ -67,14 +47,7 @@ func (m MarketDepthRequest) encodeProto(sv int) ([]byte, error) {
 	return canonicalProtoFields(body), nil
 }
 
-func (CancelMarketDepth) protobufVersion() int {
-	return protocol.MinServerVersionProtobufMarketData
-}
-
 func (m CancelMarketDepth) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: cancel market depth protobuf requires server_version %d", m.protobufVersion())
-	}
 	body, err := appendProtoInt(nil, 1, m.ReqID, "cancel market depth request id")
 	if err != nil {
 		return nil, err
@@ -85,14 +58,7 @@ func (m CancelMarketDepth) encodeProto(sv int) ([]byte, error) {
 	return body, nil
 }
 
-func (ReqMarketDataType) protobufVersion() int {
-	return protocol.MinServerVersionProtobufMarketData
-}
-
 func (m ReqMarketDataType) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: market data type protobuf requires server_version %d", m.protobufVersion())
-	}
 	return appendProtoInt(nil, 1, m.DataType, "market data type")
 }
 

@@ -19,10 +19,8 @@ import (
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
-// defaultServerVersion is the wire layout used to encode server frames for a
-// transcript that never declares one in its handshake. Every checked-in
-// transcript is captured from IB Gateway server_version 200, so that is the
-// default until version-gated transcripts land.
+// defaultServerVersion is the fallback layout for legacy symbolic transcripts
+// that omit a handshake version.
 const defaultServerVersion = 200
 
 type Host struct {
@@ -99,10 +97,6 @@ func (h *Host) run() {
 			_ = conn.Close()
 		}
 	}()
-	// serverVersion tracks the wire layout each server frame is encoded at. It
-	// is captured from the transcript's handshake so a transcript declaring an
-	// older server_version replays frames in that version's layout rather than
-	// a hardcoded one.
 	serverVersion := defaultServerVersion
 
 	for i := 0; i < len(h.steps); i++ {
@@ -119,7 +113,6 @@ func (h *Host) run() {
 					return
 				}
 			}
-			// 1. Read raw API prefix (4 bytes)
 			prefix, err := readExact(conn, 4)
 			if err != nil {
 				h.finish(fmt.Errorf("testhost: handshake: read prefix: %w", err))
@@ -129,15 +122,12 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: handshake: prefix = %x, want API\\x00", prefix))
 				return
 			}
-			// 2. Read framed version string
 			versionPayload, err := wire.ReadFrame(conn)
 			if err != nil {
 				h.finish(fmt.Errorf("testhost: handshake: read version: %w", err))
 				return
 			}
 			_ = versionPayload
-			// 3. Send framed server info. Capture the declared server_version
-			// so every server frame below encodes at that wire layout.
 			if raw, ok := cur.body["server_version"]; ok {
 				serverVersion = asInt(resolveBindings(raw, bindings))
 			}
@@ -147,7 +137,6 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: handshake: write server info: %w", err))
 				return
 			}
-			// 4. Read framed START_API
 			startPayload, err := wire.ReadFrame(conn)
 			if err != nil {
 				h.finish(fmt.Errorf("testhost: handshake: read start_api: %w", err))
@@ -167,7 +156,6 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: handshake: parse start_api: %w", err))
 				return
 			}
-			// Store client_id in bindings if body requests it
 			if cid, ok := cur.body["client_id"]; ok {
 				if s, ok := cid.(string); ok && strings.HasPrefix(s, "$") {
 					if len(startFields) >= 2 {
@@ -247,7 +235,6 @@ func (h *Host) run() {
 					h.finish(err)
 					return
 				}
-				// Advance past consumed bar steps (current step is bars[0])
 				i += len(bars) - 1
 				continue
 			}
@@ -531,8 +518,6 @@ func writeChunked(w io.Writer, frame []byte, sizes []int) error {
 	return nil
 }
 
-// decodeClientMessage decodes a real wire format client message into
-// a name and body map for transcript matching.
 func decodeClientMessage(payload []byte) (string, map[string]any, error) {
 	return decodeClientMessageAt(defaultServerVersion, payload)
 }
@@ -1059,7 +1044,6 @@ func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[strin
 		return "global_cancel", body, nil
 	case 10: // OutReqMktDepth: [10, version=5, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, numRows, isSmartDepth, mktDepthOptions]
 		body := map[string]any{}
-		// fields[1] = version (5)
 		if len(fields) >= 3 {
 			body["req_id"] = fields[2]
 		}
@@ -1093,15 +1077,6 @@ func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[strin
 			body["fa_data_type"] = fields[2]
 		}
 		return "request_fa", body, nil
-	case 19: // OutReplaceFA: [19, version=1, faDataType, xml]
-		body := map[string]any{}
-		if len(fields) >= 3 {
-			body["fa_data_type"] = fields[2]
-		}
-		if len(fields) >= 4 {
-			body["xml"] = fields[3]
-		}
-		return "replace_fa", body, nil
 	case 21: // OutExerciseOptions: [21, version=2, reqId, conId, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass, exerciseAction, exerciseQuantity, account, override, manualOrderTime, customerAccount, professionalCustomer]
 		body := map[string]any{}
 		if len(fields) >= 3 {

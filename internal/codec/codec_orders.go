@@ -585,9 +585,6 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.FAGroup)
 	w.WriteString(m.FAMethod)
 	w.WriteString(m.FAPercentage)
-	if sv < protocol.MinServerVersionFAProfileDesupport {
-		w.WriteString("") // deprecated faProfile (client.py:2463-2464)
-	}
 	w.WriteString(m.ModelCode)
 	// Short sale
 	w.WriteString(m.ShortSaleSlot)
@@ -691,34 +688,15 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.AdvancedErrorOverride)
 	w.WriteString(m.ManualOrderTime)
 	// [Exchange != IBKRATS, OrderType != PEG BEST/MID => skip peg offsets]
-	if sv >= protocol.MinServerVersionCustomerAccount {
-		w.WriteString(m.CustomerAccount) // client.py:2746
-	}
-	if sv >= protocol.MinServerVersionProfessionalCustomer {
-		w.WriteString(m.ProfessionalCustomer) // client.py:2749
-	}
-	if sv >= protocol.MinServerVersionRFQFields && sv < protocol.MinServerVersionUndoRFQFields {
-		// Legacy RFQ window (client.py:2752-2754): empty placeholder then
-		// UNSET_INTEGER (2^31-1). Removed at UndoRFQFields (190).
-		w.WriteString("")
-		w.WriteString("2147483647")
-	}
-	if sv >= protocol.MinServerVersionIncludeOvernight {
-		w.WriteString(m.IncludeOvernight) // client.py:2756
-	}
-	if sv >= protocol.MinServerVersionCMETaggingFields {
-		w.WriteString(m.ManualOrderIndicator) // client.py:2759
-	}
-	if sv >= protocol.MinServerVersionImbalanceOnly {
-		w.WriteString(m.ImbalanceOnly) // client.py:2762
-	}
+	w.WriteString(m.CustomerAccount)
+	w.WriteString(m.ProfessionalCustomer)
+	w.WriteString(m.IncludeOvernight)
+	w.WriteString(m.ManualOrderIndicator)
+	w.WriteString(m.ImbalanceOnly)
 	return w.Fields(), nil
 }
 
 // CancelOrderRequest cancels an order (outbound msg_id=4).
-// At server_version >= 169 (MANUAL_ORDER_TIME), no version field is sent and
-// manualOrderCancelTime is included. At server_version >= 192
-// (CME_TAGGING_FIELDS), extOperator and manualOrderIndicator are appended.
 type CancelOrderRequest struct {
 	OrderID               int64
 	ManualOrderCancelTime string
@@ -729,28 +707,14 @@ type CancelOrderRequest struct {
 func (m CancelOrderRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(protocol.OutCancelOrder)
-	if sv < protocol.MinServerVersionCMETaggingFields {
-		w.WriteString("1") // legacy version field (client.py:2899-2900)
-	}
 	w.WriteInt64(m.OrderID)
 	w.WriteString(m.ManualOrderCancelTime)
-	if sv >= protocol.MinServerVersionRFQFields && sv < protocol.MinServerVersionUndoRFQFields {
-		// Legacy RFQ window (client.py:2905-2908): two empty placeholders
-		// then UNSET_INTEGER. Removed at UndoRFQFields (190).
-		w.WriteString("")
-		w.WriteString("")
-		w.WriteString("2147483647")
-	}
-	if sv >= protocol.MinServerVersionCMETaggingFields {
-		w.WriteString(m.ExtOperator)          // client.py:2911
-		w.WriteString(m.ManualOrderIndicator) // client.py:2912
-	}
+	w.WriteString(m.ExtOperator)
+	w.WriteString(m.ManualOrderIndicator)
 	return w.Fields(), nil
 }
 
 // GlobalCancelRequest cancels all open orders (outbound msg_id=58).
-// At server_version >= 192 (CME_TAGGING_FIELDS), extOperator and
-// manualOrderIndicator are sent instead of the legacy version field.
 type GlobalCancelRequest struct {
 	ExtOperator          string
 	ManualOrderIndicator string // empty = UNSET
@@ -759,13 +723,8 @@ type GlobalCancelRequest struct {
 func (m GlobalCancelRequest) encodeWire(sv int) ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(protocol.OutReqGlobalCancel)
-	if sv < protocol.MinServerVersionCMETaggingFields {
-		w.WriteString("1") // legacy version field (client.py:3131-3132)
-	}
-	if sv >= protocol.MinServerVersionCMETaggingFields {
-		w.WriteString(m.ExtOperator)          // client.py:3135
-		w.WriteString(m.ManualOrderIndicator) // client.py:3136
-	}
+	w.WriteString(m.ExtOperator)
+	w.WriteString(m.ManualOrderIndicator)
 	return w.Fields(), nil
 }
 
@@ -808,15 +767,9 @@ func (m ExerciseOptionsRequest) encodeWire(sv int) ([]string, error) {
 	// and professional-customer tail; ending the frame at override drew
 	// code 10300 from the live Gateway (capture 20260611T074859Z,
 	// sha 241a49023701e9ec).
-	if sv >= protocol.MinServerVersionManualOrderTimeExerciseOptions {
-		w.WriteString("") // manualOrderTime (client.py:1775)
-	}
-	if sv >= protocol.MinServerVersionCustomerAccount {
-		w.WriteString("") // customerAccount (client.py:1779)
-	}
-	if sv >= protocol.MinServerVersionProfessionalCustomer {
-		w.WriteBool(false) // professionalCustomer (client.py:1783)
-	}
+	w.WriteString("")  // manualOrderTime (client.py:1775)
+	w.WriteString("")  // customerAccount (client.py:1779)
+	w.WriteBool(false) // professionalCustomer (client.py:1783)
 	return w.Fields(), nil
 }
 
@@ -895,9 +848,6 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	r.ReadString() // FAGroup
 	r.ReadString() // FAMethod
 	r.ReadString() // FAPercentage
-	if sv < protocol.MinServerVersionFAProfileDesupport {
-		r.ReadString() // deprecated faProfile (orderdecoder.py:136-137)
-	}
 	r.ReadString() // ModelCode
 	r.ReadString() // GoodTillDate
 	r.ReadString() // Rule80A
@@ -1057,7 +1007,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	minCommission := r.ReadString()
 	maxCommission := r.ReadString()
 	commissionCurrency := r.ReadString()
-	if sv >= protocol.MinServerVersionFullOrderPreviewFields {
+	{
 		// FULL_ORDER_PREVIEW block (orderdecoder.py:369-395): marginCurrency,
 		// nine outside-RTH margin fields, suggestedSize, rejectReason, then
 		// the order-allocations vector. warningText below is unconditional.
@@ -1144,34 +1094,13 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	// tail width is an unattested shape and falls back to the partial
 	// decode.
 	//
-	// The tail is a fixed 24-field base always present at the 176 floor
+	// The tail is a fixed 24-field base
 	// (adjustedOrderParams 8, softDollarTier 3, cashQty, autoPriceForHedge,
 	// omsContainer, discretionaryUpToLimit, usePriceMgmtAlgo, duration,
 	// postToAts, autoCancelParent, pegBest/pegMid offsets 5) plus one field
-	// per gated extension present at this version (orderdecoder.py:372-391).
-	// At sv200 the extensions sum to 8, giving the 32-field live tail.
-	expectedTail := 24
-	if sv >= protocol.MinServerVersionCustomerAccount {
-		expectedTail++
-	}
-	if sv >= protocol.MinServerVersionProfessionalCustomer {
-		expectedTail++
-	}
-	if sv >= protocol.MinServerVersionBondAccruedInterest {
-		expectedTail++
-	}
-	if sv >= protocol.MinServerVersionIncludeOvernight {
-		expectedTail++
-	}
-	if sv >= protocol.MinServerVersionCMETaggingFieldsInOpenOrder {
-		expectedTail += 2 // extOperator + manualOrderIndicator
-	}
-	if sv >= protocol.MinServerVersionSubmitter {
-		expectedTail++
-	}
-	if sv >= protocol.MinServerVersionImbalanceOnly {
-		expectedTail++
-	}
+	// plus eight fields present throughout the supported range
+	// (orderdecoder.py:372-391).
+	const expectedTail = 32
 	if r.Remaining() != expectedTail {
 		return []Message{partial}, nil
 	}
@@ -1428,15 +1357,9 @@ func decodeExecutionData(r *fieldReader, sv int) ([]Message, error) {
 	m.EconomicValueRule = r.ReadString()
 	m.EconomicValueMultiplier = r.ReadString()
 	m.ModelCode = r.ReadString()
-	if sv >= protocol.MinServerVersionLastLiquidity {
-		m.LastLiquidity = r.ReadString()
-	}
-	if sv >= protocol.MinServerVersionPendingPriceRevision {
-		m.PendingPriceRevision = r.ReadString()
-	}
-	if sv >= protocol.MinServerVersionSubmitter {
-		m.Submitter = r.ReadString()
-	}
+	m.LastLiquidity = r.ReadString()
+	m.PendingPriceRevision = r.ReadString()
+	m.Submitter = r.ReadString()
 	if remaining := r.Remaining(); remaining != 0 {
 		return nil, fmt.Errorf("ibkr codec: execution detail has %d trailing fields", remaining)
 	}
@@ -1475,15 +1398,9 @@ func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.EconomicValueRule)
 	w.WriteString(m.EconomicValueMultiplier)
 	w.WriteString(m.ModelCode)
-	if sv >= protocol.MinServerVersionLastLiquidity {
-		w.WriteString(m.LastLiquidity)
-	}
-	if sv >= protocol.MinServerVersionPendingPriceRevision {
-		w.WriteString(m.PendingPriceRevision)
-	}
-	if sv >= protocol.MinServerVersionSubmitter {
-		w.WriteString(m.Submitter)
-	}
+	w.WriteString(m.LastLiquidity)
+	w.WriteString(m.PendingPriceRevision)
+	w.WriteString(m.Submitter)
 	return w.Fields(), nil
 }
 
@@ -1553,11 +1470,6 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	m.FAGroup = r.ReadString()
 	m.FAMethod = r.ReadString()
 	m.FAPercentage = r.ReadString()
-	if sv < protocol.MinServerVersionFAProfileDesupport {
-		r.ReadString() // deprecated FA profile
-	}
-	// Models are present throughout ibkr-go's supported server range (the
-	// official gate is 103; the classic floor here is 176).
 	m.ModelCode = r.ReadString()
 	m.GoodTillDate = r.ReadString()
 	m.Rule80A = r.ReadString()
@@ -1733,15 +1645,9 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	m.CompeteAgainstBestOffset = r.ReadString()
 	m.MidOffsetAtWhole = r.ReadString()
 	m.MidOffsetAtHalf = r.ReadString()
-	if sv >= protocol.MinServerVersionCustomerAccount {
-		m.CustomerAccount = r.ReadString()
-	}
-	if sv >= protocol.MinServerVersionProfessionalCustomer {
-		m.ProfessionalCustomer = r.ReadString()
-	}
-	if sv >= protocol.MinServerVersionSubmitter {
-		m.Submitter = r.ReadString()
-	}
+	m.CustomerAccount = r.ReadString()
+	m.ProfessionalCustomer = r.ReadString()
+	m.Submitter = r.ReadString()
 	if err := r.Err(); err != nil {
 		return nil, err
 	}
@@ -1788,9 +1694,6 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.FAGroup)
 	w.WriteString(m.FAMethod)
 	w.WriteString(m.FAPercentage)
-	if sv < protocol.MinServerVersionFAProfileDesupport {
-		w.WriteString("") // deprecated FA profile
-	}
 	w.WriteString(m.ModelCode)
 	w.WriteString(m.GoodTillDate)
 	w.WriteString(m.Rule80A)
@@ -1911,15 +1814,9 @@ func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.CompeteAgainstBestOffset)
 	w.WriteString(m.MidOffsetAtWhole)
 	w.WriteString(m.MidOffsetAtHalf)
-	if sv >= protocol.MinServerVersionCustomerAccount {
-		w.WriteString(m.CustomerAccount)
-	}
-	if sv >= protocol.MinServerVersionProfessionalCustomer {
-		w.WriteString(m.ProfessionalCustomer)
-	}
-	if sv >= protocol.MinServerVersionSubmitter {
-		w.WriteString(m.Submitter)
-	}
+	w.WriteString(m.CustomerAccount)
+	w.WriteString(m.ProfessionalCustomer)
+	w.WriteString(m.Submitter)
 	return w.Fields(), nil
 }
 

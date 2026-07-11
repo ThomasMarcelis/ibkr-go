@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
@@ -222,14 +221,7 @@ func encodeDeltaNeutralContractProto(m DeltaNeutralContract) ([]byte, error) {
 	return canonicalProtoFields(body), nil
 }
 
-func (ContractDetailsRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufContractData
-}
-
 func (m ContractDetailsRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: contract details protobuf requires server_version %d", m.protobufVersion())
-	}
 	reqID, err := encodeProtoInt32(m.ReqID, "contract details request id")
 	if err != nil {
 		return nil, err

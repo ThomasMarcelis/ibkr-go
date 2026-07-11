@@ -70,9 +70,7 @@ func TestReconnectLastPriceSurvivesTransportLoss(t *testing.T) {
 		t.Fatalf("managed accounts = %v, want [DU9000001]", accts)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -206,7 +204,7 @@ func TestSingleGapOn1100ThenTransportLoss(t *testing.T) {
 		t.Fatalf("second last = %s, want 251", second.Snapshot.Last.String())
 	}
 
-	_ = sub.Close()
+	sub.Close()
 }
 
 func TestGapEventWithout1101(t *testing.T) {
@@ -260,9 +258,7 @@ func TestGapEventWithout1101(t *testing.T) {
 	}
 
 	// Close subscription manually
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -324,9 +320,7 @@ func TestDegradedToReadyVia1102(t *testing.T) {
 		t.Fatalf("session state = %s, want %s", got, ibkr.StateReady)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}

@@ -55,8 +55,7 @@ type HistoricalBar struct {
 type HistoricalBarsEnd struct {
 	ReqID int
 	// StartDate and EndDate carry the dataset bounds echoed by the terminal
-	// marker. Below HISTORICAL_DATA_END (196) that marker is synthesized from
-	// the packed IN 17 frame; at sv>=196 it arrives as standalone IN 108.
+	// IN 108 marker. Some live captures omit EndDate.
 	StartDate string
 	EndDate   string
 }
@@ -258,24 +257,12 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	// Below HISTORICAL_DATA_END (196) the frame inlines the dataset start/end
-	// dates before the bar count and the terminal marker echoes them
-	// (decoder.py:897-922). At sv>=196 the end-of-data arrives as a separate
-	// frame and these fields are absent.
-	var startDate, endDate string
-	if sv < protocol.MinServerVersionHistoricalDataEnd {
-		startDate = r.ReadString()
-		endDate = r.ReadString()
-	}
 	barCount, err := r.ReadCount("bar count")
 	if err != nil {
 		return nil, err
 	}
 	if barCount <= 0 {
-		if sv >= protocol.MinServerVersionHistoricalDataEnd {
-			return nil, nil
-		}
-		return []Message{HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate}}, nil
+		return nil, nil
 	}
 	if err := r.RequireFixedEntryFields("historical data", barCount, 8, 0); err != nil {
 		return nil, err
@@ -289,9 +276,6 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 			Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
 		})
 	}
-	if sv < protocol.MinServerVersionHistoricalDataEnd {
-		msgs = append(msgs, HistoricalBarsEnd{ReqID: reqID, StartDate: startDate, EndDate: endDate})
-	}
 	return msgs, nil
 }
 
@@ -303,13 +287,7 @@ func (m HistoricalBar) encodeWire(sv int) ([]string, error) {
 }
 
 func (m HistoricalBarsEnd) encodeWire(sv int) ([]string, error) {
-	// At sv >= 196 the live Gateway ends a batch with a standalone
-	// HISTORICAL_DATA_END frame; below that the range rides the packed IN 17
-	// frame, so a bare zero-bar batch is the only faithful representation.
-	if sv >= protocol.MinServerVersionHistoricalDataEnd {
-		return []string{itoa(protocol.InHistoricalDataEnd), itoa(m.ReqID), m.StartDate, m.EndDate}, nil
-	}
-	return []string{itoa(protocol.InHistoricalData), itoa(m.ReqID), m.StartDate, m.EndDate, "0"}, nil
+	return []string{itoa(protocol.InHistoricalDataEnd), itoa(m.ReqID), m.StartDate, m.EndDate}, nil
 }
 
 // [88, reqId, headTimestamp] — no version
@@ -516,15 +494,20 @@ func (m HistoricalDataUpdate) encodeWire(sv int) ([]string, error) {
 // [108, reqID, startDateTime, endDateTime]
 // Official HISTORICAL_DATA_END, live-attested against Gateway v200
 // (captures/v1/historical_bars_keepup.log). Sent after the packed IN 17 batch
-// at sv >= MinServerVersionHistoricalDataEnd. Older captures also show a
-// 2-field [reqID, startDateTime] shape, so the end date stays optional.
+// after the packed IN 17 batch. Some captures have a 2-field
+// [reqID, startDateTime] shape, so the end date stays optional.
 func decodeHistoricalDataEnd(r *fieldReader, sv int) ([]Message, error) {
 	reqID, err := r.ReadInt()
 	if err != nil {
 		return nil, err
 	}
+	startDate := r.ReadString()
+	endDate := ""
+	if r.Remaining() > 0 {
+		endDate = r.ReadString()
+	}
 	return []Message{HistoricalBarsEnd{
-		ReqID: reqID, StartDate: r.ReadString(), EndDate: r.ReadString(),
+		ReqID: reqID, StartDate: startDate, EndDate: endDate,
 	}}, nil
 }
 

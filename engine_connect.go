@@ -28,46 +28,59 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 		return
 	}
 	if err := configureTCPKeepAlive(conn, e.cfg.tcpKeepAlive); err != nil {
-		_ = conn.Close()
+		conn.Close()
 		e.connectFailed("keepalive", err, reconnect)
 		return
 	}
 
-	// Synchronous handshake before starting transport goroutines.
 	deadline := time.Now().Add(10 * time.Second)
+	contextDeadline := false
+	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
+		deadline = ctxDeadline
+		contextDeadline = true
+	}
+	if err := conn.SetDeadline(deadline); err != nil {
+		conn.Close()
+		e.connectFailed("handshake deadline", err, reconnect)
+		return
+	}
+	stopContextClose := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	handshakeFailed := func(err error) {
+		stopContextClose()
+		conn.Close()
+		if ctx.Err() != nil {
+			err = ctx.Err()
+		} else if contextDeadline && !time.Now().Before(deadline) {
+			err = context.DeadlineExceeded
+		}
+		e.connectFailed("handshake", err, reconnect)
+	}
 
-	// 1. Send API prefix (raw bytes, not framed)
 	if err := transport.WriteRaw(conn, codec.EncodeHandshakePrefix()); err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
+		handshakeFailed(err)
 		return
 	}
 
-	// 2. Send version range (framed)
 	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, advertisedServerVersionMax)); err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
+		handshakeFailed(err)
 		return
 	}
 
-	// 3. Read server info (framed, but no msg_id prefix)
 	serverPayload, err := transport.ReadOneFrame(conn, deadline)
 	if err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
+		handshakeFailed(err)
 		return
 	}
 	info, err := codec.DecodeServerInfo(serverPayload)
 	if err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
+		handshakeFailed(err)
 		return
 	}
 
-	// 4. Version check
-	if info.ServerVersion < minServerVersion {
+	if info.ServerVersion < minServerVersion || info.ServerVersion > advertisedServerVersionMax {
 		// A server-version mismatch is a protocol capability failure, not a
 		// transient reconnect failure. Terminate even during reconnect.
+		stopContextClose()
 		conn.Close()
 		e.reportReady(ErrUnsupportedServerVersion)
 		e.closeEngine(ErrUnsupportedServerVersion, ErrUnsupportedServerVersion)
@@ -79,20 +92,27 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	})
 	e.bootstrap.serverInfo = true
 
-	// 5. Send START_API (framed normal message)
 	startPayload, err := codec.Encode(e.serverVersion, codec.StartAPI{ClientID: e.cfg.clientID})
 	if err != nil {
-		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
+		handshakeFailed(err)
 		return
 	}
 	if err := wire.WriteFrame(conn, startPayload); err != nil {
+		handshakeFailed(err)
+		return
+	}
+	stopContextClose()
+	if ctx.Err() != nil {
 		conn.Close()
-		e.connectFailed("handshake", err, reconnect)
+		e.connectFailed("handshake", ctx.Err(), reconnect)
+		return
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		conn.Close()
+		e.connectFailed("handshake deadline", err, reconnect)
 		return
 	}
 
-	// 6. Start async transport — ManagedAccounts + NextValidID arrive on incoming channel
 	e.transport = transport.New(conn, e.cfg.logger, e.cfg.sendRate)
 	e.attachTransport(e.transport)
 	e.scheduleBootstrapTimeout(e.transport)
@@ -188,7 +208,7 @@ func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
 }
 
 func (e *engine) maybeReady() {
-	if !e.bootstrap.serverInfo || !e.bootstrap.managed || !e.bootstrap.nextValidID {
+	if e.bootstrap.readyReported || !e.bootstrap.serverInfo || !e.bootstrap.managed || !e.bootstrap.nextValidID {
 		return
 	}
 	// Completed bootstrap is the success boundary for reconnect backoff.

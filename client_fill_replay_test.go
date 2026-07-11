@@ -345,7 +345,7 @@ func TestPlaceOrderLmtBuyRestCancelReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -391,7 +391,7 @@ func TestPlaceOrderLmtBuyRestCancelReplay(t *testing.T) {
 // TestAPIDelayedSuccessModifyReplay freezes the rest-modify-fill lifecycle
 // captured live on 2026-06-11 (captures/20260611T133046Z-
 // api_delayed_success_modify_aapl, events.jsonl sha256 prefix
-// 91132d49f19f9213): a far LMT BUY 100 @ 14.61 rests at Submitted, Modify
+// 91132d49f19f9213): a far LMT BUY 100 @ 14.61 rests at Submitted, Replace
 // re-places the same order id as MKT and it fills 100 @ 292.27; the flatten
 // MKT SELL fills 59 + 41 @ 292.20. The final safety global cancel draws
 // code-161 session notices without replacing either Filled terminal result.
@@ -414,7 +414,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  decimal.RequireFromString("14.61"),
+			LmtPrice:  new(decimal.RequireFromString("14.61")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			OrderRef:  "ibkrgo-redacted-20260611T133046Z-001",
@@ -437,8 +437,8 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	}
 	restLog.nextStatus(t, ctx, ibkr.OrderStatusSubmitted)
 
-	// Modify re-places the same order id as a market order.
-	if err := rest.Modify(ctx, ibkr.Order{
+	// Replace re-places the same order id as a market order.
+	if err := rest.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeMarket,
 		Quantity:  decimal.RequireFromString("100"),
@@ -446,7 +446,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 		Account:   "DU9000001",
 		OrderRef:  "ibkrgo-redacted-20260611T133046Z-001",
 	}); err != nil {
-		t.Fatalf("Modify: %v", err)
+		t.Fatalf("Replace: %v", err)
 	}
 	open = restLog.nextOpen(t, ctx)
 	if open.OrderType != ibkr.OrderTypeMarket || !open.LmtPrice.IsZero() {
@@ -551,7 +551,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 			OrderRef:  ref(refNum),
 		}
 		if lmt != "" {
-			order.LmtPrice = decimal.RequireFromString(lmt)
+			order.LmtPrice = new(decimal.RequireFromString(lmt))
 		}
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: orderReplayAAPL, Order: order})
 		if err != nil {
@@ -609,14 +609,14 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		t.Fatalf("374 avg fill = %s, want 292.342", filled.AvgFillPrice)
 	}
 
-	// 375 LMT BUY 100 @ 14.61 rests, then Modify re-places it as MKT.
+	// 375 LMT BUY 100 @ 14.61 rests, then Replace re-places it as MKT.
 	modify, modifyLog := place(ibkr.ActionBuy, ibkr.OrderTypeLimit, "14.61", 5, 375)
 	open = modifyLog.nextOpen(t, ctx)
 	if open.OrderType != ibkr.OrderTypeLimit || !open.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
 		t.Fatalf("375 resting open = %s @ %s, want LMT @ 14.61", open.OrderType, open.LmtPrice)
 	}
 	modifyLog.nextStatus(t, ctx, ibkr.OrderStatusSubmitted)
-	if err := modify.Modify(ctx, ibkr.Order{
+	if err := modify.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeMarket,
 		Quantity:  decimal.RequireFromString("100"),
@@ -624,7 +624,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		Account:   "DU9000001",
 		OrderRef:  ref(5),
 	}); err != nil {
-		t.Fatalf("375 Modify: %v", err)
+		t.Fatalf("375 Replace: %v", err)
 	}
 	open = modifyLog.nextOpen(t, ctx)
 	if open.OrderType != ibkr.OrderTypeMarket {
@@ -643,36 +643,12 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		t.Fatalf("376 avg fill = %s, want 292.20", filled.AvgFillPrice)
 	}
 
-	// One-shot executions query: the Gateway replays all 13 executions from
-	// this campaign and re-sends a commission frame for 12 of them (376's last
-	// fill commission arrives only after ExecutionsEnd, so its route is already
-	// gone). The correlator no
-	// longer buffers the streaming-phase commissions that predate this query —
-	// they had no registered route to deliver to — so the pre-query fills no
-	// longer double-deliver a history replay at execution arrival. Fill-012 is
-	// the exception: its streaming commission lands just after req_executions
-	// (the route is already registered), so it is buffered and history-replayed
-	// once in addition to its query re-emit. That yields 13 executions + 13
-	// commission deliveries = 26 updates.
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	queryExecs, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(updates) != 26 {
-		t.Fatalf("executions query updates = %d, want 26", len(updates))
-	}
-	var queryExecs []ibkr.Execution
-	commissionUpdates := 0
-	for _, u := range updates {
-		if u.Execution != nil {
-			queryExecs = append(queryExecs, *u.Execution)
-		}
-		if u.CommissionAndFees != nil {
-			commissionUpdates++
-		}
-	}
-	if commissionUpdates != 13 {
-		t.Fatalf("executions query commissions = %d, want 13", commissionUpdates)
+	if len(queryExecs) != 13 {
+		t.Fatalf("executions query rows = %d, want 13", len(queryExecs))
 	}
 	wantRows := []struct {
 		orderID int64
@@ -861,7 +837,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("marketable_lmt_buy_price_band_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, LmtPrice: decimal.RequireFromString("350.62")}, 2, 381)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, LmtPrice: new(decimal.RequireFromString("350.62"))}, 2, 381)
 		// The Gateway cancels the order itself; the client never sends a cancel.
 		if first := log.nextStatusAny(t, ctx); first.Status != ibkr.OrderStatusPendingCancel {
 			t.Fatalf("first status = %s, want PendingCancel", first.Status)
@@ -875,7 +851,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("far_lmt_buy_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, LmtPrice: decimal.RequireFromString("14.61")}, 3, 382)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, LmtPrice: new(decimal.RequireFromString("14.61"))}, 3, 382)
 		log.nextStatus(t, ctx, ibkr.OrderStatusSubmitted)
 		cancelOrder(t, handle)
 		log.nextStatus(t, ctx, ibkr.OrderStatusCancelled)
@@ -884,7 +860,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("stp_buy_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeStop, AuxPrice: decimal.RequireFromString("350.62")}, 4, 383)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeStop, AuxPrice: new(decimal.RequireFromString("350.62"))}, 4, 383)
 		open := log.nextOpen(t, ctx)
 		// The Gateway computes a limit next to the stop on the echo.
 		if !open.LmtPrice.Equal(decimal.RequireFromString("350.65")) ||
@@ -902,7 +878,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("stp_lmt_buy_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeStopLimit, LmtPrice: decimal.RequireFromString("351.62"), AuxPrice: decimal.RequireFromString("350.62")}, 5, 384)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeStopLimit, LmtPrice: new(decimal.RequireFromString("351.62")), AuxPrice: new(decimal.RequireFromString("350.62"))}, 5, 384)
 		held := log.nextStatus(t, ctx, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "trigger" {
 			t.Fatalf("why held = %q, want trigger", held.WhyHeld)
@@ -914,7 +890,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("trail_sell_fill", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingStop, AuxPrice: decimal.RequireFromString("1"), TrailStopPrice: decimal.RequireFromString("2921.8")}, 6, 385)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingStop, AuxPrice: new(decimal.RequireFromString("1")), TrailStopPrice: new(decimal.RequireFromString("2921.8"))}, 6, 385)
 		open := log.nextOpen(t, ctx)
 		// First echo carries the Gateway-computed trigger limit, float noise
 		// included.
@@ -945,7 +921,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("trail_limit_sell_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, AuxPrice: decimal.RequireFromString("1"), TrailStopPrice: decimal.RequireFromString("2921.8"), Adjustment: ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")}}, 7, 387)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, AuxPrice: new(decimal.RequireFromString("1")), TrailStopPrice: new(decimal.RequireFromString("2921.8")), Adjustment: ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")}}, 7, 387)
 		open := log.nextOpen(t, ctx)
 		if !open.LmtPrice.Equal(decimal.RequireFromString("2921.75")) {
 			t.Fatalf("trail-limit echoed lmt = %s, want 2921.75", open.LmtPrice)
@@ -962,7 +938,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("mit_buy_fill", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarketIfTouched, AuxPrice: decimal.RequireFromString("350.62")}, 8, 388)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarketIfTouched, AuxPrice: new(decimal.RequireFromString("350.62"))}, 8, 388)
 		// MIT holds at PreSubmitted without the trigger why_held the stops carry.
 		held := log.nextStatus(t, ctx, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "" {
@@ -987,7 +963,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("lit_buy_fill", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimitIfTouched, LmtPrice: decimal.RequireFromString("351.62"), AuxPrice: decimal.RequireFromString("350.62")}, 9, 390)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimitIfTouched, LmtPrice: new(decimal.RequireFromString("351.62")), AuxPrice: new(decimal.RequireFromString("350.62"))}, 9, 390)
 		log.nextStatus(t, ctx, ibkr.OrderStatusPreSubmitted)
 		log.nextStatus(t, ctx, ibkr.OrderStatusSubmitted)
 		filled := log.nextStatus(t, ctx, ibkr.OrderStatusFilled)
@@ -1039,7 +1015,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("rel_buy_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeRelative, LmtPrice: decimal.RequireFromString("14.61")}, 11, 394)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeRelative, LmtPrice: new(decimal.RequireFromString("14.61"))}, 11, 394)
 		open := log.nextOpen(t, ctx)
 		// The client sent no offset; the Gateway assigned 0.01.
 		if !open.AuxPrice.Equal(decimal.RequireFromString("0.01")) {
@@ -1054,9 +1030,9 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("delayed_success_modify", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, LmtPrice: decimal.RequireFromString("14.61")}, 12, 395)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, LmtPrice: new(decimal.RequireFromString("14.61"))}, 12, 395)
 		log.nextStatus(t, ctx, ibkr.OrderStatusSubmitted)
-		if err := handle.Modify(ctx, ibkr.Order{
+		if err := handle.Replace(ctx, ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
 			Quantity:  decimal.RequireFromString("100"),
@@ -1064,7 +1040,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 			Account:   "DU9000001",
 			OrderRef:  ref(12),
 		}); err != nil {
-			t.Fatalf("Modify: %v", err)
+			t.Fatalf("Replace: %v", err)
 		}
 		open := log.nextOpen(t, ctx)
 		if open.OrderType != ibkr.OrderTypeMarket {
@@ -1086,7 +1062,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("invalid_order_type_reject", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderType("FEELINGS"), LmtPrice: decimal.RequireFromString("14.61")}, 13, 397)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderType("FEELINGS"), LmtPrice: new(decimal.RequireFromString("14.61"))}, 13, 397)
 		register("397", handle, log, nil, nil,
 			ibkr.ErrCodeServerErrorValidatingRequest, "Invalid order type was entered")
 	})
@@ -1103,7 +1079,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("loc_buy_silent_accept_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimitOnClose, LmtPrice: decimal.RequireFromString("350.62")}, 15, 399)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimitOnClose, LmtPrice: new(decimal.RequireFromString("350.62"))}, 15, 399)
 		cancelOrder(t, handle)
 		log.nextStatus(t, ctx, ibkr.OrderStatusPendingCancel)
 		log.nextStatus(t, ctx, ibkr.OrderStatusCancelled)
@@ -1118,19 +1094,19 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("loo_buy_reject", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimitOnOpen, LmtPrice: decimal.RequireFromString("350.62")}, 17, 401)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimitOnOpen, LmtPrice: new(decimal.RequireFromString("350.62"))}, 17, 401)
 		register("401", handle, log, nil, nil,
 			ibkr.ErrCodeServerErrorValidatingRequest, "Invalid order type was entered")
 	})
 
 	t.Run("peg_mkt_reject", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToMarket, LmtPrice: decimal.RequireFromString("14.61")}, 18, 402)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToMarket, LmtPrice: new(decimal.RequireFromString("14.61"))}, 18, 402)
 		register("402", handle, log, nil, nil,
 			ibkr.ErrCodeUnsupportedOrderType, "Unsupported order type for this exchange and security type.")
 	})
 
 	t.Run("peg_pri_reject", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToPrimary, LmtPrice: decimal.RequireFromString("14.61")}, 19, 403)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToPrimary, LmtPrice: new(decimal.RequireFromString("14.61"))}, 19, 403)
 		register("403", handle, log, nil, nil,
 			ibkr.ErrCodeServerErrorValidatingRequest, "Invalid order type was entered")
 	})
@@ -1138,7 +1114,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	t.Run("peg_mid_silent_accept_discard", func(t *testing.T) {
 		// Accepted silently; the cancel draws the 10342 attribute notice as a
 		// session event. The order only dies at the final global cancel.
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToMid, LmtPrice: decimal.RequireFromString("14.61")}, 20, 404)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToMid, LmtPrice: new(decimal.RequireFromString("14.61"))}, 20, 404)
 		cancelOrder(t, handle)
 		notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeImbalanceOnlyNotAllowed)
 		if notice.Message != "The 'ImbalanceOnly' order attribute may not be specified for this order." {
@@ -1149,7 +1125,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("peg_best_silent_accept_discard", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToBest, LmtPrice: decimal.RequireFromString("14.61")}, 21, 405)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToBest, LmtPrice: new(decimal.RequireFromString("14.61"))}, 21, 405)
 		cancelOrder(t, handle)
 		waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeImbalanceOnlyNotAllowed)
 		register("405", handle, log, nil, nil,
@@ -1159,7 +1135,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	t.Run("peg_bench_reject_on_cancel", func(t *testing.T) {
 		// Accepted silently; the cancel itself is rejected because the order
 		// never named a reference contract.
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedBenchmark, LmtPrice: decimal.RequireFromString("14.61")}, 22, 406)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedBenchmark, LmtPrice: new(decimal.RequireFromString("14.61"))}, 22, 406)
 		cancelOrder(t, handle)
 		register("406", handle, log, nil, nil,
 			ibkr.ErrCodeServerErrorValidatingRequest, "Missing reference financial instrument")

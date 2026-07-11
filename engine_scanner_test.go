@@ -40,9 +40,7 @@ func TestScannerNoItemsMessagePreservesLiveRoute(t *testing.T) {
 		t.Fatalf("scanner results len = %d, want exact live empty result", len(results))
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	sub.Close()
 	(<-e.cmds)()
 	wantCancel := liveCapturedFrame(t, "AAAACjIzADEAMTAwMQA=")
 	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantCancel) {

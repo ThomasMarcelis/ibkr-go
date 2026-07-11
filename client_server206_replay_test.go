@@ -76,9 +76,7 @@ func TestMarketDataServer206Replay(t *testing.T) {
 		t.Fatalf("string tick = %+v", text)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatal(err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatal(err)
 	}

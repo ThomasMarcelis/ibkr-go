@@ -26,7 +26,7 @@ func TestExerciseRejectsInvalidMutatingRequestsBeforeEngine(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := (OptionsClient{}).Exercise(context.Background(), ExerciseOptionsRequest{
+			_, err := (OptionsClient{}).Exercise(context.Background(), ExerciseOptionsRequest{
 				Contract:         Contract{ConID: 265598},
 				ExerciseAction:   test.action,
 				ExerciseQuantity: test.quantity,

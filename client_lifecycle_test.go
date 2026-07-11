@@ -194,8 +194,8 @@ func serveUnsupportedVersionGateway(conn net.Conn, serverVersion string) error {
 	if err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if string(versionRange) != "v176..207" {
-		return fmt.Errorf("version range = %q, want v176..207", string(versionRange))
+	if string(versionRange) != "v200..207" {
+		return fmt.Errorf("version range = %q, want v200..207", string(versionRange))
 	}
 	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{serverVersion, "2026-04-14T12:00:00Z"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
@@ -296,22 +296,60 @@ func TestDialContextRejectsInvalidEventBuffers(t *testing.T) {
 	}
 }
 
-func TestDialContextRejectsServerVersionBelow176(t *testing.T) {
+func TestDialContextRejectsUnsupportedServerVersion(t *testing.T) {
 	t.Parallel()
 
-	gateway := newUnsupportedVersionGateway(t, "175")
+	for _, serverVersion := range []string{"199", "208"} {
+		t.Run(serverVersion, func(t *testing.T) {
+			t.Parallel()
+			gateway := newUnsupportedVersionGateway(t, serverVersion)
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
 
-	_, err := ibkr.DialContext(ctx,
-		ibkr.WithDialer(gateway.dialer),
-		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
-	)
-	if !errors.Is(err, ibkr.ErrUnsupportedServerVersion) {
-		t.Fatalf("DialContext() error = %v, want ErrUnsupportedServerVersion", err)
+			_, err := ibkr.DialContext(ctx,
+				ibkr.WithDialer(gateway.dialer),
+				ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
+			)
+			if !errors.Is(err, ibkr.ErrUnsupportedServerVersion) {
+				t.Fatalf("DialContext() error = %v, want ErrUnsupportedServerVersion", err)
+			}
+			gateway.Wait(t)
+		})
 	}
-	gateway.Wait(t)
+}
+
+func TestDialContextCancellationInterruptsHandshakeIO(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name  string
+		serve func(net.Conn)
+	}{
+		{name: "write", serve: func(conn net.Conn) { time.Sleep(100 * time.Millisecond) }},
+		{name: "read", serve: func(conn net.Conn) {
+			prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+			_, _ = io.ReadFull(conn, prefix)
+			_, _ = wire.ReadFrame(conn)
+		}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			serverConn, clientConn := net.Pipe()
+			defer serverConn.Close()
+			go test.serve(serverConn)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Millisecond)
+			defer cancel()
+			_, err := ibkr.DialContext(ctx,
+				ibkr.WithDialer(&pipeDialer{conn: clientConn}),
+				ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
+			)
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("DialContext() error = %v, want context deadline", err)
+			}
+		})
+	}
 }
 
 // TestBootstrapNoNextValidID verifies that DialContext fails with a timeout
@@ -542,9 +580,7 @@ func TestSubscriptionCloseImmediatelyAfterCreate(t *testing.T) {
 		t.Fatalf("SubscribePositions() error = %v", err)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -573,14 +609,12 @@ func TestSingletonSubscriptionRejectsSecond(t *testing.T) {
 	sub2, err := client.Accounts().SubscribePositions(ctx)
 	if err == nil {
 		if sub2 != nil {
-			_ = sub2.Close()
+			sub2.Close()
 		}
 		t.Fatal("SubscribePositions() second error = nil, want rejection")
 	}
 
-	if err := sub1.Close(); err != nil {
-		t.Fatalf("sub1.Close() error = %v", err)
-	}
+	sub1.Close()
 }
 
 // TestConcurrentAccountSummaryLimit verifies that account summary enforces
@@ -622,17 +656,13 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 	})
 	if err == nil {
 		if sub3 != nil {
-			_ = sub3.Close()
+			sub3.Close()
 		}
 		t.Fatal("SubscribeAccountSummary() third error = nil, want rejection")
 	}
 
-	if err := sub1.Close(); err != nil {
-		t.Fatalf("sub1.Close() error = %v", err)
-	}
-	if err := sub2.Close(); err != nil {
-		t.Fatalf("sub2.Close() error = %v", err)
-	}
+	sub1.Close()
+	sub2.Close()
 }
 
 // TestMultipleOneShotsInFlight verifies that concurrent one-shot requests

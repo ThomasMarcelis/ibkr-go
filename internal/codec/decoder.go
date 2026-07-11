@@ -63,9 +63,14 @@ func asString(b []byte) string {
 // a NUL always exists while off is in range.
 func (r *fieldReader) field() ([]byte, bool) {
 	if r.off >= len(r.buf) {
+		r.setErr(fmt.Errorf("codec: field %d: missing required field", r.pos))
 		return nil, false
 	}
 	rel := bytes.IndexByte(r.buf[r.off:], 0)
+	if rel < 0 {
+		r.setErr(fmt.Errorf("codec: field %d: unterminated field", r.pos))
+		return nil, false
+	}
 	f := r.buf[r.off : r.off+rel]
 	r.off += rel + 1
 	r.pos++
@@ -94,7 +99,10 @@ func (r *fieldReader) Err() error {
 
 func (r *fieldReader) ReadInt() (int, error) {
 	f, ok := r.field()
-	if !ok || len(f) == 0 {
+	if !ok {
+		return 0, r.err
+	}
+	if len(f) == 0 {
 		return 0, nil
 	}
 	v, err := strconv.Atoi(asString(f))
@@ -108,7 +116,10 @@ func (r *fieldReader) ReadInt() (int, error) {
 
 func (r *fieldReader) ReadInt64() (int64, error) {
 	f, ok := r.field()
-	if !ok || len(f) == 0 {
+	if !ok {
+		return 0, r.err
+	}
+	if len(f) == 0 {
 		return 0, nil
 	}
 	v, err := strconv.ParseInt(asString(f), 10, 64)
@@ -122,7 +133,10 @@ func (r *fieldReader) ReadInt64() (int64, error) {
 
 func (r *fieldReader) ReadFloat() (float64, error) {
 	f, ok := r.field()
-	if !ok || len(f) == 0 {
+	if !ok {
+		return 0, r.err
+	}
+	if len(f) == 0 {
 		return 0, nil
 	}
 	v, err := strconv.ParseFloat(asString(f), 64)
@@ -137,7 +151,10 @@ func (r *fieldReader) ReadFloat() (float64, error) {
 // ReadMaxFloat reads a float, returning math.MaxFloat64 for empty string (TWS sentinel).
 func (r *fieldReader) ReadMaxFloat() (float64, error) {
 	f, ok := r.field()
-	if !ok || len(f) == 0 {
+	if !ok {
+		return 0, r.err
+	}
+	if len(f) == 0 {
 		return math.MaxFloat64, nil
 	}
 	v, err := strconv.ParseFloat(asString(f), 64)
@@ -152,7 +169,10 @@ func (r *fieldReader) ReadMaxFloat() (float64, error) {
 // ReadMaxInt reads an int, returning math.MaxInt32 for empty string (TWS sentinel).
 func (r *fieldReader) ReadMaxInt() (int, error) {
 	f, ok := r.field()
-	if !ok || len(f) == 0 {
+	if !ok {
+		return 0, r.err
+	}
+	if len(f) == 0 {
 		return math.MaxInt32, nil
 	}
 	v, err := strconv.Atoi(asString(f))
@@ -164,7 +184,8 @@ func (r *fieldReader) ReadMaxInt() (int, error) {
 	return v, nil
 }
 
-// ReadString returns the next field as a string. Returns "" if past end.
+// ReadString returns the next field as a string. A missing field records a
+// sticky decode error; an explicitly empty field remains a valid empty string.
 func (r *fieldReader) ReadString() string {
 	f, ok := r.field()
 	if !ok {
@@ -174,7 +195,10 @@ func (r *fieldReader) ReadString() string {
 }
 
 func (r *fieldReader) ReadBool() (bool, error) {
-	f, _ := r.field()
+	f, ok := r.field()
+	if !ok {
+		return false, r.err
+	}
 	// switch string(f) is compiled without allocating; nil past-end bytes
 	// compare equal to "" and read as false, matching ReadString semantics.
 	switch string(f) {
@@ -198,11 +222,9 @@ func (r *fieldReader) ReadDecimal() string {
 // field index, so Pos reflects the total number of skipped fields.
 func (r *fieldReader) Skip(n int) {
 	for range n {
-		if r.off < len(r.buf) {
-			rel := bytes.IndexByte(r.buf[r.off:], 0)
-			r.off += rel + 1
+		if _, ok := r.field(); !ok {
+			return
 		}
-		r.pos++
 	}
 }
 

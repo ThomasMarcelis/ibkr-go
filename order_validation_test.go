@@ -17,7 +17,7 @@ func TestValidateOrderRequest(t *testing.T) {
 				Action:    ActionBuy,
 				OrderType: OrderTypeLimit,
 				Quantity:  decimal.NewFromInt(1),
-				LmtPrice:  decimal.RequireFromString("150"),
+				LmtPrice:  new(decimal.RequireFromString("150")),
 			},
 		}
 	}
@@ -50,7 +50,7 @@ func TestValidateOrderRequest(t *testing.T) {
 		{
 			name: "missing limit price",
 			mutate: func(req *PlaceOrderRequest) {
-				req.Order.LmtPrice = decimal.Zero
+				req.Order.LmtPrice = nil
 			},
 			field: "Order.LmtPrice",
 		},
@@ -157,14 +157,14 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 			name: "cash quantity",
 			req: PlaceOrderRequest{
 				Contract: Contract{ConID: 12087792},
-				Order:    Order{Action: ActionBuy, OrderType: OrderTypeMarket, CashQty: decimal.NewFromInt(1_000)},
+				Order:    Order{Action: ActionBuy, OrderType: OrderTypeMarket, CashQty: new(decimal.NewFromInt(1_000))},
 			},
 		},
 		{
 			name: "hedge child without quantity",
 			req: PlaceOrderRequest{
 				Contract: Contract{ConID: 265598},
-				Order:    Order{Action: ActionSell, OrderType: OrderTypeLimit, LmtPrice: decimal.NewFromInt(150), ParentID: 41, Hedge: OrderHedge{Type: HedgeDelta, Param: "0.5"}},
+				Order:    Order{Action: ActionSell, OrderType: OrderTypeLimit, LmtPrice: new(decimal.NewFromInt(150)), ParentID: 41, Hedge: OrderHedge{Type: HedgeDelta, Param: "0.5"}},
 			},
 		},
 		{
@@ -175,7 +175,7 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
 				}},
 				Order: Order{
-					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: decimal.RequireFromString("0.05"),
+					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.RequireFromString("0.05")),
 				},
 			},
 		},
@@ -184,7 +184,7 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 			req: PlaceOrderRequest{
 				Contract: Contract{ConID: 265598},
 				Order: Order{
-					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: decimal.NewFromInt(150),
+					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.NewFromInt(150)),
 					Conditions: OrderConditions{Values: []OrderCondition{{
 						Type: ConditionPrice, Conjunction: ConditionAnd, Operator: ConditionMore,
 						ConID: 265598, Exchange: "SMART", Value: "200", TriggerMethod: 4,
@@ -198,7 +198,7 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 				Contract: Contract{ConID: 12345},
 				Order: Order{
 					Action: ActionBuy, OrderType: OrderTypeLimit,
-					Quantity: decimal.NewFromInt(1), LmtPrice: decimal.RequireFromString("-1.25"),
+					Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.RequireFromString("-1.25")),
 				},
 			},
 		},
@@ -225,11 +225,11 @@ func TestPrepareBracketRequestOwnsSequencing(t *testing.T) {
 		},
 		TakeProfit: Order{
 			Action: ActionSell, OrderType: OrderTypeLimit,
-			Quantity: decimal.NewFromInt(1), LmtPrice: decimal.NewFromInt(200), Account: "DU123",
+			Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.NewFromInt(200)), Account: "DU123",
 		},
 		StopLoss: Order{
 			Action: ActionSell, OrderType: OrderTypeStop,
-			Quantity: decimal.NewFromInt(1), AuxPrice: decimal.NewFromInt(100), Account: "DU123",
+			Quantity: decimal.NewFromInt(1), AuxPrice: new(decimal.NewFromInt(100)), Account: "DU123",
 		},
 	}
 	prepared, err := prepareBracketRequest(request)

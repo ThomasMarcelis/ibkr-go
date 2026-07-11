@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 )
 
 const scannerNoItemsMessage = "Historical Market Data Service query message:no items retrieved"
@@ -57,9 +56,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonCurrentTime) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -74,10 +71,6 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if e.serverVersion < protocol.MinServerVersionCurrentTimeInMillis {
-			resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", ErrUnsupportedServerVersion)}
-			return
-		}
 		if _, exists := e.singletons[singletonCurrentTimeMillis]; exists {
 			resp <- result{err: fmt.Errorf("ibkr: current time millis request already in progress")}
 			return
@@ -115,9 +108,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonCurrentTimeMillis) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -160,9 +151,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonScannerParameters) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return "", err
 	}
@@ -206,6 +195,9 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 }
 
 func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscriptionRequest, opts ...SubscriptionOption) (*Subscription[[]ScannerResult], error) {
+	if err := validateScannerSubscriptionRequest(req); err != nil {
+		return nil, err
+	}
 	req = cloneScannerSubscriptionRequest(req)
 
 	type result struct {
@@ -291,7 +283,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 	resp := make(chan result, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
+		if err := validateFADataType(faDataType); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -327,33 +319,21 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonFA) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return "", err
 	}
 	return out.xml, out.err
 }
 
-func (e *engine) ReplaceFA(ctx context.Context, faDataType FADataType, xml string) error {
-	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		if err := validateFADataType(faDataType, e.serverVersion); err != nil {
-			return err
-		}
-		return e.sendContext(ctx, codec.ReplaceFA{ReqID: e.allocReqID(), FADataType: int(faDataType), XML: xml})
-	})
-}
-
-// validateFADataType rejects the FA profiles data type once the negotiated
-// server desupports it (FA_PROFILE_DESUPPORT, 177); the official client raises
-// FA_PROFILE_NOT_SUPPORTED for the same case (client.py:4740-4747, 4800-4802).
-func validateFADataType(faDataType FADataType, serverVersion int) error {
-	if faDataType == FADataProfiles && serverVersion >= protocol.MinServerVersionFAProfileDesupport {
+// validateFADataType mirrors the official client's FA_PROFILE_NOT_SUPPORTED
+// rejection; every server version supported by this package desupports it.
+func validateFADataType(faDataType FADataType) error {
+	if faDataType == FADataProfiles {
 		return &ValidationError{
 			Field:   "FA data type",
 			Value:   faDataType.String(),
-			Message: "FA profiles are desupported at server_version 177 and above",
+			Message: "FA profiles are not supported by current IBKR servers",
 		}
 	}
 	return nil

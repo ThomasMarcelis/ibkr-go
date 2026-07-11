@@ -290,7 +290,6 @@ recorded in [`live-test-tracker.md`](live-test-tracker.md).
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
 | out | 18 | RequestFA | landed |
-| out | 19 | ReplaceFA | landed |
 | in | 16 | ReceiveFA | landed |
 | out | 79 | reqSoftDollarTiers | landed |
 | in | 77 | SoftDollarTiers | landed |

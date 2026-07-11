@@ -90,7 +90,7 @@ func prepareBracketRequest(req PlaceBracketRequest) (PlaceBracketRequest, error)
 		if item.order.Transmit != nil {
 			return PlaceBracketRequest{}, invalidOrderField(item.name+".Transmit", *item.order.Transmit, "must be nil; PlaceBracket controls transmit sequencing")
 		}
-		if !item.order.CashQty.IsZero() {
+		if item.order.CashQty != nil {
 			return PlaceBracketRequest{}, invalidOrderField(item.name+".CashQty", item.order.CashQty, "cash-quantity orders are not supported in a bracket")
 		}
 	}
@@ -158,19 +158,19 @@ func validateOrderQuantity(order Order) error {
 	if order.Quantity.IsNegative() {
 		return invalidOrderField("Order.Quantity", order.Quantity, "must be >= 0")
 	}
-	if order.CashQty.IsNegative() {
-		return invalidOrderField("Order.CashQty", order.CashQty, "must be >= 0")
+	if order.CashQty != nil && !order.CashQty.IsPositive() {
+		return invalidOrderField("Order.CashQty", order.CashQty, "must be positive")
 	}
-	if !order.Quantity.IsZero() && !order.CashQty.IsZero() {
+	if !order.Quantity.IsZero() && order.CashQty != nil {
 		return invalidOrderField("Order.CashQty", order.CashQty, "cannot be combined with Quantity")
 	}
-	if order.Quantity.IsZero() && order.CashQty.IsZero() && order.Hedge.Type == "" {
+	if order.Quantity.IsZero() && order.CashQty == nil && order.Hedge.Type == "" {
 		return invalidOrderField("Order.Quantity", order.Quantity, "Quantity or CashQty must be positive; only hedge children may omit both")
 	}
-	if order.MinQty.IsNegative() {
+	if order.MinQty != nil && order.MinQty.IsNegative() {
 		return invalidOrderField("Order.MinQty", order.MinQty, "must be >= 0")
 	}
-	if !order.Quantity.IsZero() && order.MinQty.GreaterThan(order.Quantity) {
+	if !order.Quantity.IsZero() && order.MinQty != nil && order.MinQty.GreaterThan(order.Quantity) {
 		return invalidOrderField("Order.MinQty", order.MinQty, "must not exceed Quantity")
 	}
 	return nil
@@ -179,32 +179,32 @@ func validateOrderQuantity(order Order) error {
 func validateOrderPrices(order Order) error {
 	// Outright prices may legitimately be negative for some futures and
 	// commodity markets. Only percentage and amount fields are sign-limited.
-	if order.TrailingPercent.IsNegative() {
+	if order.TrailingPercent != nil && order.TrailingPercent.IsNegative() {
 		return invalidOrderField("Order.TrailingPercent", order.TrailingPercent, "must be >= 0")
 	}
 
 	switch order.OrderType {
 	case OrderTypeLimit, OrderTypeLimitOnClose, OrderTypeLimitOnOpen:
-		if order.LmtPrice.IsZero() {
+		if order.LmtPrice == nil {
 			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
 		}
 	case OrderTypeStop:
-		if order.AuxPrice.IsZero() {
+		if order.AuxPrice == nil {
 			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "is required for a stop order")
 		}
 	case OrderTypeStopLimit, OrderTypeLimitIfTouched:
-		if order.LmtPrice.IsZero() {
+		if order.LmtPrice == nil {
 			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
 		}
-		if order.AuxPrice.IsZero() {
+		if order.AuxPrice == nil {
 			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "is required for this order type")
 		}
 	case OrderTypeMarketIfTouched:
-		if order.AuxPrice.IsZero() {
+		if order.AuxPrice == nil {
 			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "is required for a market-if-touched order")
 		}
 	case OrderTypeTrailingStop, OrderTypeTrailingLimit:
-		if order.AuxPrice.IsZero() && order.TrailingPercent.IsZero() {
+		if order.AuxPrice == nil && order.TrailingPercent == nil {
 			return invalidOrderField("Order.AuxPrice", order.AuxPrice, "AuxPrice or TrailingPercent is required for a trailing order")
 		}
 	}

@@ -74,16 +74,15 @@ func run() (err error) {
 			}
 			fmt.Println("lifecycle:", state.Kind)
 		case <-timeout.C:
-			if err := sub.Close(); err != nil {
-				return err
-			}
+			sub.Close()
 			if err := sub.Wait(); err != nil {
 				return err
 			}
 			fmt.Println("done")
 			return nil
 		case <-ctx.Done():
-			return errors.Join(ctx.Err(), sub.Close(), sub.Wait())
+			sub.Close()
+			return errors.Join(ctx.Err(), sub.Wait())
 		}
 	}
 }

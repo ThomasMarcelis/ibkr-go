@@ -142,7 +142,7 @@ func Example_placeOrder() {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},

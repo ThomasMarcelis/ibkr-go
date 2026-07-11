@@ -204,7 +204,7 @@ remain live-attestation targets.
 
 PlaceOrder (msg 3), CancelOrder (msg 4), reqGlobalCancel (msg 58). OrderHandle
 tracks lifecycle with Events(), Lifecycle(), Done(), Wait(), Close(), Cancel(),
-and Modify(). Order IDs are auto-allocated from NextValidID. OpenOrder
+and Replace(). Order IDs are auto-allocated from NextValidID. OpenOrder
 messages are dual-dispatched to both per-order handles and the singleton
 open-orders observer; OrderStatus remains part of the per-order handle
 contract. OrderHandle survives disconnects (Gap/Resumed) and auto-closes on
@@ -229,13 +229,13 @@ code 10358 for every request (`89db59e9e5abf7b7` readonly-live,
 
 ### Exercise options
 
-ExerciseOptions (msg 21) — fire-and-forget option exercise request.
+ExerciseOptions (msg 21) — option exercise request tracked by `ExerciseHandle`.
 
 ### FA configuration
 
-RequestFA (msg 18), ReplaceFA (msg 19), inbound ReceiveFA (16),
-reqSoftDollarTiers (msg 79), inbound SoftDollarTiers (77). FA-only account
-configuration.
+RequestFA (msg 18), inbound ReceiveFA (16), reqSoftDollarTiers (msg 79), and
+inbound SoftDollarTiers (77). Mutating FA configuration is outside the library
+charter.
 
 ### WSH calendar
 
@@ -270,11 +270,8 @@ against the local paper Gateway when applicable.
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
 - ~~Server-version coverage through exactly `server_version 207`~~ **Done.**
-  The client negotiates `server_version` 176..207 and gates every post-176
-  wire field on the negotiated value; live-validated 2026-07-04/05 by
-  down-negotiating the paper Gateway to 176/184/193/195/199/200 across
-  contract details, historical bars, API-error frames, and the
-  `CurrentTimeMillis` feature gate. Exact 201 is covered by the live-attested
+  The client negotiates `server_version` 200..207. Version 200 is the fixed
+  classic layout, and exact 201 is covered by the live-attested
   envelope and executions slice below. Exact 202 is separately live-attested:
   the official API 10.48.01 source names only its zero-strike gate, the
   migration table contains no v202 message transition, and a live protobuf

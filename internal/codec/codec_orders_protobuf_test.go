@@ -27,26 +27,6 @@ func TestEncodeExecutionsRequestServer201LiveVector(t *testing.T) {
 	}
 }
 
-func TestEncodeFailsClosedAtUnimplementedProtobufGate(t *testing.T) {
-	t.Parallel()
-
-	payload, err := Encode(212, StartAPI{ClientID: 7})
-	if err != nil {
-		t.Fatalf("Encode(212) error = %v", err)
-	}
-	envelope, err := protocol.DecodeEnvelope(212, payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if envelope.Encoding != protocol.ClassicBody {
-		t.Fatalf("Encode(212) encoding = %d, want classic", envelope.Encoding)
-	}
-
-	if _, err := Encode(213, StartAPI{ClientID: 7}); err == nil {
-		t.Fatal("Encode(213) fell back to classic after the protobuf migration gate")
-	}
-}
-
 func TestEncodeExecutionsRequestServer201Filter(t *testing.T) {
 	t.Parallel()
 

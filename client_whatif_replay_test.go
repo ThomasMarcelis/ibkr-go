@@ -50,7 +50,7 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 
 	for _, field := range []struct {
 		name string
-		got  decimal.Decimal
+		got  *decimal.Decimal
 		want string
 	}{
 		{"InitMarginBefore", state.InitMarginBefore, "156037.86"},
@@ -64,15 +64,15 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 		{"EquityWithLoanAfter", state.EquityWithLoanAfter, "1127798.96"},
 		{"Commission", state.Commission, "1.0003"},
 	} {
-		if !field.got.Equal(decimal.RequireFromString(field.want)) {
+		if field.got == nil || !field.got.Equal(decimal.RequireFromString(field.want)) {
 			t.Errorf("%s = %s, want %s", field.name, field.got, field.want)
 		}
 	}
 	if state.Currency != "USD" {
 		t.Errorf("Currency = %q, want USD", state.Currency)
 	}
-	if !state.CommissionMin.IsZero() || !state.CommissionMax.IsZero() {
-		t.Errorf("CommissionMin/Max = %s/%s, want zero (unset in capture)",
+	if state.CommissionMin != nil || state.CommissionMax != nil {
+		t.Errorf("CommissionMin/Max = %v/%v, want nil (unset in capture)",
 			state.CommissionMin, state.CommissionMax)
 	}
 }
@@ -121,7 +121,7 @@ func TestPreviewRejectionsReplay(t *testing.T) {
 			Action:      ibkr.ActionBuy,
 			OrderType:   ibkr.OrderTypeLimit,
 			Quantity:    decimal.RequireFromString("1"),
-			LmtPrice:    decimal.RequireFromString("150"),
+			LmtPrice:    new(decimal.RequireFromString("150")),
 			TIF:         ibkr.TIFDay,
 			Account:     "DU9000001",
 			OrderRef:    "ibkrgo-redacted-20260711T041916Z-002",

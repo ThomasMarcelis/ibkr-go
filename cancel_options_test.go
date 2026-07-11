@@ -18,28 +18,10 @@ func TestCancelOrderRequestAppliesComplianceOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("applyCancelOptions() error = %v", err)
 	}
-	req, err := cancelOrderRequest(295, cfg, 200)
-	if err != nil {
-		t.Fatalf("cancelOrderRequest() error = %v", err)
-	}
+	req := cancelOrderRequest(295, cfg)
 	if req.OrderID != 295 || req.ManualOrderCancelTime != "20220314-19:00:00" ||
 		req.ExtOperator != "IB" || req.ManualOrderIndicator != "1" {
 		t.Fatalf("cancelOrderRequest() = %+v", req)
-	}
-}
-
-func TestCancelComplianceOptionsRequireSupportedServer(t *testing.T) {
-	t.Parallel()
-
-	cfg, err := applyCancelOptions([]CancelOption{WithCancelExternalOperator("IB")})
-	if err != nil {
-		t.Fatalf("applyCancelOptions() error = %v", err)
-	}
-	if _, err := cancelOrderRequest(295, cfg, 191); !errors.Is(err, ErrUnsupportedServerVersion) {
-		t.Fatalf("cancelOrderRequest() error = %v, want ErrUnsupportedServerVersion", err)
-	}
-	if _, err := globalCancelRequest(cfg, 191); !errors.Is(err, ErrUnsupportedServerVersion) {
-		t.Fatalf("globalCancelRequest() error = %v, want ErrUnsupportedServerVersion", err)
 	}
 }
 
@@ -76,7 +58,7 @@ func TestGlobalCancelRejectsManualCancelTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("applyCancelOptions() error = %v", err)
 	}
-	_, err = globalCancelRequest(cfg, 200)
+	_, err = globalCancelRequest(cfg)
 	if _, ok := errors.AsType[*ValidationError](err); !ok {
 		t.Fatalf("globalCancelRequest() error = %v, want *ValidationError", err)
 	}

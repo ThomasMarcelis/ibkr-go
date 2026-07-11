@@ -113,7 +113,7 @@ type ScannerDataResponse struct {
 	Entries []ScannerDataEntry
 }
 
-// FA Configuration (OUT 18, OUT 19 / IN 16)
+// FA Configuration (OUT 18 / IN 16)
 
 type RequestFA struct {
 	FADataType int // 1=Groups, 2=Profiles, 3=AccountAliases
@@ -121,35 +121,6 @@ type RequestFA struct {
 
 func (m RequestFA) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(protocol.OutRequestFA), "1", itoa(m.FADataType)}, nil
-}
-
-type ReplaceFA struct {
-	ReqID      int
-	FADataType int
-	XML        string
-}
-
-func (m ReplaceFA) encodeWire(sv int) ([]string, error) {
-	// Trailing reqId since REPLACE_FA_END (157), always on at the 176 floor
-	// (client.py:4805-4816).
-	return []string{itoa(protocol.OutReplaceFA), "1", itoa(m.FADataType), strings.ReplaceAll(m.XML, "\n", ""), itoa(m.ReqID)}, nil
-}
-
-// ReplaceFAEnd acknowledges a replaceFA request (decoder.py:2243-2247).
-type ReplaceFAEnd struct {
-	ReqID int
-	Text  string
-}
-
-func (m ReplaceFAEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InReplaceFAEnd), itoa(m.ReqID), m.Text}, nil
-}
-
-// [103, reqId, text]
-func decodeReplaceFAEnd(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	text := r.ReadString()
-	return []Message{ReplaceFAEnd{ReqID: reqID, Text: text}}, nil
 }
 
 type ReceiveFA struct {

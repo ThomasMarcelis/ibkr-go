@@ -54,7 +54,7 @@ func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteBool(m.Contract.IncludeExpired)
 	w.WriteString(m.Contract.SecurityIDType)
 	w.WriteString(m.Contract.SecurityID)
-	w.WriteString(m.Contract.IssuerID) // issuerId (BOND_ISSUER_ID 176, always present in 176..200)
+	w.WriteString(m.Contract.IssuerID)
 	return w.Fields(), nil
 }
 
@@ -243,7 +243,7 @@ type SmartComponentsResponse struct {
 	Components []SmartComponentEntry
 }
 
-// v176..v200 classic layout. Explicit codec literals freeze live stock,
+// Server-version 200 classic layout. Explicit codec literals freeze live stock,
 // option, future, and mutual-fund responses; index and crypto responses are
 // additionally present in the checked-in capture corpus.
 func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
@@ -251,10 +251,7 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	symbol := r.ReadString()
 	secType := r.ReadString()
 	expiry, lastTradeTime := splitLastTradeDate(r.ReadString())
-	lastTradeDate := ""
-	if sv >= protocol.MinServerVersionLastTradeDate {
-		lastTradeDate = r.ReadString()
-	}
+	lastTradeDate := r.ReadString()
 	strike := r.ReadString()
 	right := r.ReadString()
 	exchange := r.ReadString()
@@ -287,12 +284,9 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	trailerFields := 9
-	if sv >= protocol.MinServerVersionFundDataFields && secType == "FUND" {
+	trailerFields := 10 // fixed tail plus ineligibility-reason count
+	if secType == "FUND" {
 		trailerFields += 17
-	}
-	if sv >= protocol.MinServerVersionIneligibilityReasons {
-		trailerFields++
 	}
 	if err := r.RequireFixedEntryFields("contract security ids", securityIDCount, 2, trailerFields); err != nil {
 		return nil, err
@@ -316,7 +310,7 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	suggestedSizeIncrement := r.ReadDecimal()
 
 	var fund *FundDetails
-	if sv >= protocol.MinServerVersionFundDataFields && secType == "FUND" {
+	if secType == "FUND" {
 		fund = &FundDetails{
 			Name:                 r.ReadString(),
 			Family:               r.ReadString(),
@@ -338,21 +332,19 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 		fund.AssetType = r.ReadString()
 	}
 
+	count, err := r.ReadCount("contract ineligibility reason count")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("contract ineligibility reasons", count, 2, 0); err != nil {
+		return nil, err
+	}
 	var ineligibilityReasons []IneligibilityReason
-	if sv >= protocol.MinServerVersionIneligibilityReasons {
-		count, err := r.ReadCount("contract ineligibility reason count")
-		if err != nil {
-			return nil, err
-		}
-		if err := r.RequireFixedEntryFields("contract ineligibility reasons", count, 2, 0); err != nil {
-			return nil, err
-		}
-		if count > 0 {
-			ineligibilityReasons = make([]IneligibilityReason, count)
-		}
-		for i := range ineligibilityReasons {
-			ineligibilityReasons[i] = IneligibilityReason{ID: r.ReadString(), Description: r.ReadString()}
-		}
+	if count > 0 {
+		ineligibilityReasons = make([]IneligibilityReason, count)
+	}
+	for i := range ineligibilityReasons {
+		ineligibilityReasons[i] = IneligibilityReason{ID: r.ReadString(), Description: r.ReadString()}
 	}
 	if remaining := r.Remaining(); remaining != 0 {
 		return nil, fmt.Errorf("ibkr codec: contract details has %d trailing fields", remaining)
@@ -398,13 +390,11 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 		}
 	}
 	w.WriteString(lastTradeDate)
-	if sv >= protocol.MinServerVersionLastTradeDate {
-		explicitLastTradeDate := m.LastTradeDate
-		if explicitLastTradeDate == "" {
-			explicitLastTradeDate, _ = splitLastTradeDate(m.Contract.Expiry)
-		}
-		w.WriteString(explicitLastTradeDate)
+	explicitLastTradeDate := m.LastTradeDate
+	if explicitLastTradeDate == "" {
+		explicitLastTradeDate, _ = splitLastTradeDate(m.Contract.Expiry)
 	}
+	w.WriteString(explicitLastTradeDate)
 	w.WriteString(m.Contract.Strike)
 	w.WriteString(m.Contract.Right)
 	w.WriteString(m.Contract.Exchange)
@@ -444,7 +434,7 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 	w.WriteDecimal(m.MinSize)
 	w.WriteDecimal(m.SizeIncrement)
 	w.WriteDecimal(m.SuggestedSizeIncrement)
-	if sv >= protocol.MinServerVersionFundDataFields && m.Contract.SecType == "FUND" {
+	if m.Contract.SecType == "FUND" {
 		fund := m.Fund
 		if fund == nil {
 			fund = &FundDetails{}
@@ -467,17 +457,15 @@ func (m ContractDetails) encodeWire(sv int) ([]string, error) {
 		w.WriteString(fund.DistributionPolicy)
 		w.WriteString(fund.AssetType)
 	}
-	if sv >= protocol.MinServerVersionIneligibilityReasons {
-		w.WriteInt(len(m.IneligibilityReasons))
-		for _, reason := range m.IneligibilityReasons {
-			w.WriteString(reason.ID)
-			w.WriteString(reason.Description)
-		}
+	w.WriteInt(len(m.IneligibilityReasons))
+	for _, reason := range m.IneligibilityReasons {
+		w.WriteString(reason.ID)
+		w.WriteString(reason.Description)
 	}
 	return w.Fields(), nil
 }
 
-// v176..v200 classic bond layout. Live server_version 200 frames are frozen
+// Server-version 200 classic bond layout. Live frames are frozen
 // in codec_capture_test.go; API 10.48.01 processBondContractDataMsg is the
 // source reference for field order and version gates.
 func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
@@ -486,7 +474,7 @@ func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
 	secType := r.ReadString()
 	cusip := r.ReadString()
 	coupon := r.ReadDecimal()
-	maturity, lastTradeTime, maturityTimeZone := splitBondLastTradeDate(r.ReadString())
+	maturity, lastTradeTime, _ := splitBondLastTradeDate(r.ReadString())
 	issueDate := r.ReadString()
 	ratings := r.ReadString()
 	bondType := r.ReadString()
@@ -508,14 +496,9 @@ func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
 	nextOptionPartial, _ := r.ReadBool()
 	notes := r.ReadString()
 	longName := decodeUnicodeEscapes(r.ReadString())
-	timeZoneID := maturityTimeZone
-	tradingHours := ""
-	liquidHours := ""
-	if sv >= protocol.MinServerVersionBondTradingHours {
-		timeZoneID = r.ReadString()
-		tradingHours = r.ReadString()
-		liquidHours = r.ReadString()
-	}
+	timeZoneID := r.ReadString()
+	tradingHours := r.ReadString()
+	liquidHours := r.ReadString()
 	economicValueRule := r.ReadString()
 	economicValueMultiplier := r.ReadDecimal()
 
@@ -605,11 +588,9 @@ func (m BondContractDetails) encodeWire(sv int) ([]string, error) {
 	w.WriteBool(m.NextOptionPartial)
 	w.WriteString(m.Notes)
 	w.WriteString(m.LongName)
-	if sv >= protocol.MinServerVersionBondTradingHours {
-		w.WriteString(m.TimeZoneID)
-		w.WriteString(m.TradingHours)
-		w.WriteString(m.LiquidHours)
-	}
+	w.WriteString(m.TimeZoneID)
+	w.WriteString(m.TradingHours)
+	w.WriteString(m.LiquidHours)
 	w.WriteString(m.EconomicValueRule)
 	w.WriteDecimal(m.EconomicValueMultiplier)
 	w.WriteInt(len(m.SecurityIDs))

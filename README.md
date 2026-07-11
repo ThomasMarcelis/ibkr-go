@@ -57,7 +57,7 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
   configuration, WSH, display groups, and more. The client negotiates
-  `server_version` 176..207: 200 is the classic-wire live baseline, with exact
+  `server_version` 200..207: 200 is the classic-wire live baseline, with exact
   post-200 protocol migrations through 207. Remaining official branches are
   tracked explicitly in the roadmap and coverage matrix.
 - **Reconnects are explicit.** Session transitions and subscription lifecycle
@@ -190,12 +190,12 @@ While the handle remains active, cancel or modify a working order:
 if err := handle.Cancel(ctx); err != nil { // request cancellation
     return err
 }
-if err := handle.Modify(ctx, revisedOrder); err != nil { // amend price, quantity, etc.
+if err := handle.Replace(ctx, revisedOrder); err != nil { // amend price, quantity, etc.
     return err
 }
 ```
 
-After `ErrSlowConsumer`, `Modify` returns `ErrClosed`; reconcile with the
+After `ErrSlowConsumer`, `Replace` returns `ErrClosed`; reconcile with the
 stable `OrderID` and cancel through `handle.Cancel` or
 `client.Orders().Cancel(ctx, handle.OrderID())` if the order is still working.
 
@@ -279,17 +279,17 @@ Every domain is accessed through a facade on the client:
 | `client.MarketData()` | `Quote` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
 | `client.Orders()` | `Open`, `Completed`, `Executions` | `Place` -> `OrderHandle`, `SubscribeOpen` |
-| `client.Options()` | `ImpliedVolatility`, `Price`, `Exercise` | — |
+| `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` -> `ExerciseHandle` |
 | `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
 | `client.Scanner()` | `Parameters` | `SubscribeResults` |
-| `client.Advisors()` | `Config`, `ReplaceConfig`, `SoftDollarTiers` | — |
+| `client.Advisors()` | `Config`, `SoftDollarTiers` | — |
 | `client.WSH()` | `MetaData`, `EventData` | — |
 | `client.TWS()` | `UserInfo`, `DisplayGroups` | `SubscribeDisplayGroup` |
 
 One-shots return `(T, error)` or `([]T, error)`. Subscriptions return
 `*Subscription[T]` with `Events()`, `Lifecycle()`, `Done()`, and `Close()`.
 Order placement returns `*OrderHandle` with the same channel pattern plus
-`Cancel()` and `Modify()`.
+`Cancel()` and `Replace()`.
 
 ## Examples
 
@@ -330,7 +330,7 @@ stressed, and extended without guessing. For more on that approach, see
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
 domains through an idiomatic Go facade. It negotiates `server_version`
-176..207. Version 200 is the live-attested classic-wire baseline; exact
+200..207. Version 200 is the live-attested classic-wire baseline; exact
 raw-ID/protobuf migrations from 201 through 207 are implemented and
 live-attested. Protocol boundaries from 208 onward and remaining advanced
 branches stay explicit in the coverage matrix rather than being claimed as

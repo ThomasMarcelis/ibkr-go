@@ -332,9 +332,7 @@ func (m CancelMarketDepth) encodeWire(sv int) ([]string, error) {
 	w.WriteInt(protocol.OutCancelMktDepth)
 	w.WriteInt(1)
 	w.WriteInt(m.ReqID)
-	if sv >= protocol.MinServerVersionSmartDepth {
-		w.WriteBool(m.IsSmartDepth)
-	}
+	w.WriteBool(m.IsSmartDepth)
 	return w.Fields(), nil
 }
 

@@ -35,7 +35,6 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 		keyed:          make(map[int]*route),
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
-		executions:     newExecutionCorrelator(),
 		execDeliveries: make(map[string]*execDelivery),
 		snapshot:       Snapshot{State: StateReady, ConnectionSeq: 1},
 	}
@@ -57,9 +56,7 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 		t.Fatalf("auto-open bind fields = %q, want [15 1 1]", got)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close(): %v", err)
-	}
+	sub.Close()
 	if got := readWireFields(t, serverConn); !slices.Equal(got, []string{"15", "1", "0"}) {
 		t.Fatalf("auto-open unbind fields = %q, want [15 1 0]", got)
 	}

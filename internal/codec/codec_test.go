@@ -244,9 +244,8 @@ func TestDecodeRejectsMissingOrEmptyCounts(t *testing.T) {
 func TestDecodeHistoricalDataEnd(t *testing.T) {
 	t.Parallel()
 
-	// HISTORICAL_DATA_END (IN 108) terminates a historical batch at sv >= 196.
-	// Live shape is [108, reqID, startDateTime, endDateTime]; older captures
-	// also show a 2-field variant without the end timestamp.
+	// Live shape is [108, reqID, startDateTime, endDateTime]; some captures also
+	// show a variant without the end timestamp.
 	tests := [][]string{
 		{"108", "1", "20260407 08:52:59 US/Eastern"},
 		{"108", "1", "20260407 10:23:05 US/Eastern", "20260412 10:23:05 US/Eastern"},
@@ -299,34 +298,6 @@ func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 	if update.ReqID != 42 || update.BarCount != 1 || update.Close != "100.50" ||
 		update.High != "101.00" || update.Low != "99.50" || update.WAP != "100.25" || update.Volume != "1500" {
 		t.Fatalf("HistoricalDataUpdate = %#v", update)
-	}
-}
-
-func TestEncodeCancelMarketDepthSmartDepthGate(t *testing.T) {
-	t.Parallel()
-
-	oldPayload, err := Encode(protocol.MinServerVersionSmartDepth-1, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
-	if err != nil {
-		t.Fatalf("Encode(old CancelMarketDepth) error = %v", err)
-	}
-	oldFields, err := wire.ParseFields(oldPayload)
-	if err != nil {
-		t.Fatalf("ParseFields(old) error = %v", err)
-	}
-	if want := []string{"11", "1", "77"}; !slices.Equal(oldFields, want) {
-		t.Fatalf("old CancelMarketDepth fields = %v, want %v", oldFields, want)
-	}
-
-	newPayload, err := Encode(protocol.MinServerVersionSmartDepth, CancelMarketDepth{ReqID: 77, IsSmartDepth: true})
-	if err != nil {
-		t.Fatalf("Encode(new CancelMarketDepth) error = %v", err)
-	}
-	newFields, err := wire.ParseFields(newPayload)
-	if err != nil {
-		t.Fatalf("ParseFields(new) error = %v", err)
-	}
-	if want := []string{"11", "1", "77", "1"}; !slices.Equal(newFields, want) {
-		t.Fatalf("new CancelMarketDepth fields = %v, want %v", newFields, want)
 	}
 }
 
@@ -784,10 +755,8 @@ func TestEncodeCancelHistoricalData(t *testing.T) {
 	}
 }
 
-// Regression: cancel_order at server_version >= 192 (CME_TAGGING_FIELDS)
-// requires extOperator and manualOrderIndicator. Missing fields caused the
-// gateway to silently drop the cancel — discovered via live IB Gateway
-// server_version 200 where handle.Cancel never received confirmation.
+// Regression: missing extOperator and manualOrderIndicator fields caused the
+// Gateway to silently drop cancel_order at live server_version 200.
 func TestEncodeCancelOrderRequest(t *testing.T) {
 	t.Parallel()
 

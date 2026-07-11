@@ -185,9 +185,7 @@ func TestLiveIssue13SubscriptionErrAfterClose(t *testing.T) {
 	if _, err := waitLiveSubscriptionState(ctx, sub.Lifecycle(), ibkr.SubscriptionStarted); err != nil {
 		t.Fatalf("wait Started: %v", err)
 	}
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	select {
 	case <-sub.Done():
 	case <-ctx.Done():

@@ -138,25 +138,6 @@ func TestWriteVerificationLiveProtobufEndAndAPIError(t *testing.T) {
 		}
 	})
 
-	t.Run("inline historical end", func(t *testing.T) {
-		// Exact frames retained from readonly-live max-version-195 capture
-		// 20260710T203504Z-historical_bars_sv195_inline_end. The source
-		// events sha256 is 32ea0cde9c9cdac41aa93ed1b2a6345bfc182b97a8fc8bb90b47e2f57294ce97.
-		events := liveCaptureEvents(t, 176, 195, "20260710 22:35:03 Central European Standard Time",
-			[]captureFrame{{"client", decodeBase64Payload(t, "NzEAMgAxOTUAAA==")}},
-			[]captureFrame{
-				{"client", decodeBase64Payload(t, "MjAAMTAwMQAwAEFBUEwAU1RLAAAwAAAAU01BUlQAAFVTRAAAADAAADEgaG91cgAxIEQAMQBUUkFERVMAMQAwAAA=")},
-				{"server", decodeBase64Payload(t, "MTcAMTAwMQAyMDI2MDcwOSAxNjozNTowMyBVUy9FYXN0ZXJuADIwMjYwNzEwIDE2OjM1OjAzIFVTL0Vhc3Rlcm4ANwAyMDI2MDcxMCAwOTozMDowMCBVUy9FYXN0ZXJuADMxNC42NgAzMTYuNDAAMzEzLjIxADMxNC4zMAAzMjkzNTUyADMxNC43NzEAMzE3MDQAMjAyNjA3MTAgMTA6MDA6MDAgVVMvRWFzdGVybgAzMTQuMzAAMzE0Ljc2ADMxMi4xNwAzMTMuODAAMzc5MTg2OAAzMTMuMjU2ADM4ODAwADIwMjYwNzEwIDExOjAwOjAwIFVTL0Vhc3Rlcm4AMzEzLjc4ADMxNC4xMQAzMTIuMzIAMzEzLjIzADI0MDMwMzMAMzEzLjQ0MwAyNTQ3MAAyMDI2MDcxMCAxMjowMDowMCBVUy9FYXN0ZXJuADMxMy4yNQAzMTQuNzgAMzEzLjA2ADMxNC43MAAxNTg4NjQ3ADMxNC4xNQAxNTg0NgAyMDI2MDcxMCAxMzowMDowMCBVUy9FYXN0ZXJuADMxNC43MQAzMTQuNzQAMzEzLjg5ADMxNC4xMwAxMTgwMTY0ADMxNC4zMzUAMTMzMDQAMjAyNjA3MTAgMTQ6MDA6MDAgVVMvRWFzdGVybgAzMTQuMTUAMzE1LjQwADMxNC4wMQAzMTUuMjcAMTUxNDU4NwAzMTQuNzcyADE2OTMyADIwMjYwNzEwIDE1OjAwOjAwIFVTL0Vhc3Rlcm4AMzE1LjI3ADMxNi45MQAzMTQuNzgAMzE1LjMzADQ4ODQ1NjYAMzE1Ljk4NgA0ODYyMQA=")},
-			},
-		)
-		output := verifyLiveEvents(t, events)
-		if !strings.Contains(output, "server_version=195") ||
-			!strings.Contains(output, "server_msg_ids: 17:1,195:1") ||
-			!strings.Contains(output, "end_markers: InHistoricalDataEnd:1") {
-			t.Fatalf("verification output missing inline historical completion:\n%s", output)
-		}
-	})
-
 	t.Run("api error", func(t *testing.T) {
 		// Exact global-cancel and API-error frames retained in
 		// order_lifecycle_sv203_live.txt from capture sha256

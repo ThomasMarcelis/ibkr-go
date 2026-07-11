@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
@@ -23,14 +22,7 @@ func decodeOpenOrdersEndProto(body []byte, sv int) ([]Message, error) {
 	}
 }
 
-func (m ExecutionsRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobuf
-}
-
 func (m ExecutionsRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: executions protobuf requires server_version %d", m.protobufVersion())
-	}
 
 	reqID, err := encodeProtoInt32(m.ReqID, "executions request id")
 	if err != nil {

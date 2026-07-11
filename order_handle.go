@@ -28,9 +28,9 @@ type OrderHandle struct {
 	err       error
 	errMu     sync.Mutex
 
-	cancelFn func(context.Context, cancelConfig) error // set by engine, sends CancelOrder
-	modifyFn func(context.Context, Order) error        // set by engine, sends PlaceOrder with same ID
-	detachFn func()                                    // set by engine, routes Close through the actor loop
+	cancelFn  func(context.Context, cancelConfig) error // set by engine, sends CancelOrder
+	replaceFn func(context.Context, Order) error        // set by engine, sends PlaceOrder with same ID
+	detachFn  func()                                    // set by engine, routes Close through the actor loop
 }
 
 func newOrderHandle(orderID int64, eventCapacity int) *OrderHandle {
@@ -75,15 +75,14 @@ func (h *OrderHandle) Wait() error {
 // the server. Events() and Lifecycle() channels close asynchronously on the
 // engine goroutine, serialized with in-flight emits; use Done or Wait to
 // observe completion.
-func (h *OrderHandle) Close() error {
+func (h *OrderHandle) Close() {
 	if h.detachFn != nil {
 		h.detachFn()
-		return nil
+		return
 	}
 	// Unbound handles only appear in tests; without an engine route there is no
 	// concurrent protocol emitter, so direct teardown is safe.
 	h.closeWithErr(nil)
-	return nil
 }
 
 // Cancel sends a cancel request for this order to the server. Options are only
@@ -99,16 +98,16 @@ func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 	return h.cancelFn(ctx, cfg)
 }
 
-// Modify sends a modified order to the server. The order is re-sent with the
-// handle's bound order ID; the Contract is fixed at placement time.
-func (h *OrderHandle) Modify(ctx context.Context, order Order) error {
-	if h.modifyFn == nil {
+// Replace re-sends the complete order with the handle's bound order ID. The
+// contract is fixed at placement time; omitted order fields reset to defaults.
+func (h *OrderHandle) Replace(ctx context.Context, order Order) error {
+	if h.replaceFn == nil {
 		return fmt.Errorf("ibkr: order handle not connected")
 	}
 	if h.isDone() {
 		return ErrClosed
 	}
-	return h.modifyFn(ctx, order)
+	return h.replaceFn(ctx, order)
 }
 
 func (h *OrderHandle) isDone() bool {
@@ -183,6 +182,7 @@ func (h *OrderHandle) closeWithErr(err error) {
 		h.errMu.Lock()
 		h.err = err
 		h.errMu.Unlock()
+		h.emitState(SubscriptionStateEvent{Kind: SubscriptionClosed, Err: err})
 		// Close events before done so Done reports completion only after the
 		// engine has stopped publishing business events. Consumers that need
 		// every buffered event should range Events(), then call Wait().

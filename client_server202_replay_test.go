@@ -22,14 +22,14 @@ func TestExecutionsZeroStrikeServer202Replay(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
 	if err != nil {
 		t.Fatalf("Executions() error = %v", err)
 	}
-	if len(updates) != 1 || updates[0].Execution == nil {
-		t.Fatalf("Executions() = %+v, want one live execution", updates)
+	if len(executions) != 1 {
+		t.Fatalf("Executions() = %+v, want one live execution", executions)
 	}
-	execution := updates[0].Execution
+	execution := executions[0]
 	if execution.Contract.ConID != 265598 || execution.Contract.Strike == nil || !execution.Contract.Strike.IsZero() {
 		t.Fatalf("Contract = %+v, want conId 265598 with zero strike", execution.Contract)
 	}

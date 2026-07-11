@@ -272,14 +272,14 @@ func TestFieldReaderReadPastEnd(t *testing.T) {
 	if got := r.ReadString(); got != "" {
 		t.Errorf("ReadString() past end = %q, want empty", got)
 	}
-	if got, err := r.ReadInt(); err != nil || got != 0 {
-		t.Errorf("ReadInt() past end = (%d, %v), want (0, nil)", got, err)
+	if got, err := r.ReadInt(); err == nil || got != 0 {
+		t.Errorf("ReadInt() past end = (%d, %v), want (0, error)", got, err)
 	}
-	if got, err := r.ReadFloat(); err != nil || got != 0 {
-		t.Errorf("ReadFloat() past end = (%v, %v), want (0, nil)", got, err)
+	if got, err := r.ReadFloat(); err == nil || got != 0 {
+		t.Errorf("ReadFloat() past end = (%v, %v), want (0, error)", got, err)
 	}
-	if got, err := r.ReadBool(); err != nil || got != false {
-		t.Errorf("ReadBool() past end = (%v, %v), want (false, nil)", got, err)
+	if got, err := r.ReadBool(); err == nil || got {
+		t.Errorf("ReadBool() past end = (%v, %v), want (false, error)", got, err)
 	}
 }
 

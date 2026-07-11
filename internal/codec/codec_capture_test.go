@@ -2093,8 +2093,8 @@ func TestCaptureDecode_HistoricalDataEndLive(t *testing.T) {
 	t.Parallel()
 	// captures/v1/historical_bars_keepup.log line 8 (IB Gateway paper
 	// account, server_version 200, captured 2026-04-06): the standalone
-	// HISTORICAL_DATA_END frame that follows the packed IN 17 batch at
-	// sv >= 196. Shape is [108, reqID, startDateTime, endDateTime]; the
+	// HISTORICAL_DATA_END frame that follows the packed IN 17 batch. Shape is
+	// [108, reqID, startDateTime, endDateTime]; the
 	// codec previously misread 108 as the streaming-update id.
 	payload := []byte("108\x001001\x0020260406 07:37:52 US/Eastern\x0020260406 08:37:52 US/Eastern\x00")
 	msgs, err := DecodeBatch(200, payload)

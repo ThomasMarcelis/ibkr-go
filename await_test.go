@@ -258,7 +258,6 @@ func TestEnqueueHistoricalSetupForwardsCancelDuringPacing(t *testing.T) {
 		}
 
 		cancel()
-		time.Sleep(time.Second)
 		synctest.Wait()
 		(<-e.cmds)()
 

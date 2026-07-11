@@ -21,7 +21,7 @@ func LimitOrder(action OrderAction, quantity, limit decimal.Decimal) Order {
 		Action:    action,
 		OrderType: OrderTypeLimit,
 		Quantity:  quantity,
-		LmtPrice:  limit,
+		LmtPrice:  new(limit),
 	}
 }
 
@@ -33,7 +33,7 @@ func StopOrder(action OrderAction, quantity, stop decimal.Decimal) Order {
 		Action:    action,
 		OrderType: OrderTypeStop,
 		Quantity:  quantity,
-		AuxPrice:  stop,
+		AuxPrice:  new(stop),
 	}
 }
 
@@ -46,7 +46,7 @@ func StopLimitOrder(action OrderAction, quantity, stop, limit decimal.Decimal) O
 		Action:    action,
 		OrderType: OrderTypeStopLimit,
 		Quantity:  quantity,
-		AuxPrice:  stop,
-		LmtPrice:  limit,
+		AuxPrice:  new(stop),
+		LmtPrice:  new(limit),
 	}
 }

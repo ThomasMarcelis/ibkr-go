@@ -18,7 +18,7 @@ func TestPlaceOrderAdmissionWinsCallerBoundaries(t *testing.T) {
 	t.Parallel()
 
 	handle := newOrderHandle(47, 64)
-	t.Cleanup(func() { _ = handle.Close() })
+	t.Cleanup(func() { handle.Close() })
 
 	for _, tc := range []struct {
 		name         string
@@ -80,9 +80,9 @@ func TestBracketAdmissionWinsCallerBoundaries(t *testing.T) {
 		StopLoss:   newOrderHandle(49, 64),
 	}
 	t.Cleanup(func() {
-		_ = bracket.Parent.Close()
-		_ = bracket.TakeProfit.Close()
-		_ = bracket.StopLoss.Close()
+		bracket.Parent.Close()
+		bracket.TakeProfit.Close()
+		bracket.StopLoss.Close()
 	})
 
 	for _, tc := range []struct {

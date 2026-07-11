@@ -17,15 +17,15 @@ func TestFieldReaderPastEndRepeated(t *testing.T) {
 		t.Fatalf("read 2: got %q, want %q", got, "beta")
 	}
 
-	// Reads 3-5 are past end: string returns "", int returns (0, nil), bool returns (false, nil).
+	// Reads past end record a sticky malformed-frame error.
 	if got := r.ReadString(); got != "" {
 		t.Errorf("read 3 (string past end): got %q, want %q", got, "")
 	}
-	if got, err := r.ReadInt(); err != nil || got != 0 {
-		t.Errorf("read 4 (int past end): got (%d, %v), want (0, nil)", got, err)
+	if got, err := r.ReadInt(); err == nil || got != 0 {
+		t.Errorf("read 4 (int past end): got (%d, %v), want (0, error)", got, err)
 	}
-	if got, err := r.ReadBool(); err != nil || got != false {
-		t.Errorf("read 5 (bool past end): got (%v, %v), want (false, nil)", got, err)
+	if got, err := r.ReadBool(); err == nil || got {
+		t.Errorf("read 5 (bool past end): got (%v, %v), want (false, error)", got, err)
 	}
 }
 
@@ -141,8 +141,11 @@ func TestFieldReaderSkipBeyondEnd(t *testing.T) {
 	if got := r.Remaining(); got != 0 {
 		t.Errorf("Remaining() after Skip(100) = %d, want 0", got)
 	}
-	if got := r.Pos(); got != 100 {
-		t.Errorf("Pos() after Skip(100) on 3 fields = %d, want 100", got)
+	if got := r.Pos(); got != 3 {
+		t.Errorf("Pos() after Skip(100) on 3 fields = %d, want 3", got)
+	}
+	if r.Err() == nil {
+		t.Fatal("Skip(100) error = nil, want missing-field error")
 	}
 	if got := r.ReadString(); got != "" {
 		t.Errorf("ReadString() after skip past end = %q, want %q", got, "")

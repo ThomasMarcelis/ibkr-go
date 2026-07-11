@@ -17,7 +17,6 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 	}
 	err := normalizeTransportErr(loss.err)
 	e.transport = nil
-	e.executions.reset()
 	if e.cfg.reconnect == ReconnectOff {
 		if err == nil {
 			err = ErrClosed
@@ -73,6 +72,8 @@ func (e *engine) disconnectRoutes(err error) {
 		}
 		if !route.onDisconnect(e, err) {
 			e.deleteKeyedRoute(reqID)
+		} else {
+			route.gapped = true
 		}
 	}
 	for key, route := range e.singletons {
@@ -86,6 +87,8 @@ func (e *engine) disconnectRoutes(err error) {
 		}
 		if !route.onDisconnect(e, err) {
 			delete(e.singletons, key)
+		} else {
+			route.gapped = true
 		}
 	}
 	for id, preview := range e.previews {
@@ -146,6 +149,7 @@ func (e *engine) dropLostRoutes() {
 func (e *engine) resumeRoutes() {
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
+			wasGapped := route.gapped
 			if route.validateResume != nil {
 				if err := route.validateResume(e); err != nil {
 					route.close(err)
@@ -153,19 +157,20 @@ func (e *engine) resumeRoutes() {
 					continue
 				}
 			}
-			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
 				e.deleteKeyedRoute(reqID)
 				continue
 			}
-			if route.emitResumed != nil {
+			if wasGapped && route.emitResumed != nil {
 				route.emitResumed(e)
 			}
+			route.gapped = false
 		}
 	}
 	for key, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto {
+			wasGapped := route.gapped
 			if route.validateResume != nil {
 				if err := route.validateResume(e); err != nil {
 					route.close(err)
@@ -173,15 +178,15 @@ func (e *engine) resumeRoutes() {
 					continue
 				}
 			}
-			route.gapped = false
 			if err := e.send(route.request); err != nil {
 				route.close(err)
 				delete(e.singletons, key)
 				continue
 			}
-			if route.emitResumed != nil {
+			if wasGapped && route.emitResumed != nil {
 				route.emitResumed(e)
 			}
+			route.gapped = false
 		}
 	}
 	// Emit Resumed to all active order handles after reconnect.
@@ -237,7 +242,6 @@ func (e *engine) closeEngine(err, waitErr error) {
 		}
 		delete(e.orders, id)
 	}
-	e.executions.reset()
 	e.execDeliveries = make(map[string]*execDelivery)
 	e.setState(StateClosed, 0, "", err)
 	e.reportReady(err)
@@ -271,13 +275,13 @@ func (e *engine) emitGap() {
 
 func (e *engine) emitResumed() {
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil && route.gapped {
 			route.gapped = false
 			route.emitResumed(e)
 		}
 	}
 	for _, route := range e.singletons {
-		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil {
+		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil && route.gapped {
 			route.gapped = false
 			route.emitResumed(e)
 		}

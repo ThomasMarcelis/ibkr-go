@@ -116,24 +116,6 @@ type OpenOrder struct {
 	ConditionsIgnoreRTH   bool
 	ConditionsCancelOrder bool
 
-	// Order-state margin preview. Populated on the open_order reply produced by
-	// [OrdersClient.Preview]; on regular orders the Gateway sends unset
-	// sentinels, which decode as zero.
-	InitMarginBefore     decimal.Decimal
-	MaintMarginBefore    decimal.Decimal
-	EquityWithLoanBefore decimal.Decimal
-	InitMarginChange     decimal.Decimal
-	MaintMarginChange    decimal.Decimal
-	EquityWithLoanChange decimal.Decimal
-	InitMarginAfter      decimal.Decimal
-	MaintMarginAfter     decimal.Decimal
-	EquityWithLoanAfter  decimal.Decimal
-
-	Commission         decimal.Decimal
-	MinCommission      decimal.Decimal
-	MaxCommission      decimal.Decimal
-	CommissionCurrency string
-
 	// WarningText carries the Gateway's advisory for this order, e.g. price
 	// cap adjustments; empty when the server sent none.
 	WarningText string
@@ -253,13 +235,6 @@ type Execution struct {
 	OptionExerciseType      OptionExerciseType
 }
 
-// ExecutionUpdate is a union item from [OrdersClient.Executions]. Exactly one
-// field is non-nil: an execution or a separately reported cost update.
-type ExecutionUpdate struct {
-	Execution         *Execution
-	CommissionAndFees *CommissionAndFeesReport
-}
-
 // OrderStatusUpdate reports a change in an order's fill progress or state.
 type OrderStatusUpdate struct {
 	OrderID       int64
@@ -370,15 +345,15 @@ type OrderAdjustment struct {
 	TrailingUnit   int
 }
 
-// Order is the instruction a user fills in to place or modify an order via
-// [OrdersClient.Place], [OrdersClient.Preview], or [OrderHandle.Modify]. Only a
+// Order is the instruction a user fills in to place or replace an order via
+// [OrdersClient.Place], [OrdersClient.Preview], or [OrderHandle.Replace]. Only a
 // handful of fields are needed for a common order; the rest cover advanced
 // order types and are left at their zero value.
 //
 // Zero-value conventions, derived from the wire encoder:
 //
-//   - decimal fields: a zero decimal encodes as "unset" and is omitted, so a
-//     genuine price or quantity of zero is not sent. Set the fields the
+//   - optional decimal fields are pointers: nil omits the value while a
+//     non-nil pointer sends it, including literal zero. Set the fields the
 //     [OrderType] requires (Quantity always; LmtPrice for LMT and STP LMT;
 //     AuxPrice for STP, STP LMT, and as the trailing amount for TRAIL).
 //   - *bool fields are tri-state: nil sends the server default, while a
@@ -391,37 +366,37 @@ type OrderAdjustment struct {
 // A minimal market order needs only Action, OrderType, and Quantity. A limit
 // order additionally sets LmtPrice.
 type Order struct {
-	Action                OrderAction     // BUY or SELL (required)
-	OrderType             OrderType       // execution instruction (required); selects which price fields apply
-	Quantity              decimal.Decimal // order size (required); zero is treated as unset
-	LmtPrice              decimal.Decimal // limit price for LMT / STP LMT; zero means unset
-	AuxPrice              decimal.Decimal // stop trigger for STP / STP LMT, trailing amount for TRAIL; zero means unset
-	TIF                   TimeInForce     // time in force; empty defaults to DAY at the server
-	Account               string          // account to place under; required only for multi-account logins
-	Transmit              *bool           // nil = transmit (true); false stages an untransmitted order
-	ParentID              int64           // parent order ID for a bracket child; 0 = no parent
-	OCA                   OrderOCA        // one-cancels-all behavior; zero value disables it
-	OutsideRTH            bool            // allow execution outside regular trading hours
-	TriggerMethod         int             // stop-trigger method; 0 = default
-	DisplaySize           int             // iceberg display size; 0 = show full size
-	OrderRef              string          // free-form client order reference/tag
-	GoodAfterTime         string          // activate at this time; "YYYYMMDD HH:MM:SS tz"
-	GoodTillDate          string          // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
-	AllOrNone             *bool           // nil = server default; require the whole quantity to fill at once
-	MinQty                decimal.Decimal // minimum fill quantity; zero means unset
-	PercentOffset         decimal.Decimal // offset percent for REL/pegged orders; zero means unset
-	TrailStopPrice        decimal.Decimal // trailing-stop trigger price; zero means unset
-	TrailingPercent       decimal.Decimal // trailing amount as a percent; zero means unset
-	Scale                 OrderScale      // scale-order sizing and active window
-	Hedge                 OrderHedge      // hedge-child behavior
-	Combo                 OrderCombo      // BAG legs, per-leg prices, and smart routing
-	Algorithm             OrderAlgorithm  // IB algo strategy and parameters
-	Conditions            OrderConditions // conditional submission/cancellation triggers
-	Adjustment            OrderAdjustment // adjustable-stop transition
-	CashQty               decimal.Decimal // cash quantity for cash-quantity orders; zero means unset
-	UsePriceMgmtAlgo      *bool           // nil = server default; enable IB's price management algo
-	AdvancedErrorOverride string          // override token for advanced-order warnings
-	ManualOrderTime       string          // manual order entry time for compliance
+	Action                OrderAction      // BUY or SELL (required)
+	OrderType             OrderType        // execution instruction (required); selects which price fields apply
+	Quantity              decimal.Decimal  // order size (required); zero is treated as unset
+	LmtPrice              *decimal.Decimal // limit price for LMT / STP LMT
+	AuxPrice              *decimal.Decimal // stop trigger for STP / STP LMT, trailing amount for TRAIL
+	TIF                   TimeInForce      // time in force; empty defaults to DAY at the server
+	Account               string           // account to place under; required only for multi-account logins
+	Transmit              *bool            // nil = transmit (true); false stages an untransmitted order
+	ParentID              int64            // parent order ID for a bracket child; 0 = no parent
+	OCA                   OrderOCA         // one-cancels-all behavior; zero value disables it
+	OutsideRTH            bool             // allow execution outside regular trading hours
+	TriggerMethod         int              // stop-trigger method; 0 = default
+	DisplaySize           int              // iceberg display size; 0 = show full size
+	OrderRef              string           // free-form client order reference/tag
+	GoodAfterTime         string           // activate at this time; "YYYYMMDD HH:MM:SS tz"
+	GoodTillDate          string           // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
+	AllOrNone             *bool            // nil = server default; require the whole quantity to fill at once
+	MinQty                *decimal.Decimal // minimum fill quantity
+	PercentOffset         *decimal.Decimal // offset percent for REL/pegged orders
+	TrailStopPrice        *decimal.Decimal // trailing-stop trigger price
+	TrailingPercent       *decimal.Decimal // trailing amount as a percent
+	Scale                 OrderScale       // scale-order sizing and active window
+	Hedge                 OrderHedge       // hedge-child behavior
+	Combo                 OrderCombo       // BAG legs, per-leg prices, and smart routing
+	Algorithm             OrderAlgorithm   // IB algo strategy and parameters
+	Conditions            OrderConditions  // conditional submission/cancellation triggers
+	Adjustment            OrderAdjustment  // adjustable-stop transition
+	CashQty               *decimal.Decimal // cash quantity for cash-quantity orders
+	UsePriceMgmtAlgo      *bool            // nil = server default; enable IB's price management algo
+	AdvancedErrorOverride string           // override token for advanced-order warnings
+	ManualOrderTime       string           // manual order entry time for compliance
 }
 
 // PlaceOrderRequest pairs the [Contract] to trade with the [Order] instruction.
@@ -449,47 +424,27 @@ type BracketOrder struct {
 }
 
 // OrderState is the margin-and-commission preview returned by
-// [OrdersClient.Preview]. It mirrors the order-state block the Gateway
-// attaches to the what-if open_order echo: the nine margin decimals plus the
-// commission range and currency.
+// [OrdersClient.Preview]. Nil monetary fields were omitted by IBKR; non-nil
+// zeros are reported zeros.
 type OrderState struct {
-	InitMarginBefore     decimal.Decimal
-	MaintMarginBefore    decimal.Decimal
-	EquityWithLoanBefore decimal.Decimal
-	InitMarginChange     decimal.Decimal
-	MaintMarginChange    decimal.Decimal
-	EquityWithLoanChange decimal.Decimal
-	InitMarginAfter      decimal.Decimal
-	MaintMarginAfter     decimal.Decimal
-	EquityWithLoanAfter  decimal.Decimal
+	InitMarginBefore     *decimal.Decimal
+	MaintMarginBefore    *decimal.Decimal
+	EquityWithLoanBefore *decimal.Decimal
+	InitMarginChange     *decimal.Decimal
+	MaintMarginChange    *decimal.Decimal
+	EquityWithLoanChange *decimal.Decimal
+	InitMarginAfter      *decimal.Decimal
+	MaintMarginAfter     *decimal.Decimal
+	EquityWithLoanAfter  *decimal.Decimal
 
-	Commission    decimal.Decimal
-	CommissionMin decimal.Decimal
-	CommissionMax decimal.Decimal
+	Commission    *decimal.Decimal
+	CommissionMin *decimal.Decimal
+	CommissionMax *decimal.Decimal
 	Currency      string
 
 	// WarningText carries the Gateway's advisory attached to the preview,
 	// e.g. price cap adjustments; empty when the server sent none.
 	WarningText string
-}
-
-func orderStateFromOpenOrder(o OpenOrder) OrderState {
-	return OrderState{
-		InitMarginBefore:     o.InitMarginBefore,
-		MaintMarginBefore:    o.MaintMarginBefore,
-		EquityWithLoanBefore: o.EquityWithLoanBefore,
-		InitMarginChange:     o.InitMarginChange,
-		MaintMarginChange:    o.MaintMarginChange,
-		EquityWithLoanChange: o.EquityWithLoanChange,
-		InitMarginAfter:      o.InitMarginAfter,
-		MaintMarginAfter:     o.MaintMarginAfter,
-		EquityWithLoanAfter:  o.EquityWithLoanAfter,
-		Commission:           o.Commission,
-		CommissionMin:        o.MinCommission,
-		CommissionMax:        o.MaxCommission,
-		Currency:             o.CommissionCurrency,
-		WarningText:          o.WarningText,
-	}
 }
 
 // CompletedOrderResult is one entry from [OrdersClient.Completed]: the

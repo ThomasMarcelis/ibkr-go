@@ -225,7 +225,7 @@ type ContractDetails struct {
 	UnderSymbol               string
 	UnderSecType              SecType
 	RealExpirationDate        string
-	LastTradeDate             string // explicit YYYYMMDD date supplied by server versions 182+
+	LastTradeDate             string // explicit YYYYMMDD date supplied by the server
 	LastTradeTime             string // local HH:MM:SS component; use TimeZoneID for its zone
 	StockType                 string
 	MinSize                   *decimal.Decimal // nil when IBKR omits the size rule

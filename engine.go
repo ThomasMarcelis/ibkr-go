@@ -34,7 +34,6 @@ type engine struct {
 	singletons map[string]*route
 	orders     map[int64]*orderRoute
 	previews   map[int64]*previewRoute
-	executions executionCorrelator
 	// execDeliveries is the order-handle leg's per-ExecID delivery record.
 	// orderID routes commissions to the owning handle and its presence dedupes
 	// an Executions() snapshot replaying a fill the handle already saw live.
@@ -74,12 +73,8 @@ type bootstrapState struct {
 }
 
 const (
-	// The codec gates post-176 wire fields and the sv201 envelope on the
-	// negotiated version. The classic sv200 layout, exact-sv201 executions
-	// migration, exact-sv202 zero-strike boundary, exact-sv203 order
-	// protobuf lifecycle, exact-sv204 order queries, and exact-sv205 contract
-	// data are live-validated;
-	// 176..199 are compatibility paths.
+	// Supported versions are the live-validated 200 classic layout and the
+	// staged protobuf migrations through 207.
 	minServerVersion = protocol.SupportedMinServerVersion
 	maxServerVersion = protocol.SupportedMaxServerVersion
 	bootstrapTimeout = 5 * time.Second
@@ -93,7 +88,7 @@ const (
 
 // advertisedServerVersionMax is the upper bound sent in the v100+ handshake.
 // The gateway negotiates down to it, so capping it below maxServerVersion
-// forces a live session onto an older wire layout. Only the version-matrix
+// forces a live session onto a lower supported layout. Only the version-matrix
 // live tests override it (see export_test.go); production always advertises
 // maxServerVersion.
 var advertisedServerVersionMax = maxServerVersion
@@ -126,10 +121,8 @@ type previewRoute struct {
 	resolved bool
 }
 
-// previewResult carries the single what-if open_order echo back to a blocked
-// PreviewOrder caller: either the decoded OpenOrder or the decode error.
 type previewResult struct {
-	order OpenOrder
+	state OrderState
 	err   error
 }
 
@@ -161,7 +154,6 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		singletons:               make(map[string]*route),
 		orders:                   make(map[int64]*orderRoute),
 		previews:                 make(map[int64]*previewRoute),
-		executions:               newExecutionCorrelator(),
 		execDeliveries:           make(map[string]*execDelivery),
 		unknownInboundSeen:       make(map[int]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),

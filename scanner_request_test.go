@@ -1,10 +1,34 @@
 package ibkr
 
 import (
+	"context"
 	"testing"
 
 	"github.com/shopspring/decimal"
 )
+
+func TestScannerSubscriptionRejectsInvalidStructureBeforeEnqueue(t *testing.T) {
+	t.Parallel()
+
+	valid := ScannerSubscriptionRequest{
+		Instrument: "STK", LocationCode: "STK.US.MAJOR", ScanCode: "TOP_PERC_GAIN",
+	}
+	for _, mutate := range []func(*ScannerSubscriptionRequest){
+		func(req *ScannerSubscriptionRequest) { req.Instrument = "" },
+		func(req *ScannerSubscriptionRequest) { req.LocationCode = "" },
+		func(req *ScannerSubscriptionRequest) { req.ScanCode = "" },
+		func(req *ScannerSubscriptionRequest) { req.NumberOfRows = -1 },
+		func(req *ScannerSubscriptionRequest) {
+			req.AbovePrice, req.BelowPrice = new(decimal.NewFromInt(2)), new(decimal.NewFromInt(1))
+		},
+	} {
+		req := valid
+		mutate(&req)
+		if _, err := (&engine{}).SubscribeScannerResults(context.Background(), req); err == nil {
+			t.Fatalf("SubscribeScannerResults(%+v) error = nil", req)
+		}
+	}
+}
 
 func TestCloneScannerSubscriptionRequestOwnsMutableInput(t *testing.T) {
 	price := decimal.RequireFromString("3")

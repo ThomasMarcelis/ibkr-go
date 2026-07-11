@@ -63,7 +63,7 @@ func run() (err error) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("1.00"), // far from market
+			LmtPrice:  new(decimal.RequireFromString("1.00")), // far from market
 			TIF:       ibkr.TIFDay,
 			Account:   account,
 		},
@@ -78,7 +78,7 @@ func run() (err error) {
 			defer cancel()
 			err = errors.Join(err, handle.Cancel(cleanupCtx))
 		}
-		err = errors.Join(err, handle.Close())
+		handle.Close()
 	}()
 
 	fmt.Println("placed order", handle.OrderID())

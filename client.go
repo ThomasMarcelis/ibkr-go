@@ -53,10 +53,9 @@ func (c *Client) CurrentTime(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTime(ctx)
 }
 
-// CurrentTimeMillis requests the IBKR server time at millisecond precision
-// (official reqCurrentTimeInMillis / currentTimeInMillis, server_version 197
-// or later). Like [Client.CurrentTime], one request may be in flight at a
-// time and the returned time is UTC.
+// CurrentTimeMillis requests the IBKR server time at millisecond precision.
+// Like [Client.CurrentTime], one request may be in flight at a time and the
+// returned time is UTC.
 func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTimeMillis(ctx)
 }
@@ -112,7 +111,7 @@ func (c AccountsClient) Summary(ctx context.Context, req AccountSummaryRequest) 
 }
 
 // SubscribeSummary streams account summary updates for the requested tags.
-func (c AccountsClient) SubscribeSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountSummaryUpdate], error) {
+func (c AccountsClient) SubscribeSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountValue], error) {
 	return c.engine.SubscribeAccountSummary(ctx, req, opts...)
 }
 
@@ -122,7 +121,7 @@ func (c AccountsClient) Positions(ctx context.Context) ([]Position, error) {
 }
 
 // SubscribePositions streams position updates across accounts.
-func (c AccountsClient) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[PositionUpdate], error) {
+func (c AccountsClient) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[Position], error) {
 	return c.engine.SubscribePositions(ctx, opts...)
 }
 
@@ -375,10 +374,9 @@ func (c OrdersClient) Completed(ctx context.Context, apiOnly bool) ([]CompletedO
 }
 
 // Executions returns trade executions visible to this API session that match
-// req. It completes when IBKR sends the execution-details end marker;
-// commission-and-fees reports are separate ExecID-correlated messages and are
-// not guaranteed to arrive before that marker.
-func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) ([]ExecutionUpdate, error) {
+// req. It completes when IBKR sends the execution-details end marker. Cost
+// reports are independently timed and remain available on active order handles.
+func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) ([]Execution, error) {
 	return c.engine.Executions(ctx, req)
 }
 
@@ -398,13 +396,11 @@ func (c OptionsClient) Price(ctx context.Context, req CalcOptionPriceRequest) (O
 	return c.engine.CalcOptionPrice(ctx, req)
 }
 
-// Exercise exercises or lapses a positive quantity of an option position.
-// Invalid actions and quantities fail with [*ValidationError] before the
-// request reaches the transport. Gateway accept/reject notices are emitted
-// through the client's session event stream.
-func (c OptionsClient) Exercise(ctx context.Context, req ExerciseOptionsRequest) error {
+// Exercise admits an option exercise or lapse instruction and returns its
+// lossless request-scoped observation handle.
+func (c OptionsClient) Exercise(ctx context.Context, req ExerciseOptionsRequest) (*ExerciseHandle, error) {
 	if err := validateExerciseOptionsRequest(req); err != nil {
-		return err
+		return nil, err
 	}
 	return c.engine.ExerciseOptions(ctx, req)
 }
@@ -458,14 +454,6 @@ type AdvisorsClient struct{ engine *engine }
 func (c AdvisorsClient) Config(ctx context.Context, dataType FADataType) (XMLDocument, error) {
 	data, err := c.engine.RequestFA(ctx, dataType)
 	return XMLDocument(data), err
-}
-
-// ReplaceConfig replaces an FA configuration document with the given raw XML.
-// The call is fire-and-forget: the Gateway's replaceFAEnd acknowledgement is
-// decoded but not awaited, since only financial-advisor accounts can verify
-// the round trip.
-func (c AdvisorsClient) ReplaceConfig(ctx context.Context, dataType FADataType, data XMLDocument) error {
-	return c.engine.ReplaceFA(ctx, dataType, string(data))
 }
 
 // SoftDollarTiers returns the available soft-dollar commission tiers.

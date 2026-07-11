@@ -41,7 +41,5 @@ func TestSubscribeNewsBulletinsLiveReplay(t *testing.T) {
 		t.Fatalf("second bulletin headline = %q", second.Headline)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Subscription.Close() error = %v", err)
-	}
+	sub.Close()
 }

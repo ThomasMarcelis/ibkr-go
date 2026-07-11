@@ -110,7 +110,7 @@ type ScannerResult struct {
 }
 
 // FADataType selects which Financial Advisor configuration document
-// [AdvisorsClient.Config] and [AdvisorsClient.ReplaceConfig] operate on.
+// [AdvisorsClient.Config] reads.
 type FADataType int
 
 const (

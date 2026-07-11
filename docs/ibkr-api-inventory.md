@@ -58,7 +58,7 @@ committed.
 | Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Implemented. Exact live calculation requests/results, unavailable-field sentinels, and two real exercise rejection paths are replay-promoted. Cancellation-before-first-result, lapse, override, and successful clearing settlement remain matrix work. |
 | News | `reqNewsProviders`, `reqNewsBulletins`, `cancelNewsBulletins`, `reqNewsArticle`, `reqHistoricalNews` | Implemented. `api_news_article_aapl` captures the article follow-up path from a historical-news result; invalid article/provider variants remain matrix work. |
 | Scanner | `reqScannerParameters`, `reqScannerSubscription`, `cancelScannerSubscription` | Complete classic request implemented, including every legacy field and both generic option lists. The public request, ten-row `scannerData` response, and clean cancel are live-captured; an older permission-denied run also freezes codes 490 and 365. |
-| FA/advisor | `requestFA`, `replaceFA`, `reqSoftDollarTiers` | Implemented. `replaceFA` lacks executable capture scenario and should usually freeze non-FA error or read-back/restore behavior. |
+| FA/advisor | `requestFA`, `reqSoftDollarTiers` | Implemented. Mutating FA configuration is outside the library charter. |
 | WSH | `reqWshMetaData`, `cancelWshMetaData`, `reqWshEventData`, `cancelWshEventData` | Implemented. Needs metadata, event, cancel, filter/date/portfolio/watchlist variants. |
 | Display groups/TWS | `queryDisplayGroups`, `subscribeToGroupEvents`, `updateDisplayGroup`, `unsubscribeFromGroupEvents`, `reqUserInfo` | Implemented. Needs invalid group/update cases and TWS vs Gateway differences. |
 
@@ -81,7 +81,7 @@ evidence; WSH is a separate API, not a replacement.
 | Orders/executions | `openOrder`, `openOrderEnd`, `orderStatus`, `execDetails`, `execDetailsEnd`, `commissionAndFeesReport`, `completedOrder`, `completedOrdersEnd`, `orderBound` | Implemented except `orderBound` not represented as a message/callback. Completed-order and execution decoding preserve every classic v200 field; sv201 execution protobuf and sv202 zero-strike semantics are live-frozen. Exact sv203 protobuf `openOrder`, `orderStatus`, and order errors are live-attested. Exact sv204 protobuf `completedOrder`/end preserve identities and observed completion fees. Advanced branches and protobuf-encoded execution fee reports remain explicitly unattested. |
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
 | News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has live capture coverage through `api_news_article_aapl`; invalid article/provider variants remain matrix work. |
-| FA/WSH/display | `receiveFA`, `replaceFAEnd`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented; `replaceFAEnd` decoded and routed by req_id (2026-07-04). |
+| FA/WSH/display | `receiveFA`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented. |
 | Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Both reroute callbacks are live-attested at exact sv206 and handled transparently by active quote/depth routes. Verification/auth, connectAck, and delta-neutral validation remain outside the implemented inventory. |
 
 ## Current ibkr-go Public Facade Methods
@@ -97,7 +97,7 @@ evidence; WSH is a separate API, not a replacement.
 | `Options()` | `ImpliedVolatility`, `Price`, `Exercise` |
 | `News()` | `Providers`, `Article`, `Historical`, `SubscribeBulletins` |
 | `Scanner()` | `Parameters`, `SubscribeResults` |
-| `Advisors()` | `Config`, `ReplaceConfig`, `SoftDollarTiers` |
+| `Advisors()` | `Config`, `SoftDollarTiers` |
 | `WSH()` | `MetaData`, `EventData` |
 | `TWS()` | `UserInfo`, `DisplayGroups`, `SubscribeDisplayGroup` |
 
@@ -123,7 +123,6 @@ Outbound message IDs:
 | `OutReqAllOpenOrders` | 16 | Open orders all |
 | `OutReqManagedAccounts` | 17 | Managed accounts refresh |
 | `OutRequestFA` | 18 | FA config |
-| `OutReplaceFA` | 19 | FA replace config |
 | `OutReqHistoricalData` | 20 | Historical bars/schedule |
 | `OutExerciseOptions` | 21 | Option exercise |
 | `OutReqScannerSubscription` | 22 | Scanner subscription |
@@ -180,7 +179,7 @@ Outbound message IDs:
 | `OutReqUserInfo` | 104 | User info |
 | `OutReqIds` | 8 | Explicit next-valid-ID refresh |
 | `OutReqCurrentTime` | 49 | Server wall-clock time request |
-| `OutReqCurrentTimeInMillis` | 105 | Server wall-clock time request at millisecond precision (server_version 197+) |
+| `OutReqCurrentTimeInMillis` | 105 | Server wall-clock time request at millisecond precision |
 
 Inbound message IDs:
 
@@ -255,7 +254,6 @@ Inbound message IDs:
 | `InTickByTick` | 99 | Tick-by-tick |
 | `InCompletedOrder` | 101 | Completed order |
 | `InCompletedOrderEnd` | 102 | Completed orders end |
-| `InReplaceFAEnd` | 103 | Replace FA acknowledgement |
 | `InUserInfo` | 107 | User info |
 | `InWSHMetaData` | 104 | WSH metadata |
 | `InWSHEventData` | 105 | WSH event data |

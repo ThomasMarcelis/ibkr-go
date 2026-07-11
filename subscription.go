@@ -165,9 +165,8 @@ func (s *Subscription[T]) Err() error {
 // observe completion. If cancellation cannot enter the active transport queue,
 // Wait returns a non-retryable [*SubscriptionCancelError]. When cancellation
 // follows [ErrSlowConsumer], Wait preserves both causes in the terminal error.
-func (s *Subscription[T]) Close() error {
+func (s *Subscription[T]) Close() {
 	s.cancel(nil, s.cancelFn)
-	return nil
 }
 
 // cancelOnce serializes public cancellation initiation. The shutdown cause is

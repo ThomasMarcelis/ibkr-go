@@ -101,7 +101,6 @@ var allInboundMsgIDs = []int{
 	protocol.InTickByTick,            // 99
 	protocol.InCompletedOrder,        // 101
 	protocol.InCompletedOrderEnd,     // 102
-	protocol.InReplaceFAEnd,          // 103
 	protocol.InUserInfo,              // 107
 	protocol.InHistoricalDataUpdate,  // 90
 	protocol.InHistoricalDataEnd,     // 108

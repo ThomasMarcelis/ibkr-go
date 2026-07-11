@@ -270,7 +270,7 @@ func TestFromCodecCompletedOrderRejectsMalformedTypedField(t *testing.T) {
 func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(codec.ExecutionDetail{
+	execution, err := fromCodecExecution(codec.ExecutionDetail{
 		OrderID:  42,
 		Contract: codec.Contract{Symbol: "AAPL"},
 		ExecID:   "0000e0d5.69dd4c37.01.01",
@@ -283,19 +283,16 @@ func TestFromCodecExecutionAcceptsNativeGatewayTime(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
 	}
-	if update.Execution == nil {
-		t.Fatal("Execution = nil, want decoded execution")
-	}
 	want := time.Date(2026, 4, 13, 17, 35, 50, 0, time.UTC)
-	if !update.Execution.Time.Equal(want) {
-		t.Fatalf("Execution.Time = %s, want %s", update.Execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
+	if !execution.Time.Equal(want) {
+		t.Fatalf("Execution.Time = %s, want %s", execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
 	}
 }
 
 func TestFromCodecExecutionProjectsCompleteClassicResult(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(codec.ExecutionDetail{
+	exec, err := fromCodecExecution(codec.ExecutionDetail{
 		OrderID: 1,
 		Contract: codec.Contract{
 			ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "IEX",
@@ -310,10 +307,6 @@ func TestFromCodecExecutionProjectsCompleteClassicResult(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("fromCodecExecution() error = %v", err)
-	}
-	exec := update.Execution
-	if exec == nil {
-		t.Fatal("Execution = nil")
 	}
 	if exec.Contract.ConID != 265598 || exec.Contract.Symbol != "AAPL" ||
 		exec.Contract.SecType != SecTypeStock || exec.Exchange != "IEX" {
@@ -337,7 +330,7 @@ func TestFromCodecExecutionProjectsCompleteClassicResult(t *testing.T) {
 func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 	t.Parallel()
 
-	update, err := fromCodecExecution(codec.ExecutionDetail{
+	execution, err := fromCodecExecution(codec.ExecutionDetail{
 		OrderID:  42,
 		Contract: codec.Contract{Symbol: "AAPL"},
 		ExecID:   "exec-1",
@@ -351,8 +344,8 @@ func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
 		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
 	}
 	want := time.Date(2026, 4, 5, 12, 1, 0, 0, time.UTC)
-	if !update.Execution.Time.Equal(want) {
-		t.Fatalf("Execution.Time = %s, want %s", update.Execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
+	if !execution.Time.Equal(want) {
+		t.Fatalf("Execution.Time = %s, want %s", execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
 	}
 }
 
@@ -368,14 +361,14 @@ func TestFromCodecExecutionOptionExerciseType(t *testing.T) {
 		{"future value is preserved", "444", OptionExerciseType(444)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			update, err := fromCodecExecution(codec.ExecutionDetail{
+			execution, err := fromCodecExecution(codec.ExecutionDetail{
 				Shares: "1", Price: "315.48", Time: "20260709 18:55:05 US/Eastern",
 				OptExerciseOrLapseType: tc.raw,
 			})
 			if err != nil {
 				t.Fatalf("fromCodecExecution() error = %v", err)
 			}
-			if got := update.Execution.OptionExerciseType; got != tc.want {
+			if got := execution.OptionExerciseType; got != tc.want {
 				t.Fatalf("OptionExerciseType = %d, want %d", got, tc.want)
 			}
 		})
@@ -457,7 +450,7 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 
 	const sentinel = "1.7976931348623157E308"
 
-	order, err := fromCodecOpenOrder(codec.OpenOrder{
+	_, state, err := decodeCodecOpenOrder(codec.OpenOrder{
 		OrderID:              1,
 		Account:              "DU12345",
 		Contract:             codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
@@ -480,30 +473,24 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 		MaxCommission:        sentinel,
 	})
 	if err != nil {
-		t.Fatalf("fromCodecOpenOrder() error = %v, want nil", err)
+		t.Fatalf("decodeCodecOpenOrder() error = %v, want nil", err)
 	}
-	if !order.Commission.IsZero() {
-		t.Errorf("Commission = %s, want zero (sentinel should decode as absent)", order.Commission.String())
-	}
-	if !order.MinCommission.IsZero() {
-		t.Errorf("MinCommission = %s, want zero", order.MinCommission.String())
-	}
-	if !order.MaxCommission.IsZero() {
-		t.Errorf("MaxCommission = %s, want zero", order.MaxCommission.String())
-	}
-	for name, got := range map[string]decimal.Decimal{
-		"InitMarginBefore":     order.InitMarginBefore,
-		"MaintMarginBefore":    order.MaintMarginBefore,
-		"EquityWithLoanBefore": order.EquityWithLoanBefore,
-		"InitMarginChange":     order.InitMarginChange,
-		"MaintMarginChange":    order.MaintMarginChange,
-		"EquityWithLoanChange": order.EquityWithLoanChange,
-		"InitMarginAfter":      order.InitMarginAfter,
-		"MaintMarginAfter":     order.MaintMarginAfter,
-		"EquityWithLoanAfter":  order.EquityWithLoanAfter,
+	for name, got := range map[string]*decimal.Decimal{
+		"InitMarginBefore":     state.InitMarginBefore,
+		"MaintMarginBefore":    state.MaintMarginBefore,
+		"EquityWithLoanBefore": state.EquityWithLoanBefore,
+		"InitMarginChange":     state.InitMarginChange,
+		"MaintMarginChange":    state.MaintMarginChange,
+		"EquityWithLoanChange": state.EquityWithLoanChange,
+		"InitMarginAfter":      state.InitMarginAfter,
+		"MaintMarginAfter":     state.MaintMarginAfter,
+		"EquityWithLoanAfter":  state.EquityWithLoanAfter,
+		"Commission":           state.Commission,
+		"CommissionMin":        state.CommissionMin,
+		"CommissionMax":        state.CommissionMax,
 	} {
-		if !got.IsZero() {
-			t.Errorf("%s = %s, want zero (sentinel should decode as absent)", name, got.String())
+		if got != nil {
+			t.Errorf("%s = %s, want nil (sentinel should decode as absent)", name, got)
 		}
 	}
 }

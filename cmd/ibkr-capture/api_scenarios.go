@@ -564,7 +564,7 @@ func runAPINewsBulletins(ctx context.Context, addr string, clientID int) error {
 			case <-timer.C:
 				break collect
 			case <-ctx.Done():
-				_ = sub.Close()
+				sub.Close()
 				return ctx.Err()
 			}
 		}
@@ -670,7 +670,7 @@ func runAPIDisplayGroupSubscription(ctx context.Context, addr string, clientID i
 			return update.ContractInfo != ""
 		})
 		if err != nil {
-			_ = handle.Close()
+			handle.Close()
 			_ = handle.Wait()
 			return fmt.Errorf("observe display group %d: %w", groups[0], err)
 		}
@@ -681,7 +681,7 @@ func runAPIDisplayGroupSubscription(ctx context.Context, addr string, clientID i
 		updated := current != "" && current != "none"
 		if updated {
 			if err := handle.Update(ctx, current); err != nil {
-				_ = handle.Close()
+				handle.Close()
 				_ = handle.Wait()
 				return fmt.Errorf("re-select display group %d contract %q: %w", groups[0], current, err)
 			}
@@ -752,16 +752,16 @@ func runAPIOpenOrdersAll(ctx context.Context, addr string, clientID int) error {
 
 func runAPIExecutionsSnapshot(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
+		executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
 		if err != nil {
 			return err
 		}
-		for _, update := range updates {
-			if (update.Execution == nil) == (update.CommissionAndFees == nil) {
-				return errors.New("execution snapshot update must contain exactly one payload")
+		for _, execution := range executions {
+			if execution.ExecID == "" {
+				return errors.New("execution snapshot returned an empty execution ID")
 			}
 		}
-		recordAPIEvent("executions", "snapshot", func(event *apiDriverEvent) { event.Count = len(updates) })
+		recordAPIEvent("executions", "snapshot", func(event *apiDriverEvent) { event.Count = len(executions) })
 		return nil
 	})
 }
@@ -1079,12 +1079,10 @@ func runAPISmartComponents(ctx context.Context, addr string, clientID int) error
 		}
 		components, err := client.Contracts().SmartComponents(ctx, bboExchange)
 		if err != nil {
-			_ = sub.Close()
+			sub.Close()
 			return err
 		}
-		if err := sub.Close(); err != nil {
-			return fmt.Errorf("close AAPL quote: %w", err)
-		}
+		sub.Close()
 		if err := sub.Wait(); err != nil {
 			return fmt.Errorf("wait for AAPL quote close: %w", err)
 		}
@@ -1126,7 +1124,7 @@ func fenceAPIWrites(ctx context.Context, client *ibkr.Client, label string) erro
 	return nil
 }
 
-func drainAccountSummaryEvents(sub *ibkr.Subscription[ibkr.AccountSummaryUpdate]) int {
+func drainAccountSummaryEvents(sub *ibkr.Subscription[ibkr.AccountValue]) int {
 	count := 0
 	for {
 		select {
@@ -1150,11 +1148,11 @@ func runAPIAccountSummaryStream(ctx context.Context, addr string, clientID int) 
 			return err
 		}
 		if err := sub.AwaitSnapshot(ctx); err != nil {
-			_ = sub.Close()
+			sub.Close()
 			return err
 		}
 		count := drainAccountSummaryEvents(sub)
-		_ = sub.Close()
+		sub.Close()
 		if err := sub.Wait(); err != nil {
 			return err
 		}
@@ -1181,23 +1179,23 @@ func runAPIAccountSummaryTwoSubscriptions(ctx context.Context, addr string, clie
 			Tags: []string{"TotalCashValue"},
 		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 		if err != nil {
-			_ = first.Close()
+			first.Close()
 			return err
 		}
 		if err := first.AwaitSnapshot(ctx); err != nil {
-			_ = first.Close()
-			_ = second.Close()
+			first.Close()
+			second.Close()
 			return fmt.Errorf("first account summary: %w", err)
 		}
 		if err := second.AwaitSnapshot(ctx); err != nil {
-			_ = first.Close()
-			_ = second.Close()
+			first.Close()
+			second.Close()
 			return fmt.Errorf("second account summary: %w", err)
 		}
 		firstCount := drainAccountSummaryEvents(first)
 		secondCount := drainAccountSummaryEvents(second)
-		_ = first.Close()
-		_ = second.Close()
+		first.Close()
+		second.Close()
 		if err := errors.Join(first.Wait(), second.Wait()); err != nil {
 			return fmt.Errorf("close account summaries: %w", err)
 		}
@@ -1277,11 +1275,11 @@ func runAPISetTypeSwitchWhileStreaming(ctx context.Context, addr string, clientI
 			return sawDelayedType && sawPriceOrSize
 		})
 		if err != nil {
-			_ = sub.Close()
+			sub.Close()
 			return fmt.Errorf("observe delayed AAPL quote stream: %w", err)
 		}
 		if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
-			_ = sub.Close()
+			sub.Close()
 			return fmt.Errorf("switch AAPL quote stream to live: %w", err)
 		}
 		if err := closeAndFenceSubscription(ctx, client, sub, "market-data type switch cancellation"); err != nil {
@@ -1360,32 +1358,27 @@ func runAPIQuoteStreamMultiAsset(ctx context.Context, addr string, clientID int)
 		}
 		eurusd, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiEURUSD}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 		if err != nil {
-			_ = aapl.Close()
+			aapl.Close()
 			return fmt.Errorf("subscribe EUR.USD quotes: %w", err)
 		}
 		aaplCount, err := awaitSubscriptionEvidence(ctx, aapl, 15*time.Second, func(update ibkr.QuoteUpdate) bool {
 			return update.Changed&apiQuotePriceOrSizeFields != 0
 		})
 		if err != nil {
-			_ = aapl.Close()
-			_ = eurusd.Close()
+			aapl.Close()
+			eurusd.Close()
 			return fmt.Errorf("observe AAPL quote stream: %w", err)
 		}
 		eurusdCount, err := awaitSubscriptionEvidence(ctx, eurusd, 15*time.Second, func(update ibkr.QuoteUpdate) bool {
 			return update.Changed&apiQuotePriceOrSizeFields != 0
 		})
 		if err != nil {
-			_ = aapl.Close()
-			_ = eurusd.Close()
+			aapl.Close()
+			eurusd.Close()
 			return fmt.Errorf("observe EUR.USD quote stream: %w", err)
 		}
-		if err := aapl.Close(); err != nil {
-			_ = eurusd.Close()
-			return fmt.Errorf("AAPL quote stream cancellation: %w", err)
-		}
-		if err := eurusd.Close(); err != nil {
-			return fmt.Errorf("EUR.USD quote stream cancellation: %w", err)
-		}
+		aapl.Close()
+		eurusd.Close()
 		if err := aapl.Wait(); err != nil {
 			return fmt.Errorf("AAPL quote stream cancellation wait: %w", err)
 		}
@@ -1481,7 +1474,7 @@ func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
 			sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: candidate.contract}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 			if err != nil {
 				for i := range probes {
-					_ = probes[i].sub.Close()
+					probes[i].sub.Close()
 					_ = probes[i].sub.Wait()
 				}
 				return fmt.Errorf("subscribe %s EFP quotes: %w", candidate.label, err)
@@ -1528,7 +1521,7 @@ func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
 		}
 
 		for i := range probes {
-			_ = probes[i].sub.Close()
+			probes[i].sub.Close()
 			if err := probes[i].sub.Wait(); err != nil {
 				if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {
 					recordSubscriptionRefusal("tick_efp_probe", probes[i].label, apiErr)
@@ -1779,9 +1772,7 @@ func awaitSubscriptionEvidence[T any](ctx context.Context, sub *ibkr.Subscriptio
 }
 
 func closeAndFenceSubscription[T any](ctx context.Context, client *ibkr.Client, sub *ibkr.Subscription[T], label string) error {
-	if err := sub.Close(); err != nil {
-		return fmt.Errorf("%s: %w", label, err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		return fmt.Errorf("%s wait: %w", label, err)
 	}
@@ -1985,10 +1976,10 @@ func runAPIHistoricalBarsKeepUp(ctx context.Context, addr string, clientID int) 
 				}
 				return errors.New("AAPL keep-up bars closed before the initial snapshot completed")
 			case <-timer.C:
-				_ = sub.Close()
+				sub.Close()
 				return errors.New("AAPL keep-up bars did not produce a nonempty initial snapshot within 20s")
 			case <-ctx.Done():
-				_ = sub.Close()
+				sub.Close()
 				return ctx.Err()
 			}
 		}
@@ -2197,7 +2188,7 @@ func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) e
 			if tc.modifyToFill && !obs.FullFill() {
 				order := tc.order
 				order.OrderType = ibkr.OrderTypeMarket
-				order.LmtPrice = decimal.Zero
+				order.LmtPrice = nil
 				if err := modifyAPIOrder(caseCtx, handle, tc.label+" modify", order); err != nil {
 					log.Printf("%s modify-to-fill error: %v", tc.label, err)
 				} else {
@@ -2243,7 +2234,7 @@ func runAPIOrderFillAAPL(ctx context.Context, addr string, clientID int) error {
 		}
 		_ = observeOrder(ctx, handle, "fill delayed resting", 8*time.Second)
 		resting.OrderType = ibkr.OrderTypeMarket
-		resting.LmtPrice = decimal.Zero
+		resting.LmtPrice = nil
 		if err := modifyAPIOrder(ctx, handle, "fill delayed modify", resting); err != nil {
 			log.Printf("fill delayed modify-to-market: %v", err)
 			cancelOrder(ctx, handle, "fill delayed")
@@ -2529,7 +2520,7 @@ func runAPIDelayedSuccessModifyAAPL(ctx context.Context, addr string, clientID i
 		_ = observeOrder(ctx, handle, "delayed resting", 10*time.Second)
 
 		order.OrderType = ibkr.OrderTypeMarket
-		order.LmtPrice = decimal.Zero
+		order.LmtPrice = nil
 		if err := modifyAPIOrder(ctx, handle, "delayed modified", order); err != nil {
 			return fmt.Errorf("modify resting order to market: %w", err)
 		}
@@ -2788,7 +2779,7 @@ func runAPIMarketDataCompletenessAAPL(ctx context.Context, addr string, clientID
 				continue
 			}
 			count := observeBars(caseCtx, sub, 12*time.Second)
-			_ = sub.Close()
+			sub.Close()
 			cancel()
 			recordProbeResult("realtime_bars", string(what), count, nil)
 		}
@@ -2815,7 +2806,7 @@ func runAPIMarketDataCompletenessAAPL(ctx context.Context, addr string, clientID
 				continue
 			}
 			count := observeTicks(caseCtx, sub, 12*time.Second)
-			_ = sub.Close()
+			sub.Close()
 			cancel()
 			recordProbeResult("tick_by_tick", tickCase.label, count, nil)
 		}
@@ -2836,7 +2827,7 @@ func runAPIPnL(ctx context.Context, addr string, clientID int) error {
 			return true
 		})
 		if err != nil {
-			_ = sub.Close()
+			sub.Close()
 			return fmt.Errorf("observe account PnL: %w", err)
 		}
 		if err := closeAndFenceSubscription(ctx, client, sub, "account PnL cancellation"); err != nil {
@@ -2891,7 +2882,7 @@ func runAPIPnLSingle(ctx context.Context, addr string, clientID int) error {
 			return true
 		})
 		if err != nil {
-			_ = sub.Close()
+			sub.Close()
 			return fmt.Errorf("observe %s single-position PnL: %w", held.Contract.Symbol, err)
 		}
 		if err := closeAndFenceSubscription(ctx, client, sub, "single-position PnL cancellation"); err != nil {
@@ -3403,7 +3394,7 @@ func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int
 		}
 		_ = observeOrder(ctx, stop, "stop-management stop", 8*time.Second)
 
-		stopOrder.AuxPrice = farBuy(anchor).Add(decimal.NewFromInt(1))
+		stopOrder.AuxPrice = new(farBuy(anchor).Add(decimal.NewFromInt(1)))
 		if err := modifyAPIOrder(ctx, stop, "stop-management moved stop", stopOrder); err != nil {
 			log.Printf("stop-management modify: %v", err)
 		}
@@ -3436,7 +3427,7 @@ func runAPIBracketTrailingStopAAPL(ctx context.Context, addr string, clientID in
 			return nil
 		}
 		trailingStopOrder := withParent(withTrailing(baseAPIOrder(account, parentOrder.Quantity, ibkr.ActionSell, ibkr.OrderTypeTrailingStop), anchor), parent.OrderID())
-		trailingStopOrder.TrailStopPrice = farBuy(anchor)
+		trailingStopOrder.TrailStopPrice = new(farBuy(anchor))
 		trailingStop, err := placeAPIOrder(ctx, client, "trailing bracket stop", apiAAPL, trailingStopOrder)
 		if err != nil {
 			log.Printf("trailing bracket stop: %v", err)
@@ -3497,8 +3488,11 @@ func runAPIOptionCampaignAAPL(ctx context.Context, addr string, clientID int) er
 				}
 			}
 		}
-		if err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{Contract: opt, ExerciseAction: ibkr.Lapse, ExerciseQuantity: 1, Account: account, Override: false}); err != nil {
+		exercise, err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{Contract: opt, ExerciseAction: ibkr.Lapse, ExerciseQuantity: 1, Account: account, Override: false})
+		if err != nil {
 			log.Printf("option lapse response: %v", err)
+		} else {
+			defer exercise.Close()
 		}
 		queryAAPLExecutions(client, account)
 		queryCompleted(client, "option completed orders")
@@ -3773,13 +3767,9 @@ func runAPIDuplicateQuoteSubscriptionsAAPL(ctx context.Context, addr string, cli
 		if second != nil {
 			observeQuotes(ctx, second, "duplicate quote second", 8*time.Second)
 		}
-		if err := first.Close(); err != nil {
-			return fmt.Errorf("close first duplicate quote subscription: %w", err)
-		}
+		first.Close()
 		if second != nil {
-			if err := second.Close(); err != nil {
-				return fmt.Errorf("close second duplicate quote subscription: %w", err)
-			}
+			second.Close()
 		}
 		if err := first.Wait(); err != nil {
 			return fmt.Errorf("wait for first duplicate quote subscription: %w", err)
@@ -4164,7 +4154,7 @@ func modifyAPIOrder(ctx context.Context, handle *ibkr.OrderHandle, label string,
 		event.AuxPrice = order.AuxPrice.String()
 		event.ParentID = order.ParentID
 	})
-	if err := handle.Modify(ctx, order); err != nil {
+	if err := handle.Replace(ctx, order); err != nil {
 		recordAPIEvent("modify_order_error", label, func(event *apiDriverEvent) {
 			event.OrderID = handle.OrderID()
 			event.Error = err.Error()
@@ -4182,12 +4172,12 @@ func clientReady(client *ibkr.Client) bool {
 }
 
 func withLimit(order ibkr.Order, price decimal.Decimal) ibkr.Order {
-	order.LmtPrice = price.Round(2)
+	order.LmtPrice = new(price.Round(2))
 	return order
 }
 
 func withAux(order ibkr.Order, price decimal.Decimal) ibkr.Order {
-	order.AuxPrice = price.Round(2)
+	order.AuxPrice = new(price.Round(2))
 	return order
 }
 
@@ -4207,14 +4197,14 @@ func withOCA(order ibkr.Order, group string) ibkr.Order {
 }
 
 func withTrailing(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
-	order.TrailStopPrice = farSell(anchor)
-	order.AuxPrice = decimal.RequireFromString("1")
+	order.TrailStopPrice = new(farSell(anchor))
+	order.AuxPrice = new(decimal.RequireFromString("1"))
 	return order
 }
 
 func withTrailingLimit(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
-	order.TrailStopPrice = farSell(anchor)
-	order.AuxPrice = decimal.RequireFromString("1")
+	order.TrailStopPrice = new(farSell(anchor))
+	order.AuxPrice = new(decimal.RequireFromString("1"))
 	order.Adjustment.LmtPriceOffset = decimal.RequireFromString("0.05")
 	return order
 }
@@ -4241,18 +4231,18 @@ func withAllOrNone(order ibkr.Order) ibkr.Order {
 
 func withMinQty(order ibkr.Order, quantity decimal.Decimal, minQty decimal.Decimal) ibkr.Order {
 	order.Quantity = quantity
-	order.MinQty = minQty
+	order.MinQty = new(minQty)
 	return order
 }
 
 func withPercentOffset(order ibkr.Order, percent decimal.Decimal) ibkr.Order {
-	order.PercentOffset = percent
+	order.PercentOffset = new(percent)
 	return order
 }
 
 func withTrailingPercent(order ibkr.Order, anchor decimal.Decimal, percent decimal.Decimal) ibkr.Order {
-	order.TrailStopPrice = farSell(anchor)
-	order.TrailingPercent = percent
+	order.TrailStopPrice = new(farSell(anchor))
+	order.TrailingPercent = new(percent)
 	return order
 }
 
@@ -5152,7 +5142,7 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 
 		// Far LMT rest.
 		order := baseAPIOrder(account, decimal.NewFromInt(100000), ibkr.ActionBuy, ibkr.OrderTypeLimit)
-		order.LmtPrice = anchor.Mul(decimal.RequireFromString("0.90")).Round(5)
+		order.LmtPrice = new(anchor.Mul(decimal.RequireFromString("0.90")).Round(5))
 
 		handle, err := placeAPIOrder(ctx, client, "forex rest", apiEURUSD, order)
 		if err != nil {
@@ -5162,7 +5152,7 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 		_ = observeOrder(ctx, handle, "forex rest", 8*time.Second)
 
 		// Modify price.
-		order.LmtPrice = anchor.Mul(decimal.RequireFromString("0.92")).Round(5)
+		order.LmtPrice = new(anchor.Mul(decimal.RequireFromString("0.92")).Round(5))
 		if err := modifyAPIOrder(ctx, handle, "forex modified", order); err != nil {
 			log.Printf("forex modify: %v", err)
 		}
@@ -5278,7 +5268,7 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 
 		// Protective stop-loss.
 		stopOrder := baseAPIOrder(account, filledQty, ibkr.ActionSell, ibkr.OrderTypeStop)
-		stopOrder.AuxPrice = farBuy(anchor)
+		stopOrder.AuxPrice = new(farBuy(anchor))
 		stopOrder.TIF = ibkr.TIFGTC
 		stopHandle, err := placeAPIOrder(ctx, client, "scale stop-loss", apiAAPL, stopOrder)
 		if err != nil {
@@ -5306,7 +5296,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 
 		// IOC marketable.
 		iocOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
-		iocOrder.LmtPrice = marketableBuy(anchor)
+		iocOrder.LmtPrice = new(marketableBuy(anchor))
 		iocOrder.TIF = ibkr.TIFIOC
 		handle, err := placeAPIOrder(ctx, client, "ioc marketable", apiAAPL, iocOrder)
 		if err != nil {
@@ -5322,7 +5312,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 
 		// FOK marketable.
 		fokOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
-		fokOrder.LmtPrice = marketableBuy(anchor)
+		fokOrder.LmtPrice = new(marketableBuy(anchor))
 		fokOrder.TIF = ibkr.TIFFOK
 		handle, err = placeAPIOrder(ctx, client, "fok fillable", apiAAPL, fokOrder)
 		if err != nil {
@@ -5338,7 +5328,7 @@ func runAPIIOCFOKAAPL(ctx context.Context, addr string, clientID int) error {
 
 		// FOK unfillable.
 		fokFarOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
-		fokFarOrder.LmtPrice = farBuy(anchor)
+		fokFarOrder.LmtPrice = new(farBuy(anchor))
 		fokFarOrder.TIF = ibkr.TIFFOK
 		handle, err = placeAPIOrder(ctx, client, "fok unfillable", apiAAPL, fokFarOrder)
 		if err != nil {
@@ -5382,13 +5372,14 @@ func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) er
 			log.Printf("exercise buy did not fill; exercising anyway to capture the no-position response")
 		}
 
-		if err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{Contract: opt, ExerciseAction: ibkr.Exercise, ExerciseQuantity: 1, Account: account, Override: false}); err != nil {
+		exercise, err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{Contract: opt, ExerciseAction: ibkr.Exercise, ExerciseQuantity: 1, Account: account, Override: false})
+		if err != nil {
 			log.Printf("exercise response: %v", err)
 		} else {
-			log.Printf("exercise request sent")
+			defer exercise.Close()
+			log.Printf("exercise request admitted with request id %d", exercise.RequestID())
 		}
-		// Exercise is fire-and-forget; hold the session open for the
-		// follow-up order/position/error traffic the Gateway emits.
+		// Hold the session open for the follow-up order and position traffic.
 		time.Sleep(20 * time.Second)
 		queryAAPLExecutions(client, account)
 		return nil
@@ -5465,22 +5456,6 @@ func runAPIHedgeOrderAAPL(ctx context.Context, addr string, clientID int) error 
 			cancelOrder(ctx, handle, h.label)
 		}
 		cancelOrder(ctx, parentHandle, "hedge parent")
-		return nil
-	})
-}
-
-func runAPIFAReplaceNonFA(ctx context.Context, addr string, clientID int) error {
-	return apiTradingScenario(ctx, addr, clientID, 2*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
-		groups := ibkr.XMLDocument(`<?xml version="1.0" encoding="UTF-8"?><ListOfGroups><Group><name>capture_probe</name><defaultMethod>EqualQuantity</defaultMethod><ListOfAccts varName="list"><Account><acct>` + account + `</acct></Account></ListOfAccts></Group></ListOfGroups>`)
-		if err := client.Advisors().ReplaceConfig(ctx, ibkr.FADataGroups, groups); err != nil {
-			log.Printf("fa replace response: %v", err)
-			recordAPIEvent("fa_replace_error", "groups", func(event *apiDriverEvent) {
-				event.Account = account
-				event.Error = err.Error()
-			})
-			return nil
-		}
-		log.Printf("fa replace accepted")
 		return nil
 	})
 }

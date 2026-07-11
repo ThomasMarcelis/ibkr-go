@@ -17,8 +17,6 @@ func TestOutboundProtobufMigrationGates(t *testing.T) {
 		{OutReqCompletedOrders, 204},
 		{OutReqContractData, 205},
 		{OutReqAccountSummary, 207},
-		{OutStartAPI, 213},
-		{OutReqConfig, 219},
 	} {
 		got, ok := OutboundProtobufVersion(tc.msgID)
 		if !ok || got != tc.want {

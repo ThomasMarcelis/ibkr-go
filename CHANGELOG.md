@@ -98,6 +98,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed (breaking)
 
+- The supported Gateway range is now exactly `server_version` 200..207.
+  Pre-200 compatibility branches and unimplemented post-207 migration claims
+  have been removed.
+
+- `Subscription.Close` and `OrderHandle.Close` no longer return a redundant
+  error; terminal observation errors remain available through `Wait` and
+  `Err`. `OrderHandle.Modify` is now `OrderHandle.Replace`.
+
+- Account-summary and position subscriptions emit `AccountValue` and
+  `Position` directly. Optional monetary outputs and optional order inputs use
+  pointers so absence is distinct from literal zero.
+
+- `Orders().Executions` returns executions only. Commission callbacks remain
+  correlated to `OrderHandle` events. `Options().Exercise` now returns an
+  `ExerciseHandle`, and the unsupported FA configuration mutation was removed.
+
 - **The legacy `ibkr-probe` diagnostic command has been removed.** Maintained
   workflows use `ibkr-doctor` for session diagnostics and
   `ibkr-recorder`/`ibkr-capture`/`ibkr-normalize` for raw protocol evidence.
@@ -199,13 +215,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   exchange, permanent/client IDs, cumulative quantity, average price, order
   reference, economic-value fields, model, liquidity, price-revision state,
   and submitter. `ExecutionsRequest` adds client, time, security type,
-  exchange, side, last-days, and specific-date filters. The date filters fail
-  locally below server version 200 instead of disappearing from the wire.
+  exchange, side, last-days, and specific-date filters.
 
 - **Execution costs use current commission-and-fees terminology and preserve
   absence.** `CommissionReport` becomes `CommissionAndFeesReport`, and the
-  `Commission` union fields on `ExecutionUpdate` and `OrderEvent` become
-  `CommissionAndFees`. `Amount`, `RealizedPNL`, and `BondYield` are pointers:
+  `Commission` on `OrderEvent` becomes `CommissionAndFees`. `Amount`,
+  `RealizedPNL`, and `BondYield` are pointers:
   nil means IBKR sent an unset sentinel, while a pointer to zero means a real
   computed zero. Yield redemption dates are retained as validated `YYYYMMDD`
   strings. The decoder no longer discards the classic yield/date tail.
@@ -260,7 +275,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   ```
 
 - **Order identity and preview mode are operation-owned.** `Order` no longer
-  exposes `OrderID` or `WhatIf`. `Place` allocates a new ID, `Modify` always
+  exposes `OrderID` or `WhatIf`. `Place` allocates a new ID, `Replace` always
   uses its handle's bound ID, and `Preview` sets the wire-level what-if flag
   while returning the Gateway's margin-and-commission block as an
   `OrderState`.
@@ -282,7 +297,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `*net.Dialer` and any existing custom dialer keep compiling unchanged;
   only code that named the internal type in its own signature needs to
   switch to `ibkr.Dialer`.
-- **The client negotiates IB Gateway `server_version` 176..207, with exact 201
+- **The client negotiates IB Gateway `server_version` 200..207, with exact 201
   adding raw message IDs and protobuf executions, exact 202 adding the
   zero-strike contract boundary, exact 203 migrating the order lifecycle,
   exact 204 migrating open/completed-order queries and completed results,
@@ -292,8 +307,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   layout. The classic sv200, mixed-envelope sv201, zero-strike sv202,
   order-protobuf sv203, completed-order-protobuf sv204, contract-data sv205,
   market-data sv206, and accounts/positions sv207
-  boundaries are live-attested; versions 176..199 remain compatibility paths
-  until independently evidenced, and 208+ is not advertised. The official API
+  boundaries are live-attested, and 208+ is not advertised. The official API
   10.48.01 migration table moves no message at 202; a sanitized live replay
   freezes a protobuf execution Contract with both conId and explicit strike=0.
   `CurrentTimeMillis` returns
@@ -476,8 +490,8 @@ Every breaking change in this release, before → after:
   what-if flag.
 
   ```go
-  order.OrderID = handle.OrderID() // before Modify
-  err := handle.Modify(ctx, order) // after: the handle supplies its ID
+  order.OrderID = handle.OrderID() // before
+  err := handle.Replace(ctx, order) // after: the handle supplies its ID
 
   order.WhatIf = ptr(true)                     // before a preview
   state, err := client.Orders().Preview(ctx, req) // after: Preview sets it

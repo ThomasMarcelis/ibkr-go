@@ -6,8 +6,8 @@ import (
 
 // AccountSummaryRequest selects the IBKR account group, optional local account
 // filter, and summary tags for [AccountsClient.Summary]. An empty Group requests
-// "All", an empty AccountFilter accepts every returned account, and empty Tags
-// request all tags.
+// "All", and an empty AccountFilter accepts every returned account. Tags must
+// contain at least one nonempty IBKR summary tag.
 type AccountSummaryRequest struct {
 	Group         string   // IBKR account group; empty requests "All"
 	AccountFilter string   // exact returned account to accept; empty accepts all
@@ -23,11 +23,6 @@ type AccountValue struct {
 	Currency string
 }
 
-// AccountSummaryUpdate is one event from an account summary subscription.
-type AccountSummaryUpdate struct {
-	Value AccountValue
-}
-
 // Position is a held position: the signed quantity and average cost of a
 // contract in an account.
 type Position struct {
@@ -35,11 +30,6 @@ type Position struct {
 	Contract Contract
 	Position decimal.Decimal // signed quantity; negative is short
 	AvgCost  decimal.Decimal
-}
-
-// PositionUpdate is one event from a positions subscription.
-type PositionUpdate struct {
-	Position Position
 }
 
 // FamilyCode maps an account ID to its family code, returned by
@@ -59,16 +49,17 @@ type AccountUpdateValue struct {
 }
 
 // PortfolioUpdate is one portfolio position from an account-updates
-// subscription, with live valuation and P&L.
+// subscription. Monetary pointers preserve the difference between an omitted
+// IBKR value and a reported zero.
 type PortfolioUpdate struct {
 	Account       string
 	Contract      Contract
 	Position      decimal.Decimal // signed quantity; negative is short
-	MarketPrice   decimal.Decimal
-	MarketValue   decimal.Decimal
-	AvgCost       decimal.Decimal
-	UnrealizedPNL decimal.Decimal
-	RealizedPNL   decimal.Decimal
+	MarketPrice   *decimal.Decimal
+	MarketValue   *decimal.Decimal
+	AvgCost       *decimal.Decimal
+	UnrealizedPNL *decimal.Decimal
+	RealizedPNL   *decimal.Decimal
 }
 
 // AccountUpdate is a union event from SubscribeAccountUpdates. Exactly one field is non-nil.
@@ -119,11 +110,12 @@ type PnLRequest struct {
 	ModelCode string
 }
 
-// PnLUpdate is an account-level profit-and-loss snapshot.
+// PnLUpdate is an account-level profit-and-loss snapshot. A nil field was
+// omitted by IBKR; a non-nil zero is a reported zero.
 type PnLUpdate struct {
-	DailyPnL      decimal.Decimal
-	UnrealizedPnL decimal.Decimal
-	RealizedPnL   decimal.Decimal
+	DailyPnL      *decimal.Decimal
+	UnrealizedPnL *decimal.Decimal
+	RealizedPnL   *decimal.Decimal
 }
 
 // PnLSingleRequest selects the account, advisor model, and contract for a
@@ -134,11 +126,12 @@ type PnLSingleRequest struct {
 	ConID     int // contract ID of the position to track
 }
 
-// PnLSingleUpdate is a single-position profit-and-loss snapshot.
+// PnLSingleUpdate is a single-position profit-and-loss snapshot. Optional
+// monetary pointers use the same omitted-versus-zero convention as PnLUpdate.
 type PnLSingleUpdate struct {
 	Position      decimal.Decimal // current position size
-	DailyPnL      decimal.Decimal
-	UnrealizedPnL decimal.Decimal
-	RealizedPnL   decimal.Decimal
-	Value         decimal.Decimal // current market value of the position
+	DailyPnL      *decimal.Decimal
+	UnrealizedPnL *decimal.Decimal
+	RealizedPnL   *decimal.Decimal
+	Value         *decimal.Decimal // current market value of the position
 }

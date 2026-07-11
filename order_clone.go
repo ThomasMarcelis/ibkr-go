@@ -17,6 +17,27 @@ func clonePlaceBracketRequest(req PlaceBracketRequest) PlaceBracketRequest {
 }
 
 func cloneOrder(order Order) Order {
+	if order.LmtPrice != nil {
+		order.LmtPrice = new(*order.LmtPrice)
+	}
+	if order.AuxPrice != nil {
+		order.AuxPrice = new(*order.AuxPrice)
+	}
+	if order.MinQty != nil {
+		order.MinQty = new(*order.MinQty)
+	}
+	if order.PercentOffset != nil {
+		order.PercentOffset = new(*order.PercentOffset)
+	}
+	if order.TrailStopPrice != nil {
+		order.TrailStopPrice = new(*order.TrailStopPrice)
+	}
+	if order.TrailingPercent != nil {
+		order.TrailingPercent = new(*order.TrailingPercent)
+	}
+	if order.CashQty != nil {
+		order.CashQty = new(*order.CashQty)
+	}
 	if order.Transmit != nil {
 		order.Transmit = new(*order.Transmit)
 	}

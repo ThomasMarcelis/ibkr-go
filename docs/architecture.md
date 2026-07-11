@@ -13,9 +13,7 @@ open/completed-order query family and completed-order replies. Exact 205
 migrates contract-details requests and replies. Exact 206 migrates quote,
 market-depth, and market-data-type requests plus their L1/depth callbacks.
 Exact 207 migrates the accounts and positions request/callback family. The
-session handshake can negotiate 176..207 and gates fields on the returned
-version, but 176..199 remain compatibility paths rather than advertised support
-until each has independent evidence. Version 208 and newer remain unsupported
+session handshake accepts 200..207. Version 208 and newer remain unsupported
 until their staged protobuf migrations are implemented and live-attested.
 
 ## Layers
@@ -140,19 +138,16 @@ singleton open-orders observer.
   captures it by value when it attaches a transport, so each reconnect
   decodes with its own freshly negotiated version even if the Gateway answers
   differently on redial.
-- Wire fields introduced above `minServerVersion` (176) branch on `sv` at the
-  call site instead of assuming the maximum. Gated areas include outbound
-  `placeOrder`, cancel, global-cancel, exercise-options, and executions
-  fields; inbound `errMsg` layout, `contractData` last-trade-date,
-  `openOrder` FA-profile and order-preview blocks, and historical-data inline
-  dataset dates. `internal/protocol/version.go` names each gate after the
-  official client's `MIN_SERVER_VER_*` constant.
+- The supported range is exactly 200..207. Version 200 owns one fixed classic
+  layout; versions 201..207 progressively switch the message families named in
+  `internal/protocol/version.go` to protobuf. Handshake rejects versions outside
+  that range instead of carrying dead classic-layout compatibility branches.
 - `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
   boundary it could not fully resolve, so a degraded parse is observable
   instead of silently dropping fields.
 - The advertised handshake maximum (`maxServerVersion`, currently 207) is a
   package-level override point used only by the version-matrix live tests to
-  force a session onto an older wire layout for verification; production
+  force a lower supported layout for verification; production
   code always advertises the maximum.
 
 ## Order ID Management
@@ -197,7 +192,7 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 - **Close()** detaches the handle from the engine. The order continues
   executing on the server; the caller simply stops receiving events.
 - **Cancel(ctx)** sends a CancelOrder request for this order.
-- **Modify(order)** sends a modified PlaceOrder with the same OrderID.
+- **Replace(order)** sends a modified PlaceOrder with the same OrderID.
 
 ## Protocol Realities
 

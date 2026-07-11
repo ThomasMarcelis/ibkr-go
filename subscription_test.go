@@ -13,9 +13,7 @@ func TestSubscriptionCloseWaitsForCloseWithErr(t *testing.T) {
 		sub.closeWithErr(nil)
 	})
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
 	}

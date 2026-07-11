@@ -7,10 +7,9 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates `server_version` 176..207; the Gateway's answer below
-176 is rejected during handshake, and wire fields introduced above 176 are
-gated on whatever version the Gateway actually negotiates. `sv200` remains
-the classic live-validated layout; exact `sv201` adds the raw-ID envelope and
+The client negotiates `server_version` 200..207; answers outside that range
+are rejected during handshake. `sv200` is the classic live-validated layout;
+exact `sv201` adds the raw-ID envelope and
 protobuf executions family, while exact `sv202` adds zero-strike contract
 semantics without migrating another message family. Exact `sv203` migrates
 place order, targeted cancel, global cancel, and the corresponding
@@ -64,7 +63,7 @@ type Subscription[T any] struct {
     Done() <-chan struct{}
     Err() error
     Wait() error
-    Close() error
+    Close()
 }
 ```
 
@@ -147,7 +146,7 @@ Default subscription behavior:
 `Orders().Place(ctx, req)` sends a live order and returns an `OrderHandle`.
 It validates the contract, core order fields, and structural relationships in
 advanced order settings before anything reaches the wire. The operation owns
-the wire-level what-if flag: `Place` and `OrderHandle.Modify` submit live
+the wire-level what-if flag: `Place` and `OrderHandle.Replace` submit live
 orders, while `Orders().Preview` performs the margin/commission query without
 creating an `OrderHandle`.
 
@@ -189,9 +188,9 @@ func (h *OrderHandle) Events() <-chan OrderEvent
 func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent
 func (h *OrderHandle) Done() <-chan struct{}
 func (h *OrderHandle) Wait() error
-func (h *OrderHandle) Close() error
+func (h *OrderHandle) Close()
 func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error
-func (h *OrderHandle) Modify(ctx context.Context, order Order) error
+func (h *OrderHandle) Replace(ctx context.Context, order Order) error
 ```
 
 `Orders().Place` returns an `OrderHandle` that tracks a single order's
@@ -210,7 +209,7 @@ stable coordinate for open-order reconciliation and direct cancellation.
 bounded and observational. `Close()` detaches the handle without cancelling the
 server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
 can attach the manual cancel time, external operator, and manual-order
-indicator through `CancelOption`. `Modify(ctx, order)` sends a modified order
+indicator through `CancelOption`. `Replace(ctx, order)` sends a modified order
 with the same OrderID.
 
 `Events()` closes before `Done()`. Consumers that need every order event,

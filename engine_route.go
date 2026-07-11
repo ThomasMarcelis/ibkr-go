@@ -316,8 +316,8 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		}
 		// A reqID-targeted error that matches no keyed route and no order
 		// route is surfaced as a session event rather than dropped: it is the
-		// only trace of failures on fire-and-forget request ids (e.g. an
-		// option-exercise refusal on an id whose route is already gone).
+		// only trace of failures on request ids whose observation has ended
+		// (for example, a late option-exercise refusal).
 		e.emitEvent(msg.Code, msg.Message)
 		return
 	}
@@ -381,8 +381,8 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	// the blocked PreviewOrder caller. No OrderHandle is ever involved.
 	if preview, ok := e.previews[msg.OrderID]; ok {
 		delete(e.previews, msg.OrderID)
-		order, err := fromCodecOpenOrder(msg)
-		preview.resolve(previewResult{order: order, err: err})
+		_, state, err := decodeCodecOpenOrder(msg)
+		preview.resolve(previewResult{state: state, err: err})
 		return
 	}
 
@@ -533,25 +533,13 @@ func (e *engine) activeAccountSummarySubscriptions() int {
 }
 
 func (e *engine) deleteKeyedRoute(reqID int) {
-	route, ok := e.keyed[reqID]
-	if !ok {
+	if _, ok := e.keyed[reqID]; !ok {
 		return
 	}
 	delete(e.keyed, reqID)
-	if route.opKind == OpExecutions {
-		e.executions.unregisterRoute(reqID)
-	}
 }
 
 func (e *engine) routeCommissionReport(report codec.CommissionReport) {
-	for _, reqID := range e.executions.recordCommission(report) {
-		route, found := e.keyed[reqID]
-		if !found || route.opKind != OpExecutions {
-			continue
-		}
-		route.handle(report, e)
-	}
-	// Also dispatch to the order handle that owns this execution.
 	st, ok := e.execDeliveries[report.ExecID]
 	if !ok {
 		// No execution detail has claimed this ExecID yet: the Gateway can
@@ -623,7 +611,7 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 			"order_id", m.OrderID, "exec_id", m.ExecID, "err", err)
 		return
 	}
-	if !or.handle.emitExecution(*exec.Execution) {
+	if !or.handle.emitExecution(exec) {
 		e.closeOrderRoute(m.OrderID, or, nil)
 		return
 	}
@@ -639,23 +627,4 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	for _, buffered := range pending {
 		e.deliverCommissionToOrder(st, buffered)
 	}
-}
-
-func (e *engine) undeliveredCommissions(reqID int, execID string) []codec.CommissionReport {
-	return e.executions.undeliveredCommissions(reqID, execID)
-}
-
-func (e *engine) emitUndeliveredExecutionCommissions(reqID int, execID string, sub *Subscription[ExecutionUpdate]) bool {
-	for _, commissionMsg := range e.undeliveredCommissions(reqID, execID) {
-		report, err := fromCodecCommission(commissionMsg)
-		if err != nil {
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(err)
-			return false
-		}
-		if !sub.emit(ExecutionUpdate{CommissionAndFees: &report}) {
-			return false
-		}
-	}
-	return true
 }

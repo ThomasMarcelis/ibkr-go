@@ -3,6 +3,7 @@ package ibkr
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/shopspring/decimal"
@@ -13,13 +14,21 @@ func (e *engine) AccountSummary(ctx context.Context, req AccountSummaryRequest) 
 	if err != nil {
 		return nil, err
 	}
-	return collectSnapshotAndClose(ctx, sub, func(update AccountSummaryUpdate) (AccountValue, bool) { return update.Value, true })
+	return collectSnapshotAndClose(ctx, sub, func(value AccountValue) (AccountValue, bool) { return value, true })
 }
 
-func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountSummaryUpdate], error) {
+func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummaryRequest, opts ...SubscriptionOption) (*Subscription[AccountValue], error) {
 	req = cloneAccountSummaryRequest(req)
+	if len(req.Tags) == 0 {
+		return nil, &ValidationError{Field: "AccountSummaryRequest.Tags", Message: "must contain at least one tag"}
+	}
+	for i, tag := range req.Tags {
+		if strings.TrimSpace(tag) == "" {
+			return nil, &ValidationError{Field: fmt.Sprintf("AccountSummaryRequest.Tags[%d]", i), Message: "must not be empty"}
+		}
+	}
 	type result struct {
-		sub *Subscription[AccountSummaryUpdate]
+		sub *Subscription[AccountValue]
 		err error
 	}
 	resp := make(chan result, 1)
@@ -38,7 +47,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 
 		reqID := e.allocReqID()
 		plan := newAccountSummaryPlan(reqID, req)
-		sub, ownedRoute := newKeyedSubscriptionRoute[AccountSummaryUpdate](
+		sub, ownedRoute := newKeyedSubscriptionRoute[AccountValue](
 			e, cfg, reqID, OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID},
 		)
 		sub.expectSnapshot()
@@ -50,13 +59,11 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 				if !plan.matches(m.Account) {
 					return
 				}
-				sub.emit(AccountSummaryUpdate{
-					Value: AccountValue{
-						Account:  m.Account,
-						Tag:      m.Tag,
-						Value:    m.Value,
-						Currency: m.Currency,
-					},
+				sub.emit(AccountValue{
+					Account:  m.Account,
+					Tag:      m.Tag,
+					Value:    m.Value,
+					Currency: m.Currency,
 				})
 			case codec.AccountSummaryEnd:
 				sub.emitState(SubscriptionStateEvent{
@@ -91,7 +98,7 @@ func (e *engine) PositionsSnapshot(ctx context.Context) ([]Position, error) {
 	if err != nil {
 		return nil, err
 	}
-	return collectSnapshotAndClose(ctx, sub, func(update PositionUpdate) (Position, bool) { return update.Position, true })
+	return collectSnapshotAndClose(ctx, sub, func(position Position) (Position, bool) { return position, true })
 }
 
 func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
@@ -131,18 +138,16 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonManagedAccounts) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return nil, err
 	}
 	return out.accounts, out.err
 }
 
-func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[PositionUpdate], error) {
+func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOption) (*Subscription[Position], error) {
 	type result struct {
-		sub *Subscription[PositionUpdate]
+		sub *Subscription[Position]
 		err error
 	}
 	resp := make(chan result, 1)
@@ -158,7 +163,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			resp <- result{err: err}
 			return
 		}
-		sub, ownedRoute := newSingletonSubscriptionRoute[PositionUpdate](
+		sub, ownedRoute := newSingletonSubscriptionRoute[Position](
 			e, cfg, singletonPositions, OpPositions, codec.CancelPositions{},
 		)
 		sub.expectSnapshot()
@@ -173,7 +178,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 					sub.closeWithErr(err)
 					return
 				}
-				sub.emit(PositionUpdate{Position: position})
+				sub.emit(position)
 			case codec.PositionEnd:
 				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 			}
@@ -239,9 +244,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonFamilyCodes) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -304,31 +307,31 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					sub.closeWithErr(err)
 					return
 				}
-				marketPrice, err := parseOptionalDecimal(m.MarketPrice, "account updates market price")
+				marketPrice, err := parseOptionalDecimalPointer(m.MarketPrice, "account updates market price")
 				if err != nil {
 					delete(e.singletons, singletonAccountUpdates)
 					sub.closeWithErr(err)
 					return
 				}
-				marketValue, err := parseOptionalDecimal(m.MarketValue, "account updates market value")
+				marketValue, err := parseOptionalDecimalPointer(m.MarketValue, "account updates market value")
 				if err != nil {
 					delete(e.singletons, singletonAccountUpdates)
 					sub.closeWithErr(err)
 					return
 				}
-				avgCost, err := parseOptionalDecimal(m.AvgCost, "account updates average cost")
+				avgCost, err := parseOptionalDecimalPointer(m.AvgCost, "account updates average cost")
 				if err != nil {
 					delete(e.singletons, singletonAccountUpdates)
 					sub.closeWithErr(err)
 					return
 				}
-				unrealizedPNL, err := parseOptionalDecimal(m.UnrealizedPNL, "account updates unrealized pnl")
+				unrealizedPNL, err := parseOptionalDecimalPointer(m.UnrealizedPNL, "account updates unrealized pnl")
 				if err != nil {
 					delete(e.singletons, singletonAccountUpdates)
 					sub.closeWithErr(err)
 					return
 				}
-				realizedPNL, err := parseOptionalDecimal(m.RealizedPNL, "account updates realized pnl")
+				realizedPNL, err := parseOptionalDecimalPointer(m.RealizedPNL, "account updates realized pnl")
 				if err != nil {
 					delete(e.singletons, singletonAccountUpdates)
 					sub.closeWithErr(err)
@@ -535,19 +538,19 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 		ownedRoute.request = codec.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.PnLValue); ok {
-				daily, err := parseOptionalDecimal(m.DailyPnL, "pnl daily")
+				daily, err := parseOptionalDecimalPointer(m.DailyPnL, "pnl daily")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
 					return
 				}
-				unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl unrealized")
+				unrealized, err := parseOptionalDecimalPointer(m.UnrealizedPnL, "pnl unrealized")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
 					return
 				}
-				realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl realized")
+				realized, err := parseOptionalDecimalPointer(m.RealizedPnL, "pnl realized")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
@@ -604,25 +607,25 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 					sub.closeWithErr(err)
 					return
 				}
-				daily, err := parseOptionalDecimal(m.DailyPnL, "pnl single daily")
+				daily, err := parseOptionalDecimalPointer(m.DailyPnL, "pnl single daily")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
 					return
 				}
-				unrealized, err := parseOptionalDecimal(m.UnrealizedPnL, "pnl single unrealized")
+				unrealized, err := parseOptionalDecimalPointer(m.UnrealizedPnL, "pnl single unrealized")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
 					return
 				}
-				realized, err := parseOptionalDecimal(m.RealizedPnL, "pnl single realized")
+				realized, err := parseOptionalDecimalPointer(m.RealizedPnL, "pnl single realized")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)
 					return
 				}
-				value, err := parseOptionalDecimal(m.Value, "pnl single value")
+				value, err := parseOptionalDecimalPointer(m.Value, "pnl single value")
 				if err != nil {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(err)

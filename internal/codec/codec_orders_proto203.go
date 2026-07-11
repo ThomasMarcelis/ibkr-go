@@ -6,18 +6,10 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
-func (PlaceOrderRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufPlaceOrder
-}
-
 func (m PlaceOrderRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: place order protobuf requires server_version %d", m.protobufVersion())
-	}
 	orderID, err := protoInt32FromInt64(m.OrderID, "place order id")
 	if err != nil {
 		return nil, err
@@ -39,14 +31,7 @@ func (m PlaceOrderRequest) encodeProto(sv int) ([]byte, error) {
 	return appendProtoMessage(body, 4, nil), nil
 }
 
-func (CancelOrderRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufPlaceOrder
-}
-
 func (m CancelOrderRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: cancel order protobuf requires server_version %d", m.protobufVersion())
-	}
 	orderID, err := protoInt32FromInt64(m.OrderID, "cancel order id")
 	if err != nil {
 		return nil, err
@@ -59,14 +44,7 @@ func (m CancelOrderRequest) encodeProto(sv int) ([]byte, error) {
 	return appendProtoMessage(body, 2, cancel), nil
 }
 
-func (GlobalCancelRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufPlaceOrder
-}
-
 func (m GlobalCancelRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: global cancel protobuf requires server_version %d", m.protobufVersion())
-	}
 	cancel, err := encodeOrderCancelProto("", m.ExtOperator, m.ManualOrderIndicator)
 	if err != nil {
 		return nil, err

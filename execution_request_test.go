@@ -1,7 +1,6 @@
 package ibkr
 
 import (
-	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -40,15 +39,6 @@ func TestExecutionsRequestProjectsCompleteFilter(t *testing.T) {
 	}
 	if !slices.Equal(got.SpecificDates, []int{20260708, 20260709}) {
 		t.Fatalf("SpecificDates = %v", got.SpecificDates)
-	}
-}
-
-func TestExecutionsRequestRejectsUnsupportedDayFilters(t *testing.T) {
-	t.Parallel()
-
-	_, err := executionsRequest(ExecutionsRequest{LastDays: 1}, 199)
-	if !errors.Is(err, ErrUnsupportedServerVersion) {
-		t.Fatalf("executionsRequest() error = %v, want ErrUnsupportedServerVersion", err)
 	}
 }
 

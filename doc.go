@@ -118,7 +118,7 @@
 // coordinate.
 //
 // [OrderHandle.Close] detaches the handle without cancelling the order.
-// [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Modify] sends a
+// [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Replace] sends a
 // modified order with the same ID.
 //
 // Admission to the transport queue is the ownership boundary for Place and
@@ -151,7 +151,7 @@
 //	fmt.Println(state.InitMarginAfter, state.Commission)
 //
 // The what-if flag is operation-owned: previews go through Preview, while
-// Place and [OrderHandle.Modify] always submit live orders.
+// Place and [OrderHandle.Replace] always submit live orders.
 //
 // # Session Lifecycle
 //

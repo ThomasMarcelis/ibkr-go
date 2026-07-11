@@ -24,7 +24,7 @@ func (e *engine) QuoteSnapshot(ctx context.Context, req QuoteRequest) (Quote, er
 	if err != nil {
 		return Quote{}, err
 	}
-	defer func() { _ = sub.Close() }()
+	defer sub.Close()
 
 	var latest Quote
 	for {
@@ -608,9 +608,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonMktDepthExchanges) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -33,7 +33,6 @@ func TestClientCloseWaitsCleanlyAndInterruptsActiveWork(t *testing.T) {
 				"active-stream": {subscription: true, close: sub.closeWithErr},
 			},
 			orders:         make(map[int64]*orderRoute),
-			executions:     newExecutionCorrelator(),
 			execDeliveries: make(map[string]*execDelivery),
 			snapshot:       Snapshot{State: StateReady},
 		}
@@ -167,7 +166,6 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 			keyed:          make(map[int]*route),
 			singletons:     make(map[string]*route),
 			orders:         make(map[int64]*orderRoute),
-			executions:     newExecutionCorrelator(),
 			execDeliveries: make(map[string]*execDelivery),
 			snapshot:       Snapshot{State: StateReady},
 		}

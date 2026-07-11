@@ -204,7 +204,7 @@ var scenarios = map[string]*scenario{
 	// --- Executions ---
 
 	"executions_snapshot": {
-		metadata:    meta("orders", []string{"Orders().Executions"}, []int{protocol.OutReqExecutions, protocol.InExecutionData, protocol.InExecutionDataEnd, protocol.InCommissionReport}, "read_only", nil, []string{"finite execution query and commissions when present"}, 1, "promoted", batchReadOnly),
+		metadata:    meta("orders", []string{"Orders().Executions"}, []int{protocol.OutReqExecutions, protocol.InExecutionData, protocol.InExecutionDataEnd}, "read_only", nil, []string{"finite execution query"}, 1, "promoted", batchReadOnly),
 		description: "request an unfiltered execution snapshot through the public API",
 		run:         runAPIExecutionsSnapshot,
 	},
@@ -432,12 +432,12 @@ var scenarios = map[string]*scenario{
 		run:         runAPIQualifyContractAmbiguous,
 	},
 	"api_order_type_matrix_aapl": {
-		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families accepted, rejected, filled, modified, or cancelled with real order lifecycle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchExhaustivePremarket, batchReplayDefault, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families accepted, rejected, filled, modified, or cancelled with real order lifecycle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchExhaustivePremarket, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL order type breadth: fills, rests, rejects, modifies, and cancels",
 		run:         runAPIOrderTypeMatrixAAPL,
 	},
 	"api_order_fill_aapl": {
-		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT, MTL, and delayed modify-to-market fill paths with flattening"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Replace", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT, MTL, and delayed modify-to-market fill paths with flattening"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL fill paths: MKT, MTL, and delayed modify-to-market",
 		run:         runAPIOrderFillAAPL,
 	},
@@ -477,12 +477,12 @@ var scenarios = map[string]*scenario{
 		run:         runAPIOrderRejectsAAPL,
 	},
 	"api_delayed_success_modify_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "Orders().Executions", "Accounts().Positions"}, []int{3, 4, 5, 11, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"resting limit order later becomes marketable through modify and is observed through the original handle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
-		description: "public API campaign where a resting AAPL limit order succeeds later through OrderHandle.Modify",
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "Orders().Executions", "Accounts().Positions"}, []int{3, 4, 5, 11, 59, 61, 62}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"resting limit order later becomes marketable through modify and is observed through the original handle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+		description: "public API campaign where a resting AAPL limit order succeeds later through OrderHandle.Replace",
 		run:         runAPIDelayedSuccessModifyAAPL,
 	},
 	"api_bracket_trigger_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "Orders().Open", "Orders().Executions", "Orders().CancelAll"}, []int{3, 4, 5, 11, 16, 53, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"bracket parent fills, children echo the same OCA group, forced take-profit modify reaches real price-band cancellation/rejection"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayDefault, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "Orders().Open", "Orders().Executions", "Orders().CancelAll"}, []int{3, 4, 5, 11, 16, 53, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"bracket parent fills, children echo the same OCA group, forced take-profit modify reaches real price-band cancellation/rejection"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for bracket parent/child activation and take-profit-trigger sibling cancellation",
 		run:         runAPIBracketTriggerAAPL,
 	},
@@ -557,7 +557,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIDollarCostAveragingAAPL,
 	},
 	"api_stop_loss_management_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"market entry, protective stop placement, stop modification, cancellation, flatten, and execution reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"market entry, protective stop placement, stop modification, cancellation, flatten, and execution reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for placing, moving, cancelling, and flattening a protective stop",
 		run:         runAPIStopLossManagementAAPL,
 	},
@@ -565,11 +565,6 @@ var scenarios = map[string]*scenario{
 		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "Orders().CancelAll", "Orders().Executions"}, []int{1, 2, 3, 4, 7, 11, 55, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"live scenario probes quote, places market-parent bracket with TRAIL child, and receives code 328; promoted replay freezes request/rejection before execution-query and cleanup tail"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for bracket order sequencing with a trailing stop child",
 		run:         runAPIBracketTrailingStopAAPL,
-	},
-	"api_fa_replace_non_fa": {
-		metadata:    metaWithAssets("advisors", []string{"Advisors().ReplaceConfig"}, []int{19}, "paper_order", []string{"paper_trading"}, []string{"real non-FA account response to FA group replacement"}, 1, "promoted", []string{"STK"}, batchTrading),
-		description: "public API probe replacing FA groups on a non-FA paper account, freezing the real account-type response",
-		run:         runAPIFAReplaceNonFA,
 	},
 	"api_option_exercise_aapl": {
 		metadata:    meta("options", []string{"Orders().Place", "Options().Exercise"}, []int{3, 5, 21}, "paper_marketable_order", []string{"paper_trading", "market_hours", "option_permissions"}, []string{"option fill then real exercise acknowledgement or no-position error"}, 1, "promoted", batchTrading),
@@ -602,7 +597,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIComboOptionVerticalAAPL,
 	},
 	"api_algorithmic_campaign_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribeUpdates", "Accounts().SubscribePnL", "Accounts().Positions", "MarketData().SubscribeQuotes", "Orders().SubscribeOpen", "Orders().Place", "OrderHandle.Modify", "Orders().Executions", "Orders().Completed", "Orders().CancelAll"}, []int{1, 2, 3, 5, 6, 7, 8, 11, 16, 53, 54, 58, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_destructive", []string{"paper_trading", "market_hours"}, []string{"multi-subscription algorithmic campaign with split fills, resting modifies, reconciliation, and cleanup"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribeUpdates", "Accounts().SubscribePnL", "Accounts().Positions", "MarketData().SubscribeQuotes", "Orders().SubscribeOpen", "Orders().Place", "OrderHandle.Replace", "Orders().Executions", "Orders().Completed", "Orders().CancelAll"}, []int{1, 2, 3, 5, 6, 7, 8, 11, 16, 53, 54, 58, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_destructive", []string{"paper_trading", "market_hours"}, []string{"multi-subscription algorithmic campaign with split fills, resting modifies, reconciliation, and cleanup"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign with concurrent market/account/order observers and multi-step trading",
 		run:         runAPIAlgorithmicCampaignAAPL,
 	},
@@ -612,7 +607,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPICompletedOrdersVariantsAAPL,
 	},
 	"api_transmit_false_then_transmit_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"Transmit=false staged order is modified to transmit, then cancelled or rejected by the real Gateway"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"Transmit=false staged order is modified to transmit, then cancelled or rejected by the real Gateway"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "public API campaign for staging Transmit=false then modifying to transmit and cancel",
 		run:         runAPITransmitFalseThenTransmitAAPL,
 	},
@@ -637,7 +632,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPICrossClientCancelAAPL,
 	},
 	"api_forex_lifecycle_eurusd": {
-		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Modify", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading", "forex_hours"}, []string{"EUR.USD far LMT reaches Inactive with real paper-account leverage rejection"}, 1, "promoted", []string{"CASH"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel"}, []int{1, 2, 3, 4, 5, 57, 58}, "paper_order", []string{"paper_trading", "forex_hours"}, []string{"EUR.USD far LMT reaches Inactive with real paper-account leverage rejection"}, 1, "promoted", []string{"CASH"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "public API campaign for EUR.USD forex rest/modify/cancel lifecycle",
 		run:         runAPIForexLifecycleEURUSD,
 	},

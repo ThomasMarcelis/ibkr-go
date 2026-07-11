@@ -48,9 +48,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonNewsProviders) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return nil, err
 	}

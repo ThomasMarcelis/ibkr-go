@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -181,7 +182,26 @@ func DialContext(t testing.TB, timeout time.Duration, extra ...ibkr.Option) (*ib
 func DialTradingContext(t testing.TB, timeout time.Duration, extra ...ibkr.Option) (*ibkr.Client, context.Context, context.CancelFunc) {
 	t.Helper()
 	cfg := RequireTradingConfig(t)
-	return dialContext(t, cfg, timeout, extra...)
+	client, ctx, cancel := dialContext(t, cfg, timeout, extra...)
+	accounts, err := client.ManagedAccounts(ctx)
+	if err != nil {
+		_ = client.Close()
+		cancel()
+		t.Fatalf("ManagedAccounts() paper-account guard error = %v", err)
+	}
+	for _, account := range accounts {
+		if !strings.HasPrefix(account, "DU") {
+			_ = client.Close()
+			cancel()
+			t.Fatalf("paper-trading session reported non-paper account %q", account)
+		}
+	}
+	if len(accounts) == 0 {
+		_ = client.Close()
+		cancel()
+		t.Fatal("paper-trading session reported no managed accounts")
+	}
+	return client, ctx, cancel
 }
 
 func dialContext(t testing.TB, cfg Config, timeout time.Duration, extra ...ibkr.Option) (*ibkr.Client, context.Context, context.CancelFunc) {

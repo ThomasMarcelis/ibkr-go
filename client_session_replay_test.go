@@ -316,9 +316,7 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		}
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 }
 
 func TestTickNewsReplay(t *testing.T) {
@@ -370,9 +368,7 @@ func TestTickNewsReplay(t *testing.T) {
 	if update.Changed != 0 || update.Snapshot.Available != ibkr.QuoteFieldMarketDataType || update.ReceivedAt.IsZero() {
 		t.Fatalf("news update mutated snapshot or lacked receive time: %+v", update)
 	}
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Subscription.Close() error = %v", err)
-	}
+	sub.Close()
 }
 
 // TestCurrentTimeMillisReplay freezes explicit reqCurrentTimeInMillis
@@ -396,39 +392,5 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 	}
 	if want := time.UnixMilli(1783720285807).UTC(); !ts.Equal(want) {
 		t.Fatalf("CurrentTimeMillis = %v, want %v", ts, want)
-	}
-}
-
-// TestAPIFAReplaceNonFAReplay freezes the non-FA blocker for FA group
-// replacement (/tmp/ibkr-go-fa-replace-current-20260711/
-// 20260711T033010Z-api_fa_replace_non_fa, events.jsonl sha256
-// 132e15c631f93b7f97f02db8749febe580ed5f0a4a5c7b5a60b0dd30d9bf4954):
-// ReplaceConfig is fire-and-forget and
-// returns nil once sent, and the Gateway's code-321 "FA data operations
-// ignored for non FA customers" reply matches no route, so the engine drops
-// it and the session stays healthy.
-func TestAPIFAReplaceNonFAReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_fa_replace_non_fa.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	groups := ibkr.XMLDocument(`<?xml version="1.0" encoding="UTF-8"?><ListOfGroups><Group><name>capture_probe</name><defaultMethod>EqualQuantity</defaultMethod><ListOfAccts varName="list"><Account><acct>DU9000001</acct></Account></ListOfAccts></Group></ListOfGroups>`)
-	if err := client.Advisors().ReplaceConfig(ctx, ibkr.FADataGroups, groups); err != nil {
-		t.Fatalf("ReplaceConfig: %v", err)
-	}
-
-	// The 321 blocker is dropped without perturbing the session: no event
-	// surfaces and the session stays usable until the scripted disconnect.
-	select {
-	case evt := <-client.SessionEvents():
-		if evt.Code == 321 {
-			t.Fatalf("321 unexpectedly surfaced as a session event: %+v", evt)
-		}
-	case <-time.After(300 * time.Millisecond):
 	}
 }

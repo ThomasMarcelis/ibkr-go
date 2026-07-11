@@ -261,8 +261,8 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 	}
 	for _, expected := range want {
 		got := waitForEvent(t, sub.Events())
-		if got.Value.Tag != expected.tag || got.Value.Value != expected.value {
-			t.Fatalf("value = %+v, want %s %s", got.Value, expected.tag, expected.value)
+		if got.Tag != expected.tag || got.Value != expected.value {
+			t.Fatalf("value = %+v, want %s %s", got, expected.tag, expected.value)
 		}
 	}
 
@@ -277,9 +277,7 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 	default:
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -370,7 +368,7 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 	}
 	second, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: contract})
 	if err != nil {
-		_ = first.Close()
+		first.Close()
 		t.Fatalf("second SubscribeQuotes() error = %v", err)
 	}
 
@@ -410,12 +408,8 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 		}
 	}
 
-	if err := first.Close(); err != nil {
-		t.Fatalf("first Close() error = %v", err)
-	}
-	if err := second.Close(); err != nil {
-		t.Fatalf("second Close() error = %v", err)
-	}
+	first.Close()
+	second.Close()
 	if err := first.Wait(); err != nil {
 		t.Fatalf("first Wait() error = %v", err)
 	}
@@ -541,9 +535,7 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 		t.Fatalf("second ask = %s, want 189.15", second.Snapshot.Ask.String())
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -599,9 +591,7 @@ func TestSubscribeQuotesResumeAutoResendsAfter1101(t *testing.T) {
 		t.Fatalf("second ask = %s, want 189.15", second.Snapshot.Ask.String())
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -654,9 +644,7 @@ func TestSubscribeQuotesResumeAutoResumesWithoutResendAfter1102(t *testing.T) {
 		t.Fatalf("second ask = %s, want 189.15", second.Snapshot.Ask.String())
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
@@ -777,7 +765,7 @@ func TestOpenOrdersSnapshotBurstExceedsSubscriptionBuffer(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -834,7 +822,7 @@ func TestOpenOrdersAutoRequiresClientIDZero(t *testing.T) {
 	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAuto)
 	if err == nil {
 		if sub != nil {
-			_ = sub.Close()
+			sub.Close()
 		}
 		t.Fatal("SubscribeOpenOrders() error = nil, want client-id validation")
 	}
@@ -855,7 +843,7 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 					Tags:          []string{"NetLiquidation"},
 				}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
 				if sub != nil {
-					_ = sub.Close()
+					sub.Close()
 				}
 				return err
 			},
@@ -865,7 +853,7 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 			subscribe: func(ctx context.Context, client *ibkr.Client) error {
 				sub, err := client.Accounts().SubscribePositions(ctx, ibkr.WithResumePolicy(ibkr.ResumeAuto))
 				if sub != nil {
-					_ = sub.Close()
+					sub.Close()
 				}
 				return err
 			},
@@ -875,7 +863,7 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 			subscribe: func(ctx context.Context, client *ibkr.Client) error {
 				sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll, ibkr.WithResumePolicy(ibkr.ResumeAuto))
 				if sub != nil {
-					_ = sub.Close()
+					sub.Close()
 				}
 				return err
 			},
@@ -902,9 +890,7 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 }
 
 // TestExecutionsBurstExceedsSubscriptionBuffer freezes a finite live execution
-// query whose 29 response rows exceed the configured consumer buffer. The
-// one-shot must retain every row and return when execution-data-end arrives;
-// the capture's fifteenth commission arrived only after that boundary.
+// query whose response rows exceed the configured consumer buffer.
 func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	t.Parallel()
 
@@ -915,24 +901,17 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(updates) != 29 {
-		t.Fatalf("updates len = %d, want 29 before execution-data-end", len(updates))
+	if len(executions) != 15 {
+		t.Fatalf("executions len = %d, want 15", len(executions))
 	}
 
-	var executionIDs, commissionIDs []string
-	for i, update := range updates {
-		switch {
-		case update.Execution != nil:
-			executionIDs = append(executionIDs, update.Execution.ExecID)
-		case update.CommissionAndFees != nil:
-			commissionIDs = append(commissionIDs, update.CommissionAndFees.ExecID)
-		default:
-			t.Fatalf("updates[%d] = %#v, want execution or commission", i, update)
-		}
+	executionIDs := make([]string, len(executions))
+	for i, execution := range executions {
+		executionIDs[i] = execution.ExecID
 	}
 	wantExecutionIDs := []string{
 		"redacted-fill-000000014", "redacted-fill-000000015",
@@ -942,30 +921,16 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 		"redacted-fill-000000010", "redacted-fill-000000011", "redacted-fill-000000012",
 		"redacted-fill-000000013",
 	}
-	wantCommissionIDs := []string{
-		"redacted-fill-000000014", "redacted-fill-000000015",
-		"redacted-fill-000000001", "redacted-fill-000000002", "redacted-fill-000000003",
-		"redacted-fill-000000004", "redacted-fill-000000005", "redacted-fill-000000006",
-		"redacted-fill-000000007", "redacted-fill-000000008", "redacted-fill-000000009",
-		"redacted-fill-000000010", "redacted-fill-000000011", "redacted-fill-000000012",
-	}
 	if !reflect.DeepEqual(executionIDs, wantExecutionIDs) {
 		t.Fatalf("execution IDs = %v, want %v", executionIDs, wantExecutionIDs)
 	}
-	if !reflect.DeepEqual(commissionIDs, wantCommissionIDs) {
-		t.Fatalf("commission IDs = %v, want %v", commissionIDs, wantCommissionIDs)
-	}
-
-	first := updates[0].Execution
+	first := executions[0]
 	if first.Price.String() != "292.76" || first.Shares.String() != "1" {
 		t.Fatalf("first execution price/shares = %s/%s, want 292.76/1", first.Price, first.Shares)
 	}
 	wantTime := time.Date(2026, 6, 11, 13, 30, 10, 0, time.UTC)
 	if !first.Time.Equal(wantTime) {
 		t.Fatalf("first execution time = %s, want %s", first.Time, wantTime)
-	}
-	if got := updates[15].CommissionAndFees.Amount.String(); got != "1.000003" {
-		t.Fatalf("first commission = %s, want 1.000003", got)
 	}
 }
 
@@ -985,10 +950,9 @@ func TestExecutionsMissingEndReturnsContextDeadline(t *testing.T) {
 	}
 }
 
-// TestExecutionsCorrelateCommissionByExecID freezes partitioning across two
-// simultaneous, disjoint execution queries: a commission must reach only the
-// route that observed its ExecID.
-func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
+// TestExecutionsPartitionConcurrentQueries freezes request-ID routing across
+// two simultaneous, disjoint execution queries.
+func TestExecutionsPartitionConcurrentQueries(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "executions_correlated.txt")
@@ -998,8 +962,8 @@ func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	buyCh := make(chan []ibkr.ExecutionUpdate, 1)
-	sellCh := make(chan []ibkr.ExecutionUpdate, 1)
+	buyCh := make(chan []ibkr.Execution, 1)
+	sellCh := make(chan []ibkr.Execution, 1)
 	errCh := make(chan error, 2)
 	go func() {
 		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
@@ -1027,42 +991,36 @@ func TestExecutionsCorrelateCommissionByExecID(t *testing.T) {
 		sellCh <- updates
 	}()
 
-	var buyUpdates []ibkr.ExecutionUpdate
-	var sellUpdates []ibkr.ExecutionUpdate
+	var buyExecutions []ibkr.Execution
+	var sellExecutions []ibkr.Execution
 	for i := 0; i < 2; i++ {
 		select {
 		case err := <-errCh:
 			t.Fatalf("Executions() error = %v", err)
-		case buyUpdates = <-buyCh:
-		case sellUpdates = <-sellCh:
+		case buyExecutions = <-buyCh:
+		case sellExecutions = <-sellCh:
 		}
 	}
 
-	assertRoute := func(name string, updates []ibkr.ExecutionUpdate, execID string, side ibkr.ExecutionSide, price, commission string) {
+	assertRoute := func(name string, executions []ibkr.Execution, execID string, side ibkr.ExecutionSide, price string) {
 		t.Helper()
-		if len(updates) != 2 {
-			t.Fatalf("%s updates len = %d, want execution and commission only", name, len(updates))
+		if len(executions) != 1 {
+			t.Fatalf("%s executions len = %d, want 1", name, len(executions))
 		}
-		execution := updates[0].Execution
-		if execution == nil || execution.ExecID != execID || execution.Side != side ||
+		execution := executions[0]
+		if execution.ExecID != execID || execution.Side != side ||
 			!execution.Shares.Equal(decimal.RequireFromString("1")) ||
 			!execution.Price.Equal(decimal.RequireFromString(price)) {
 			t.Fatalf("%s execution = %#v, want %s %s 1 @ %s", name, execution, execID, side, price)
 		}
-		fees := updates[1].CommissionAndFees
-		if fees == nil || fees.ExecID != execID || fees.Amount == nil ||
-			!fees.Amount.Equal(decimal.RequireFromString(commission)) {
-			t.Fatalf("%s commission = %#v, want %s amount %s", name, fees, execID, commission)
-		}
 	}
-	assertRoute("BUY", buyUpdates, "sanitized-fill-014", ibkr.ExecutionSideBought, "292.76", "1.000003")
-	assertRoute("SELL", sellUpdates, "sanitized-fill-015", ibkr.ExecutionSideSold, "292.70", "1.006228")
+	assertRoute("BUY", buyExecutions, "sanitized-fill-014", ibkr.ExecutionSideBought, "292.76")
+	assertRoute("SELL", sellExecutions, "sanitized-fill-015", ibkr.ExecutionSideSold, "292.70")
 }
 
-// TestExecutionsCorrelateCommissionForOverlappingSubscriptions freezes the
-// opposite invariant: a commission that races ahead of its execution must be
-// retained and delivered once to every overlapping route that observes it.
-func TestExecutionsCorrelateCommissionForOverlappingSubscriptions(t *testing.T) {
+// TestExecutionsDeliverOverlappingQueryResults freezes that the same execution
+// is returned independently to every matching request route.
+func TestExecutionsDeliverOverlappingQueryResults(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "executions_overlapping.txt")
@@ -1072,8 +1030,8 @@ func TestExecutionsCorrelateCommissionForOverlappingSubscriptions(t *testing.T) 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	allCh := make(chan []ibkr.ExecutionUpdate, 1)
-	sellCh := make(chan []ibkr.ExecutionUpdate, 1)
+	allCh := make(chan []ibkr.Execution, 1)
+	sellCh := make(chan []ibkr.Execution, 1)
 	errCh := make(chan error, 2)
 	go func() {
 		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
@@ -1097,36 +1055,31 @@ func TestExecutionsCorrelateCommissionForOverlappingSubscriptions(t *testing.T) 
 		sellCh <- updates
 	}()
 
-	var allUpdates []ibkr.ExecutionUpdate
-	var sellUpdates []ibkr.ExecutionUpdate
+	var allExecutions []ibkr.Execution
+	var sellExecutions []ibkr.Execution
 	for i := 0; i < 2; i++ {
 		select {
 		case err := <-errCh:
 			t.Fatalf("Executions() error = %v", err)
-		case allUpdates = <-allCh:
-		case sellUpdates = <-sellCh:
+		case allExecutions = <-allCh:
+		case sellExecutions = <-sellCh:
 		}
 	}
 
-	assertRoute := func(name string, updates []ibkr.ExecutionUpdate) {
+	assertRoute := func(name string, executions []ibkr.Execution) {
 		t.Helper()
-		if len(updates) != 2 {
-			t.Fatalf("%s updates len = %d, want one execution and one commission", name, len(updates))
+		if len(executions) != 1 {
+			t.Fatalf("%s executions len = %d, want 1", name, len(executions))
 		}
-		execution := updates[0].Execution
-		if execution == nil || execution.ExecID != "sanitized-fill-012" || execution.Side != ibkr.ExecutionSideSold ||
+		execution := executions[0]
+		if execution.ExecID != "sanitized-fill-012" || execution.Side != ibkr.ExecutionSideSold ||
 			!execution.Shares.Equal(decimal.RequireFromString("40")) ||
 			!execution.Price.Equal(decimal.RequireFromString("292.20")) {
 			t.Fatalf("%s execution = %#v, want sanitized-fill-012 SLD 40 @ 292.20", name, execution)
 		}
-		fees := updates[1].CommissionAndFees
-		if fees == nil || fees.ExecID != "sanitized-fill-012" || fees.Amount == nil ||
-			!fees.Amount.Equal(decimal.RequireFromString("0.248693")) {
-			t.Fatalf("%s commission = %#v, want sanitized-fill-012 amount 0.248693", name, fees)
-		}
 	}
-	assertRoute("all-side", allUpdates)
-	assertRoute("SELL", sellUpdates)
+	assertRoute("all-side", allExecutions)
+	assertRoute("SELL", sellExecutions)
 }
 
 func TestSubscribeQuotesResumeNeverRequiresManualResumeOnDisconnect(t *testing.T) {
@@ -1296,9 +1249,7 @@ func TestScannerSubscriptionReturnsLiveRankedResults(t *testing.T) {
 		t.Fatalf("last result = %+v, want live rank 9 FAB", got)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
 	}
@@ -1569,9 +1520,7 @@ func TestSmartComponents(t *testing.T) {
 	if components[19].ExchangeName != "TXSE" || components[19].ExchangeLetter != "F" {
 		t.Fatalf("last component = %+v, want TXSE/F", components[19])
 	}
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	sub.Close()
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
 	}
@@ -1961,7 +1910,7 @@ func TestDirectCancelOrder(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -2046,9 +1995,8 @@ directCancelDone:
 	}
 }
 
-// Regression: cancel_order at server_version >= 192 requires extOperator and
-// manualOrderIndicator fields (CME_TAGGING_FIELDS). Missing fields caused the
-// gateway to silently drop the cancel. This test uses the full
+// Regression: missing extOperator and manualOrderIndicator fields caused the
+// Gateway to silently drop cancel_order. This test uses the full
 // PreSubmitted → Submitted → PendingCancel → Cancelled lifecycle grounded from
 // live paper Gateway sv=200 on 2026-04-14.
 func TestAPIOrderRestCancelAAPL(t *testing.T) {
@@ -2069,7 +2017,7 @@ func TestAPIOrderRestCancelAAPL(t *testing.T) {
 		Order: ibkr.Order{
 			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit,
 			Quantity: decimal.RequireFromString("1"),
-			LmtPrice: decimal.RequireFromString("10"),
+			LmtPrice: new(decimal.RequireFromString("10")),
 			TIF:      ibkr.TIFDay, Account: "DU9000001",
 		},
 	})
@@ -2652,9 +2600,7 @@ func TestSubscribePnL(t *testing.T) {
 		t.Fatalf("realized pnl = %s, want 0", update.RealizedPnL.String())
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
+	sub.Close()
 }
 
 func waitForStateKind(t *testing.T, ch <-chan ibkr.SubscriptionStateEvent, want ibkr.SubscriptionStateKind) ibkr.SubscriptionStateEvent {
@@ -2722,9 +2668,7 @@ func TestDisplayGroupLifecycleIntegration(t *testing.T) {
 		t.Fatalf("initial ContractInfo = %q, want %q", initial.ContractInfo, "none")
 	}
 
-	if err := handle.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	handle.Close()
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
 	}
@@ -2755,7 +2699,7 @@ func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("12.89"),
+			LmtPrice:  new(decimal.RequireFromString("12.89")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -2776,14 +2720,14 @@ func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
 		}
 	}
 
-	if err := handle.Modify(ctx, ibkr.Order{
+	if err := handle.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeMarket,
 		Quantity:  decimal.RequireFromString("1"),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
 	}); err != nil {
-		t.Fatalf("Modify: %v", err)
+		t.Fatalf("Replace: %v", err)
 	}
 
 	var sawFilled, sawExecution, sawCommission bool
@@ -2867,7 +2811,7 @@ func TestPlaceOrderInvalidTypeLiveError(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderType("FEELINGS"),
 			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  decimal.RequireFromString("15.81"),
+			LmtPrice:  new(decimal.RequireFromString("15.81")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			OrderRef:  "ibkrgo-redacted-20260711T041223Z-001",
@@ -2908,7 +2852,7 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("309.6"),
+			LmtPrice:  new(decimal.RequireFromString("309.6")),
 			TIF:       ibkr.TIFIOC,
 			Account:   "DU9000001",
 		},
@@ -2936,7 +2880,7 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("309.6"),
+			LmtPrice:  new(decimal.RequireFromString("309.6")),
 			TIF:       ibkr.TIFFOK,
 			Account:   "DU9000001",
 		},
@@ -2961,7 +2905,7 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("12.9"),
+			LmtPrice:  new(decimal.RequireFromString("12.9")),
 			TIF:       ibkr.TIFFOK,
 			Account:   "DU9000001",
 		},
@@ -2997,7 +2941,7 @@ func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("10"),
+			LmtPrice:  new(decimal.RequireFromString("10")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -3033,8 +2977,8 @@ func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
 			Quantity:        decimal.RequireFromString("1"),
 			TIF:             ibkr.TIFDay,
 			Account:         "DU9000001",
-			TrailStopPrice:  decimal.RequireFromString("2000"),
-			TrailingPercent: decimal.RequireFromString("1.5"),
+			TrailStopPrice:  new(decimal.RequireFromString("2000")),
+			TrailingPercent: new(decimal.RequireFromString("1.5")),
 		},
 	})
 	if err != nil {
@@ -3127,7 +3071,7 @@ func TestAPIStopLossManagementAAPLReplay(t *testing.T) {
 		Action:    ibkr.ActionSell,
 		OrderType: ibkr.OrderTypeStop,
 		Quantity:  decimal.RequireFromString("1"),
-		AuxPrice:  decimal.RequireFromString("13.13"),
+		AuxPrice:  new(decimal.RequireFromString("13.13")),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
 	}
@@ -3137,9 +3081,9 @@ func TestAPIStopLossManagementAAPLReplay(t *testing.T) {
 	}
 	waitForOrderStatus(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
 
-	stopOrder.AuxPrice = decimal.RequireFromString("14.13")
-	if err := stop.Modify(ctx, stopOrder); err != nil {
-		t.Fatalf("stop Modify: %v", err)
+	stopOrder.AuxPrice = new(decimal.RequireFromString("14.13"))
+	if err := stop.Replace(ctx, stopOrder); err != nil {
+		t.Fatalf("stop Replace: %v", err)
 	}
 	waitForOrderStatus(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
 
@@ -3271,7 +3215,7 @@ func TestAPIScaleInCampaignAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("2"),
-			AuxPrice:  decimal.RequireFromString("12.98"),
+			AuxPrice:  new(decimal.RequireFromString("12.98")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -3337,7 +3281,7 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
 				Quantity:  decimal.RequireFromString("100"),
-				LmtPrice:  decimal.RequireFromString(price),
+				LmtPrice:  new(decimal.RequireFromString(price)),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
 				OrderRef:  fmt.Sprintf("ibkrgo-redacted-20260711T045307Z-%03d", i+1),
@@ -3398,7 +3342,7 @@ func TestAPIForexLifecycleEURUSDReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("20000"),
-			LmtPrice:  decimal.RequireFromString("0.99"),
+			LmtPrice:  new(decimal.RequireFromString("0.99")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -3454,7 +3398,7 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("2578.5"),
+			LmtPrice:  new(decimal.RequireFromString("2578.5")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -3462,7 +3406,7 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("1"),
-			AuxPrice:  decimal.RequireFromString("12.89"),
+			AuxPrice:  new(decimal.RequireFromString("12.89")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 		},
@@ -3490,17 +3434,17 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 		t.Fatalf("child OCA groups = %q and %q, want same non-empty group", takeProfitOpen.OcaGroup, stopLossOpen.OcaGroup)
 	}
 
-	err = takeProfit.Modify(ctx, ibkr.Order{
+	err = takeProfit.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionSell,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.RequireFromString("1"),
-		LmtPrice:  decimal.RequireFromString("206.28"),
+		LmtPrice:  new(decimal.RequireFromString("206.28")),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
 		ParentID:  parent.OrderID(),
 	})
 	if err != nil {
-		t.Fatalf("bracket take-profit Modify: %v", err)
+		t.Fatalf("bracket take-profit Replace: %v", err)
 	}
 	statuses := waitOrderStatuses(t, ctx, takeProfit)
 	if !hasOrderStatus(statuses, ibkr.OrderStatusPendingCancel) {
@@ -3551,7 +3495,7 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  decimal.RequireFromString("2649.6"),
+			LmtPrice:  new(decimal.RequireFromString("2649.6")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			ParentID:  parent.OrderID(),
@@ -3570,11 +3514,11 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 			Action:         ibkr.ActionSell,
 			OrderType:      ibkr.OrderTypeTrailingStop,
 			Quantity:       decimal.RequireFromString("10"),
-			AuxPrice:       decimal.RequireFromString("1"),
+			AuxPrice:       new(decimal.RequireFromString("1")),
 			TIF:            ibkr.TIFDay,
 			Account:        "DU9000001",
 			ParentID:       parent.OrderID(),
-			TrailStopPrice: decimal.RequireFromString("13.25"),
+			TrailStopPrice: new(decimal.RequireFromString("13.25")),
 		},
 	})
 	if err != nil {
@@ -3620,7 +3564,7 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("12.9"),
+			LmtPrice:  new(decimal.RequireFromString("12.9")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			OCA:       ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock},
@@ -3641,7 +3585,7 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("309.48"),
+			LmtPrice:  new(decimal.RequireFromString("309.48")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			OCA:       ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock},
@@ -3924,7 +3868,7 @@ func TestAPIReconnectActiveOrderAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  decimal.RequireFromString("13.27"),
+			LmtPrice:  new(decimal.RequireFromString("13.27")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -3933,9 +3877,7 @@ func TestAPIReconnectActiveOrderAAPLReplay(t *testing.T) {
 		t.Fatalf("first Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	if err := first.Close(); err != nil {
-		t.Fatalf("first Close: %v", err)
-	}
+	_ = first.Close()
 
 	second := dialHostClient(t, host, ibkr.WithClientID(1))
 	defer second.Close()
@@ -3979,7 +3921,7 @@ func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  decimal.RequireFromString("13.27"),
+			LmtPrice:  new(decimal.RequireFromString("13.27")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -4032,7 +3974,7 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  decimal.RequireFromString("13.27"),
+			LmtPrice:  new(decimal.RequireFromString("13.27")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -4041,9 +3983,7 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	if err := placer.Close(); err != nil {
-		t.Fatalf("placer Close: %v", err)
-	}
+	_ = placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(0))
 	defer observer.Close()
@@ -4086,7 +4026,7 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  decimal.RequireFromString("13.27"),
+			LmtPrice:  new(decimal.RequireFromString("13.27")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -4095,9 +4035,7 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	if err := placer.Close(); err != nil {
-		t.Fatalf("placer Close: %v", err)
-	}
+	_ = placer.Close()
 
 	canceller := dialHostClient(t, host, ibkr.WithClientID(2))
 	defer canceller.Close()
@@ -4147,7 +4085,7 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  decimal.RequireFromString("15.42"),
+			LmtPrice:  new(decimal.RequireFromString("15.42")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -4156,9 +4094,7 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-	if err := placer.Close(); err != nil {
-		t.Fatalf("placer Close: %v", err)
-	}
+	_ = placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(1))
 	defer observer.Close()
@@ -4251,7 +4187,7 @@ func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -4390,7 +4326,7 @@ func TestOpenOrdersSnapshotSkipsPairedStatuses(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  decimal.RequireFromString("15.42"),
+			LmtPrice:  new(decimal.RequireFromString("15.42")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
 		},
@@ -4399,9 +4335,7 @@ func TestOpenOrdersSnapshotSkipsPairedStatuses(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-	if err := placer.Close(); err != nil {
-		t.Fatalf("placer Close: %v", err)
-	}
+	_ = placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(1))
 	defer observer.Close()
@@ -4436,7 +4370,7 @@ func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.RequireFromString("10"),
-		LmtPrice:  decimal.RequireFromString("13.26"),
+		LmtPrice:  new(decimal.RequireFromString("13.26")),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
 		Transmit:  new(false),
@@ -4456,8 +4390,8 @@ func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 	}
 
 	order.Transmit = new(true)
-	if err := handle.Modify(ctx, order); err != nil {
-		t.Fatalf("Transmit=true Modify: %v", err)
+	if err := handle.Replace(ctx, order); err != nil {
+		t.Fatalf("Transmit=true Replace: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
 

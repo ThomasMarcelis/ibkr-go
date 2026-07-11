@@ -355,7 +355,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 					Action:      ibkr.ActionBuy,
 					OrderType:   ibkr.OrderTypeLimit,
 					Quantity:    decimal.RequireFromString("100"),
-					LmtPrice:    decimal.RequireFromString("15.81"),
+					LmtPrice:    new(decimal.RequireFromString("15.81")),
 					TIF:         ibkr.TIFDay,
 					Account:     "DU9000001",
 					OrderRef:    ref,

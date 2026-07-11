@@ -191,9 +191,7 @@ func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
 		t.Fatalf("market-depth subscription error after notice = %v", err)
 	}
 
-	if err := sub.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	sub.Close()
 	(<-e.cmds)()
 	wantCancel, err := codec.Encode(206, codec.CancelMarketDepth{ReqID: 1, IsSmartDepth: true})
 	if err != nil {
@@ -293,7 +291,7 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
 		events: newObserver[Event](cfg.eventBuffer), transport: transport.New(client, cfg.logger, 0),
 		serverVersion: 206, keyed: make(map[int]*route), singletons: make(map[string]*route),
-		orders: make(map[int64]*orderRoute), executions: newExecutionCorrelator(),
+		orders:         make(map[int64]*orderRoute),
 		execDeliveries: make(map[string]*execDelivery), snapshot: Snapshot{State: StateReady, ConnectionSeq: 1},
 	}
 	t.Cleanup(func() {
@@ -649,10 +647,7 @@ func nextQuoteUpdate(t *testing.T, sub *Subscription[QuoteUpdate]) QuoteUpdate {
 func closeInstalledQuoteRoute(t *testing.T, e *engine, sub *Subscription[QuoteUpdate]) {
 	t.Helper()
 	t.Cleanup(func() {
-		if err := sub.Close(); err != nil {
-			t.Errorf("close quote subscription: %v", err)
-			return
-		}
+		sub.Close()
 		select {
 		case closeRoute := <-e.cmds:
 			closeRoute()

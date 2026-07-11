@@ -2,10 +2,45 @@ package ibkr
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/shopspring/decimal"
 )
+
+func validateScannerSubscriptionRequest(req ScannerSubscriptionRequest) error {
+	if strings.TrimSpace(string(req.Instrument)) == "" {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.Instrument", Message: "is required"}
+	}
+	if strings.TrimSpace(string(req.LocationCode)) == "" {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.LocationCode", Message: "is required"}
+	}
+	if strings.TrimSpace(string(req.ScanCode)) == "" {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.ScanCode", Message: "is required"}
+	}
+	if req.NumberOfRows < 0 {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.NumberOfRows", Message: "must be >= 0"}
+	}
+	if req.AboveVolume != nil && *req.AboveVolume < 0 {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.AboveVolume", Message: "must be >= 0"}
+	}
+	if req.AverageOptionVolumeAbove != nil && *req.AverageOptionVolumeAbove < 0 {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.AverageOptionVolumeAbove", Message: "must be >= 0"}
+	}
+	if req.AbovePrice != nil && req.BelowPrice != nil && req.AbovePrice.GreaterThan(*req.BelowPrice) {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.AbovePrice", Message: "must not exceed BelowPrice"}
+	}
+	if req.MarketCapAbove != nil && req.MarketCapBelow != nil && req.MarketCapAbove.GreaterThan(*req.MarketCapBelow) {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.MarketCapAbove", Message: "must not exceed MarketCapBelow"}
+	}
+	if req.CouponRateAbove != nil && req.CouponRateBelow != nil && req.CouponRateAbove.GreaterThan(*req.CouponRateBelow) {
+		return &ValidationError{Field: "ScannerSubscriptionRequest.CouponRateAbove", Message: "must not exceed CouponRateBelow"}
+	}
+	if err := validateTagValues("ScannerSubscriptionRequest.FilterOptions", req.FilterOptions); err != nil {
+		return err
+	}
+	return validateTagValues("ScannerSubscriptionRequest.SubscriptionOptions", req.SubscriptionOptions)
+}
 
 func cloneScannerSubscriptionRequest(req ScannerSubscriptionRequest) ScannerSubscriptionRequest {
 	if req.AbovePrice != nil {

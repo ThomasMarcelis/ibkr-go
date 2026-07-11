@@ -3,6 +3,7 @@ package ibkr
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
@@ -59,7 +60,12 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(codec.CancelHistoricalData{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -122,7 +128,12 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				e.deleteKeyedRoute(reqID)
+				_ = e.send(codec.CancelHistoricalData{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return HistoricalSchedule{}, err
@@ -370,6 +381,9 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 	}
 	resp := make(chan result, 1)
 	var reqID int
+	var midpointTicks []HistoricalTick
+	var bidAskTicks []HistoricalTickBidAsk
+	var lastTicks []HistoricalTickLast
 	enqueueOneShotSetup(ctx, e, func() {
 		if err := validateContractFieldSupport(req.Contract, "historical ticks", e.serverVersion, contractFieldPrimaryExchange|contractFieldIncludeExpired); err != nil {
 			resp <- result{err: err}
@@ -380,33 +394,39 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.HistoricalTicksResponse:
-					e.deleteKeyedRoute(reqID)
 					ticks := make([]HistoricalTick, len(m.Ticks))
 					for i, t := range m.Ticks {
 						parsedTime, err := parseEpochSeconds(t.Time)
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].Time = parsedTime
 						ticks[i].Price, err = parseRequiredDecimal(t.Price, "historical midpoint tick price")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].Size, err = parseRequiredDecimal(t.Size, "historical midpoint tick size")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 					}
-					resp <- result{value: HistoricalTicksResult{Ticks: ticks}}
+					midpointTicks = append(midpointTicks, ticks...)
+					if m.Done {
+						e.deleteKeyedRoute(reqID)
+						resp <- result{value: HistoricalTicksResult{Ticks: midpointTicks}}
+					}
 				case codec.HistoricalTicksBidAskResponse:
-					e.deleteKeyedRoute(reqID)
 					ticks := make([]HistoricalTickBidAsk, len(m.Ticks))
 					for i, t := range m.Ticks {
 						parsedTime, err := parseEpochSeconds(t.Time)
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
@@ -414,32 +434,40 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 						ticks[i].Time = parsedTime
 						ticks[i].BidPrice, err = parseRequiredDecimal(t.BidPrice, "historical bid price")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].AskPrice, err = parseRequiredDecimal(t.AskPrice, "historical ask price")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].BidSize, err = parseRequiredDecimal(t.BidSize, "historical bid size")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].AskSize, err = parseRequiredDecimal(t.AskSize, "historical ask size")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 					}
-					resp <- result{value: HistoricalTicksResult{BidAsk: ticks}}
+					bidAskTicks = append(bidAskTicks, ticks...)
+					if m.Done {
+						e.deleteKeyedRoute(reqID)
+						resp <- result{value: HistoricalTicksResult{BidAsk: bidAskTicks}}
+					}
 				case codec.HistoricalTicksLastResponse:
-					e.deleteKeyedRoute(reqID)
 					ticks := make([]HistoricalTickLast, len(m.Ticks))
 					for i, t := range m.Ticks {
 						parsedTime, err := parseEpochSeconds(t.Time)
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
@@ -447,18 +475,24 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 						ticks[i].Time = parsedTime
 						ticks[i].Price, err = parseRequiredDecimal(t.Price, "historical trade tick price")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].Size, err = parseRequiredDecimal(t.Size, "historical trade tick size")
 						if err != nil {
+							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						ticks[i].Exchange = t.Exchange
 						ticks[i].SpecialConditions = t.SpecialConditions
 					}
-					resp <- result{value: HistoricalTicksResult{Last: ticks}}
+					lastTicks = append(lastTicks, ticks...)
+					if m.Done {
+						e.deleteKeyedRoute(reqID)
+						resp <- result{value: HistoricalTicksResult{Last: lastTicks}}
+					}
 				}
 			}, func(err error) {
 				resp <- result{err: err}
@@ -523,26 +557,24 @@ func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
 	return Bar{Time: ts, Open: open, High: high, Low: low, Close: closeValue, Volume: volume, WAP: wap, Count: count}, nil
 }
 
-// parseBarTime handles both RFC3339 (from testhost transcripts) and IBKR native
-// bar date formats ("20260402  09:30:00" or "20260402" for daily bars).
 func parseBarTime(raw string) (time.Time, error) {
-	// Try RFC3339 first (for backward compat with test transcripts)
-	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
-		return ts, nil
-	}
-	// IBKR intraday format: "20260402  09:30:00" (note: double space, no timezone)
-	if ts, err := time.Parse("20060102  15:04:05", raw); err == nil {
-		return ts, nil
-	}
-	// IBKR daily format: "20260402"
-	if ts, err := time.Parse("20060102", raw); err == nil {
-		return ts, nil
-	}
-	// IBKR format with timezone: "20260402 09:30:00 US/Eastern"
-	// Strip timezone suffix and parse the datetime prefix.
-	if len(raw) > 17 {
-		if ts, err := time.Parse("20060102 15:04:05", raw[:17]); err == nil {
-			return ts, nil
+	parts := strings.Fields(raw)
+	switch len(parts) {
+	case 1:
+		if ts, err := time.Parse("20060102", parts[0]); err == nil {
+			return ts.UTC(), nil
+		}
+	case 2:
+		if ts, err := time.Parse("20060102 15:04:05", parts[0]+" "+parts[1]); err == nil {
+			return ts.UTC(), nil
+		}
+	case 3:
+		location, err := time.LoadLocation(parts[2])
+		if err != nil {
+			return time.Time{}, fmt.Errorf("ibkr: parse bar time %q: load location: %w", raw, err)
+		}
+		if ts, err := time.ParseInLocation("20060102 15:04:05", parts[0]+" "+parts[1], location); err == nil {
+			return ts.UTC(), nil
 		}
 	}
 	return time.Time{}, fmt.Errorf("ibkr: parse bar time %q", raw)

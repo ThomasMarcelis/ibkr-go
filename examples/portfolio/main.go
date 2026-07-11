@@ -76,7 +76,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, pnl.Close()) }()
+	defer pnl.Close()
 
 	fmt.Println("\n=== streaming P&L (30s) ===")
 	timeout := time.After(30 * time.Second)

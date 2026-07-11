@@ -35,6 +35,7 @@ type Conn struct {
 	incoming  chan []byte
 	done      chan struct{}
 	closeOnce sync.Once
+	closeErr  error
 	waitOnce  sync.Once
 	waitErr   error
 	waitErrMu sync.Mutex
@@ -120,9 +121,9 @@ func (c *Conn) Close() error {
 		c.outgoingClosed = true
 		c.queueCond.Broadcast()
 		c.queueMu.Unlock()
-		_ = c.conn.Close()
+		c.closeErr = c.conn.Close()
 	})
-	return nil
+	return c.closeErr
 }
 
 func (c *Conn) Wait() error {

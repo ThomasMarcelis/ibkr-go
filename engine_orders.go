@@ -52,9 +52,7 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 			resp <- result{err: err}
 		}
 	})
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonOrderID) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return 0, err
 	}
@@ -69,7 +67,7 @@ func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
+	defer sub.Close()
 	return collectSnapshot(ctx, sub, func(update OpenOrderUpdate) (OpenOrder, bool) {
 		if update.Order == nil {
 			return OpenOrder{}, false
@@ -154,19 +152,19 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 	return out.sub, out.err
 }
 
-func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) ([]ExecutionUpdate, error) {
+func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) ([]Execution, error) {
 	sub, err := e.subscribeExecutions(ctx, req, withSnapshotCollector())
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = sub.Close() }()
-	return collectSnapshot(ctx, sub, func(update ExecutionUpdate) (ExecutionUpdate, bool) { return update, true })
+	defer sub.Close()
+	return collectSnapshot(ctx, sub, func(execution Execution) (Execution, bool) { return execution, true })
 }
 
-func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
+func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[Execution], error) {
 	req.SpecificDates = append([]time.Time(nil), req.SpecificDates...)
 	type result struct {
-		sub *Subscription[ExecutionUpdate]
+		sub *Subscription[Execution]
 		err error
 	}
 	resp := make(chan result, 1)
@@ -184,9 +182,8 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		}
 		reqID := e.allocReqID()
 		wireReq.ReqID = reqID
-		sub, ownedRoute := newKeyedSubscriptionRoute[ExecutionUpdate](e, cfg, reqID, OpExecutions, nil)
+		sub, ownedRoute := newKeyedSubscriptionRoute[Execution](e, cfg, reqID, OpExecutions, nil)
 		sub.expectSnapshot()
-		e.executions.registerRoute(reqID)
 
 		ownedRoute.request = wireReq
 		ownedRoute.handle = func(msg any, e *engine) {
@@ -198,21 +195,11 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 					sub.closeWithErr(err)
 					return
 				}
-				e.executions.observeExecution(reqID, m)
-				if !sub.emit(update) {
-					return
-				}
-				if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
-					return
-				}
+				sub.emit(update)
 			case codec.ExecutionsEnd:
 				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
 				e.deleteKeyedRoute(reqID)
 				sub.closeWithErr(nil)
-			case codec.CommissionReport:
-				if !e.emitUndeliveredExecutionCommissions(reqID, m.ExecID, sub) {
-					return
-				}
 			}
 		}
 		e.keyed[reqID] = ownedRoute
@@ -286,9 +273,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonCompletedOrders) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -460,29 +445,9 @@ func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, placementErr
 func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle {
 	handle := newOrderHandle(orderID, e.cfg.orderEventBuffer)
 	handle.cancelFn = func(ctx context.Context, cfg cancelConfig) error {
-		ch := make(chan error, 1)
-		e.enqueue(func() {
-			if !e.isReady() {
-				ch <- ErrNotReady
-				return
-			}
-			req, err := cancelOrderRequest(orderID, cfg, e.serverVersion)
-			if err != nil {
-				ch <- err
-				return
-			}
-			ch <- e.sendContext(ctx, req)
-		})
-		select {
-		case err := <-ch:
-			return err
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-e.done:
-			return e.closedOperationError()
-		}
+		return e.CancelOrder(ctx, orderID, cfg)
 	}
-	handle.modifyFn = func(ctx context.Context, order Order) error {
+	handle.replaceFn = func(ctx context.Context, order Order) error {
 		if err := validateOrderRequest(PlaceOrderRequest{Contract: contract, Order: order}); err != nil {
 			return err
 		}
@@ -572,7 +537,7 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 			if pr.err != nil {
 				return OrderState{}, pr.err
 			}
-			return orderStateFromOpenOrder(pr.order), nil
+			return pr.state, nil
 		case <-ctx.Done():
 			cleanup()
 			return OrderState{}, ctx.Err()
@@ -592,11 +557,7 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 // events channel as an OrderStatus with Status "Cancelled".
 func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		req, err := cancelOrderRequest(orderID, cfg, e.serverVersion)
-		if err != nil {
-			return err
-		}
-		return e.sendContext(ctx, req)
+		return e.sendContext(ctx, cancelOrderRequest(orderID, cfg))
 	})
 }
 
@@ -628,7 +589,7 @@ func (e *engine) RefreshOpenOrders(ctx context.Context) error {
 // OrderHandle events channels.
 func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		req, err := globalCancelRequest(cfg, e.serverVersion)
+		req, err := globalCancelRequest(cfg)
 		if err != nil {
 			return err
 		}
@@ -638,56 +599,76 @@ func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 
 const exerciseRouteTTL = 2 * time.Minute
 
-func (e *engine) installExerciseRoute(reqID int) {
-	route := &route{
+func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
+	orderHandle := newOrderHandle(int64(reqID), e.cfg.orderEventBuffer)
+	handle := &ExerciseHandle{requestID: reqID, order: orderHandle}
+	var exerciseRoute *route
+	closeExercise := func(err error) {
+		if or, ok := e.orders[int64(reqID)]; ok {
+			e.closeOrderRoute(int64(reqID), or, err)
+		}
+		if e.keyed[reqID] == exerciseRoute {
+			e.deleteKeyedRoute(reqID)
+		}
+	}
+	exerciseRoute = &route{
 		opKind: OpExerciseOptions,
 		handle: func(any, *engine) {},
 		handleAPIErr: func(m codec.APIError, e *engine) {
-			e.emitSessionEvent(m.Code, m.Message, e.apiErr(OpExerciseOptions, m))
-			if isTerminalExerciseNotice(m.Code) {
-				e.deleteKeyedRoute(reqID)
+			apiErr, _ := errors.AsType[*APIError](e.apiErr(OpExerciseOptions, m))
+			if m.Code == ErrCodeOrderTIFSetFromPreset {
+				if !orderHandle.emitWarning(apiErr) {
+					closeExercise(nil)
+				}
+				return
 			}
+			closeExercise(apiErr)
 		},
 		onDisconnect: func(e *engine, err error) bool {
+			closeExercise(ErrInterrupted)
 			return false
 		},
-		close: func(error) {},
+		close: closeExercise,
 	}
-	e.keyed[reqID] = route
+	e.keyed[reqID] = exerciseRoute
+	e.orders[int64(reqID)] = &orderRoute{orderID: int64(reqID), handle: orderHandle}
+	orderHandle.detachFn = func() {
+		e.enqueue(func() { closeExercise(nil) })
+	}
 	if e.cmds == nil {
-		return
+		return handle
 	}
 	time.AfterFunc(exerciseRouteTTL, func() {
 		e.enqueue(func() {
-			if e.keyed[reqID] == route {
-				e.deleteKeyedRoute(reqID)
+			if e.keyed[reqID] == exerciseRoute {
+				closeExercise(nil)
 			}
 		})
 	})
+	return handle
 }
 
-func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) error {
+func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest) (*ExerciseHandle, error) {
 	if err := validateExerciseOptionsRequest(req); err != nil {
-		return err
+		return nil, err
 	}
 	req.Contract = cloneContract(req.Contract)
-	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
+	type result struct {
+		handle *ExerciseHandle
+		err    error
+	}
+	resp := make(chan result, 1)
+	enqueueReadySetup(ctx, e, func() { resp <- result{err: ctx.Err()} }, func() {
 		if err := validateContractFieldSupport(req.Contract, "exercise options", e.serverVersion, 0); err != nil {
-			return err
+			resp <- result{err: err}
+			return
 		}
 		override := 0
 		if req.Override {
 			override = 1
 		}
 		reqID := e.allocReqID()
-		// Register a keyed route for the exercise request id. Exercise is
-		// fire-and-forget on the wire, but request-id-targeted replies —
-		// refusals (322), the TIF-preset acknowledgement (10349), and the 202
-		// that cancels a working instruction — must remain observable and must
-		// not be mistaken for an unrelated order with the same numeric id.
-		// There is no success-end callback, so terminal errors retire the route
-		// immediately and a bounded TTL retires quiet/successful instructions.
-		e.installExerciseRoute(reqID)
+		handle := e.installExerciseRoute(reqID)
 		if err := e.sendContext(ctx, codec.ExerciseOptionsRequest{
 			ReqID:            reqID,
 			Contract:         toCodecContract(req.Contract),
@@ -696,157 +677,169 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 			Account:          req.Account,
 			Override:         override,
 		}); err != nil {
+			if or, ok := e.orders[int64(reqID)]; ok {
+				e.closeOrderRoute(int64(reqID), or, err)
+			}
 			e.deleteKeyedRoute(reqID)
-			return err
+			resp <- result{err: err}
+			return
 		}
-		return nil
+		resp <- result{handle: handle}
 	})
-}
-
-func isTerminalExerciseNotice(code int) bool {
-	return code == ErrCodeServerErrorProcessingRequest || code == ErrCodeOrderCanceled
+	out, err := awaitAdmittedResponse(ctx, e, resp)
+	if err != nil {
+		return nil, err
+	}
+	return out.handle, out.err
 }
 
 func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
+	order, _, err := decodeCodecOpenOrder(m)
+	return order, err
+}
+
+func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 	contract, err := fromCodecContract(m.Contract)
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	comboLegPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, "open order combo leg price")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	quantity, err := parseOptionalDecimal(m.Quantity, "open order quantity")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	lmtPrice, err := parseOptionalDecimal(m.LmtPrice, "open order limit price")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	auxPrice, err := parseOptionalDecimal(m.AuxPrice, "open order aux price")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	initMarginBefore, err := parseOptionalDecimal(m.InitMarginBefore, "open order init margin before")
+	initMarginBefore, err := parseOptionalDecimalPointer(m.InitMarginBefore, "open order init margin before")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	maintMarginBefore, err := parseOptionalDecimal(m.MaintMarginBefore, "open order maint margin before")
+	maintMarginBefore, err := parseOptionalDecimalPointer(m.MaintMarginBefore, "open order maint margin before")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	equityWithLoanBefore, err := parseOptionalDecimal(m.EquityWithLoanBefore, "open order equity with loan before")
+	equityWithLoanBefore, err := parseOptionalDecimalPointer(m.EquityWithLoanBefore, "open order equity with loan before")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	initMarginChange, err := parseOptionalDecimal(m.InitMarginChange, "open order init margin change")
+	initMarginChange, err := parseOptionalDecimalPointer(m.InitMarginChange, "open order init margin change")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	maintMarginChange, err := parseOptionalDecimal(m.MaintMarginChange, "open order maint margin change")
+	maintMarginChange, err := parseOptionalDecimalPointer(m.MaintMarginChange, "open order maint margin change")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	equityWithLoanChange, err := parseOptionalDecimal(m.EquityWithLoanChange, "open order equity with loan change")
+	equityWithLoanChange, err := parseOptionalDecimalPointer(m.EquityWithLoanChange, "open order equity with loan change")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	initMarginAfter, err := parseOptionalDecimal(m.InitMarginAfter, "open order init margin after")
+	initMarginAfter, err := parseOptionalDecimalPointer(m.InitMarginAfter, "open order init margin after")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	maintMarginAfter, err := parseOptionalDecimal(m.MaintMarginAfter, "open order maint margin after")
+	maintMarginAfter, err := parseOptionalDecimalPointer(m.MaintMarginAfter, "open order maint margin after")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	equityWithLoanAfter, err := parseOptionalDecimal(m.EquityWithLoanAfter, "open order equity with loan after")
+	equityWithLoanAfter, err := parseOptionalDecimalPointer(m.EquityWithLoanAfter, "open order equity with loan after")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	commission, err := parseOptionalDecimal(m.Commission, "open order commission")
+	commission, err := parseOptionalDecimalPointer(m.Commission, "open order commission")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	minCommission, err := parseOptionalDecimal(m.MinCommission, "open order min commission")
+	minCommission, err := parseOptionalDecimalPointer(m.MinCommission, "open order min commission")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
-	maxCommission, err := parseOptionalDecimal(m.MaxCommission, "open order max commission")
+	maxCommission, err := parseOptionalDecimalPointer(m.MaxCommission, "open order max commission")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	origin, err := parseOptionalInt(m.Origin, "open order origin")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	clientID, err := parseOptionalInt(m.ClientID, "open order client id")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	permID, err := parseOptionalInt64(m.PermID, "open order perm id")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	parentID, err := parseOptionalInt64(m.ParentID, "open order parent id")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	outsideRTH, err := parseOptionalBoolString(m.OutsideRTH, "open order outside rth")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	hidden, err := parseOptionalBoolString(m.Hidden, "open order hidden")
 	if err != nil {
-		return OpenOrder{}, err
+		return OpenOrder{}, OrderState{}, err
 	}
 	return OpenOrder{
-		OrderID:       m.OrderID,
-		Account:       m.Account,
-		Contract:      contract,
-		Action:        OrderAction(m.Action),
-		OrderType:     OrderType(m.OrderType),
-		Status:        OrderStatus(m.Status),
-		WarningText:   m.WarningText,
-		Quantity:      quantity,
-		LmtPrice:      lmtPrice,
-		AuxPrice:      auxPrice,
-		TIF:           TimeInForce(m.TIF),
-		OcaGroup:      m.OcaGroup,
-		OpenClose:     m.OpenClose,
-		Origin:        origin,
-		OrderRef:      m.OrderRef,
-		ClientID:      clientID,
-		PermID:        permID,
-		OutsideRTH:    outsideRTH,
-		Hidden:        hidden,
-		GoodAfterTime: m.GoodAfterTime,
-		ParentID:      parentID,
-		Combo: OrderCombo{
-			LegPrices:    comboLegPrices,
-			SmartRouting: tagValuesFromCodec(m.SmartComboRouting),
-		},
-		ComboDescription:      m.ComboLegsDescription,
-		AlgoStrategy:          m.AlgoStrategy,
-		AlgoParams:            tagValuesFromCodec(m.AlgoParams),
-		Conditions:            orderConditionsFromCodec(m.Conditions),
-		ConditionsIgnoreRTH:   m.ConditionsIgnoreRTH == "1",
-		ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
-		InitMarginBefore:      initMarginBefore,
-		MaintMarginBefore:     maintMarginBefore,
-		EquityWithLoanBefore:  equityWithLoanBefore,
-		InitMarginChange:      initMarginChange,
-		MaintMarginChange:     maintMarginChange,
-		EquityWithLoanChange:  equityWithLoanChange,
-		InitMarginAfter:       initMarginAfter,
-		MaintMarginAfter:      maintMarginAfter,
-		EquityWithLoanAfter:   equityWithLoanAfter,
-		Commission:            commission,
-		MinCommission:         minCommission,
-		MaxCommission:         maxCommission,
-		CommissionCurrency:    m.CommissionCurrency,
-		Partial:               m.Partial,
-	}, nil
+			OrderID:       m.OrderID,
+			Account:       m.Account,
+			Contract:      contract,
+			Action:        OrderAction(m.Action),
+			OrderType:     OrderType(m.OrderType),
+			Status:        OrderStatus(m.Status),
+			WarningText:   m.WarningText,
+			Quantity:      quantity,
+			LmtPrice:      lmtPrice,
+			AuxPrice:      auxPrice,
+			TIF:           TimeInForce(m.TIF),
+			OcaGroup:      m.OcaGroup,
+			OpenClose:     m.OpenClose,
+			Origin:        origin,
+			OrderRef:      m.OrderRef,
+			ClientID:      clientID,
+			PermID:        permID,
+			OutsideRTH:    outsideRTH,
+			Hidden:        hidden,
+			GoodAfterTime: m.GoodAfterTime,
+			ParentID:      parentID,
+			Combo: OrderCombo{
+				LegPrices:    comboLegPrices,
+				SmartRouting: tagValuesFromCodec(m.SmartComboRouting),
+			},
+			ComboDescription:      m.ComboLegsDescription,
+			AlgoStrategy:          m.AlgoStrategy,
+			AlgoParams:            tagValuesFromCodec(m.AlgoParams),
+			Conditions:            orderConditionsFromCodec(m.Conditions),
+			ConditionsIgnoreRTH:   m.ConditionsIgnoreRTH == "1",
+			ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
+			Partial:               m.Partial,
+		}, OrderState{
+			InitMarginBefore:     initMarginBefore,
+			MaintMarginBefore:    maintMarginBefore,
+			EquityWithLoanBefore: equityWithLoanBefore,
+			InitMarginChange:     initMarginChange,
+			MaintMarginChange:    maintMarginChange,
+			EquityWithLoanChange: equityWithLoanChange,
+			InitMarginAfter:      initMarginAfter,
+			MaintMarginAfter:     maintMarginAfter,
+			EquityWithLoanAfter:  equityWithLoanAfter,
+			Commission:           commission,
+			CommissionMin:        minCommission,
+			CommissionMax:        maxCommission,
+			Currency:             m.CommissionCurrency,
+			WarningText:          m.WarningText,
+		}, nil
 }
 
 func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
@@ -897,88 +890,86 @@ func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
 	}, nil
 }
 
-func fromCodecExecution(m codec.ExecutionDetail) (ExecutionUpdate, error) {
+func fromCodecExecution(m codec.ExecutionDetail) (Execution, error) {
 	contract, err := fromCodecContract(m.Contract)
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	shares, err := parseRequiredDecimal(m.Shares, "execution shares")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	price, err := parseRequiredDecimal(m.Price, "execution price")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	ts, err := parseExecutionTime(m.Time)
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	permID, err := parseOptionalInt64(m.PermID, "execution permanent id")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	clientID, err := parseOptionalInt(m.ClientID, "execution client id")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	liquidation, err := parseOptionalInt(m.Liquidation, "execution liquidation")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	cumulativeQuantity, err := parseOptionalDecimal(m.CumulativeQuantity, "execution cumulative quantity")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	averagePrice, err := parseOptionalDecimal(m.AveragePrice, "execution average price")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	economicValueMultiplier, err := parseOptionalDecimalPointer(m.EconomicValueMultiplier, "execution economic value multiplier")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	lastLiquidity, err := parseOptionalInt(m.LastLiquidity, "execution last liquidity")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	pendingPriceRevision, err := parseOptionalBoolString(m.PendingPriceRevision, "execution pending price revision")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	optExerciseOrLapseType, err := parseOptionalInt(m.OptExerciseOrLapseType, "execution option exercise or lapse type")
 	if err != nil {
-		return ExecutionUpdate{}, err
+		return Execution{}, err
 	}
 	optionExerciseType := OptionExerciseType(optExerciseOrLapseType)
 	if optExerciseOrLapseType == -1 {
 		optionExerciseType = OptionExerciseTypeNone
 	}
-	return ExecutionUpdate{
-		Execution: &Execution{
-			OrderID:                 m.OrderID,
-			Contract:                contract,
-			ExecID:                  m.ExecID,
-			Time:                    ts,
-			Account:                 m.Account,
-			Exchange:                m.Exchange,
-			Side:                    ExecutionSide(m.Side),
-			Shares:                  shares,
-			Price:                   price,
-			PermID:                  permID,
-			ClientID:                clientID,
-			Liquidation:             liquidation,
-			CumulativeQuantity:      cumulativeQuantity,
-			AveragePrice:            averagePrice,
-			OrderRef:                m.OrderRef,
-			EconomicValueRule:       m.EconomicValueRule,
-			EconomicValueMultiplier: economicValueMultiplier,
-			ModelCode:               m.ModelCode,
-			Liquidity:               ExecutionLiquidity(lastLiquidity),
-			PriceRevisionPending:    pendingPriceRevision,
-			Submitter:               m.Submitter,
-			OptionExerciseType:      optionExerciseType,
-		},
+	return Execution{
+		OrderID:                 m.OrderID,
+		Contract:                contract,
+		ExecID:                  m.ExecID,
+		Time:                    ts,
+		Account:                 m.Account,
+		Exchange:                m.Exchange,
+		Side:                    ExecutionSide(m.Side),
+		Shares:                  shares,
+		Price:                   price,
+		PermID:                  permID,
+		ClientID:                clientID,
+		Liquidation:             liquidation,
+		CumulativeQuantity:      cumulativeQuantity,
+		AveragePrice:            averagePrice,
+		OrderRef:                m.OrderRef,
+		EconomicValueRule:       m.EconomicValueRule,
+		EconomicValueMultiplier: economicValueMultiplier,
+		ModelCode:               m.ModelCode,
+		Liquidity:               ExecutionLiquidity(lastLiquidity),
+		PriceRevisionPending:    pendingPriceRevision,
+		Submitter:               m.Submitter,
+		OptionExerciseType:      optionExerciseType,
 	}, nil
 }
 

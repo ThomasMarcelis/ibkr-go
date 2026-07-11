@@ -23,7 +23,6 @@ func newEngineForDispatchTest() (*engine, *bytes.Buffer) {
 		keyed:          make(map[int]*route),
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
-		executions:     newExecutionCorrelator(),
 		execDeliveries: make(map[string]*execDelivery),
 	}
 	return e, buf

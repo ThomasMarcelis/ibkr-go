@@ -356,13 +356,13 @@ func TestLiveExecutions(t *testing.T) {
 	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelReq()
 
-	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
 	if err != nil {
 		// Timeout is acceptable when the account has no executions.
 		t.Logf("Executions() returned: %v (acceptable for read-only/empty accounts)", err)
 		return
 	}
-	t.Logf("Executions: %d updates", len(updates))
+	t.Logf("Executions: %d rows", len(executions))
 }
 
 func TestLiveSubscribeAccountSummary(t *testing.T) {
@@ -605,7 +605,7 @@ func TestLivePlaceOrderLimitAndCancel(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFDay,
 		},
 	})
@@ -675,7 +675,7 @@ func TestLiveGlobalCancel(t *testing.T) {
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
 				Quantity:  decimal.RequireFromString("1"),
-				LmtPrice:  decimal.RequireFromString("50"),
+				LmtPrice:  new(decimal.RequireFromString("50")),
 				TIF:       ibkr.TIFDay,
 			},
 		})
@@ -1121,7 +1121,7 @@ func TestLivePlaceOrderModify(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFDay,
 		},
 	})
@@ -1140,15 +1140,15 @@ func TestLivePlaceOrderModify(t *testing.T) {
 		t.Fatal("timeout waiting for initial status")
 	}
 
-	// Modify to $51.
-	if err := handle.Modify(ctx, ibkr.Order{
+	// Replace to $51.
+	if err := handle.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.RequireFromString("1"),
-		LmtPrice:  decimal.RequireFromString("51"),
+		LmtPrice:  new(decimal.RequireFromString("51")),
 		TIF:       ibkr.TIFDay,
 	}); err != nil {
-		t.Fatalf("Modify: %v", err)
+		t.Fatalf("Replace: %v", err)
 	}
 
 	// Wait for an OpenOrder event reflecting the new price.
@@ -1224,7 +1224,7 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("500"),
+			LmtPrice:  new(decimal.RequireFromString("500")),
 			TIF:       ibkr.TIFGTC,
 			ParentID:  parent.OrderID(),
 			Transmit:  new(false),
@@ -1242,7 +1242,7 @@ func TestLivePlaceOrderBracket(t *testing.T) {
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("1"),
-			AuxPrice:  decimal.RequireFromString("50"),
+			AuxPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFGTC,
 			ParentID:  parent.OrderID(),
 		},
@@ -1378,7 +1378,7 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("50"),
+			LmtPrice:  new(decimal.RequireFromString("50")),
 			TIF:       ibkr.TIFGTC,
 		},
 	})
@@ -1403,9 +1403,7 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 			t.Fatal("timeout waiting for resting status")
 		}
 	}
-	if err := placer.Close(); err != nil {
-		t.Fatalf("placer Close: %v", err)
-	}
+	_ = placer.Close()
 	// Release the shared live-session slot before dialing the observer leg.
 	cancelPlacer()
 

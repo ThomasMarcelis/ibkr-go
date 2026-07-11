@@ -18,7 +18,7 @@ func bindContext[T any](ctx context.Context, sub *Subscription[T]) {
 	go func() {
 		select {
 		case <-ctx.Done():
-			_ = sub.Close()
+			sub.Close()
 		case <-sub.Done():
 		}
 	}()
@@ -44,7 +44,7 @@ func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], ma
 // cancellation cannot enter the active transport queue.
 func collectSnapshotAndClose[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) (U, bool)) ([]U, error) {
 	values, collectErr := collectSnapshot(ctx, sub, mapFn)
-	_ = sub.Close()
+	sub.Close()
 	closeErr := sub.Wait()
 	_, cancellationUncertain := errors.AsType[*SubscriptionCancelError](closeErr)
 	if collectErr == nil {

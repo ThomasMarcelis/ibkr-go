@@ -156,6 +156,9 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.MarketRule:
+					if m.MarketRuleID != marketRuleID {
+						return
+					}
 					delete(eng.singletons, singletonMarketRule)
 					increments := make([]PriceIncrement, len(m.Increments))
 					for i, inc := range m.Increments {
@@ -196,9 +199,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 		}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { delete(e.singletons, singletonMarketRule) })
-	})
+	out, err := awaitOneShotResponse(ctx, e, resp, nil)
 	if err != nil {
 		return MarketRuleResult{}, err
 	}

@@ -6,7 +6,7 @@ package protocol
 import "slices"
 
 const (
-	SupportedMinServerVersion = 176
+	SupportedMinServerVersion = 200
 	SupportedMaxServerVersion = 207
 )
 
@@ -57,7 +57,6 @@ const (
 	OutReqAllOpenOrders            = 16
 	OutReqManagedAccounts          = 17
 	OutRequestFA                   = 18
-	OutReplaceFA                   = 19
 	OutReqHistoricalData           = 20
 	OutExerciseOptions             = 21
 	OutReqScannerSubscription      = 22
@@ -193,7 +192,6 @@ const (
 	InTickByTick            = 99
 	InCompletedOrder        = 101
 	InCompletedOrderEnd     = 102
-	InReplaceFAEnd          = 103
 	InWSHMetaData           = 104
 	InWSHEventData          = 105
 	InHistoricalSchedule    = 106
@@ -220,7 +218,6 @@ var messages = [...]Message{
 	{"OutReqAllOpenOrders", OutReqAllOpenOrders, ClientToServer},
 	{"OutReqManagedAccounts", OutReqManagedAccounts, ClientToServer},
 	{"OutRequestFA", OutRequestFA, ClientToServer},
-	{"OutReplaceFA", OutReplaceFA, ClientToServer},
 	{"OutReqHistoricalData", OutReqHistoricalData, ClientToServer},
 	{"OutExerciseOptions", OutExerciseOptions, ClientToServer},
 	{"OutReqScannerSubscription", OutReqScannerSubscription, ClientToServer},
@@ -346,7 +343,6 @@ var messages = [...]Message{
 	{"InTickByTick", InTickByTick, ServerToClient},
 	{"InCompletedOrder", InCompletedOrder, ServerToClient},
 	{"InCompletedOrderEnd", InCompletedOrderEnd, ServerToClient},
-	{"InReplaceFAEnd", InReplaceFAEnd, ServerToClient},
 	{"InWSHMetaData", InWSHMetaData, ServerToClient},
 	{"InWSHEventData", InWSHEventData, ServerToClient},
 	{"InHistoricalSchedule", InHistoricalSchedule, ServerToClient},

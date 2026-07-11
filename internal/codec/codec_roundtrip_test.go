@@ -83,9 +83,8 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			msg:  ContractDetailsEnd{ReqID: 42},
 		},
 		{
-			// HistoricalBar encodes as InHistoricalData with barCount=1.
-			// At sv>=196 DecodeBatch returns the bar only; standalone
-			// HistoricalDataEnd carries completion.
+			// HistoricalBar encodes as InHistoricalData with barCount=1;
+			// standalone HistoricalDataEnd carries completion.
 			name: "HistoricalBar",
 			msg: HistoricalBar{
 				ReqID: 1, Time: "20260405 10:00:00", Open: "150.00",

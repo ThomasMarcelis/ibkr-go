@@ -30,12 +30,8 @@ func TestSubscriptionDoubleClose(t *testing.T) {
 		})
 		sub.closeWithErr(nil) // ensure done channel is closed so Close doesn't block
 
-		if err := sub.Close(); err != nil {
-			t.Errorf("first Close() = %v, want nil", err)
-		}
-		if err := sub.Close(); err != nil {
-			t.Errorf("second Close() = %v, want nil", err)
-		}
+		sub.Close()
+		sub.Close()
 	})
 
 	t.Run("closeWithErr twice", func(t *testing.T) {
@@ -85,9 +81,7 @@ func TestSubscriptionSlowConsumerWinsCompetingTeardown(t *testing.T) {
 			if !sub.emit(1) {
 				t.Fatal("first emit returned false, want true")
 			}
-			if err := sub.Close(); err != nil {
-				t.Fatalf("Close() error = %v", err)
-			}
+			sub.Close()
 			if sub.emit(2) {
 				t.Fatal("in-flight emit with full queue returned true")
 			}
@@ -457,7 +451,7 @@ func TestSubscriptionCancelFnCalledOnce(t *testing.T) {
 	sub.closeWithErr(nil)
 
 	for i := 0; i < 3; i++ {
-		_ = sub.Close()
+		sub.Close()
 	}
 
 	if got := count.Load(); got != 1 {

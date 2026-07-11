@@ -13,9 +13,7 @@ func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
 		for i := 0; i < 12; i++ {
 			handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: uint64(i + 1)})
 		}
-		if err := handle.Close(); err != nil {
-			t.Fatalf("Close() error = %v", err)
-		}
+		handle.Close()
 
 		var seqs []uint64
 		for evt := range handle.Lifecycle() {
@@ -23,11 +21,11 @@ func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
 				seqs = append(seqs, evt.ConnectionSeq)
 			}
 		}
-		if len(seqs) != 8 {
-			t.Fatalf("gap event count = %d, want 8", len(seqs))
+		if len(seqs) != 7 {
+			t.Fatalf("gap event count = %d, want 7 plus the terminal Closed event", len(seqs))
 		}
 		for i, seq := range seqs {
-			want := uint64(i + 5)
+			want := uint64(i + 6)
 			if seq != want {
 				t.Fatalf("seqs[%d] = %d, want %d (keep latest 8)", i, seq, want)
 			}
@@ -44,9 +42,7 @@ func TestOrderHandleCloseSerializedWithEngineEmits(t *testing.T) {
 		for i := 0; i < 8; i++ {
 			enqueueOrderHandleEmit(e, handle)
 		}
-		if err := handle.Close(); err != nil {
-			t.Fatalf("Close() error = %v", err)
-		}
+		handle.Close()
 		for i := 0; i < 8; i++ {
 			enqueueOrderHandleEmit(e, handle)
 		}
@@ -72,9 +68,7 @@ func TestOrderHandleCloseWhenEventsBufferFull(t *testing.T) {
 		for i := 0; i < cap(handle.events)+1; i++ {
 			enqueueOrderHandleEmit(e, handle)
 		}
-		if err := handle.Close(); err != nil {
-			t.Fatalf("Close() error = %v", err)
-		}
+		handle.Close()
 
 		synctest.Wait()
 		select {
@@ -177,7 +171,6 @@ func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 		keyed:          make(map[int]*route),
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
-		executions:     newExecutionCorrelator(),
 		execDeliveries: make(map[string]*execDelivery),
 		nextReqID:      1,
 		snapshot: Snapshot{
@@ -236,18 +229,18 @@ func enqueueOrderHandleEmit(e *engine, handle *OrderHandle) {
 	})
 }
 
-func TestOrderHandleModifyAfterCloseReturnsErrClosed(t *testing.T) {
+func TestOrderHandleReplaceAfterCloseReturnsErrClosed(t *testing.T) {
 	t.Parallel()
 
 	handle := newOrderHandle(100, 64)
-	handle.modifyFn = func(ctx context.Context, order Order) error {
-		t.Fatal("Modify invoked modifyFn after handle close")
+	handle.replaceFn = func(ctx context.Context, order Order) error {
+		t.Fatal("Replace invoked replaceFn after handle close")
 		return nil
 	}
 	handle.closeWithErr(nil)
 
-	if err := handle.Modify(context.Background(), Order{Action: ActionBuy, OrderType: OrderTypeLimit}); !errors.Is(err, ErrClosed) {
-		t.Fatalf("Modify() after close = %v, want ErrClosed", err)
+	if err := handle.Replace(context.Background(), Order{Action: ActionBuy, OrderType: OrderTypeLimit}); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Replace() after close = %v, want ErrClosed", err)
 	}
 }
 
@@ -265,9 +258,7 @@ func TestOrderHandleCloseDropsRouteAndExecMappings(t *testing.T) {
 		synctest.Wait()
 		<-closed
 
-		if err := handle.Close(); err != nil {
-			t.Fatalf("Close() error = %v", err)
-		}
+		handle.Close()
 		synctest.Wait()
 
 		got := make(chan struct {

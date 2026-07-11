@@ -26,7 +26,7 @@ func TestOrderLifecycleServer203Replay(t *testing.T) {
 		Contract: aaplContract,
 		Order: ibkr.Order{
 			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit,
-			Quantity: decimal.NewFromInt(1), LmtPrice: decimal.NewFromInt(50), TIF: ibkr.TIFDay,
+			Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.NewFromInt(50)), TIF: ibkr.TIFDay,
 		},
 	})
 	if err != nil {

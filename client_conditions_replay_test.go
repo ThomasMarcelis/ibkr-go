@@ -121,7 +121,7 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
 				Quantity:  decimal.RequireFromString("100"),
-				LmtPrice:  decimal.RequireFromString("14.59"),
+				LmtPrice:  new(decimal.RequireFromString("14.59")),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
 				OrderRef:  "ibkrgo-redacted-20260610T200936Z-001",

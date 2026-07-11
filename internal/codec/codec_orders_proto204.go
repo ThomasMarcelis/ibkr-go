@@ -1,45 +1,22 @@
 package codec
 
-import (
-	"fmt"
+import "fmt"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
-)
-
-func (OpenOrdersRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufCompletedOrder
-}
-
+//nolint:unparam // protobuf encoders share one fallible contract.
 func (m OpenOrdersRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: open orders protobuf requires server_version %d", m.protobufVersion())
-	}
 	if m.Scope == "auto" {
 		return appendProtoVarint(nil, 1, 1), nil
 	}
 	return nil, nil
 }
 
-func (CancelOpenOrders) protobufVersion() int {
-	return protocol.MinServerVersionProtobufCompletedOrder
-}
-
 func (m CancelOpenOrders) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: cancel auto-open orders protobuf requires server_version %d", m.protobufVersion())
-	}
 	// optional false is absent in the official protobuf request.
 	return []byte{}, nil
 }
 
-func (CompletedOrdersRequest) protobufVersion() int {
-	return protocol.MinServerVersionProtobufCompletedOrder
-}
-
+//nolint:unparam // protobuf encoders share one fallible contract.
 func (m CompletedOrdersRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < m.protobufVersion() {
-		return nil, fmt.Errorf("codec: completed orders protobuf requires server_version %d", m.protobufVersion())
-	}
 	if m.APIOnly {
 		return appendProtoVarint(nil, 1, 1), nil
 	}

@@ -122,7 +122,6 @@ func newBenchEngine(tb testing.TB) *engine {
 		keyed:                    make(map[int]*route),
 		singletons:               make(map[string]*route),
 		orders:                   make(map[int64]*orderRoute),
-		executions:               newExecutionCorrelator(),
 		execDeliveries:           make(map[string]*execDelivery),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
@@ -156,27 +155,6 @@ func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) *Su
 	return r.sub
 }
 
-func installDepthRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) (*Subscription[DepthRow], int) {
-	tb.Helper()
-	type result struct {
-		sub *Subscription[DepthRow]
-		err error
-	}
-	res := make(chan result, 1)
-	reqID := e.nextReqID
-	go func() {
-		sub, err := e.SubscribeMarketDepth(context.Background(), MarketDepthRequest{Contract: benchContract, NumRows: 10}, opts...)
-		res <- result{sub, err}
-	}()
-	fn := <-e.cmds
-	fn()
-	r := <-res
-	if r.err != nil {
-		tb.Fatalf("SubscribeMarketDepth: %v", r.err)
-	}
-	return r.sub, reqID
-}
-
 func decodeOne(tb testing.TB, payload []byte) codec.Message {
 	tb.Helper()
 	msgs, err := codec.DecodeBatch(200, payload)
@@ -187,20 +165,6 @@ func decodeOne(tb testing.TB, payload []byte) codec.Message {
 		tb.Fatalf("got %d messages, want 1", len(msgs))
 	}
 	return msgs[0]
-}
-
-// depthL2Frame packs a MarketDepthL2Update with the codec's round-trip-
-// validated encoder. Values shaped like a real NASDAQ book row.
-func depthL2Frame(tb testing.TB, reqID int) []byte {
-	tb.Helper()
-	payload, err := codec.Encode(200, codec.MarketDepthL2Update{
-		ReqID: reqID, Position: 3, MarketMaker: "NSDQ", Operation: 1, Side: 0,
-		Price: "255.45", Size: "300", IsSmartDepth: true,
-	})
-	if err != nil {
-		tb.Fatal(err)
-	}
-	return payload
 }
 
 // --- actor-side stage: handleIncoming with a live quote route ---
@@ -242,23 +206,6 @@ func BenchmarkActorHandleTickQuote_NoConsumer(b *testing.B) { benchActorTick(b, 
 
 // BenchmarkActorHandleTickQuote_Drained: actor cost with a spinning consumer.
 func BenchmarkActorHandleTickQuote_Drained(b *testing.B) { benchActorTick(b, true) }
-
-// BenchmarkActorHandleDepthL2_Drained measures actor cost per L2 row (two
-// decimal parses plus delivery) with a consumer preserving every book delta.
-func BenchmarkActorHandleDepthL2_Drained(b *testing.B) {
-	e := newBenchEngine(b)
-	sub, reqID := installDepthRoute(b, e)
-	msg := decodeOne(b, depthL2Frame(b, reqID))
-	go func() {
-		for range sub.Events() {
-		}
-	}()
-
-	b.ReportAllocs()
-	for b.Loop() {
-		e.handleIncoming(msg)
-	}
-}
 
 // --- full pipeline over real TCP loopback ---
 
@@ -379,7 +326,7 @@ func BenchmarkE2EQuoteStreamTCP(b *testing.B) {
 		if rate := float64(nMsgs) / elapsed.Seconds(); rate > bestRate {
 			bestRate = rate
 		}
-		_ = sub.Close()
+		sub.Close()
 		_ = client.Close()
 		cancel()
 	}

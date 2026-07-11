@@ -112,14 +112,14 @@ func Encode(sv int, msg Message) ([]byte, error) {
 	if unknown, ok := msg.(UnknownInbound); ok && unknown.Encoding == protocol.ProtobufBody {
 		return protocol.EncodeProtobufEnvelope(sv, msgID, unknown.Payload)
 	}
-	if proto, ok := msg.(protobufEncoder); ok && sv >= proto.protobufVersion() {
-		body, err := proto.encodeProto(sv)
-		if err != nil {
-			return nil, err
-		}
-		return protocol.EncodeProtobufEnvelope(sv, msgID, body)
-	}
 	if version, ok := protocol.OutboundProtobufVersion(msgID); ok && sv >= version {
+		if proto, ok := msg.(protobufEncoder); ok {
+			body, err := proto.encodeProto(sv)
+			if err != nil {
+				return nil, err
+			}
+			return protocol.EncodeProtobufEnvelope(sv, msgID, body)
+		}
 		return nil, fmt.Errorf("codec: msg_id %d protobuf encoding is not implemented for server_version %d", msgID, sv)
 	}
 	return protocol.EncodeClassicEnvelope(sv, msgID, fields[1:])
@@ -129,7 +129,6 @@ type decodeFunc func(r *fieldReader, sv int) ([]Message, error)
 type protobufDecodeFunc func(body []byte, sv int) ([]Message, error)
 
 type protobufEncoder interface {
-	protobufVersion() int
 	encodeProto(sv int) ([]byte, error)
 }
 
@@ -186,7 +185,6 @@ var inboundDecoders = map[int]decodeFunc{
 	protocol.InMarketDepthReroute:    decodeMarketDepthReroute,
 	protocol.InCompletedOrder:        decodeCompletedOrder,
 	protocol.InCompletedOrderEnd:     decodeCompletedOrderEnd,
-	protocol.InReplaceFAEnd:          decodeReplaceFAEnd,
 	protocol.InUserInfo:              decodeUserInfo,
 	protocol.InUpdateAccountValue:    decodeUpdateAccountValue,
 	protocol.InUpdatePortfolio:       decodeUpdatePortfolio,

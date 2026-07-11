@@ -57,7 +57,6 @@ scenario.
 | 16 | reqAllOpenOrders | yes | yes | yes | |
 | 17 | reqManagedAccounts | yes | yes | yes | bootstrap managed-account discovery |
 | 18 | requestFA | yes | yes | partial | non-FA error frozen; FA-account path missing |
-| 19 | replaceFA | no | no | no | **target** — needs FA account |
 | 20 | reqHistoricalData | yes | yes | yes | schedule variant, more bar sizes |
 | 21 | exerciseOptions | yes | yes | yes | lapse, override, and successful clearing settlement |
 | 22 | reqScannerSubscription | yes | yes | yes | complete 25-field public request and ten-row result are live-captured |
@@ -113,7 +112,7 @@ scenario.
 | 102 | reqWSHEventData | yes | yes | partial | filter/date/portfolio variants |
 | 103 | cancelWSHEventData | partial | partial | no | |
 | 104 | reqUserInfo | yes | yes | yes | |
-| 105 | reqCurrentTimeInMillis | yes | yes | yes | exact server_version 197+ request/response |
+| 105 | reqCurrentTimeInMillis | yes | yes | yes | exact supported request/response |
 
 ### 1.2 Inbound (server → client): 76 message IDs
 
@@ -127,7 +126,7 @@ All are exercised through the outbound scenarios above. Individual gaps:
 | 83 | newsArticle | captured through `api_news_article_aapl`; invalid article/provider variants remain |
 | 101 | completedOrder | classic full-field and exact-sv204 protobuf projection landed; nondefault combo, scale, hedge, active delta-neutral, PEG BENCH, condition, and FA frames remain |
 | 90 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
-| 108 | historicalDataEnd | standalone end marker at server_version >= 196; edge cases untested |
+| 108 | historicalDataEnd | standalone end marker; edge cases untested |
 
 ### 1.3 Contract field-layout law
 
@@ -342,7 +341,7 @@ tests.
 | Bracket: parent MKT + TP LMT + SL STP | live test | parent fill → children activate |
 | Bracket: trigger TP → SL auto-cancels | live test | sibling OCA cancellation |
 | OCA: one fills, peers cancel | live test | group semantics |
-| Modify resting to fill | live test | price modification → fill |
+| Replace resting to fill | live test | price modification → fill |
 | Cancel after fill (rejected) | live test | terminal state protection |
 | WhatIf margin preview | live test | no execution, commission data |
 | Reconnect with active orders | replay promoted | `api_reconnect_active_order_aapl.txt` freezes live GTC visibility/cancel after reconnect; `api_order_handle_reconnect_cancel_aapl.txt` freezes original handle Gap/Resumed + cancel |
@@ -507,7 +506,7 @@ tests.
 | OrderHandle after terminal (no-op) | live test |
 | Subscription close before first event | transcript |
 | Cancel after Done | live test |
-| Modify after Done | live test |
+| Replace after Done | live test |
 | Place with Transmit=false, then cancel | live test |
 | Place with Transmit=false, then transmit | replay promoted |
 | Two subscriptions same contract | replay promoted |
@@ -624,7 +623,7 @@ rejections or no-status cleanup evidence.
 - [x] Transmit=false then transmit (modify to transmit)
 - [x] Two subscriptions same contract (independent delayed streams)
 - [x] Cross-client order observation (client_id=0)
-- [ ] Server version boundary testing (sv=191 vs sv=192)
+- [x] Supported server boundaries (199 rejected, 200 accepted, 207 accepted, 208 rejected)
 - [x] Bond contract details callback shape
 
 Progress: `api_transmit_false_then_transmit_aapl` was live-captured on

@@ -366,7 +366,7 @@ func TestFAConfigReturnsExactLiveNonFARefusal(t *testing.T) {
 // TestHandleAPIErrorExerciseRouteShieldsCollidingOrder freezes the Bug 3
 // id-collision invariant: when an exercise request id numerically collides
 // with a live order id, the exercise's keyed route (checked before the order
-// fallback) absorbs the refusal as a session event, and the unrelated order
+// fallback) absorbs the refusal on its scoped handle, and the unrelated order
 // handle is left untouched.
 func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 	t.Parallel()
@@ -374,7 +374,7 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 	e := newEngineForErrorTest()
 	handle := newOrderHandle(5, 64)
 	e.orders[5] = &orderRoute{orderID: 5, handle: handle}
-	e.installExerciseRoute(5)
+	exerciseHandle := e.installExerciseRoute(5)
 
 	e.handleAPIError(codec.APIError{
 		ReqID:   5,
@@ -385,17 +385,9 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 	if handle.isDone() {
 		t.Fatal("exercise refusal closed the colliding order handle; keyed route must shield it")
 	}
-	select {
-	case evt := <-e.events.Chan():
-		if evt.Code != ErrCodeServerErrorProcessingRequest {
-			t.Fatalf("session event code = %d, want %d", evt.Code, ErrCodeServerErrorProcessingRequest)
-		}
-		apiErr, ok := errors.AsType[*APIError](evt.Err)
-		if !ok || apiErr.OpKind != OpExerciseOptions {
-			t.Fatalf("session event err = %v, want exercise *APIError", evt.Err)
-		}
-	default:
-		t.Fatal("exercise refusal did not surface as a session event")
+	apiErr, ok := errors.AsType[*APIError](exerciseHandle.Wait())
+	if !ok || apiErr.Code != ErrCodeServerErrorProcessingRequest || apiErr.OpKind != OpExerciseOptions {
+		t.Fatalf("exercise Wait() = %#v, want exercise code-322 APIError", apiErr)
 	}
 }
 
@@ -403,7 +395,7 @@ func TestExerciseRouteTerminalErrorDeletesKeyedRoute(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
-	e.installExerciseRoute(77)
+	handle := e.installExerciseRoute(77)
 
 	e.handleAPIError(codec.APIError{
 		ReqID:   77,
@@ -414,13 +406,17 @@ func TestExerciseRouteTerminalErrorDeletesKeyedRoute(t *testing.T) {
 	if _, ok := e.keyed[77]; ok {
 		t.Fatal("exercise route retained after terminal exercise refusal")
 	}
+	apiErr, ok := errors.AsType[*APIError](handle.Wait())
+	if !ok || apiErr.Code != ErrCodeServerErrorProcessingRequest {
+		t.Fatalf("exercise Wait() = %#v, want code-322 APIError", apiErr)
+	}
 }
 
 func TestExerciseRoutePresetNoticeStaysActive(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
-	e.installExerciseRoute(77)
+	handle := e.installExerciseRoute(77)
 
 	e.handleAPIError(codec.APIError{
 		ReqID:   77,
@@ -430,6 +426,14 @@ func TestExerciseRoutePresetNoticeStaysActive(t *testing.T) {
 
 	if _, ok := e.keyed[77]; !ok {
 		t.Fatal("exercise route deleted after non-terminal preset notice")
+	}
+	select {
+	case event := <-handle.Events():
+		if event.Warning == nil || event.Warning.Code != ErrCodeOrderTIFSetFromPreset {
+			t.Fatalf("exercise event = %#v, want code-10349 warning", event)
+		}
+	default:
+		t.Fatal("exercise preset notice was not delivered to handle")
 	}
 }
 
