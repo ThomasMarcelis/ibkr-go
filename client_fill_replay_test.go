@@ -520,10 +520,10 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 // captured live on 2026-06-11 (captures/20260611T133024Z-api_order_fill_aapl,
 // events.jsonl sha256 prefix 4fa597ba1c4bc369): six lifecycles with real
 // fills on one connection (MKT buy/sell round trips, an MTL fill, and a
-// rest-modify-fill), then a one-shot executions query that returned 41
-// updates live (15 executions, including two from the same day's earlier
-// captures, plus 26 commission deliveries), and a final safety global cancel
-// whose code-161 replies remain session notices. The query's re-emitted
+// rest-modify-fill), then a one-shot executions query retaining 26 campaign
+// updates (13 executions plus 13 commission deliveries), and a final safety
+// global cancel whose code-161 replies remain session notices. The query's
+// re-emitted
 // executions dual-dispatch to the still-open order routes but are deduped by
 // ExecID on the order-handle leg, so each handle sees every fill exactly once
 // while the query's own snapshot result still carries every row.
@@ -538,7 +538,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	defer cancel()
 
 	ref := func(n int) string {
-		return fmt.Sprintf("ibkrgo-sanitized-20260611T133024Z-%03d", n)
+		return fmt.Sprintf("ibkrgo-redacted-20260611T133024Z-%03d", n)
 	}
 	place := func(action ibkr.OrderAction, orderType ibkr.OrderType, lmt string, refNum int, wantID int64) (*ibkr.OrderHandle, *orderEventLog) {
 		t.Helper()
@@ -566,7 +566,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	// 371 MKT BUY 100: PreSubmitted, then a single 100-share fill at 292.79.
 	mktBuy, mktBuyLog := place(ibkr.ActionBuy, ibkr.OrderTypeMarket, "", 1, 371)
 	open := mktBuyLog.nextOpen(t, ctx)
-	if open.PermID != 900371 || open.OrderRef != ref(1) {
+	if open.PermID != 9000000371 || open.OrderRef != ref(1) {
 		t.Fatalf("371 open perm/ref = %d/%q", open.PermID, open.OrderRef)
 	}
 	if first := mktBuyLog.nextStatusAny(t, ctx); first.Status != ibkr.OrderStatusPreSubmitted {
@@ -643,23 +643,23 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		t.Fatalf("376 avg fill = %s, want 292.20", filled.AvgFillPrice)
 	}
 
-	// One-shot executions query: the Gateway replays 15 executions (including
-	// the day's earlier orders 368/369, surfaced only here) and re-sends a
-	// commission frame for 14 of them (376's last fill commission arrives only
-	// after ExecutionsEnd, so its route is already gone). The correlator no
+	// One-shot executions query: the Gateway replays all 13 executions from
+	// this campaign and re-sends a commission frame for 12 of them (376's last
+	// fill commission arrives only after ExecutionsEnd, so its route is already
+	// gone). The correlator no
 	// longer buffers the streaming-phase commissions that predate this query —
 	// they had no registered route to deliver to — so the pre-query fills no
 	// longer double-deliver a history replay at execution arrival. Fill-012 is
 	// the exception: its streaming commission lands just after req_executions
 	// (the route is already registered), so it is buffered and history-replayed
-	// once in addition to its query re-emit. That yields 15 executions + 15
-	// commission deliveries = 30 updates.
+	// once in addition to its query re-emit. That yields 13 executions + 13
+	// commission deliveries = 26 updates.
 	updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(updates) != 30 {
-		t.Fatalf("executions query updates = %d, want 30", len(updates))
+	if len(updates) != 26 {
+		t.Fatalf("executions query updates = %d, want 26", len(updates))
 	}
 	var queryExecs []ibkr.Execution
 	commissionUpdates := 0
@@ -671,29 +671,27 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 			commissionUpdates++
 		}
 	}
-	if commissionUpdates != 15 {
-		t.Fatalf("executions query commissions = %d, want 15", commissionUpdates)
+	if commissionUpdates != 13 {
+		t.Fatalf("executions query commissions = %d, want 13", commissionUpdates)
 	}
 	wantRows := []struct {
 		orderID int64
 		exec    wantExec
 		execID  string
 	}{
-		{368, wantExec{"BOT", "1", "292.76"}, "sanitized-fill-014"},
-		{369, wantExec{"SLD", "1", "292.70"}, "sanitized-fill-015"},
-		{371, wantExec{"BOT", "100", "292.79"}, "sanitized-fill-001"},
-		{372, wantExec{"SLD", "40", "292.33"}, "sanitized-fill-002"},
-		{372, wantExec{"SLD", "40", "292.30"}, "sanitized-fill-003"},
-		{372, wantExec{"SLD", "20", "292.30"}, "sanitized-fill-004"},
-		{373, wantExec{"BOT", "40", "292.44"}, "sanitized-fill-005"},
-		{373, wantExec{"BOT", "60", "292.44"}, "sanitized-fill-006"},
-		{374, wantExec{"SLD", "40", "292.36"}, "sanitized-fill-007"},
-		{374, wantExec{"SLD", "40", "292.33"}, "sanitized-fill-008"},
-		{374, wantExec{"SLD", "20", "292.33"}, "sanitized-fill-009"},
-		{375, wantExec{"BOT", "100", "292.31"}, "sanitized-fill-010"},
-		{376, wantExec{"SLD", "40", "292.20"}, "sanitized-fill-011"},
-		{376, wantExec{"SLD", "40", "292.20"}, "sanitized-fill-012"},
-		{376, wantExec{"SLD", "20", "292.20"}, "sanitized-fill-013"},
+		{371, wantExec{"BOT", "100", "292.79"}, "redacted-fill-000000001"},
+		{372, wantExec{"SLD", "40", "292.33"}, "redacted-fill-000000002"},
+		{372, wantExec{"SLD", "40", "292.30"}, "redacted-fill-000000003"},
+		{372, wantExec{"SLD", "20", "292.30"}, "redacted-fill-000000004"},
+		{373, wantExec{"BOT", "40", "292.44"}, "redacted-fill-000000005"},
+		{373, wantExec{"BOT", "60", "292.44"}, "redacted-fill-000000006"},
+		{374, wantExec{"SLD", "40", "292.36"}, "redacted-fill-000000007"},
+		{374, wantExec{"SLD", "40", "292.33"}, "redacted-fill-000000008"},
+		{374, wantExec{"SLD", "20", "292.33"}, "redacted-fill-000000009"},
+		{375, wantExec{"BOT", "100", "292.31"}, "redacted-fill-000000010"},
+		{376, wantExec{"SLD", "40", "292.20"}, "redacted-fill-000000011"},
+		{376, wantExec{"SLD", "40", "292.20"}, "redacted-fill-000000012"},
+		{376, wantExec{"SLD", "20", "292.20"}, "redacted-fill-000000013"},
 	}
 	if len(queryExecs) != len(wantRows) {
 		t.Fatalf("executions query rows = %d, want %d", len(queryExecs), len(wantRows))
@@ -713,7 +711,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	}())
 	// The query response carries the Gateway's "US/Eastern" time form, which
 	// must parse to the same instant as the streaming UTC dash form.
-	if want := time.Date(2026, 6, 11, 13, 30, 10, 0, time.UTC); !queryExecs[0].Time.Equal(want) {
+	if want := time.Date(2026, 6, 11, 13, 30, 30, 0, time.UTC); !queryExecs[0].Time.Equal(want) {
 		t.Fatalf("query row 0 time = %s, want %s (parsed from US/Eastern form)", queryExecs[0].Time, want)
 	}
 
