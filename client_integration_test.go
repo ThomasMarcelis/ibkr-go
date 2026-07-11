@@ -85,6 +85,7 @@ func TestHistoricalSchedule(t *testing.T) {
 
 	schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -100,22 +101,22 @@ func TestHistoricalSchedule(t *testing.T) {
 	if schedule.TimeZone != "US/Eastern" {
 		t.Errorf("TimeZone = %q, want US/Eastern", schedule.TimeZone)
 	}
-	if schedule.StartDateTime != "20260312-09:30:00" {
-		t.Errorf("StartDateTime = %q, want 20260312-09:30:00", schedule.StartDateTime)
+	if schedule.StartDateTime != "20260611-09:30:00" {
+		t.Errorf("StartDateTime = %q, want 20260611-09:30:00", schedule.StartDateTime)
 	}
-	if schedule.EndDateTime != "20260410-16:00:00" {
-		t.Errorf("EndDateTime = %q, want 20260410-16:00:00", schedule.EndDateTime)
+	if schedule.EndDateTime != "20260710-16:00:00" {
+		t.Errorf("EndDateTime = %q, want 20260710-16:00:00", schedule.EndDateTime)
 	}
-	if len(schedule.Sessions) != 21 {
-		t.Fatalf("Sessions = %d, want 21", len(schedule.Sessions))
+	if len(schedule.Sessions) != 20 {
+		t.Fatalf("Sessions = %d, want 20", len(schedule.Sessions))
 	}
 	first := schedule.Sessions[0]
-	if first.RefDate != "20260312" || first.StartDateTime != "20260312-09:30:00" {
-		t.Errorf("first session = %+v, want 20260312-09:30:00 / 20260312", first)
+	if first.RefDate != "20260611" || first.StartDateTime != "20260611-09:30:00" {
+		t.Errorf("first session = %+v, want 20260611-09:30:00 / 20260611", first)
 	}
-	last := schedule.Sessions[20]
-	if last.RefDate != "20260410" || last.EndDateTime != "20260410-16:00:00" {
-		t.Errorf("last session = %+v, want 20260410-09:30:00 / 20260410", last)
+	last := schedule.Sessions[19]
+	if last.RefDate != "20260710" || last.EndDateTime != "20260710-16:00:00" {
+		t.Errorf("last session = %+v, want 20260710-16:00:00 / 20260710", last)
 	}
 }
 
@@ -1365,6 +1366,7 @@ func TestHeadTimestamp(t *testing.T) {
 
 	ts, err := client.History().HeadTimestamp(ctx, ibkr.HeadTimestampRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -1584,6 +1586,7 @@ func TestHistogramData(t *testing.T) {
 
 	entries, err := client.History().Histogram(ctx, ibkr.HistogramDataRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -1595,14 +1598,15 @@ func TestHistogramData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HistogramData() error = %v", err)
 	}
-	if len(entries) != 3 {
-		t.Fatalf("entries len = %d, want 3", len(entries))
+	if len(entries) != 992 {
+		t.Fatalf("entries len = %d, want 992", len(entries))
 	}
-	if entries[0].Price.String() != "170.5" {
-		t.Fatalf("first price = %s, want 170.5", entries[0].Price.String())
+	if entries[0].Price.String() != "311" || entries[0].Size.String() != "267840" {
+		t.Fatalf("first entry = %s/%s, want 311/267840", entries[0].Price, entries[0].Size)
 	}
-	if entries[1].Size.String() != "2300" {
-		t.Fatalf("second size = %s, want 2300", entries[1].Size.String())
+	last := entries[991]
+	if last.Price.String() != "316.03" || last.Size.String() != "55920" {
+		t.Fatalf("last entry = %s/%s, want 316.03/55920", last.Price, last.Size)
 	}
 }
 

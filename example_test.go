@@ -197,6 +197,7 @@ func Example_historicalSchedule() {
 
 	schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -215,8 +216,8 @@ func Example_historicalSchedule() {
 	fmt.Println(schedule.TimeZone, len(schedule.Sessions), "sessions")
 	fmt.Println(first.RefDate, "through", last.RefDate)
 	// Output:
-	// US/Eastern 21 sessions
-	// 20260312 through 20260410
+	// US/Eastern 20 sessions
+	// 20260611 through 20260710
 }
 
 func Example_awaitSnapshot() {

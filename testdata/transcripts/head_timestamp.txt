@@ -1,6 +1,12 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_head_timestamp {"req_id":"$req_id"}
-server head_timestamp {"req_id":"$req_id","timestamp":"19801212-14:30:00"}
+# Live-derived from /tmp/ibkr-history-final-captures/
+# 20260710T224442Z-head_timestamp_aapl at server_version 206; events.jsonl sha256:
+# 9bbb8f8f025db049af0917c0a4412dfdeeca92be674ab4651f0129a0cd1de206.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted.
+# The AAPL request and timestamp response are exact.
+handshake {"server_version":206,"connection_time":"20260711 00:44:41 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAANAAAAFcxADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAADAAMQBUUkFERVMAMQA=
+raw server AAAAGAAAAFgxADE5ODAxMjEyLTE0OjMwOjAwAA==
 disconnect

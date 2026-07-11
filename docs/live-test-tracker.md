@@ -526,6 +526,9 @@ against the role-aware `paper-dev` Gateway.
 | current_time_millis.txt | 20260710T215126Z | promoted; exact sv206 bare reqCurrentTimeInMillis and live epoch-millisecond reply (`3070c6c9296d0eb2`) |
 | mkt_depth_exchanges.txt | 20260710T215127Z | promoted; exact sv206 request and complete 307-row depth-exchange response (`6ca2202028b6e8e1`) |
 | news_providers.txt | 20260710T215127Z | promoted; exact sv206 request and complete ordered eight-provider response (`999c27f32c7d8e68`) |
+| head_timestamp.txt | 20260710T224442Z | promoted; exact sv206 AAPL request and head timestamp response (`9bbb8f8f025db049`) |
+| histogram_data.txt | 20260710T224442Z | promoted; exact sv206 AAPL request and complete 992-bin response (`885d5783c6fbb37e`) |
+| historical_schedule_aapl.txt | 20260710T224442Z | promoted; exact sv206 AAPL request and complete 20-session schedule (`c5adf611a551c748`) |
 | api_whatif_margin_aapl.txt (preview) | 20260610T200009Z | see the AORD-010 row above; nine margin decimals plus commission on the public OpenOrder |
 | place_order_mkt_buy_aapl.txt | 20260611T133005Z | promoted; MKT BUY single fill with execution, UTC-dash time, and commission carrying a real negative realized PnL |
 | place_order_mkt_sell_aapl.txt | 20260611T133011Z | promoted; MKT SELL fill with the unset-PnL sentinel commission |
