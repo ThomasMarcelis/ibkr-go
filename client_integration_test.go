@@ -2738,27 +2738,7 @@ func TestSoftDollarTiersIntegration(t *testing.T) {
 	}
 }
 
-func TestQueryDisplayGroupsIntegration(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "display_groups.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	groups, err := client.TWS().DisplayGroups(ctx)
-	if err != nil {
-		t.Fatalf("QueryDisplayGroups() error = %v", err)
-	}
-	wantGroups := []ibkr.DisplayGroupID{1, 2, 3, 4, 5, 6, 7}
-	if !reflect.DeepEqual(groups, wantGroups) {
-		t.Fatalf("QueryDisplayGroups() = %v, want %v", groups, wantGroups)
-	}
-}
-
-func TestSubscribeDisplayGroupIntegration(t *testing.T) {
+func TestDisplayGroupLifecycleIntegration(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "display_group_subscribe.txt")
@@ -2768,7 +2748,16 @@ func TestSubscribeDisplayGroupIntegration(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	handle, err := client.TWS().SubscribeDisplayGroup(ctx, 1)
+	groups, err := client.TWS().DisplayGroups(ctx)
+	if err != nil {
+		t.Fatalf("DisplayGroups() error = %v", err)
+	}
+	wantGroups := []ibkr.DisplayGroupID{1, 2, 3, 4, 5, 6, 7}
+	if !reflect.DeepEqual(groups, wantGroups) {
+		t.Fatalf("DisplayGroups() = %v, want %v", groups, wantGroups)
+	}
+
+	handle, err := client.TWS().SubscribeDisplayGroup(ctx, groups[0])
 	if err != nil {
 		t.Fatalf("SubscribeDisplayGroup() error = %v", err)
 	}
@@ -2781,18 +2770,14 @@ func TestSubscribeDisplayGroupIntegration(t *testing.T) {
 		t.Fatalf("initial ContractInfo = %q, want %q", initial.ContractInfo, "none")
 	}
 
-	// Update to AAPL.
-	if err := handle.Update(ctx, "265598"); err != nil {
-		t.Fatalf("Update() error = %v", err)
-	}
-
-	updated := waitForEvent(t, handle.Events())
-	if updated.ContractInfo != "265598@SMART" {
-		t.Fatalf("updated ContractInfo = %q, want %q", updated.ContractInfo, "265598@SMART")
-	}
-
 	if err := handle.Close(); err != nil {
 		t.Fatalf("Close() error = %v", err)
+	}
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v", err)
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime() fence error = %v", err)
 	}
 }
 

@@ -1,9 +1,16 @@
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client subscribe_group_events {"req_id":"$req1"}
-server display_group_updated {"req_id":"$req1","contract_info":"none"}
-client update_display_group {"req_id":"$req1"}
-server display_group_updated {"req_id":"$req1","contract_info":"265598@SMART"}
-client unsubscribe_group_events {"req_id":"$req1"}
+# Live-derived from readonly IB Gateway server_version 206.
+# Private capture: 20260711T005249Z-display_group_subscribe.
+# events.jsonl sha256: bb3a476faf05a1d39ab39d318c472c759df22b66eda08c77c17b8ec8d58680a4
+# The account is a deterministic length-preserving substitution. Farm-status
+# messages are omitted because they are unrelated to the display-group route.
+handshake {"server_version":206,"connection_time":"20260711 02:52:49 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAACAAAAEMxADEA
+raw server AAAAFgAAAEMxADEAMXwyfDN8NHw1fDZ8NwA=
+raw client AAAACgAAAEQxADIAMQA=
+raw server AAAADQAAAEQxADIAbm9uZQA=
+raw client AAAACAAAAEYxADIA
+raw client AAAABgAAADExAA==
+raw server AAAAEQAAADExADE3ODM3MzExNjkA
 disconnect
