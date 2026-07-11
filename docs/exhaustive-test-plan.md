@@ -36,7 +36,7 @@ sets an explicit override.
 Every outbound and inbound message ID must have at least one live-grounded
 scenario.
 
-### 1.1 Outbound (client → server): 72 message IDs
+### 1.1 Outbound (client → server): 74 message IDs
 
 | ID | Name | Live | Capture | Transcript | Gap |
 |----|------|------|---------|------------|-----|
@@ -55,6 +55,7 @@ scenario.
 | 13 | cancelNewsBulletins | yes | yes | yes | |
 | 15 | reqAutoOpenOrders | yes | yes | yes | |
 | 16 | reqAllOpenOrders | yes | yes | yes | |
+| 17 | reqManagedAccounts | yes | yes | yes | bootstrap managed-account discovery |
 | 18 | requestFA | yes | yes | partial | non-FA error frozen; FA-account path missing |
 | 19 | replaceFA | no | no | no | **target** — needs FA account |
 | 20 | reqHistoricalData | yes | yes | yes | schedule variant, more bar sizes |
@@ -112,8 +113,9 @@ scenario.
 | 102 | reqWSHEventData | yes | yes | partial | filter/date/portfolio variants |
 | 103 | cancelWSHEventData | partial | partial | no | |
 | 104 | reqUserInfo | yes | yes | yes | |
+| 105 | reqCurrentTimeInMillis | yes | yes | yes | exact server_version 197+ request/response |
 
-### 1.2 Inbound (server → client): 72 message IDs
+### 1.2 Inbound (server → client): 76 message IDs
 
 All are exercised through the outbound scenarios above. Individual gaps:
 

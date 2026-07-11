@@ -18,7 +18,10 @@ Several existing Go libraries wrap the official callback shape in a thinner ergo
 
 Libraries that maintain a package-level singleton client, package-level logger, or package-level connection registry push ambiguity into every call site. Tests become brittle, parallelism becomes impossible without workarounds, and shutdown ordering becomes invisible.
 
-`ibkr-go` rejects implicit global state. Every client is a concrete value constructed explicitly. Loggers, clocks, and network dialers are passed in through functional options. The library has no package-level mutable state.
+`ibkr-go` rejects implicit global state. Every client is a concrete value
+constructed explicitly. Loggers and network dialers are passed in through
+functional options; deadlines come from caller contexts and Gateway time is
+requested explicitly. The library has no package-level mutable state.
 
 ## Silent reconnect
 
