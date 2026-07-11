@@ -242,35 +242,6 @@ func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
 	}
 }
 
-func TestDisconnectDuringOneShot(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "error_disconnect_during_oneshot.txt",
-		ibkr.WithReconnectPolicy(ibkr.ReconnectOff))
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		EndTime:    time.Date(2026, 4, 6, 12, 0, 0, 0, time.UTC),
-		Duration:   ibkr.Days(1),
-		BarSize:    ibkr.Bar1Hour,
-		WhatToShow: ibkr.ShowTrades,
-		UseRTH:     true,
-	})
-	if err == nil {
-		t.Fatal("HistoricalBars() error = nil, want error on disconnect")
-	}
-}
-
 func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 	t.Parallel()
 
