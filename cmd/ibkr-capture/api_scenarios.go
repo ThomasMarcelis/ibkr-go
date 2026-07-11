@@ -615,6 +615,57 @@ func runAPIDisplayGroups(ctx context.Context, addr string, clientID int) error {
 	})
 }
 
+func runAPIDisplayGroupSubscription(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		groups, err := client.TWS().DisplayGroups(ctx)
+		if err != nil {
+			return fmt.Errorf("query display groups: %w", err)
+		}
+		if len(groups) == 0 {
+			if err := fenceAPIWrites(ctx, client, "empty display group list"); err != nil {
+				return err
+			}
+			recordAPIEvent("display_group_unavailable", "", nil)
+			return nil
+		}
+
+		handle, err := client.TWS().SubscribeDisplayGroup(ctx, groups[0], ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe display group %d: %w", groups[0], err)
+		}
+		current := ""
+		count, err := awaitSubscriptionEvidence(ctx, handle.Subscription, 8*time.Second, func(update ibkr.DisplayGroupUpdate) bool {
+			current = update.ContractInfo
+			return update.ContractInfo != ""
+		})
+		if err != nil {
+			_ = handle.Close()
+			_ = handle.Wait()
+			return fmt.Errorf("observe display group %d: %w", groups[0], err)
+		}
+
+		// Re-selecting the current contract exercises Update without changing the
+		// operator's TWS state. An empty group reports "none", which is not a
+		// valid update token and is therefore left untouched.
+		updated := current != "" && current != "none"
+		if updated {
+			if err := handle.Update(ctx, current); err != nil {
+				_ = handle.Close()
+				_ = handle.Wait()
+				return fmt.Errorf("re-select display group %d contract %q: %w", groups[0], current, err)
+			}
+		}
+		if err := closeAndFenceSubscription(ctx, client, handle.Subscription, "display group subscription"); err != nil {
+			return err
+		}
+		recordAPIEvent("display_group_subscription", strconv.Itoa(int(groups[0])), func(event *apiDriverEvent) {
+			event.Count = count
+			event.Values = map[string]string{"update_sent": strconv.FormatBool(updated)}
+		})
+		return nil
+	})
+}
+
 func runAPIFAConfigGroups(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		document, err := client.Advisors().Config(ctx, ibkr.FADataGroups)

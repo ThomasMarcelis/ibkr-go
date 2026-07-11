@@ -909,28 +909,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIDisplayGroups,
 	},
 	"display_group_subscribe": {
-		metadata:    meta("tws", []string{"TWS().SubscribeDisplayGroup", "DisplayGroupHandle.Update"}, []int{67, 68, 69, 70}, "read_only", []string{"tws_display_groups"}, []string{"display group subscribe/update/unsubscribe"}, 1, "promoted", batchNewV2, batchReadOnly),
-		description: "QUERY_DISPLAY_GROUPS then SUBSCRIBE_TO_GROUP_EVENTS for group 1, observe, unsubscribe",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			queryReqID := nextReqID()
-			if err := sendQueryDisplayGroups(conn, queryReqID); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 3*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			subReqID := nextReqID()
-			if err := sendSubscribeToGroupEvents(conn, subReqID, 1); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendUnsubscribeFromGroupEvents(conn, subReqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("tws", []string{"TWS().DisplayGroups", "TWS().SubscribeDisplayGroup", "DisplayGroupHandle.Update", "Client.CurrentTime"}, []int{protocol.OutQueryDisplayGroups, protocol.InDisplayGroupList, protocol.OutSubscribeToGroupEvents, protocol.InDisplayGroupUpdated, protocol.OutUpdateDisplayGroup, protocol.OutUnsubscribeFromGroupEvents, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"tws_display_groups"}, []string{"typed display group query, subscribe, state-preserving update when possible, unsubscribe"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "query real display group IDs and exercise the public subscription lifecycle",
+		runAPI:      runAPIDisplayGroupSubscription,
 	},
 	"wsh_meta_data": {
 		metadata:    meta("wsh", []string{"WSH().MetaData"}, []int{protocol.OutReqWSHMetaData, protocol.InWSHMetaData, protocol.InErrMsg}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"valid WSH metadata JSON or exact entitlement error"}, 1, "promoted", batchNewV2, batchReadOnly),

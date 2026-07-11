@@ -457,24 +457,3 @@ func sendCancelOrder(conn net.Conn, orderID int64) error {
 func sendGlobalCancel(conn net.Conn) error {
 	return sendMessage(conn, []string{"58", "", ""})
 }
-
-// --- Query display groups (msg_id=67) ---
-//
-//	[67, version=1, reqId]
-func sendQueryDisplayGroups(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"67", "1", strconv.Itoa(reqID)})
-}
-
-// --- Subscribe to group events (msg_id=68) ---
-//
-//	[68, version=1, reqId, groupId]
-func sendSubscribeToGroupEvents(conn net.Conn, reqID, groupID int) error {
-	return sendMessage(conn, []string{"68", "1", strconv.Itoa(reqID), strconv.Itoa(groupID)})
-}
-
-// --- Unsubscribe from group events (msg_id=70) ---
-//
-//	[70, version=1, reqId]
-func sendUnsubscribeFromGroupEvents(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"70", "1", strconv.Itoa(reqID)})
-}
