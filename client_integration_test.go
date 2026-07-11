@@ -161,20 +161,22 @@ func TestAccountSummary(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		AccountFilter: "DU12345",
-		Tags:          []string{"NetLiquidation", "BuyingPower"},
+		AccountFilter: "DU9000001",
+		Tags:          []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
 	}
-	if len(values) != 2 {
-		t.Fatalf("values len = %d, want 2", len(values))
+	if len(values) != 4 {
+		t.Fatalf("values len = %d, want 4", len(values))
 	}
-	if values[0].Account != "DU12345" || values[1].Account != "DU12345" {
-		t.Fatalf("accounts = %#v, want only DU12345", values)
+	for _, value := range values {
+		if value.Account != "DU9000001" {
+			t.Fatalf("account = %q, want DU9000001", value.Account)
+		}
 	}
-	if values[0].Tag != "NetLiquidation" {
-		t.Fatalf("first tag = %q, want NetLiquidation", values[0].Tag)
+	if values[0].Tag != "BuyingPower" || values[0].Value != "173392.95" {
+		t.Fatalf("first value = %+v, want BuyingPower 173392.95", values[0])
 	}
 }
 
@@ -190,13 +192,13 @@ func TestAccountSummaryAllReturnsAllAccounts(t *testing.T) {
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
 		Group: "All",
-		Tags:  []string{"NetLiquidation", "BuyingPower"},
+		Tags:  []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
 	}
-	if len(values) != 3 {
-		t.Fatalf("values len = %d, want 3", len(values))
+	if len(values) != 4 {
+		t.Fatalf("values len = %d, want 4", len(values))
 	}
 }
 
@@ -211,17 +213,17 @@ func TestAccountSummarySucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		AccountFilter: "DU12345",
-		Tags:          []string{"NetLiquidation"},
+		AccountFilter: "DU9000001",
+		Tags:          []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"},
 	})
 	if err != nil {
 		t.Fatalf("AccountSummary() error = %v", err)
 	}
-	if len(values) != 1 {
-		t.Fatalf("values len = %d, want 1", len(values))
+	if len(values) != 4 {
+		t.Fatalf("values len = %d, want 4", len(values))
 	}
-	if values[0].Value != "100000.00" {
-		t.Fatalf("value = %#v, want 100000.00", values[0])
+	if values[2].Tag != "NetLiquidation" || values[2].Value != "33911.62" {
+		t.Fatalf("net liquidation = %+v, want 33911.62", values[2])
 	}
 }
 
@@ -236,8 +238,8 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 	defer cancel()
 
 	sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		AccountFilter: "DU12345",
-		Tags:          []string{"NetLiquidation"},
+		AccountFilter: "DU9000001",
+		Tags:          []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
 	})
 	if err != nil {
 		t.Fatalf("SubscribeAccountSummary() error = %v", err)
@@ -248,9 +250,19 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
 
-	first := waitForEvent(t, sub.Events())
-	if first.Value.Value != "100000.00" {
-		t.Fatalf("first value = %#v, want 100000.00", first)
+	want := []struct {
+		tag   string
+		value string
+	}{
+		{tag: "BuyingPower", value: "173392.95"},
+		{tag: "NetLiquidation", value: "33911.62"},
+		{tag: "TotalCashValue", value: "-1642.47"},
+	}
+	for _, expected := range want {
+		got := waitForEvent(t, sub.Events())
+		if got.Value.Tag != expected.tag || got.Value.Value != expected.value {
+			t.Fatalf("value = %+v, want %s %s", got.Value, expected.tag, expected.value)
+		}
 	}
 
 	snapshot := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
@@ -258,9 +270,10 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 		t.Fatalf("snapshot.ConnectionSeq = %d, want 1", snapshot.ConnectionSeq)
 	}
 
-	second := waitForEvent(t, sub.Events())
-	if second.Value.Value != "100500.00" {
-		t.Fatalf("second value = %#v, want 100500.00", second)
+	select {
+	case <-sub.Done():
+		t.Fatal("snapshot end closed streaming account summary")
+	default:
 	}
 
 	if err := sub.Close(); err != nil {

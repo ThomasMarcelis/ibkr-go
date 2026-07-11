@@ -1,10 +1,17 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_account_summary {"req_id":"$req1","account":"All","tags":["NetLiquidation","BuyingPower"]}
-server account_summary {"req_id":"$req1","account":"DU12345","tag":"NetLiquidation","value":"100000.00","currency":"USD"}
-server account_summary {"req_id":"$req1","account":"DU99999","tag":"NetLiquidation","value":"200000.00","currency":"USD"}
-server account_summary {"req_id":"$req1","account":"DU12345","tag":"BuyingPower","value":"50000.00","currency":"USD"}
-server account_summary_end {"req_id":"$req1"}
-client cancel_account_summary {"req_id":"$req1"}
+# Live-derived from /tmp/ibkr-current-eight-captures/
+# 20260710T223024Z-account_summary_snapshot at server_version 206; events.jsonl sha256:
+# 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db.
+# Account identifiers are deterministic length-preserving substitutions.
+# Ambient farm-status frames and the later current-time fence are omitted.
+# Request, all four values, end, and cancellation are exact.
+handshake {"server_version":206,"connection_time":"20260711 00:30:24 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAARgAAAD4xADEAQWxsAE5ldExpcXVpZGF0aW9uLFRvdGFsQ2FzaFZhbHVlLEJ1eWluZ1Bvd2VyLEV4Y2Vzc0xpcXVpZGl0eQA=
+raw server AAAALAAAAD8xADEARFU5MDAwMDAxAEJ1eWluZ1Bvd2VyADE3MzM5Mi45NQBFVVIA
+raw server AAAALwAAAD8xADEARFU5MDAwMDAxAEV4Y2Vzc0xpcXVpZGl0eQAyNjgwOC45NQBFVVIA
+raw server AAAALgAAAD8xADEARFU5MDAwMDAxAE5ldExpcXVpZGF0aW9uADMzOTExLjYyAEVVUgA=
+raw server AAAALgAAAD8xADEARFU5MDAwMDAxAFRvdGFsQ2FzaFZhbHVlAC0xNjQyLjQ3AEVVUgA=
+raw server AAAACAAAAEAxADEA
+raw client AAAACAAAAD8xADEA
 disconnect

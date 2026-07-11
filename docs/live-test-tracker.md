@@ -532,6 +532,8 @@ against the role-aware `paper-dev` Gateway.
 | head_timestamp.txt | 20260710T224442Z | promoted; exact sv206 AAPL request and head timestamp response (`9bbb8f8f025db049`) |
 | histogram_data.txt | 20260710T224442Z | promoted; exact sv206 AAPL request and complete 992-bin response (`885d5783c6fbb37e`) |
 | historical_schedule_aapl.txt | 20260710T224442Z | promoted; exact sv206 AAPL request and complete 20-session schedule (`c5adf611a551c748`) |
+| account_summary.txt, account_summary_disconnect_after_end.txt | 20260710T223024Z | promoted; exact sv206 four-tag snapshot, cancel or injected post-end transport loss (`71f26259c1556157`) |
+| account_summary_stream.txt | 20260710T223024Z | promoted; exact sv206 three-tag stream, snapshot end, and cancel (`7d4fd505b88228d0`) |
 | api_whatif_margin_aapl.txt (preview) | 20260610T200009Z | see the AORD-010 row above; nine margin decimals plus commission on the public OpenOrder |
 | place_order_mkt_buy_aapl.txt | 20260611T133005Z | promoted; MKT BUY single fill with execution, UTC-dash time, and commission carrying a real negative realized PnL |
 | place_order_mkt_sell_aapl.txt | 20260611T133011Z | promoted; MKT SELL fill with the unset-PnL sentinel commission |
