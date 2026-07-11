@@ -283,6 +283,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		return
 	}
 
+	// Cancellation replies use the order-ID namespace. They can arrive after
+	// an order route and even its connection are gone, when the same number is
+	// already serving an unrelated request ID. Keep them out of keyed routes;
+	// order status remains the handle's lifecycle signal and the API notice is
+	// session-level evidence.
+	if msg.ReqID > 0 && isOrderCancellationReply(msg.Code) {
+		e.emitAPIEvent(msg)
+		return
+	}
+
 	// 10xxx: market-data warnings such as 10167 "displaying delayed data".
 	// Route to keyed handler when one exists (the handler decides whether
 	// the code is terminal); otherwise emit as a session-level event.
@@ -298,10 +308,6 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 				if !e.ensureOrderStarted(or) {
 					e.closeOrderRoute(int64(msg.ReqID), or, nil)
-					return
-				}
-				if isOrderCancellationReply(msg.Code) {
-					e.emitAPIEvent(msg)
 					return
 				}
 				if !or.working && isInitialOrderRejection(msg.Code) {
@@ -334,10 +340,6 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 			if !e.ensureOrderStarted(or) {
 				e.closeOrderRoute(int64(msg.ReqID), or, nil)
-				return
-			}
-			if isOrderCancellationReply(msg.Code) {
-				e.emitAPIEvent(msg)
 				return
 			}
 			orderErr, isAPIErr := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))

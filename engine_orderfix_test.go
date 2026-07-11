@@ -491,6 +491,37 @@ func TestHandleAPIErrorKeepsUnattestedOrderNotice(t *testing.T) {
 	handle.Close()
 }
 
+// TestLateOrderCancellationNoticeDoesNotHitKeyedRoute freezes the cross-client
+// paper capture from 2026-07-11, server_version 207
+// (/tmp/ibkr-go-live-captures/20260711T205916Z-cross_client_cancel_reprobe,
+// events.jsonl sha256 f1b072887982ee651bda389c0f5b2885f7f165645a7169f88b797f9110f5ac22).
+// A code-202 notice for the previous order ID 1 arrived after reconnect, when
+// a new quote also owned request ID 1. Cancellation-only codes belong to the
+// order namespace and must not terminate the unrelated keyed request.
+func TestLateOrderCancellationNoticeDoesNotHitKeyedRoute(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	keyedCalled := false
+	e.keyed[1] = &route{
+		handleAPIErr: func(codec.APIError, *engine) { keyedCalled = true },
+	}
+
+	message, err := codec.Decode(207, liveCapturedFrame(t, "AAAAKgAAAMwIARCI5umX9TMYygEiGE9yZGVyIENhbmNlbGVkIC0gcmVhc29uOg=="))
+	if err != nil {
+		t.Fatalf("decode exact live code-202 frame: %v", err)
+	}
+	e.handleIncoming(message)
+
+	if keyedCalled {
+		t.Fatal("late order cancellation notice was routed to keyed request 1")
+	}
+	event := <-e.SessionEvents()
+	if event.APIError == nil || event.APIError.Code != ErrCodeOrderCanceled || event.APIError.RequestID != 1 {
+		t.Fatalf("session event = %+v, want order cancellation notice for id 1", event)
+	}
+}
+
 func TestHandleAPIErrorKeepsRejectionAfterWorkingEvidence(t *testing.T) {
 	t.Parallel()
 
