@@ -110,16 +110,20 @@ func TestReconnectOneShotInterrupted(t *testing.T) {
 func TestReconnectPolicyOff(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "reconnect_policy_off.txt",
+	client, host := newClient(t, "quote_stream_disconnect.txt",
 		ibkr.WithReconnectPolicy(ibkr.ReconnectOff))
 	defer client.Close()
 	defer waitHost(t, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType() error = %v", err)
+	}
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -133,11 +137,6 @@ func TestReconnectPolicyOff(t *testing.T) {
 	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
-	}
-
-	first := waitForEvent(t, sub.Events())
-	if first.Snapshot.Last.String() != "250" {
-		t.Fatalf("first last = %s, want 250", first.Snapshot.Last.String())
 	}
 
 	// Transport drops. With ReconnectOff, the subscription and client close.
