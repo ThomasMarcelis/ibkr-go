@@ -1,7 +1,15 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_positions {}
-server position {"account":"DU12345","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"position":"10","avg_cost":"189.12"}
-server position_end {}
+# Live-derived from captures/20260405T215052Z-positions_snapshot at server_version 200;
+# events.jsonl sha256: 1040c7e174563d310f2f707679c23275e8d25cff760dad88cb01c115818208bd.
+# The account and two average costs are deterministic sanitized substitutions.
+# The exact request, all four positions, and end are retained; transport closure
+# replaces the captured cancellation as fault injection.
+handshake {"server_version":200,"connection_time":"20260405 23:50:51 Central European Standard Time"}
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAABjkAMQAxAA==
+raw client AAAABTYxADEA
+raw server AAAARTYxADMARFU5MDAwMDAxADM2OTE5MzcAQU1aTgBTVEsAADAuMAAAAE5BU0RBUQBVU0QAQU1aTgBOTVMAMTUAMjAwLjI1AA==
+raw server AAAAYjYxADMARFU5MDAwMDAxADcyODkzNzgzNQBRUVEAT1BUADIwMjcwMTE1ADUwMC4wAFAAMTAwAABVU0QAUVFRICAgMjcwMTE1UDAwNTAwMDAwAFFRUQAtMwAyMTAwLjYzMjEA
+raw server AAAASjYxADMARFU5MDAwMDAxADcxNTM1ODI1NgBZVwBGVVQAMjAyNjEyMTQAMC4wAAAxMDAwAABVU0QAWFdaNgBYVwAxADYzODQuNDMA
+raw server AAAARDYxADMARFU5MDAwMDAxADI2NTU5OABBQVBMAFNUSwAAMC4wAAAATkFTREFRAFVTRABBQVBMAE5NUwAxMAAyNTYuMTAA
+raw server AAAABTYyADEA
 disconnect

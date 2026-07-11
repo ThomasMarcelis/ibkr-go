@@ -298,11 +298,11 @@ func TestPositionsSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T)
 	if err != nil {
 		t.Fatalf("PositionsSnapshot() error = %v", err)
 	}
-	if len(values) != 1 {
-		t.Fatalf("positions len = %d, want 1", len(values))
+	if len(values) != 4 {
+		t.Fatalf("positions len = %d, want 4", len(values))
 	}
-	if values[0].Position.String() != "10" {
-		t.Fatalf("position = %s, want 10", values[0].Position.String())
+	if values[3].Contract.Symbol != "AAPL" || values[3].Position.String() != "10" {
+		t.Fatalf("last position = %+v, want AAPL 10", values[3])
 	}
 }
 

@@ -535,6 +535,7 @@ against the role-aware `paper-dev` Gateway.
 | account_summary.txt, account_summary_disconnect_after_end.txt | 20260710T223024Z | promoted; exact sv206 four-tag snapshot, cancel or injected post-end transport loss (`71f26259c1556157`) |
 | account_summary_stream.txt | 20260710T223024Z | promoted; exact sv206 three-tag stream, snapshot end, and cancel (`7d4fd505b88228d0`) |
 | account_updates_multi.txt | 20260710T224440Z | promoted; exact sv206 request, all 125 ledger-and-NLV values, end, and cancel (`08e0c024b4b49823`) |
+| positions_disconnect_after_end.txt | 20260405T215052Z | promoted; exact sanitized four-position snapshot succeeds despite injected transport closure immediately after end (`1040c7e174563d31`) |
 | api_whatif_margin_aapl.txt (preview) | 20260610T200009Z | see the AORD-010 row above; nine margin decimals plus commission on the public OpenOrder |
 | place_order_mkt_buy_aapl.txt | 20260611T133005Z | promoted; MKT BUY single fill with execution, UTC-dash time, and commission carrying a real negative realized PnL |
 | place_order_mkt_sell_aapl.txt | 20260611T133011Z | promoted; MKT SELL fill with the unset-PnL sentinel commission |
