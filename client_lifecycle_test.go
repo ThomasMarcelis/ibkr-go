@@ -370,7 +370,7 @@ func TestBootstrapOutOfOrder(t *testing.T) {
 func TestSetMarketDataTypeAfterClose(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "lifecycle_set_mdt_after_close.txt")
+	client, host := newClient(t, "grounded_bootstrap.txt")
 	_ = client.Close()
 	<-client.Done()
 	_ = host.Close()
