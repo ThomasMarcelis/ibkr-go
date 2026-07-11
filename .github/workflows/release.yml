@@ -67,8 +67,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          base_tag="${TAG%%-*}"
-          awk -v tag="$base_tag" '
+          awk -v tag="$TAG" '
             found && /^## / { exit }
             !found && index($0, "## " tag) == 1 {
               rest = substr($0, length("## " tag) + 1)
@@ -79,7 +78,7 @@ jobs:
           sed -i -e '/./,$!d' -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' notes.md
           sed -i "s#](docs/migration-v2.md)#](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/docs/migration-v2.md)#g" notes.md
           if [ ! -s notes.md ]; then
-            echo "CHANGELOG.md has no release notes for $base_tag"
+            echo "CHANGELOG.md has no release notes for $TAG"
             exit 1
           fi
 

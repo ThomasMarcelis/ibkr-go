@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## v2.0.0-rc.2 — Unreleased
+## v2.0.0-rc.2 — 2026-07-11
 
 v2 is a clean-break release on the `github.com/ThomasMarcelis/ibkr-go/v2` module path. Existing v1 users remain on v1 until they explicitly change imports.
 
