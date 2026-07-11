@@ -1,8 +1,16 @@
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_positions {}
-server position_end {}
-sleep 1s
-client cancel_positions {}
+# Exact request, snapshot boundary, and cancellation from paper IB Gateway
+# server_version 207 capture
+# /tmp/ibkr-go-empty-positions-paper-20260711/
+# 20260711T032432Z-positions_snapshot, events.jsonl sha256:
+# 93fe95e3b2f7f336e6c9fced2ca7b563dd4e9c6726343ca05df02335b020b24d
+#
+# The account is length-preserving redacted to DU9000001. Eight private
+# position rows between the request and end marker are omitted; they are not
+# relevant to the singleton-ownership behavior under test.
+handshake {"server_version":207,"connection_time":"20260711 05:24:32 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAABAAAAQU=
+raw server AAAABAAAAQY=
+raw client AAAABAAAAQg=
 disconnect
