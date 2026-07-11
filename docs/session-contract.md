@@ -56,8 +56,7 @@ refreshed explicitly with `Client.ManagedAccounts`.
 
 ```go
 type Subscription[T any] struct {
-    Events() <-chan T
-    Lifecycle() <-chan SubscriptionStateEvent
+    Events() <-chan StreamEvent[T]
     All(ctx context.Context) iter.Seq[T]
     AwaitSnapshot(ctx context.Context) error
     Done() <-chan struct{}
@@ -67,19 +66,18 @@ type Subscription[T any] struct {
 }
 ```
 
-`All(ctx)` is the canonical consumption loop: ranging over it drains `Events()`
-to exhaustion (or until `ctx` ends), so `Err()`/`Wait()` are final by the time
-the loop exits. It is equivalent to the drain-then-`Wait()` pattern described
-below, without the caller managing channel state directly.
+`Events()` is the single ordered queue for data and lifecycle boundaries. Its
+event kinds are `Started`, `Data`, `SnapshotComplete`, `Gap`, `Restored`, and
+`Resubscribed`. `Restored` means the Gateway retained the remote stream (1102);
+`Resubscribed` means the client physically sent the request again. Channel
+close is terminal; inspect `Err()` or `Wait()` for its cause. There is no
+redundant `Closed` event.
 
-`Events()` carries business data only. `Lifecycle()` carries lifecycle only and
-is bounded/observational: if unread, older queued lifecycle events may be
-dropped in favor of the latest one. `SubscriptionClosed` is still guaranteed
-before the lifecycle channel closes. `SubscriptionGap` and `SubscriptionClosed`
-events include `Retryable`; callers that read only `Events()` should inspect
-`sub.Err()` or `sub.Wait()` with `IsRetryable(err)` after the channel closes.
-`Err()` does not wait for `Done()` and returns nil until a terminal close reason
-is known.
+`All(ctx)` filters `Data` values from that same queue. Ranging it to exhaustion
+drains every buffered event, so `Err()`/`Wait()` are final when the loop exits.
+`Events()` and `All()` are alternative consumers and must not be read
+concurrently. `Err()` does not wait for `Done()` and returns nil until a
+terminal close reason is known.
 
 `Events()` closes before `Done()`. Consumers that need every buffered business
 event must drain `Events()` until it closes, then call `Wait()`. `Done()` is for
@@ -95,10 +93,10 @@ Once the subscribe frame is admitted, its handle result wins caller-context and
 client-shutdown races; before admission, setup returns an error and no handle.
 The establishment context remains bound to the returned handle, so a context
 that raced admission initiates cancellation immediately without hiding the
-handle or its terminal result.
+handle. `Wait()` preserves the context's exact cancellation cause.
 
-`Close` initiates cancellation asynchronously and remains idempotent. `Wait`,
-`Err`, and the `Closed` lifecycle event report `*SubscriptionCancelError` when
+`Close` initiates cancellation asynchronously and remains idempotent. `Wait`
+and `Err` report `*SubscriptionCancelError` when
 the cancel frame cannot enter the active transport queue. That error is
 non-retryable because the old remote stream may still be live; recycle the
 client connection before creating a replacement subscription. A nil close
@@ -109,28 +107,33 @@ hosts that remote stream.
 
 Slow-consumer shutdown uses the same cancellation path. If cancellation enters
 the active transport queue, that transport is already dead, or another terminal
-teardown wins the race, `Wait`, `Err`, and the `Closed` lifecycle event report
+teardown wins the race, `Wait` and `Err` report
 exactly `ErrSlowConsumer`. Only when the active transport refuses cancellation
 admission do all three report the same joined error:
 `errors.Is(err, ErrSlowConsumer)` remains true and
 `errors.AsType[*SubscriptionCancelError](err)` exposes the uncertain remote
 stream. The joined result is not retryable.
 
-Lifecycle event kinds:
+Ordered event kinds:
 
 - `Started`
+- `Data`
 - `SnapshotComplete`
 - `Gap`
-- `Resumed`
-- `Closed`
+- `Restored`
+- `Resubscribed`
 
 Retryability:
 
-- transport/session gaps are retryable
-- `ErrInterrupted` and `ErrResumeRequired` closes are retryable
-- `*APIError` closes are terminal request rejections and are not retryable
+- `ErrNotReady`, `ErrInterrupted`, and `ErrResumeRequired` are retryable
+- transient `*ConnectError` values are retryable
+- API pacing violations are retryable with backoff; other `*APIError` values
+  are terminal by default
+- caller context cancellation, protocol/validation failures,
+  `ErrSlowConsumer`, and `ErrClosed` are not retryable
 - `*SubscriptionCancelError` is not retryable even when it wraps
   `ErrInterrupted`
+- `*OrderRecoveryError` is not retryable even when it wraps a transient cause
 
 Default subscription behavior:
 
@@ -155,7 +158,9 @@ frame is admitted, its buffered success result wins races with `ctx.Done()` and
 engine shutdown: `Place` returns the handle and `nil`, even if concurrent
 shutdown has already closed that handle. Before admission, it returns an error
 and no handle. This keeps the result unambiguous; a live order is never hidden
-behind a context error.
+behind a context error. The transport tracks each admitted order frame until
+the socket write completes. If the connection dies while that frame is still
+unwritten, the handle closes with `ErrInterrupted`: IBKR never received it.
 
 `Orders().PlaceBracket(ctx, req)` allocates the parent, take-profit, and
 stop-loss IDs in one actor turn and owns their `ParentID` and `Transmit`
@@ -187,7 +192,6 @@ type OrderHandle struct{ /* opaque */ }
 
 func (h *OrderHandle) OrderID() int64
 func (h *OrderHandle) Events() <-chan OrderEvent
-func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent
 func (h *OrderHandle) Done() <-chan struct{}
 func (h *OrderHandle) Wait() error
 func (h *OrderHandle) Close()
@@ -198,7 +202,9 @@ func (h *OrderHandle) Replace(ctx context.Context, order Order) error
 `Orders().Place` returns an `OrderHandle` that tracks a single order's
 lifecycle. `Events()` delivers `OrderEvent` values. `OrderEvent` is a union:
 exactly one of `OpenOrder`, `Status`, `Execution`, `CommissionAndFees`, or
-`Warning` is non-nil per event.
+`Warning`, `Binding`, or `Lifecycle` is non-nil per event. `OpenOrder.State`
+preserves the margin, commission, allocation, and rejection details from the
+same open-order frame.
 
 The event queue is bounded and lossless, with a client-wide default capacity of
 64 configured by `WithOrderEventBuffer`. It never silently drops an event while
@@ -207,14 +213,16 @@ continuing to observe. If the queue fills, the handle closes with
 IBKR stopped or cancelled the live order. `OrderID()` remains available as the
 stable coordinate for open-order reconciliation and direct cancellation.
 
-`Lifecycle()` delivers Gap and Resumed events across reconnect boundaries. It is
-bounded and observational. `Close()` detaches the handle without cancelling the
-server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
+`OrderEvent.Lifecycle` carries `Started`, `Gap`, `Restored`, and
+`RecoveryRequired` in order with business events. `RecoveryRequired` means the
+connection gap may have hidden order changes; reconcile open orders,
+executions, and completed orders before replacement. `Close()` detaches the
+handle without cancelling the server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
 can attach the manual cancel time, external operator, and manual-order
 indicator through `CancelOption`. `Replace(ctx, order)` sends a modified order
 with the same OrderID.
 
-`Events()` closes before `Done()`. A Filled, Cancelled, ApiCancelled, or
+`Events()` closes before `Done()`. A Filled, Cancelled, APICancelled, or
 Inactive status is an order-state event, not the end of local observation.
 Execution and commission-and-fees callbacks may follow it. The caller owns the
 observation window and must call `Close()` after collecting the evidence it
@@ -222,38 +230,38 @@ needs; `Close()` then drains already-buffered events before `Done()` closes.
 `Wait()` reports the explicit local close, a request error, slow-consumer
 failure, or disconnect.
 
-An order-targeted api_error that rejects the placement outright (no
-order_status ever follows) closes the handle with the `*APIError` as its
-terminal error;
-this covers both the sub-10000 rejection codes and the 10xxx codes
-live-attested as outright placement rejections (10063, 10255). Order-targeted
-10xxx notices for live orders — cancel replies such as 10147/10148 — stay
-session events, because the handle already carries the order's real state.
+An order-targeted api_error closes the handle only when
+`APIError.IsOrderRejection()` identifies a live-attested outright placement
+failure and no working-order evidence has appeared. Unknown codes and every
+error after working evidence are delivered as non-terminal warnings: retaining
+an observable live order is safer than detaching it. Order-targeted 10xxx
+notices for live orders — cancel replies such as 10147/10148 — stay session
+events, because the handle already carries the order's real state.
 Cancellation replies 161 (the order is not in a cancellable state) and 202
 (the order was cancelled) follow the same rule even though they are below
 10000: they are session notices, never placement failures. A 161 may race
 ahead of the terminal status it describes, so it must not tear down the route;
 the subsequent `OrderStatus` still owns the handle result.
 
-An order-targeted api_error whose `(&APIError{Code: ...}).IsWarning()` is true —
-notably code 399, the off-hours deferral — is delivered non-terminally as an
-`OrderEvent.Warning`. The order stays working at IB and the handle stays open;
-its real lifecycle and later status updates continue until the caller closes
-the observation window or an error/disconnect ends it.
+Other order-targeted api_error values — notably code 399, the off-hours
+deferral, and code 404, an order held while shares are located — are delivered
+non-terminally as `OrderEvent.Warning`. The order stays observable and the
+handle remains open; later status updates continue until the caller closes the
+observation window or an error ends it.
 
 ## Completion and Reconnect
 
 - One-shots complete only on explicit protocol completion markers.
-- Snapshot-style subscriptions surface completion through `Lifecycle()` and
-  `AwaitSnapshot`.
+- Snapshot-style subscriptions surface completion through the ordered event
+  stream and `AwaitSnapshot`.
 - `Orders().Executions(ctx, filter)` returns an `ExecutionSnapshot` containing
   executions and every commission-and-fees report observed through IBKR's
   execution-details end marker. Because fees are independent ExecID-correlated
   messages and may arrive or be revised after that boundary,
   `SubscribeExecutions` keeps the route open until the caller closes it and
   emits `ExecutionUpdate` values for executions and fee reports.
-- Reconnect boundaries are explicit through `Event` and
-  `SubscriptionStateEvent`, never mixed into business event streams.
+- Reconnect boundaries are explicit through session `Event`, `StreamEvent`,
+  and `OrderEvent` values.
 - Calls submitted while the session is reconnecting wait for the next `Ready`
   transition or for their context to end; callers do not need to add their own
   client-wide mutex for bursty request sequences.
@@ -264,8 +272,10 @@ the observation window or an error/disconnect ends it.
   route applies its transport-loss teardown — non-resumable subscriptions
   close with `ErrResumeRequired`, in-flight one-shots and pending what-if
   previews resolve with `ErrInterrupted` (both retryable). A data-maintained
-  restoration (code 1102) interrupts nothing. Live order handles survive both:
-  orders rest at IB, not on the Gateway's data connection.
+  restoration (code 1102) interrupts nothing. Live order handles survive both,
+  but a reconnect that cannot prove the missing order state emits
+  `RecoveryRequired`; callers reconcile before replacement. Orders rest at IB,
+  not on the Gateway's data connection.
 - Historical bars and schedules use internal endpoint admission so rapid
   repeated requests respect Gateway pacing before they are written to the
   socket.
@@ -277,6 +287,7 @@ Public error taxonomy:
 - `*ConnectError`
 - `*ProtocolError`
 - `*APIError`
+- `*ValidationError`
 - `*SubscriptionCancelError`
 - `*OrderRecoveryError`
 - `IsRetryable(err)`
@@ -287,6 +298,16 @@ Public error taxonomy:
 - `ErrSlowConsumer`
 - `ErrUnsupportedServerVersion`
 - `ErrClosed`
+- `ErrNoMatch`
+- `ErrAmbiguousContract`
+- `ErrNoSubscription`
+- `ErrOperationActive`
+
+`*APIError` exposes `IsEntitlement`, `IsPacingViolation`,
+`IsOrderRejection`, `IsConnectivityTransition`, `IsFarmStatus`, and
+`IsWarning` for control-flow classification without text parsing. Generic HMDS
+code 162 and real-time-query code 420 count as pacing only when their Gateway
+message explicitly says so.
 
 Numeric and payload types:
 

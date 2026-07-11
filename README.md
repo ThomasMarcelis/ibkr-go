@@ -25,7 +25,7 @@ if err != nil {
 }
 fmt.Println("positions:", len(positions))
 
-// streaming — typed subscription with lifecycle events
+// streaming — one ordered stream, or data-only iteration with All
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
 })
@@ -53,7 +53,7 @@ v2 uses Go semantic import versioning, so existing v1 applications cannot upgrad
 ## Why ibkr-go
 
 - **Go-shaped API.** One-shots return typed results. Streams return typed
-  subscriptions with `Events()`, `Lifecycle()`, and `Done()`. No `EWrapper` /
+  subscriptions with one ordered `Events()` stream plus `Done()`. No `EWrapper` /
   `EClient` callback surface.
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
@@ -61,9 +61,9 @@ v2 uses Go semantic import versioning, so existing v1 applications cannot upgrad
   `server_version` 200..207: 200 is the classic-wire live baseline, with exact
   post-200 protocol migrations through 207. Remaining official branches are
   tracked explicitly in the roadmap and coverage matrix.
-- **Reconnects are explicit.** Session transitions and subscription lifecycle
-  events — `Gap`, `Resumed`, `SnapshotComplete`, `Closed` — are part of the
-  contract, not hidden behind callbacks.
+- **Reconnects are explicit.** Subscription events preserve `Gap`, `Restored`,
+  `Resubscribed`, and `SnapshotComplete` in order with data. Channel close plus
+  `Err()` is the terminal signal.
 - **Exact financial values.** [`decimal.Decimal`](https://github.com/shopspring/decimal)
   for typed prices, quantities, and money — no float64 rounding. Heterogeneous
   IBKR values and extensible tag payloads remain strings where the protocol
@@ -123,12 +123,27 @@ if err := sub.Err(); err != nil {
 `sub.All(ctx)` ranges over business data until the subscription closes or ctx
 is canceled, then `sub.Err()` reports why: nil for a clean close, or e.g.
 `ibkr.ErrSlowConsumer` / `ibkr.ErrInterrupted` otherwise — check
-`ibkr.IsRetryable(err)` to tell a reconnectable gap from a terminal IBKR API
-rejection. Lifecycle transitions (`SnapshotComplete`, `Gap`, `Resumed`,
-`Closed`) are a separate channel, `sub.Lifecycle()`, and are never mixed into
-`All`/`Events`; a caller that needs both streams in one loop reads
-`Events()`/`Lifecycle()` directly with a `select`, or reads `Lifecycle()` from
-another goroutine.
+`ibkr.IsRetryable(err)` to distinguish retry-with-backoff conditions from
+terminal failures. `All` filters lifecycle transitions from the subscription's
+single queue. To observe reconnect boundaries, consume `Events()` instead:
+
+```go
+for event := range sub.Events() {
+    switch event.Kind {
+    case ibkr.StreamData:
+        fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
+    case ibkr.StreamGap:
+        log.Printf("quote gap on connection %d: %v", event.ConnectionSeq, event.Err)
+    case ibkr.StreamRestored, ibkr.StreamResubscribed:
+        log.Printf("quote stream recovered on connection %d", event.ConnectionSeq)
+    }
+}
+return sub.Err()
+```
+
+`Events()` and `All(ctx)` consume the same ordered queue; choose one rather
+than reading both concurrently. `AwaitSnapshot(ctx)` remains a durable initial
+snapshot boundary.
 
 ### Fetch historical bars
 
@@ -153,7 +168,7 @@ for _, bar := range bars {
 
 `Place` returns an `OrderHandle` whose `Events()` channel carries a typed
 union — exactly one of `Status`, `Execution`, `CommissionAndFees`, `OpenOrder`,
-or `Warning` is non-nil per event. A terminal order status does not close the
+`Warning`, `Binding`, or `Lifecycle` is non-nil per event. A terminal order status does not close the
 handle because IBKR can deliver executions and fees afterward. The caller ends
 its observation window explicitly after collecting the evidence it needs.
 
@@ -206,8 +221,8 @@ After `ErrSlowConsumer`, `Replace` returns `ErrClosed`; reconcile with the
 stable `OrderID` and cancel through `handle.Cancel` or
 `client.Orders().Cancel(ctx, handle.OrderID())` if the order is still working.
 
-Absent an explicit local close or observation error, the events channel keeps
-delivering until the server confirms the terminal state.
+The handle remains open after a terminal status so trailing executions and fees
+can arrive. Call `Close` when the application's observation window is complete.
 
 Place a bracket without managing IDs or transmit flags yourself:
 
@@ -227,12 +242,14 @@ fmt.Println(bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.Stop
 
 `PlaceBracket` allocates all three IDs in one engine turn, links both children,
 and sends the required `Transmit=false`, `false`, `true` sequence. Each returned
-handle has the same lifecycle API as a regular order.
+handle has the same ordered order-event API as a regular order.
 
 Transport-queue admission is the ownership boundary for both placement calls.
-After admission, a concurrent context cancellation or client shutdown does not
-replace a successful result: you receive the handle (or bracket) and own its
-lifecycle. Before admission, placement returns an error and no handle. If a
+After admission, a concurrent context cancellation does not replace a
+successful result: you receive the handle (or bracket) and own its lifecycle.
+If the admitted frame was still unwritten when the transport died, that handle
+closes with `ErrInterrupted`; IBKR never received that frame. Before admission,
+placement returns an error and no handle. If a
 bracket is only partially admitted, the zero bracket is returned with an
 `*ibkr.OrderRecoveryError`; its `OrderIDs` contain every admitted leg to
 reconcile through open orders. `CancelErr == nil` means every compensating
@@ -260,8 +277,8 @@ if err != nil {
     return err
 }
 defer sub.Close()
-for pos := range sub.Events() {
-    fmt.Println(pos.Position.Contract.Symbol, pos.Position.Position, pos.Position.AvgCost)
+for pos := range sub.All(ctx) {
+    fmt.Println(pos.Contract.Symbol, pos.Position, pos.AvgCost)
 }
 if err := sub.Wait(); err != nil {
     return err
@@ -294,9 +311,43 @@ Every domain is accessed through a facade on the client:
 | `client.TWS()` | `UserInfo`, `DisplayGroups` | `SubscribeDisplayGroup` |
 
 One-shots return `(T, error)` or `([]T, error)`. Subscriptions return
-`*Subscription[T]` with `Events()`, `Lifecycle()`, `Done()`, and `Close()`.
-Order placement returns `*OrderHandle` with the same channel pattern plus
+`*Subscription[T]` with `Events()`, `All(ctx)`, `Done()`, and `Close()`.
+Order placement returns `*OrderHandle` with one ordered event stream plus
 `Cancel()` and `Replace()`.
+
+## Errors
+
+Errors are typed so callers can make a policy decision without parsing text:
+`*ConnectError` covers dial/bootstrap failures, `*ProtocolError` wire failures,
+`*ValidationError` rejected local input, and `*APIError` a Gateway response.
+`*OrderRecoveryError` and `*SubscriptionCancelError` mean remote state is
+uncertain and deliberately override any retryable wrapped cause.
+
+`ibkr.IsRetryable(err)` is the single retry-with-backoff decision. It returns
+true for not-ready/session interruption, transient connection failures, and
+actual pacing violations. Ordinary API rejections, context cancellation,
+protocol/validation failures, slow consumers, and uncertain recovery errors
+are false. For finer handling:
+
+```go
+if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {
+    switch {
+    case apiErr.IsPacingViolation():
+        // back off before retrying
+    case apiErr.IsEntitlement():
+        // request permissions, or select delayed market data where supported
+    case apiErr.IsOrderRejection():
+        // placement failed before working-order evidence appeared
+    }
+}
+```
+
+`IsWarning`, `IsFarmStatus`, and `IsConnectivityTransition` classify
+informational codes. Delayed-data notice 10167 is normally a session `Event`
+while the quote stream continues, so consumers that care about the downgrade
+must also observe `Client.SessionEvents()`. See the
+[session contract](docs/session-contract.md) for the full terminal and recovery
+semantics.
 
 ## Examples
 

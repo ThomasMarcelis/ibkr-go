@@ -489,7 +489,7 @@ against the role-aware `paper-dev` Gateway.
 | api_reconnect_active_order_aapl.txt | 20260415T162822Z | promoted; covers GTC active order visible after reconnect |
 | api_reconnect_recovered_cancel_status_aapl.txt | 20260704T174748Z | promoted; covers unsolicited reconnect snapshot push, paired order_status in the recovery snapshot, and cancel-status delivery to SubscribeOpen for a recovered order (issue #20) |
 | api_open_orders_refresh_aapl.txt | 20260704T181808Z | promoted; covers RefreshOpen fresh snapshot burst on an active subscription with inter-snapshot echo pairs (issue #21) |
-| api_order_handle_reconnect_cancel_aapl.txt | 20260415T162822Z | promoted; covers original OrderHandle Gap/Resumed lifecycle and cancel after reconnect |
+| api_order_handle_reconnect_cancel_aapl.txt | 20260415T162822Z | promoted; covers original OrderHandle Gap/RecoveryRequired lifecycle and cancel after reconnect |
 | api_client_id0_order_observation_aapl.txt | 20260415T162840Z | promoted; covers client ID 0 observing/cancelling another client's GTC order |
 | api_cross_client_cancel_aapl.txt | 20260415T162857Z | promoted; covers client ID 2 observing/cancelling client ID 1 order |
 | api_completed_orders_variants_aapl.txt | 20260415T170243Z | promoted; covers completed-orders apiOnly=false and apiOnly=true after live completed-order decode fix |
@@ -652,7 +652,7 @@ against the role-aware `paper-dev` Gateway.
 | Reconnect with active orders | live-captured and replay-promoted via `api_reconnect_active_order_aapl.txt` |
 | Multi-client same account | live-captured and replay-promoted via `api_cross_client_cancel_aapl.txt` |
 | Client ID 0 order observation | live-captured and replay-promoted via `api_client_id0_order_observation_aapl.txt` |
-| Order handle across reconnect | active order visibility/cancel after reconnect promoted; original in-memory handle Gap/Resumed and post-reconnect cancel replay-promoted |
+| Order handle across reconnect | active order visibility/cancel after reconnect promoted; original in-memory handle Gap/RecoveryRequired and post-reconnect cancel replay-promoted |
 
 ### Capture Scenarios Not Yet Recorded
 

@@ -46,19 +46,13 @@
 //
 // # Subscriptions
 //
-// Streaming data uses [Subscription], a generic type that separates business
-// events from lifecycle state. Every subscription exposes three channels:
-//
-//   - Events() delivers business data (quotes, bars, positions, etc.)
-//   - Lifecycle() delivers lifecycle transitions ([SubscriptionStarted],
-//     [SubscriptionSnapshotComplete], [SubscriptionGap], [SubscriptionResumed],
-//     [SubscriptionClosed])
-//   - Done() closes when the subscription terminates
-//
-// Lifecycle() is a bounded observational channel. If the caller stops draining
-// it, older queued lifecycle events may be dropped in favor of the latest one.
-// [SubscriptionClosed] is still guaranteed before the channel closes.
-// [Subscription.AwaitSnapshot] is durable for snapshot-style subscriptions.
+// Streaming data uses [Subscription]. [Subscription.Events] is one ordered
+// stream of [StreamEvent] values, so data cannot race past a reconnect boundary
+// on a second channel. Event kinds are Started, Data, SnapshotComplete, Gap,
+// Restored (the Gateway retained the remote stream), and Resubscribed (the
+// client physically sent the request again). [Subscription.Done] closes when
+// the subscription terminates; channel close plus Err or Wait is the terminal
+// signal, so there is no redundant Closed event.
 //
 // The typical read loop ranges over [Subscription.All], an iterator that
 // yields business events until the subscription closes or ctx is canceled:
@@ -76,10 +70,9 @@
 //	    return err
 //	}
 //
-// Lifecycle transitions (SnapshotComplete, Gap, Resumed, Closed) are not part
-// of that iteration; a consumer that needs them reads Lifecycle() from
-// another goroutine, or drops to a manual select over Events() and
-// Lifecycle() to observe both streams in one loop.
+// All filters lifecycle transitions from the same queue. A consumer that needs
+// reconnect boundaries reads Events directly and switches on StreamEvent.Kind.
+// Events and All are alternative consumers; do not read them concurrently.
 //
 // Admission to the transport queue is the ownership boundary for a
 // subscription. Once admitted, the subscription result wins context-cancellation
@@ -90,25 +83,21 @@
 // final error, if any. A [*SubscriptionCancelError] means cancellation could
 // not enter the active transport queue and the remote stream may still be live;
 // recycle the client connection before subscribing again. Err returns the
-// currently recorded terminal error without waiting for Done.
-// If slow-consumer shutdown also cannot admit its cancellation, the terminal
+// currently recorded terminal error without waiting for Done. If slow-consumer
+// shutdown also cannot admit its cancellation, the terminal
 // error preserves both [ErrSlowConsumer] and [*SubscriptionCancelError].
-// SubscriptionClosed and Gap lifecycle events include a Retryable flag. API
-// errors are terminal request rejections; use [IsRetryable] on the final error
-// when a consumer loop only observes Events() or All(). Done is useful for
-// coordinating other goroutines, but consumers that need every business event
-// should drain Events (or All) until it closes, then check Err or call Wait.
+// Use [IsRetryable] on the final error. Done is useful for coordinating other
+// goroutines, but consumers that need every event should drain Events (or All)
+// until it closes, then check Err or call Wait.
 //
 // # Order Management
 //
 // [OrdersClient.Place] submits an order and returns an [*OrderHandle] that tracks
-// its full lifecycle. The handle follows the same Events/Lifecycle/Done pattern as
-// subscriptions. OrderEvent is a union: exactly one of OpenOrder, Status,
-// Execution, CommissionAndFees, or Warning is non-nil per event. The handle
-// auto-closes when the order reaches a terminal state (Filled, Cancelled,
-// Inactive). Its
-// Lifecycle() channel is also bounded and observational: if unread, older queued
-// lifecycle events may be dropped in favor of the latest one.
+// its full lifecycle. [OrderHandle.Events] is one ordered stream. [OrderEvent]
+// is a union: exactly one of OpenOrder, Status, Execution, CommissionAndFees,
+// Warning, Binding, or Lifecycle is non-nil per event. Terminal order statuses
+// do not close the handle because executions and fees can follow; the caller
+// closes the observation window after collecting the evidence it needs.
 //
 // The order-event queue is lossless and bounded. Its default capacity is 64
 // and [WithOrderEventBuffer] configures it for every handle on the client. If
@@ -160,10 +149,11 @@
 // Degraded or Reconnecting on connection loss. Set [WithReconnectPolicy] to
 // control automatic reconnect behavior.
 //
-// During a reconnect cycle, active subscriptions receive a Gap event through
-// Lifecycle(). When the connection is re-established, subscriptions that support
-// resume receive a Resumed event. The reconnect boundary is always explicit
-// and never mixed into business event streams.
+// During a reconnect cycle, active subscriptions receive a Gap event on their
+// ordered Events stream. Recovery is Restored when IBKR retained the stream or
+// Resubscribed when the client sent it again. Order handles report corresponding
+// lifecycle values inside OrderEvent. No reconnect boundary is inferred from
+// silence or split across a second channel.
 //
 // # Errors
 //
@@ -178,7 +168,8 @@
 //
 // IBKR codes attested in live captures have named ErrCode constants (e.g.
 // [ErrCodeOrderCanceled], [ErrCodeMarketDataNotSubscribed]) and [*APIError]
-// classification helpers ([APIError.IsEntitlement],
+// classification helpers ([APIError.IsEntitlement], [APIError.IsPacingViolation],
+// [APIError.IsOrderRejection],
 // [APIError.IsConnectivityTransition], [APIError.IsFarmStatus],
 // [APIError.IsWarning]).
 //

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## v2.0.0 — 2026-07-11
+## v2.0.0-rc.2 — Unreleased
 
 v2 is a clean-break release on the `github.com/ThomasMarcelis/ibkr-go/v2` module path. Existing v1 users remain on v1 until they explicitly change imports.
 
@@ -18,26 +18,44 @@ v2 is a clean-break release on the `github.com/ThomasMarcelis/ibkr-go/v2` module
 
 **Correctness.** Typed Gateway errors retain request IDs and advanced rejection details. Reconnects, slow consumers, cancellation uncertainty, bracket admission, warning events, malformed frames, unset decimals, and classic/protobuf version boundaries now fail or recover explicitly instead of silently losing state.
 
+**RC.2 failure-path hardening.** Admitted order frames are tracked until the
+socket write completes, singleton one-shots cannot wedge after context
+cancellation, resume transport loss retains resumable subscriptions, order
+errors use an attested terminal set, request/order IDs stay monotonic across
+Gateway reseeds, and reconnect dial/bootstrap work no longer stalls the actor.
+Subscription data and lifecycle boundaries now share one ordered event stream.
+
 ### Breaking changes
 
 | Area | Migration |
 |---|---|
 | Module | Change imports to `github.com/ThomasMarcelis/ibkr-go/v2` |
 | Lifecycle | `Close()` returns no value; read `Wait()` or `Err()` for terminal outcomes |
+| Streams | `Subscription.Events()` now yields ordered `StreamEvent[T]`; use `All(ctx)` for data only; remove `Lifecycle()` handling |
 | Orders | `Modify` is now `Replace`; close handles explicitly after collecting late events |
 | Results | `Executions` returns `ExecutionSnapshot`; `HistoricalNews` returns `HistoricalNewsResult`; `Exercise` returns `ExerciseHandle` |
 | Presence | Contract strike, open-order prices, quote/depth sizes, snapshot permissions, and fee values use pointers where absence differs from zero |
 | Ownership | Order identity and preview mode moved out of `Order`; contract selection and composition moved onto `Contract` |
-| Names | `Buy`/`Sell` became `ActionBuy`/`ActionSell`; commission types use commission-and-fees terminology |
+| Names | `Buy`/`Sell` became `ActionBuy`/`ActionSell`; commission types use commission-and-fees terminology; P&L fields use `PnL`; `OrderStatusAPICancelled` follows Go initialism casing |
 | Accounts | Summary and position subscriptions emit direct values; account group and exact-account filtering are separate |
 | Resume | Remove `WithDefaultResumePolicy`; configure `ResumeAuto` per supported subscription |
 | Removed | Reuters fundamental data, FA mutation, `ibkr-probe`, and pre-200 compatibility |
+| Test infrastructure | Repository replay/live helpers moved under `internal/`; external tests use the public `Dialer` seam or their own fixtures |
 
 See [Migrating from v1 to v2](docs/migration-v2.md) for before-and-after examples and the complete source migration checklist.
 
 ### Release-candidate validation
 
-The deterministic suite, race tests, lint, vulnerability scan, and Linux/macOS/Windows builds are green. A successful entitled regulatory-snapshot quote and a raw paper-TWS `orderBound` capture remain validation targets before v2.0.0 stable.
+The rc.1 baseline passed deterministic tests, race tests, lint, vulnerability
+scan, 386, and the fuzz battery. RC.2 reruns those gates after the changes
+above. With both Gateways restored on 2026-07-11, the isolated sv200/205/206
+matrix passed on its second complete run (one earlier sv205 bootstrap ended in
+EOF), keep-up-to-date bars, tick-by-tick midpoint, historical bid/ask and
+midpoint ticks, and PnLSingle completed. Real-time bars returned the expected
+10089 entitlement error; historical TRADES ticks received no Gateway reply in
+two isolated 20-second captures. A successful explicitly authorized
+fee-bearing regulatory snapshot and a raw paper-TWS `orderBound` capture remain
+validation targets before v2.0.0 stable.
 
 ## v1.5.1 — 2026-07-04
 

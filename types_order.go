@@ -124,7 +124,7 @@ type OpenOrder struct {
 
 	// Partial reports that an advanced or unattested order layout degraded to
 	// a partial parse: the core order fields above are populated, but Status
-	// and the margin/commission section are empty.
+	// and State are empty.
 	Partial bool
 }
 

@@ -161,7 +161,9 @@ the final child is the only frame with `Transmit=true`.
 
 Admission to the transport queue transfers placement ownership to the caller.
 The buffered handle result therefore wins context and shutdown races after
-admission. A partially admitted bracket cancels only admitted IDs and always
+admission. The transport retains a pending-write marker until each order frame
+is written; transport loss closes any definitely-unwritten handle with
+`ErrInterrupted`. A partially admitted bracket cancels only admitted IDs and always
 returns an `OrderRecoveryError` containing every one of those IDs. Even a
 queue-admitted cancellation is unacknowledged, so callers reconcile open orders
 before retrying; `CancelErr` only records failures to admit those cancellations.
@@ -170,26 +172,27 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 
 `Orders().Place` returns an `OrderHandle` that tracks a single order's lifecycle:
 
-- **Events()** delivers `OrderEvent` values (union of OpenOrder, OrderStatus,
-  Execution, CommissionAndFees, Warning — exactly one field non-nil per event).
+- **Events()** delivers one ordered stream of `OrderEvent` values (union of
+  OpenOrder, OrderStatus, Execution, CommissionAndFees, Warning, Binding, and
+  Lifecycle — exactly one field non-nil per event).
   A `Warning` is a non-terminal, order-targeted notice (e.g. code 399, the
   off-hours deferral): the order stays working at IB and the handle stays open.
-- **Lifecycle()** delivers bounded observational `SubscriptionStateEvent` values
-  (Gap, Resumed). If unread, older queued lifecycle events may be dropped in
-  favor of the latest one.
+- **Lifecycle events** are part of that same stream: Started, Gap, Restored,
+  and RecoveryRequired cannot race past business events on another channel.
 - **Event backpressure.** Each handle has a bounded, lossless event queue
   (default 64, configured by `WithOrderEventBuffer`). Overflow closes local
   observation with `ErrSlowConsumer` rather than dropping and continuing. It
   does not change the live order; its OrderID remains available for
   reconciliation or cancellation.
-- **Terminal order states.** Filled, Cancelled, ApiCancelled, and Inactive are
+- **Terminal order states.** Filled, Cancelled, APICancelled, and Inactive are
   business events, not local observation boundaries. Execution and fee
   callbacks may follow them, so the caller closes the handle when its evidence
   requirements are satisfied. Cancellation replies 161 and 202 remain session
   notices and do not close the handle.
-- **Disconnect.** On session disconnect, active order handles receive a `Gap`
-  event via Lifecycle(). On reconnect, they receive `Resumed`. Handles are not
-  closed on disconnect — orders continue executing on the server.
+- **Disconnect.** On session disconnect, active order handles receive `Gap`.
+  A data-maintained restoration yields `Restored`; a socket reconnect yields
+  `RecoveryRequired` because fills or status changes may have occurred during
+  the gap. Handles stay open, but replacement requires reconciliation.
 - **Close()** detaches the handle from the engine. The order continues
   executing on the server; the caller simply stops receiving events.
 - **Cancel(ctx)** sends a CancelOrder request for this order.
@@ -214,10 +217,10 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 - `DialContext` returns a ready session, not a raw TCP socket.
 - Managed accounts are bootstrap state on the session snapshot.
 - One-shots, subscriptions, and order handles are separate public contracts.
-- Subscriptions expose business events through `Events()` and lifecycle through
-  `Lifecycle()`. Lifecycle channels are observational rather than durable history:
-  the newest state is favored when buffers fill. OrderHandle follows the same
-  shape with order-specific extensions.
+- Subscriptions expose data and lifecycle boundaries through one ordered
+  `Events()` stream. `All(ctx)` is the data-only view over that same queue.
+  Channel close plus `Err()`/`Wait()` is terminal. OrderHandle uses the same
+  single-stream principle with order-specific events.
 
 These public contracts are intended to survive the remaining protocol work.
 
@@ -226,5 +229,6 @@ These public contracts are intended to survive the remaining protocol work.
 - Reconnect policy is a client policy.
 - Resume policy is a per-subscription policy.
 - One-shots are never replayed automatically.
-- Order handles survive disconnects (Gap on disconnect, Resumed on reconnect).
+- Order handles survive disconnects and require explicit reconciliation after
+  an observation gap.
 - Session reconnect boundaries are surfaced via `ConnectionSeq`.

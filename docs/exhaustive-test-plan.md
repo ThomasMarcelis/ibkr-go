@@ -344,7 +344,7 @@ tests.
 | Replace resting to fill | live test | price modification → fill |
 | Cancel after fill (rejected) | live test | terminal state protection |
 | WhatIf margin preview | live test | no execution, commission data |
-| Reconnect with active orders | replay promoted | `api_reconnect_active_order_aapl.txt` freezes live GTC visibility/cancel after reconnect; `api_order_handle_reconnect_cancel_aapl.txt` freezes original handle Gap/Resumed + cancel |
+| Reconnect with active orders | replay promoted | `api_reconnect_active_order_aapl.txt` freezes live GTC visibility/cancel after reconnect; `api_order_handle_reconnect_cancel_aapl.txt` freezes original handle Gap/RecoveryRequired + cancel |
 | Reconnect with active subscriptions + orders | no | mixed lifecycle across reconnect |
 | Multi-client same account | replay promoted | `api_cross_client_cancel_aapl.txt` freezes client ID 2 observing/cancelling client ID 1 order |
 | Client ID 0 order observation | replay promoted | `api_client_id0_order_observation_aapl.txt` freezes client ID 0 all-open-orders observation/cancel |
@@ -494,7 +494,7 @@ tests.
 | Bootstrap missing managed_accounts | yes (transcript) | |
 | Concurrent one-shots | yes (transcript) | |
 | Reconnect multi-cycle | yes (transcript) | |
-| Reconnect with active order handle | replay promoted | GTC order survives reconnect; original in-memory handle emits Gap/Resumed and cancels after reconnect |
+| Reconnect with active order handle | replay promoted | GTC order survives reconnect; original in-memory handle emits Gap/RecoveryRequired and cancels after reconnect |
 | Reconnect with open-orders observer | partial | client/all open-orders after reconnect captured and replay promoted |
 | Server version negotiation edge | no | near-boundary version |
 
@@ -567,7 +567,7 @@ reconnect/expiry assertions.
 
 - [x] Reconnect with resting order → verify handle resumes
 - [ ] Reconnect with filled order → verify execution delivered
-- [ ] Reconnect with active quote subscription → verify Gap/Resumed
+- [ ] Reconnect with active quote subscription → verify ordered Gap followed by Restored or Resubscribed
 - [ ] Reconnect with active PnL subscription
 - [ ] Reconnect during order placement
 
@@ -576,7 +576,7 @@ Progress: `api_reconnect_active_order_aapl` was live-captured on 2026-04-15
 It freezes a real GTC order visible after reconnect and direct cancellation
 from the reconnected client. `api_order_handle_reconnect_cancel_aapl.txt`
 adds deterministic replay coverage for the original in-memory `OrderHandle`
-emitting Gap/Resumed and cancelling after reconnect, grounded in the same live
+emitting Gap/RecoveryRequired and cancelling after reconnect, grounded in the same live
 capture.
 
 ### Phase 6: Advanced order features

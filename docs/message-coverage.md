@@ -328,7 +328,7 @@ recorded in [`live-test-tracker.md`](live-test-tracker.md).
 ## Session-Level Status
 
 API/system codes that drive `Ready`, `Degraded`, `Reconnecting`, and
-`Gap`/`Resumed` semantics.
+ordered `Gap`/`Restored`/`Resubscribed` semantics.
 
 ## Completion Markers
 
