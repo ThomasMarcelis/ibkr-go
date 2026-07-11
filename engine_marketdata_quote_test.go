@@ -106,9 +106,9 @@ func TestQuoteResumeRejectsContractFieldsAfterVersionDowngrade(t *testing.T) {
 		t.Fatal("unsupported quote resume terminated the session")
 	default:
 	}
-	for state := range sub.Lifecycle() {
-		if state.Kind == SubscriptionResumed {
-			t.Fatal("unsupported quote resume emitted Resumed")
+	for event := range sub.Events() {
+		if event.Kind == StreamResubscribed {
+			t.Fatal("unsupported quote resume emitted Resubscribed")
 		}
 	}
 }
@@ -636,8 +636,11 @@ func TestQuoteRoutePreservesLiveMissingMinimumTick(t *testing.T) {
 func nextQuoteUpdate(t *testing.T, sub *Subscription[QuoteUpdate]) QuoteUpdate {
 	t.Helper()
 	select {
-	case update := <-sub.Events():
-		return update
+	case event := <-sub.Events():
+		if event.Kind != StreamData {
+			return nextQuoteUpdate(t, sub)
+		}
+		return event.Value
 	default:
 		t.Fatal("quote update was not emitted synchronously")
 		return QuoteUpdate{}

@@ -169,15 +169,13 @@ func decodeOne(tb testing.TB, payload []byte) codec.Message {
 
 // --- actor-side stage: handleIncoming with a live quote route ---
 
-func benchActorTick(b *testing.B, drain bool) {
+func benchActorTick(b *testing.B) {
 	e := newBenchEngine(b)
-	sub := installQuoteRoute(b, e, WithSlowConsumerPolicy(SlowConsumerDropOldest))
-	if drain {
-		go func() {
-			for range sub.Events() {
-			}
-		}()
-	}
+	sub := installQuoteRoute(b, e)
+	go func() {
+		for range sub.Events() {
+		}
+	}()
 	msgLast := decodeOne(b, frameTickPriceLast)
 	msgVol := decodeOne(b, frameTickSizeVol)
 
@@ -185,9 +183,6 @@ func benchActorTick(b *testing.B, drain bool) {
 	select {
 	case <-sub.Events():
 	default:
-		if !drain {
-			b.Fatal("no QuoteUpdate emitted")
-		}
 	}
 
 	b.ReportAllocs()
@@ -200,12 +195,8 @@ func benchActorTick(b *testing.B, drain bool) {
 	}
 }
 
-// BenchmarkActorHandleTickQuote_NoConsumer: actor cost per tick when the
-// subscriber never drains (drop-oldest juggling path, the worst case).
-func BenchmarkActorHandleTickQuote_NoConsumer(b *testing.B) { benchActorTick(b, false) }
-
 // BenchmarkActorHandleTickQuote_Drained: actor cost with a spinning consumer.
-func BenchmarkActorHandleTickQuote_Drained(b *testing.B) { benchActorTick(b, true) }
+func BenchmarkActorHandleTickQuote_Drained(b *testing.B) { benchActorTick(b) }
 
 // --- full pipeline over real TCP loopback ---
 

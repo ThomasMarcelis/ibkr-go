@@ -241,16 +241,15 @@ func (c MarketDataClient) SubscribeRealTimeBars(ctx context.Context, req RealTim
 	return c.engine.SubscribeRealTimeBars(ctx, req, opts...)
 }
 
-// SubscribeTickByTick streams tick-by-tick data for a contract. This is a
-// high-rate stream; see [SlowConsumerPolicy] and [WithQueueSize].
+// SubscribeTickByTick streams tick-by-tick data for a contract. Use
+// [WithQueueSize] when the default queue is too small for expected bursts.
 func (c MarketDataClient) SubscribeTickByTick(ctx context.Context, req TickByTickRequest, opts ...SubscriptionOption) (*Subscription[TickByTickData], error) {
 	return c.engine.SubscribeTickByTick(ctx, req, opts...)
 }
 
-// SubscribeDepth streams market depth (Level 2) order-book updates. This is a
-// high-rate, stateful stream: it rejects [SlowConsumerDropOldest] because
-// dropping a delta corrupts the local book. Use [WithQueueSize] for more burst
-// capacity.
+// SubscribeDepth streams market depth (Level 2) order-book updates. Because
+// dropping a delta corrupts the local book, queue overflow terminates the
+// subscription with [ErrSlowConsumer]. Use [WithQueueSize] for more burst capacity.
 func (c MarketDataClient) SubscribeDepth(ctx context.Context, req MarketDepthRequest, opts ...SubscriptionOption) (*Subscription[DepthRow], error) {
 	return c.engine.SubscribeMarketDepth(ctx, req, opts...)
 }

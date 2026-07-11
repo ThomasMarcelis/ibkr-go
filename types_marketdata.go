@@ -548,9 +548,9 @@ type HistoricalTicksResult struct {
 // subscription for [MarketDataClient.SubscribeDepth].
 //
 // Depth is a high-rate, stateful stream. A consumer that cannot keep up fails
-// the subscription with [ErrSlowConsumer]. [SlowConsumerDropOldest] is rejected
-// because losing one delta corrupts the local book; raise the queue with
-// [WithQueueSize] when more burst capacity is needed.
+// the subscription with [ErrSlowConsumer] because losing one delta corrupts
+// the local book. Raise the queue with [WithQueueSize] when more burst capacity
+// is needed.
 type MarketDepthRequest struct {
 	Contract     Contract
 	NumRows      int  // number of book levels per side to stream

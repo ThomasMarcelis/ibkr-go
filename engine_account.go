@@ -66,14 +66,11 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 					Currency: m.Currency,
 				})
 			case codec.AccountSummaryEnd:
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionSnapshotComplete,
-					ConnectionSeq: e.connectionSeq(),
-				})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -180,11 +177,11 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 				}
 				sub.emit(position)
 			case codec.PositionEnd:
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}
 		e.singletons[singletonPositions] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.PositionsRequest{}); err != nil {
 			delete(e.singletons, singletonPositions)
 			sub.closeWithErr(err)
@@ -350,11 +347,11 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 			case codec.UpdateAccountTime:
 				sub.emit(AccountUpdate{UpdateTime: new(m.Timestamp)})
 			case codec.AccountDownloadEnd:
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}
 		e.singletons[singletonAccountUpdates] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.AccountUpdatesRequest{Subscribe: true, Account: account}); err != nil {
 			delete(e.singletons, singletonAccountUpdates)
 			sub.closeWithErr(err)
@@ -413,11 +410,11 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 					Key: m.Key, Value: m.Value, Currency: m.Currency,
 				})
 			case codec.AccountUpdateMultiEnd:
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -493,11 +490,11 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 					Position: position, AvgCost: avgCost,
 				})
 			case codec.PositionMultiEnd:
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -560,7 +557,7 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -635,7 +632,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)

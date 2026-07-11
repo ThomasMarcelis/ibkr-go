@@ -81,13 +81,17 @@ func run() (err error) {
 	timeout := time.After(30 * time.Second)
 	for {
 		select {
-		case update, ok := <-pnl.Events():
+		case event, ok := <-pnl.Events():
 			if !ok {
 				if err := pnl.Wait(); err != nil {
 					return err
 				}
 				return nil
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
+			update := event.Value
 			fmt.Printf("  daily=%s unrealized=%s realized=%s\n",
 				update.DailyPnL, update.UnrealizedPnL, update.RealizedPnL)
 		case <-timeout:

@@ -248,7 +248,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			sub.closeWithErr(e.apiErr(OpScannerSubscription, m))
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -536,7 +536,7 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)

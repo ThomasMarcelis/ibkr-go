@@ -72,27 +72,20 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 		t.Fatalf("SubscribeRealTimeBars() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
-	if started.Retryable {
-		t.Fatal("started.Retryable = true, want false")
+	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
+	if started.Err != nil {
+		t.Fatalf("started.Err = %v, want nil", started.Err)
 	}
 
-	closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
-	if closed.Retryable {
-		t.Fatal("closed.Retryable = true, want false for API rejection")
-	}
-	apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+	waitErr := sub.Wait()
+	apiErr, ok := errors.AsType[*ibkr.APIError](waitErr)
 	if !ok {
-		t.Fatalf("closed.Err type = %T, want *ibkr.APIError", closed.Err)
+		t.Fatalf("sub.Wait() error type = %T, want *ibkr.APIError", waitErr)
 	}
 	if apiErr.Code != 420 {
 		t.Fatalf("APIError.Code = %d, want 420", apiErr.Code)
 	}
 
-	waitErr := sub.Wait()
-	if waitErr == nil {
-		t.Fatal("sub.Wait() error = nil, want API error")
-	}
 	select {
 	case _, ok := <-sub.Events():
 		if ok {
@@ -147,24 +140,16 @@ func TestAPIRealTimeBarsRequestErrorsAAPLReplay(t *testing.T) {
 			t.Fatalf("%s SubscribeRealTimeBars() error = %v", tc.label, err)
 		}
 
-		closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
-		apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+		waitErr := sub.Wait()
+		apiErr, ok := errors.AsType[*ibkr.APIError](waitErr)
 		if !ok {
-			t.Fatalf("%s closed.Err type = %T, want *ibkr.APIError", tc.label, closed.Err)
+			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
 		}
 		if apiErr.Code != tc.wantCode {
 			t.Fatalf("%s APIError.Code = %d, want %d", tc.label, apiErr.Code, tc.wantCode)
 		}
 		if apiErr.OpKind != ibkr.OpRealTimeBars {
 			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpRealTimeBars)
-		}
-		if closed.Retryable {
-			t.Fatalf("%s closed.Retryable = true, want false", tc.label)
-		}
-
-		waitErr := sub.Wait()
-		if waitErr == nil {
-			t.Fatalf("%s sub.Wait() error = nil, want API error", tc.label)
 		}
 		waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
 		if !ok {
@@ -214,24 +199,16 @@ func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
 			t.Fatalf("%s SubscribeTickByTick() error = %v", tc.label, err)
 		}
 
-		closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
-		apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+		waitErr := sub.Wait()
+		apiErr, ok := errors.AsType[*ibkr.APIError](waitErr)
 		if !ok {
-			t.Fatalf("%s closed.Err type = %T, want *ibkr.APIError", tc.label, closed.Err)
+			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
 		}
 		if apiErr.Code != tc.wantCode {
 			t.Fatalf("%s APIError.Code = %d, want %d", tc.label, apiErr.Code, tc.wantCode)
 		}
 		if apiErr.OpKind != ibkr.OpTickByTick {
 			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpTickByTick)
-		}
-		if closed.Retryable {
-			t.Fatalf("%s closed.Retryable = true, want false", tc.label)
-		}
-
-		waitErr := sub.Wait()
-		if waitErr == nil {
-			t.Fatalf("%s sub.Wait() error = nil, want API error", tc.label)
 		}
 		waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
 		if !ok {
@@ -376,61 +353,15 @@ func TestMarketDepthError10xxx(t *testing.T) {
 		t.Fatalf("SubscribeMarketDepth() error = %v", err)
 	}
 
-	closed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionClosed)
-
-	apiErr, ok := errors.AsType[*ibkr.APIError](closed.Err)
+	waitErr := sub.Wait()
+	apiErr, ok := errors.AsType[*ibkr.APIError](waitErr)
 	if !ok {
-		t.Fatalf("closed.Err type = %T, want *ibkr.APIError", closed.Err)
+		t.Fatalf("sub.Wait() error type = %T, want *ibkr.APIError", waitErr)
 	}
 	if apiErr.Code != 10092 {
 		t.Fatalf("APIError.Code = %d, want 10092", apiErr.Code)
 	}
-	if closed.Retryable {
-		t.Fatal("closed.Retryable = true, want false for API error")
-	}
-
-	waitErr := sub.Wait()
-	if waitErr == nil {
-		t.Fatal("sub.Wait() error = nil, want API error")
-	}
 	if ibkr.IsRetryable(waitErr) {
 		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API error")
-	}
-}
-
-func TestMarketDepthRejectsLossySlowConsumerPolicy(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name       string
-		clientOpts []ibkr.Option
-		subOpts    []ibkr.SubscriptionOption
-	}{
-		{
-			name:       "inherited client default",
-			clientOpts: []ibkr.Option{ibkr.WithDefaultSlowConsumerPolicy(ibkr.SlowConsumerDropOldest)},
-		},
-		{
-			name:    "subscription override",
-			subOpts: []ibkr.SubscriptionOption{ibkr.WithSlowConsumerPolicy(ibkr.SlowConsumerDropOldest)},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			t.Parallel()
-
-			client, host := newClient(t, "grounded_bootstrap.txt", test.clientOpts...)
-			defer client.Close()
-			defer waitHost(t, host)
-
-			sub, err := client.MarketData().SubscribeDepth(context.Background(), ibkr.MarketDepthRequest{}, test.subOpts...)
-			if sub != nil {
-				t.Fatalf("SubscribeDepth() subscription = %v, want nil", sub)
-			}
-			validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
-			if !ok || validationErr.Field != "SlowConsumerPolicy" || validationErr.Value != string(ibkr.SlowConsumerDropOldest) {
-				t.Fatalf("SubscribeDepth() error = %v, want SlowConsumerPolicy ValidationError", err)
-			}
-		})
 	}
 }

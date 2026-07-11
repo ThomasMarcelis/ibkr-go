@@ -33,28 +33,28 @@ func TestReconnectLastPriceSurvivesTransportLoss(t *testing.T) {
 	}
 
 	// Session 1: started + last-price tick
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
 
-	first := waitForEvent(t, sub.Events())
+	first := waitForStreamData(t, sub.Events())
 	if first.Snapshot.Last.String() != "250" {
 		t.Fatalf("first last = %s, want 250", first.Snapshot.Last.String())
 	}
 
 	// Reconnect: gap + resumed + updated last-price tick
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
 
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := waitForStateKind(t, sub.Events(), ibkr.StreamResubscribed)
 	if resumed.ConnectionSeq != 2 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
 	}
 
-	second := waitForEvent(t, sub.Events())
+	second := waitForStreamData(t, sub.Events())
 	if second.Snapshot.Last.String() != "251" {
 		t.Fatalf("second last = %s, want 251", second.Snapshot.Last.String())
 	}
@@ -132,7 +132,7 @@ func TestReconnectPolicyOff(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
@@ -180,26 +180,26 @@ func TestSingleGapOn1100ThenTransportLoss(t *testing.T) {
 	}
 
 	// Wait for started + initial tick
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
-	first := waitForEvent(t, sub.Events())
+	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
+	first := waitForStreamData(t, sub.Events())
 	if first.Snapshot.Last.String() != "250" {
 		t.Fatalf("first last = %s, want 250", first.Snapshot.Last.String())
 	}
 
 	// Code 1100 arrives, then transport drops. Should see exactly one Gap.
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
 
 	// After reconnect, should get Resumed (not another Gap first).
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := waitForStateKind(t, sub.Events(), ibkr.StreamResubscribed)
 	if resumed.ConnectionSeq != 2 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
 	}
 
 	// Verify data flows again
-	second := waitForEvent(t, sub.Events())
+	second := waitForStreamData(t, sub.Events())
 	if second.Snapshot.Last.String() != "251" {
 		t.Fatalf("second last = %s, want 251", second.Snapshot.Last.String())
 	}
@@ -229,18 +229,18 @@ func TestGapEventWithout1101(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
 
-	first := waitForEvent(t, sub.Events())
+	first := waitForStreamData(t, sub.Events())
 	if first.Snapshot.Last.String() != "250" {
 		t.Fatalf("first last = %s, want 250", first.Snapshot.Last.String())
 	}
 
 	// Code 1100 arrives: subscription emits Gap
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
@@ -286,31 +286,31 @@ func TestDegradedToReadyVia1102(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 
-	started := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 	if started.ConnectionSeq != 1 {
 		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
 	}
 
 	// First tick
-	first := waitForEvent(t, sub.Events())
+	first := waitForStreamData(t, sub.Events())
 	if first.Snapshot.Last.String() != "250" {
 		t.Fatalf("first last = %s, want 250", first.Snapshot.Last.String())
 	}
 
 	// Code 1100 -> Gap
-	gap := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionGap)
+	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
 
 	// Code 1102 -> Resumed (no re-subscribe, data maintained)
-	resumed := waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed := waitForStateKind(t, sub.Events(), ibkr.StreamRestored)
 	if resumed.ConnectionSeq != 1 {
 		t.Fatalf("resumed.ConnectionSeq = %d, want 1 (same session, no transport loss)", resumed.ConnectionSeq)
 	}
 
 	// More ticks arrive after resume
-	second := waitForEvent(t, sub.Events())
+	second := waitForStreamData(t, sub.Events())
 	if second.Snapshot.Last.String() != "251" {
 		t.Fatalf("second last = %s, want 251", second.Snapshot.Last.String())
 	}

@@ -46,7 +46,7 @@ func TestLiveIssue9GatewayDailyRestartAutoReconnects(t *testing.T) {
 	}
 	defer sub.Close()
 
-	started, err := waitLiveSubscriptionState(ctx, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started, err := waitLiveSubscriptionState(ctx, sub.Events(), ibkr.StreamStarted)
 	if err != nil {
 		t.Fatalf("wait Started: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestLiveIssue9GatewayDailyRestartAutoReconnects(t *testing.T) {
 	recoveryCtx, cancelRecovery := context.WithTimeout(context.Background(), liveDurationEnv(envLiveRecoveryWait, 5*time.Minute))
 	defer cancelRecovery()
 
-	resumed, err := waitLiveSubscriptionState(recoveryCtx, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed, err := waitLiveSubscriptionState(recoveryCtx, sub.Events(), ibkr.StreamResubscribed)
 	if err != nil {
 		t.Fatalf("wait Resumed after real Gateway restart: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 	}
 	defer sub.Close()
 
-	started, err := waitLiveSubscriptionState(ctx, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	started, err := waitLiveSubscriptionState(ctx, sub.Events(), ibkr.StreamStarted)
 	if err != nil {
 		t.Fatalf("wait Started: %v", err)
 	}
@@ -110,7 +110,7 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 
 	recoveryCtx, cancelRecovery := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancelRecovery()
-	resumed, err := waitLiveSubscriptionState(recoveryCtx, sub.Lifecycle(), ibkr.SubscriptionResumed)
+	resumed, err := waitLiveSubscriptionState(recoveryCtx, sub.Events(), ibkr.StreamResubscribed)
 	if err != nil {
 		t.Fatalf("wait Resumed after real Gateway proxy outage: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestLiveIssue13SubscriptionErrAfterClose(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
-	if _, err := waitLiveSubscriptionState(ctx, sub.Lifecycle(), ibkr.SubscriptionStarted); err != nil {
+	if _, err := waitLiveSubscriptionState(ctx, sub.Events(), ibkr.StreamStarted); err != nil {
 		t.Fatalf("wait Started: %v", err)
 	}
 	sub.Close()
@@ -344,21 +344,18 @@ func liveDurationEnv(name string, fallback time.Duration) time.Duration {
 	return duration
 }
 
-func waitLiveSubscriptionState(ctx context.Context, ch <-chan ibkr.SubscriptionStateEvent, want ibkr.SubscriptionStateKind) (ibkr.SubscriptionStateEvent, error) {
+func waitLiveSubscriptionState[T any](ctx context.Context, ch <-chan ibkr.StreamEvent[T], want ibkr.StreamEventKind) (ibkr.StreamEvent[T], error) {
 	for {
 		select {
 		case evt, ok := <-ch:
 			if !ok {
-				return ibkr.SubscriptionStateEvent{}, fmt.Errorf("lifecycle closed before %s", want)
+				return ibkr.StreamEvent[T]{}, fmt.Errorf("subscription closed before %s", want)
 			}
 			if evt.Kind == want {
 				return evt, nil
 			}
-			if evt.Kind == ibkr.SubscriptionClosed {
-				return ibkr.SubscriptionStateEvent{}, fmt.Errorf("subscription closed before %s: %v", want, evt.Err)
-			}
 		case <-ctx.Done():
-			return ibkr.SubscriptionStateEvent{}, ctx.Err()
+			return ibkr.StreamEvent[T]{}, ctx.Err()
 		}
 	}
 }

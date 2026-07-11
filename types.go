@@ -100,29 +100,26 @@ type Snapshot struct {
 	CurrentTime     time.Time // server time captured at connect, in UTC
 }
 
-// SubscriptionStateKind classifies a lifecycle transition on a subscription's
-// or order handle's [SubscriptionStateEvent] channel.
-type SubscriptionStateKind string
+// StreamEventKind classifies one item in a subscription's ordered event stream.
+type StreamEventKind string
 
 const (
-	SubscriptionStarted          SubscriptionStateKind = "Started"          // stream established
-	SubscriptionSnapshotComplete SubscriptionStateKind = "SnapshotComplete" // initial snapshot boundary reached
-	SubscriptionGap              SubscriptionStateKind = "Gap"              // connection lost, events may be missing
-	SubscriptionResumed          SubscriptionStateKind = "Resumed"          // stream re-established after a gap
-	SubscriptionClosed           SubscriptionStateKind = "Closed"           // terminally closed, see Err for the reason
+	StreamStarted          StreamEventKind = "Started"
+	StreamData             StreamEventKind = "Data"
+	StreamSnapshotComplete StreamEventKind = "SnapshotComplete"
+	StreamGap              StreamEventKind = "Gap"
+	StreamRestored         StreamEventKind = "Restored"
+	StreamResubscribed     StreamEventKind = "Resubscribed"
 )
 
-// SubscriptionStateEvent reports a lifecycle transition on a subscription or
-// order handle, distinct from the business events on the Events channel.
-type SubscriptionStateEvent struct {
-	At            time.Time             // when the transition was observed, UTC
-	Kind          SubscriptionStateKind // which transition occurred
-	ConnectionSeq uint64                // connection generation the transition belongs to
-	Err           error                 // non-nil on a Closed caused by an error
-	// Retryable reports whether the caller can expect this stream to recover on
-	// its own (a Gap, or a Closed with a transient error). A Closed with a
-	// server rejection or clean shutdown is not retryable.
-	Retryable bool
+// StreamEvent is one ordered subscription event. Value is meaningful only for
+// StreamData. A closed Events channel is terminal; call Subscription.Err for
+// the final error.
+type StreamEvent[T any] struct {
+	Kind          StreamEventKind
+	Value         T
+	ConnectionSeq uint64
+	Err           error
 }
 
 // ReconnectPolicy controls whether a [Client] automatically re-dials the
@@ -149,25 +146,6 @@ const (
 
 func (p ResumePolicy) valid() bool {
 	return p == ResumeNever || p == ResumeAuto
-}
-
-// SlowConsumerPolicy controls what happens when a subscriber cannot keep up
-// with the event rate and the delivery queue fills. Set the default with
-// [WithDefaultSlowConsumerPolicy] or per-subscription with [WithSlowConsumerPolicy].
-//
-// The default is [SlowConsumerClose]. [SlowConsumerDropOldest] is an explicitly
-// lossy policy for streams whose events are independent. Stateful streams such
-// as market depth reject it because dropping one delta corrupts the local book;
-// raise their queue with [WithQueueSize] instead.
-type SlowConsumerPolicy string
-
-const (
-	SlowConsumerClose      SlowConsumerPolicy = "close"       // fail the subscription with [ErrSlowConsumer]
-	SlowConsumerDropOldest SlowConsumerPolicy = "drop_oldest" // evict the oldest queued event to make room
-)
-
-func (p SlowConsumerPolicy) valid() bool {
-	return p == SlowConsumerClose || p == SlowConsumerDropOldest
 }
 
 // XMLDocument is a raw XML payload returned by the Gateway (scanner parameters

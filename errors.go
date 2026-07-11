@@ -12,7 +12,7 @@ var (
 	ErrInterrupted              = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
 	ErrResumeRequired           = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
 	ErrNoSnapshot               = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
-	ErrSlowConsumer             = errors.New("ibkr: slow consumer")                         // consumer fell behind and the queue overflowed under SlowConsumerClose
+	ErrSlowConsumer             = errors.New("ibkr: slow consumer")                         // consumer fell behind and a bounded event queue overflowed
 	ErrUnsupportedServerVersion = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
 	ErrClosed                   = errors.New("ibkr: closed")                                // operation on a closed client
 	ErrNoMatch                  = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
@@ -180,11 +180,4 @@ func isRetryableError(err error) bool {
 		return false
 	}
 	return errors.Is(err, ErrInterrupted) || errors.Is(err, ErrResumeRequired)
-}
-
-func retryableSubscriptionState(evt SubscriptionStateEvent) bool {
-	if evt.Kind == SubscriptionGap {
-		return true
-	}
-	return evt.Kind == SubscriptionClosed && isRetryableError(evt.Err)
 }

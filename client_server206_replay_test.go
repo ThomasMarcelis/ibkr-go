@@ -44,10 +44,14 @@ func TestMarketDataServer206Replay(t *testing.T) {
 	updates := make(map[ibkr.QuoteUpdateKind]ibkr.QuoteUpdate)
 	for len(updates) < 6 {
 		select {
-		case update, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				t.Fatalf("quote events closed before server_version 206 updates: %v", sub.Err())
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
+			update := event.Value
 			updates[update.Kind] = update
 		case <-sub.Done():
 			t.Fatalf("quote subscription closed before server_version 206 updates: %v", sub.Err())

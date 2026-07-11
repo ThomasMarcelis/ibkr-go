@@ -35,7 +35,11 @@ func TestScannerNoItemsMessagePreservesLiveRoute(t *testing.T) {
 	}
 
 	e.handleIncoming(decodeLiveScannerFrame(t, "AAAADDIwADMAMTAwMQAwAA=="))
-	results := <-sub.Events()
+	event := <-sub.Events()
+	if event.Kind != StreamData {
+		event = <-sub.Events()
+	}
+	results := event.Value
 	if len(results) != 0 {
 		t.Fatalf("scanner results len = %d, want exact live empty result", len(results))
 	}

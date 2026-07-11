@@ -108,14 +108,7 @@ func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 		t.Fatal("failed cancellation left the local quote route active")
 	}
 
-	var closed SubscriptionStateEvent
-	for event := range sub.Lifecycle() {
-		if event.Kind == SubscriptionClosed {
-			closed = event
-		}
-	}
-	if closed.Err != waitErr || closed.Retryable {
-		t.Fatalf("closed lifecycle = %+v, want exact non-retryable cancellation error", closed)
+	for range sub.Events() {
 	}
 }
 
@@ -155,14 +148,7 @@ func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
 		t.Fatal("failed slow-consumer cancellation left the quote route active")
 	}
 
-	var closed SubscriptionStateEvent
-	for event := range sub.Lifecycle() {
-		if event.Kind == SubscriptionClosed {
-			closed = event
-		}
-	}
-	if closed.Err != waitErr || closed.Retryable {
-		t.Fatalf("closed lifecycle = %+v, want exact non-retryable joined error", closed)
+	for range sub.Events() {
 	}
 }
 
@@ -184,8 +170,7 @@ func TestActorSlowConsumerCancelsWhilePublicCloseWaitsOnFullCommandQueue(t *test
 			sub.closeWithErr(nil)
 		}
 		sub = newEngineSubscription[int](subscriptionConfig{
-			buffer:       1,
-			slowConsumer: SlowConsumerClose,
+			buffer: 1,
 		}, e, actorCancel)
 		e.cmds <- func() {}
 
@@ -414,7 +399,6 @@ func TestAccountSnapshotRetainsRowsWhenCleanupFails(t *testing.T) {
 	var sub *Subscription[AccountValue]
 	sub = newSubscription[AccountValue](subscriptionConfig{
 		buffer:          1,
-		slowConsumer:    SlowConsumerClose,
 		collectSnapshot: true,
 	}, func() {
 		sub.closeWithErr(cancelErr)
@@ -425,7 +409,7 @@ func TestAccountSnapshotRetainsRowsWhenCleanupFails(t *testing.T) {
 	sub.emit(AccountValue{
 		Account: "DU9000001", Tag: "NetLiquidation", Value: "68000.00", Currency: "EUR",
 	})
-	sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
+	sub.emitState(StreamSnapshotComplete, 0, nil)
 
 	values, err := collectSnapshotAndClose(context.Background(), sub, func(value AccountValue) (AccountValue, bool) {
 		return value, true

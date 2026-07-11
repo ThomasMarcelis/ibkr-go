@@ -60,8 +60,8 @@ func (h *OrderHandle) Wait() error {
 }
 
 // Close initiates detachment of the handle. The order continues executing on
-// the server. Events() and Lifecycle() channels close asynchronously on the
-// engine goroutine, serialized with in-flight emits; use Done or Wait to
+// the server. Events closes asynchronously on the engine goroutine, serialized
+// with in-flight emits; use Done or Wait to
 // observe completion.
 func (h *OrderHandle) Close() {
 	if h.detachFn != nil {

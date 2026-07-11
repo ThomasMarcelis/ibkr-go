@@ -122,7 +122,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 				sub.emit(OpenOrderUpdate{Binding: &m})
 			case codec.OpenOrderEnd:
 				if scope != OpenOrdersScopeAuto {
-					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+					sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 				}
 			}
 		}
@@ -135,7 +135,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		}
 		e.singletons[singletonOpenOrders] = ownedRoute
 
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
 			delete(e.singletons, singletonOpenOrders)
 			sub.closeWithErr(err)
@@ -245,11 +245,11 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 				}
 				delete(pendingFees, m.ExecID)
 			case codec.ExecutionsEnd:
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -624,8 +624,8 @@ func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfi
 
 // RefreshOpenOrders re-sends the active open-orders subscription's request.
 // The Gateway answers with a fresh snapshot burst: the subscription receives
-// the current open orders as Order events followed by another
-// SubscriptionSnapshotComplete lifecycle event. The open-orders reply carries
+// the current open orders as data events followed by another
+// StreamSnapshotComplete event. The open-orders reply carries
 // no request ID on the wire, so a one-shot snapshot cannot coexist with the
 // subscription; refresh is the supported way to resync without tearing the
 // subscription down.

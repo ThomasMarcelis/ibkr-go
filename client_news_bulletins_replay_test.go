@@ -23,9 +23,9 @@ func TestSubscribeNewsBulletinsLiveReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubscribeBulletins() error = %v", err)
 	}
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 
-	first := waitForEvent(t, sub.Events())
+	first := waitForStreamData(t, sub.Events())
 	if first.MsgID != 1783570115 || first.MsgType != 1 || first.Source != "TWSE" {
 		t.Fatalf("first bulletin identity = %+v", first)
 	}
@@ -33,7 +33,7 @@ func TestSubscribeNewsBulletinsLiveReplay(t *testing.T) {
 		t.Fatalf("first bulletin headline = %q", first.Headline)
 	}
 
-	second := waitForEvent(t, sub.Events())
+	second := waitForStreamData(t, sub.Events())
 	if second.MsgID != 1783570118 || second.MsgType != 1 || second.Source != "HKFE,SGX" {
 		t.Fatalf("second bulletin identity = %+v", second)
 	}

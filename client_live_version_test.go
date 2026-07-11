@@ -346,7 +346,11 @@ func TestLiveServer206MarketDataBoundary(t *testing.T) {
 
 	for {
 		select {
-		case update := <-sub.Events():
+		case event := <-sub.Events():
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
+			update := event.Value
 			if update.Kind != ibkr.QuoteUpdateParameters {
 				continue
 			}

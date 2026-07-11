@@ -612,7 +612,7 @@ func TestSingletonSubscriptionRejectsSecond(t *testing.T) {
 	}
 
 	// Wait for snapshot complete so we know the first subscription is established.
-	waitForStateKind(t, sub1.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
+	waitForStateKind(t, sub1.Events(), ibkr.StreamSnapshotComplete)
 
 	sub2, err := client.Accounts().SubscribePositions(ctx)
 	if err == nil {
@@ -654,8 +654,8 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 	}
 
 	// The live capture issued both requests before either snapshot completed.
-	waitForStateKind(t, sub1.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
-	waitForStateKind(t, sub2.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
+	waitForStateKind(t, sub1.Events(), ibkr.StreamSnapshotComplete)
+	waitForStateKind(t, sub2.Events(), ibkr.StreamSnapshotComplete)
 
 	// Third subscription must be rejected.
 	sub3, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{

@@ -37,30 +37,15 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 	var latest Quote
 	for {
 		select {
-		case update, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				return latest, sub.Wait()
 			}
-			latest = update.Snapshot
-		case state, ok := <-sub.Lifecycle():
-			if !ok {
-				return latest, sub.Wait()
-			}
-			if state.Kind == SubscriptionSnapshotComplete {
-				for {
-					select {
-					case update, ok := <-sub.Events():
-						if !ok {
-							return latest, sub.Wait()
-						}
-						latest = update.Snapshot
-					default:
-						return latest, nil
-					}
-				}
-			}
-			if state.Kind == SubscriptionClosed && state.Err != nil {
-				return Quote{}, state.Err
+			switch event.Kind {
+			case StreamData:
+				latest = event.Value.Snapshot
+			case StreamSnapshotComplete:
+				return latest, nil
 			}
 		case <-ctx.Done():
 			return Quote{}, ctx.Err()
@@ -280,7 +265,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					ReceivedAt: time.Now().UTC(),
 				})
 			case codec.TickSnapshotEnd:
-				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 				if snapshot {
 					e.deleteKeyedRoute(reqID)
 					sub.closeWithErr(nil)
@@ -306,30 +291,25 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				return false
 			}
 			if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionGap,
-					ConnectionSeq: e.connectionSeq(),
-					Err:           err,
-				})
+				quote = Quote{}
+				sub.emitState(StreamGap, e.connectionSeq(), err)
 				return true
 			}
 			sub.closeWithErr(ErrResumeRequired)
 			return false
 		}
 		quoteRoute.emitGap = func(e *engine) {
-			sub.emitState(SubscriptionStateEvent{
-				Kind:          SubscriptionGap,
-				ConnectionSeq: e.connectionSeq(),
-			})
+			quote = Quote{}
+			sub.emitState(StreamGap, e.connectionSeq(), nil)
 		}
-		quoteRoute.emitResumed = func(e *engine) {
-			sub.emitState(SubscriptionStateEvent{
-				Kind:          SubscriptionResumed,
-				ConnectionSeq: e.connectionSeq(),
-			})
+		quoteRoute.emitRestored = func(e *engine) {
+			sub.emitState(StreamRestored, e.connectionSeq(), nil)
+		}
+		quoteRoute.emitResubscribed = func(e *engine) {
+			sub.emitState(StreamResubscribed, e.connectionSeq(), nil)
 		}
 		e.keyed[reqID] = quoteRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -412,30 +392,23 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 		}
 		ownedRoute.onDisconnect = func(e *engine, err error) bool {
 			if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
-				sub.emitState(SubscriptionStateEvent{
-					Kind:          SubscriptionGap,
-					ConnectionSeq: e.connectionSeq(),
-					Err:           err,
-				})
+				sub.emitState(StreamGap, e.connectionSeq(), err)
 				return true
 			}
 			sub.closeWithErr(ErrResumeRequired)
 			return false
 		}
 		ownedRoute.emitGap = func(e *engine) {
-			sub.emitState(SubscriptionStateEvent{
-				Kind:          SubscriptionGap,
-				ConnectionSeq: e.connectionSeq(),
-			})
+			sub.emitState(StreamGap, e.connectionSeq(), nil)
 		}
-		ownedRoute.emitResumed = func(e *engine) {
-			sub.emitState(SubscriptionStateEvent{
-				Kind:          SubscriptionResumed,
-				ConnectionSeq: e.connectionSeq(),
-			})
+		ownedRoute.emitRestored = func(e *engine) {
+			sub.emitState(StreamRestored, e.connectionSeq(), nil)
+		}
+		ownedRoute.emitResubscribed = func(e *engine) {
+			sub.emitState(StreamResubscribed, e.connectionSeq(), nil)
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -475,14 +448,6 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 		cfg, err := applySubscriptionOptions(e.cfg, opts)
 		if err != nil {
 			resp <- result{err: err}
-			return
-		}
-		if cfg.slowConsumer == SlowConsumerDropOldest {
-			resp <- result{err: &ValidationError{
-				Field:   "SlowConsumerPolicy",
-				Value:   string(cfg.slowConsumer),
-				Message: "must be SlowConsumerClose for market depth because every update mutates book state",
-			}}
 			return
 		}
 		if err := validateResumePolicy(OpMarketDepth, cfg.resume); err != nil {
@@ -553,7 +518,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			sub.closeWithErr(e.apiErr(OpMarketDepth, m))
 		}
 		e.keyed[reqID] = depthRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)
@@ -728,7 +693,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			sub.closeWithErr(e.apiErr(OpTickByTick, m))
 		}
 		e.keyed[reqID] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, e.keyed[reqID].request); err != nil {
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(err)

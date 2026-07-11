@@ -59,7 +59,7 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 					Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
 				},
 			},
-			emitResumed: func(*engine) { resumed <- id },
+			emitResubscribed: func(*engine) { resumed <- id },
 			close:       func(error) {},
 			gapped:      true,
 		}
@@ -159,7 +159,7 @@ func TestResumeTransportFailureRetainsRouteForNextReconnect(t *testing.T) {
 				Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
 			},
 		},
-		emitResumed: func(*engine) { resumed <- struct{}{} },
+		emitResubscribed: func(*engine) { resumed <- struct{}{} },
 		close:       func(err error) { closed <- err },
 		gapped:      true,
 	}

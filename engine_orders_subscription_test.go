@@ -63,7 +63,11 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 		e.handleIncoming(codec.OrderBound{PermID: 123456789, ClientID: 0, OrderID: 42})
 	})
 	select {
-	case update := <-sub.Events():
+	case event := <-sub.Events():
+		if event.Kind != StreamData {
+			event = <-sub.Events()
+		}
+		update := event.Value
 		if update.Binding == nil || *update.Binding != (OrderBinding{PermID: 123456789, ClientID: 0, OrderID: 42}) {
 			t.Fatalf("binding update = %+v", update.Binding)
 		}

@@ -252,11 +252,11 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 
 	// 1. The live tickReqParams callback is ancillary and does not mutate the
 	// accumulated quote.
-	update := waitForEvent(t, sub.Events())
+	update := waitForStreamData(t, sub.Events())
 	if update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
 		t.Fatalf("update 1 = %+v, want QuoteUpdateParameters", update)
 	}
@@ -267,13 +267,13 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 
 	// 2. The Gateway then identifies the stream as delayed.
-	update = waitForEvent(t, sub.Events())
+	update = waitForStreamData(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldMarketDataType || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
 		t.Fatalf("update 2 = %+v, want delayed market-data type", update)
 	}
 
 	// 3. Delayed last (tick 68) lands in the normalized Last field.
-	update = waitForEvent(t, sub.Events())
+	update = waitForStreamData(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldLast|ibkr.QuoteFieldLastSize ||
 		update.Snapshot.Last.String() != "314.96" || update.Snapshot.LastSize.String() != "53" {
 		t.Fatalf("update 3 = %+v, want delayed last 314.96 x 53", update)
@@ -286,14 +286,14 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 
 	// The delayed last timestamp was already in flight before the switch.
-	update = waitForEvent(t, sub.Events())
+	update = waitForStreamData(t, sub.Events())
 	if update.Kind != ibkr.QuoteUpdateStringTick || update.StringTick == nil ||
 		update.StringTick.TickType != 88 || update.StringTick.Value != "1783727950" {
 		t.Fatalf("update 4 = %+v, want delayed last timestamp", update)
 	}
 
 	// The next callback remains a delayed open tick, proving no type-1 re-ack.
-	update = waitForEvent(t, sub.Events())
+	update = waitForStreamData(t, sub.Events())
 	if update.Changed != ibkr.QuoteFieldOpen || update.Snapshot.Open.String() != "314.7" {
 		t.Fatalf("update 5 = %+v, want delayed open 314.7", update)
 	}
@@ -345,15 +345,15 @@ func TestTickNewsReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
+	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 
-	if update := waitForEvent(t, sub.Events()); update.Kind != ibkr.QuoteUpdateFields || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
+	if update := waitForStreamData(t, sub.Events()); update.Kind != ibkr.QuoteUpdateFields || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
 		t.Fatalf("market-data-type update = %+v", update)
 	}
-	if update := waitForEvent(t, sub.Events()); update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
+	if update := waitForStreamData(t, sub.Events()); update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
 		t.Fatalf("quote-parameters update = %+v", update)
 	}
-	update := waitForEvent(t, sub.Events())
+	update := waitForStreamData(t, sub.Events())
 	if update.Kind != ibkr.QuoteUpdateNewsTick || update.NewsTick == nil {
 		t.Fatalf("news update = %+v", update)
 	}

@@ -5,20 +5,16 @@ import (
 	"errors"
 	"iter"
 	"sync"
-	"time"
 )
 
-// Subscription is a live stream of typed events from the Gateway. Business
-// events arrive on [Subscription.Events]; lifecycle state changes (gaps,
-// resumes, close) arrive on [Subscription.Lifecycle]. Call [Subscription.Close]
-// to initiate server-side cancellation, then [Subscription.Wait] when shutdown
-// completion matters.
+// Subscription is a live stream of ordered data and lifecycle events from the
+// Gateway. Call [Subscription.Close] to initiate server-side cancellation,
+// then [Subscription.Wait] when shutdown completion matters.
 // [Subscription.AwaitSnapshot] blocks until the initial snapshot boundary,
 // [Subscription.Wait] blocks until the subscription closes, and
 // [Subscription.Err] returns the terminal error without blocking.
 type Subscription[T any] struct {
-	events         chan T
-	state          *observer[SubscriptionStateEvent]
+	events         chan StreamEvent[T]
 	done           chan struct{}
 	cancelFn       func()
 	actorCancelFn  func()
@@ -34,6 +30,7 @@ type Subscription[T any] struct {
 	snapshotOnce   sync.Once
 	snapshotEvents []T
 	cfg            subscriptionConfig
+	connectionSeq  uint64
 }
 
 func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscription[T] {
@@ -41,8 +38,7 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 		cfg.buffer = 1
 	}
 	return &Subscription[T]{
-		events:       make(chan T, cfg.buffer),
-		state:        newObserver[SubscriptionStateEvent](8),
+		events:       make(chan StreamEvent[T], cfg.buffer),
 		done:         make(chan struct{}),
 		snapshotDone: make(chan struct{}),
 		cancelFn:     cancelFn,
@@ -50,13 +46,12 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 	}
 }
 
-// Events returns the channel of business events. It closes when the
-// subscription closes; after ranging it to exhaustion, call [Subscription.Err]
-// for the terminal error. See also [Subscription.All] for a range-friendly
-// iterator.
-func (s *Subscription[T]) Events() <-chan T { return s.events }
+// Events returns the single ordered stream of data and lifecycle events. It
+// closes when the subscription terminates; after ranging it to exhaustion,
+// call [Subscription.Err] for the terminal error.
+func (s *Subscription[T]) Events() <-chan StreamEvent[T] { return s.events }
 
-// All returns an iterator over the subscription's events for use with a
+// All returns an iterator over the subscription's data values for use with a
 // range statement. It yields until the subscription closes or ctx is
 // canceled. Iterating to exhaustion drains every buffered event, so after
 // the loop [Subscription.Err] reports the terminal error: nil for a clean
@@ -70,17 +65,20 @@ func (s *Subscription[T]) Events() <-chan T { return s.events }
 //		log.Fatal(err)
 //	}
 //
-// Lifecycle transitions (gap, resume, snapshot boundaries) are not part of
-// the iteration; consumers that need them use [Subscription.Lifecycle].
+// Lifecycle transitions are filtered out. Events and All consume the same
+// queue, so use one or the other rather than reading them concurrently.
 func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		for {
 			select {
-			case ev, ok := <-s.events:
+			case event, ok := <-s.events:
 				if !ok {
 					return
 				}
-				if !yield(ev) {
+				if event.Kind != StreamData {
+					continue
+				}
+				if !yield(event.Value) {
 					return
 				}
 			case <-ctx.Done():
@@ -89,10 +87,6 @@ func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
 		}
 	}
 }
-
-// Lifecycle returns the channel of lifecycle transitions (started, snapshot
-// complete, gap, resume, close), distinct from the business events on Events.
-func (s *Subscription[T]) Lifecycle() <-chan SubscriptionStateEvent { return s.state.Chan() }
 
 // Done returns a channel closed when the subscription has terminated. After it
 // is closed, [Subscription.Wait] and [Subscription.Err] report the terminal error.
@@ -160,8 +154,8 @@ func (s *Subscription[T]) Err() error {
 }
 
 // Close initiates cancellation of the server-side subscription. It is
-// idempotent and safe to call concurrently. Events and lifecycle channels
-// close asynchronously; use [Subscription.Done] or [Subscription.Wait] to
+// idempotent and safe to call concurrently. Events closes asynchronously; use
+// [Subscription.Done] or [Subscription.Wait] to
 // observe completion. If cancellation cannot enter the active transport queue,
 // Wait returns a non-retryable [*SubscriptionCancelError]. When cancellation
 // follows [ErrSlowConsumer], Wait preserves both causes in the terminal error.
@@ -228,47 +222,37 @@ func (s *Subscription[T]) emit(value T) bool {
 	}
 
 	select {
-	case s.events <- value:
+	case s.events <- StreamEvent[T]{Kind: StreamData, Value: value, ConnectionSeq: s.connectionSeq}:
 		return true
-	default:
-	}
-
-	switch s.cfg.slowConsumer {
-	case SlowConsumerDropOldest:
-		select {
-		case <-s.events:
-		default:
-		}
-		select {
-		case s.events <- value:
-			return true
-		default:
-			s.cancelFromActor(ErrSlowConsumer)
-			return false
-		}
 	default:
 		s.cancelFromActor(ErrSlowConsumer)
 		return false
 	}
 }
 
-func (s *Subscription[T]) emitState(evt SubscriptionStateEvent) {
+func (s *Subscription[T]) emitState(kind StreamEventKind, connectionSeq uint64, err error) {
 	select {
 	case <-s.done:
 		return
 	default:
 	}
-	evt.Retryable = retryableSubscriptionState(evt)
-	if evt.At.IsZero() {
-		evt.At = time.Now().UTC()
+	if connectionSeq != 0 {
+		s.connectionSeq = connectionSeq
 	}
-	if evt.Kind == SubscriptionSnapshotComplete {
+	if kind == StreamSnapshotComplete {
 		s.snapshotMu.Lock()
 		s.snapshotClosed = true
 		s.snapshotMu.Unlock()
 		s.snapshotOnce.Do(func() { close(s.snapshotDone) })
 	}
-	s.state.EmitLatest(evt)
+	if s.cfg.collectSnapshot {
+		return
+	}
+	select {
+	case s.events <- StreamEvent[T]{Kind: kind, ConnectionSeq: connectionSeq, Err: err}:
+	default:
+		s.cancelFromActor(ErrSlowConsumer)
+	}
 }
 
 func (s *Subscription[T]) snapshotComplete() bool {
@@ -303,12 +287,10 @@ func (s *Subscription[T]) closeWithErr(err error) {
 		}
 		s.err = err
 		s.errMu.Unlock()
-		s.emitState(SubscriptionStateEvent{Kind: SubscriptionClosed, Err: err})
 		// Close events before done so Done reports completion only after the
-		// engine has stopped publishing business events. Consumers that need
+		// engine has stopped publishing events. Consumers that need
 		// every buffered event should range Events(), then call Wait().
 		close(s.events)
-		s.state.Close()
 		close(s.done)
 	})
 }

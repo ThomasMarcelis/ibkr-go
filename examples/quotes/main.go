@@ -58,21 +58,19 @@ func run() (err error) {
 	timeout := time.NewTimer(10 * time.Second)
 	defer timeout.Stop()
 	events := sub.Events()
-	lifecycle := sub.Lifecycle()
 	for {
 		select {
-		case update, ok := <-events:
+		case event, ok := <-events:
 			if !ok {
 				return errors.Join(ctx.Err(), sub.Wait())
 			}
-			fmt.Printf("bid=%-10s ask=%-10s last=%-10s\n",
-				update.Snapshot.Bid, update.Snapshot.Ask, update.Snapshot.Last)
-		case state, ok := <-lifecycle:
-			if !ok {
-				lifecycle = nil
-				continue
+			if event.Kind == ibkr.StreamData {
+				update := event.Value
+				fmt.Printf("bid=%-10s ask=%-10s last=%-10s\n",
+					update.Snapshot.Bid, update.Snapshot.Ask, update.Snapshot.Last)
+			} else {
+				fmt.Println("lifecycle:", event.Kind)
 			}
-			fmt.Println("lifecycle:", state.Kind)
 		case <-timeout.C:
 			sub.Close()
 			if err := sub.Wait(); err != nil {

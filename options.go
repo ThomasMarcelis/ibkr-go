@@ -26,49 +26,45 @@ type Dialer interface {
 }
 
 type config struct {
-	host                string
-	port                int
-	clientID            int
-	dialer              Dialer
-	logger              *slog.Logger
-	reconnect           ReconnectPolicy
-	tcpKeepAlive        time.Duration
-	sendRate            int
-	eventBuffer         int
-	subscriptionBuffer  int
-	orderEventBuffer    int
-	defaultSlowConsumer SlowConsumerPolicy
+	host               string
+	port               int
+	clientID           int
+	dialer             Dialer
+	logger             *slog.Logger
+	reconnect          ReconnectPolicy
+	tcpKeepAlive       time.Duration
+	sendRate           int
+	eventBuffer        int
+	subscriptionBuffer int
+	orderEventBuffer   int
 }
 
 type subscriptionConfig struct {
 	resume          ResumePolicy
-	slowConsumer    SlowConsumerPolicy
 	buffer          int
 	collectSnapshot bool
 }
 
 func defaultConfig() config {
 	return config{
-		host:                "127.0.0.1",
-		port:                7497,
-		clientID:            1,
-		dialer:              &net.Dialer{},
-		logger:              slog.New(slog.NewTextHandler(io.Discard, nil)),
-		reconnect:           ReconnectAuto,
-		tcpKeepAlive:        30 * time.Second,
-		sendRate:            50,
-		eventBuffer:         64,
-		subscriptionBuffer:  64,
-		orderEventBuffer:    64,
-		defaultSlowConsumer: SlowConsumerClose,
+		host:               "127.0.0.1",
+		port:               7497,
+		clientID:           1,
+		dialer:             &net.Dialer{},
+		logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
+		reconnect:          ReconnectAuto,
+		tcpKeepAlive:       30 * time.Second,
+		sendRate:           50,
+		eventBuffer:        64,
+		subscriptionBuffer: 64,
+		orderEventBuffer:   64,
 	}
 }
 
 func defaultSubscriptionConfig(cfg config) subscriptionConfig {
 	return subscriptionConfig{
-		resume:       ResumeNever,
-		slowConsumer: cfg.defaultSlowConsumer,
-		buffer:       cfg.subscriptionBuffer,
+		resume: ResumeNever,
+		buffer: cfg.subscriptionBuffer,
 	}
 }
 
@@ -108,9 +104,6 @@ func validateConfig(cfg config) error {
 	if !cfg.reconnect.valid() {
 		return &ValidationError{Field: "ReconnectPolicy", Value: string(cfg.reconnect), Message: "must be ReconnectOff or ReconnectAuto"}
 	}
-	if !cfg.defaultSlowConsumer.valid() {
-		return &ValidationError{Field: "DefaultSlowConsumerPolicy", Value: string(cfg.defaultSlowConsumer), Message: "must be SlowConsumerClose or SlowConsumerDropOldest"}
-	}
 	return nil
 }
 
@@ -127,9 +120,6 @@ func applySubscriptionOptions(client config, opts []SubscriptionOption) (subscri
 	}
 	if !cfg.resume.valid() {
 		return subscriptionConfig{}, &ValidationError{Field: "ResumePolicy", Value: string(cfg.resume), Message: "must be ResumeNever or ResumeAuto"}
-	}
-	if !cfg.slowConsumer.valid() {
-		return subscriptionConfig{}, &ValidationError{Field: "SlowConsumerPolicy", Value: string(cfg.slowConsumer), Message: "must be SlowConsumerClose or SlowConsumerDropOldest"}
 	}
 	return cfg, nil
 }
@@ -243,16 +233,6 @@ func WithOrderEventBuffer(size int) Option {
 	}
 }
 
-// WithDefaultSlowConsumerPolicy sets the default [SlowConsumerPolicy] for
-// subscriptions. Default: [SlowConsumerClose]. Drop-oldest is suitable only
-// when losing individual events is acceptable; stateful market-depth streams
-// reject it. Override per subscription with [WithSlowConsumerPolicy].
-func WithDefaultSlowConsumerPolicy(policy SlowConsumerPolicy) Option {
-	return func(cfg *config) {
-		cfg.defaultSlowConsumer = policy
-	}
-}
-
 // WithResumePolicy overrides the [ResumePolicy] for a single subscription.
 func WithResumePolicy(policy ResumePolicy) SubscriptionOption {
 	return func(cfg *subscriptionConfig) {
@@ -260,20 +240,9 @@ func WithResumePolicy(policy ResumePolicy) SubscriptionOption {
 	}
 }
 
-// WithSlowConsumerPolicy overrides the [SlowConsumerPolicy] for a single
-// subscription. The default is [SlowConsumerClose], which fails the
-// subscription when the consumer falls behind. Use [SlowConsumerDropOldest]
-// only for streams where losing individual events is acceptable; market depth
-// rejects it because each event mutates book state.
-func WithSlowConsumerPolicy(policy SlowConsumerPolicy) SubscriptionOption {
-	return func(cfg *subscriptionConfig) {
-		cfg.slowConsumer = policy
-	}
-}
-
 // WithQueueSize overrides the event queue capacity for a single subscription.
 // Raising it gives a bursty high-rate stream (market depth, tick-by-tick) more
-// slack before the [SlowConsumerPolicy] takes effect. The size must be positive.
+// slack before the subscription closes with [ErrSlowConsumer]. The size must be positive.
 func WithQueueSize(size int) SubscriptionOption {
 	return func(cfg *subscriptionConfig) {
 		cfg.buffer = size

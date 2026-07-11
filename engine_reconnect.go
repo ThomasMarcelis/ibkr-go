@@ -243,8 +243,8 @@ func (e *engine) continueResumeRoutes() {
 		default:
 		}
 		e.resumePending = e.resumePending[1:]
-		if route.gapped && route.emitResumed != nil {
-			route.emitResumed(e)
+		if route.gapped && route.emitResubscribed != nil {
+			route.emitResubscribed(e)
 		}
 		route.gapped = false
 	}
@@ -382,15 +382,15 @@ func (e *engine) emitGap() {
 
 func (e *engine) emitResumed() {
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil && route.gapped {
+		if route.subscription && route.resume == ResumeAuto && route.emitRestored != nil && route.gapped {
 			route.gapped = false
-			route.emitResumed(e)
+			route.emitRestored(e)
 		}
 	}
 	for _, route := range e.singletons {
-		if route.subscription && route.resume == ResumeAuto && route.emitResumed != nil && route.gapped {
+		if route.subscription && route.resume == ResumeAuto && route.emitRestored != nil && route.gapped {
 			route.gapped = false
-			route.emitResumed(e)
+			route.emitRestored(e)
 		}
 	}
 	for _, or := range e.orders {

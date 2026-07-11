@@ -140,10 +140,11 @@ type route struct {
 	handleAPIErr     func(codec.APIError, *engine)
 	onDisconnect     func(*engine, error) bool // true retains the route; caller deletes on false
 	emitGap          func(*engine)
-	emitResumed      func(*engine)
+	emitRestored     func(*engine)
+	emitResubscribed func(*engine)
 	validateResume   func(*engine) error
 	close            func(error)
-	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
+	gapped           bool // true after Gap emitted; prevents double emission
 }
 
 type orderRoute struct {

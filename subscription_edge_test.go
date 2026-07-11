@@ -12,7 +12,7 @@ import (
 func TestSubscriptionEmitAfterClose(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	sub.closeWithErr(nil)
 
 	if sub.emit(42) {
@@ -25,7 +25,7 @@ func TestSubscriptionDoubleClose(t *testing.T) {
 
 	t.Run("Close twice", func(t *testing.T) {
 		t.Parallel()
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+		sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {
 			// no-op cancel
 		})
 		sub.closeWithErr(nil) // ensure done channel is closed so Close doesn't block
@@ -36,7 +36,7 @@ func TestSubscriptionDoubleClose(t *testing.T) {
 
 	t.Run("closeWithErr twice", func(t *testing.T) {
 		t.Parallel()
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 		sub.closeWithErr(nil)
 		sub.closeWithErr(errors.New("second")) // must not panic
 	})
@@ -45,7 +45,7 @@ func TestSubscriptionDoubleClose(t *testing.T) {
 func TestSubscriptionSlowConsumerClose(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, nil)
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, nil)
 
 	if !sub.emit(1) {
 		t.Fatal("first emit returned false, want true")
@@ -60,9 +60,11 @@ func TestSubscriptionSlowConsumerClose(t *testing.T) {
 	if err := sub.Err(); err != ErrSlowConsumer {
 		t.Errorf("Err() = %v, want exact ErrSlowConsumer", err)
 	}
-	closed := <-sub.Lifecycle()
-	if closed.Kind != SubscriptionClosed || closed.Err != ErrSlowConsumer || closed.Retryable {
-		t.Fatalf("closed lifecycle = %+v, want exact non-retryable ErrSlowConsumer", closed)
+	if _, ok := <-sub.Events(); !ok {
+		t.Fatal("buffered data event was not drainable after close")
+	}
+	if _, ok := <-sub.Events(); ok {
+		t.Fatal("Events remained open after slow-consumer close")
 	}
 }
 
@@ -77,7 +79,7 @@ func TestSubscriptionSlowConsumerWinsCompetingTeardown(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+			sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 			if !sub.emit(1) {
 				t.Fatal("first emit returned false, want true")
 			}
@@ -99,10 +101,6 @@ func TestSubscriptionSlowConsumerWinsCompetingTeardown(t *testing.T) {
 			if err := sub.Err(); err != ErrSlowConsumer {
 				t.Fatalf("Err() = %v, want exact ErrSlowConsumer", err)
 			}
-			closed := <-sub.Lifecycle()
-			if closed.Kind != SubscriptionClosed || closed.Err != ErrSlowConsumer || closed.Retryable {
-				t.Fatalf("closed lifecycle = %+v, want exact non-retryable ErrSlowConsumer", closed)
-			}
 		})
 	}
 }
@@ -112,7 +110,7 @@ func TestEmitKeyedSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 
 	e := &engine{keyed: map[int]*route{7: {}}}
 	var sub *Subscription[int]
-	sub = newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+	sub = newSubscription[int](subscriptionConfig{buffer: 1}, func() {
 		e.deleteKeyedRoute(7)
 		sub.closeWithErr(nil)
 	})
@@ -135,7 +133,7 @@ func TestEmitSingletonSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 
 	e := &engine{singletons: map[string]*route{singletonOpenOrders: {}}}
 	var sub *Subscription[int]
-	sub = newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+	sub = newSubscription[int](subscriptionConfig{buffer: 1}, func() {
 		delete(e.singletons, singletonOpenOrders)
 		sub.closeWithErr(nil)
 	})
@@ -153,31 +151,9 @@ func TestEmitSingletonSubscriptionDeletesRouteOnSlowConsumer(t *testing.T) {
 	}
 }
 
-func TestSubscriptionSlowConsumerDropOldest(t *testing.T) {
-	t.Parallel()
-
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerDropOldest}, func() {})
-
-	if !sub.emit(1) {
-		t.Fatal("first emit returned false, want true")
-	}
-	if !sub.emit(2) {
-		t.Fatal("second emit (drop oldest) returned false, want true")
-	}
-
-	select {
-	case v := <-sub.Events():
-		if v != 2 {
-			t.Errorf("Events() received %d, want 2 (oldest should have been dropped)", v)
-		}
-	default:
-		t.Error("Events() channel empty, expected value 2")
-	}
-}
-
 func TestSubscriptionWaitBlocksUntilClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 
 		done := make(chan error, 1)
 		go func() {
@@ -208,7 +184,7 @@ func TestSubscriptionWaitBlocksUntilClose(t *testing.T) {
 func TestSubscriptionWaitReturnsError(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	want := errors.New("test error")
 	sub.closeWithErr(want)
 
@@ -220,7 +196,7 @@ func TestSubscriptionWaitReturnsError(t *testing.T) {
 func TestSubscriptionErrReturnsCloseErrorWithoutBlocking(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	if err := sub.Err(); err != nil {
 		t.Fatalf("Err() before close = %v, want nil", err)
 	}
@@ -233,147 +209,45 @@ func TestSubscriptionErrReturnsCloseErrorWithoutBlocking(t *testing.T) {
 	}
 }
 
-func TestSubscriptionStateEventDelivery(t *testing.T) {
+func TestSubscriptionEventsPreserveLifecycleAndDataOrder(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub := newSubscription[int](subscriptionConfig{buffer: 4}, func() {})
 
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
+		sub.emitState(StreamStarted, 3, nil)
+		sub.emit(42)
+		sub.emitState(StreamSnapshotComplete, 3, nil)
 
-		evt := <-sub.Lifecycle()
-		if evt.Kind != SubscriptionSnapshotComplete {
-			t.Errorf("Lifecycle() event Kind = %q, want %q", evt.Kind, SubscriptionSnapshotComplete)
+		started := <-sub.Events()
+		data := <-sub.Events()
+		complete := <-sub.Events()
+		if started.Kind != StreamStarted || started.ConnectionSeq != 3 {
+			t.Fatalf("first event = %+v, want Started on connection 3", started)
 		}
-		if evt.At.IsZero() {
-			t.Error("Lifecycle() event At is zero, expected auto-filled timestamp")
+		if data.Kind != StreamData || data.Value != 42 || data.ConnectionSeq != 3 {
+			t.Fatalf("second event = %+v, want data 42 on connection 3", data)
+		}
+		if complete.Kind != StreamSnapshotComplete || complete.ConnectionSeq != 3 {
+			t.Fatalf("third event = %+v, want SnapshotComplete on connection 3", complete)
 		}
 	})
-}
-
-func TestSubscriptionStateRetryableClassification(t *testing.T) {
-	t.Parallel()
-
-	apiErr := &APIError{OpKind: OpRealTimeBars, Code: 420, Message: "Invalid Real-time Query"}
-	tests := []struct {
-		name      string
-		evt       SubscriptionStateEvent
-		retryable bool
-	}{
-		{
-			name:      "gap",
-			evt:       SubscriptionStateEvent{Kind: SubscriptionGap},
-			retryable: true,
-		},
-		{
-			name:      "closed interrupted",
-			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: ErrInterrupted},
-			retryable: true,
-		},
-		{
-			name:      "closed resume required",
-			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: ErrResumeRequired},
-			retryable: true,
-		},
-		{
-			name:      "closed api error",
-			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: apiErr},
-			retryable: false,
-		},
-		{
-			name:      "closed slow consumer",
-			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed, Err: ErrSlowConsumer},
-			retryable: false,
-		},
-		{
-			name:      "closed clean",
-			evt:       SubscriptionStateEvent{Kind: SubscriptionClosed},
-			retryable: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
-			sub.emitState(tt.evt)
-			got := <-sub.Lifecycle()
-			if got.Retryable != tt.retryable {
-				t.Fatalf("Retryable = %v, want %v", got.Retryable, tt.retryable)
-			}
-			if retryable := IsRetryable(tt.evt.Err); retryable != tt.retryable && tt.evt.Kind == SubscriptionClosed {
-				t.Fatalf("IsRetryable(%v) = %v, want %v", tt.evt.Err, retryable, tt.retryable)
-			}
-		})
-	}
-}
-
-func TestSubscriptionStateChannelFull(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
-
-		for i := 0; i < 12; i++ {
-			sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: uint64(i + 1)})
-		}
-		sub.closeWithErr(nil)
-
-		var seqs []uint64
-		for evt := range sub.Lifecycle() {
-			if evt.Kind == SubscriptionStarted {
-				seqs = append(seqs, evt.ConnectionSeq)
-			}
-		}
-		if len(seqs) != 7 {
-			t.Fatalf("read %d state events, want 7 (one buffered state replaced by Closed)", len(seqs))
-		}
-		for i, seq := range seqs {
-			want := uint64(i + 6)
-			if seq != want {
-				t.Fatalf("seqs[%d] = %d, want %d (keep latest 7 before Closed)", i, seq, want)
-			}
-		}
-	})
-}
-
-func TestSubscriptionClosedEventSurvivesFullStateBuffer(t *testing.T) {
-	t.Parallel()
-
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
-
-	for i := 0; i < 8; i++ {
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted})
-	}
-	sub.closeWithErr(ErrSlowConsumer)
-
-	seenClosed := false
-	for evt := range sub.Lifecycle() {
-		if evt.Kind == SubscriptionClosed {
-			seenClosed = true
-			if !errors.Is(evt.Err, ErrSlowConsumer) {
-				t.Fatalf("closed event err = %v, want ErrSlowConsumer", evt.Err)
-			}
-		}
-	}
-	if !seenClosed {
-		t.Fatal("SubscriptionClosed event was dropped when state buffer was full")
-	}
 }
 
 func TestSubscriptionSnapshotCompleteFlag(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 
 	if sub.snapshotComplete() {
 		t.Error("snapshotComplete() = true before any state event, want false")
 	}
 
-	sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
+	sub.emitState(StreamSnapshotComplete, 1, nil)
 	if !sub.snapshotComplete() {
 		t.Error("snapshotComplete() = false after SnapshotComplete, want true")
 	}
 
 	// Latched: additional events do not clear it.
-	sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted})
+	sub.emitState(StreamStarted, 1, nil)
 	if !sub.snapshotComplete() {
 		t.Error("snapshotComplete() = false after subsequent event, want true (latched)")
 	}
@@ -381,7 +255,7 @@ func TestSubscriptionSnapshotCompleteFlag(t *testing.T) {
 
 func TestSubscriptionDoneClosedOnClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 
 		select {
 		case <-sub.Done():
@@ -402,22 +276,22 @@ func TestSubscriptionDoneClosedOnClose(t *testing.T) {
 func TestSubscriptionEventsClosedOnClose(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	sub.closeWithErr(nil)
 
 	v, ok := <-sub.Events()
 	if ok {
 		t.Errorf("Events() receive ok = true, want false (closed channel)")
 	}
-	if v != 0 {
-		t.Errorf("Events() zero-value = %d, want 0", v)
+	if v != (StreamEvent[int]{}) {
+		t.Errorf("Events() zero-value = %+v, want zero event", v)
 	}
 }
 
 func TestSubscriptionEventsDrainAfterClose(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 2, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 2}, func() {})
 	if !sub.emit(1) {
 		t.Fatal("first emit returned false, want true")
 	}
@@ -428,8 +302,10 @@ func TestSubscriptionEventsDrainAfterClose(t *testing.T) {
 	sub.closeWithErr(nil)
 
 	var got []int
-	for value := range sub.Events() {
-		got = append(got, value)
+	for event := range sub.Events() {
+		if event.Kind == StreamData {
+			got = append(got, event.Value)
+		}
 	}
 	if len(got) != 2 || got[0] != 1 || got[1] != 2 {
 		t.Fatalf("drained events = %v, want [1 2]", got)
@@ -443,7 +319,7 @@ func TestSubscriptionCancelFnCalledOnce(t *testing.T) {
 	t.Parallel()
 
 	var count atomic.Int32
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {
 		count.Add(1)
 	})
 
@@ -465,9 +341,9 @@ func TestSubscriptionCancelFnCalledOnce(t *testing.T) {
 func TestAwaitSnapshotReturnsNilWhenSnapshotComplete(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	sub.expectSnapshot()
-	sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
+	sub.emitState(StreamSnapshotComplete, 0, nil)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -488,13 +364,13 @@ func TestAwaitSnapshotReturnsNilWhenSnapshotComplete(t *testing.T) {
 func TestAwaitSnapshotReturnsNilWhenCompleteThenClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		for i := 0; i < 50; i++ {
-			sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+			sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 			sub.expectSnapshot()
 
 			done := make(chan error, 1)
 			go func() { done <- sub.AwaitSnapshot(context.Background()) }()
 
-			sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete})
+			sub.emitState(StreamSnapshotComplete, 0, nil)
 			sub.closeWithErr(nil)
 
 			synctest.Wait()
@@ -516,7 +392,7 @@ func TestAwaitSnapshotReturnsNilWhenCompleteThenClose(t *testing.T) {
 // AwaitSnapshot must surface ErrInterrupted, not silently report success.
 func TestAwaitSnapshotReturnsErrInterruptedOnCleanCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 		sub.expectSnapshot()
 
 		done := make(chan error, 1)
@@ -544,7 +420,7 @@ func TestAwaitSnapshotReturnsErrInterruptedOnCleanCancel(t *testing.T) {
 // ErrInterrupted.
 func TestAwaitSnapshotReturnsCloseErrorOnErrorClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+		sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 		sub.expectSnapshot()
 
 		want := errors.New("api error 162")
@@ -572,7 +448,7 @@ func TestAwaitSnapshotReturnsCloseErrorOnErrorClose(t *testing.T) {
 func TestAwaitSnapshotReturnsErrNoSnapshotWithoutExpectation(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	// Do not call expectSnapshot.
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -586,7 +462,7 @@ func TestAwaitSnapshotReturnsErrNoSnapshotWithoutExpectation(t *testing.T) {
 func TestAwaitSnapshotReturnsContextError(t *testing.T) {
 	t.Parallel()
 
-	sub := newSubscription[int](subscriptionConfig{buffer: 1, slowConsumer: SlowConsumerClose}, func() {})
+	sub := newSubscription[int](subscriptionConfig{buffer: 1}, func() {})
 	sub.expectSnapshot()
 
 	ctx, cancel := context.WithCancel(context.Background())

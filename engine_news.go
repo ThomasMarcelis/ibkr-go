@@ -85,7 +85,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			}
 		}
 		e.singletons[singletonNewsBulletins] = ownedRoute
-		sub.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.NewsBulletinsRequest{AllMessages: allMessages}); err != nil {
 			delete(e.singletons, singletonNewsBulletins)
 			sub.closeWithErr(err)

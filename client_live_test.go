@@ -418,11 +418,11 @@ func TestLiveSubscribeAccountSummary(t *testing.T) {
 				t.Fatal("Events channel closed before SnapshotComplete")
 			}
 			events++
-		case evt, ok := <-sub.Lifecycle():
+		case evt, ok := <-sub.Events():
 			if !ok {
 				t.Fatal("State channel closed unexpectedly")
 			}
-			if evt.Kind == ibkr.SubscriptionSnapshotComplete {
+			if evt.Kind == ibkr.StreamSnapshotComplete {
 				if events == 0 {
 					t.Fatal("SnapshotComplete with 0 events")
 				}
@@ -584,7 +584,7 @@ func TestLiveSubscribeMarketDepth(t *testing.T) {
 				t.Logf("SubscribeMarketDepth: received %d depth rows", events)
 				return
 			}
-		case evt := <-sub.Lifecycle():
+		case evt := <-sub.Events():
 			if evt.Err != nil {
 				// Terminal market-depth errors such as 10092 close the subscription.
 				t.Logf("SubscribeMarketDepth state error: %v (expected without deep data subscription)", evt.Err)
@@ -866,11 +866,11 @@ func TestLiveSubscribePositions(t *testing.T) {
 				t.Fatal("Events channel closed before SnapshotComplete")
 			}
 			events++
-		case evt, ok := <-sub.Lifecycle():
+		case evt, ok := <-sub.Events():
 			if !ok {
 				t.Fatal("State channel closed unexpectedly")
 			}
-			if evt.Kind == ibkr.SubscriptionSnapshotComplete {
+			if evt.Kind == ibkr.StreamSnapshotComplete {
 				t.Logf("SubscribePositions: %d events before SnapshotComplete", events)
 				return
 			}
@@ -1313,7 +1313,7 @@ func TestLiveSubscribeDisplayGroup(t *testing.T) {
 	}
 	defer handle.Close()
 
-	waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionStarted)
+	waitForStateKind(t, handle.Events(), ibkr.StreamStarted)
 
 	// Update the display group to AAPL's conID.
 	if err := handle.Update(ctx, "265598"); err != nil {
@@ -1322,11 +1322,13 @@ func TestLiveSubscribeDisplayGroup(t *testing.T) {
 
 	// Wait for an update event or timeout.
 	select {
-	case evt, ok := <-handle.Events():
+	case event, ok := <-handle.Events():
 		if !ok {
 			t.Fatal("Events channel closed")
 		}
-		t.Logf("DisplayGroupUpdate: %s", evt.ContractInfo)
+		if event.Kind == ibkr.StreamData {
+			t.Logf("DisplayGroupUpdate: %s", event.Value.ContractInfo)
+		}
 	case <-time.After(5 * time.Second):
 		t.Log("no display group update event received (may be expected)")
 	}
@@ -1363,8 +1365,8 @@ func TestLiveSubscribeOpenOrders(t *testing.T) {
 				t.Fatalf("Events closed after %d events", events)
 			}
 			events++
-		case evt := <-sub.Lifecycle():
-			if evt.Kind == ibkr.SubscriptionSnapshotComplete {
+		case evt := <-sub.Events():
+			if evt.Kind == ibkr.StreamSnapshotComplete {
 				t.Logf("SubscribeOpenOrders: %d open orders", events)
 				return
 			}
@@ -1451,20 +1453,22 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 	recovered := false
 	for done := false; !done; {
 		select {
-		case evt, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				t.Fatal("subscription closed during snapshot")
 			}
-			if evt.Order != nil && evt.Order.OrderID == orderID {
-				t.Logf("recovered order %d (client %d, status %q)", evt.Order.OrderID, evt.Order.ClientID, evt.Order.Status)
-				recovered = true
-			}
-		case state := <-sub.Lifecycle():
-			if state.Kind == ibkr.SubscriptionSnapshotComplete {
+			switch event.Kind {
+			case ibkr.StreamData:
+				if event.Value.Order != nil && event.Value.Order.OrderID == orderID {
+					order := event.Value.Order
+					t.Logf("recovered order %d (client %d, status %q)", order.OrderID, order.ClientID, order.Status)
+					recovered = true
+				}
+			case ibkr.StreamSnapshotComplete:
 				done = true
 			}
-			if state.Err != nil {
-				t.Fatalf("subscription error: %v", state.Err)
+			if event.Err != nil {
+				t.Fatalf("subscription error: %v", event.Err)
 			}
 		case <-ctx.Done():
 			t.Fatal("timeout waiting for open-orders snapshot")
@@ -1481,10 +1485,14 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 
 	for {
 		select {
-		case evt, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				t.Fatal("subscription closed without delivering the cancel status")
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
+			evt := event.Value
 			if evt.Status != nil && evt.Status.OrderID == orderID {
 				t.Logf("recovered order status: %s", evt.Status.Status)
 				if evt.Status.Status == ibkr.OrderStatusCancelled {

@@ -93,7 +93,7 @@ func TestAllEarlyBreakLeavesSubscriptionUsable(t *testing.T) {
 		}
 	}
 	// The remaining buffered events stay consumable via Events().
-	if v := <-sub.Events(); v != 2 {
-		t.Fatalf("Events() after break = %d, want 2", v)
+	if event := <-sub.Events(); event.Kind != StreamData || event.Value != 2 {
+		t.Fatalf("Events() after break = %+v, want data 2", event)
 	}
 }

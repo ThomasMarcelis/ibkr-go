@@ -548,14 +548,16 @@ func runAPINewsBulletins(ctx context.Context, addr string, clientID int) error {
 	collect:
 		for {
 			select {
-			case _, ok := <-sub.Events():
+			case event, ok := <-sub.Events():
 				if !ok {
 					if err := sub.Wait(); err != nil {
 						return fmt.Errorf("news bulletin subscription: %w", err)
 					}
 					return errors.New("news bulletin subscription closed before observation window ended")
 				}
-				count++
+				if event.Kind == ibkr.StreamData {
+					count++
+				}
 			case <-sub.Done():
 				if err := sub.Wait(); err != nil {
 					return fmt.Errorf("news bulletin subscription: %w", err)
@@ -1064,13 +1066,17 @@ func runAPISmartComponents(ctx context.Context, addr string, clientID int) error
 		bboExchange := ""
 		for bboExchange == "" {
 			select {
-			case update, ok := <-sub.Events():
+			case event, ok := <-sub.Events():
 				if !ok {
 					if err := sub.Err(); err != nil {
 						return fmt.Errorf("AAPL quote closed before BBO mapping: %w", err)
 					}
 					return errors.New("AAPL quote closed before BBO mapping")
 				}
+				if event.Kind != ibkr.StreamData {
+					continue
+				}
+				update := event.Value
 				if update.Kind == ibkr.QuoteUpdateParameters && update.Parameters != nil {
 					bboExchange = update.Parameters.BBOExchange
 				}
@@ -1710,14 +1716,18 @@ func awaitMarketDepthEvidence(ctx context.Context, client *ibkr.Client, sub *ibk
 	count := 0
 	for {
 		select {
-		case row, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				if err := sub.Wait(); err != nil {
 					return count, nil, err
 				}
 				return count, nil, errors.New("market-depth subscription closed before required evidence")
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
 			count++
+			row := event.Value
 			if row.Position >= 0 {
 				return count, nil, nil
 			}
@@ -1753,14 +1763,18 @@ func awaitSubscriptionEvidence[T any](ctx context.Context, sub *ibkr.Subscriptio
 	count := 0
 	for {
 		select {
-		case value, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				if err := sub.Wait(); err != nil {
 					return count, err
 				}
 				return count, errors.New("subscription closed before required evidence")
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
 			count++
+			value := event.Value
 			if accept(value) {
 				return count, nil
 			}
@@ -1960,22 +1974,19 @@ func runAPIHistoricalBarsKeepUp(ctx context.Context, addr string, clientID int) 
 		snapshotComplete := false
 		for count == 0 || !snapshotComplete {
 			select {
-			case _, ok := <-sub.Events():
+			case event, ok := <-sub.Events():
 				if !ok {
 					if err := sub.Wait(); err != nil {
 						return fmt.Errorf("AAPL keep-up bars: %w", err)
 					}
 					return errors.New("AAPL keep-up bars closed before the initial snapshot completed")
 				}
-				count++
-			case state, ok := <-sub.Lifecycle():
-				if !ok {
-					if err := sub.Wait(); err != nil {
-						return fmt.Errorf("AAPL keep-up bars: %w", err)
-					}
-					return errors.New("AAPL keep-up bars closed before the initial snapshot completed")
+				switch event.Kind {
+				case ibkr.StreamData:
+					count++
+				case ibkr.StreamSnapshotComplete:
+					snapshotComplete = true
 				}
-				snapshotComplete = snapshotComplete || state.Kind == ibkr.SubscriptionSnapshotComplete
 			case <-sub.Done():
 				if err := sub.Wait(); err != nil {
 					return fmt.Errorf("AAPL keep-up bars: %w", err)
@@ -2988,12 +2999,16 @@ func runAPIGenericTickMatrixAAPL(ctx context.Context, addr string, clientID int)
 		count := 0
 		for {
 			select {
-			case update, ok := <-sub.Events():
+			case event, ok := <-sub.Events():
 				if !ok {
 					recordProbeResult("generic_tick_matrix", "aapl", count, sub.Err())
 					return nil
 				}
+				if event.Kind != ibkr.StreamData {
+					continue
+				}
 				count++
+				update := event.Value
 				values := quoteUpdateValues(update)
 				recordAPIEvent("quote_update", update.Kind.String(), func(event *apiDriverEvent) {
 					event.Symbol = apiAAPL.Symbol
@@ -3105,12 +3120,16 @@ func runAPITickNewsAAPLProbe(ctx context.Context, addr string, clientID int) err
 		count := 0
 		for {
 			select {
-			case update, ok := <-sub.Events():
+			case event, ok := <-sub.Events():
 				if !ok {
 					recordProbeResult("tick_news", "aapl_brfg", count, sub.Err())
 					return nil
 				}
+				if event.Kind != ibkr.StreamData {
+					continue
+				}
 				count++
+				update := event.Value
 				recordAPIEvent("quote_update", update.Kind.String(), func(event *apiDriverEvent) {
 					event.Symbol = apiAAPL.Symbol
 					event.SecType = string(apiAAPL.SecType)
@@ -4404,11 +4423,15 @@ func observeBars(ctx context.Context, sub *ibkr.Subscription[ibkr.Bar], wait tim
 	var count int
 	for {
 		select {
-		case bar, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				return count
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
 			count++
+			bar := event.Value
 			log.Printf("bar update time=%s close=%s", bar.Time.Format(time.RFC3339), bar.Close)
 		case <-sub.Done():
 			return count
@@ -4426,11 +4449,15 @@ func observeTicks(ctx context.Context, sub *ibkr.Subscription[ibkr.TickByTickDat
 	var count int
 	for {
 		select {
-		case tick, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				return count
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
 			count++
+			tick := event.Value
 			log.Printf("tick-by-tick update type=%d price=%s bid=%s ask=%s midpoint=%s", tick.TickType, tick.Price, tick.BidPrice, tick.AskPrice, tick.MidPoint)
 		case <-sub.Done():
 			return count
@@ -4448,12 +4475,16 @@ func observeQuotes(ctx context.Context, sub *ibkr.Subscription[ibkr.QuoteUpdate]
 	var count int
 	for {
 		select {
-		case quote, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				recordProbeResult("quote_subscription", label, count, nil)
 				return count
 			}
+			if event.Kind != ibkr.StreamData {
+				continue
+			}
 			count++
+			quote := event.Value
 			log.Printf("%s quote update changed=%d last=%s bid=%s ask=%s", label, quote.Changed, quote.Snapshot.Last, quote.Snapshot.Bid, quote.Snapshot.Ask)
 		case <-sub.Done():
 			recordProbeResult("quote_subscription", label, count, sub.Err())
@@ -5063,29 +5094,33 @@ func drainObservers(
 		for {
 			select {
 			case evt, ok := <-quoteEvents(quotes):
-				if ok {
-					log.Printf("observer quote changed=%d", evt.Changed)
+				if ok && evt.Kind == ibkr.StreamData {
+					value := evt.Value
+					log.Printf("observer quote changed=%d", value.Changed)
 				}
 			case evt, ok := <-accountEvents(updates):
-				if ok {
-					if evt.AccountValue != nil {
-						log.Printf("observer account key=%s account=%s", evt.AccountValue.Key, evt.AccountValue.Account)
+				if ok && evt.Kind == ibkr.StreamData {
+					value := evt.Value
+					if value.AccountValue != nil {
+						log.Printf("observer account key=%s account=%s", value.AccountValue.Key, value.AccountValue.Account)
 					}
-					if evt.Portfolio != nil {
-						log.Printf("observer portfolio symbol=%s position=%s market_price=%s", evt.Portfolio.Contract.Symbol, evt.Portfolio.Position, evt.Portfolio.MarketPrice)
+					if value.Portfolio != nil {
+						log.Printf("observer portfolio symbol=%s position=%s market_price=%s", value.Portfolio.Contract.Symbol, value.Portfolio.Position, value.Portfolio.MarketPrice)
 					}
 				}
 			case evt, ok := <-pnlEvents(pnl):
-				if ok {
-					log.Printf("observer pnl daily=%s unrealized=%s realized=%s", evt.DailyPnL, evt.UnrealizedPnL, evt.RealizedPnL)
+				if ok && evt.Kind == ibkr.StreamData {
+					value := evt.Value
+					log.Printf("observer pnl daily=%s unrealized=%s realized=%s", value.DailyPnL, value.UnrealizedPnL, value.RealizedPnL)
 				}
 			case evt, ok := <-openOrderEvents(openOrders):
-				if ok {
-					if evt.Order != nil {
-						log.Printf("observer open order_id=%d status=%s", evt.Order.OrderID, evt.Order.Status)
+				if ok && evt.Kind == ibkr.StreamData {
+					value := evt.Value
+					if value.Order != nil {
+						log.Printf("observer open order_id=%d status=%s", value.Order.OrderID, value.Order.Status)
 					}
-					if evt.Status != nil {
-						log.Printf("observer open status order_id=%d status=%s", evt.Status.OrderID, evt.Status.Status)
+					if value.Status != nil {
+						log.Printf("observer open status order_id=%d status=%s", value.Status.OrderID, value.Status.Status)
 					}
 				}
 			case <-deadline:
@@ -5095,28 +5130,28 @@ func drainObservers(
 	}()
 }
 
-func quoteEvents(sub *ibkr.Subscription[ibkr.QuoteUpdate]) <-chan ibkr.QuoteUpdate {
+func quoteEvents(sub *ibkr.Subscription[ibkr.QuoteUpdate]) <-chan ibkr.StreamEvent[ibkr.QuoteUpdate] {
 	if sub == nil {
 		return nil
 	}
 	return sub.Events()
 }
 
-func accountEvents(sub *ibkr.Subscription[ibkr.AccountUpdate]) <-chan ibkr.AccountUpdate {
+func accountEvents(sub *ibkr.Subscription[ibkr.AccountUpdate]) <-chan ibkr.StreamEvent[ibkr.AccountUpdate] {
 	if sub == nil {
 		return nil
 	}
 	return sub.Events()
 }
 
-func pnlEvents(sub *ibkr.Subscription[ibkr.PnLUpdate]) <-chan ibkr.PnLUpdate {
+func pnlEvents(sub *ibkr.Subscription[ibkr.PnLUpdate]) <-chan ibkr.StreamEvent[ibkr.PnLUpdate] {
 	if sub == nil {
 		return nil
 	}
 	return sub.Events()
 }
 
-func openOrderEvents(sub *ibkr.Subscription[ibkr.OpenOrderUpdate]) <-chan ibkr.OpenOrderUpdate {
+func openOrderEvents(sub *ibkr.Subscription[ibkr.OpenOrderUpdate]) <-chan ibkr.StreamEvent[ibkr.OpenOrderUpdate] {
 	if sub == nil {
 		return nil
 	}
