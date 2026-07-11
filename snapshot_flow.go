@@ -25,42 +25,17 @@ func bindContext[T any](ctx context.Context, sub *Subscription[T]) {
 }
 
 func collectSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) (U, bool)) ([]U, error) {
-	if sub.cfg.collectSnapshot {
-		return collectRetainedSnapshot(ctx, sub, mapFn)
-	}
-
-	values := make([]U, 0, 8)
-	for {
-		select {
-		case item, ok := <-sub.Events():
-			if !ok {
-				if sub.snapshotComplete() {
-					return values, nil
-				}
-				return values, sub.Wait()
-			}
-			if value, ok := mapFn(item); ok {
-				values = append(values, value)
-			}
-		case state, ok := <-sub.Lifecycle():
-			if !ok {
-				if sub.snapshotComplete() {
-					return drainSnapshotEvents(values, sub, mapFn), nil
-				}
-				return values, sub.Wait()
-			}
-			switch state.Kind {
-			case SubscriptionSnapshotComplete:
-				return drainSnapshotEvents(values, sub, mapFn), nil
-			case SubscriptionClosed:
-				if sub.snapshotComplete() {
-					return drainSnapshotEvents(values, sub, mapFn), nil
-				}
-				return values, state.Err
-			}
-		case <-ctx.Done():
-			return nil, ctx.Err()
+	select {
+	case <-sub.snapshotDone:
+		return mapSnapshotEvents(sub.takeSnapshotEvents(), mapFn), nil
+	case <-sub.done:
+		values := mapSnapshotEvents(sub.takeSnapshotEvents(), mapFn)
+		if sub.snapshotComplete() {
+			return values, nil
 		}
+		return values, sub.Wait()
+	case <-ctx.Done():
+		return nil, ctx.Err()
 	}
 }
 
@@ -88,21 +63,6 @@ func collectSnapshotAndClose[T any, U any](ctx context.Context, sub *Subscriptio
 	return values, errors.Join(collectErr, closeErr)
 }
 
-func collectRetainedSnapshot[T any, U any](ctx context.Context, sub *Subscription[T], mapFn func(T) (U, bool)) ([]U, error) {
-	select {
-	case <-sub.snapshotDone:
-		return mapSnapshotEvents(sub.takeSnapshotEvents(), mapFn), nil
-	case <-sub.done:
-		values := mapSnapshotEvents(sub.takeSnapshotEvents(), mapFn)
-		if sub.snapshotComplete() {
-			return values, nil
-		}
-		return values, sub.Wait()
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
-
 func mapSnapshotEvents[T any, U any](events []T, mapFn func(T) (U, bool)) []U {
 	values := make([]U, 0, len(events))
 	for _, event := range events {
@@ -111,20 +71,4 @@ func mapSnapshotEvents[T any, U any](events []T, mapFn func(T) (U, bool)) []U {
 		}
 	}
 	return values
-}
-
-func drainSnapshotEvents[T any, U any](values []U, sub *Subscription[T], mapFn func(T) (U, bool)) []U {
-	for {
-		select {
-		case item, ok := <-sub.Events():
-			if !ok {
-				return values
-			}
-			if value, ok := mapFn(item); ok {
-				values = append(values, value)
-			}
-		default:
-			return values
-		}
-	}
 }
