@@ -417,7 +417,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("14.61"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260611T133046Z-001",
+			OrderRef:  "ibkrgo-redacted-20260611T133046Z-001",
 		},
 	})
 	if err != nil {
@@ -432,8 +432,8 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	if open.OrderType != ibkr.OrderTypeLimit || !open.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
 		t.Fatalf("resting open order = %s @ %s, want LMT @ 14.61", open.OrderType, open.LmtPrice)
 	}
-	if open.PermID != 900377 {
-		t.Fatalf("perm id = %d, want 900377", open.PermID)
+	if open.PermID != 9000000377 {
+		t.Fatalf("perm id = %d, want 9000000377", open.PermID)
 	}
 	restLog.nextStatus(t, ctx, ibkr.OrderStatusSubmitted)
 
@@ -444,7 +444,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 		Quantity:  decimal.RequireFromString("100"),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
-		OrderRef:  "ibkrgo-sanitized-20260611T133046Z-001",
+		OrderRef:  "ibkrgo-redacted-20260611T133046Z-001",
 	}); err != nil {
 		t.Fatalf("Modify: %v", err)
 	}
@@ -466,7 +466,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260611T133046Z-002",
+			OrderRef:  "ibkrgo-redacted-20260611T133046Z-002",
 		},
 	})
 	if err != nil {
@@ -493,7 +493,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	restLog.drain()
 	execs := restLog.executions()
 	requireExecutions(t, "modify", execs, []wantExec{{"BOT", "100", "292.27"}})
-	if execs[0].ExecID != "sanitized-modify-001" {
+	if execs[0].ExecID != "redacted-modify-0000001" {
 		t.Fatalf("exec id = %q", execs[0].ExecID)
 	}
 	comms := restLog.commissions()
@@ -501,7 +501,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	if !comms[0].RealizedPNL.Equal(decimal.RequireFromString("-9.622032")) {
 		t.Fatalf("realized PnL = %s, want -9.622032", comms[0].RealizedPNL)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900377")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000377")
 	requireOrderWaitNil(t, "modify", rest)
 
 	flattenLog.drain()
@@ -512,7 +512,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	// The second commission trails the code-161 notice but remains inside the
 	// terminal drain window, so both live reports reach the handle.
 	requireCommissions(t, "flatten", flattenLog.commissions(), []string{"1.366822", "0.25491"})
-	requireCancelNotCancellableNotice(t, ctx, events, "900378")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000378")
 	requireOrderWaitNil(t, "flatten", flatten)
 }
 
