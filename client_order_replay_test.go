@@ -336,7 +336,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 			TrailStopPrice: decimal.RequireFromString("2921"),
 			TIF:            ibkr.TIFDay,
 			Account:        "DU9000001",
-			OrderRef:       "ibkrgo-sanitized-20260610T195819Z-001",
+			OrderRef:       "ibkrgo-redacted-20260610T195820Z-001",
 		},
 	})
 	if err != nil {
@@ -358,8 +358,8 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	if !open.AuxPrice.Equal(decimal.RequireFromString("1")) {
 		t.Fatalf("trail aux price = %s, want 1", open.AuxPrice)
 	}
-	if open.PermID != 900340 {
-		t.Fatalf("trail perm id = %d, want 900340", open.PermID)
+	if open.PermID != 9000000340 {
+		t.Fatalf("trail perm id = %d, want 9000000340", open.PermID)
 	}
 
 	// Drain to Filled, tracking the partial fill (80/20 @ 292.14) and
@@ -434,7 +434,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 			Adjustment:     ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")},
 			TIF:            ibkr.TIFDay,
 			Account:        "DU9000001",
-			OrderRef:       "ibkrgo-sanitized-20260610T195819Z-002",
+			OrderRef:       "ibkrgo-redacted-20260610T195820Z-002",
 		},
 	})
 	if err != nil {
@@ -453,8 +453,8 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	if !open.LmtPrice.Equal(decimal.RequireFromString("2920.95")) {
 		t.Fatalf("trail-limit echoed lmt price = %s, want 2920.95", open.LmtPrice)
 	}
-	if open.PermID != 900341 {
-		t.Fatalf("trail-limit perm id = %d, want 900341", open.PermID)
+	if open.PermID != 9000000341 {
+		t.Fatalf("trail-limit perm id = %d, want 9000000341", open.PermID)
 	}
 
 	preSubmitted := waitOrderStatusUpdate(t, ctx, trailLimit, ibkr.OrderStatusPreSubmitted)
@@ -495,8 +495,8 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	if executions != 2 || commissions != 2 {
 		t.Fatalf("trail surfaced %d executions and %d commissions, want 2/2", executions, commissions)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900340")
-	requireCancelNotCancellableNotice(t, ctx, events, "900341")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000340")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000341")
 	requireOrderWaitNil(t, "trail", trail)
 	requireOrderWaitNil(t, "trail-limit", trailLimit)
 }
