@@ -18,6 +18,8 @@ func (e *engine) run() {
 		case loss := <-e.transportErr:
 			e.drainIncoming()
 			e.handleTransportLoss(loss)
+		case result := <-e.connectResults:
+			e.handleConnectResult(result)
 		case <-e.done:
 			return
 		}

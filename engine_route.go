@@ -201,6 +201,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 	// Connectivity codes drive session state transitions.
 	switch msg.Code {
 	case 1100:
+		e.invalidateReconnectStability()
 		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
 		e.setState(StateDegraded, msg.Code, msg.Message, nil, apiErr)
 		e.emitGap()
@@ -220,6 +221,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
 		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
 		e.emitResumed()
+		e.scheduleReconnectStability(e.transport)
 		return
 	case 1300:
 		if e.transport != nil {

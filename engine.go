@@ -14,15 +14,18 @@ import (
 type engine struct {
 	cfg config
 
-	cmds         chan func()
-	incoming     chan any
-	transportErr chan transportLoss
-	ready        chan error
-	done         chan struct{}
-	events       *observer[Event]
+	cmds           chan func()
+	incoming       chan any
+	transportErr   chan transportLoss
+	connectResults chan connectResult
+	ready          chan error
+	done           chan struct{}
+	events         *observer[Event]
 
-	waitMu  sync.Mutex
-	waitErr error
+	waitMu         sync.Mutex
+	waitErr        error
+	connectErrMu   sync.Mutex
+	lastConnectErr error
 
 	snapshotMu sync.RWMutex
 	snapshot   Snapshot
@@ -60,8 +63,13 @@ type engine struct {
 	nextHistoricalRequest    time.Time
 	recentHistoricalRequests map[string]time.Time
 
-	bootstrap bootstrapState
-	closed    bool
+	bootstrap        bootstrapState
+	closed           bool
+	lifetimeCtx      context.Context
+	cancelLifetime   context.CancelFunc
+	connectAttemptID uint64
+	connectCancel    context.CancelFunc
+	stabilityEpoch   uint64
 
 	reconnectAttempt int
 	resumePending    []resumeRoute
@@ -178,6 +186,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		cmds:                     make(chan func(), 256),
 		incoming:                 make(chan any, 256),
 		transportErr:             make(chan transportLoss, 8),
+		connectResults:           make(chan connectResult),
 		ready:                    make(chan error, 1),
 		done:                     make(chan struct{}),
 		events:                   newObserver[Event](cfg.eventBuffer),
@@ -194,6 +203,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 			State: StateDisconnected,
 		},
 	}
+	e.lifetimeCtx, e.cancelLifetime = context.WithCancel(context.Background())
 	go e.run()
 	e.enqueue(func() {
 		e.startConnect(ctx, false)
@@ -206,15 +216,29 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		}
 		return e, nil
 	case <-ctx.Done():
+		select {
+		case err := <-e.ready:
+			if err != nil {
+				return nil, err
+			}
+			return e, nil
+		default:
+		}
 		e.Close()
-		return nil, ctx.Err()
+		return nil, errors.Join(context.Cause(ctx), e.lastConnectionError())
 	}
 }
 
 func (e *engine) Close() {
+	select {
+	case <-e.done:
+		return
+	default:
+	}
 	e.enqueue(func() {
 		e.closeEngine(ErrClosed, nil)
 	})
+	<-e.done
 }
 
 func (e *engine) Done() <-chan struct{} {
@@ -265,6 +289,21 @@ func (e *engine) reportReady(err error) {
 	case e.ready <- err:
 	default:
 	}
+}
+
+func (e *engine) rememberConnectionError(err error) {
+	if err == nil {
+		return
+	}
+	e.connectErrMu.Lock()
+	e.lastConnectErr = err
+	e.connectErrMu.Unlock()
+}
+
+func (e *engine) lastConnectionError() error {
+	e.connectErrMu.Lock()
+	defer e.connectErrMu.Unlock()
+	return e.lastConnectErr
 }
 
 func (e *engine) setState(next State, code int, message string, err error, apiErrors ...*APIError) {

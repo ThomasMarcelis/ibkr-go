@@ -21,6 +21,10 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 		return
 	}
 	err := normalizeTransportErr(loss.err)
+	e.invalidateReconnectStability()
+	if !e.bootstrap.readyReported {
+		e.rememberConnectionError(&ConnectError{Op: "bootstrap", Err: err})
+	}
 	e.transport = nil
 	if e.cfg.reconnect == ReconnectOff {
 		if err == nil {
@@ -43,8 +47,11 @@ func (e *engine) scheduleReconnect() {
 			if e.closed || e.transport != nil || e.cfg.reconnect == ReconnectOff {
 				return
 			}
-			dialCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
+			lifetime := e.lifetimeCtx
+			if lifetime == nil {
+				lifetime = context.Background()
+			}
+			dialCtx, _ := context.WithTimeout(lifetime, 5*time.Second)
 			e.startConnect(dialCtx, true)
 		})
 	})
@@ -228,6 +235,7 @@ func (e *engine) continueResumeRoutes() {
 		}
 		route.gapped = false
 	}
+	e.scheduleReconnectStability(e.transport)
 }
 
 func (e *engine) waitForResumeCapacity(tr *transport.Conn) {
@@ -267,9 +275,18 @@ func (e *engine) closeEngine(err, waitErr error) {
 		return
 	}
 	e.closed = true
+	e.invalidateReconnectStability()
+	if e.connectCancel != nil {
+		e.connectCancel()
+		e.connectCancel = nil
+	}
+	if e.cancelLifetime != nil {
+		e.cancelLifetime()
+	}
 	e.clearReadySetups()
 	if e.transport != nil {
 		_ = e.transport.Close()
+		_ = e.transport.Wait()
 	}
 	for reqID, route := range e.keyed {
 		route.close(err)
@@ -302,6 +319,31 @@ func (e *engine) closeEngine(err, waitErr error) {
 	e.waitMu.Unlock()
 	close(e.done)
 	e.events.Close()
+}
+
+func (e *engine) invalidateReconnectStability() {
+	e.stabilityEpoch++
+}
+
+func (e *engine) scheduleReconnectStability(tr *transport.Conn) {
+	if tr == nil {
+		return
+	}
+	e.stabilityEpoch++
+	epoch := e.stabilityEpoch
+	time.AfterFunc(reconnectBackoffMax, func() {
+		e.enqueue(func() {
+			if e.closed || e.transport != tr || e.stabilityEpoch != epoch {
+				return
+			}
+			e.snapshotMu.RLock()
+			state := e.snapshot.State
+			e.snapshotMu.RUnlock()
+			if state == StateReady {
+				e.reconnectAttempt = 0
+			}
+		})
+	})
 }
 
 func (e *engine) emitGap() {

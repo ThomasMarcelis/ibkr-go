@@ -2,8 +2,52 @@ package ibkr
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net"
+	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
+
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
+
+type cancelBlockingDialer struct {
+	started  chan struct{}
+	canceled chan struct{}
+	once     sync.Once
+}
+
+type bootstrapDropDialer struct {
+	mu       sync.Mutex
+	conn     net.Conn
+	redialed chan struct{}
+	once     sync.Once
+}
+
+func (d *bootstrapDropDialer) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
+	d.mu.Lock()
+	conn := d.conn
+	d.conn = nil
+	d.mu.Unlock()
+	if conn != nil {
+		return conn, nil
+	}
+	d.once.Do(func() { close(d.redialed) })
+	<-ctx.Done()
+	return nil, context.Cause(ctx)
+}
+
+func (d *cancelBlockingDialer) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
+	d.once.Do(func() { close(d.started) })
+	<-ctx.Done()
+	close(d.canceled)
+	return nil, context.Cause(ctx)
+}
 
 func TestMaybeReadyRunsCompletionOnce(t *testing.T) {
 	t.Parallel()
@@ -29,5 +73,177 @@ func TestMaybeReadyRunsCompletionOnce(t *testing.T) {
 	}
 	if got := e.Session().ConnectionSeq; got != 1 {
 		t.Fatalf("connection sequence = %d, want 1", got)
+	}
+}
+
+func TestCloseCancelsDialWithoutWaitingForConnectionSetup(t *testing.T) {
+	t.Parallel()
+
+	dialer := &cancelBlockingDialer{
+		started:  make(chan struct{}),
+		canceled: make(chan struct{}),
+	}
+	cfg := defaultConfig()
+	cfg.dialer = dialer
+	e := &engine{
+		cfg:                cfg,
+		cmds:               make(chan func(), 1),
+		incoming:           make(chan any, 1),
+		transportErr:       make(chan transportLoss, 1),
+		connectResults:     make(chan connectResult),
+		ready:              make(chan error, 1),
+		done:               make(chan struct{}),
+		events:             newObserver[Event](1),
+		keyed:              make(map[int]*route),
+		singletons:         make(map[string]*route),
+		orders:             make(map[int64]*orderRoute),
+		previews:           make(map[int64]*previewRoute),
+		execDeliveries:     make(map[string]*execDelivery),
+		pendingOrderWrites: make(map[transportWriteKey]int64),
+		snapshot:           Snapshot{State: StateDisconnected},
+	}
+	e.lifetimeCtx, e.cancelLifetime = context.WithCancel(context.Background())
+	go e.run()
+	e.enqueue(func() { e.startConnect(context.Background(), false) })
+	<-dialer.started
+
+	e.Close()
+
+	select {
+	case <-dialer.canceled:
+	case <-time.After(time.Second):
+		t.Fatal("dial context was not canceled by Close")
+	}
+	if err := e.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v, want nil", err)
+	}
+}
+
+func TestStaleConnectResultClosesConnection(t *testing.T) {
+	t.Parallel()
+
+	client, server := net.Pipe()
+	defer server.Close()
+	if err := server.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline() error = %v", err)
+	}
+	e := &engine{connectAttemptID: 2}
+	e.handleConnectResult(connectResult{attempt: 1, conn: client})
+
+	if _, err := server.Read(make([]byte, 1)); err == nil {
+		t.Fatal("stale connection remained open")
+	} else if timeout, ok := errors.AsType[net.Error](err); ok && timeout.Timeout() {
+		t.Fatal("stale connection was not closed")
+	}
+}
+
+func TestReconnectBackoffResetsAfterStableReadySession(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		tr := &transport.Conn{}
+		e := &engine{
+			cmds:             make(chan func(), 1),
+			done:             make(chan struct{}),
+			transport:        tr,
+			reconnectAttempt: 4,
+			snapshot:         Snapshot{State: StateReady},
+		}
+		defer close(e.done)
+
+		e.scheduleReconnectStability(tr)
+		time.Sleep(reconnectBackoffMax - time.Nanosecond)
+		synctest.Wait()
+		select {
+		case <-e.cmds:
+			t.Fatal("stability completed before the full window")
+		default:
+		}
+
+		time.Sleep(time.Nanosecond)
+		synctest.Wait()
+		(<-e.cmds)()
+		if got := e.reconnectAttempt; got != 0 {
+			t.Fatalf("reconnectAttempt = %d, want 0", got)
+		}
+	})
+}
+
+func TestReconnectBackoffDoesNotResetAfterAnotherGap(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		tr := &transport.Conn{}
+		e := &engine{
+			cmds:             make(chan func(), 1),
+			done:             make(chan struct{}),
+			transport:        tr,
+			reconnectAttempt: 4,
+			snapshot:         Snapshot{State: StateReady},
+		}
+		defer close(e.done)
+
+		e.scheduleReconnectStability(tr)
+		e.invalidateReconnectStability()
+		time.Sleep(reconnectBackoffMax)
+		synctest.Wait()
+		(<-e.cmds)()
+		if got := e.reconnectAttempt; got != 4 {
+			t.Fatalf("reconnectAttempt = %d, want 4", got)
+		}
+	})
+}
+
+func TestDialContextReconnectTimeoutIncludesLastConnectionFailure(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	dialer := &bootstrapDropDialer{conn: client, redialed: make(chan struct{})}
+	serverErr := make(chan error, 1)
+	go func() {
+		defer server.Close()
+		prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+		if _, err := io.ReadFull(server, prefix); err != nil {
+			serverErr <- fmt.Errorf("read handshake prefix: %w", err)
+			return
+		}
+		if _, err := wire.ReadFrame(server); err != nil {
+			serverErr <- fmt.Errorf("read version range: %w", err)
+			return
+		}
+		if err := wire.WriteFrame(server, wire.EncodeFields([]string{"200", "2026-07-11T12:00:00Z"})); err != nil {
+			serverErr <- fmt.Errorf("write server info: %w", err)
+			return
+		}
+		if _, err := wire.ReadFrame(server); err != nil {
+			serverErr <- fmt.Errorf("read START_API: %w", err)
+			return
+		}
+		// Let the client clear its handshake deadline and attach the transport,
+		// then drop the connection before bootstrap can complete.
+		time.Sleep(20 * time.Millisecond)
+		serverErr <- nil
+	}()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	_, err := dialEngine(ctx, WithDialer(dialer), WithReconnectPolicy(ReconnectAuto))
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("DialContext() error = %v, want context deadline", err)
+	}
+	connectErr, ok := errors.AsType[*ConnectError](err)
+	if !ok {
+		t.Fatalf("DialContext() error = %v, want joined *ConnectError", err)
+	}
+	if connectErr.Op != "bootstrap" {
+		t.Fatalf("ConnectError.Op = %q, want bootstrap", connectErr.Op)
+	}
+	select {
+	case <-dialer.redialed:
+	default:
+		t.Fatal("ReconnectAuto did not attempt a redial")
+	}
+	if err := <-serverErr; err != nil {
+		t.Fatal(err)
 	}
 }

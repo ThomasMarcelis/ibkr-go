@@ -12,9 +12,22 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
+type connectResult struct {
+	attempt       uint64
+	reconnect     bool
+	conn          net.Conn
+	serverVersion int
+	op            string
+	err           error
+	unsupported   bool
+}
+
 func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 	if e.closed {
 		return
+	}
+	if e.connectCancel != nil {
+		e.connectCancel()
 	}
 	e.bootstrap = bootstrapState{}
 	if reconnect {
@@ -23,98 +36,120 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 		e.setState(StateConnecting, 0, "", nil)
 	}
 
-	conn, err := e.cfg.dialer.DialContext(ctx, "tcp", net.JoinHostPort(e.cfg.host, strconv.Itoa(e.cfg.port)))
-	if err != nil {
-		e.connectFailed("dial", err, reconnect)
-		return
+	e.connectAttemptID++
+	attempt := e.connectAttemptID
+	lifetime := e.lifetimeCtx
+	if lifetime == nil {
+		lifetime = context.Background()
 	}
-	if err := configureTCPKeepAlive(conn, e.cfg.tcpKeepAlive); err != nil {
-		conn.Close()
-		e.connectFailed("keepalive", err, reconnect)
-		return
+	attemptCtx, cancel := context.WithCancelCause(lifetime)
+	stopParent := context.AfterFunc(ctx, func() { cancel(context.Cause(ctx)) })
+	e.connectCancel = func() {
+		stopParent()
+		cancel(context.Canceled)
+	}
+	cfg := e.cfg
+	advertisedMax := advertisedServerVersionMax
+	go func() {
+		result := dialConnection(attemptCtx, cfg, advertisedMax)
+		result.attempt = attempt
+		result.reconnect = reconnect
+		stopParent()
+		cancel(context.Canceled)
+		select {
+		case <-e.done:
+			if result.conn != nil {
+				_ = result.conn.Close()
+			}
+		case e.connectResults <- result:
+		}
+	}()
+}
+
+func dialConnection(ctx context.Context, cfg config, advertisedMax int) connectResult {
+	conn, err := cfg.dialer.DialContext(ctx, "tcp", net.JoinHostPort(cfg.host, strconv.Itoa(cfg.port)))
+	if err != nil {
+		return connectResult{op: "dial", err: err}
+	}
+	fail := func(op string, err error) connectResult {
+		_ = conn.Close()
+		if cause := context.Cause(ctx); cause != nil {
+			err = cause
+		}
+		return connectResult{op: op, err: err}
+	}
+	if err := configureTCPKeepAlive(conn, cfg.tcpKeepAlive); err != nil {
+		return fail("keepalive", err)
 	}
 
 	deadline := time.Now().Add(10 * time.Second)
-	contextDeadline := false
 	if ctxDeadline, ok := ctx.Deadline(); ok && ctxDeadline.Before(deadline) {
 		deadline = ctxDeadline
-		contextDeadline = true
 	}
 	if err := conn.SetDeadline(deadline); err != nil {
-		conn.Close()
-		e.connectFailed("handshake deadline", err, reconnect)
-		return
+		return fail("handshake deadline", err)
 	}
 	stopContextClose := context.AfterFunc(ctx, func() { _ = conn.Close() })
-	handshakeFailed := func(err error) {
-		stopContextClose()
-		conn.Close()
-		if ctx.Err() != nil {
-			err = ctx.Err()
-		} else if contextDeadline && !time.Now().Before(deadline) {
-			err = context.DeadlineExceeded
-		}
-		e.connectFailed("handshake", err, reconnect)
-	}
+	defer stopContextClose()
 
 	if err := transport.WriteRaw(conn, codec.EncodeHandshakePrefix()); err != nil {
-		handshakeFailed(err)
-		return
+		return fail("handshake", err)
 	}
-
-	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, advertisedServerVersionMax)); err != nil {
-		handshakeFailed(err)
-		return
+	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, advertisedMax)); err != nil {
+		return fail("handshake", err)
 	}
-
 	serverPayload, err := transport.ReadOneFrame(conn, deadline)
 	if err != nil {
-		handshakeFailed(err)
-		return
+		return fail("handshake", err)
 	}
 	info, err := codec.DecodeServerInfo(serverPayload)
 	if err != nil {
-		handshakeFailed(err)
+		return fail("handshake", err)
+	}
+	if info.ServerVersion < minServerVersion || info.ServerVersion > advertisedMax {
+		_ = conn.Close()
+		return connectResult{unsupported: true, err: ErrUnsupportedServerVersion}
+	}
+	startPayload, err := codec.Encode(info.ServerVersion, codec.StartAPI{ClientID: cfg.clientID})
+	if err != nil {
+		return fail("handshake", err)
+	}
+	if err := wire.WriteFrame(conn, startPayload); err != nil {
+		return fail("handshake", err)
+	}
+	if cause := context.Cause(ctx); cause != nil {
+		return fail("handshake", cause)
+	}
+	if err := conn.SetDeadline(time.Time{}); err != nil {
+		return fail("handshake deadline", err)
+	}
+	return connectResult{conn: conn, serverVersion: info.ServerVersion}
+}
+
+func (e *engine) handleConnectResult(result connectResult) {
+	if e.closed || result.attempt != e.connectAttemptID {
+		if result.conn != nil {
+			_ = result.conn.Close()
+		}
 		return
 	}
-
-	if info.ServerVersion < minServerVersion || info.ServerVersion > advertisedServerVersionMax {
-		// A server-version mismatch is a protocol capability failure, not a
-		// transient reconnect failure. Terminate even during reconnect.
-		stopContextClose()
-		conn.Close()
+	e.connectCancel = nil
+	if result.unsupported {
 		e.reportReady(ErrUnsupportedServerVersion)
 		e.closeEngine(ErrUnsupportedServerVersion, ErrUnsupportedServerVersion)
 		return
 	}
-	e.serverVersion = info.ServerVersion
+	if result.err != nil {
+		e.connectFailed(result.op, result.err, result.reconnect)
+		return
+	}
+
+	e.serverVersion = result.serverVersion
 	e.updateSnapshot(func(s *Snapshot) {
-		s.ServerVersion = info.ServerVersion
+		s.ServerVersion = result.serverVersion
 	})
 	e.bootstrap.serverInfo = true
-
-	startPayload, err := codec.Encode(e.serverVersion, codec.StartAPI{ClientID: e.cfg.clientID})
-	if err != nil {
-		handshakeFailed(err)
-		return
-	}
-	if err := wire.WriteFrame(conn, startPayload); err != nil {
-		handshakeFailed(err)
-		return
-	}
-	stopContextClose()
-	if ctx.Err() != nil {
-		conn.Close()
-		e.connectFailed("handshake", ctx.Err(), reconnect)
-		return
-	}
-	if err := conn.SetDeadline(time.Time{}); err != nil {
-		conn.Close()
-		e.connectFailed("handshake deadline", err, reconnect)
-		return
-	}
-
-	e.transport = transport.New(conn, e.cfg.logger, e.cfg.sendRate)
+	e.transport = transport.New(result.conn, e.cfg.logger, e.cfg.sendRate)
 	e.attachTransport(e.transport)
 	e.scheduleBootstrapTimeout(e.transport)
 	e.setState(StateHandshaking, 0, "", nil)
@@ -122,6 +157,7 @@ func (e *engine) startConnect(ctx context.Context, reconnect bool) {
 
 func (e *engine) connectFailed(op string, err error, reconnect bool) {
 	connectErr := &ConnectError{Op: op, Err: err}
+	e.rememberConnectionError(connectErr)
 	if !reconnect {
 		e.reportReady(connectErr)
 		e.closeEngine(connectErr, connectErr)
@@ -218,8 +254,6 @@ func (e *engine) maybeReady() {
 	if e.bootstrap.readyReported || !e.bootstrap.serverInfo || !e.bootstrap.managed || !e.bootstrap.nextValidID {
 		return
 	}
-	// Completed bootstrap is the success boundary for reconnect backoff.
-	e.reconnectAttempt = 0
 	e.updateSnapshot(func(s *Snapshot) {
 		s.ConnectionSeq++
 	})
