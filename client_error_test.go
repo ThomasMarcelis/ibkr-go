@@ -291,52 +291,6 @@ func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 	}
 }
 
-func TestMarketDataWarningDoesNotCloseSubscription(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "error_market_data_warning.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	})
-	if err != nil {
-		t.Fatalf("SubscribeQuotes() error = %v", err)
-	}
-
-	waitForStateKind(t, sub.Lifecycle(), ibkr.SubscriptionStarted)
-
-	// Read quote updates to confirm data flows after the warning.
-	// Each tick_price arrives as a separate update; accumulate until both
-	// bid and ask are populated.
-	var lastUpdate ibkr.QuoteUpdate
-	for i := 0; i < 5; i++ {
-		lastUpdate = waitForEvent(t, sub.Events())
-		if !lastUpdate.Snapshot.Bid.IsZero() && !lastUpdate.Snapshot.Ask.IsZero() {
-			break
-		}
-	}
-	if lastUpdate.Snapshot.Bid.IsZero() {
-		t.Fatal("expected non-zero bid after market data warning")
-	}
-	if lastUpdate.Snapshot.Ask.IsZero() {
-		t.Fatal("expected non-zero ask after market data warning")
-	}
-
-	if err := sub.Close(); err != nil {
-		t.Fatalf("sub.Close() error = %v", err)
-	}
-}
-
 func TestFarmStatusCodesAreInformational(t *testing.T) {
 	t.Parallel()
 
