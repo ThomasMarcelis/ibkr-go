@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
 const (
@@ -474,9 +475,37 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 // drop at the missing-route check, identical to the closed-route behavior.
 func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 	or.closed = true
+	if or.pendingWrite.id != 0 {
+		delete(e.pendingOrderWrites, or.pendingWrite)
+		or.pendingWrite = transportWriteKey{}
+	}
 	or.handle.closeWithErr(err)
 	delete(e.orders, orderID)
 	e.forgetOrderExecutions(orderID)
+}
+
+func (e *engine) handleTransportWrite(write transportWrite) {
+	key := transportWriteKey{transport: write.transport, id: write.result.ID}
+	orderID, ok := e.pendingOrderWrites[key]
+	if !ok {
+		return
+	}
+	delete(e.pendingOrderWrites, key)
+	or, ok := e.orders[orderID]
+	if !ok || or.closed || or.pendingWrite != key {
+		return
+	}
+	or.pendingWrite = transportWriteKey{}
+
+	switch write.result.Outcome {
+	case transport.WriteCompleteLocal:
+		or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+	case transport.WriteUnwritten:
+		e.closeOrderRoute(orderID, or, ErrInterrupted)
+	case transport.WriteIncomplete:
+		// The Gateway may have observed a partial frame. The transport loss
+		// that follows keeps the route alive but marks its state uncertain.
+	}
 }
 
 const unclaimedCommissionTTL = 750 * time.Millisecond

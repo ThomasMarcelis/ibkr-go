@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"context"
+	"errors"
 	"net"
 	"strconv"
 	"time"
@@ -149,21 +150,15 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 	// the freshly negotiated version, and the decode pump runs off the actor
 	// goroutine, so it must not read e.serverVersion directly.
 	sv := e.serverVersion
-	decodedDone := make(chan struct{})
+	decodeResult := make(chan error, 1)
 	go func() {
-		defer close(decodedDone)
+		var result error
+		defer func() { decodeResult <- result }()
 		for payload := range tr.Incoming() {
 			msgs, err := codec.DecodeBatch(sv, payload)
 			if err != nil {
 				_ = tr.Close()
-				// Every send races engine shutdown: once run() has exited
-				// (e.done closed on Close) nothing drains e.incoming or
-				// e.transportErr, so an unguarded send on a hot feed wedges
-				// this goroutine forever. Bail on e.done instead.
-				select {
-				case e.transportErr <- transportLoss{transport: tr, err: &ProtocolError{Direction: "inbound", Err: err}}:
-				case <-e.done:
-				}
+				result = &ProtocolError{Direction: "inbound", Err: err}
 				return
 			}
 			for _, msg := range msgs {
@@ -176,15 +171,27 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 		}
 	}()
 
+	writesDone := make(chan struct{})
+	go func() {
+		defer close(writesDone)
+		for result := range tr.Completions() {
+			select {
+			case e.incoming <- transportWrite{transport: tr, result: result}:
+			case <-e.done:
+				return
+			}
+		}
+	}()
+
 	go func() {
 		<-tr.Done()
-		<-decodedDone
+		decodeErr := <-decodeResult
+		<-writesDone
 		// The ordering guarantee (all of this connection's decoded messages
-		// reach e.incoming before its transportErr) is preserved: this send is
-		// gated on decodedDone, and the decode goroutine only closes it after
-		// its final incoming send or an e.done bail-out.
+		// and tracked write outcomes reach e.incoming before transportErr) is
+		// preserved by waiting for both pumps.
 		select {
-		case e.transportErr <- transportLoss{transport: tr, err: tr.Wait()}:
+		case e.transportErr <- transportLoss{transport: tr, err: errors.Join(tr.Wait(), decodeErr)}:
 		case <-e.done:
 		}
 	}()

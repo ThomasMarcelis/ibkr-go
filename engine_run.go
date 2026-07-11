@@ -14,7 +14,7 @@ func (e *engine) run() {
 				fn()
 			}
 		case msg := <-e.incoming:
-			e.handleIncoming(msg)
+			e.handleActorInput(msg)
 		case loss := <-e.transportErr:
 			e.drainIncoming()
 			e.handleTransportLoss(loss)
@@ -38,9 +38,17 @@ func (e *engine) drainIncoming() {
 	for {
 		select {
 		case msg := <-e.incoming:
-			e.handleIncoming(msg)
+			e.handleActorInput(msg)
 		default:
 			return
 		}
 	}
+}
+
+func (e *engine) handleActorInput(msg any) {
+	if write, ok := msg.(transportWrite); ok {
+		e.handleTransportWrite(write)
+		return
+	}
+	e.handleIncoming(msg)
 }

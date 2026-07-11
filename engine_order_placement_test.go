@@ -71,6 +71,41 @@ func TestPlaceOrderAdmissionWinsCallerBoundaries(t *testing.T) {
 	}
 }
 
+func TestUnwrittenPlaceOrderClosesItsHandle(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		orders:             make(map[int64]*orderRoute),
+		pendingOrderWrites: make(map[transportWriteKey]int64),
+		execDeliveries:     make(map[string]*execDelivery),
+	}
+	handle := e.bindOrderHandle(47, Contract{ConID: 265598, Exchange: "SMART"})
+	tr := new(transport.Conn)
+	key := transportWriteKey{transport: tr, id: 3}
+	e.pendingOrderWrites[key] = 47
+	e.orders[47].pendingWrite = key
+
+	e.handleTransportWrite(transportWrite{
+		transport: tr,
+		result: transport.WriteResult{
+			ID:      3,
+			Outcome: transport.WriteUnwritten,
+		},
+	})
+
+	select {
+	case <-handle.Done():
+	default:
+		t.Fatal("unwritten order handle remained open")
+	}
+	if err := handle.Wait(); !errors.Is(err, ErrInterrupted) {
+		t.Fatalf("OrderHandle.Wait() error = %v, want ErrInterrupted", err)
+	}
+	if _, ok := e.orders[47]; ok {
+		t.Fatal("unwritten order route remained installed")
+	}
+}
+
 func TestBracketAdmissionWinsCallerBoundaries(t *testing.T) {
 	t.Parallel()
 

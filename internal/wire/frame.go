@@ -38,18 +38,38 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 
 // WriteFrame writes one length-prefixed payload.
 func WriteFrame(w io.Writer, payload []byte) error {
-	if len(payload) == 0 {
-		return ErrEmptyMessage
-	}
-	if len(payload) > MaxFrameSize {
-		return ErrFrameTooLarge
-	}
-
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
-	if _, err := w.Write(header[:]); err != nil {
+	frame, err := EncodeFrame(payload)
+	if err != nil {
 		return err
 	}
-	_, err := w.Write(payload)
-	return err
+	for len(frame) > 0 {
+		n, err := w.Write(frame)
+		if n > 0 {
+			frame = frame[n:]
+		}
+		if err != nil {
+			return err
+		}
+		if n == 0 {
+			return io.ErrNoProgress
+		}
+	}
+	return nil
+}
+
+// EncodeFrame returns one contiguous length-prefixed frame. Keeping the
+// prefix and payload together lets callers distinguish a complete local write
+// from a partial frame when a connection fails.
+func EncodeFrame(payload []byte) ([]byte, error) {
+	if len(payload) == 0 {
+		return nil, ErrEmptyMessage
+	}
+	if len(payload) > MaxFrameSize {
+		return nil, ErrFrameTooLarge
+	}
+
+	frame := make([]byte, 4+len(payload))
+	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
+	copy(frame[4:], payload)
+	return frame, nil
 }

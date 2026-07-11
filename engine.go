@@ -34,6 +34,10 @@ type engine struct {
 	singletons map[string]*route
 	orders     map[int64]*orderRoute
 	previews   map[int64]*previewRoute
+	// pendingOrderWrites owns the admission-to-write gap for order frames.
+	// Completion is handled on the actor before transport loss, so an
+	// unwritten order cannot be mistaken for one IBKR received.
+	pendingOrderWrites map[transportWriteKey]int64
 	// execDeliveries is the order-handle leg's per-ExecID delivery record.
 	// orderID routes commissions to the owning handle and its presence dedupes
 	// an Executions() snapshot replaying a fill the handle already saw live.
@@ -71,6 +75,16 @@ type resumeRoute struct {
 type transportLoss struct {
 	transport *transport.Conn
 	err       error
+}
+
+type transportWriteKey struct {
+	transport *transport.Conn
+	id        transport.WriteID
+}
+
+type transportWrite struct {
+	transport *transport.Conn
+	result    transport.WriteResult
 }
 
 type bootstrapState struct {
@@ -118,10 +132,11 @@ type route struct {
 }
 
 type orderRoute struct {
-	orderID int64
-	handle  *OrderHandle
-	closed  bool
-	gapped  bool // true after Gap emitted, reset on Resumed; prevents double emission
+	orderID      int64
+	handle       *OrderHandle
+	closed       bool
+	gapped       bool // true after Gap emitted, reset on Resumed; prevents double emission
+	pendingWrite transportWriteKey
 }
 
 type previewRoute struct {
@@ -162,6 +177,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		singletons:               make(map[string]*route),
 		orders:                   make(map[int64]*orderRoute),
 		previews:                 make(map[int64]*previewRoute),
+		pendingOrderWrites:       make(map[transportWriteKey]int64),
 		execDeliveries:           make(map[string]*execDelivery),
 		unknownInboundSeen:       make(map[int]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),
@@ -329,6 +345,24 @@ func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 		return ErrInterrupted
 	}
 	return err
+}
+
+func (e *engine) sendTrackedContext(ctx context.Context, msg codec.Message) (transportWriteKey, error) {
+	if e.transport == nil {
+		return transportWriteKey{}, ErrNotReady
+	}
+	payload, err := codec.Encode(e.serverVersion, msg)
+	if err != nil {
+		return transportWriteKey{}, err
+	}
+	id, err := e.transport.SendTracked(ctx, payload)
+	if errors.Is(err, transport.ErrSendQueueFull) {
+		return transportWriteKey{}, ErrInterrupted
+	}
+	if err != nil {
+		return transportWriteKey{}, err
+	}
+	return transportWriteKey{transport: e.transport, id: id}, nil
 }
 
 func normalizeTransportErr(err error) error {

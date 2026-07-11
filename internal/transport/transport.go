@@ -15,7 +15,7 @@ import (
 
 // WriteRaw writes raw bytes directly to the connection without framing.
 func WriteRaw(conn net.Conn, data []byte) error {
-	_, err := conn.Write(data)
+	_, err := writeAll(conn, data)
 	return err
 }
 
@@ -33,18 +33,48 @@ type Conn struct {
 	logger    *slog.Logger
 	sendRate  int
 	incoming  chan []byte
+	completed chan WriteResult
 	writable  chan struct{}
+	stopping  chan struct{}
 	done      chan struct{}
-	closeOnce sync.Once
+	stopOnce  sync.Once
 	closeErr  error
-	waitOnce  sync.Once
 	waitErr   error
 	waitErrMu sync.Mutex
 
 	queueMu        sync.Mutex
 	queueCond      *sync.Cond
-	outgoing       [][]byte
+	outgoing       []outboundFrame
 	outgoingClosed bool
+	nextWriteID    WriteID
+}
+
+type outboundFrame struct {
+	id    WriteID
+	frame []byte
+}
+
+// WriteID identifies a tracked frame admitted to the outbound queue. Zero is
+// reserved for ordinary untracked sends.
+type WriteID uint64
+
+// WriteOutcome classifies how much of a tracked frame reached the local
+// socket before the transport stopped.
+type WriteOutcome uint8
+
+const (
+	WriteUnwritten WriteOutcome = iota
+	WriteIncomplete
+	WriteCompleteLocal
+)
+
+// WriteResult is emitted exactly once for each successful SendTracked
+// admission. CompleteLocal means the whole framed message was accepted by the
+// local socket; it is not a Gateway acknowledgement.
+type WriteResult struct {
+	ID      WriteID
+	Outcome WriteOutcome
+	Err     error
 }
 
 const outgoingQueueCap = 256
@@ -66,12 +96,14 @@ func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 		sendRate = maxSendRate
 	}
 	c := &Conn{
-		conn:     conn,
-		logger:   logger,
-		sendRate: sendRate,
-		incoming: make(chan []byte, 64),
-		writable: make(chan struct{}, 1),
-		done:     make(chan struct{}),
+		conn:      conn,
+		logger:    logger,
+		sendRate:  sendRate,
+		incoming:  make(chan []byte, 64),
+		completed: make(chan WriteResult, outgoingQueueCap+1),
+		writable:  make(chan struct{}, 1),
+		stopping:  make(chan struct{}),
+		done:      make(chan struct{}),
 	}
 	c.queueCond = sync.NewCond(&c.queueMu)
 	go c.readLoop()
@@ -87,55 +119,72 @@ func (c *Conn) Done() <-chan struct{} {
 	return c.done
 }
 
+// Completions reports the local write outcome of tracked sends. It closes
+// before Done after every admitted tracked frame has received one result.
+func (c *Conn) Completions() <-chan WriteResult { return c.completed }
+
 // Writable is signaled whenever the writer removes an item from the bounded
 // outbound queue. A caller that received ErrSendQueueFull can wait for this
 // edge and retry admission without polling.
 func (c *Conn) Writable() <-chan struct{} { return c.writable }
 
 func (c *Conn) Send(ctx context.Context, payload []byte) error {
+	_, err := c.admit(ctx, payload, false)
+	return err
+}
+
+// SendTracked admits a frame and returns the ID used by Completions. Admission
+// does not imply that any byte has reached the socket.
+func (c *Conn) SendTracked(ctx context.Context, payload []byte) (WriteID, error) {
+	return c.admit(ctx, payload, true)
+}
+
+func (c *Conn) admit(ctx context.Context, payload []byte, tracked bool) (WriteID, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if len(payload) == 0 {
-		return wire.ErrEmptyMessage
+		return 0, wire.ErrEmptyMessage
 	}
 	if len(payload) > wire.MaxFrameSize {
-		return wire.ErrFrameTooLarge
+		return 0, wire.ErrFrameTooLarge
 	}
-	copyPayload := append([]byte(nil), payload...)
+	frame, err := wire.EncodeFrame(payload)
+	if err != nil {
+		return 0, err
+	}
 
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return 0, ctx.Err()
 	case <-c.done:
-		return c.Wait()
+		return 0, c.Wait()
 	default:
 	}
 
 	c.queueMu.Lock()
 	if c.outgoingClosed {
 		c.queueMu.Unlock()
-		return c.Wait()
+		return 0, c.Wait()
 	}
 	if len(c.outgoing) >= outgoingQueueCap {
 		c.queueMu.Unlock()
-		return ErrSendQueueFull
+		return 0, ErrSendQueueFull
 	}
-	c.outgoing = append(c.outgoing, copyPayload)
+	var id WriteID
+	if tracked {
+		c.nextWriteID++
+		id = c.nextWriteID
+	}
+	c.outgoing = append(c.outgoing, outboundFrame{id: id, frame: frame})
 	c.queueCond.Signal()
 	c.queueMu.Unlock()
 
-	return nil
+	return id, nil
 }
 
 func (c *Conn) Close() error {
-	c.closeOnce.Do(func() {
-		c.queueMu.Lock()
-		c.outgoingClosed = true
-		c.queueCond.Broadcast()
-		c.queueMu.Unlock()
-		c.closeErr = c.conn.Close()
-	})
+	c.stop(nil)
 	return c.closeErr
 }
 
@@ -160,11 +209,11 @@ func (c *Conn) readLoop() {
 	for {
 		payload, err := wire.ReadFrame(br)
 		if err != nil {
-			c.finish(err)
+			c.stop(err)
 			return
 		}
 		select {
-		case <-c.done:
+		case <-c.stopping:
 			return
 		case c.incoming <- payload:
 		}
@@ -185,13 +234,33 @@ func (c *Conn) writeLoop() {
 		for len(c.outgoing) == 0 && !c.outgoingClosed {
 			c.queueCond.Wait()
 		}
-		if len(c.outgoing) == 0 && c.outgoingClosed {
+		if c.outgoingClosed {
+			unwritten := c.takeQueuedLocked()
 			c.queueMu.Unlock()
-			c.finish(nil)
+			c.reportUnwritten(unwritten)
+			c.finishWriter()
 			return
 		}
-		payload := c.outgoing[0]
-		c.outgoing[0] = nil
+		c.queueMu.Unlock()
+
+		if ticker != nil {
+			select {
+			case <-c.stopping:
+				continue
+			case <-ticker:
+			}
+		}
+
+		c.queueMu.Lock()
+		if c.outgoingClosed {
+			unwritten := c.takeQueuedLocked()
+			c.queueMu.Unlock()
+			c.reportUnwritten(unwritten)
+			c.finishWriter()
+			return
+		}
+		item := c.outgoing[0]
+		c.outgoing[0] = outboundFrame{}
 		c.outgoing = c.outgoing[1:]
 		select {
 		case c.writable <- struct{}{}:
@@ -199,34 +268,86 @@ func (c *Conn) writeLoop() {
 		}
 		c.queueMu.Unlock()
 
-		if ticker != nil {
-			select {
-			case <-c.done:
-				return
-			case <-ticker:
+		n, err := writeAll(c.conn, item.frame)
+		if err != nil {
+			c.stop(err)
+			if item.id != 0 {
+				outcome := WriteUnwritten
+				if n > 0 {
+					outcome = WriteIncomplete
+				}
+				c.completed <- WriteResult{ID: item.id, Outcome: outcome, Err: err}
 			}
-		}
-		if err := wire.WriteFrame(c.conn, payload); err != nil {
-			c.finish(err)
+			c.queueMu.Lock()
+			unwritten := c.takeQueuedLocked()
+			c.queueMu.Unlock()
+			c.reportUnwritten(unwritten)
+			c.finishWriter()
 			return
+		}
+		if item.id != 0 {
+			c.completed <- WriteResult{ID: item.id, Outcome: WriteCompleteLocal}
 		}
 	}
 }
 
-func (c *Conn) finish(err error) {
-	c.waitOnce.Do(func() {
+func (c *Conn) stop(err error) {
+	c.stopOnce.Do(func() {
 		c.queueMu.Lock()
 		c.outgoingClosed = true
 		c.queueCond.Broadcast()
 		c.queueMu.Unlock()
 
-		c.waitErrMu.Lock()
-		defer c.waitErrMu.Unlock()
 		if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {
+			c.waitErrMu.Lock()
 			c.waitErr = err
+			c.waitErrMu.Unlock()
 			c.logger.Debug("transport closed", "error", err)
 		}
-		close(c.done)
-		_ = c.conn.Close()
+		close(c.stopping)
+		c.closeErr = c.conn.Close()
 	})
+}
+
+func (c *Conn) takeQueuedLocked() []outboundFrame {
+	queued := c.outgoing
+	c.outgoing = nil
+	return queued
+}
+
+func (c *Conn) reportUnwritten(items []outboundFrame) {
+	for _, item := range items {
+		if item.id != 0 {
+			c.completed <- WriteResult{ID: item.id, Outcome: WriteUnwritten, Err: c.WaitError()}
+		}
+	}
+}
+
+func (c *Conn) finishWriter() {
+	close(c.completed)
+	close(c.done)
+}
+
+func (c *Conn) WaitError() error {
+	c.waitErrMu.Lock()
+	defer c.waitErrMu.Unlock()
+	return c.waitErr
+}
+
+func writeAll(w io.Writer, p []byte) (int, error) {
+	written := 0
+	for len(p) > 0 {
+		n, err := w.Write(p)
+		if n > 0 {
+			written += n
+			p = p[n:]
+		}
+		if err != nil {
+			return written, err
+		}
+		if n == 0 {
+			return written, io.ErrNoProgress
+		}
+	}
+	return written, nil
 }

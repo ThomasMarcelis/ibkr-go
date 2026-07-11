@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+type shortWriter struct {
+	buf bytes.Buffer
+	n   int
+}
+
+func (w *shortWriter) Write(p []byte) (int, error) {
+	if len(p) > w.n {
+		p = p[:w.n]
+	}
+	return w.buf.Write(p)
+}
+
+type stalledWriter struct{}
+
+func (stalledWriter) Write([]byte) (int, error) { return 0, nil }
+
 func TestFrameRoundTrip(t *testing.T) {
 	t.Parallel()
 
@@ -35,6 +51,33 @@ func TestFrameRoundTrip(t *testing.T) {
 		if gotFields[i] != fields[i] {
 			t.Fatalf("field[%d] = %q, want %q", i, gotFields[i], fields[i])
 		}
+	}
+}
+
+func TestWriteFrameCompletesShortWrites(t *testing.T) {
+	t.Parallel()
+
+	payload := EncodeFields([]string{"hello", "1", "7"})
+	w := &shortWriter{n: 1}
+	if err := WriteFrame(w, payload); err != nil {
+		t.Fatalf("WriteFrame() error = %v", err)
+	}
+
+	got, err := ReadFrame(&w.buf)
+	if err != nil {
+		t.Fatalf("ReadFrame() error = %v", err)
+	}
+	if !bytes.Equal(got, payload) {
+		t.Fatalf("ReadFrame() = %q, want %q", got, payload)
+	}
+}
+
+func TestWriteFrameRejectsZeroLengthProgress(t *testing.T) {
+	t.Parallel()
+
+	err := WriteFrame(stalledWriter{}, []byte("payload"))
+	if !errors.Is(err, io.ErrNoProgress) {
+		t.Fatalf("WriteFrame() error = %v, want io.ErrNoProgress", err)
 	}
 }
 

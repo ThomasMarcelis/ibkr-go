@@ -393,12 +393,14 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 		orderID := e.allocOrderID()
 		handle := e.bindOrderHandle(orderID, req.Contract)
 
-		if err := e.sendContext(ctx, toCodecPlaceOrder(orderID, req)); err != nil {
+		write, err := e.sendTrackedContext(ctx, toCodecPlaceOrder(orderID, req))
+		if err != nil {
 			delete(e.orders, orderID)
 			handle.closeWithErr(err)
 			resp <- placeOrderResult{err: err}
 			return
 		}
+		e.trackOrderWrite(orderID, write)
 
 		resp <- placeOrderResult{handle: handle}
 	})
@@ -446,10 +448,12 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 			{stopLossID, req.StopLoss},
 		}
 		for _, item := range orders {
-			if err := e.sendContext(ctx, toCodecPlaceOrder(item.id, PlaceOrderRequest{Contract: req.Contract, Order: item.order})); err != nil {
+			write, err := e.sendTrackedContext(ctx, toCodecPlaceOrder(item.id, PlaceOrderRequest{Contract: req.Contract, Order: item.order}))
+			if err != nil {
 				resp <- bracketOrderResult{err: e.cancelAndCloseOrderRoutes(sentIDs, allIDs, err)}
 				return
 			}
+			e.trackOrderWrite(item.id, write)
 			sentIDs = append(sentIDs, item.id)
 		}
 		resp <- bracketOrderResult{bracket: bracket}
@@ -523,6 +527,14 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 	}
 	e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
 	return handle
+}
+
+func (e *engine) trackOrderWrite(orderID int64, write transportWriteKey) {
+	if e.pendingOrderWrites == nil {
+		e.pendingOrderWrites = make(map[transportWriteKey]int64)
+	}
+	e.pendingOrderWrites[write] = orderID
+	e.orders[orderID].pendingWrite = write
 }
 
 // PreviewOrder submits a what-if order and returns the margin-and-commission
