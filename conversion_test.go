@@ -423,6 +423,7 @@ func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 	}{
 		{"canonical_uppercase", "1.7976931348623157E308"},
 		{"lowercase_exponent", "1.7976931348623157e308"},
+		{"protobuf_plus_exponent", "1.7976931348623157e+308"},
 		{"surrounding_whitespace", "  1.7976931348623157E308\t"},
 		{"official_unset_decimal", "-9223372036854775808"},
 	}
@@ -438,6 +439,29 @@ func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 				t.Fatalf("parseOptionalDecimal(%q) = %s, want zero (sentinel should decode as absent)", tt.raw, value.String())
 			}
 		})
+	}
+}
+
+func TestParseOptionalDecimalPreservesValuesAroundMaxDouble(t *testing.T) {
+	t.Parallel()
+
+	for _, raw := range []string{
+		"-1.7976931348623157e+308",
+		"1.7976931348623156e+308",
+	} {
+		value, err := parseOptionalDecimalPointer(raw, "test field")
+		if err != nil {
+			t.Fatalf("parseOptionalDecimalPointer(%q) error = %v", raw, err)
+		}
+		if value == nil || value.String() == "0" {
+			t.Fatalf("parseOptionalDecimalPointer(%q) = %v, want preserved value", raw, value)
+		}
+	}
+
+	for _, raw := range []string{"NaN", "+Inf", "-Inf"} {
+		if _, err := parseOptionalDecimalPointer(raw, "test field"); err == nil {
+			t.Fatalf("parseOptionalDecimalPointer(%q) error = nil, want malformed value", raw)
+		}
 	}
 }
 

@@ -9,16 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// maxDoubleSentinel is the literal string the TWS/IB Gateway reference Java
-// client uses to encode an unset optional double (Double.MAX_VALUE). It arrives
-// verbatim on live open-order margin and commission fields, the PnL stream,
-// option-computation Greeks, and tick-by-tick fields when the value is unknown.
-// The Go client itself emits the empty-string form via WriteMaxFloat, so the
-// receive path must accept both.
-const (
-	maxDoubleSentinel    = "1.7976931348623157E308"
-	unsetDecimalSentinel = "-9223372036854775808"
-)
+const unsetDecimalSentinel = "-9223372036854775808"
 
 func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
 	value, err := decimal.NewFromString(raw)
@@ -30,7 +21,7 @@ func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
 
 func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) || trimmed == unsetDecimalSentinel {
+	if optionalDecimalUnset(trimmed) {
 		return decimal.Decimal{}, nil
 	}
 	value, err := decimal.NewFromString(trimmed)
@@ -42,7 +33,7 @@ func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 
 func parseOptionalDecimalPointer(raw string, field string) (*decimal.Decimal, error) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) || trimmed == unsetDecimalSentinel {
+	if optionalDecimalUnset(trimmed) {
 		return nil, nil
 	}
 	value, err := decimal.NewFromString(trimmed)
@@ -50,6 +41,18 @@ func parseOptionalDecimalPointer(raw string, field string) (*decimal.Decimal, er
 		return nil, fmt.Errorf("ibkr: %s: %w", field, err)
 	}
 	return new(value), nil
+}
+
+// optionalDecimalUnset recognizes the numeric Double.MAX_VALUE sentinel, not
+// one spelling of it. Protobuf formatting uses an explicit '+' in the
+// exponent while classic fields do not. NaN, infinities, negative MAX_VALUE,
+// and adjacent finite decimals remain values and fail or parse normally.
+func optionalDecimalUnset(trimmed string) bool {
+	if trimmed == "" || trimmed == unsetDecimalSentinel {
+		return true
+	}
+	value, err := strconv.ParseFloat(trimmed, 64)
+	return err == nil && value == math.MaxFloat64
 }
 
 func parseOptionalInt(raw string, field string) (int, error) {
