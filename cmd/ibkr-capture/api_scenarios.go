@@ -3648,7 +3648,23 @@ func runAPIDuplicateQuoteSubscriptionsAAPL(ctx context.Context, addr string, cli
 		if second != nil {
 			observeQuotes(ctx, second, "duplicate quote second", 8*time.Second)
 		}
-		return nil
+		if err := first.Close(); err != nil {
+			return fmt.Errorf("close first duplicate quote subscription: %w", err)
+		}
+		if second != nil {
+			if err := second.Close(); err != nil {
+				return fmt.Errorf("close second duplicate quote subscription: %w", err)
+			}
+		}
+		if err := first.Wait(); err != nil {
+			return fmt.Errorf("wait for first duplicate quote subscription: %w", err)
+		}
+		if second != nil {
+			if err := second.Wait(); err != nil {
+				return fmt.Errorf("wait for second duplicate quote subscription: %w", err)
+			}
+		}
+		return fenceAPIWrites(ctx, client, "duplicate quote cancellations")
 	})
 }
 

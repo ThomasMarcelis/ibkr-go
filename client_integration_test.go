@@ -401,11 +401,11 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 		if quote.MarketDataType != ibkr.MarketDataDelayed {
 			t.Fatalf("%s market data type = %s, want Delayed", label, quote.MarketDataType)
 		}
-		if got := quote.Bid.String(); got != "263.45" {
-			t.Fatalf("%s bid = %s, want 263.45", label, got)
+		if got := quote.Bid.String(); got != "314.96" {
+			t.Fatalf("%s bid = %s, want 314.96", label, got)
 		}
-		if got := quote.Ask.String(); got != "263.48" {
-			t.Fatalf("%s ask = %s, want 263.48", label, got)
+		if got := quote.Ask.String(); got != "314.98" {
+			t.Fatalf("%s ask = %s, want 314.98", label, got)
 		}
 	}
 
