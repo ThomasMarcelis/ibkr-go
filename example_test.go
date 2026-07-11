@@ -118,9 +118,9 @@ func Example_positionsSnapshot() {
 	}
 	// Output:
 	// AMZN 15
-	// AAPL 10
-	// YW 1
 	// QQQ -3
+	// YW 1
+	// AAPL 10
 }
 
 func Example_placeOrder() {
