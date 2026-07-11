@@ -136,6 +136,23 @@ func TestConnCloseCompletes(t *testing.T) {
 	}
 }
 
+func TestConnSendAfterCleanCloseReportsClosed(t *testing.T) {
+	t.Parallel()
+
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	conn := New(clientConn, nil, 0)
+	if err := conn.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if err := conn.Wait(); err != nil {
+		t.Fatalf("Wait() error = %v, want nil", err)
+	}
+	if err := conn.Send(context.Background(), []byte("late")); !errors.Is(err, ErrClosed) {
+		t.Fatalf("Send() error = %v, want ErrClosed", err)
+	}
+}
+
 func TestConnSendBackpressuresWithoutClosing(t *testing.T) {
 	t.Parallel()
 

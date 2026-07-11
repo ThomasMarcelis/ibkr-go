@@ -217,17 +217,30 @@ func (e *engine) continueResumeRoutes() {
 			}
 		}
 		payload, err := codec.Encode(e.serverVersion, route.request)
-		if err == nil {
-			err = e.transport.Send(context.Background(), payload)
-		}
-		if errors.Is(err, transport.ErrSendQueueFull) {
-			e.waitForResumeCapacity(e.transport)
-			return
-		}
 		if err != nil {
 			e.dropResumeRoute(pending, err)
 			e.resumePending = e.resumePending[1:]
 			continue
+		}
+		tr := e.transport
+		if tr == nil {
+			return
+		}
+		err = tr.Send(context.Background(), payload)
+		if errors.Is(err, transport.ErrSendQueueFull) {
+			e.waitForResumeCapacity(tr)
+			return
+		}
+		if err != nil {
+			// The request was valid when its route was first installed. A send
+			// failure here is therefore a transport failure, not a per-route
+			// failure. Leave it pending so the next ready connection retries it.
+			return
+		}
+		select {
+		case <-tr.Stopping():
+			return
+		default:
 		}
 		e.resumePending = e.resumePending[1:]
 		if route.gapped && route.emitResumed != nil {

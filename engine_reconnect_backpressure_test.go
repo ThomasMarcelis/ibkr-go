@@ -136,3 +136,60 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 		t.Fatalf("post-resume Send: %v", err)
 	}
 }
+
+func TestResumeTransportFailureRetainsRouteForNextReconnect(t *testing.T) {
+	t.Parallel()
+
+	peer, client := net.Pipe()
+	tr := transport.New(client, nil, 0)
+	if err := peer.Close(); err != nil {
+		t.Fatalf("close peer: %v", err)
+	}
+	<-tr.Done()
+
+	closed := make(chan error, 1)
+	resumed := make(chan struct{}, 1)
+	r := &route{
+		opKind:       OpQuotes,
+		subscription: true,
+		resume:       ResumeAuto,
+		request: codec.QuoteRequest{
+			ReqID: 1,
+			Contract: codec.Contract{
+				Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
+			},
+		},
+		emitResumed: func(*engine) { resumed <- struct{}{} },
+		close:       func(err error) { closed <- err },
+		gapped:      true,
+	}
+	e := &engine{
+		transport:     tr,
+		serverVersion: 200,
+		keyed:         map[int]*route{1: r},
+		singletons:    make(map[string]*route),
+		orders:        make(map[int64]*orderRoute),
+	}
+
+	e.resumeRoutes()
+
+	if e.keyed[1] != r {
+		t.Fatal("resume transport failure removed the subscription route")
+	}
+	if len(e.resumePending) != 1 || e.resumePending[0].route != r {
+		t.Fatalf("resumePending = %+v, want retained route", e.resumePending)
+	}
+	if !r.gapped {
+		t.Fatal("resume transport failure cleared the route gap")
+	}
+	select {
+	case err := <-closed:
+		t.Fatalf("resume transport failure closed route: %v", err)
+	default:
+	}
+	select {
+	case <-resumed:
+		t.Fatal("resume transport failure emitted Resumed")
+	default:
+	}
+}

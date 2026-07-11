@@ -12,7 +12,7 @@ func (e *engine) cancelSubscription(opKind OpKind, msg codec.Message) error {
 	}
 	tr := e.transport
 	select {
-	case <-tr.Done():
+	case <-tr.Stopping():
 		return nil
 	default:
 	}
@@ -21,7 +21,7 @@ func (e *engine) cancelSubscription(opKind OpKind, msg codec.Message) error {
 		// Transport loss racing cancellation also destroys the remote stream;
 		// only a failure on the still-active connection is uncertain.
 		select {
-		case <-tr.Done():
+		case <-tr.Stopping():
 			return nil
 		default:
 			return &SubscriptionCancelError{OpKind: opKind, Err: err}

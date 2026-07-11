@@ -86,7 +86,10 @@ const outgoingQueueCap = 256
 // clamping here loses nothing while making the panic unreachable.
 const maxSendRate = int(time.Second / time.Nanosecond) // 1_000_000_000
 
-var ErrSendQueueFull = errors.New("transport: outbound queue full")
+var (
+	ErrClosed        = errors.New("transport: closed")
+	ErrSendQueueFull = errors.New("transport: outbound queue full")
+)
 
 func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 	if logger == nil {
@@ -118,6 +121,10 @@ func (c *Conn) Incoming() <-chan []byte {
 func (c *Conn) Done() <-chan struct{} {
 	return c.done
 }
+
+// Stopping closes as soon as the connection can no longer admit writes. Done
+// closes later, after the writer reports every tracked admission outcome.
+func (c *Conn) Stopping() <-chan struct{} { return c.stopping }
 
 // Completions reports the local write outcome of tracked sends. It closes
 // before Done after every admitted tracked frame has received one result.
@@ -158,14 +165,14 @@ func (c *Conn) admit(ctx context.Context, payload []byte, tracked bool) (WriteID
 	case <-ctx.Done():
 		return 0, ctx.Err()
 	case <-c.done:
-		return 0, c.Wait()
+		return 0, c.terminalError()
 	default:
 	}
 
 	c.queueMu.Lock()
 	if c.outgoingClosed {
 		c.queueMu.Unlock()
-		return 0, c.Wait()
+		return 0, c.terminalError()
 	}
 	if len(c.outgoing) >= outgoingQueueCap {
 		c.queueMu.Unlock()
@@ -181,6 +188,13 @@ func (c *Conn) admit(ctx context.Context, payload []byte, tracked bool) (WriteID
 	c.queueMu.Unlock()
 
 	return id, nil
+}
+
+func (c *Conn) terminalError() error {
+	if err := c.WaitError(); err != nil {
+		return err
+	}
+	return ErrClosed
 }
 
 func (c *Conn) Close() error {
