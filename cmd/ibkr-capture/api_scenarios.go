@@ -40,6 +40,11 @@ func optionalDecimalString(value *decimal.Decimal) string {
 	return value.String()
 }
 
+func setRecordedOrderPrices(event *apiDriverEvent, limit, auxiliary *decimal.Decimal) {
+	event.LmtPrice = optionalDecimalString(limit)
+	event.AuxPrice = optionalDecimalString(auxiliary)
+}
+
 type apiDriverRecorder struct {
 	mu          sync.Mutex
 	file        *os.File
@@ -4137,8 +4142,7 @@ func placeAPIOrder(ctx context.Context, client *ibkr.Client, label string, contr
 		event.OrderType = string(order.OrderType)
 		event.TIF = string(order.TIF)
 		event.Quantity = order.Quantity.String()
-		event.LmtPrice = order.LmtPrice.String()
-		event.AuxPrice = order.AuxPrice.String()
+		setRecordedOrderPrices(event, order.LmtPrice, order.AuxPrice)
 		event.ParentID = order.ParentID
 		event.OCAGroup = order.OCA.Group
 	})
@@ -4175,8 +4179,7 @@ func modifyAPIOrder(ctx context.Context, handle *ibkr.OrderHandle, label string,
 		event.OrderType = string(order.OrderType)
 		event.TIF = string(order.TIF)
 		event.Quantity = order.Quantity.String()
-		event.LmtPrice = order.LmtPrice.String()
-		event.AuxPrice = order.AuxPrice.String()
+		setRecordedOrderPrices(event, order.LmtPrice, order.AuxPrice)
 		event.ParentID = order.ParentID
 	})
 	if err := handle.Replace(ctx, order); err != nil {
@@ -4672,8 +4675,7 @@ func recordOrderEvent(label string, evt ibkr.OrderEvent) {
 			event.OrderType = string(order.OrderType)
 			event.TIF = string(order.TIF)
 			event.Quantity = order.Quantity.String()
-			event.LmtPrice = order.LmtPrice.String()
-			event.AuxPrice = order.AuxPrice.String()
+			setRecordedOrderPrices(event, order.LmtPrice, order.AuxPrice)
 			event.Status = string(order.Status)
 			event.ParentID = order.ParentID
 			event.OCAGroup = order.OcaGroup
