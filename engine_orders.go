@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/shopspring/decimal"
 )
 
 // RefreshOrderID asks the Gateway for a fresh next-valid order ID and updates
@@ -117,6 +118,8 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 				sub.emit(OpenOrderUpdate{Order: &m})
 			case OrderStatusUpdate:
 				sub.emit(OpenOrderUpdate{Status: &m})
+			case OrderBinding:
+				sub.emit(OpenOrderUpdate{Binding: &m})
 			case codec.OpenOrderEnd:
 				if scope != OpenOrdersScopeAuto {
 					sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
@@ -152,19 +155,32 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 	return out.sub, out.err
 }
 
-func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) ([]Execution, error) {
+func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) (ExecutionSnapshot, error) {
 	sub, err := e.subscribeExecutions(ctx, req, withSnapshotCollector())
 	if err != nil {
-		return nil, err
+		return ExecutionSnapshot{}, err
 	}
 	defer sub.Close()
-	return collectSnapshot(ctx, sub, func(execution Execution) (Execution, bool) { return execution, true })
+	updates, err := collectSnapshot(ctx, sub, func(update ExecutionUpdate) (ExecutionUpdate, bool) { return update, true })
+	if err != nil {
+		return ExecutionSnapshot{}, err
+	}
+	result := ExecutionSnapshot{}
+	for _, update := range updates {
+		if update.Execution != nil {
+			result.Executions = append(result.Executions, *update.Execution)
+		}
+		if update.CommissionAndFees != nil {
+			result.CommissionAndFees = append(result.CommissionAndFees, *update.CommissionAndFees)
+		}
+	}
+	return result, nil
 }
 
-func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[Execution], error) {
+func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
 	req.SpecificDates = append([]time.Time(nil), req.SpecificDates...)
 	type result struct {
-		sub *Subscription[Execution]
+		sub *Subscription[ExecutionUpdate]
 		err error
 	}
 	resp := make(chan result, 1)
@@ -182,10 +198,33 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		}
 		reqID := e.allocReqID()
 		wireReq.ReqID = reqID
-		sub, ownedRoute := newKeyedSubscriptionRoute[Execution](e, cfg, reqID, OpExecutions, nil)
+		sub, ownedRoute := newKeyedSubscriptionRoute[ExecutionUpdate](e, cfg, reqID, OpExecutions, nil)
 		sub.expectSnapshot()
+		knownExecutions := make(map[string]struct{})
+		pendingFees := make(map[string][]codec.CommissionReport)
+		deliveredFees := make(map[string]codec.CommissionReport)
+		emitFee := func(report codec.CommissionReport) bool {
+			if delivered, ok := deliveredFees[report.ExecID]; ok && delivered == report {
+				return true
+			}
+			fee, err := fromCodecCommission(report)
+			if err != nil {
+				e.deleteKeyedRoute(reqID)
+				sub.closeWithErr(err)
+				return false
+			}
+			deliveredFees[report.ExecID] = report
+			return sub.emit(ExecutionUpdate{CommissionAndFees: &fee})
+		}
 
 		ownedRoute.request = wireReq
+		ownedRoute.handleCommission = func(report codec.CommissionReport, _ *engine) {
+			if _, ok := knownExecutions[report.ExecID]; !ok {
+				pendingFees[report.ExecID] = append(pendingFees[report.ExecID], report)
+				return
+			}
+			emitFee(report)
+		}
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.ExecutionDetail:
@@ -195,11 +234,18 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 					sub.closeWithErr(err)
 					return
 				}
-				sub.emit(update)
+				knownExecutions[m.ExecID] = struct{}{}
+				if !sub.emit(ExecutionUpdate{Execution: &update}) {
+					return
+				}
+				for _, report := range pendingFees[m.ExecID] {
+					if !emitFee(report) {
+						return
+					}
+				}
+				delete(pendingFees, m.ExecID)
 			case codec.ExecutionsEnd:
 				sub.emitState(SubscriptionStateEvent{Kind: SubscriptionSnapshotComplete, ConnectionSeq: e.connectionSeq()})
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(nil)
 			}
 		}
 		e.keyed[reqID] = ownedRoute
@@ -597,8 +643,6 @@ func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 	})
 }
 
-const exerciseRouteTTL = 2 * time.Minute
-
 func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 	orderHandle := newOrderHandle(int64(reqID), e.cfg.orderEventBuffer)
 	handle := &ExerciseHandle{requestID: reqID, order: orderHandle}
@@ -635,16 +679,6 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 	orderHandle.detachFn = func() {
 		e.enqueue(func() { closeExercise(nil) })
 	}
-	if e.cmds == nil {
-		return handle
-	}
-	time.AfterFunc(exerciseRouteTTL, func() {
-		e.enqueue(func() {
-			if e.keyed[reqID] == exerciseRoute {
-				closeExercise(nil)
-			}
-		})
-	})
 	return handle
 }
 
@@ -711,11 +745,11 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
-	lmtPrice, err := parseOptionalDecimal(m.LmtPrice, "open order limit price")
+	lmtPrice, err := parseOptionalDecimalPointer(m.LmtPrice, "open order limit price")
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
-	auxPrice, err := parseOptionalDecimal(m.AuxPrice, "open order aux price")
+	auxPrice, err := parseOptionalDecimalPointer(m.AuxPrice, "open order aux price")
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
@@ -766,6 +800,60 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 	maxCommission, err := parseOptionalDecimalPointer(m.MaxCommission, "open order max commission")
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
+	}
+	var initMarginBeforeOutsideRTH, maintMarginBeforeOutsideRTH, equityWithLoanBeforeOutsideRTH *decimal.Decimal
+	var initMarginChangeOutsideRTH, maintMarginChangeOutsideRTH, equityWithLoanChangeOutsideRTH *decimal.Decimal
+	var initMarginAfterOutsideRTH, maintMarginAfterOutsideRTH, equityWithLoanAfterOutsideRTH *decimal.Decimal
+	var suggestedSize *decimal.Decimal
+	for _, field := range []struct {
+		raw   string
+		label string
+		dst   **decimal.Decimal
+	}{
+		{m.InitMarginBeforeOutsideRTH, "open order init margin before outside RTH", &initMarginBeforeOutsideRTH},
+		{m.MaintMarginBeforeOutsideRTH, "open order maint margin before outside RTH", &maintMarginBeforeOutsideRTH},
+		{m.EquityWithLoanBeforeOutsideRTH, "open order equity with loan before outside RTH", &equityWithLoanBeforeOutsideRTH},
+		{m.InitMarginChangeOutsideRTH, "open order init margin change outside RTH", &initMarginChangeOutsideRTH},
+		{m.MaintMarginChangeOutsideRTH, "open order maint margin change outside RTH", &maintMarginChangeOutsideRTH},
+		{m.EquityWithLoanChangeOutsideRTH, "open order equity with loan change outside RTH", &equityWithLoanChangeOutsideRTH},
+		{m.InitMarginAfterOutsideRTH, "open order init margin after outside RTH", &initMarginAfterOutsideRTH},
+		{m.MaintMarginAfterOutsideRTH, "open order maint margin after outside RTH", &maintMarginAfterOutsideRTH},
+		{m.EquityWithLoanAfterOutsideRTH, "open order equity with loan after outside RTH", &equityWithLoanAfterOutsideRTH},
+		{m.SuggestedSize, "open order suggested size", &suggestedSize},
+	} {
+		value, err := parseOptionalDecimalPointer(field.raw, field.label)
+		if err != nil {
+			return OpenOrder{}, OrderState{}, err
+		}
+		*field.dst = value
+	}
+	var allocations []OrderAllocation
+	if len(m.Allocations) != 0 {
+		allocations = make([]OrderAllocation, len(m.Allocations))
+	}
+	for i, allocation := range m.Allocations {
+		allocations[i].Account = allocation.Account
+		for _, field := range []struct {
+			raw   string
+			label string
+			dst   **decimal.Decimal
+		}{
+			{allocation.Position, "order allocation position", &allocations[i].Position},
+			{allocation.PositionDesired, "order allocation desired position", &allocations[i].PositionDesired},
+			{allocation.PositionAfter, "order allocation position after", &allocations[i].PositionAfter},
+			{allocation.DesiredAllocQty, "order allocation desired quantity", &allocations[i].DesiredAllocQty},
+			{allocation.AllowedAllocQty, "order allocation allowed quantity", &allocations[i].AllowedAllocQty},
+		} {
+			value, err := parseOptionalDecimalPointer(field.raw, field.label)
+			if err != nil {
+				return OpenOrder{}, OrderState{}, err
+			}
+			*field.dst = value
+		}
+		allocations[i].IsMonetary, err = parseOptionalBoolPointer(allocation.IsMonetary, "order allocation is monetary")
+		if err != nil {
+			return OpenOrder{}, OrderState{}, err
+		}
 	}
 	origin, err := parseOptionalInt(m.Origin, "open order origin")
 	if err != nil {
@@ -825,20 +913,34 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 			ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
 			Partial:               m.Partial,
 		}, OrderState{
-			InitMarginBefore:     initMarginBefore,
-			MaintMarginBefore:    maintMarginBefore,
-			EquityWithLoanBefore: equityWithLoanBefore,
-			InitMarginChange:     initMarginChange,
-			MaintMarginChange:    maintMarginChange,
-			EquityWithLoanChange: equityWithLoanChange,
-			InitMarginAfter:      initMarginAfter,
-			MaintMarginAfter:     maintMarginAfter,
-			EquityWithLoanAfter:  equityWithLoanAfter,
-			Commission:           commission,
-			CommissionMin:        minCommission,
-			CommissionMax:        maxCommission,
-			Currency:             m.CommissionCurrency,
-			WarningText:          m.WarningText,
+			Status:                         OrderStatus(m.Status),
+			InitMarginBefore:               initMarginBefore,
+			MaintMarginBefore:              maintMarginBefore,
+			EquityWithLoanBefore:           equityWithLoanBefore,
+			InitMarginChange:               initMarginChange,
+			MaintMarginChange:              maintMarginChange,
+			EquityWithLoanChange:           equityWithLoanChange,
+			InitMarginAfter:                initMarginAfter,
+			MaintMarginAfter:               maintMarginAfter,
+			EquityWithLoanAfter:            equityWithLoanAfter,
+			CommissionAndFees:              commission,
+			MinCommissionAndFees:           minCommission,
+			MaxCommissionAndFees:           maxCommission,
+			CommissionAndFeesCurrency:      m.CommissionCurrency,
+			MarginCurrency:                 m.MarginCurrency,
+			InitMarginBeforeOutsideRTH:     initMarginBeforeOutsideRTH,
+			MaintMarginBeforeOutsideRTH:    maintMarginBeforeOutsideRTH,
+			EquityWithLoanBeforeOutsideRTH: equityWithLoanBeforeOutsideRTH,
+			InitMarginChangeOutsideRTH:     initMarginChangeOutsideRTH,
+			MaintMarginChangeOutsideRTH:    maintMarginChangeOutsideRTH,
+			EquityWithLoanChangeOutsideRTH: equityWithLoanChangeOutsideRTH,
+			InitMarginAfterOutsideRTH:      initMarginAfterOutsideRTH,
+			MaintMarginAfterOutsideRTH:     maintMarginAfterOutsideRTH,
+			EquityWithLoanAfterOutsideRTH:  equityWithLoanAfterOutsideRTH,
+			SuggestedSize:                  suggestedSize,
+			RejectReason:                   m.RejectReason,
+			Allocations:                    allocations,
+			WarningText:                    m.WarningText,
 		}, nil
 }
 

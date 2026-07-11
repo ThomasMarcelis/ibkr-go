@@ -256,7 +256,7 @@ and the what-if flag are operation-owned and therefore are not `Order` fields.
 | AdvancedErrorOverride | string | override advanced order validation |
 | Adjustment.OrderType | OrderType | volatility order adjustment |
 | Adjustment.TriggerPrice | decimal | adjusted order trigger |
-| Adjustment.LmtPriceOffset | decimal | adjusted limit offset |
+| LmtPriceOffset | *decimal | order-level limit-price offset |
 | Adjustment.StopPrice | decimal | adjusted stop price |
 | Adjustment.StopLimitPrice | decimal | adjusted stop-limit price |
 | Adjustment.TrailingAmount | decimal | adjusted trailing amount |

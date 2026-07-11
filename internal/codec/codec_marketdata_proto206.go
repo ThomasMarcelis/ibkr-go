@@ -20,6 +20,9 @@ func (m QuoteRequest) encodeProto(sv int) ([]byte, error) {
 	if m.Snapshot {
 		body = appendProtoVarint(body, 4, 1)
 	}
+	if m.RegulatorySnapshot {
+		body = appendProtoVarint(body, 5, 1)
+	}
 	return canonicalProtoFields(body), nil
 }
 

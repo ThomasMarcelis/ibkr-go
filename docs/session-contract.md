@@ -29,7 +29,7 @@ type Client struct{ /* opaque */ }
 
 func DialContext(ctx context.Context, opts ...Option) (*Client, error)
 
-func (c *Client) Close() error
+func (c *Client) Close()
 func (c *Client) Done() <-chan struct{}
 func (c *Client) Wait() error
 func (c *Client) Session() Snapshot
@@ -174,9 +174,11 @@ again. Only failure before the first place admission returns the original
 placement error directly.
 
 `Orders().Preview(ctx, req)` is the one-shot counterpart: it forces the
-what-if flag and returns an `OrderState` (the nine margin decimals plus the
-commission range and currency) with no `OrderHandle` and nothing resting on
-the server.
+what-if flag and returns the complete `OrderState` preview block, including
+status, margin currency, before/change/after margin both in and outside regular
+trading hours, commission-and-fees range/currency, suggested size, reject
+reason, and allocation results. It creates no `OrderHandle` and leaves nothing
+resting on the server.
 
 ## OrderHandle
 
@@ -212,14 +214,17 @@ can attach the manual cancel time, external operator, and manual-order
 indicator through `CancelOption`. `Replace(ctx, order)` sends a modified order
 with the same OrderID.
 
-`Events()` closes before `Done()`. Consumers that need every order event,
-including late `Execution` or `CommissionAndFees` callbacks after a terminal status,
-must drain `Events()` until it closes, then call `Wait()`.
+`Events()` closes before `Done()`. A Filled, Cancelled, ApiCancelled, or
+Inactive status is an order-state event, not the end of local observation.
+Execution and commission-and-fees callbacks may follow it. The caller owns the
+observation window and must call `Close()` after collecting the evidence it
+needs; `Close()` then drains already-buffered events before `Done()` closes.
+`Wait()` reports the explicit local close, a request error, slow-consumer
+failure, or disconnect.
 
-Terminal states: when an OrderStatus arrives with status Filled, Cancelled,
-ApiCancelled, or Inactive, the handle auto-closes with `nil` error. An
-order-targeted api_error that rejects the placement outright (no order_status
-ever follows) closes the handle with the `*APIError` as its terminal error;
+An order-targeted api_error that rejects the placement outright (no
+order_status ever follows) closes the handle with the `*APIError` as its
+terminal error;
 this covers both the sub-10000 rejection codes and the 10xxx codes
 live-attested as outright placement rejections (10063, 10255). Order-targeted
 10xxx notices for live orders — cancel replies such as 10147/10148 — stay
@@ -233,18 +238,20 @@ the subsequent `OrderStatus` still owns the handle result.
 An order-targeted api_error whose `(&APIError{Code: ...}).IsWarning()` is true —
 notably code 399, the off-hours deferral — is delivered non-terminally as an
 `OrderEvent.Warning`. The order stays working at IB and the handle stays open;
-its real lifecycle (later status updates, the eventual terminal close)
-continues.
+its real lifecycle and later status updates continue until the caller closes
+the observation window or an error/disconnect ends it.
 
 ## Completion and Reconnect
 
 - One-shots complete only on explicit protocol completion markers.
 - Snapshot-style subscriptions surface completion through `Lifecycle()` and
   `AwaitSnapshot`.
-- Execution reports are modeled as `Orders().Executions(ctx, filter)`, a finite
-  query, not a public subscription. It completes on IBKR's execution-details
-  end marker; commission-and-fees reports are independent ExecID-correlated
-  messages and may be unset, revised, or arrive after that marker.
+- `Orders().Executions(ctx, filter)` returns an `ExecutionSnapshot` containing
+  executions and every commission-and-fees report observed through IBKR's
+  execution-details end marker. Because fees are independent ExecID-correlated
+  messages and may arrive or be revised after that boundary,
+  `SubscribeExecutions` keeps the route open until the caller closes it and
+  emits `ExecutionUpdate` values for executions and fee reports.
 - Reconnect boundaries are explicit through `Event` and
   `SubscriptionStateEvent`, never mixed into business event streams.
 - Calls submitted while the session is reconnecting wait for the next `Ready`

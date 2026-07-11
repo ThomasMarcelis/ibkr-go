@@ -190,6 +190,7 @@ const (
 	InHistoricalTicksBidAsk = 97
 	InHistoricalTicksLast   = 98
 	InTickByTick            = 99
+	InOrderBound            = 100
 	InCompletedOrder        = 101
 	InCompletedOrderEnd     = 102
 	InWSHMetaData           = 104
@@ -341,6 +342,7 @@ var messages = [...]Message{
 	{"InHistoricalTicksBidAsk", InHistoricalTicksBidAsk, ServerToClient},
 	{"InHistoricalTicksLast", InHistoricalTicksLast, ServerToClient},
 	{"InTickByTick", InTickByTick, ServerToClient},
+	{"InOrderBound", InOrderBound, ServerToClient},
 	{"InCompletedOrder", InCompletedOrder, ServerToClient},
 	{"InCompletedOrderEnd", InCompletedOrderEnd, ServerToClient},
 	{"InWSHMetaData", InWSHMetaData, ServerToClient},

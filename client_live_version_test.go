@@ -45,7 +45,7 @@ func TestLiveServer202ZeroStrikeBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Executions() at sv202 error = %v", err)
 	}
-	for _, execution := range executions {
+	for _, execution := range executions.Executions {
 		if execution.Contract.ConID != 0 && execution.Contract.Strike != nil && execution.Contract.Strike.IsZero() {
 			t.Logf("sv202 execution attested: exec_id=%s con_id=%d strike=%s",
 				execution.ExecID, execution.Contract.ConID, execution.Contract.Strike)

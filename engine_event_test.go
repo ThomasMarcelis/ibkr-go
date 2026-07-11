@@ -3,6 +3,8 @@ package ibkr
 import (
 	"testing"
 	"testing/synctest"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 )
 
 func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {
@@ -40,6 +42,34 @@ func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {
 		for range e.SessionEvents() {
 		}
 	})
+}
+
+func TestConnectivityEventPreservesFullAPIError(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		events: newObserver[Event](1),
+		snapshot: Snapshot{
+			State:         StateReady,
+			ConnectionSeq: 3,
+		},
+	}
+	e.handleAPIError(codec.APIError{
+		ReqID:   0,
+		Code:    1100,
+		Message: "Connectivity between IB and TWS has been lost.",
+	})
+
+	event := <-e.SessionEvents()
+	if event.APIError == nil {
+		t.Fatal("Event.APIError = nil")
+	}
+	if event.APIError.RequestID != 0 || event.APIError.Code != 1100 || event.APIError.ConnectionSeq != 3 {
+		t.Fatalf("Event.APIError = %+v", event.APIError)
+	}
+	if !event.APIError.ServerTime.IsZero() {
+		t.Fatalf("ServerTime = %s, want zero when the classic capture omitted errorTime", event.APIError.ServerTime)
+	}
 }
 
 func TestSessionEventsDropOldestKeepsLatest(t *testing.T) {

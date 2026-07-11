@@ -409,7 +409,7 @@ func TestSetMarketDataTypeAfterClose(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_bootstrap.txt")
-	_ = client.Close()
+	client.Close()
 	<-client.Done()
 	_ = host.Close()
 
@@ -470,7 +470,7 @@ func TestProtocolErrorClosesTransport(t *testing.T) {
 	select {
 	case <-client.Done():
 	case <-time.After(2 * time.Second):
-		_ = client.Close()
+		client.Close()
 		t.Fatal("client did not close after protocol error")
 	}
 
@@ -553,9 +553,7 @@ func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {
 	default:
 	}
 
-	if err := client.Close(); err != nil {
-		t.Fatalf("Close() error = %v", err)
-	}
+	client.Close()
 	select {
 	case <-client.Done():
 	case <-time.After(time.Second):

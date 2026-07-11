@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"time"
@@ -246,7 +247,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 				return
 			}
 			if m.Code == ErrCodeHistoricalDataQueryMessage && m.Message == scannerNoItemsMessage {
-				e.emitEvent(m.Code, m.Message)
+				e.emitAPIEvent(m)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -329,11 +330,11 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 // validateFADataType mirrors the official client's FA_PROFILE_NOT_SUPPORTED
 // rejection; every server version supported by this package desupports it.
 func validateFADataType(faDataType FADataType) error {
-	if faDataType == FADataProfiles {
+	if faDataType != FADataGroups && faDataType != FADataAliases {
 		return &ValidationError{
 			Field:   "FA data type",
 			Value:   faDataType.String(),
-			Message: "FA profiles are not supported by current IBKR servers",
+			Message: "must be Groups or Aliases",
 		}
 	}
 	return nil
@@ -393,6 +394,10 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 				switch m := msg.(type) {
 				case codec.WSHMetaDataResponse:
 					e.deleteKeyedRoute(reqID)
+					if !json.Valid([]byte(m.DataJSON)) {
+						resp <- result{err: fmt.Errorf("ibkr: invalid WSH metadata JSON")}
+						return
+					}
 					resp <- result{dataJSON: m.DataJSON}
 				}
 			}, func(err error) {
@@ -405,7 +410,12 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				_ = e.cancelSubscription(OpWSHMetaData, codec.CancelWSHMetaData{ReqID: reqID})
+				e.deleteKeyedRoute(reqID)
+			}
+		})
 	})
 	if err != nil {
 		return "", err
@@ -414,6 +424,10 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 }
 
 func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (string, error) {
+	if len(req.Filter) > 0 && !json.Valid(req.Filter) {
+		return "", &ValidationError{Field: "WSH filter", Message: "must be valid JSON"}
+	}
+	req.Filter = append(JSONDocument(nil), req.Filter...)
 	type result struct {
 		dataJSON string
 		err      error
@@ -427,6 +441,10 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 				switch m := msg.(type) {
 				case codec.WSHEventDataResponse:
 					e.deleteKeyedRoute(reqID)
+					if !json.Valid([]byte(m.DataJSON)) {
+						resp <- result{err: fmt.Errorf("ibkr: invalid WSH event-data JSON")}
+						return
+					}
 					resp <- result{dataJSON: m.DataJSON}
 				}
 			}, func(err error) {
@@ -449,7 +467,12 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if _, ok := e.keyed[reqID]; ok {
+				_ = e.cancelSubscription(OpWSHEventData, codec.CancelWSHEventData{ReqID: reqID})
+				e.deleteKeyedRoute(reqID)
+			}
+		})
 	})
 	if err != nil {
 		return "", err

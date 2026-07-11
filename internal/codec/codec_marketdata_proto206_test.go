@@ -131,6 +131,32 @@ func TestEncodeMarketDataProto206LiveVectors(t *testing.T) {
 	}
 }
 
+func TestEncodeRegulatorySnapshotFlagsClassicAndProtobuf(t *testing.T) {
+	t.Parallel()
+
+	msg := QuoteRequest{
+		ReqID: 42,
+		Contract: Contract{
+			ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
+		},
+		RegulatorySnapshot: true,
+	}
+	fields, err := msg.encodeWire(200)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fields[len(fields)-4:]; !reflect.DeepEqual(got, []string{"", "0", "1", ""}) {
+		t.Fatalf("classic trailing fields = %q, want genericTicks, snapshot=false, regulatorySnapshot=true, options", got)
+	}
+	body, err := msg.encodeProto(206)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.HasSuffix(body, []byte{0x28, 0x01}) {
+		t.Fatalf("protobuf body = %x, want field 5 regulatorySnapshot=true", body)
+	}
+}
+
 func TestMarketDataEncodingBoundary206(t *testing.T) {
 	t.Parallel()
 

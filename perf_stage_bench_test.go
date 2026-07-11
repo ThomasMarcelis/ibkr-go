@@ -143,7 +143,7 @@ func installQuoteRoute(tb testing.TB, e *engine, opts ...SubscriptionOption) *Su
 	}
 	res := make(chan result, 1)
 	go func() {
-		sub, err := e.subscribeQuotes(context.Background(), QuoteRequest{Contract: benchContract}, false, opts...)
+		sub, err := e.subscribeQuotes(context.Background(), QuoteRequest{Contract: benchContract}, false, false, opts...)
 		res <- result{sub, err}
 	}()
 	fn := <-e.cmds
@@ -327,7 +327,7 @@ func BenchmarkE2EQuoteStreamTCP(b *testing.B) {
 			bestRate = rate
 		}
 		sub.Close()
-		_ = client.Close()
+		client.Close()
 		cancel()
 	}
 	b.ReportMetric(bestRate, "msgs/sec")

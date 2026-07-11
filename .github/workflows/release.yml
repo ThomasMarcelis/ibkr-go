@@ -55,7 +55,8 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          awk -v tag="$TAG" '
+          base_tag="${TAG%%-*}"
+          awk -v tag="$base_tag" '
             found && /^## / { exit }
             !found && index($0, "## " tag) == 1 {
               rest = substr($0, length("## " tag) + 1)
@@ -65,7 +66,7 @@ jobs:
           ' CHANGELOG.md > notes.md
           sed -i -e '/./,$!d' -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' notes.md
           if [ ! -s notes.md ]; then
-            echo "CHANGELOG.md has no release notes for $TAG"
+            echo "CHANGELOG.md has no release notes for $base_tag"
             exit 1
           fi
 
@@ -73,4 +74,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
-        run: gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
+        run: |
+          args=(--verify-tag --title "$TAG" --notes-file notes.md)
+          if [[ "$TAG" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "$TAG" "${args[@]}"

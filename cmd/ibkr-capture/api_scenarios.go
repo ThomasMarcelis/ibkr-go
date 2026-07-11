@@ -756,12 +756,15 @@ func runAPIExecutionsSnapshot(ctx context.Context, addr string, clientID int) er
 		if err != nil {
 			return err
 		}
-		for _, execution := range executions {
+		for _, execution := range executions.Executions {
 			if execution.ExecID == "" {
 				return errors.New("execution snapshot returned an empty execution ID")
 			}
 		}
-		recordAPIEvent("executions", "snapshot", func(event *apiDriverEvent) { event.Count = len(executions) })
+		recordAPIEvent("executions", "snapshot", func(event *apiDriverEvent) {
+			event.Count = len(executions.Executions)
+			event.Values = map[string]string{"commission_and_fees": strconv.Itoa(len(executions.CommissionAndFees))}
+		})
 		return nil
 	})
 }
@@ -804,10 +807,10 @@ func runAPIHistoricalNews(ctx context.Context, addr string, clientID int, label 
 		if err != nil {
 			return err
 		}
-		if len(items) == 0 {
+		if len(items.Items) == 0 {
 			return fmt.Errorf("%s returned no historical news", label)
 		}
-		for _, item := range items {
+		for _, item := range items.Items {
 			if item.Time.IsZero() || item.ProviderCode == "" || item.ArticleID == "" || item.Headline == "" {
 				return fmt.Errorf("%s returned an incomplete historical news item", label)
 			}
@@ -818,7 +821,10 @@ func runAPIHistoricalNews(ctx context.Context, addr string, clientID int, label 
 				return fmt.Errorf("%s returned item %s before inclusive lower bound %s", label, item.Time, end)
 			}
 		}
-		recordAPIEvent("historical_news", label, func(event *apiDriverEvent) { event.Count = len(items) })
+		recordAPIEvent("historical_news", label, func(event *apiDriverEvent) {
+			event.Count = len(items.Items)
+			event.Values = map[string]string{"has_more": strconv.FormatBool(items.HasMore)}
+		})
 		return nil
 	})
 }
@@ -3198,12 +3204,12 @@ func runAPINewsArticleAAPL(ctx context.Context, addr string, clientID int) error
 			recordProbeResult("historical_news_for_article", "aapl", 0, err)
 			return nil
 		}
-		recordProbeResult("historical_news_for_article", "aapl", len(items), nil)
-		if len(items) == 0 {
+		recordProbeResult("historical_news_for_article", "aapl", len(items.Items), nil)
+		if len(items.Items) == 0 {
 			return nil
 		}
 
-		articleReq := ibkr.NewsArticleRequest{ProviderCode: items[0].ProviderCode, ArticleID: items[0].ArticleID}
+		articleReq := ibkr.NewsArticleRequest{ProviderCode: items.Items[0].ProviderCode, ArticleID: items.Items[0].ArticleID}
 		articleCtx, articleCancel := context.WithTimeout(ctx, 30*time.Second)
 		article, err := client.News().Article(articleCtx, articleReq)
 		articleCancel()
@@ -3806,13 +3812,13 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 	}
 	account, err := firstManagedAccount(first)
 	if err != nil {
-		_ = first.Close()
+		first.Close()
 		return err
 	}
 	recordSessionReady(addr, clientID, account, first)
 	if err := guardedCancelAll(ctx, first, account, "reconnect pre-cleanup global cancel"); err != nil {
 		log.Printf("reconnect pre-cleanup global cancel: %v", err)
-		_ = first.Close()
+		first.Close()
 		return err
 	}
 
@@ -3820,7 +3826,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
 	handle, err := placeAPIOrder(ctx, first, "reconnect resting", apiAAPL, order)
 	if err != nil {
-		_ = first.Close()
+		first.Close()
 		return fmt.Errorf("place reconnect resting order: %w", err)
 	}
 	_ = observeOrder(ctx, handle, "reconnect resting", 10*time.Second)
@@ -3829,7 +3835,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 	recordAPIEvent("disconnect_client", "reconnect resting", func(event *apiDriverEvent) {
 		event.OrderID = orderID
 	})
-	_ = first.Close()
+	first.Close()
 	time.Sleep(500 * time.Millisecond)
 
 	second, err := dialAPI(ctx, addr, clientID)
@@ -3885,26 +3891,26 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 	}
 	account, err := firstManagedAccount(placer)
 	if err != nil {
-		_ = placer.Close()
+		placer.Close()
 		return err
 	}
 	recordSessionReady(addr, clientID, account, placer)
 	if err := guardedCancelAll(ctx, placer, account, "client0 pre-cleanup global cancel"); err != nil {
 		log.Printf("client0 pre-cleanup global cancel: %v", err)
-		_ = placer.Close()
+		placer.Close()
 		return err
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
 	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
 	handle, err := placeAPIOrder(ctx, placer, "client0 observed resting", apiAAPL, order)
 	if err != nil {
-		_ = placer.Close()
+		placer.Close()
 		return err
 	}
 	_ = observeOrder(ctx, handle, "client0 observed resting", 10*time.Second)
 	orderID := handle.OrderID()
 	cleanup.Track(orderID)
-	_ = placer.Close()
+	placer.Close()
 	time.Sleep(500 * time.Millisecond)
 
 	observer, err := dialAPI(ctx, addr, 0)
@@ -3954,26 +3960,26 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 	}
 	account, err := firstManagedAccount(placer)
 	if err != nil {
-		_ = placer.Close()
+		placer.Close()
 		return err
 	}
 	recordSessionReady(addr, clientID, account, placer)
 	if err := guardedCancelAll(ctx, placer, account, "cross-client pre-cleanup global cancel"); err != nil {
 		log.Printf("cross-client pre-cleanup global cancel: %v", err)
-		_ = placer.Close()
+		placer.Close()
 		return err
 	}
 	anchor := quoteAnchor(ctx, placer, apiAAPL, decimal.RequireFromString("200"))
 	order := withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTC)
 	handle, err := placeAPIOrder(ctx, placer, "cross-client resting", apiAAPL, order)
 	if err != nil {
-		_ = placer.Close()
+		placer.Close()
 		return err
 	}
 	_ = observeOrder(ctx, handle, "cross-client resting", 10*time.Second)
 	orderID := handle.OrderID()
 	cleanup.Track(orderID)
-	_ = placer.Close()
+	placer.Close()
 	time.Sleep(500 * time.Millisecond)
 
 	cancellerID := clientID + 1
@@ -4205,7 +4211,7 @@ func withTrailing(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
 func withTrailingLimit(order ibkr.Order, anchor decimal.Decimal) ibkr.Order {
 	order.TrailStopPrice = new(farSell(anchor))
 	order.AuxPrice = new(decimal.RequireFromString("1"))
-	order.Adjustment.LmtPriceOffset = decimal.RequireFromString("0.05")
+	order.LmtPriceOffset = new(decimal.RequireFromString("0.05"))
 	return order
 }
 
@@ -4804,11 +4810,12 @@ func queryExecutions(client *ibkr.Client, req ibkr.ExecutionsRequest, label stri
 		})
 		return
 	}
-	log.Printf("%s query updates=%d", label, len(updates))
+	log.Printf("%s query executions=%d commission_and_fees=%d", label, len(updates.Executions), len(updates.CommissionAndFees))
 	recordAPIEvent("executions_query", label, func(event *apiDriverEvent) {
 		event.Account = req.Account
 		event.Symbol = req.Symbol
-		event.Count = len(updates)
+		event.Count = len(updates.Executions)
+		event.Values = map[string]string{"commission_and_fees": strconv.Itoa(len(updates.CommissionAndFees))}
 	})
 }
 
@@ -5202,7 +5209,7 @@ func runAPIWhatIfMarginAAPL(ctx context.Context, addr string, clientID int) erro
 			return nil
 		}
 		log.Printf("whatif preview: init_margin_after=%s maint_margin_after=%s commission=%s min=%s max=%s currency=%s",
-			state.InitMarginAfter, state.MaintMarginAfter, state.Commission, state.CommissionMin, state.CommissionMax, state.Currency)
+			state.InitMarginAfter, state.MaintMarginAfter, state.CommissionAndFees, state.MinCommissionAndFees, state.MaxCommissionAndFees, state.CommissionAndFeesCurrency)
 		return nil
 	})
 }

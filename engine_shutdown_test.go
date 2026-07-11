@@ -39,9 +39,7 @@ func TestClientCloseWaitsCleanlyAndInterruptsActiveWork(t *testing.T) {
 		go e.run()
 
 		client := &Client{engine: e}
-		if err := client.Close(); err != nil {
-			t.Fatalf("Close() error = %v", err)
-		}
+		client.Close()
 		synctest.Wait()
 
 		if err := client.Wait(); err != nil {
@@ -149,12 +147,11 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 	}
 }
 
-// TestTerminalOrderCloseForgetsRouteAndExecMappings freezes the state-retention
-// fix. After a terminal order's drain window elapses the engine closes the
-// handle and must also drop e.orders[id] and every execDeliveries entry the
-// order owned; unrelated orders' records stay. Pre-fix those entries lived
-// until the connection ended.
-func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
+// TestTerminalOrderRemainsObservedUntilClose freezes the lossless lifecycle:
+// a terminal status is a business event, not an observation boundary. The
+// route and execution correlations remain until the caller explicitly closes
+// the handle, allowing arbitrarily late fee reports to arrive.
+func TestTerminalOrderRemainsObservedUntilClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := &engine{
 			cfg:            config{logger: slog.Default()},
@@ -173,12 +170,15 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 		defer close(e.done)
 
 		route := &orderRoute{orderID: 50, handle: newOrderHandle(50, 64)}
+		route.handle.detachFn = func() {
+			e.enqueue(func() { e.closeOrderRoute(50, route, nil) })
+		}
 		e.enqueue(func() {
 			e.orders[50] = route
 			e.execDeliveries["exec-a"] = &execDelivery{orderID: 50, delivered: &codec.CommissionReport{ExecID: "exec-a"}}
 			e.execDeliveries["exec-b"] = &execDelivery{orderID: 50}
 			e.execDeliveries["exec-other"] = &execDelivery{orderID: 99}
-			e.scheduleTerminalOrderClose(50, route)
+			e.dispatchObservedOrderStatus(codec.OrderStatus{OrderID: 50, Status: string(OrderStatusFilled)})
 		})
 		synctest.Wait()
 
@@ -195,20 +195,24 @@ func TestTerminalOrderCloseForgetsRouteAndExecMappings(t *testing.T) {
 			return <-out
 		}
 
-		// Before the drain window elapses everything is still retained.
 		if got := read(); !got.order50 || !got.execA || !got.execB {
-			t.Fatalf("route/exec mappings dropped before drain window: %+v", got)
+			t.Fatalf("route/exec mappings dropped at terminal status: %+v", got)
+		}
+		select {
+		case <-route.handle.Done():
+			t.Fatal("terminal status closed order handle")
+		default:
 		}
 
-		time.Sleep(orderTerminalDrainWindow + time.Millisecond)
+		route.handle.Close()
 		synctest.Wait()
 
 		got := read()
 		if got.order50 {
-			t.Error("e.orders[50] retained after terminal drain window")
+			t.Error("e.orders[50] retained after explicit close")
 		}
 		if got.execA || got.execB {
-			t.Errorf("order 50 exec mappings retained after terminal close: %+v", got)
+			t.Errorf("order 50 exec mappings retained after explicit close: %+v", got)
 		}
 		if !got.execOther {
 			t.Error("unrelated order's delivery record was dropped")

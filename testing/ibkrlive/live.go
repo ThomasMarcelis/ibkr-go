@@ -185,19 +185,19 @@ func DialTradingContext(t testing.TB, timeout time.Duration, extra ...ibkr.Optio
 	client, ctx, cancel := dialContext(t, cfg, timeout, extra...)
 	accounts, err := client.ManagedAccounts(ctx)
 	if err != nil {
-		_ = client.Close()
+		client.Close()
 		cancel()
 		t.Fatalf("ManagedAccounts() paper-account guard error = %v", err)
 	}
 	for _, account := range accounts {
 		if !strings.HasPrefix(account, "DU") {
-			_ = client.Close()
+			client.Close()
 			cancel()
 			t.Fatalf("paper-trading session reported non-paper account %q", account)
 		}
 	}
 	if len(accounts) == 0 {
-		_ = client.Close()
+		client.Close()
 		cancel()
 		t.Fatal("paper-trading session reported no managed accounts")
 	}

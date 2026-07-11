@@ -3,6 +3,7 @@ package ibkr
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Sentinel errors returned across the package. Match them with [errors.Is].
@@ -53,14 +54,17 @@ func (e *ProtocolError) Unwrap() error {
 	return e.Err
 }
 
-// APIError is an error code returned by TWS or IB Gateway in response to a
-// specific request. Code carries the IBKR error/warning code and Message is
-// the human-readable text sent by the server.
+// APIError is an error or notification returned by TWS or IB Gateway. RequestID
+// identifies the request when the callback is scoped; session notifications
+// commonly use zero or -1. Code and Message preserve the Gateway payload.
 type APIError struct {
-	Code          int
-	Message       string
-	OpKind        OpKind
-	ConnectionSeq uint64
+	RequestID               int
+	Code                    int
+	Message                 string
+	AdvancedOrderRejectJSON string
+	ServerTime              time.Time
+	OpKind                  OpKind
+	ConnectionSeq           uint64
 }
 
 func (e *APIError) Error() string {

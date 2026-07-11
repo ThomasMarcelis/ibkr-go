@@ -316,6 +316,9 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	// Closure shapes on the transcript disconnect: handles that reached a
 	// terminal status close clean; the fx child closed on its code-10063
 	// rejection back in the fx subtest, having emitted no business events.
+	pair.Close()
+	optionParent.Close()
+	stockParent.Close()
 	if err := pair.Wait(); err != nil {
 		t.Fatalf("pair Wait() = %v, want nil (terminal Cancelled)", err)
 	}

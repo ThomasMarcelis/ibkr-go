@@ -121,7 +121,9 @@ func liveObserveOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandl
 			t.Logf("%s open_order: orderID=%d type=%s status=%s lmt=%s qty=%s parent=%d oca=%q",
 				label, evt.OpenOrder.OrderID, evt.OpenOrder.OrderType, evt.OpenOrder.Status,
 				evt.OpenOrder.LmtPrice, evt.OpenOrder.Quantity, evt.OpenOrder.ParentID, evt.OpenOrder.OcaGroup)
-			result.lastLmtPrice = evt.OpenOrder.LmtPrice
+			if evt.OpenOrder.LmtPrice != nil {
+				result.lastLmtPrice = *evt.OpenOrder.LmtPrice
+			}
 			result.lastQuantity = evt.OpenOrder.Quantity
 		}
 		if evt.Status != nil {
@@ -585,7 +587,7 @@ func TestLiveOrderTrailingLimitRestCancel(t *testing.T) {
 	order := liveBaseOrder(account, ibkr.ActionBuy, ibkr.OrderTypeTrailingLimit)
 	order.TrailStopPrice = new(liveFarSell(anchor)) // far above market; BUY TRAIL triggers on rise, won't reach
 	order.AuxPrice = new(decimal.RequireFromString("1"))
-	order.Adjustment.LmtPriceOffset = decimal.RequireFromString("0.05")
+	order.LmtPriceOffset = new(decimal.RequireFromString("0.05"))
 
 	livePlaceAndCancel(t, ctx, client, aaplContract, order)
 }
@@ -1262,7 +1264,9 @@ func TestLiveOrderRapidModifications(t *testing.T) {
 				goto done
 			}
 			if evt.OpenOrder != nil {
-				lastSeen = evt.OpenOrder.LmtPrice
+				if evt.OpenOrder.LmtPrice != nil {
+					lastSeen = *evt.OpenOrder.LmtPrice
+				}
 				t.Logf("rapid modify OpenOrder lmt=%s", lastSeen)
 			}
 		case <-handle.Done():
@@ -1806,7 +1810,7 @@ func TestLiveOrderWhatIf(t *testing.T) {
 	}
 	t.Logf("Preview: initMarginAfter=%s maintMarginAfter=%s commission=%s min=%s max=%s currency=%s",
 		state.InitMarginAfter, state.MaintMarginAfter,
-		state.Commission, state.CommissionMin, state.CommissionMax, state.Currency)
+		state.CommissionAndFees, state.MinCommissionAndFees, state.MaxCommissionAndFees, state.CommissionAndFeesCurrency)
 	if state.InitMarginAfter.IsZero() && state.MaintMarginAfter.IsZero() {
 		t.Error("Preview returned no margin data")
 	}
@@ -2278,10 +2282,10 @@ func TestLiveFillAndImmediateFlatten(t *testing.T) {
 	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: account, Symbol: "AAPL"})
 	if err != nil {
 		t.Logf("Executions: %v (context may have expired after fills)", err)
-	} else if len(executions) < 2 {
-		t.Logf("expected >= 2 execution updates; got %d", len(executions))
+	} else if len(executions.Executions) < 2 {
+		t.Logf("expected >= 2 execution updates; got %d", len(executions.Executions))
 	} else {
-		t.Logf("execution updates: %d", len(executions))
+		t.Logf("execution updates: %d", len(executions.Executions))
 	}
 }
 
@@ -2381,7 +2385,7 @@ func TestLiveAlgorithmicCampaign(t *testing.T) {
 	if err != nil {
 		t.Logf("Executions: %v", err)
 	} else {
-		t.Logf("campaign executions: %d", len(executions))
+		t.Logf("campaign executions: %d", len(executions.Executions))
 	}
 
 	// Step 6: Flatten all. Use a fresh context since the original may be near expiry.

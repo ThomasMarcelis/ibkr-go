@@ -91,6 +91,17 @@ func TestEncodeEnvelopeExactServer201Vectors(t *testing.T) {
 	}
 }
 
+func TestEncodeClassicEnvelopeRejectsEmbeddedNUL(t *testing.T) {
+	t.Parallel()
+
+	for _, serverVersion := range []int{200, 201} {
+		_, err := EncodeClassicEnvelope(serverVersion, OutStartAPI, []string{"2", "bad\x00field"})
+		if err == nil {
+			t.Fatalf("EncodeClassicEnvelope(%d) error = nil", serverVersion)
+		}
+	}
+}
+
 func TestDecodeEnvelopeRejectsMalformedRawID(t *testing.T) {
 	t.Parallel()
 

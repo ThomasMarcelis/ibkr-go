@@ -50,6 +50,7 @@ var exerciseAAPLJun12Call2825 = ibkr.Contract{
 func requireNoMoreOrderEvents(t *testing.T, ctx context.Context, name string, handle *ibkr.OrderHandle) {
 	t.Helper()
 
+	handle.Close()
 	for {
 		select {
 		case evt, ok := <-handle.Events():
@@ -155,6 +156,7 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 	if !filled.Filled.Equal(decimal.NewFromInt(1)) || !filled.AvgFillPrice.Equal(decimal.RequireFromString("2.11")) {
 		t.Fatalf("filled status = %+v, want 1 @ 2.11", filled)
 	}
+	handle.Close()
 
 	exerciseHandle, err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{
 		Contract:         exerciseAAPLJun12Call2925,
@@ -172,9 +174,8 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 		t.Fatalf("exercise Wait() = %#v, want request-scoped code-322 refusal", refusal)
 	}
 
-	// The handle saw the terminal Filled status; no exercise reply touches it,
-	// so it closes clean (nil) on the transcript disconnect with no further
-	// business events.
+	// The handle saw the fill evidence; the caller now ends observation before
+	// checking that no exercise reply was misrouted to the order.
 	requireNoMoreOrderEvents(t, ctx, "exercise buy", handle)
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("handle.Wait() = %v, want nil (terminal Filled before disconnect)", err)
@@ -239,6 +240,7 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	if !filled.AvgFillPrice.Equal(decimal.RequireFromString("8.9")) {
 		t.Fatalf("filled avg = %s, want 8.90", filled.AvgFillPrice)
 	}
+	handle.Close()
 
 	exerciseHandle, err := client.Options().Exercise(ctx, ibkr.ExerciseOptionsRequest{
 		Contract:         exerciseAAPLJun12Call2825,

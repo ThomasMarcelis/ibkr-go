@@ -87,6 +87,7 @@ type Event struct {
 	Code          int       // IBKR notification code when the transition carries one, else 0
 	Message       string    // human-readable detail, may be empty
 	Err           error     // non-nil when the transition was caused by an error
+	APIError      *APIError // full Gateway error payload when this is an API notification
 }
 
 // Snapshot is a point-in-time view of the session, returned by [Client.Session].

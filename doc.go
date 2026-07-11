@@ -148,7 +148,7 @@
 //	if err != nil {
 //	    return err
 //	}
-//	fmt.Println(state.InitMarginAfter, state.Commission)
+//	fmt.Println(state.InitMarginAfter, state.CommissionAndFees)
 //
 // The what-if flag is operation-owned: previews go through Preview, while
 // Place and [OrderHandle.Replace] always submit live orders.

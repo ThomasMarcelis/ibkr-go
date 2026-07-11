@@ -139,14 +139,14 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 	return out.article, out.err
 }
 
-func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) ([]HistoricalNewsItem, error) {
+func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) (HistoricalNewsResult, error) {
 	if err := validateHistoricalNewsRequest(req); err != nil {
-		return nil, err
+		return HistoricalNewsResult{}, err
 	}
 	providerCodes := formatProviderCodes(req.ProviderCodes)
 	type result struct {
-		items []HistoricalNewsItem
-		err   error
+		page HistoricalNewsResult
+		err  error
 	}
 	resp := make(chan result, 1)
 	var reqID int
@@ -169,7 +169,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 					})
 				case codec.HistoricalNewsEnd:
 					e.deleteKeyedRoute(reqID)
-					resp <- result{items: collected}
+					resp <- result{page: HistoricalNewsResult{Items: collected, HasMore: m.HasMore}}
 				}
 			}, func(err error) {
 				resp <- result{err: err}
@@ -187,9 +187,9 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
 	})
 	if err != nil {
-		return nil, err
+		return HistoricalNewsResult{}, err
 	}
-	return out.items, out.err
+	return out.page, out.err
 }
 
 func parseHistoricalNewsTime(raw string) (time.Time, error) {

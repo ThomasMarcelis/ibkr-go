@@ -55,11 +55,21 @@ func TestOrderLifecycleServer203Replay(t *testing.T) {
 	if err := handle.Cancel(ctx); err != nil {
 		t.Fatalf("Cancel() error = %v", err)
 	}
-	select {
-	case <-handle.Done():
-	case <-ctx.Done():
-		t.Fatalf("waiting for cancellation: %v", ctx.Err())
+	for {
+		select {
+		case event := <-handle.Events():
+			if event.Status != nil && ibkr.IsTerminalOrderStatus(event.Status.Status) {
+				handle.Close()
+				if err := handle.Wait(); err != nil {
+					t.Fatalf("Close/Wait() error = %v", err)
+				}
+				goto canceled
+			}
+		case <-ctx.Done():
+			t.Fatalf("waiting for cancellation: %v", ctx.Err())
+		}
 	}
+canceled:
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll() error = %v", err)
 	}

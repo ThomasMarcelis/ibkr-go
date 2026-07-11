@@ -4,9 +4,35 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## [Unreleased]
+## v1.6.0 — 2026-07-11
 
 ### Added
+
+- `MarketData().RegulatorySnapshot` sends IBKR's fee-bearing regulatory
+  snapshot request in both classic and protobuf market-data layouts and
+  completes on the normal snapshot-end callback. Calling it may incur an IBKR
+  fee; ordinary `Quote` behavior is unchanged.
+
+- Auto-open-order subscriptions expose classic and protobuf `orderBound`
+  callbacks as `OpenOrderUpdate.Binding`. The decoder and client-0 routing are
+  implemented from the official schema; raw paper-TWS capture evidence remains
+  an explicit release-candidate validation item.
+
+- What-if previews now retain the complete Gateway `OrderState`: status,
+  margin currency, the nine outside-RTH margin fields, suggested size, reject
+  reason, and allocation results in addition to the existing margin and
+  commission-and-fees values.
+
+- `Orders().SubscribeExecutions` exposes executions and independently arriving
+  commission-and-fees reports as one typed update stream. It remains open after
+  the execution-details end marker so callers can observe late or revised fee
+  reports. `Orders().Executions` returns an `ExecutionSnapshot` containing both
+  result families observed through that boundary.
+
+- Session `Event` values carry the complete typed `APIError` when the event
+  originated from a Gateway error or notification, preserving request ID,
+  server timestamp, and advanced-order-reject JSON instead of flattening them
+  to code and message.
 
 - `AccountUpdatesMultiRequest.LedgerAndNLV` exposes the official multi-account
   request switch instead of forcing it on for every caller.
@@ -102,17 +128,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   Pre-200 compatibility branches and unimplemented post-207 migration claims
   have been removed.
 
-- `Subscription.Close` and `OrderHandle.Close` no longer return a redundant
-  error; terminal observation errors remain available through `Wait` and
-  `Err`. `OrderHandle.Modify` is now `OrderHandle.Replace`.
+- `Client.Close`, `Subscription.Close`, and `OrderHandle.Close` no longer
+  return a redundant error; terminal observation errors remain available
+  through `Wait` and `Err`. `OrderHandle.Modify` is now
+  `OrderHandle.Replace`.
 
 - Account-summary and position subscriptions emit `AccountValue` and
   `Position` directly. Optional monetary outputs and optional order inputs use
   pointers so absence is distinct from literal zero.
 
-- `Orders().Executions` returns executions only. Commission callbacks remain
-  correlated to `OrderHandle` events. `Options().Exercise` now returns an
-  `ExerciseHandle`, and the unsupported FA configuration mutation was removed.
+- Order handles no longer auto-close on Filled, Cancelled, ApiCancelled, or
+  Inactive. Those statuses do not bound IBKR's late execution and fee
+  callbacks. Callers now close the handle explicitly after collecting the
+  evidence they need; errors, disconnects, and slow-consumer failures still
+  close it terminally.
+
+- `Orders().Executions` returns `ExecutionSnapshot` instead of an
+  execution-only slice. `HistoricalNews` returns
+  `HistoricalNewsResult{Items, HasMore}` so pagination is no longer discarded.
+  `Options().Exercise` now returns an `ExerciseHandle`, and the unsupported FA
+  configuration mutation was removed.
+
+- `OpenOrder.LmtPrice` and `OpenOrder.AuxPrice` are presence-aware decimal
+  pointers. `LmtPriceOffset` now belongs to `Order`, matching its real wire
+  ownership, rather than `OrderAdjustment`.
+
+- WSH one-shots require valid non-empty JSON, deep-copy caller filters before
+  actor transfer, and send their protocol cancellation when the context ends.
+  FA configuration reads accept only the supported Groups and Aliases types.
+
+- Empty outbound frames, frames over 64 MiB, and classic fields containing an
+  embedded NUL are rejected before transport admission. Automatic reconnect
+  resume now drains an arbitrarily large route set in stable request order
+  instead of turning local queue saturation into route failure.
 
 - **The legacy `ibkr-probe` diagnostic command has been removed.** Maintained
   workflows use `ibkr-doctor` for session diagnostics and
@@ -263,9 +311,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   err := handle.Wait() // nil (or the real terminal status/error)
   ```
 
-- **`Buy`/`Sell` renamed to `ActionBuy`/`ActionSell`.** The old names remain
-  as deprecated aliases (`Buy = ActionBuy`, `Sell = ActionSell`) for one
-  release and are removed in the next.
+- **`Buy`/`Sell` renamed to `ActionBuy`/`ActionSell`.** The old aliases are
+  removed in this clean-break release.
 
   ```go
   // Before
@@ -361,15 +408,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `Closed` lifecycle event retain both `ErrSlowConsumer` and
   `*SubscriptionCancelError`; successful cancellation admission or a dead
   transport still returns exactly `ErrSlowConsumer`, as does any ordinary
-  teardown that wins the terminal-close race. Actor-owned overflow cancellation
+  teardown that wins the close race. Actor-owned overflow cancellation
   executes directly, so a full engine command queue cannot deadlock shutdown.
 
 - **Code 161 no longer turns a successful terminal order into a handle
   error.** "Cancel attempted when order is not in a cancellable state" is a
   cancellation reply, like code 202, rather than a placement rejection. It
   now surfaces on `SessionEvents()` while the real `OrderStatus` remains
-  authoritative. This also preserves late executions and commissions inside
-  the terminal drain window.
+  authoritative. The explicit caller-owned observation window preserves late
+  executions and commissions after that status.
 - **Order placement now transfers ownership at transport-queue admission.** An
   admitted `Orders().Place` or complete `Orders().PlaceBracket` returns its
   handle result even when caller cancellation or engine shutdown races with
@@ -392,8 +439,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   the order handle.** The Gateway can deliver `commission_report` before the
   `execution_detail` it belongs to; previously the handle leg dropped it with
   no owner and nothing re-triggered delivery. It is now buffered and flushed
-  when the execution claims the ExecID (unclaimed buffers evict after the
-  drain window).
+  when the execution claims the ExecID (unclaimed buffers evict after a bounded
+  correlation window).
 - **A re-sent commission report with changed content reaches the order
   handle.** The snapshot-replay dedupe now compares content instead of ExecID
   presence, so an identical replay is still dropped but a report the Gateway
@@ -401,8 +448,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   delivered.
 - **Rejected orders no longer retain their routes until reconnect.** A
   terminal placement rejection, a decode failure, or a slow-consumer close
-  now tears down the order route and its execution correlations the same way
-  the post-fill drain window does.
+  now tears down the order route and its execution correlations immediately.
 - **`Options().Exercise` now registers a keyed route for its request id.**
   Exercise is fire-and-forget on the wire, but its request-id-targeted replies
   (refusals like 322, the 10349 TIF-preset acknowledgement, the 202 that
@@ -477,8 +523,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 Every breaking change in this release, before → after:
 
-- **Actions.** `Buy`/`Sell` → `ActionBuy`/`ActionSell` (old names are
-  deprecated aliases, removed next release).
+- **Actions.** `Buy`/`Sell` → `ActionBuy`/`ActionSell`; the old aliases are
+  removed.
 
   ```go
   Order{Action: ibkr.Buy}    // before

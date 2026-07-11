@@ -159,6 +159,12 @@ func Example_placeOrder() {
 	if err := handle.Cancel(ctx); err != nil {
 		panic(err)
 	}
+	for event := range handle.Events() {
+		if event.Status != nil && event.Status.Status == ibkr.OrderStatusCancelled {
+			handle.Close()
+			break
+		}
+	}
 	if err := handle.Wait(); err != nil {
 		panic(err)
 	}
@@ -342,12 +348,12 @@ func exampleClient(transcript string) (*ibkr.Client, func()) {
 
 	cleanup := func() {
 		if err := host.Wait(); err != nil {
-			_ = client.Close()
+			client.Close()
 			cancel()
 			_ = host.Close()
 			panic(err)
 		}
-		_ = client.Close()
+		client.Close()
 		cancel()
 		_ = host.Close()
 	}

@@ -3,6 +3,7 @@ package ibkr_test
 import (
 	"context"
 	"errors"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -304,6 +305,30 @@ func TestLiveQuoteSnapshot(t *testing.T) {
 		quote.Available, quote.Bid, quote.Ask, quote.Last)
 }
 
+func TestLiveRegulatorySnapshot(t *testing.T) {
+	if os.Getenv("IBKR_LIVE_REGULATORY_SNAPSHOT") != "1" {
+		t.Skip("set IBKR_LIVE_REGULATORY_SNAPSHOT=1 only after authorizing the fee-bearing request")
+	}
+	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancelReq()
+	details, err := client.Contracts().Qualify(ctx, aaplContract)
+	if err != nil {
+		t.Fatalf("Qualify(AAPL) error = %v", err)
+	}
+	quote, err := client.MarketData().RegulatorySnapshot(ctx, details.Contract)
+	if err != nil {
+		t.Fatalf("RegulatorySnapshot() error = %v", err)
+	}
+	if quote.Available == 0 {
+		t.Fatal("RegulatorySnapshot() returned no available quote fields")
+	}
+	t.Logf("RegulatorySnapshot: Available=%d Bid=%s Ask=%s Last=%s", quote.Available, quote.Bid, quote.Ask, quote.Last)
+}
+
 func TestLiveOpenOrders(t *testing.T) {
 	t.Parallel()
 
@@ -362,7 +387,7 @@ func TestLiveExecutions(t *testing.T) {
 		t.Logf("Executions() returned: %v (acceptable for read-only/empty accounts)", err)
 		return
 	}
-	t.Logf("Executions: %d rows", len(executions))
+	t.Logf("Executions: %d rows", len(executions.Executions))
 }
 
 func TestLiveSubscribeAccountSummary(t *testing.T) {
@@ -778,7 +803,7 @@ func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("executions after split buys: %v", err)
 	}
-	if len(executions) == 0 {
+	if len(executions.Executions) == 0 {
 		t.Fatal("executions after split buys = 0, want at least one execution/commission update")
 	}
 
@@ -954,15 +979,15 @@ func TestLiveHistoricalNews(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HistoricalNews() error = %v", err)
 	}
-	if len(items) == 0 {
+	if len(items.Items) == 0 {
 		t.Fatal("HistoricalNews() returned 0 items")
 	}
-	for _, item := range items {
+	for _, item := range items.Items {
 		if item.Time.Before(lowerBound) {
 			t.Fatalf("HistoricalNews() item %s is before lower bound %s", item.Time, lowerBound)
 		}
 	}
-	t.Logf("HistoricalNews: %d items", len(items))
+	t.Logf("HistoricalNews: %d items (has_more=%t)", len(items.Items), items.HasMore)
 }
 
 func TestLiveMatchingSymbols(t *testing.T) {
@@ -1383,7 +1408,7 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 		},
 	})
 	if err != nil {
-		_ = placer.Close()
+		placer.Close()
 		t.Fatalf("PlaceOrder: %v", err)
 	}
 	orderID := handle.OrderID()
@@ -1399,11 +1424,11 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 				resting = true
 			}
 		case <-ctx.Done():
-			_ = placer.Close()
+			placer.Close()
 			t.Fatal("timeout waiting for resting status")
 		}
 	}
-	_ = placer.Close()
+	placer.Close()
 	// Release the shared live-session slot before dialing the observer leg.
 	cancelPlacer()
 

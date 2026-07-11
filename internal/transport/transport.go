@@ -33,6 +33,7 @@ type Conn struct {
 	logger    *slog.Logger
 	sendRate  int
 	incoming  chan []byte
+	writable  chan struct{}
 	done      chan struct{}
 	closeOnce sync.Once
 	closeErr  error
@@ -69,6 +70,7 @@ func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 		logger:   logger,
 		sendRate: sendRate,
 		incoming: make(chan []byte, 64),
+		writable: make(chan struct{}, 1),
 		done:     make(chan struct{}),
 	}
 	c.queueCond = sync.NewCond(&c.queueMu)
@@ -85,9 +87,20 @@ func (c *Conn) Done() <-chan struct{} {
 	return c.done
 }
 
+// Writable is signaled whenever the writer removes an item from the bounded
+// outbound queue. A caller that received ErrSendQueueFull can wait for this
+// edge and retry admission without polling.
+func (c *Conn) Writable() <-chan struct{} { return c.writable }
+
 func (c *Conn) Send(ctx context.Context, payload []byte) error {
 	if ctx == nil {
 		ctx = context.Background()
+	}
+	if len(payload) == 0 {
+		return wire.ErrEmptyMessage
+	}
+	if len(payload) > wire.MaxFrameSize {
+		return wire.ErrFrameTooLarge
 	}
 	copyPayload := append([]byte(nil), payload...)
 
@@ -180,6 +193,10 @@ func (c *Conn) writeLoop() {
 		payload := c.outgoing[0]
 		c.outgoing[0] = nil
 		c.outgoing = c.outgoing[1:]
+		select {
+		case c.writable <- struct{}{}:
+		default:
+		}
 		c.queueMu.Unlock()
 
 		if ticker != nil {

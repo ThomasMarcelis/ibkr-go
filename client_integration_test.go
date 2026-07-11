@@ -905,12 +905,15 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(executions) != 15 {
-		t.Fatalf("executions len = %d, want 15", len(executions))
+	if len(executions.Executions) != 15 {
+		t.Fatalf("executions len = %d, want 15", len(executions.Executions))
+	}
+	if len(executions.CommissionAndFees) != 14 {
+		t.Fatalf("commission-and-fees len = %d, want 14 live-captured reports", len(executions.CommissionAndFees))
 	}
 
-	executionIDs := make([]string, len(executions))
-	for i, execution := range executions {
+	executionIDs := make([]string, len(executions.Executions))
+	for i, execution := range executions.Executions {
 		executionIDs[i] = execution.ExecID
 	}
 	wantExecutionIDs := []string{
@@ -924,7 +927,7 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	if !reflect.DeepEqual(executionIDs, wantExecutionIDs) {
 		t.Fatalf("execution IDs = %v, want %v", executionIDs, wantExecutionIDs)
 	}
-	first := executions[0]
+	first := executions.Executions[0]
 	if first.Price.String() != "292.76" || first.Shares.String() != "1" {
 		t.Fatalf("first execution price/shares = %s/%s, want 292.76/1", first.Price, first.Shares)
 	}
@@ -975,7 +978,7 @@ func TestExecutionsPartitionConcurrentQueries(t *testing.T) {
 			errCh <- err
 			return
 		}
-		buyCh <- updates
+		buyCh <- updates.Executions
 	}()
 	time.Sleep(10 * time.Millisecond)
 	go func() {
@@ -988,7 +991,7 @@ func TestExecutionsPartitionConcurrentQueries(t *testing.T) {
 			errCh <- err
 			return
 		}
-		sellCh <- updates
+		sellCh <- updates.Executions
 	}()
 
 	var buyExecutions []ibkr.Execution
@@ -1039,7 +1042,7 @@ func TestExecutionsDeliverOverlappingQueryResults(t *testing.T) {
 			errCh <- err
 			return
 		}
-		allCh <- updates
+		allCh <- updates.Executions
 	}()
 	time.Sleep(10 * time.Millisecond)
 	go func() {
@@ -1052,7 +1055,7 @@ func TestExecutionsDeliverOverlappingQueryResults(t *testing.T) {
 			errCh <- err
 			return
 		}
-		sellCh <- updates
+		sellCh <- updates.Executions
 	}()
 
 	var allExecutions []ibkr.Execution
@@ -1683,16 +1686,16 @@ func TestNewsArticle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Historical() error = %v", err)
 	}
-	if len(items) != 5 {
-		t.Fatalf("historical items = %d, want 5", len(items))
+	if len(items.Items) != 5 {
+		t.Fatalf("historical items = %d, want 5", len(items.Items))
 	}
-	if items[0].ProviderCode != "BRFG" || items[0].ArticleID != "BRFG$1e4f0994" {
-		t.Fatalf("first historical item = %+v", items[0])
+	if items.Items[0].ProviderCode != "BRFG" || items.Items[0].ArticleID != "BRFG$1e4f0994" {
+		t.Fatalf("first historical item = %+v", items.Items[0])
 	}
 
 	article, err := client.News().Article(ctx, ibkr.NewsArticleRequest{
-		ProviderCode: items[0].ProviderCode,
-		ArticleID:    items[0].ArticleID,
+		ProviderCode: items.Items[0].ProviderCode,
+		ArticleID:    items.Items[0].ArticleID,
 	})
 	if err != nil {
 		t.Fatalf("Article() error = %v", err)
@@ -1726,13 +1729,13 @@ func TestHistoricalNews(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HistoricalNews() error = %v", err)
 	}
-	if len(items) != 2 {
-		t.Fatalf("items len = %d, want 2", len(items))
+	if len(items.Items) != 2 {
+		t.Fatalf("items len = %d, want 2", len(items.Items))
 	}
-	if !items[0].Time.Equal(time.Date(2026, 5, 1, 14, 27, 6, 0, time.UTC)) || items[0].ProviderCode != "BRFG" {
-		t.Fatalf("first item = %+v", items[0])
+	if !items.Items[0].Time.Equal(time.Date(2026, 5, 1, 14, 27, 6, 0, time.UTC)) || items.Items[0].ProviderCode != "BRFG" {
+		t.Fatalf("first item = %+v", items.Items[0])
 	}
-	for _, item := range items {
+	for _, item := range items.Items {
 		if item.Time.Before(lowerBound) {
 			t.Fatalf("item %s is before lower bound %s", item.Time, lowerBound)
 		}
@@ -1853,6 +1856,9 @@ func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
 			if evt.CommissionAndFees != nil {
 				commission = evt.CommissionAndFees
 			}
+			if sawFilled && execution != nil && commission != nil {
+				goto done
+			}
 		case <-ctx.Done():
 			t.Fatal("timeout waiting for native execution-time order events")
 		}
@@ -1883,6 +1889,7 @@ done:
 	if commission.ExecID != execution.ExecID {
 		t.Fatalf("Commission.ExecID = %q, want %q", commission.ExecID, execution.ExecID)
 	}
+	handle.Close()
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("handle.Wait() error = %v", err)
 	}
@@ -1979,19 +1986,13 @@ directCancelDone:
 	if !sawCancelled {
 		t.Fatal("never received Cancelled status event after direct-by-ID cancel")
 	}
+	handle.Close()
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
 	notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 	if notice.Message != "Order Canceled - reason:" {
 		t.Fatalf("code-202 message = %q, want %q", notice.Message, "Order Canceled - reason:")
-	}
-
-	select {
-	case <-handle.Done():
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for handle to close after direct-by-ID cancel")
-	}
-
-	if err := handle.Wait(); err != nil {
-		t.Fatalf("handle.Wait() error = %v", err)
 	}
 }
 
@@ -2040,7 +2041,8 @@ func TestAPIOrderRestCancelAAPL(t *testing.T) {
 	// Drain until Cancelled; a following code 202 cancellation notice must not
 	// convert a successful terminal status into handle error.
 	var sawPendingCancel, sawCancelled bool
-	for evt := range handle.Events() {
+	for !sawCancelled {
+		evt := waitForEvent(t, handle.Events())
 		if evt.Status != nil {
 			switch evt.Status.Status {
 			case ibkr.OrderStatusPendingCancel:
@@ -2050,6 +2052,7 @@ func TestAPIOrderRestCancelAAPL(t *testing.T) {
 			}
 		}
 	}
+	handle.Close()
 	if !sawPendingCancel {
 		t.Error("expected PendingCancel status before Cancelled")
 	}
@@ -2749,6 +2752,9 @@ func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
 			if evt.CommissionAndFees != nil {
 				sawCommission = true
 			}
+			if sawFilled && sawExecution && sawCommission {
+				goto done
+			}
 		case <-handle.Done():
 			for {
 				select {
@@ -2784,6 +2790,7 @@ done:
 	if !sawCommission {
 		t.Fatal("never received late commission after Filled")
 	}
+	handle.Close()
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("handle.Wait() error = %v", err)
 	}
@@ -2892,6 +2899,7 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 	if !hasOrderStatus(fokMarketableStatuses, ibkr.OrderStatusInactive) {
 		t.Fatalf("FOK marketable statuses = %v, want Inactive from live capture", fokMarketableStatuses)
 	}
+	fokMarketable.Close()
 
 	fokFar, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -2917,6 +2925,7 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 	if !hasOrderStatus(fokFarStatuses, ibkr.OrderStatusInactive) {
 		t.Fatalf("FOK far statuses = %v, want Inactive from live capture", fokFarStatuses)
 	}
+	fokFar.Close()
 }
 
 func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
@@ -2997,6 +3006,9 @@ func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
 			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
 				sawFilled = true
 			}
+			if sawExecution && sawFilled {
+				goto trailingDone
+			}
 		case <-trailing.Done():
 			for {
 				select {
@@ -3026,6 +3038,7 @@ trailingDone:
 	if !sawFilled {
 		t.Fatal("never received trailing-percent Filled status from live capture")
 	}
+	trailing.Close()
 	if err := trailing.Wait(); err != nil {
 		t.Fatalf("TrailingPercent Wait: %v", err)
 	}
@@ -3877,7 +3890,7 @@ func TestAPIReconnectActiveOrderAAPLReplay(t *testing.T) {
 		t.Fatalf("first Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	_ = first.Close()
+	first.Close()
 
 	second := dialHostClient(t, host, ibkr.WithClientID(1))
 	defer second.Close()
@@ -3983,7 +3996,7 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	_ = placer.Close()
+	placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(0))
 	defer observer.Close()
@@ -4035,7 +4048,7 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	_ = placer.Close()
+	placer.Close()
 
 	canceller := dialHostClient(t, host, ibkr.WithClientID(2))
 	defer canceller.Close()
@@ -4094,7 +4107,7 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-	_ = placer.Close()
+	placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(1))
 	defer observer.Close()
@@ -4335,7 +4348,7 @@ func TestOpenOrdersSnapshotSkipsPairedStatuses(t *testing.T) {
 		t.Fatalf("placer Place: %v", err)
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-	_ = placer.Close()
+	placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(1))
 	defer observer.Close()
@@ -4407,6 +4420,9 @@ func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 func waitForOrderStatus(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle, want ibkr.OrderStatus) {
 	t.Helper()
 	waitOrderStatusUpdate(t, ctx, handle, want)
+	if ibkr.IsTerminalOrderStatus(want) && want != ibkr.OrderStatusInactive {
+		handle.Close()
+	}
 }
 
 func waitForOpenOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) ibkr.OpenOrder {
@@ -4458,6 +4474,10 @@ func waitOrderFillAndExecution(t *testing.T, ctx context.Context, handle *ibkr.O
 			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
 				filled = true
 			}
+			if filled && execution {
+				handle.Close()
+				return filled, execution
+			}
 		case <-handle.Done():
 			for {
 				select {
@@ -4493,6 +4513,12 @@ func waitOrderStatuses(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 			}
 			if evt.Status != nil {
 				statuses = append(statuses, evt.Status.Status)
+				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
+					if evt.Status.Status != ibkr.OrderStatusInactive {
+						handle.Close()
+					}
+					return statuses
+				}
 			}
 		case <-handle.Done():
 			for {

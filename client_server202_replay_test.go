@@ -26,10 +26,10 @@ func TestExecutionsZeroStrikeServer202Replay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Executions() error = %v", err)
 	}
-	if len(executions) != 1 {
+	if len(executions.Executions) != 1 {
 		t.Fatalf("Executions() = %+v, want one live execution", executions)
 	}
-	execution := executions[0]
+	execution := executions.Executions[0]
 	if execution.Contract.ConID != 265598 || execution.Contract.Strike == nil || !execution.Contract.Strike.IsZero() {
 		t.Fatalf("Contract = %+v, want conId 265598 with zero strike", execution.Contract)
 	}

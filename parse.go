@@ -15,7 +15,10 @@ import (
 // option-computation Greeks, and tick-by-tick fields when the value is unknown.
 // The Go client itself emits the empty-string form via WriteMaxFloat, so the
 // receive path must accept both.
-const maxDoubleSentinel = "1.7976931348623157E308"
+const (
+	maxDoubleSentinel    = "1.7976931348623157E308"
+	unsetDecimalSentinel = "-9223372036854775808"
+)
 
 func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
 	value, err := decimal.NewFromString(raw)
@@ -27,7 +30,7 @@ func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
 
 func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) {
+	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) || trimmed == unsetDecimalSentinel {
 		return decimal.Decimal{}, nil
 	}
 	value, err := decimal.NewFromString(trimmed)
@@ -39,7 +42,7 @@ func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 
 func parseOptionalDecimalPointer(raw string, field string) (*decimal.Decimal, error) {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) {
+	if trimmed == "" || strings.EqualFold(trimmed, maxDoubleSentinel) || trimmed == unsetDecimalSentinel {
 		return nil, nil
 	}
 	value, err := decimal.NewFromString(trimmed)
@@ -104,4 +107,15 @@ func parseOptionalBoolString(raw string, field string) (bool, error) {
 	default:
 		return false, fmt.Errorf("ibkr: %s: parse bool %q", field, raw)
 	}
+}
+
+func parseOptionalBoolPointer(raw string, field string) (*bool, error) {
+	if strings.TrimSpace(raw) == "" {
+		return nil, nil
+	}
+	value, err := parseOptionalBoolString(raw, field)
+	if err != nil {
+		return nil, err
+	}
+	return new(value), nil
 }

@@ -30,7 +30,7 @@ func DialContext(ctx context.Context, opts ...Option) (*Client, error) {
 // Close initiates shutdown of the client and its connection. It is idempotent.
 // Active operations terminate with [ErrClosed], while [Client.Wait] returns nil
 // after this intentional shutdown.
-func (c *Client) Close() error { return c.engine.Close() }
+func (c *Client) Close() { c.engine.Close() }
 
 // Done returns a channel closed when the client has terminated.
 func (c *Client) Done() <-chan struct{} { return c.engine.Done() }
@@ -224,6 +224,13 @@ func (c MarketDataClient) Quote(ctx context.Context, req QuoteRequest) (Quote, e
 	return c.engine.QuoteSnapshot(ctx, req)
 }
 
+// RegulatorySnapshot requests IBKR's fee-bearing US regulatory snapshot for
+// contract. IBKR bills eligible requests individually and completes the call
+// only when tickSnapshotEnd arrives.
+func (c MarketDataClient) RegulatorySnapshot(ctx context.Context, contract Contract) (Quote, error) {
+	return c.engine.RegulatorySnapshot(ctx, contract)
+}
+
 // SubscribeQuotes streams quote updates for a contract.
 func (c MarketDataClient) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
 	return c.engine.SubscribeQuotes(ctx, req, opts...)
@@ -373,11 +380,18 @@ func (c OrdersClient) Completed(ctx context.Context, apiOnly bool) ([]CompletedO
 	return c.engine.CompletedOrders(ctx, apiOnly)
 }
 
-// Executions returns trade executions visible to this API session that match
-// req. It completes when IBKR sends the execution-details end marker. Cost
-// reports are independently timed and remain available on active order handles.
-func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) ([]Execution, error) {
+// Executions returns executions and the commission-and-fee reports observed by
+// the execution-details end marker. IBKR can send additional fee reports after
+// that boundary; use SubscribeExecutions when those late reports matter.
+func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) (ExecutionSnapshot, error) {
 	return c.engine.Executions(ctx, req)
+}
+
+// SubscribeExecutions streams executions and their separate commission-and-fee
+// callbacks. SnapshotComplete marks executionsEnd; the stream remains open for
+// late fee reports until Close is called.
+func (c OrdersClient) SubscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
+	return c.engine.subscribeExecutions(ctx, req, opts...)
 }
 
 // OptionsClient groups option pricing, implied-volatility, and exercise
@@ -419,8 +433,9 @@ func (c NewsClient) Article(ctx context.Context, req NewsArticleRequest) (NewsAr
 	return c.engine.NewsArticle(ctx, req)
 }
 
-// Historical returns historical news headlines for a contract.
-func (c NewsClient) Historical(ctx context.Context, req HistoricalNewsRequest) ([]HistoricalNewsItem, error) {
+// Historical returns one page of historical headlines and the Gateway's
+// pagination signal.
+func (c NewsClient) Historical(ctx context.Context, req HistoricalNewsRequest) (HistoricalNewsResult, error) {
 	return c.engine.HistoricalNews(ctx, req)
 }
 

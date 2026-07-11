@@ -180,7 +180,7 @@ func newRunningEngineForOrderHandleTest(t *testing.T) *engine {
 	go e.run()
 
 	t.Cleanup(func() {
-		_ = e.Close()
+		e.Close()
 		synctest.Wait()
 		select {
 		case <-e.Done():

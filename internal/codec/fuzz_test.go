@@ -99,6 +99,7 @@ var allInboundMsgIDs = []int{
 	protocol.InHistoricalTicksBidAsk, // 97
 	protocol.InHistoricalTicksLast,   // 98
 	protocol.InTickByTick,            // 99
+	protocol.InOrderBound,            // 100
 	protocol.InCompletedOrder,        // 101
 	protocol.InCompletedOrderEnd,     // 102
 	protocol.InUserInfo,              // 107

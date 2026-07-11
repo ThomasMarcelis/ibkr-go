@@ -2,7 +2,12 @@ package ibkr
 
 import (
 	"context"
+	"errors"
+	"sort"
 	"time"
+
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 )
 
 func (e *engine) handleTransportLoss(loss transportLoss) {
@@ -147,48 +152,30 @@ func (e *engine) dropLostRoutes() {
 }
 
 func (e *engine) resumeRoutes() {
+	e.resumePending = e.resumePending[:0]
+	e.resumeWaiting = false
+	reqIDs := make([]int, 0, len(e.keyed))
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
-			wasGapped := route.gapped
-			if route.validateResume != nil {
-				if err := route.validateResume(e); err != nil {
-					route.close(err)
-					e.deleteKeyedRoute(reqID)
-					continue
-				}
-			}
-			if err := e.send(route.request); err != nil {
-				route.close(err)
-				e.deleteKeyedRoute(reqID)
-				continue
-			}
-			if wasGapped && route.emitResumed != nil {
-				route.emitResumed(e)
-			}
-			route.gapped = false
+			reqIDs = append(reqIDs, reqID)
 		}
 	}
+	sort.Ints(reqIDs)
+	for _, reqID := range reqIDs {
+		e.resumePending = append(e.resumePending, resumeRoute{reqID: reqID, route: e.keyed[reqID]})
+	}
+	keys := make([]string, 0, len(e.singletons))
 	for key, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto {
-			wasGapped := route.gapped
-			if route.validateResume != nil {
-				if err := route.validateResume(e); err != nil {
-					route.close(err)
-					delete(e.singletons, key)
-					continue
-				}
-			}
-			if err := e.send(route.request); err != nil {
-				route.close(err)
-				delete(e.singletons, key)
-				continue
-			}
-			if wasGapped && route.emitResumed != nil {
-				route.emitResumed(e)
-			}
-			route.gapped = false
+			keys = append(keys, key)
 		}
 	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		e.resumePending = append(e.resumePending, resumeRoute{key: key, route: e.singletons[key]})
+	}
+	e.continueResumeRoutes()
+
 	// Emit Resumed to all active order handles after reconnect.
 	for _, or := range e.orders {
 		if !or.closed && or.gapped {
@@ -196,6 +183,77 @@ func (e *engine) resumeRoutes() {
 			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
 		}
 	}
+}
+
+func (e *engine) continueResumeRoutes() {
+	for len(e.resumePending) > 0 {
+		pending := e.resumePending[0]
+		if pending.reqID != 0 {
+			if e.keyed[pending.reqID] != pending.route {
+				e.resumePending = e.resumePending[1:]
+				continue
+			}
+		} else if e.singletons[pending.key] != pending.route {
+			e.resumePending = e.resumePending[1:]
+			continue
+		}
+
+		route := pending.route
+		if route.validateResume != nil {
+			if err := route.validateResume(e); err != nil {
+				e.dropResumeRoute(pending, err)
+				e.resumePending = e.resumePending[1:]
+				continue
+			}
+		}
+		payload, err := codec.Encode(e.serverVersion, route.request)
+		if err == nil {
+			err = e.transport.Send(context.Background(), payload)
+		}
+		if errors.Is(err, transport.ErrSendQueueFull) {
+			e.waitForResumeCapacity(e.transport)
+			return
+		}
+		if err != nil {
+			e.dropResumeRoute(pending, err)
+			e.resumePending = e.resumePending[1:]
+			continue
+		}
+		e.resumePending = e.resumePending[1:]
+		if route.gapped && route.emitResumed != nil {
+			route.emitResumed(e)
+		}
+		route.gapped = false
+	}
+}
+
+func (e *engine) waitForResumeCapacity(tr *transport.Conn) {
+	if e.resumeWaiting {
+		return
+	}
+	e.resumeWaiting = true
+	go func() {
+		select {
+		case <-tr.Writable():
+			e.enqueue(func() {
+				if e.transport != tr {
+					return
+				}
+				e.resumeWaiting = false
+				e.continueResumeRoutes()
+			})
+		case <-tr.Done():
+		}
+	}()
+}
+
+func (e *engine) dropResumeRoute(pending resumeRoute, err error) {
+	pending.route.close(err)
+	if pending.reqID != 0 {
+		e.deleteKeyedRoute(pending.reqID)
+		return
+	}
+	delete(e.singletons, pending.key)
 }
 
 // closeEngine terminates active work with err and records waitErr as the
@@ -229,16 +287,7 @@ func (e *engine) closeEngine(err, waitErr error) {
 	for id, or := range e.orders {
 		if !or.closed {
 			or.closed = true
-			// Terminal order status is authoritative for the handle's close (see
-			// docs/session-contract.md, "OrderHandle"). Session-level transport and
-			// reconnect errors stay observable via SessionEvents() and Client.Wait()
-			// and must not bleed into per-order Wait() once the order reached a
-			// terminal business state (see "Completion and Reconnect").
-			orderErr := err
-			if or.terminalCloseSeq > 0 {
-				orderErr = nil
-			}
-			or.handle.closeWithErr(orderErr)
+			or.handle.closeWithErr(err)
 		}
 		delete(e.orders, id)
 	}

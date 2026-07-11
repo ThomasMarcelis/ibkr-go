@@ -44,7 +44,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, client.Close()) }()
+	defer client.Close()
 
 	account, err := exampleutil.PaperAccount(client.Session().ManagedAccounts)
 	if err != nil {

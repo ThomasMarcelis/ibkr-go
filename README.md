@@ -16,7 +16,7 @@ client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4
 if err != nil {
     return err
 }
-defer func() { _ = client.Close() }()
+defer client.Close()
 
 // one-shot — typed result, blocks until done
 positions, err := client.Accounts().Positions(ctx)
@@ -32,7 +32,7 @@ sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 if err != nil {
     return err
 }
-defer func() { _ = sub.Close() }()
+defer sub.Close()
 for update := range sub.All(ctx) {
     fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
 }
@@ -48,6 +48,8 @@ go get github.com/ThomasMarcelis/ibkr-go@latest
 Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
 
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go).
+Upgrading from v1.5 requires the clean-break changes in
+[`docs/migration-1.6.md`](docs/migration-1.6.md).
 
 ## Why ibkr-go
 
@@ -152,8 +154,9 @@ for _, bar := range bars {
 
 `Place` returns an `OrderHandle` whose `Events()` channel carries a typed
 union — exactly one of `Status`, `Execution`, `CommissionAndFees`, `OpenOrder`,
-or `Warning` is non-nil per event. The channel closes after the terminal status
-(`Filled`, `Cancelled`, or `Inactive`) or an earlier local observation error.
+or `Warning` is non-nil per event. A terminal order status does not close the
+handle because IBKR can deliver executions and fees afterward. The caller ends
+its observation window explicitly after collecting the evidence it needs.
 
 ```go
 handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -164,17 +167,22 @@ if err != nil {
     return err
 }
 
-for evt := range handle.Events() {
+var terminal, execution bool
+for !terminal || !execution {
+    evt := <-handle.Events()
     switch {
     case evt.Status != nil:
         fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
+        terminal = ibkr.IsTerminalOrderStatus(evt.Status.Status)
     case evt.Execution != nil:
         fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
+        execution = true
     case evt.CommissionAndFees != nil:
         fmt.Println("commission and fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
     }
 }
-return handle.Wait() // nil when terminal status reached cleanly
+handle.Close()
+return handle.Wait()
 ```
 
 Order events use a bounded, lossless queue with a default capacity of 64;
@@ -252,7 +260,7 @@ sub, err := client.Accounts().SubscribePositions(ctx)
 if err != nil {
     return err
 }
-defer func() { _ = sub.Close() }()
+defer sub.Close()
 for pos := range sub.Events() {
     fmt.Println(pos.Position.Contract.Symbol, pos.Position.Position, pos.Position.AvgCost)
 }
@@ -265,7 +273,7 @@ pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: "DU9000
 if err != nil {
     return err
 }
-defer func() { _ = pnl.Close() }()
+defer pnl.Close()
 ```
 
 ## API Shape
@@ -276,9 +284,9 @@ Every domain is accessed through a facade on the client:
 |--------|-----------|---------------|
 | `client.Accounts()` | `Summary`, `Positions`, `Updates`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribePnL`, `SubscribePnLSingle` |
 | `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | — |
-| `client.MarketData()` | `Quote` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
+| `client.MarketData()` | `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
-| `client.Orders()` | `Open`, `Completed`, `Executions` | `Place` -> `OrderHandle`, `SubscribeOpen` |
+| `client.Orders()` | `Open`, `Completed`, `Executions` | `Place` -> `OrderHandle`, `SubscribeOpen`, `SubscribeExecutions` |
 | `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` -> `ExerciseHandle` |
 | `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
 | `client.Scanner()` | `Parameters` | `SubscribeResults` |

@@ -306,7 +306,7 @@ func installObservedQuoteRoute(t *testing.T, e *engine, req QuoteRequest, opts .
 	t.Helper()
 	result := make(chan *Subscription[QuoteUpdate], 1)
 	go func() {
-		sub, err := e.subscribeQuotes(context.Background(), req, false, opts...)
+		sub, err := e.subscribeQuotes(context.Background(), req, false, false, opts...)
 		if err != nil {
 			t.Errorf("subscribeQuotes: %v", err)
 		}

@@ -82,6 +82,38 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	}
 }
 
+func TestDecodeOrderBoundClassicAndProtobuf(t *testing.T) {
+	t.Parallel()
+
+	want := OrderBound{PermID: 123456789, ClientID: 0, OrderID: 42}
+	classic, err := Encode(200, want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err := Decode(200, classic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded != want {
+		t.Fatalf("classic OrderBound = %#v, want %#v", decoded, want)
+	}
+
+	body := appendProtoVarint(nil, 1, 123456789)
+	body = appendProtoVarint(body, 2, 0)
+	body = appendProtoVarint(body, 3, 42)
+	protobuf, err := protocol.EncodeProtobufEnvelope(206, protocol.InOrderBound, body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoded, err = Decode(206, protobuf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if decoded != want {
+		t.Fatalf("protobuf OrderBound = %#v, want %#v", decoded, want)
+	}
+}
+
 func TestManagedAccountsRequestExactServer206(t *testing.T) {
 	t.Parallel()
 

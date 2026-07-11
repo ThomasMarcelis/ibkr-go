@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
@@ -101,6 +102,11 @@ func parseClassicMessageID(field []byte) (int, bool) {
 func EncodeClassicEnvelope(serverVersion, msgID int, fields []string) ([]byte, error) {
 	if msgID < 0 || msgID > math.MaxInt32 || (serverVersion >= MinServerVersionProtobuf && msgID == 0) {
 		return nil, fmt.Errorf("protocol: invalid classic msg_id %d", msgID)
+	}
+	for i, field := range fields {
+		if strings.IndexByte(field, 0) >= 0 {
+			return nil, fmt.Errorf("protocol: classic field %d contains NUL", i)
+		}
 	}
 	if serverVersion < MinServerVersionProtobuf {
 		all := make([]string, 1, len(fields)+1)

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -382,6 +383,9 @@ func TestNormalizeEventsSkipsClientHandshakePrefix(t *testing.T) {
 // keep to the simple 0700/0600 contract Create promises.
 func TestCreatePermissions(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows ignores Unix creation modes; capture access inherits the caller-selected parent ACL")
+	}
 
 	root := t.TempDir()
 	session, err := Create(root, Meta{Scenario: "perms"})

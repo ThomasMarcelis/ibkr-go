@@ -58,6 +58,14 @@ type engine struct {
 	closed    bool
 
 	reconnectAttempt int
+	resumePending    []resumeRoute
+	resumeWaiting    bool
+}
+
+type resumeRoute struct {
+	reqID int
+	key   string
+	route *route
 }
 
 type transportLoss struct {
@@ -94,26 +102,26 @@ const (
 var advertisedServerVersionMax = maxServerVersion
 
 type route struct {
-	opKind         OpKind
-	subscription   bool
-	resume         ResumePolicy
-	request        codec.Message
-	handle         func(any, *engine)
-	handleAPIErr   func(codec.APIError, *engine)
-	onDisconnect   func(*engine, error) bool // true retains the route; caller deletes on false
-	emitGap        func(*engine)
-	emitResumed    func(*engine)
-	validateResume func(*engine) error
-	close          func(error)
-	gapped         bool // true after Gap emitted, reset on Resumed; prevents double emission
+	opKind           OpKind
+	subscription     bool
+	resume           ResumePolicy
+	request          codec.Message
+	handle           func(any, *engine)
+	handleCommission func(codec.CommissionReport, *engine)
+	handleAPIErr     func(codec.APIError, *engine)
+	onDisconnect     func(*engine, error) bool // true retains the route; caller deletes on false
+	emitGap          func(*engine)
+	emitResumed      func(*engine)
+	validateResume   func(*engine) error
+	close            func(error)
+	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
 type orderRoute struct {
-	orderID          int64
-	handle           *OrderHandle
-	closed           bool
-	gapped           bool // true after Gap emitted, reset on Resumed; prevents double emission
-	terminalCloseSeq uint64
+	orderID int64
+	handle  *OrderHandle
+	closed  bool
+	gapped  bool // true after Gap emitted, reset on Resumed; prevents double emission
 }
 
 type previewRoute struct {
@@ -174,16 +182,15 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		}
 		return e, nil
 	case <-ctx.Done():
-		_ = e.Close()
+		e.Close()
 		return nil, ctx.Err()
 	}
 }
 
-func (e *engine) Close() error {
+func (e *engine) Close() {
 	e.enqueue(func() {
 		e.closeEngine(ErrClosed, nil)
 	})
-	return nil
 }
 
 func (e *engine) Done() <-chan struct{} {
@@ -236,14 +243,14 @@ func (e *engine) reportReady(err error) {
 	}
 }
 
-func (e *engine) setState(next State, code int, message string, err error) {
+func (e *engine) setState(next State, code int, message string, err error, apiErrors ...*APIError) {
 	e.snapshotMu.Lock()
 	prev := e.snapshot.State
 	e.snapshot.State = next
 	connSeq := e.snapshot.ConnectionSeq
 	e.snapshotMu.Unlock()
 
-	e.events.EmitLatest(Event{
+	event := Event{
 		At:            time.Now().UTC(),
 		State:         next,
 		Previous:      prev,
@@ -251,13 +258,34 @@ func (e *engine) setState(next State, code int, message string, err error) {
 		Code:          code,
 		Message:       message,
 		Err:           err,
-	})
+	}
+	if len(apiErrors) != 0 {
+		event.APIError = apiErrors[0]
+	}
+	e.events.EmitLatest(event)
 }
 
 // emitEvent publishes an informational session event (e.g. farm-status
 // or market-data warnings) without changing session state.
 func (e *engine) emitEvent(code int, message string) {
 	e.emitSessionEvent(code, message, nil)
+}
+
+func (e *engine) emitAPIEvent(msg codec.APIError) {
+	apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+	e.snapshotMu.RLock()
+	state := e.snapshot.State
+	connSeq := e.snapshot.ConnectionSeq
+	e.snapshotMu.RUnlock()
+	e.events.EmitLatest(Event{
+		At:            time.Now().UTC(),
+		State:         state,
+		Previous:      state,
+		ConnectionSeq: connSeq,
+		Code:          msg.Code,
+		Message:       msg.Message,
+		APIError:      apiErr,
+	})
 }
 
 func (e *engine) emitSessionEvent(code int, message string, err error) {

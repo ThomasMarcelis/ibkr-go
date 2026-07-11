@@ -7,10 +7,11 @@ import (
 )
 
 type QuoteRequest struct {
-	ReqID        int
-	Contract     Contract
-	Snapshot     bool
-	GenericTicks []string
+	ReqID              int
+	Contract           Contract
+	Snapshot           bool
+	RegulatorySnapshot bool
+	GenericTicks       []string
 }
 
 func (m QuoteRequest) encodeWire(sv int) ([]string, error) {
@@ -37,8 +38,8 @@ func (m QuoteRequest) encodeWire(sv int) ([]string, error) {
 	}
 	w.WriteString(strings.Join(m.GenericTicks, ","))
 	w.WriteBool(m.Snapshot)
-	w.WriteBool(false) // regulatorySnapshot
-	w.WriteString("")  // mktDataOptions
+	w.WriteBool(m.RegulatorySnapshot)
+	w.WriteString("") // mktDataOptions
 	return w.Fields(), nil
 }
 

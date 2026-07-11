@@ -95,8 +95,8 @@ type OpenOrder struct {
 	Status    OrderStatus
 	Quantity  decimal.Decimal
 
-	LmtPrice              decimal.Decimal
-	AuxPrice              decimal.Decimal
+	LmtPrice              *decimal.Decimal
+	AuxPrice              *decimal.Decimal
 	TIF                   TimeInForce
 	OcaGroup              string
 	OpenClose             string
@@ -131,8 +131,17 @@ type OpenOrder struct {
 // observed through the subscription, including orders that have no live
 // OrderHandle in this process (e.g. recovered after a restart).
 type OpenOrderUpdate struct {
-	Order  *OpenOrder
-	Status *OrderStatusUpdate
+	Order   *OpenOrder
+	Status  *OrderStatusUpdate
+	Binding *OrderBinding
+}
+
+// OrderBinding reports the API order ID assigned when client ID 0 binds a
+// manual TWS order through an auto-open-orders subscription.
+type OrderBinding struct {
+	PermID   int64
+	ClientID int
+	OrderID  int64
 }
 
 // ExecutionFilterSide filters executions by the original order action. It is
@@ -206,6 +215,23 @@ type CommissionAndFeesReport struct {
 	RealizedPNL         *decimal.Decimal
 	BondYield           *decimal.Decimal
 	YieldRedemptionDate string // YYYYMMDD, or empty when unavailable
+}
+
+// ExecutionUpdate is an executions-query event. Exactly one field is non-nil.
+// CommissionAndFees reports are separate Gateway callbacks and can arrive
+// before their execution or after the executions snapshot boundary.
+type ExecutionUpdate struct {
+	Execution         *Execution
+	CommissionAndFees *CommissionAndFeesReport
+}
+
+// ExecutionSnapshot is the executions and commission-and-fee reports observed
+// through the Gateway's executions-end boundary. The boundary does not promise
+// that every fee report has arrived; use [OrdersClient.SubscribeExecutions] to
+// keep observing late reports.
+type ExecutionSnapshot struct {
+	Executions        []Execution
+	CommissionAndFees []CommissionAndFeesReport
 }
 
 // Execution is a single trade execution report from the Gateway, carrying
@@ -338,7 +364,6 @@ type OrderConditions struct {
 type OrderAdjustment struct {
 	OrderType      OrderType
 	TriggerPrice   decimal.Decimal
-	LmtPriceOffset decimal.Decimal
 	StopPrice      decimal.Decimal
 	StopLimitPrice decimal.Decimal
 	TrailingAmount decimal.Decimal
@@ -387,6 +412,7 @@ type Order struct {
 	PercentOffset         *decimal.Decimal // offset percent for REL/pegged orders
 	TrailStopPrice        *decimal.Decimal // trailing-stop trigger price
 	TrailingPercent       *decimal.Decimal // trailing amount as a percent
+	LmtPriceOffset        *decimal.Decimal // limit offset for TRAIL LIMIT and adjustable orders
 	Scale                 OrderScale       // scale-order sizing and active window
 	Hedge                 OrderHedge       // hedge-child behavior
 	Combo                 OrderCombo       // BAG legs, per-leg prices, and smart routing
@@ -427,6 +453,7 @@ type BracketOrder struct {
 // [OrdersClient.Preview]. Nil monetary fields were omitted by IBKR; non-nil
 // zeros are reported zeros.
 type OrderState struct {
+	Status               OrderStatus
 	InitMarginBefore     *decimal.Decimal
 	MaintMarginBefore    *decimal.Decimal
 	EquityWithLoanBefore *decimal.Decimal
@@ -437,14 +464,41 @@ type OrderState struct {
 	MaintMarginAfter     *decimal.Decimal
 	EquityWithLoanAfter  *decimal.Decimal
 
-	Commission    *decimal.Decimal
-	CommissionMin *decimal.Decimal
-	CommissionMax *decimal.Decimal
-	Currency      string
+	CommissionAndFees         *decimal.Decimal
+	MinCommissionAndFees      *decimal.Decimal
+	MaxCommissionAndFees      *decimal.Decimal
+	CommissionAndFeesCurrency string
+	MarginCurrency            string
+
+	InitMarginBeforeOutsideRTH     *decimal.Decimal
+	MaintMarginBeforeOutsideRTH    *decimal.Decimal
+	EquityWithLoanBeforeOutsideRTH *decimal.Decimal
+	InitMarginChangeOutsideRTH     *decimal.Decimal
+	MaintMarginChangeOutsideRTH    *decimal.Decimal
+	EquityWithLoanChangeOutsideRTH *decimal.Decimal
+	InitMarginAfterOutsideRTH      *decimal.Decimal
+	MaintMarginAfterOutsideRTH     *decimal.Decimal
+	EquityWithLoanAfterOutsideRTH  *decimal.Decimal
+	SuggestedSize                  *decimal.Decimal
+	RejectReason                   string
+	Allocations                    []OrderAllocation
 
 	// WarningText carries the Gateway's advisory attached to the preview,
 	// e.g. price cap adjustments; empty when the server sent none.
 	WarningText string
+}
+
+// OrderAllocation is one account allocation returned in a full order preview.
+// Decimal and boolean pointers preserve omitted values separately from
+// explicit zero and false.
+type OrderAllocation struct {
+	Account         string
+	Position        *decimal.Decimal
+	PositionDesired *decimal.Decimal
+	PositionAfter   *decimal.Decimal
+	DesiredAllocQty *decimal.Decimal
+	AllowedAllocQty *decimal.Decimal
+	IsMonetary      *bool
 }
 
 // CompletedOrderResult is one entry from [OrdersClient.Completed]: the

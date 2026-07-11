@@ -33,6 +33,7 @@ var inboundProtobufDecoders = map[int]protobufDecodeFunc{
 	protocol.InAccountUpdateMulti:    decodeAccountUpdateMultiProto,
 	protocol.InAccountUpdateMultiEnd: decodeAccountUpdateMultiEndProto,
 	protocol.InCompletedOrder:        decodeCompletedOrderProto,
+	protocol.InOrderBound:            decodeOrderBoundProto,
 	protocol.InCompletedOrderEnd:     decodeCompletedOrdersEndProto,
 	protocol.InOrderStatus:           decodeOrderStatusProto,
 	protocol.InOpenOrder:             decodeOpenOrderProto,

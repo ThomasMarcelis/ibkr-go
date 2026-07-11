@@ -155,6 +155,7 @@ var pendingLiveAttestation = map[int]string{
 	protocol.InHistoricalTicks:       "needs a reqHistoricalTicks whatToShow=MIDPOINT capture",
 	protocol.InHistoricalTicksBidAsk: "needs a reqHistoricalTicks whatToShow=BID_ASK capture",
 	protocol.InTickByTick:            "needs a reqTickByTickData capture (market hours)",
+	protocol.InOrderBound:            "needs a client-ID-0 reqAutoOpenOrders capture after binding a manual paper-TWS order",
 	protocol.InWSHMetaData:           "needs a reqWSHMetaData capture (WSH entitlement)",
 	protocol.InWSHEventData:          "needs a reqWSHEventData capture (WSH entitlement)",
 }

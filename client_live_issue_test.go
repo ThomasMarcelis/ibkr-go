@@ -383,7 +383,7 @@ func waitLiveReadySeq(ctx context.Context, client *ibkr.Client, minSeq uint64) e
 
 func closeLiveIssueClient(t *testing.T, client *ibkr.Client) {
 	t.Helper()
-	_ = client.Close()
+	client.Close()
 	select {
 	case <-client.Done():
 	case <-time.After(5 * time.Second):

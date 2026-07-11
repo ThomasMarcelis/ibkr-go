@@ -25,7 +25,7 @@ func TestExecutionsEmptyServer201Replay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Executions() error = %v", err)
 	}
-	if len(updates) != 0 {
-		t.Fatalf("Executions() returned %d updates, want live empty snapshot", len(updates))
+	if len(updates.Executions) != 0 {
+		t.Fatalf("Executions() returned %d updates, want live empty snapshot", len(updates.Executions))
 	}
 }

@@ -182,10 +182,11 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
   observation with `ErrSlowConsumer` rather than dropping and continuing. It
   does not change the live order; its OrderID remains available for
   reconciliation or cancellation.
-- **Terminal states.** When an OrderStatus arrives with status Filled,
-  Cancelled, ApiCancelled, or Inactive, the handle auto-closes with `nil`
-  error. Cancellation replies 161 and 202 remain session notices and do not
-  override that terminal result.
+- **Terminal order states.** Filled, Cancelled, ApiCancelled, and Inactive are
+  business events, not local observation boundaries. Execution and fee
+  callbacks may follow them, so the caller closes the handle when its evidence
+  requirements are satisfied. Cancellation replies 161 and 202 remain session
+  notices and do not close the handle.
 - **Disconnect.** On session disconnect, active order handles receive a `Gap`
   event via Lifecycle(). On reconnect, they receive `Resumed`. Handles are not
   closed on disconnect — orders continue executing on the server.

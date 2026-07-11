@@ -57,7 +57,7 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		ConditionsCancelOrder:    boolToString(req.Order.Conditions.CancelOrder),
 		AdjustedOrderType:        string(req.Order.Adjustment.OrderType),
 		TriggerPrice:             decimalOrEmpty(req.Order.Adjustment.TriggerPrice),
-		LmtPriceOffset:           decimalOrEmpty(req.Order.Adjustment.LmtPriceOffset),
+		LmtPriceOffset:           decimalPointerOrEmpty(req.Order.LmtPriceOffset),
 		AdjustedStopPrice:        decimalOrEmpty(req.Order.Adjustment.StopPrice),
 		AdjustedStopLimitPrice:   decimalOrEmpty(req.Order.Adjustment.StopLimitPrice),
 		AdjustedTrailingAmount:   decimalOrEmpty(req.Order.Adjustment.TrailingAmount),

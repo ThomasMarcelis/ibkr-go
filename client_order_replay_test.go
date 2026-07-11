@@ -95,8 +95,9 @@ func requireOrderAPIError(t *testing.T, name string, handle *ibkr.OrderHandle, c
 func requireOrderWaitNil(t *testing.T, name string, handle *ibkr.OrderHandle) {
 	t.Helper()
 
+	handle.Close()
 	if err := handle.Wait(); err != nil {
-		t.Fatalf("%s Wait() = %v, want nil terminal close", name, err)
+		t.Fatalf("%s Wait() = %v, want nil explicit close", name, err)
 	}
 }
 
@@ -431,7 +432,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 			Quantity:       decimal.RequireFromString("100"),
 			AuxPrice:       new(decimal.RequireFromString("1")),
 			TrailStopPrice: new(decimal.RequireFromString("2921")),
-			Adjustment:     ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")},
+			LmtPriceOffset: new(decimal.RequireFromString("0.05")),
 			TIF:            ibkr.TIFDay,
 			Account:        "DU9000001",
 			OrderRef:       "ibkrgo-redacted-20260610T195820Z-002",
@@ -478,7 +479,8 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	// events. The capture's execution times use the Gateway's UTC dash
 	// notation; the parser accepts that form, so both fills (80 and 20 at
 	// 292.14) and both commission reports must reach the handle.
-	for evt := range trail.Events() {
+	for executions < 2 || commissions < 2 {
+		evt := waitForEvent(t, trail.Events())
 		if evt.Execution != nil {
 			executions++
 			if got := evt.Execution.Shares.String(); got != "80" && got != "20" {
@@ -492,6 +494,7 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 			commissions++
 		}
 	}
+	trail.Close()
 	if executions != 2 || commissions != 2 {
 		t.Fatalf("trail surfaced %d executions and %d commissions, want 2/2", executions, commissions)
 	}

@@ -35,6 +35,9 @@ func cloneOrder(order Order) Order {
 	if order.TrailingPercent != nil {
 		order.TrailingPercent = new(*order.TrailingPercent)
 	}
+	if order.LmtPriceOffset != nil {
+		order.LmtPriceOffset = new(*order.LmtPriceOffset)
+	}
 	if order.CashQty != nil {
 		order.CashQty = new(*order.CashQty)
 	}

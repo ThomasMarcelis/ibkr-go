@@ -59,6 +59,14 @@ type HistoricalNewsItem struct {
 	Headline     string
 }
 
+// HistoricalNewsResult is one page of historical headlines. HasMore is the
+// Gateway's pagination signal and must be used to decide whether to request a
+// subsequent page.
+type HistoricalNewsResult struct {
+	Items   []HistoricalNewsItem
+	HasMore bool
+}
+
 // ScannerInstrument is a scanner instrument type (for example "STK").
 type ScannerInstrument string
 

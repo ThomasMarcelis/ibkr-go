@@ -461,7 +461,7 @@ func decodeOpenOrderStateProto(body []byte, m *OpenOrder) error {
 			return nil
 		}
 		switch number {
-		case 1, 14, 28:
+		case 1, 14, 15, 25, 26, 28:
 			value, err := consumeProtoBytes(&body, typ)
 			if err != nil {
 				return protoFieldError("order state", number, err)
@@ -471,10 +471,16 @@ func decodeOpenOrderStateProto(body []byte, m *OpenOrder) error {
 				m.Status = string(value)
 			case 14:
 				m.CommissionCurrency = string(value)
+			case 15:
+				m.MarginCurrency = string(value)
+			case 25:
+				m.SuggestedSize = string(value)
+			case 26:
+				m.RejectReason = string(value)
 			case 28:
 				m.WarningText = string(value)
 			}
-		case 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13:
+		case 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 16, 17, 18, 19, 20, 21, 22, 23, 24:
 			value, err := consumeProtoDouble(&body, typ)
 			if err != nil {
 				return protoFieldError("order state", number, err)
@@ -505,10 +511,114 @@ func decodeOpenOrderStateProto(body []byte, m *OpenOrder) error {
 				m.MinCommission = formatted
 			case 13:
 				m.MaxCommission = formatted
+			case 16:
+				m.InitMarginBeforeOutsideRTH = formatted
+			case 17:
+				m.MaintMarginBeforeOutsideRTH = formatted
+			case 18:
+				m.EquityWithLoanBeforeOutsideRTH = formatted
+			case 19:
+				m.InitMarginChangeOutsideRTH = formatted
+			case 20:
+				m.MaintMarginChangeOutsideRTH = formatted
+			case 21:
+				m.EquityWithLoanChangeOutsideRTH = formatted
+			case 22:
+				m.InitMarginAfterOutsideRTH = formatted
+			case 23:
+				m.MaintMarginAfterOutsideRTH = formatted
+			case 24:
+				m.EquityWithLoanAfterOutsideRTH = formatted
 			}
+		case 27:
+			value, err := consumeProtoBytes(&body, typ)
+			if err != nil {
+				return protoFieldError("order state", number, err)
+			}
+			allocation, err := decodeOrderAllocationProto(value)
+			if err != nil {
+				return protoFieldError("order state allocation", number, err)
+			}
+			m.Allocations = append(m.Allocations, allocation)
 		default:
 			if err := skipProtoField(&body, number, typ); err != nil {
 				return protoFieldError("order state", number, err)
+			}
+		}
+	}
+}
+
+func decodeOrderBoundProto(body []byte, sv int) ([]Message, error) {
+	var m OrderBound
+	for {
+		number, typ, ok, err := consumeProtoTag(&body)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			return []Message{m}, nil
+		}
+		switch number {
+		case 1, 2, 3:
+			value, err := consumeProtoVarint(&body, typ)
+			if err != nil {
+				return nil, protoFieldError("order bound", number, err)
+			}
+			switch number {
+			case 1:
+				m.PermID = decodeProtoInt64(value)
+			case 2:
+				m.ClientID = decodeProtoInt32(value)
+			case 3:
+				m.OrderID = decodeProtoInt64(value)
+			}
+		default:
+			if err := skipProtoField(&body, number, typ); err != nil {
+				return nil, protoFieldError("order bound", number, err)
+			}
+		}
+	}
+}
+
+func decodeOrderAllocationProto(body []byte) (OrderAllocation, error) {
+	var allocation OrderAllocation
+	for {
+		number, typ, ok, err := consumeProtoTag(&body)
+		if err != nil {
+			return OrderAllocation{}, err
+		}
+		if !ok {
+			return allocation, nil
+		}
+		switch number {
+		case 1, 2, 3, 4, 5, 6:
+			value, err := consumeProtoBytes(&body, typ)
+			if err != nil {
+				return OrderAllocation{}, protoFieldError("order allocation", number, err)
+			}
+			switch number {
+			case 1:
+				allocation.Account = string(value)
+			case 2:
+				allocation.Position = string(value)
+			case 3:
+				allocation.PositionDesired = string(value)
+			case 4:
+				allocation.PositionAfter = string(value)
+			case 5:
+				allocation.DesiredAllocQty = string(value)
+			case 6:
+				allocation.AllowedAllocQty = string(value)
+			}
+		case 7:
+			value, err := consumeProtoVarint(&body, typ)
+			if err != nil {
+				return OrderAllocation{}, protoFieldError("order allocation", number, err)
+			}
+			allocation.IsMonetary = btoa(value != 0)
+		default:
+			if err := skipProtoField(&body, number, typ); err != nil {
+				return OrderAllocation{}, protoFieldError("order allocation", number, err)
 			}
 		}
 	}

@@ -83,7 +83,7 @@ func dialLiveWithRecordedTCPConn(t *testing.T, cfg ibkrlive.Config, dialer *reco
 		t.Fatalf("DialContext() error = %v", err)
 	}
 	if dialer.Conn() == nil {
-		_ = client.Close()
+		client.Close()
 		t.Fatal("recording dialer did not capture TCP connection")
 	}
 	return client

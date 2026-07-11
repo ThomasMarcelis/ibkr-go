@@ -62,18 +62,43 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 		{"InitMarginAfter", state.InitMarginAfter, "156037.86"},
 		{"MaintMarginAfter", state.MaintMarginAfter, "141852.6"},
 		{"EquityWithLoanAfter", state.EquityWithLoanAfter, "1127798.96"},
-		{"Commission", state.Commission, "1.0003"},
+		{"CommissionAndFees", state.CommissionAndFees, "1.0003"},
 	} {
 		if field.got == nil || !field.got.Equal(decimal.RequireFromString(field.want)) {
 			t.Errorf("%s = %s, want %s", field.name, field.got, field.want)
 		}
 	}
-	if state.Currency != "USD" {
-		t.Errorf("Currency = %q, want USD", state.Currency)
+	if state.CommissionAndFeesCurrency != "USD" {
+		t.Errorf("CommissionAndFeesCurrency = %q, want USD", state.CommissionAndFeesCurrency)
 	}
-	if state.CommissionMin != nil || state.CommissionMax != nil {
+	if state.MinCommissionAndFees != nil || state.MaxCommissionAndFees != nil {
 		t.Errorf("CommissionMin/Max = %v/%v, want nil (unset in capture)",
-			state.CommissionMin, state.CommissionMax)
+			state.MinCommissionAndFees, state.MaxCommissionAndFees)
+	}
+	if state.Status != ibkr.OrderStatusPreSubmitted || state.MarginCurrency != "EUR" {
+		t.Errorf("status/margin currency = %s/%q, want PreSubmitted/EUR", state.Status, state.MarginCurrency)
+	}
+	for _, field := range []struct {
+		name string
+		got  *decimal.Decimal
+	}{
+		{"InitMarginBeforeOutsideRTH", state.InitMarginBeforeOutsideRTH},
+		{"MaintMarginBeforeOutsideRTH", state.MaintMarginBeforeOutsideRTH},
+		{"EquityWithLoanBeforeOutsideRTH", state.EquityWithLoanBeforeOutsideRTH},
+		{"InitMarginChangeOutsideRTH", state.InitMarginChangeOutsideRTH},
+		{"MaintMarginChangeOutsideRTH", state.MaintMarginChangeOutsideRTH},
+		{"EquityWithLoanChangeOutsideRTH", state.EquityWithLoanChangeOutsideRTH},
+		{"InitMarginAfterOutsideRTH", state.InitMarginAfterOutsideRTH},
+		{"MaintMarginAfterOutsideRTH", state.MaintMarginAfterOutsideRTH},
+		{"EquityWithLoanAfterOutsideRTH", state.EquityWithLoanAfterOutsideRTH},
+		{"SuggestedSize", state.SuggestedSize},
+	} {
+		if field.got != nil {
+			t.Errorf("%s = %s, want nil (unset in capture)", field.name, field.got)
+		}
+	}
+	if state.RejectReason != "" || state.Allocations != nil {
+		t.Errorf("reject reason/allocations = %q/%v, want empty/nil", state.RejectReason, state.Allocations)
 	}
 }
 

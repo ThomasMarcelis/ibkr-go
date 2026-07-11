@@ -184,6 +184,7 @@ var inboundDecoders = map[int]decodeFunc{
 	protocol.InMarketDataReroute:     decodeMarketDataReroute,
 	protocol.InMarketDepthReroute:    decodeMarketDepthReroute,
 	protocol.InCompletedOrder:        decodeCompletedOrder,
+	protocol.InOrderBound:            decodeOrderBound,
 	protocol.InCompletedOrderEnd:     decodeCompletedOrderEnd,
 	protocol.InUserInfo:              decodeUserInfo,
 	protocol.InUpdateAccountValue:    decodeUpdateAccountValue,

@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -35,7 +34,7 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	defer func() { err = errors.Join(err, client.Close()) }()
+	defer client.Close()
 
 	account, err := exampleutil.FirstAccount(client.Session().ManagedAccounts)
 	if err != nil {

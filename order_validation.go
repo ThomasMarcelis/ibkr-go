@@ -182,6 +182,9 @@ func validateOrderPrices(order Order) error {
 	if order.TrailingPercent != nil && order.TrailingPercent.IsNegative() {
 		return invalidOrderField("Order.TrailingPercent", order.TrailingPercent, "must be >= 0")
 	}
+	if order.LmtPriceOffset != nil && order.LmtPriceOffset.IsNegative() {
+		return invalidOrderField("Order.LmtPriceOffset", order.LmtPriceOffset, "must be >= 0")
+	}
 
 	switch order.OrderType {
 	case OrderTypeLimit, OrderTypeLimitOnClose, OrderTypeLimitOnOpen:
@@ -337,7 +340,6 @@ func validateOrderAdjustment(adjustment OrderAdjustment) error {
 		field string
 		value decimal.Decimal
 	}{
-		{"Order.Adjustment.LmtPriceOffset", adjustment.LmtPriceOffset},
 		{"Order.Adjustment.TrailingAmount", adjustment.TrailingAmount},
 	}
 	for _, value := range values {

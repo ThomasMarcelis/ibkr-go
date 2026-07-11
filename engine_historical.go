@@ -274,7 +274,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				return
 			}
 			if m.Code == 10167 {
-				e.emitEvent(m.Code, m.Message)
+				e.emitAPIEvent(m)
 				return
 			}
 			e.deleteKeyedRoute(reqID)

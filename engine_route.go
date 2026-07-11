@@ -139,7 +139,18 @@ func (e *engine) handleIncoming(msg any) {
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			route.handle(msg, e)
 		}
+	case codec.OrderBound:
+		if route, ok := e.singletons[singletonOpenOrders]; ok {
+			if request, auto := route.request.(codec.OpenOrdersRequest); auto && request.Scope == string(OpenOrdersScopeAuto) {
+				route.handle(OrderBinding{PermID: msg.PermID, ClientID: msg.ClientID, OrderID: msg.OrderID}, e)
+			}
+		}
 	case codec.CommissionReport:
+		for _, route := range e.keyed {
+			if route.handleCommission != nil {
+				route.handleCommission(msg, e)
+			}
+		}
 		e.routeCommissionReport(msg)
 	case codec.FamilyCodes:
 		if rt, ok := e.singletons[singletonFamilyCodes]; ok {
@@ -184,7 +195,8 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 	// Connectivity codes drive session state transitions.
 	switch msg.Code {
 	case 1100:
-		e.setState(StateDegraded, msg.Code, msg.Message, nil)
+		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+		e.setState(StateDegraded, msg.Code, msg.Message, nil, apiErr)
 		e.emitGap()
 		return
 	case 1101:
@@ -193,12 +205,14 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// resumeRoutes; everything else is interrupted, mirroring the
 		// transport-loss teardown, so callers are not left waiting on
 		// answers that are never coming.
-		e.setState(StateReady, msg.Code, msg.Message, nil)
+		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
 		e.dropLostRoutes()
 		e.resumeRoutes()
 		return
 	case 1102:
-		e.setState(StateReady, msg.Code, msg.Message, nil)
+		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
 		e.emitResumed()
 		return
 	case 1300:
@@ -216,7 +230,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			if singleton == singletonOpenOrders {
 				request, ok := route.request.(codec.OpenOrdersRequest)
 				if !ok || request.Scope != string(OpenOrdersScopeClient) {
-					e.emitEvent(msg.Code, msg.Message)
+					e.emitAPIEvent(msg)
 					return
 				}
 			}
@@ -233,7 +247,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			route.handleAPIErr(msg, e)
 			return
 		}
-		e.emitEvent(msg.Code, msg.Message)
+		e.emitAPIEvent(msg)
 		return
 	}
 
@@ -241,7 +255,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 	// Emitted as session events for observability; they never target a
 	// request or subscription and must not interfere with bootstrap.
 	if msg.Code >= 2000 && msg.Code < 3000 {
-		e.emitEvent(msg.Code, msg.Message)
+		e.emitAPIEvent(msg)
 		return
 	}
 
@@ -275,7 +289,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				}
 			}
 		}
-		e.emitEvent(msg.Code, msg.Message)
+		e.emitAPIEvent(msg)
 		return
 	}
 
@@ -295,7 +309,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 			if isOrderCancellationReply(msg.Code) {
-				e.emitEvent(msg.Code, msg.Message)
+				e.emitAPIEvent(msg)
 				return
 			}
 			// A warning targeting a live order (e.g. code 399, the off-hours
@@ -318,14 +332,14 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// route is surfaced as a session event rather than dropped: it is the
 		// only trace of failures on request ids whose observation has ended
 		// (for example, a late option-exercise refusal).
-		e.emitEvent(msg.Code, msg.Message)
+		e.emitAPIEvent(msg)
 		return
 	}
 
 	// An unattributable request-range error with no request ID is still
 	// operational evidence. Keep it visible without guessing which concurrent
 	// singleton caller owns it.
-	e.emitEvent(msg.Code, msg.Message)
+	e.emitAPIEvent(msg)
 }
 
 func unkeyedAPIErrorSingleton(msg codec.APIError) string {
@@ -347,12 +361,20 @@ func unkeyedAPIErrorSingleton(msg codec.APIError) string {
 }
 
 func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
-	return &APIError{
-		Code:          msg.Code,
-		Message:       msg.Message,
-		OpKind:        opKind,
-		ConnectionSeq: e.connectionSeq(),
+	apiErr := &APIError{
+		RequestID:               msg.ReqID,
+		Code:                    msg.Code,
+		Message:                 msg.Message,
+		AdvancedOrderRejectJSON: msg.AdvancedOrderRejectJSON,
+		OpKind:                  opKind,
+		ConnectionSeq:           e.connectionSeq(),
 	}
+	if msg.ErrorTimeMs != "" {
+		if timestamp, err := parseEpochMilliseconds(msg.ErrorTimeMs); err == nil {
+			apiErr.ServerTime = timestamp
+		}
+	}
+	return apiErr
 }
 
 func isOrderCancellationReply(code int) bool {
@@ -436,8 +458,6 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	if orderObserved && !orderRoute.closed {
 		if !orderRoute.handle.emitStatus(status) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
-		} else if IsTerminalOrderStatus(status.Status) {
-			e.scheduleTerminalOrderClose(msg.OrderID, orderRoute)
 		}
 	}
 	if singletonObserved {
@@ -459,33 +479,7 @@ func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 	e.forgetOrderExecutions(orderID)
 }
 
-const orderTerminalDrainWindow = 750 * time.Millisecond
-
-func (e *engine) scheduleTerminalOrderClose(orderID int64, route *orderRoute) {
-	route.terminalCloseSeq++
-	seq := route.terminalCloseSeq
-	time.AfterFunc(orderTerminalDrainWindow, func() {
-		e.enqueue(func() {
-			current, ok := e.orders[orderID]
-			if !ok || current.closed || current.terminalCloseSeq != seq {
-				return
-			}
-			current.closed = true
-			current.handle.closeWithErr(nil)
-			// The drain window has elapsed and the handle is closing: drop the
-			// route and every execution correlation it owns. Retaining them
-			// only bounded the maps by connection lifetime. Deleting the
-			// execToOrder entries here is safe precisely because the route is
-			// gone — dispatchExecutionToOrder and routeCommissionReport both
-			// early-return on a missing route, and any commission that could
-			// still legitimately arrive for this order is exactly what the
-			// drain window existed to absorb; anything later is post-terminal
-			// noise the closed handle would drop anyway.
-			delete(e.orders, orderID)
-			e.forgetOrderExecutions(orderID)
-		})
-	})
-}
+const unclaimedCommissionTTL = 750 * time.Millisecond
 
 // execDelivery is the order-handle leg's delivery record for one ExecID.
 // See the engine.execDeliveries field comment for the full contract.
@@ -513,7 +507,7 @@ func (e *engine) forgetOrderExecutions(orderID int64) {
 // claiming execution, so without the timer they would accumulate for the
 // connection lifetime.
 func (e *engine) scheduleUnclaimedExecEviction(execID string) {
-	time.AfterFunc(orderTerminalDrainWindow, func() {
+	time.AfterFunc(unclaimedCommissionTTL, func() {
 		e.enqueue(func() {
 			if st, ok := e.execDeliveries[execID]; ok && st.orderID == 0 {
 				delete(e.execDeliveries, execID)

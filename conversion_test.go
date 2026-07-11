@@ -424,6 +424,7 @@ func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 		{"canonical_uppercase", "1.7976931348623157E308"},
 		{"lowercase_exponent", "1.7976931348623157e308"},
 		{"surrounding_whitespace", "  1.7976931348623157E308\t"},
+		{"official_unset_decimal", "-9223372036854775808"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -485,9 +486,9 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 		"InitMarginAfter":      state.InitMarginAfter,
 		"MaintMarginAfter":     state.MaintMarginAfter,
 		"EquityWithLoanAfter":  state.EquityWithLoanAfter,
-		"Commission":           state.Commission,
-		"CommissionMin":        state.CommissionMin,
-		"CommissionMax":        state.CommissionMax,
+		"Commission":           state.CommissionAndFees,
+		"CommissionMin":        state.MinCommissionAndFees,
+		"CommissionMax":        state.MaxCommissionAndFees,
 	} {
 		if got != nil {
 			t.Errorf("%s = %s, want nil (sentinel should decode as absent)", name, got)

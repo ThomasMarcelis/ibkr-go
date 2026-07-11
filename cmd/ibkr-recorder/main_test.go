@@ -80,7 +80,9 @@ func TestRecordFailureFlushesRedactionAndClosesResources(t *testing.T) {
 	if _, err := client.Read(make([]byte, 1)); err == nil {
 		t.Fatal("client connection remained open after record returned")
 	}
-	_ = client.Close()
+	if err := client.Close(); err != nil {
+		t.Fatalf("client.Close() error = %v", err)
+	}
 
 	dir := onlyCaptureDir(t, root)
 	events, err := capturelog.LoadEvents(filepath.Join(dir, "events.jsonl"))
@@ -109,7 +111,9 @@ func TestRecordFailureFlushesRedactionAndClosesResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recorder listener was not released: %v", err)
 	}
-	_ = rebound.Close()
+	if err := rebound.Close(); err != nil {
+		t.Fatalf("rebound.Close() error = %v", err)
+	}
 }
 
 func TestRecordCancellationBeforeFirstLegClosesResources(t *testing.T) {
@@ -140,7 +144,9 @@ func TestRecordCancellationBeforeFirstLegClosesResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("recorder listener was not released: %v", err)
 	}
-	_ = rebound.Close()
+	if err := rebound.Close(); err != nil {
+		t.Fatalf("rebound.Close() error = %v", err)
+	}
 }
 
 func TestRecordReadyFileRequiresBoundListener(t *testing.T) {

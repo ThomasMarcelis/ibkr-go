@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
@@ -40,7 +41,7 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 	}
 	go e.run()
 	t.Cleanup(func() {
-		_ = e.Close()
+		e.Close()
 		_ = e.Wait()
 		_ = serverConn.Close()
 	})
@@ -54,6 +55,20 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 
 	if got := readWireFields(t, serverConn); !slices.Equal(got, []string{"15", "1", "1"}) {
 		t.Fatalf("auto-open bind fields = %q, want [15 1 1]", got)
+	}
+
+	// This is an official-schema routing law, not a claim of raw live evidence:
+	// only the client-0 auto-open scope owns orderBound callbacks.
+	e.enqueue(func() {
+		e.handleIncoming(codec.OrderBound{PermID: 123456789, ClientID: 0, OrderID: 42})
+	})
+	select {
+	case update := <-sub.Events():
+		if update.Binding == nil || *update.Binding != (OrderBinding{PermID: 123456789, ClientID: 0, OrderID: 42}) {
+			t.Fatalf("binding update = %+v", update.Binding)
+		}
+	case <-ctx.Done():
+		t.Fatal("timeout waiting for orderBound routing")
 	}
 
 	sub.Close()

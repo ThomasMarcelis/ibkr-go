@@ -1,6 +1,7 @@
 package transport
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"math"
@@ -139,6 +140,36 @@ func TestConnSendCopiesPayload(t *testing.T) {
 	}
 	if gotFields[0] != "hello" {
 		t.Fatalf("message = %q, want hello", gotFields[0])
+	}
+}
+
+func TestConnSendRejectsInvalidFrameBeforeAdmission(t *testing.T) {
+	t.Parallel()
+
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+
+	conn := New(clientConn, nil, 0)
+	defer conn.Close()
+
+	if err := conn.Send(context.Background(), nil); !errors.Is(err, wire.ErrEmptyMessage) {
+		t.Fatalf("Send(nil) error = %v, want %v", err, wire.ErrEmptyMessage)
+	}
+	if err := conn.Send(context.Background(), make([]byte, wire.MaxFrameSize+1)); !errors.Is(err, wire.ErrFrameTooLarge) {
+		t.Fatalf("Send(oversize) error = %v, want %v", err, wire.ErrFrameTooLarge)
+	}
+
+	want := []byte("still usable")
+	if err := conn.Send(context.Background(), want); err != nil {
+		t.Fatalf("Send(valid) error = %v", err)
+	}
+	got, err := wire.ReadFrame(serverConn)
+	if err != nil {
+		t.Fatalf("ReadFrame() error = %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("ReadFrame() = %q, want %q", got, want)
 	}
 }
 

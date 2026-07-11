@@ -94,20 +94,33 @@ type OpenOrder struct {
 	Status string
 
 	// OrderState margin/commission section (follows Status on the wire).
-	InitMarginBefore     string
-	MaintMarginBefore    string
-	EquityWithLoanBefore string
-	InitMarginChange     string
-	MaintMarginChange    string
-	EquityWithLoanChange string
-	InitMarginAfter      string
-	MaintMarginAfter     string
-	EquityWithLoanAfter  string
-	Commission           string
-	MinCommission        string
-	MaxCommission        string
-	CommissionCurrency   string
-	WarningText          string
+	InitMarginBefore               string
+	MaintMarginBefore              string
+	EquityWithLoanBefore           string
+	InitMarginChange               string
+	MaintMarginChange              string
+	EquityWithLoanChange           string
+	InitMarginAfter                string
+	MaintMarginAfter               string
+	EquityWithLoanAfter            string
+	Commission                     string
+	MinCommission                  string
+	MaxCommission                  string
+	CommissionCurrency             string
+	MarginCurrency                 string
+	InitMarginBeforeOutsideRTH     string
+	MaintMarginBeforeOutsideRTH    string
+	EquityWithLoanBeforeOutsideRTH string
+	InitMarginChangeOutsideRTH     string
+	MaintMarginChangeOutsideRTH    string
+	EquityWithLoanChangeOutsideRTH string
+	InitMarginAfterOutsideRTH      string
+	MaintMarginAfterOutsideRTH     string
+	EquityWithLoanAfterOutsideRTH  string
+	SuggestedSize                  string
+	RejectReason                   string
+	Allocations                    []OrderAllocation
+	WarningText                    string
 
 	// ParentID rides the pre-status slot of the live layout (bracket
 	// children carry real values there). Live open_order frames carry no
@@ -121,7 +134,43 @@ type OpenOrder struct {
 	Partial bool
 }
 
+type OrderAllocation struct {
+	Account         string
+	Position        string
+	PositionDesired string
+	PositionAfter   string
+	DesiredAllocQty string
+	AllowedAllocQty string
+	IsMonetary      string
+}
+
 type OpenOrderEnd struct{}
+
+type OrderBound struct {
+	PermID   int64
+	ClientID int
+	OrderID  int64
+}
+
+func decodeOrderBound(r *fieldReader, sv int) ([]Message, error) {
+	permID, err := r.ReadInt64()
+	if err != nil {
+		return nil, err
+	}
+	clientID, err := r.ReadInt()
+	if err != nil {
+		return nil, err
+	}
+	orderID, err := r.ReadInt64()
+	if err != nil {
+		return nil, err
+	}
+	return []Message{OrderBound{PermID: permID, ClientID: clientID, OrderID: orderID}}, nil
+}
+
+func (m OrderBound) encodeWire(sv int) ([]string, error) {
+	return []string{itoa(protocol.InOrderBound), i64toa(m.PermID), itoa(m.ClientID), i64toa(m.OrderID)}, nil
+}
 
 type OrderStatus struct {
 	OrderID       int64
@@ -1007,39 +1056,35 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	minCommission := r.ReadString()
 	maxCommission := r.ReadString()
 	commissionCurrency := r.ReadString()
-	{
-		// FULL_ORDER_PREVIEW block (orderdecoder.py:369-395): marginCurrency,
-		// nine outside-RTH margin fields, suggestedSize, rejectReason, then
-		// the order-allocations vector. warningText below is unconditional.
-		r.ReadString() // MarginCurrency
-		r.ReadString() // InitMarginBeforeOutsideRTH
-		r.ReadString() // MaintMarginBeforeOutsideRTH
-		r.ReadString() // EquityWithLoanBeforeOutsideRTH
-		r.ReadString() // InitMarginChangeOutsideRTH
-		r.ReadString() // MaintMarginChangeOutsideRTH
-		r.ReadString() // EquityWithLoanChangeOutsideRTH
-		r.ReadString() // InitMarginAfterOutsideRTH
-		r.ReadString() // MaintMarginAfterOutsideRTH
-		r.ReadString() // EquityWithLoanAfterOutsideRTH
-		r.ReadString() // SuggestedSize
-		r.ReadString() // RejectReason
-		orderAllocationsCount, err := r.ReadOptionalCount("open order allocations")
-		if err != nil {
-			return nil, err
-		}
-		// Official allocations carry seven fields per entry
-		// (account..isMonetary); there is no trailing reserved slot.
-		if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 7, 0); err != nil {
-			return nil, err
-		}
-		for range orderAllocationsCount {
-			r.ReadString() // Account
-			r.ReadString() // Position
-			r.ReadString() // PositionDesired
-			r.ReadString() // PositionAfter
-			r.ReadString() // DesiredAllocQty
-			r.ReadString() // AllowedAllocQty
-			r.ReadString() // IsMonetary
+	marginCurrency := r.ReadString()
+	initMarginBeforeOutsideRTH := r.ReadString()
+	maintMarginBeforeOutsideRTH := r.ReadString()
+	equityWithLoanBeforeOutsideRTH := r.ReadString()
+	initMarginChangeOutsideRTH := r.ReadString()
+	maintMarginChangeOutsideRTH := r.ReadString()
+	equityWithLoanChangeOutsideRTH := r.ReadString()
+	initMarginAfterOutsideRTH := r.ReadString()
+	maintMarginAfterOutsideRTH := r.ReadString()
+	equityWithLoanAfterOutsideRTH := r.ReadString()
+	suggestedSize := r.ReadString()
+	rejectReason := r.ReadString()
+	orderAllocationsCount, err := r.ReadOptionalCount("open order allocations")
+	if err != nil {
+		return nil, err
+	}
+	if err := r.RequireFixedEntryFields("open order allocations", orderAllocationsCount, 7, 0); err != nil {
+		return nil, err
+	}
+	var allocations []OrderAllocation
+	if orderAllocationsCount > 0 {
+		allocations = make([]OrderAllocation, orderAllocationsCount)
+	}
+	for i := range allocations {
+		allocations[i] = OrderAllocation{
+			Account: r.ReadString(), Position: r.ReadString(),
+			PositionDesired: r.ReadString(), PositionAfter: r.ReadString(),
+			DesiredAllocQty: r.ReadString(), AllowedAllocQty: r.ReadString(),
+			IsMonetary: r.ReadString(),
 		}
 	}
 	warningText := r.ReadString()
@@ -1114,30 +1159,43 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 		ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 		Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
-		ComboLegsDescription:  comboLegsDescription,
-		OrderComboLegPrices:   orderComboLegPrices,
-		SmartComboRouting:     smartComboRouting,
-		AlgoStrategy:          algoStrategy,
-		AlgoParams:            algoParams,
-		Conditions:            conditions,
-		ConditionsIgnoreRTH:   conditionsIgnoreRTH,
-		ConditionsCancelOrder: conditionsCancelOrder,
-		Status:                status,
-		InitMarginBefore:      initMarginBefore,
-		MaintMarginBefore:     maintMarginBefore,
-		EquityWithLoanBefore:  equityWithLoanBefore,
-		InitMarginChange:      initMarginChange,
-		MaintMarginChange:     maintMarginChange,
-		EquityWithLoanChange:  equityWithLoanChange,
-		InitMarginAfter:       initMarginAfter,
-		MaintMarginAfter:      maintMarginAfter,
-		EquityWithLoanAfter:   equityWithLoanAfter,
-		Commission:            commission,
-		MinCommission:         minCommission,
-		MaxCommission:         maxCommission,
-		CommissionCurrency:    commissionCurrency,
-		WarningText:           warningText,
-		ParentID:              preStatusParentID,
+		ComboLegsDescription:           comboLegsDescription,
+		OrderComboLegPrices:            orderComboLegPrices,
+		SmartComboRouting:              smartComboRouting,
+		AlgoStrategy:                   algoStrategy,
+		AlgoParams:                     algoParams,
+		Conditions:                     conditions,
+		ConditionsIgnoreRTH:            conditionsIgnoreRTH,
+		ConditionsCancelOrder:          conditionsCancelOrder,
+		Status:                         status,
+		InitMarginBefore:               initMarginBefore,
+		MaintMarginBefore:              maintMarginBefore,
+		EquityWithLoanBefore:           equityWithLoanBefore,
+		InitMarginChange:               initMarginChange,
+		MaintMarginChange:              maintMarginChange,
+		EquityWithLoanChange:           equityWithLoanChange,
+		InitMarginAfter:                initMarginAfter,
+		MaintMarginAfter:               maintMarginAfter,
+		EquityWithLoanAfter:            equityWithLoanAfter,
+		Commission:                     commission,
+		MinCommission:                  minCommission,
+		MaxCommission:                  maxCommission,
+		CommissionCurrency:             commissionCurrency,
+		MarginCurrency:                 marginCurrency,
+		InitMarginBeforeOutsideRTH:     initMarginBeforeOutsideRTH,
+		MaintMarginBeforeOutsideRTH:    maintMarginBeforeOutsideRTH,
+		EquityWithLoanBeforeOutsideRTH: equityWithLoanBeforeOutsideRTH,
+		InitMarginChangeOutsideRTH:     initMarginChangeOutsideRTH,
+		MaintMarginChangeOutsideRTH:    maintMarginChangeOutsideRTH,
+		EquityWithLoanChangeOutsideRTH: equityWithLoanChangeOutsideRTH,
+		InitMarginAfterOutsideRTH:      initMarginAfterOutsideRTH,
+		MaintMarginAfterOutsideRTH:     maintMarginAfterOutsideRTH,
+		EquityWithLoanAfterOutsideRTH:  equityWithLoanAfterOutsideRTH,
+		SuggestedSize:                  suggestedSize,
+		RejectReason:                   rejectReason,
+		Allocations:                    allocations,
+		WarningText:                    warningText,
+		ParentID:                       preStatusParentID,
 	}}, nil
 }
 
@@ -1267,19 +1325,28 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.MinCommission)
 	w.WriteString(m.MaxCommission)
 	w.WriteString(m.CommissionCurrency)
-	w.WriteString("") // MarginCurrency
-	w.WriteString("") // InitMarginBeforeOutsideRTH
-	w.WriteString("") // MaintMarginBeforeOutsideRTH
-	w.WriteString("") // EquityWithLoanBeforeOutsideRTH
-	w.WriteString("") // InitMarginChangeOutsideRTH
-	w.WriteString("") // MaintMarginChangeOutsideRTH
-	w.WriteString("") // EquityWithLoanChangeOutsideRTH
-	w.WriteString("") // InitMarginAfterOutsideRTH
-	w.WriteString("") // MaintMarginAfterOutsideRTH
-	w.WriteString("") // EquityWithLoanAfterOutsideRTH
-	w.WriteString("") // SuggestedSize
-	w.WriteString("") // RejectReason
-	w.WriteInt(0)     // OrderAllocationsCount
+	w.WriteString(m.MarginCurrency)
+	w.WriteString(m.InitMarginBeforeOutsideRTH)
+	w.WriteString(m.MaintMarginBeforeOutsideRTH)
+	w.WriteString(m.EquityWithLoanBeforeOutsideRTH)
+	w.WriteString(m.InitMarginChangeOutsideRTH)
+	w.WriteString(m.MaintMarginChangeOutsideRTH)
+	w.WriteString(m.EquityWithLoanChangeOutsideRTH)
+	w.WriteString(m.InitMarginAfterOutsideRTH)
+	w.WriteString(m.MaintMarginAfterOutsideRTH)
+	w.WriteString(m.EquityWithLoanAfterOutsideRTH)
+	w.WriteString(m.SuggestedSize)
+	w.WriteString(m.RejectReason)
+	w.WriteInt(len(m.Allocations))
+	for _, allocation := range m.Allocations {
+		w.WriteString(allocation.Account)
+		w.WriteString(allocation.Position)
+		w.WriteString(allocation.PositionDesired)
+		w.WriteString(allocation.PositionAfter)
+		w.WriteString(allocation.DesiredAllocQty)
+		w.WriteString(allocation.AllowedAllocQty)
+		w.WriteString(allocation.IsMonetary)
+	}
 	w.WriteString(m.WarningText)
 	w.WriteString("") // RandomizeSize
 	w.WriteString("") // RandomizePrice

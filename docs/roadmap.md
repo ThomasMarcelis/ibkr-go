@@ -195,10 +195,10 @@ the real code 490 permission response and code 365 rejected-cancel path.
 
 ### Order and execution observation
 
-Open orders snapshot and streaming (all three scopes), executions finite query,
-and commission-and-fees reports. The classic sv200 execution and fee payloads
-are fully projected; nondefault filters and meaningful bond yield/redemption
-remain live-attestation targets.
+Open orders snapshot and streaming (all three scopes), execution snapshots and
+late-fee subscriptions, and commission-and-fees reports. The classic sv200
+execution and fee payloads are fully projected; nondefault filters and
+meaningful bond yield/redemption remain live-attestation targets.
 
 ### Order management
 
@@ -207,8 +207,9 @@ tracks lifecycle with Events(), Lifecycle(), Done(), Wait(), Close(), Cancel(),
 and Replace(). Order IDs are auto-allocated from NextValidID. OpenOrder
 messages are dual-dispatched to both per-order handles and the singleton
 open-orders observer; OrderStatus remains part of the per-order handle
-contract. OrderHandle survives disconnects (Gap/Resumed) and auto-closes on
-terminal status (Filled, Cancelled, ApiCancelled, Inactive).
+contract. OrderHandle survives reconnectable disconnects (Gap/Resumed).
+Terminal statuses do not end observation; the caller closes the handle after
+collecting any late execution and fee callbacks it requires.
 
 ### Market depth (Level 2)
 

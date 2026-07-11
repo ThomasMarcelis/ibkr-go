@@ -14,10 +14,8 @@ import (
 // only local observation: the live order may keep executing, and OrderID
 // remains available for cancellation and reconciliation.
 //
-// Commission events may race the terminal order status: the live Gateway can
-// deliver an execution or commission callback just after a Filled or Cancelled
-// status. The handle therefore keeps a short drain window open after a terminal
-// status before closing, so those trailing events are still delivered.
+// A terminal order status does not close the handle: executions and fee reports
+// can arrive later. Call Close when observation is no longer needed.
 type OrderHandle struct {
 	orderID int64
 	events  chan OrderEvent
@@ -61,9 +59,8 @@ func (h *OrderHandle) Lifecycle() <-chan SubscriptionStateEvent {
 // closed, Wait reports the terminal error.
 func (h *OrderHandle) Done() <-chan struct{} { return h.done }
 
-// Wait blocks until the handle terminates and returns its terminal error, or
-// nil on a clean close. [ErrSlowConsumer] means only that local observation
-// ended; use OrderID to reconcile or cancel the possibly live order.
+// Wait blocks until the handle is explicitly closed or observation terminates
+// with an error. A terminal order status alone does not complete Wait.
 func (h *OrderHandle) Wait() error {
 	<-h.done
 	h.errMu.Lock()

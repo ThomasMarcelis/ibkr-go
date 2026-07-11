@@ -40,10 +40,10 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 				Param:                 "BUY EUR.USD",
 				DisableAutomaticPrice: new(true),
 			},
+			LmtPriceOffset: new(decimal.RequireFromString("0.02")),
 			Adjustment: OrderAdjustment{
 				OrderType:      OrderTypeStop,
 				TriggerPrice:   decimal.RequireFromString("198"),
-				LmtPriceOffset: decimal.RequireFromString("0.02"),
 				StopPrice:      decimal.RequireFromString("195"),
 				StopLimitPrice: decimal.RequireFromString("194.5"),
 				TrailingAmount: decimal.RequireFromString("1"),

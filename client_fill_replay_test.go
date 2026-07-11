@@ -98,10 +98,16 @@ func (l *orderEventLog) nextStatus(t *testing.T, ctx context.Context, want ibkr.
 	}
 }
 
-// drain consumes the handle to its close, recording every event. The engine
-// closes order handles via the post-terminal drain window, an order-routed
-// error, or the end-of-replay disconnect, so this always returns.
-func (l *orderEventLog) drain() {
+// finish waits for the expected late execution and fee evidence, then ends
+// the caller-owned observation window explicitly and records buffered events.
+func (l *orderEventLog) finish(t *testing.T, ctx context.Context, wantExecutions, wantCommissions int) {
+	t.Helper()
+	for len(l.executions()) < wantExecutions || len(l.commissions()) < wantCommissions {
+		if _, ok := l.next(t, ctx); !ok {
+			t.Fatalf("order %d closed before %d executions and %d commissions", l.handle.OrderID(), wantExecutions, wantCommissions)
+		}
+	}
+	l.handle.Close()
 	for evt := range l.handle.Events() {
 		l.events = append(l.events, evt)
 	}
@@ -239,7 +245,7 @@ func TestPlaceOrderMktBuyFillReplay(t *testing.T) {
 		t.Fatalf("filled status = %+v, want 1 @ 292.76", filled)
 	}
 
-	log.drain()
+	log.finish(t, ctx, 1, 1)
 	execs := log.executions()
 	requireExecutions(t, "mkt buy", execs, []wantExec{{"BOT", "1", "292.76"}})
 	if execs[0].ExecID != "sanitized-mkt-buy-001" {
@@ -303,7 +309,7 @@ func TestPlaceOrderMktSellFillReplay(t *testing.T) {
 		t.Fatalf("avg fill price = %s, want 292.70", filled.AvgFillPrice)
 	}
 
-	log.drain()
+	log.finish(t, ctx, 1, 1)
 	execs := log.executions()
 	requireExecutions(t, "mkt sell", execs, []wantExec{{"SLD", "1", "292.70"}})
 	if execs[0].ExecID != "sanitized-mkt-sell-001" {
@@ -376,7 +382,7 @@ func TestPlaceOrderLmtBuyRestCancelReplay(t *testing.T) {
 		t.Fatalf("202 message = %q", notice.Message)
 	}
 
-	log.drain()
+	log.finish(t, ctx, 0, 0)
 	if got := log.statuses(); !slices.Equal(got, []ibkr.OrderStatus{ibkr.OrderStatusSubmitted, ibkr.OrderStatusCancelled}) {
 		t.Fatalf("statuses = %v, want [Submitted Cancelled]", got)
 	}
@@ -490,7 +496,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 		t.Fatalf("CancelAll: %v", err)
 	}
 
-	restLog.drain()
+	restLog.finish(t, ctx, 1, 1)
 	execs := restLog.executions()
 	requireExecutions(t, "modify", execs, []wantExec{{"BOT", "100", "292.27"}})
 	if execs[0].ExecID != "redacted-modify-0000001" {
@@ -504,7 +510,7 @@ func TestAPIDelayedSuccessModifyReplay(t *testing.T) {
 	requireCancelNotCancellableNotice(t, ctx, events, "9000000377")
 	requireOrderWaitNil(t, "modify", rest)
 
-	flattenLog.drain()
+	flattenLog.finish(t, ctx, 2, 2)
 	requireExecutions(t, "flatten", flattenLog.executions(), []wantExec{
 		{"SLD", "59", "292.20"},
 		{"SLD", "41", "292.20"},
@@ -647,8 +653,8 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(queryExecs) != 13 {
-		t.Fatalf("executions query rows = %d, want 13", len(queryExecs))
+	if len(queryExecs.Executions) != 13 {
+		t.Fatalf("executions query rows = %d, want 13", len(queryExecs.Executions))
 	}
 	wantRows := []struct {
 		orderID int64
@@ -669,16 +675,16 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 		{376, wantExec{"SLD", "40", "292.20"}, "redacted-fill-000000012"},
 		{376, wantExec{"SLD", "20", "292.20"}, "redacted-fill-000000013"},
 	}
-	if len(queryExecs) != len(wantRows) {
-		t.Fatalf("executions query rows = %d, want %d", len(queryExecs), len(wantRows))
+	if len(queryExecs.Executions) != len(wantRows) {
+		t.Fatalf("executions query rows = %d, want %d", len(queryExecs.Executions), len(wantRows))
 	}
 	for i, row := range wantRows {
-		got := queryExecs[i]
+		got := queryExecs.Executions[i]
 		if got.OrderID != row.orderID || got.ExecID != row.execID {
 			t.Fatalf("query row %d = order %d exec %q, want order %d exec %q", i, got.OrderID, got.ExecID, row.orderID, row.execID)
 		}
 	}
-	requireExecutions(t, "query rows", queryExecs, func() []wantExec {
+	requireExecutions(t, "query rows", queryExecs.Executions, func() []wantExec {
 		out := make([]wantExec, len(wantRows))
 		for i, row := range wantRows {
 			out[i] = row.exec
@@ -687,8 +693,8 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	}())
 	// The query response carries the Gateway's "US/Eastern" time form, which
 	// must parse to the same instant as the streaming UTC dash form.
-	if want := time.Date(2026, 6, 11, 13, 30, 30, 0, time.UTC); !queryExecs[0].Time.Equal(want) {
-		t.Fatalf("query row 0 time = %s, want %s (parsed from US/Eastern form)", queryExecs[0].Time, want)
+	if want := time.Date(2026, 6, 11, 13, 30, 30, 0, time.UTC); !queryExecs.Executions[0].Time.Equal(want) {
+		t.Fatalf("query row 0 time = %s, want %s (parsed from US/Eastern form)", queryExecs.Executions[0].Time, want)
 	}
 
 	// Final safety global cancel: real code-161 replies remain session notices;
@@ -733,7 +739,7 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 			[]string{"1.248693", "0.248693", "0.124346"}},
 	}
 	for _, f := range finals {
-		f.log.drain()
+		f.log.finish(t, ctx, len(f.wantExecs), len(f.wantComms))
 		requireExecutions(t, f.name, f.log.executions(), f.wantExecs)
 		requireCommissions(t, f.name, f.log.commissions(), f.wantComms)
 		requireOrderWaitNil(t, f.name, f.handle)
@@ -921,7 +927,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	})
 
 	t.Run("trail_limit_sell_rest_cancel", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, AuxPrice: new(decimal.RequireFromString("1")), TrailStopPrice: new(decimal.RequireFromString("2921.8")), Adjustment: ibkr.OrderAdjustment{LmtPriceOffset: decimal.RequireFromString("0.05")}}, 7, 387)
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, AuxPrice: new(decimal.RequireFromString("1")), TrailStopPrice: new(decimal.RequireFromString("2921.8")), LmtPriceOffset: new(decimal.RequireFromString("0.05"))}, 7, 387)
 		open := log.nextOpen(t, ctx)
 		if !open.LmtPrice.Equal(decimal.RequireFromString("2921.75")) {
 			t.Fatalf("trail-limit echoed lmt = %s, want 2921.75", open.LmtPrice)
@@ -1158,7 +1164,7 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 
 	t.Run("terminal_outcomes", func(t *testing.T) {
 		for _, tc := range terminals {
-			tc.log.drain()
+			tc.log.finish(t, ctx, len(tc.wantExecs), len(tc.wantComms))
 			requireExecutions(t, tc.name, tc.log.executions(), tc.wantExecs)
 			requireCommissions(t, tc.name, tc.log.commissions(), tc.wantComms)
 			if tc.errCode == 0 {

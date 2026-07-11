@@ -20,7 +20,15 @@ func (e *engine) SetMarketDataType(ctx context.Context, dataType MarketDataType)
 }
 
 func (e *engine) QuoteSnapshot(ctx context.Context, req QuoteRequest) (Quote, error) {
-	sub, err := e.subscribeQuotes(ctx, req, true)
+	return e.quoteSnapshot(ctx, req, false)
+}
+
+func (e *engine) RegulatorySnapshot(ctx context.Context, contract Contract) (Quote, error) {
+	return e.quoteSnapshot(ctx, QuoteRequest{Contract: contract}, true)
+}
+
+func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory bool) (Quote, error) {
+	sub, err := e.subscribeQuotes(ctx, req, true, regulatory)
 	if err != nil {
 		return Quote{}, err
 	}
@@ -61,10 +69,10 @@ func (e *engine) QuoteSnapshot(ctx context.Context, req QuoteRequest) (Quote, er
 }
 
 func (e *engine) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
-	return e.subscribeQuotes(ctx, req, false, opts...)
+	return e.subscribeQuotes(ctx, req, false, false, opts...)
 }
 
-func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot bool, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
+func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot, regulatory bool, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
 	if err := validateContract(req.Contract); err != nil {
 		return nil, err
 	}
@@ -103,10 +111,11 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 		resumeContract := cloneContract(req.Contract)
 
 		quoteRoute.request = codec.QuoteRequest{
-			ReqID:        reqID,
-			Contract:     toCodecContract(req.Contract),
-			Snapshot:     snapshot,
-			GenericTicks: genericTicks,
+			ReqID:              reqID,
+			Contract:           toCodecContract(req.Contract),
+			Snapshot:           snapshot && !regulatory,
+			RegulatorySnapshot: regulatory,
+			GenericTicks:       genericTicks,
 		}
 		quoteRoute.validateResume = func(e *engine) error {
 			return validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion))
@@ -285,7 +294,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			// 10167: delayed market data warning — the subscription
 			// stays open and will receive delayed ticks.
 			if m.Code == 10167 {
-				e.emitEvent(m.Code, m.Message)
+				e.emitAPIEvent(m)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -395,7 +404,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				return
 			}
 			if m.Code == 10167 {
-				e.emitEvent(m.Code, m.Message)
+				e.emitAPIEvent(m)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -537,7 +546,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 				return
 			}
 			if m.Code == ErrCodeSmartDepthExchanges {
-				e.emitEvent(m.Code, m.Message)
+				e.emitAPIEvent(m)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -712,7 +721,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				return
 			}
 			if m.Code == 10167 {
-				e.emitEvent(m.Code, m.Message)
+				e.emitAPIEvent(m)
 				return
 			}
 			e.deleteKeyedRoute(reqID)
