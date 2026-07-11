@@ -38,6 +38,15 @@ func GatewayAddress() (string, int, error) {
 	return host, port, nil
 }
 
+// RequirePaperTrading requires an explicit opt-in before an example can send
+// an order-shaped request to a paper account.
+func RequirePaperTrading() error {
+	if os.Getenv("IBKR_TRADING") != "paper" {
+		return fmt.Errorf("set IBKR_TRADING=paper to confirm paper-only order activity")
+	}
+	return nil
+}
+
 // FirstAccount returns the first managed account after proving one exists.
 func FirstAccount(accounts []string) (string, error) {
 	if len(accounts) == 0 {

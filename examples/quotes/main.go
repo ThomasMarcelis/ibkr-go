@@ -1,4 +1,4 @@
-// Subscribe to live quotes for AAPL and print bid/ask updates for 10 seconds.
+// Subscribe to delayed AAPL quotes and print the first complete bid/ask.
 //
 // Usage:
 //
@@ -25,7 +25,7 @@ func run() (err error) {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	client, err := ibkr.DialContext(ctx,
@@ -44,43 +44,23 @@ func run() (err error) {
 	}
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+		Contract: ibkr.Stock("AAPL"),
 	})
 	if err != nil {
 		return err
 	}
 
-	timeout := time.NewTimer(10 * time.Second)
-	defer timeout.Stop()
-	events := sub.Events()
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				return errors.Join(context.Cause(ctx), sub.Wait())
-			}
-			if event.Kind == ibkr.StreamData {
-				update := event.Value
-				fmt.Printf("bid=%-10s ask=%-10s last=%-10s\n",
-					update.Snapshot.Bid, update.Snapshot.Ask, update.Snapshot.Last)
-			} else {
-				fmt.Println("lifecycle:", event.Kind)
-			}
-		case <-timeout.C:
+	want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
+	for update := range sub.All(ctx) {
+		if update.Snapshot.Available&want == want {
+			fmt.Printf("AAPL  bid=%s  ask=%s  data=%s\n",
+				update.Snapshot.Bid, update.Snapshot.Ask,
+				update.Snapshot.MarketDataType)
 			sub.Close()
-			if err := sub.Wait(); err != nil {
-				return err
-			}
-			fmt.Println("done")
-			return nil
-		case <-ctx.Done():
-			sub.Close()
-			return errors.Join(context.Cause(ctx), sub.Wait())
+			return sub.Wait()
 		}
 	}
+
+	sub.Close()
+	return errors.Join(context.Cause(ctx), sub.Wait(), errors.New("quote ended before a complete bid/ask"))
 }

@@ -13,7 +13,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
@@ -26,8 +25,8 @@ func main() {
 }
 
 func run() (err error) {
-	if os.Getenv("IBKR_TRADING") != "paper" {
-		return fmt.Errorf("set IBKR_TRADING=paper to confirm paper-only order placement")
+	if err := exampleutil.RequirePaperTrading(); err != nil {
+		return err
 	}
 	host, port, err := exampleutil.GatewayAddress()
 	if err != nil {
@@ -51,22 +50,17 @@ func run() (err error) {
 		return err
 	}
 
-	// Place a far-from-market limit buy so it won't fill.
+	order := ibkr.LimitOrder(
+		ibkr.ActionBuy,
+		decimal.NewFromInt(1),
+		decimal.RequireFromString("1.00"), // deliberately far from market
+	)
+	order.Account = account
+	order.TIF = ibkr.TIFDay
+
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("1.00")), // far from market
-			TIF:       ibkr.TIFDay,
-			Account:   account,
-		},
+		Contract: ibkr.Stock("AAPL"),
+		Order:    order,
 	})
 	if err != nil {
 		return err
@@ -79,43 +73,49 @@ func run() (err error) {
 			err = errors.Join(err, handle.Cancel(cleanupCtx))
 		}
 		handle.Close()
+		err = errors.Join(err, handle.Wait())
 	}()
 
 	fmt.Println("placed order", handle.OrderID())
 
-	// Read events until the handle closes, then inspect Wait for the final error.
-	cancelled := false
-	for evt := range handle.Events() {
-		switch {
-		case evt.Status != nil:
-			fmt.Printf("status: %s  filled=%s remaining=%s\n",
-				evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
-
-			// Cancel once the order is live on the server.
-			if !cancelled && !ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-				fmt.Println("cancelling order...")
-				if err := handle.Cancel(ctx); err != nil {
-					return err
-				}
-				cancelled = true
+	cancelSent := false
+	for {
+		select {
+		case evt, ok := <-handle.Events():
+			if !ok {
+				return errors.Join(handle.Wait(), errors.New("order observation ended before a terminal status"))
 			}
-		case evt.OpenOrder != nil:
-			fmt.Printf("open order: %s %s %s @ %s\n",
-				evt.OpenOrder.Action, evt.OpenOrder.Quantity,
-				evt.OpenOrder.OrderType, evt.OpenOrder.LmtPrice)
-		case evt.Execution != nil:
-			fmt.Printf("execution: %s shares @ %s\n",
-				evt.Execution.Shares, evt.Execution.Price)
-		case evt.CommissionAndFees != nil:
-			fmt.Printf("commission: %s %s\n",
-				evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
+			switch {
+			case evt.Status != nil:
+				fmt.Printf("status: %s  filled=%s remaining=%s\n",
+					evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
+				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
+					cleanupNeeded = false
+					fmt.Println("order done")
+					return nil
+				}
+				if !cancelSent {
+					fmt.Println("cancelling order...")
+					if err := handle.Cancel(ctx); err != nil {
+						return err
+					}
+					cancelSent = true
+				}
+			case evt.OpenOrder != nil:
+				fmt.Printf("open order: %s %s %s @ %s\n",
+					evt.OpenOrder.Action, evt.OpenOrder.Quantity,
+					evt.OpenOrder.OrderType, evt.OpenOrder.LmtPrice)
+			case evt.Execution != nil:
+				fmt.Printf("execution: %s shares @ %s\n",
+					evt.Execution.Shares, evt.Execution.Price)
+			case evt.CommissionAndFees != nil:
+				fmt.Printf("commission: %s %s\n",
+					evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
+			case evt.Warning != nil:
+				fmt.Println("warning:", evt.Warning)
+			}
+		case <-ctx.Done():
+			return context.Cause(ctx)
 		}
 	}
-	cleanupNeeded = false
-
-	if err := handle.Wait(); err != nil {
-		return err
-	}
-	fmt.Println("order done")
-	return nil
 }

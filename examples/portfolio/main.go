@@ -1,4 +1,4 @@
-// Fetch account summary and positions, then stream P&L for 30 seconds.
+// Fetch account summary and positions, then read the first P&L update.
 //
 // Usage:
 //
@@ -7,11 +7,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
 	"github.com/ThomasMarcelis/ibkr-go/v2/examples/internal/exampleutil"
+	"github.com/shopspring/decimal"
 )
 
 func main() {
@@ -24,7 +26,7 @@ func run() (err error) {
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	client, err := ibkr.DialContext(ctx,
@@ -41,7 +43,6 @@ func run() (err error) {
 		return err
 	}
 
-	// Account summary — one-shot.
 	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
 		Group: "All",
 		Tags:  []string{"NetLiquidation", "TotalCashValue", "UnrealizedPnL"},
@@ -54,7 +55,6 @@ func run() (err error) {
 		fmt.Printf("  %-20s %s %s\n", v.Tag, v.Value, v.Currency)
 	}
 
-	// Positions — one-shot.
 	positions, err := client.Accounts().Positions(ctx)
 	if err != nil {
 		return err
@@ -68,35 +68,32 @@ func run() (err error) {
 			p.Contract.Symbol, p.Contract.SecType, p.Position, p.AvgCost)
 	}
 
-	// Stream P&L for 30 seconds.
 	pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{
 		Account: account,
 	})
 	if err != nil {
 		return err
 	}
-	defer pnl.Close()
 
-	fmt.Println("\n=== streaming P&L (30s) ===")
-	timeout := time.After(30 * time.Second)
-	for {
-		select {
-		case event, ok := <-pnl.Events():
-			if !ok {
-				if err := pnl.Wait(); err != nil {
-					return err
-				}
-				return nil
-			}
-			if event.Kind != ibkr.StreamData {
-				continue
-			}
-			update := event.Value
-			fmt.Printf("  daily=%s unrealized=%s realized=%s\n",
-				update.DailyPnL, update.UnrealizedPnL, update.RealizedPnL)
-		case <-timeout:
-			fmt.Println("done")
-			return nil
-		}
+	streamCtx, stop := context.WithTimeout(ctx, 10*time.Second)
+	defer stop()
+	fmt.Println("\n=== P&L ===")
+	for update := range pnl.All(streamCtx) {
+		fmt.Printf("  daily=%s unrealized=%s realized=%s\n",
+			optionalDecimal(update.DailyPnL),
+			optionalDecimal(update.UnrealizedPnL),
+			optionalDecimal(update.RealizedPnL))
+		pnl.Close()
+		return pnl.Wait()
 	}
+
+	pnl.Close()
+	return errors.Join(context.Cause(streamCtx), pnl.Wait(), errors.New("P&L stream ended before its first update"))
+}
+
+func optionalDecimal(value *decimal.Decimal) string {
+	if value == nil {
+		return "n/a"
+	}
+	return value.String()
 }

@@ -27,7 +27,7 @@ fmt.Println("positions:", len(positions))
 
 // streaming — one ordered stream, or data-only iteration with All
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-    Contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
+    Contract: ibkr.Stock("AAPL"),
 })
 if err != nil {
     return err
@@ -101,9 +101,12 @@ exactly six uppercase ASCII letters such as `EURUSD` and configures IDEALPRO
 routing. Build a `Contract{}` literal directly for anything more exotic
 (combos, non-USD listings, a specific primary exchange).
 
-### Stream live quotes
+### Stream quotes
 
 ```go
+if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+    return err
+}
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Stock("AAPL"),
 })
@@ -351,19 +354,9 @@ semantics.
 
 ## Examples
 
-The [`examples/`](examples/) directory contains standalone programs you can run
-against a local paper IB Gateway:
-
-```bash
-IBKR_ADDR=127.0.0.1:4002 go run ./examples/connect       # session info
-IBKR_ADDR=127.0.0.1:4002 go run ./examples/quotes         # live quote stream
-IBKR_ADDR=127.0.0.1:4002 go run ./examples/historical     # historical bars
-IBKR_ADDR=127.0.0.1:4002 go run ./examples/portfolio      # account + positions + P&L stream
-IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=paper go run ./examples/order  # place, observe, cancel
-```
-
-Each example demonstrates real error handling, context cancellation, and
-graceful shutdown.
+See the [`examples/` guide](examples/) for a short learning path from
+connection and snapshots through option discovery, scanners, reconnecting
+streams, paper order lifecycle, and margin previews.
 
 ## Testing and Verification
 

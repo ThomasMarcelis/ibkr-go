@@ -20,6 +20,20 @@ func TestGatewayAddressRejectsMissingPort(t *testing.T) {
 	}
 }
 
+func TestRequirePaperTrading(t *testing.T) {
+	t.Setenv("IBKR_TRADING", "paper")
+	if err := RequirePaperTrading(); err != nil {
+		t.Fatalf("RequirePaperTrading() error = %v", err)
+	}
+}
+
+func TestRequirePaperTradingRequiresOptIn(t *testing.T) {
+	t.Setenv("IBKR_TRADING", "")
+	if err := RequirePaperTrading(); err == nil {
+		t.Fatal("RequirePaperTrading() error = nil, want opt-in error")
+	}
+}
+
 func TestPaperAccountRejectsMixedSession(t *testing.T) {
 	if _, err := PaperAccount([]string{"DU9000001", "U123456"}); err == nil {
 		t.Fatal("PaperAccount() error = nil, want live-account refusal")

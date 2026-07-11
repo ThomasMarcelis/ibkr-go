@@ -37,12 +37,7 @@ func run() (err error) {
 	defer client.Close()
 
 	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+		Contract:   ibkr.Stock("AAPL"),
 		Duration:   ibkr.Days(1),
 		BarSize:    ibkr.Bar1Hour,
 		WhatToShow: ibkr.ShowTrades,
