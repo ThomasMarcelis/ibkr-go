@@ -522,8 +522,10 @@ tests.
   from live captures. The public `Orders().Preview` replay replaced the failed
   2026-04-14 what-if attempts and was live-revalidated at server version 206
   on 2026-07-10.
-- [ ] Record fresh captures for all scenarios with fixed cancel
-- [ ] Update `cancel_order.txt` and `direct_cancel_order.txt` to include PendingCancel
+- [x] Record focused public direct-cancel evidence at server version 206.
+- [x] Freeze `PendingCancel` before terminal `Cancelled` in
+  `api_order_direct_cancel_aapl`; retain only the grounded
+  `direct_cancel_order.txt` focused replay.
 
 ### Phase 2: TIF and order attribute expansion
 

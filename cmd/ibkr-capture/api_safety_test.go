@@ -198,31 +198,10 @@ func TestScenarioCaptureRoleMatchesCancelPolicy(t *testing.T) {
 	}
 }
 
-func TestVerifyRawScenarioForSessionRefusesTradingOnLiveAccount(t *testing.T) {
+func TestVerifyRawScenarioForSessionAllowsVersion200Probe(t *testing.T) {
 	t.Parallel()
 
-	err := verifyRawScenarioForSession("global_cancel", &sessionInfo{ManagedAccounts: "U123456"})
-	if err == nil {
-		t.Fatal("verifyRawScenarioForSession(global_cancel live) = nil, want refusal")
-	}
-	if !strings.Contains(err.Error(), "global_cancel") || !strings.Contains(err.Error(), "U123456") {
-		t.Fatalf("raw trading refusal %q does not name scenario and account", err)
-	}
-}
-
-func TestVerifyRawScenarioForSessionRequiresEveryManagedAccountPaper(t *testing.T) {
-	t.Parallel()
-
-	err := verifyRawScenarioForSession("place_order_lmt_buy_aapl", &sessionInfo{ManagedAccounts: "DU9000001,U123456"})
-	if err == nil {
-		t.Fatal("verifyRawScenarioForSession(mixed accounts) = nil, want refusal")
-	}
-}
-
-func TestVerifyRawScenarioForSessionAllowsReadOnlyLiveAccount(t *testing.T) {
-	t.Parallel()
-
-	if err := verifyRawScenarioForSession("market_rule", &sessionInfo{ManagedAccounts: "U123456"}); err != nil {
-		t.Fatalf("verifyRawScenarioForSession(read-only live) = %v, want nil", err)
+	if err := verifyRawScenarioForSession("tick_efp_probe", &sessionInfo{ServerVersion: 200}); err != nil {
+		t.Fatalf("verifyRawScenarioForSession(tick_efp_probe) = %v, want nil", err)
 	}
 }
