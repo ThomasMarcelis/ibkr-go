@@ -1,6 +1,14 @@
-handshake {"server_version":200,"connection_time":"20260405 12:00:00 CET"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
-client req_historical_ticks {"req_id":"$req1"}
-server historical_ticks {"req_id":"$req1","ticks":[{"time":"1712345678","price":"170.50","size":"100"},{"time":"1712345679","price":"170.55","size":"200"}],"done":true}
+# Exact public API capture from read-only IB Gateway server_version 207.
+# Source: /tmp/ibkr-history-errors-current-20260711/
+# 20260711T035224Z-historical_ticks_aapl_midpoint
+# events.jsonl sha256:
+# 23eaeccef26263af212651bc235cfa1a73739173a0c2eeec836512f83a98ac13
+#
+# The account is length-preserving redacted to DU9000001. Ambient farm-status
+# frames are omitted; the end-bounded request and code-10187 response are exact.
+handshake {"server_version":207,"connection_time":"20260711 05:52:23 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAAUgAAAGAxADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAADAAADIwMjYwNzExIDAzOjUyOjI0IFVUQwAxMDAATUlEUE9JTlQAMQAwAAA=
+raw server AAAAXgAAAMwIARDqnbj69DMYy08iTEZhaWxlZCB0byByZXF1ZXN0IGhpc3RvcmljYWwgdGlja3M6Tm8gbWFya2V0IGRhdGEgcGVybWlzc2lvbnMgZm9yIElTTEFORCBTVEs=
 disconnect

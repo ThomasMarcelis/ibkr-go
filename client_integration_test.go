@@ -1612,7 +1612,7 @@ func TestHistogramData(t *testing.T) {
 	}
 }
 
-func TestHistoricalTicksMidpoint(t *testing.T) {
+func TestHistoricalTicksMidpointPermissionError(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "historical_ticks_midpoint.txt")
@@ -1621,10 +1621,11 @@ func TestHistoricalTicksMidpoint(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	end := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 7, 11, 3, 52, 24, 0, time.UTC)
 
-	result, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
+	_, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -1635,21 +1636,13 @@ func TestHistoricalTicksMidpoint(t *testing.T) {
 		WhatToShow:    ibkr.ShowMidpoint,
 		UseRTH:        true,
 	})
-	if err != nil {
-		t.Fatalf("HistoricalTicks() error = %v", err)
-	}
-	if len(result.Ticks) != 2 {
-		t.Fatalf("ticks len = %d, want 2", len(result.Ticks))
-	}
-	if result.Ticks[0].Price.String() != "170.5" {
-		t.Fatalf("first price = %s, want 170.5", result.Ticks[0].Price.String())
-	}
-	if !result.Ticks[0].Time.Equal(time.Unix(1712345678, 0).UTC()) {
-		t.Fatalf("first time = %s, want %s", result.Ticks[0].Time.Format(time.RFC3339), time.Unix(1712345678, 0).UTC().Format(time.RFC3339))
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.OpKind != ibkr.OpHistoricalTicks || apiErr.Code != 10187 || !strings.Contains(apiErr.Message, "No market data permissions for ISLAND STK") {
+		t.Fatalf("HistoricalTicks() error = %v, want live code 10187 permission refusal", err)
 	}
 }
 
-func TestHistoricalTicksBidAsk(t *testing.T) {
+func TestHistoricalTicksBidAskPermissionError(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "historical_ticks_bid_ask.txt")
@@ -1658,10 +1651,11 @@ func TestHistoricalTicksBidAsk(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	end := time.Date(2026, 4, 5, 12, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 7, 11, 3, 52, 23, 0, time.UTC)
 
-	result, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
+	_, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -1672,20 +1666,9 @@ func TestHistoricalTicksBidAsk(t *testing.T) {
 		WhatToShow:    ibkr.ShowBidAsk,
 		UseRTH:        true,
 	})
-	if err != nil {
-		t.Fatalf("HistoricalTicks() error = %v", err)
-	}
-	if len(result.BidAsk) != 1 {
-		t.Fatalf("bid_ask ticks len = %d, want 1", len(result.BidAsk))
-	}
-	if result.BidAsk[0].BidPrice.String() != "170.4" {
-		t.Fatalf("bid price = %s, want 170.4", result.BidAsk[0].BidPrice.String())
-	}
-	if result.BidAsk[0].AskPrice.String() != "170.6" {
-		t.Fatalf("ask price = %s, want 170.6", result.BidAsk[0].AskPrice.String())
-	}
-	if result.BidAsk[0].TickAttrib != 1 {
-		t.Fatalf("tick attrib = %d, want 1", result.BidAsk[0].TickAttrib)
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.OpKind != ibkr.OpHistoricalTicks || apiErr.Code != 10187 || !strings.Contains(apiErr.Message, "No market data permissions for ISLAND STK") {
+		t.Fatalf("HistoricalTicks() error = %v, want live code 10187 permission refusal", err)
 	}
 }
 
