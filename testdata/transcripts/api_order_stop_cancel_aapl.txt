@@ -1,50 +1,29 @@
-# Grounded by live API capture captures/20260610T195758Z-api_order_stop_cancel_aapl.
-# server_version=200, events.jsonl sha256 prefix: fb50c6d6a49dc509.
-# Replays the STP and STP LMT rest/cancel lifecycles (ORD-001 stop variants)
-# observed on 2026-06-10 against live paper Gateway. Both far-above-market
-# stops (delayed-quote anchor 292.12 x 10) reached PreSubmitted with
-# why_held=trigger; for the plain STP the Gateway's open_order echo reported a
-# computed limit price 2921.23 next to the 2921.2 stop. Each API cancel
-# produced order_status Cancelled plus the code-202 notice, and the driver's
-# final safety global cancel drew real code-161 replies for both
-# already-cancelled orders (339 first, then 338). In replay both 161s remain
-# session notices and both handles close cleanly from their Cancelled statuses.
-# Sanitized: account identifiers redacted to the DU9000001 redaction token,
-# perm ids -> 900338/900339 (including inside the code-161 message texts),
-# order refs -> ibkrgo-sanitized-20260610T195758Z-001/-002. Trimmed:
-# farm-status 2104/2107/2158, the driver's startup safety global cancel and
-# its code-161 reply for the previous scenario's order, and the driver's
-# delayed-quote anchor exchange (market-data-type toggles, the req 1/2 tick
-# stream, and the code-10089 entitlement notice).
+# Exact public-API capture from paper IB Gateway server_version 200:
+# captures/20260610T195758Z-api_order_stop_cancel_aapl
+# events.jsonl sha256:
+# fb50c6d6a49dc5097d9952aa437b29a330f37a0c289b065c03ee0fd6828fe903.
+# Ambient quote qualification, farm-status traffic, and startup cleanup are
+# omitted. Account, order refs, perm IDs, and username use deterministic
+# same-width substitutions; all retained application frames are otherwise exact.
 handshake {"server_version":200,"connection_time":"20260610 21:57:58 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":338}
-
-# STP BUY far above market: stop trigger 2921.2, no client limit price
-client place_order {"order_id":"338","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"STP","lmt_price":"","aux_price":"2921.2","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195758Z-001","transmit":true}
-server open_order {"order_id":338,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"STP","quantity":"100","lmt_price":"2921.23","aux_price":"2921.2","tif":"DAY","perm_id":"900338","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195758Z-001"}
-server order_status {"order_id":338,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900338","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"trigger","mkt_cap_price":"0"}
-
-client cancel_order {"field_count":"5","order_id":"338","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server order_status {"order_id":338,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900338","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":338,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121489000"}
-
-# STP LMT BUY far above market: limit 2922.2 over stop trigger 2921.2
-client place_order {"order_id":"339","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"100","order_type":"STP LMT","lmt_price":"2922.2","aux_price":"2921.2","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260610T195758Z-002","transmit":true}
-server open_order {"order_id":339,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"STP LMT","quantity":"100","lmt_price":"2922.2","aux_price":"2921.2","tif":"DAY","perm_id":"900339","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195758Z-002"}
-server order_status {"order_id":339,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900339","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"trigger","mkt_cap_price":"0"}
-server open_order {"order_id":339,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"STP LMT","quantity":"100","lmt_price":"2922.2","aux_price":"2921.2","tif":"DAY","perm_id":"900339","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260610T195758Z-002"}
-server order_status {"order_id":339,"status":"PreSubmitted","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900339","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"trigger","mkt_cap_price":"0"}
-
-client cancel_order {"field_count":"5","order_id":"339","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server order_status {"order_id":339,"status":"Cancelled","filled":"0","remaining":"100","avg_fill_price":"0","perm_id":"900339","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":339,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121497000"}
-
-# final safety global cancel: live Gateway answers with code 161 for both
-# already-cancelled stop orders
-client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
-server api_error {"req_id":339,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900339","advanced_order_reject_json":"","error_time_ms":"1781121496363"}
-server api_error {"req_id":338,"code":161,"message":"Cancel attempted when order is not in a cancellable state.  Order permId =900338","advanced_order_reject_json":"","error_time_ms":"1781121496363"}
-
+raw server AAAADzE1ADEARFU5MDAwMDAxAA==
+raw server AAAACDkAMQAzMzgA
+raw client AAAA3TMAMzM4ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAQlVZADEwMABTVFAAADI5MjEuMgBEQVkAAERVOTAwMDAwMQAAMABpYmtyZ28tcmVkYWN0ZWQtMjAyNjA2MTBUMTk1NzU5Wi0wMDEAMQAwAAAAMAAwADAAAAAAAAAAAAAAAAAtMQAwAAAAAAAAMAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAADAAAAAAAAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+raw server AAADszUAMzM4ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABTVFAAMjkyMS4yMwAyOTIxLjIAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjEwVDE5NTc1OVotMDAxADEAOTAwMDAwMDMzOAAwADAAMAAAOTAwMDAwMDMzOC4wL0RVOTAwMDAwMS8xMDAAAAAAAAAAAAAwAAAtMQAwAAAAAAAAMjE0NzQ4MzY0NwAwADAAMAAAMwAwADAAADAAMAAAMABOb25lAAAwAAAAAD8AMAAwAAAwADAAAAAAAAAwADAAMAAyMTQ3NDgzNjQ3ADIxNDc0ODM2NDcAAAAwAABJQgAwADAAADAAMABQcmVTdWJtaXR0ZWQAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjEuMgAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAxADAAMAAwAAAAMAAAMTAwADAuMDIAAAAAMAAAMAAAMABwYXBlcnRyYWRlcjAxADAA
+raw server AAAANjMAMzM4AFByZVN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDAzMzgAMAAwADEAdHJpZ2dlcgAwAA==
+raw client AAAACTQAMzM4AAAAAA==
+raw server AAAALDMAMzM4AENhbmNlbGxlZAAwADEwMAAwADkwMDAwMDAzMzgAMAAwADEAADAA
+raw server AAAAMjQAMzM4ADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjoAADE3ODExMjE0ODkwMDAA
+raw client AAAA5zMAMzM5ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAAAAQlVZADEwMABTVFAgTE1UADI5MjIuMgAyOTIxLjIAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjEwVDE5NTc1OVotMDAyADEAMAAAADAAMAAwAAAAAAAAAAAAAAAALTEAMAAAAAAAADAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAwAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+raw server AAADtjUAMzM5ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABTVFAgTE1UADI5MjIuMgAyOTIxLjIAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjEwVDE5NTc1OVotMDAyADEAOTAwMDAwMDMzOQAwADAAMAAAOTAwMDAwMDMzOS4wL0RVOTAwMDAwMS8xMDAAAAAAAAAAAAAwAAAtMQAwAAAAAAAAMjE0NzQ4MzY0NwAwADAAMAAAMwAwADAAADAAMAAAMABOb25lAAAwAAAAAD8AMAAwAAAwADAAAAAAAAAwADAAMAAyMTQ3NDgzNjQ3ADIxNDc0ODM2NDcAAAAwAABJQgAwADAAADAAMABQcmVTdWJtaXR0ZWQAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjEuMgAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAxADAAMAAwAAAAMAAAMTAwADAuMDIAAAAAMAAAMAAAMABwYXBlcnRyYWRlcjAxADAA
+raw server AAAANjMAMzM5AFByZVN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDAzMzkAMAAwADEAdHJpZ2dlcgAwAA==
+raw server AAADuDUAMzM5ADI2NTU5OABBQVBMAFNUSwAAMAA/AABTTUFSVABVU0QAQUFQTABOTVMAQlVZADEwMABTVFAgTE1UADI5MjIuMgAyOTIxLjIAREFZAABEVTkwMDAwMDEAADAAaWJrcmdvLXJlZGFjdGVkLTIwMjYwNjEwVDE5NTc1OVotMDAyADEAOTAwMDAwMDMzOQAwADAAMAAAOTAwMDAwMDMzOS4wL0RVOTAwMDAwMS8xMDAAAAAAAAAAAAAwAAAtMQAwAAAAAAAAMjE0NzQ4MzY0NwAwADAAMAAAMwAwADAAADAAMAAAMABOb25lAAAwAAAAAD8AMAAwAAAwADAAAAAAAAAwADAAMAAyMTQ3NDgzNjQ3ADIxNDc0ODM2NDcAAAAwAABJQgAwADAAADAAMABQcmVTdWJtaXR0ZWQAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAAAAAAAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAtOTIyMzM3MjAzNjg1NDc3NTgwOAAAMAAAMAAwADAATm9uZQAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADI5MjEuMgAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADAAAAAAMAAxADAAMAAwAAAAMAAAAAAAAAAwAAAwAAAyMTQ3NDgzNjQ3AHBhcGVydHJhZGVyMDEAMAA=
+raw server AAAANjMAMzM5AFByZVN1Ym1pdHRlZAAwADEwMAAwADkwMDAwMDAzMzkAMAAwADEAdHJpZ2dlcgAwAA==
+raw client AAAACTQAMzM5AAAAAA==
+raw server AAAALDMAMzM5AENhbmNlbGxlZAAwADEwMAAwADkwMDAwMDAzMzkAMAAwADEAADAA
+raw server AAAAMjQAMzM5ADIwMgBPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjoAADE3ODExMjE0OTcwMDAA
+raw client AAAABTU4AAAA
+raw server AAAAbjQAMzM5ADE2MQBDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTkwMDAwMDAzMzkAADE3ODExMjE0OTYzNjMA
+raw server AAAAbjQAMzM4ADE2MQBDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTkwMDAwMDAzMzgAADE3ODExMjE0OTYzNjMA
 sleep 100ms
 disconnect

@@ -138,7 +138,7 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 			LmtPrice:  decimal.RequireFromString("14.61"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195745Z-001",
+			OrderRef:  "ibkrgo-redacted-20260610T195746Z-001",
 		},
 	})
 	if err != nil {
@@ -149,8 +149,8 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, handle)
-	if open.OrderID != 337 || open.PermID != 900337 {
-		t.Fatalf("open order id/perm = %d/%d, want 337/900337", open.OrderID, open.PermID)
+	if open.OrderID != 337 || open.PermID != 9000000337 {
+		t.Fatalf("open order id/perm = %d/%d, want 337/9000000337", open.OrderID, open.PermID)
 	}
 	if open.OrderType != ibkr.OrderTypeLimit {
 		t.Fatalf("open order type = %s, want LMT", open.OrderType)
@@ -158,7 +158,7 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 	if !open.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
 		t.Fatalf("open lmt price = %s, want 14.61", open.LmtPrice)
 	}
-	if open.OrderRef != "ibkrgo-sanitized-20260610T195745Z-001" {
+	if open.OrderRef != "ibkrgo-redacted-20260610T195746Z-001" {
 		t.Fatalf("open order ref = %q", open.OrderRef)
 	}
 
@@ -182,7 +182,7 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900337")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000337")
 	requireOrderWaitNil(t, "rest", handle)
 }
 
@@ -212,7 +212,7 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 			AuxPrice:  decimal.RequireFromString("2921.2"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195758Z-001",
+			OrderRef:  "ibkrgo-redacted-20260610T195759Z-001",
 		},
 	})
 	if err != nil {
@@ -233,8 +233,8 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	if !open.LmtPrice.Equal(decimal.RequireFromString("2921.23")) {
 		t.Fatalf("stop echoed lmt price = %s, want 2921.23", open.LmtPrice)
 	}
-	if open.PermID != 900338 {
-		t.Fatalf("stop perm id = %d, want 900338", open.PermID)
+	if open.PermID != 9000000338 {
+		t.Fatalf("stop perm id = %d, want 9000000338", open.PermID)
 	}
 
 	preSubmitted := waitOrderStatusUpdate(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
@@ -258,7 +258,7 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 			AuxPrice:  decimal.RequireFromString("2921.2"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-sanitized-20260610T195758Z-002",
+			OrderRef:  "ibkrgo-redacted-20260610T195759Z-002",
 		},
 	})
 	if err != nil {
@@ -278,8 +278,8 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	if !open.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
 		t.Fatalf("stop-limit aux price = %s, want 2921.2", open.AuxPrice)
 	}
-	if open.PermID != 900339 {
-		t.Fatalf("stop-limit perm id = %d, want 900339", open.PermID)
+	if open.PermID != 9000000339 {
+		t.Fatalf("stop-limit perm id = %d, want 9000000339", open.PermID)
 	}
 
 	preSubmitted = waitOrderStatusUpdate(t, ctx, stopLimit, ibkr.OrderStatusPreSubmitted)
@@ -298,8 +298,8 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}
-	requireCancelNotCancellableNotice(t, ctx, events, "900339")
-	requireCancelNotCancellableNotice(t, ctx, events, "900338")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000339")
+	requireCancelNotCancellableNotice(t, ctx, events, "9000000338")
 	requireOrderWaitNil(t, "stop-limit", stopLimit)
 	requireOrderWaitNil(t, "stop", stop)
 }
