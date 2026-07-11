@@ -399,7 +399,9 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 		)
 		sub.expectSnapshot()
 
-		ownedRoute.request = codec.AccountUpdatesMultiRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode}
+		ownedRoute.request = codec.AccountUpdatesMultiRequest{
+			ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, LedgerAndNLV: req.LedgerAndNLV,
+		}
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.AccountUpdateMultiValue:

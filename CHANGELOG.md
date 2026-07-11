@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Added
 
+- `AccountUpdatesMultiRequest.LedgerAndNLV` exposes the official multi-account
+  request switch instead of forcing it on for every caller.
+
 - Account-update subscriptions expose the Gateway's update timestamp through
   `AccountUpdate.UpdateTime` instead of silently discarding the callback.
 

@@ -47,8 +47,8 @@ encoding until their later official migration groups.
 
 - False booleans and empty strings use protobuf absence. In particular,
   account-update unsubscribe omits `subscribe`, while the account remains
-  present. The current account-updates-multi API emits `ledgerAndNLV=true`, as
-  it did on the classic wire.
+  present. `AccountUpdatesMultiRequest.LedgerAndNLV` controls the corresponding
+  classic field and is omitted from protobuf when false.
 - Request IDs are range-checked protobuf `int32` values. Missing correlated
   callback IDs use the official `NO_VALID_ID` default of `-1`.
 - Position quantities remain decimal strings. Optional portfolio and average-

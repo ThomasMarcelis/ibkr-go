@@ -1722,22 +1722,34 @@ func runAPIAccountUpdates(ctx context.Context, addr string, clientID int) error 
 
 func runAPIAccountUpdatesMulti(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 15*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
-		values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{Account: account})
-		if err != nil {
-			return err
-		}
-		if len(values) == 0 {
-			return errors.New("multi-account updates returned no values")
-		}
-		for _, value := range values {
-			if value.Account != account || value.Key == "" {
-				return fmt.Errorf("invalid multi-account update: account=%q key=%q", value.Account, value.Key)
+		counts := make(map[string]int, 2)
+		for _, includeLedger := range []bool{false, true} {
+			values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
+				Account: account, LedgerAndNLV: includeLedger,
+			})
+			if err != nil {
+				return err
 			}
+			if len(values) == 0 {
+				return fmt.Errorf("multi-account updates ledger_and_nlv=%t returned no values", includeLedger)
+			}
+			for _, value := range values {
+				if value.Account != account || value.Key == "" {
+					return fmt.Errorf("invalid multi-account update: account=%q key=%q", value.Account, value.Key)
+				}
+			}
+			counts[strconv.FormatBool(includeLedger)] = len(values)
 		}
 		if err := fenceAPIWrites(ctx, client, "multi-account updates cancellation"); err != nil {
 			return err
 		}
-		recordAPIEvent("account_updates_multi", "snapshot", func(event *apiDriverEvent) { event.Count = len(values) })
+		recordAPIEvent("account_updates_multi", "snapshot", func(event *apiDriverEvent) {
+			event.Count = counts["false"] + counts["true"]
+			event.Values = map[string]string{
+				"ledger_false": strconv.Itoa(counts["false"]),
+				"ledger_true":  strconv.Itoa(counts["true"]),
+			}
+		})
 		return nil
 	})
 }

@@ -79,8 +79,9 @@ type AccountUpdate struct {
 // AccountUpdatesMultiRequest selects the account and advisor model for a
 // multi-account updates subscription. Empty fields request all.
 type AccountUpdatesMultiRequest struct {
-	Account   string
-	ModelCode string // advisor model code; empty for the account itself
+	Account      string
+	ModelCode    string // advisor model code; empty for the account itself
+	LedgerAndNLV bool   // include ledger and net-liquidation-value rows
 }
 
 // AccountUpdateMultiValue is one account attribute from a multi-account updates

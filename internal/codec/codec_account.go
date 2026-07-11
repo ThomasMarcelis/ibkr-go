@@ -112,13 +112,18 @@ type AccountDownloadEnd struct {
 // Account updates multi (OUT 76, cancel OUT 77 / IN 73, 74)
 
 type AccountUpdatesMultiRequest struct {
-	ReqID     int
-	Account   string
-	ModelCode string
+	ReqID        int
+	Account      string
+	ModelCode    string
+	LedgerAndNLV bool
 }
 
 func (m AccountUpdatesMultiRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqAccountUpdatesMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode, "1"}, nil
+	ledgerAndNLV := "0"
+	if m.LedgerAndNLV {
+		ledgerAndNLV = "1"
+	}
+	return []string{itoa(protocol.OutReqAccountUpdatesMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode, ledgerAndNLV}, nil
 }
 
 type CancelAccountUpdatesMulti struct {

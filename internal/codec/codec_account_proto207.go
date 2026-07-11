@@ -147,7 +147,10 @@ func (m AccountUpdatesMultiRequest) encodeProto(sv int) ([]byte, error) {
 	if m.ModelCode != "" {
 		body = appendProtoString(body, 3, m.ModelCode)
 	}
-	return appendProtoVarint(body, 4, 1), nil
+	if m.LedgerAndNLV {
+		body = appendProtoVarint(body, 4, 1)
+	}
+	return body, nil
 }
 
 func (CancelAccountUpdatesMulti) protobufVersion() int {

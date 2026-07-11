@@ -2633,8 +2633,9 @@ func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 	defer cancel()
 
 	values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
-		Account:   "DU12345",
-		ModelCode: "",
+		Account:      "DU12345",
+		ModelCode:    "",
+		LedgerAndNLV: true,
 	})
 	if err != nil {
 		t.Fatalf("AccountUpdatesMultiSnapshot() error = %v", err)

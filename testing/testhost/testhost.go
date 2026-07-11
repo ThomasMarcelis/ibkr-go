@@ -812,7 +812,7 @@ func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[strin
 			body["account"] = fields[3]
 		}
 		return "req_account_updates", body, nil
-	case 76: // OutReqAccountUpdatesMulti: [76, 1, reqId, account, modelCode, subscribe=1]
+	case 76: // OutReqAccountUpdatesMulti: [76, 1, reqId, account, modelCode, ledgerAndNLV]
 		body := map[string]any{}
 		if len(fields) >= 3 {
 			body["req_id"] = fields[2]
@@ -822,6 +822,9 @@ func decodeClientMessageAt(serverVersion int, payload []byte) (string, map[strin
 		}
 		if len(fields) >= 5 {
 			body["model_code"] = fields[4]
+		}
+		if len(fields) >= 6 {
+			body["ledger_and_nlv"] = fields[5] == "1"
 		}
 		return "req_account_updates_multi", body, nil
 	case 77: // OutCancelAccountUpdatesMulti: [77, 1, reqId]

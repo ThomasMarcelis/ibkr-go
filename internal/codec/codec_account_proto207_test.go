@@ -29,7 +29,7 @@ func TestEncodeAccountProto207LiveVectors(t *testing.T) {
 		{"cancel account summary", CancelAccountSummary{ReqID: 7001}, "0000010708d936"},
 		{"positions multi", PositionsMultiRequest{ReqID: 7002, Account: "DU9000001"}, "0000011208da361209445539303030303031"},
 		{"cancel positions multi", CancelPositionsMulti{ReqID: 7002}, "0000011308da36"},
-		{"account updates multi", AccountUpdatesMultiRequest{ReqID: 7003, Account: "DU9000001"}, "0000011408db3612094455393030303030312001"},
+		{"account updates multi", AccountUpdatesMultiRequest{ReqID: 7003, Account: "DU9000001", LedgerAndNLV: true}, "0000011408db3612094455393030303030312001"},
 		{"cancel account updates multi", CancelAccountUpdatesMulti{ReqID: 7003}, "0000011508db36"},
 	}
 	for _, tc := range tests {
@@ -63,6 +63,36 @@ func TestAccountEncodingBoundary207(t *testing.T) {
 	}
 	if want := decodeHex(t, "0000010608111203416c6c1a0e4e65744c69717569646174696f6e"); !bytes.Equal(protobuf, want) {
 		t.Fatalf("Encode(207) = %x, want %x", protobuf, want)
+	}
+}
+
+func TestAccountUpdatesMultiLedgerFlagBoundary207(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		sv   int
+		flag bool
+		hex  string
+	}{
+		{"classic false", 206, false, "0000004c3100373030330044553930303030303100003000"},
+		{"classic true", 206, true, "0000004c3100373030330044553930303030303100003100"},
+		{"protobuf false omitted", 207, false, "0000011408db361209445539303030303031"},
+		{"protobuf true", 207, true, "0000011408db3612094455393030303030312001"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Encode(tc.sv, AccountUpdatesMultiRequest{
+				ReqID: 7003, Account: "DU9000001", LedgerAndNLV: tc.flag,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := decodeHex(t, tc.hex); !bytes.Equal(got, want) {
+				t.Fatalf("Encode(%d, LedgerAndNLV=%t) = %x, want %x", tc.sv, tc.flag, got, want)
+			}
+		})
 	}
 }
 
