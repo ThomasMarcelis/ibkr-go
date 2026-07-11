@@ -2497,6 +2497,66 @@ func runAPIPnL(ctx context.Context, addr string, clientID int) error {
 	})
 }
 
+func runAPIPnLSingle(ctx context.Context, addr string, clientID int) error {
+	return apiScenario(ctx, addr, clientID, 20*time.Second, func(ctx context.Context, client *ibkr.Client, account string) error {
+		accountUpdates, err := client.Accounts().Updates(ctx, account)
+		if err != nil {
+			return fmt.Errorf("derive held position for single-position PnL: %w", err)
+		}
+		var held ibkr.PortfolioUpdate
+		found := false
+		for _, accountUpdate := range accountUpdates {
+			position := accountUpdate.Portfolio
+			if position == nil || position.Contract.ConID <= 0 || position.Position.IsZero() {
+				continue
+			}
+			if !found || position.Contract.SecType == ibkr.SecTypeStock {
+				held = *position
+				found = true
+			}
+			if position.Contract.SecType == ibkr.SecTypeStock {
+				break
+			}
+		}
+		if !found {
+			return errors.New("single-position PnL requires a live held position with a contract ID")
+		}
+		sub, err := client.Accounts().SubscribePnLSingle(ctx, ibkr.PnLSingleRequest{
+			Account: account,
+			ConID:   held.Contract.ConID,
+		}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("subscribe %s single-position PnL: %w", held.Contract.Symbol, err)
+		}
+		var update ibkr.PnLSingleUpdate
+		count, err := awaitSubscriptionEvidence(ctx, sub, 10*time.Second, func(value ibkr.PnLSingleUpdate) bool {
+			update = value
+			return true
+		})
+		if err != nil {
+			_ = sub.Close()
+			return fmt.Errorf("observe %s single-position PnL: %w", held.Contract.Symbol, err)
+		}
+		if err := closeAndFenceSubscription(ctx, client, sub, "single-position PnL cancellation"); err != nil {
+			return err
+		}
+		recordAPIEvent("pnl_single", "held_position", func(event *apiDriverEvent) {
+			event.Symbol = held.Contract.Symbol
+			event.SecType = string(held.Contract.SecType)
+			event.Count = count
+			event.Values = map[string]string{
+				"con_id":     strconv.Itoa(held.Contract.ConID),
+				"position":   update.Position.String(),
+				"daily":      update.DailyPnL.String(),
+				"unrealized": update.UnrealizedPnL.String(),
+				"realized":   update.RealizedPnL.String(),
+				"value":      update.Value.String(),
+			}
+		})
+		return nil
+	})
+}
+
 func runAPIScannerSubscription(ctx context.Context, addr string, clientID int) error {
 	return apiScenario(ctx, addr, clientID, 30*time.Second, func(ctx context.Context, client *ibkr.Client, _ string) error {
 		sub, err := client.Scanner().SubscribeResults(ctx, ibkr.ScannerSubscriptionRequest{

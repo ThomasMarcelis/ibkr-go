@@ -191,18 +191,6 @@ func sendCancelPnL(conn net.Conn, reqID int) error {
 	return sendMessage(conn, []string{"93", strconv.Itoa(reqID)})
 }
 
-// --- PnL single (msg_id=94) / cancel (msg_id=95) ---
-//
-//	[94, reqId, account, modelCode, conId]
-//	[95, reqId]
-func sendReqPnLSingle(conn net.Conn, reqID int, account, modelCode string, conID int) error {
-	return sendMessage(conn, []string{"94", strconv.Itoa(reqID), account, modelCode, strconv.Itoa(conID)})
-}
-
-func sendCancelPnLSingle(conn net.Conn, reqID int) error {
-	return sendMessage(conn, []string{"95", strconv.Itoa(reqID)})
-}
-
 // --- Place order (msg_id=3) ---
 //
 // On server v>=145 the version field is elided. Layout:

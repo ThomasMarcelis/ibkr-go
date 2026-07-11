@@ -477,22 +477,9 @@ var scenarios = map[string]*scenario{
 		runAPI:      runAPIPnL,
 	},
 	"pnl_single": {
-		metadata:    meta("accounts", []string{"Accounts().SubscribePnLSingle"}, []int{94, 95}, "read_only", nil, []string{"single-position PnL stream or real error"}, 1, "promoted", batchReadOnly),
-		description: "REQ_PNL_SINGLE for AAPL conId=265598, read for 5s, cancel",
-		run: func(ctx context.Context, conn net.Conn, sess *sessionInfo) error {
-			reqID := nextReqID()
-			acct := sess.ManagedAccounts
-			if err := sendReqPnLSingle(conn, reqID, acct, "", 265598); err != nil {
-				return err
-			}
-			if err := readFrames(conn, 5*time.Second, logFrame, nil); err != nil {
-				return err
-			}
-			if err := sendCancelPnLSingle(conn, reqID); err != nil {
-				return err
-			}
-			return readFrames(conn, 1*time.Second, logFrame, nil)
-		},
+		metadata:    meta("accounts", []string{"Accounts().Updates", "Accounts().SubscribePnLSingle", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqAccountUpdates, protocol.InUpdatePortfolio, protocol.InAccountDownloadEnd, protocol.OutReqPnLSingle, protocol.InPnLSingle, protocol.OutCancelPnLSingle, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", nil, []string{"typed PnL update for a real held contract followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
+		description: "derive a held contract and observe its single-position PnL through the public API",
+		runAPI:      runAPIPnLSingle,
 	},
 	"tick_by_tick_last": {
 		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed Last tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
