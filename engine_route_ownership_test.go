@@ -86,3 +86,45 @@ func TestRequestIDSkipsPendingPreview(t *testing.T) {
 		t.Fatalf("allocReqID() = %d, want 42 after pending preview 41", got)
 	}
 }
+
+func TestOrderIDRemainsMonotonicAfterBackwardReseed(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		keyed:    make(map[int]*route),
+		orders:   make(map[int64]*orderRoute),
+		previews: make(map[int64]*previewRoute),
+		snapshot: Snapshot{NextValidID: 47},
+	}
+	if got := e.allocOrderID(); got != 47 {
+		t.Fatalf("first allocOrderID() = %d, want 47", got)
+	}
+
+	e.handleIncoming(codec.NextValidID{OrderID: 47})
+	if got := e.snapshot.NextValidID; got != 48 {
+		t.Fatalf("NextValidID after backward reseed = %d, want 48", got)
+	}
+	if got := e.allocOrderID(); got != 48 {
+		t.Fatalf("second allocOrderID() = %d, want 48", got)
+	}
+}
+
+func TestOrderIDSkipsEveryLiveRouteNamespace(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		keyed: map[int]*route{
+			47: {},
+		},
+		orders: map[int64]*orderRoute{
+			48: {},
+		},
+		previews: map[int64]*previewRoute{
+			49: {},
+		},
+		snapshot: Snapshot{NextValidID: 47},
+	}
+	if got := e.allocOrderID(); got != 50 {
+		t.Fatalf("allocOrderID() = %d, want 50 after keyed/order/preview conflicts", got)
+	}
+}

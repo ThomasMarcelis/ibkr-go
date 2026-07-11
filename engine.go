@@ -55,6 +55,7 @@ type engine struct {
 	readySetups        []*readySetup
 
 	nextReqID                int
+	orderIDHighWater         int64
 	nextClockRequest         time.Time
 	nextHistoricalRequest    time.Time
 	recentHistoricalRequests map[string]time.Time
@@ -394,14 +395,41 @@ func (e *engine) allocReqID() int {
 
 func (e *engine) allocOrderID() int64 {
 	for {
-		id := e.snapshot.NextValidID
+		id := max(e.snapshot.NextValidID, e.orderIDHighWater+1)
 		e.updateSnapshot(func(s *Snapshot) {
-			s.NextValidID++
+			s.NextValidID = id + 1
 		})
-		if _, conflict := e.keyed[int(id)]; !conflict {
-			return id
+		if _, conflict := e.keyed[int(id)]; conflict {
+			continue
 		}
+		if _, conflict := e.orders[id]; conflict {
+			continue
+		}
+		if _, conflict := e.previews[id]; conflict {
+			continue
+		}
+		e.orderIDHighWater = id
+		return id
 	}
+}
+
+func (e *engine) observeOrderID(id int64) {
+	if id <= e.orderIDHighWater {
+		return
+	}
+	e.orderIDHighWater = id
+	e.updateSnapshot(func(s *Snapshot) {
+		if s.NextValidID <= id {
+			s.NextValidID = id + 1
+		}
+	})
+}
+
+func (e *engine) observeNextValidID(id int64) {
+	next := max(id, e.orderIDHighWater+1, e.snapshot.NextValidID)
+	e.updateSnapshot(func(s *Snapshot) {
+		s.NextValidID = next
+	})
 }
 
 func (e *engine) connectionSeq() uint64 {

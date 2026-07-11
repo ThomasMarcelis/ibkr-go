@@ -36,7 +36,7 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 					resp <- result{err: fmt.Errorf("ibkr: invalid next valid order ID %d", m.OrderID)}
 					return
 				}
-				resp <- result{orderID: m.OrderID}
+				resp <- result{orderID: eng.snapshot.NextValidID}
 			},
 			handleAPIErr: func(msg codec.APIError, eng *engine) {
 				delete(eng.singletons, singletonOrderID)

@@ -57,9 +57,7 @@ func (e *engine) handleIncoming(msg any) {
 		}
 		return
 	case codec.NextValidID:
-		e.updateSnapshot(func(s *Snapshot) {
-			s.NextValidID = m.OrderID
-		})
+		e.observeNextValidID(m.OrderID)
 		e.bootstrap.nextValidID = true
 		e.maybeReady()
 		if route, ok := e.singletons[singletonOrderID]; ok {
@@ -416,6 +414,7 @@ func isInitialOrderRejection(code int) bool {
 }
 
 func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
+	e.observeOrderID(msg.OrderID)
 	// A what-if preview route resolves on its single open_order echo: decode,
 	// tear the route down, and hand the result (OpenOrder or decode error) to
 	// the blocked PreviewOrder caller. No OrderHandle is ever involved.
@@ -462,6 +461,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 }
 
 func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
+	e.observeOrderID(msg.OrderID)
 	orderRoute, orderObserved := e.orders[msg.OrderID]
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
 	if (!orderObserved || orderRoute.closed) && !singletonObserved {
