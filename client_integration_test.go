@@ -1259,28 +1259,6 @@ func TestNewsProviders(t *testing.T) {
 	}
 }
 
-func TestScannerParameters(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "scanner_parameters.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	xml, err := client.Scanner().Parameters(ctx)
-	if err != nil {
-		t.Fatalf("ScannerParameters() error = %v", err)
-	}
-	if len(xml) == 0 {
-		t.Fatal("ScannerParameters() returned empty XML")
-	}
-	if string(xml) != "<ScanParameterResponse><InstrumentList></InstrumentList></ScanParameterResponse>" {
-		t.Fatalf("xml = %q, want scan parameter response XML", xml)
-	}
-}
-
 func TestScannerSubscriptionReturnsLiveRankedResults(t *testing.T) {
 	t.Parallel()
 

@@ -148,7 +148,7 @@ var rawFrameAttested = map[int]string{
 var pendingLiveAttestation = map[int]string{
 	protocol.InMarketDepthL2:         "exact-sv206 protobuf dispatch/schema are official-source-attested; positive raw 213 remains pending because the local capture account lacked L2 entitlement",
 	protocol.InReceiveFA:             "needs a requestFA capture (FA account entitlement)",
-	protocol.InScannerParameters:     "needs a reqScannerParameters capture (large XML frame)",
+	protocol.InScannerParameters:     "live sv206 response is attested by capture e50db8964130d14bcf8c5d02fe8c1383d15f55daf58363ab1433b999ccd79660, but its 1.8 MB XML frame is intentionally not checked in",
 	protocol.InRealTimeBars:          "needs a reqRealTimeBars 5s-bar capture (market hours)",
 	protocol.InHistoricalDataUpdate:  "source-referenced from the official client library; live attestation pending (needs a market-hours keepUpToDate reqHistoricalData capture) — see captures/v1/WIRE_TRUTH.md",
 	protocol.InPnLSingle:             "needs a reqPnLSingle capture",
