@@ -9,10 +9,10 @@ import (
 // Raw-frame capture-coverage gate and inbound evidence ledger.
 //
 // Every decoder registered in inboundDecoders must be attested by at least one
-// "capture-decode" test: a test that feeds a HARDCODED raw wire frame (a
-// []byte("…\x00…") literal, or a hardcoded field slice whose first token is the
-// literal msg_id) into DecodeBatch/Decode and asserts on the typed result. The
-// frame must be live-derived, not synthesized.
+// test that feeds a hardcoded live-derived wire frame through the production
+// decoder and asserts on the typed result. The frame may live directly in a
+// codec test or in an exact raw public replay fixture; large frames should not
+// be duplicated merely to satisfy this ledger.
 //
 // Why this gate exists. This library once leaned on symmetric round-trip tests
 // (Encode → Decode). Those tests share a single msg_id constant on both sides,
@@ -71,9 +71,9 @@ func TestInboundDecoderRegistryCoverage(t *testing.T) {
 	}
 }
 
-// rawFrameAttested maps a decoder's msg_id to a representative direct test
-// that decodes a hardcoded live wire frame and asserts the typed result. The
-// names are navigation aids; the executable assertions remain the evidence.
+// rawFrameAttested maps a decoder's msg_id to a representative direct decode
+// or exact raw public replay test. The names are navigation aids; the
+// executable assertions and their cited live frames remain the evidence.
 var rawFrameAttested = map[int]string{
 	protocol.InTickPrice:             "TestCaptureDecode_TickPrice",
 	protocol.InTickSize:              "TestCaptureDecode_TickSize",
@@ -117,6 +117,9 @@ var rawFrameAttested = map[int]string{
 	protocol.InPositionMulti:         "TestCaptureDecode_PositionMultiServerVersion206",
 	protocol.InFamilyCodes:           "TestCaptureDecode_FamilyCodesLive",
 	protocol.InNewsProviders:         "TestCaptureDecode_NewsProvidersLive",
+	protocol.InSymbolSamples:         "TestMatchingSymbols",
+	protocol.InMktDepthExchanges:     "TestMktDepthExchanges",
+	protocol.InSmartComponents:       "TestSmartComponents",
 	protocol.InPnL:                   "TestCaptureDecode_PnLLive",
 	protocol.InOrderStatus:           "TestCaptureDecode_OrderStatusLive",
 	protocol.InUpdateAccountValue:    "TestCaptureDecode_AccountUpdatesLive",
@@ -145,9 +148,6 @@ var pendingLiveAttestation = map[int]string{
 	protocol.InReceiveFA:             "needs a requestFA capture (FA account entitlement)",
 	protocol.InScannerParameters:     "needs a reqScannerParameters capture (large XML frame)",
 	protocol.InRealTimeBars:          "needs a reqRealTimeBars 5s-bar capture (market hours)",
-	protocol.InSymbolSamples:         "TestDecodeLiveSymbolSamplesFrameShape decodes a live-shaped frame but cites no capture — promote by adding a captures/ citation or a fresh reqMatchingSymbols capture",
-	protocol.InMktDepthExchanges:     "needs a reqMktDepthExchanges capture",
-	protocol.InSmartComponents:       "needs a reqSmartComponents capture",
 	protocol.InHistogramData:         "needs a reqHistogramData capture",
 	protocol.InHistoricalDataUpdate:  "source-referenced from the official client library; live attestation pending (needs a market-hours keepUpToDate reqHistoricalData capture) — see captures/v1/WIRE_TRUTH.md",
 	protocol.InPnLSingle:             "needs a reqPnLSingle capture",

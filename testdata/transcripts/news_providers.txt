@@ -1,12 +1,12 @@
-# Grounded by paper IB Gateway server_version 200 capture
-# captures/v1/news_providers.log.
-# capture sha256: 7c54a1a50c60aef5af5de634b7a23cb1b04269dd92d0ea98dda29b451bbc862f
-#
-# The bootstrap account and connection time are sanitized. Ambient farm-status
-# frames are omitted. The ordered provider response is exact.
-handshake {"server_version":200,"connection_time":"20260405 14:28:53 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_news_providers {}
-server news_providers {"providers":[{"code":"BRFG","name":"Briefing.com General Market Columns"},{"code":"BRFUPDN","name":"Briefing.com Analyst Actions"},{"code":"DJNL","name":"Dow Jones Newsletters"}]}
+# Live-derived from /tmp/ibkr-api-migration-captures/
+# 20260710T215127Z-news_providers at server_version 206; events.jsonl sha256:
+# 999c27f32c7d8e68bd39a35c04fc41f20f1adf8c626b47e4ad80e99b6a04ce55.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted.
+# The bare request and complete ordered provider response are exact.
+handshake {"server_version":206,"connection_time":"20260710 23:51:26 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABAAAAFU=
+raw server AAABIQAAAFU4AEJSRkcAQnJpZWZpbmcuY29tIEdlbmVyYWwgTWFya2V0IENvbHVtbnMAQlJGVVBETgBCcmllZmluZy5jb20gQW5hbHlzdCBBY3Rpb25zAERKLU4ARG93IEpvbmVzIEdsb2JhbCBFcXVpdHkgVHJhZGVyAERKLVJUAERvdyBKb25lcyBUcmFkZXIgTmV3cwBESi1SVEEARG93IEpvbmVzIFRvcCBTdG9yaWVzIEFzaWEgUGFjaWZpYwBESi1SVEUARG93IEpvbmVzIFRvcCBTdG9yaWVzIEV1cm9wZQBESi1SVEcARG93IEpvbmVzIFRvcCBTdG9yaWVzIEdsb2JhbABESk5MAERvdyBKb25lcyBOZXdzbGV0dGVycwA=
 disconnect

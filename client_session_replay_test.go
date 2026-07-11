@@ -425,9 +425,9 @@ func TestTickNewsReplay(t *testing.T) {
 
 // TestCurrentTimeMillisReplay freezes explicit reqCurrentTimeInMillis
 // (OUT 105) answered by the live epoch-millisecond reply (IN 109), both
-// versionless, captured 2026-06-11 against the paper Gateway
-// (captures/20260611T091447Z-current_time_millis, events.jsonl sha256
-// prefix 23d6cedcf61b86fa).
+// versionless, captured 2026-07-10 against the readonly Gateway
+// (/tmp/ibkr-api-migration-captures/20260710T215126Z-current_time_millis,
+// events.jsonl sha256 prefix 3070c6c9296d0eb2).
 func TestCurrentTimeMillisReplay(t *testing.T) {
 	t.Parallel()
 
@@ -442,7 +442,7 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentTimeMillis: %v", err)
 	}
-	if want := time.UnixMilli(1781169286652).UTC(); !ts.Equal(want) {
+	if want := time.UnixMilli(1783720285807).UTC(); !ts.Equal(want) {
 		t.Fatalf("CurrentTimeMillis = %v, want %v", ts, want)
 	}
 }

@@ -1,14 +1,12 @@
-# Grounded by live API capture captures/20260611T091447Z-current_time_millis.
-# server_version=200, events.jsonl sha256 prefix: 23d6cedcf61b86fa.
-# Replays explicit reqCurrentTimeInMillis (OUT 105, bare message id) answered
-# by currentTimeInMillis (IN 109) with the live epoch milliseconds, both
-# versionless per the official client at server_version 197+.
-# Account identifiers are sanitized to the DU9000001 redaction token.
-# Trimmed: farm-status 2104/2107/2158 ambient frames.
-handshake {"server_version":200,"connection_time":"20260611 11:14:46 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":2}
-
-client req_current_time_millis {}
-server current_time_millis {"time_ms":"1781169286652"}
+# Live-derived from /tmp/ibkr-api-migration-captures/
+# 20260710T215126Z-current_time_millis at server_version 206; events.jsonl sha256:
+# 3070c6c9296d0eb2a50bcb59bbf77b64b6135ad8a0cd22c135cf3f8cf9d38dfe.
+# The account identifier is a deterministic length-preserving substitution.
+# Ambient farm-status frames are omitted.
+# The bare request and millisecond reply are exact.
+handshake {"server_version":206,"connection_time":"20260710 23:51:25 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABAAAAGk=
+raw server AAAAEgAAAG0xNzgzNzIwMjg1ODA3AA==
 disconnect

@@ -1178,17 +1178,25 @@ func TestMktDepthExchanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MktDepthExchanges() error = %v", err)
 	}
-	if len(exchanges) != 1 {
-		t.Fatalf("exchanges len = %d, want 1", len(exchanges))
+	if len(exchanges) != 307 {
+		t.Fatalf("exchanges len = %d, want 307", len(exchanges))
 	}
-	if exchanges[0].Exchange != "ARCA" {
-		t.Fatalf("exchange = %q, want ARCA", exchanges[0].Exchange)
+	wantExchanges := []ibkr.DepthExchange{
+		{Exchange: "IDEALPRO", SecType: ibkr.SecTypeForex, ServiceDataType: "Deep", AggGroup: 4},
+		{Exchange: "SMART", SecType: ibkr.SecTypeStock, ListingExch: "PINK", ServiceDataType: "AggDeep", AggGroup: 1},
+		{Exchange: "SMART", SecType: ibkr.SecTypeBond, ServiceDataType: "Deep", AggGroup: 7},
 	}
-	if exchanges[0].SecType != ibkr.SecTypeStock {
-		t.Fatalf("sec_type = %q, want STK", exchanges[0].SecType)
-	}
-	if exchanges[0].AggGroup != 4 {
-		t.Fatalf("agg_group = %d, want 4", exchanges[0].AggGroup)
+	for _, want := range wantExchanges {
+		found := false
+		for _, got := range exchanges {
+			if got == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("exchanges missing %+v", want)
+		}
 	}
 }
 
@@ -1206,12 +1214,17 @@ func TestNewsProviders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewsProviders() error = %v", err)
 	}
-	if len(providers) != 3 {
-		t.Fatalf("providers len = %d, want 3", len(providers))
+	if len(providers) != 8 {
+		t.Fatalf("providers len = %d, want 8", len(providers))
 	}
 	wantProviders := []ibkr.NewsProvider{
 		{Code: "BRFG", Name: "Briefing.com General Market Columns"},
 		{Code: "BRFUPDN", Name: "Briefing.com Analyst Actions"},
+		{Code: "DJ-N", Name: "Dow Jones Global Equity Trader"},
+		{Code: "DJ-RT", Name: "Dow Jones Trader News"},
+		{Code: "DJ-RTA", Name: "Dow Jones Top Stories Asia Pacific"},
+		{Code: "DJ-RTE", Name: "Dow Jones Top Stories Europe"},
+		{Code: "DJ-RTG", Name: "Dow Jones Top Stories Global"},
 		{Code: "DJNL", Name: "Dow Jones Newsletters"},
 	}
 	for i, want := range wantProviders {
