@@ -14,9 +14,6 @@ func (h *ExerciseHandle) RequestID() int { return h.requestID }
 // Events returns warnings and pseudo-order lifecycle events for the instruction.
 func (h *ExerciseHandle) Events() <-chan OrderEvent { return h.order.Events() }
 
-// Lifecycle returns local observation state changes.
-func (h *ExerciseHandle) Lifecycle() <-chan SubscriptionStateEvent { return h.order.Lifecycle() }
-
 // Done closes when observation ends.
 func (h *ExerciseHandle) Done() <-chan struct{} { return h.order.Done() }
 

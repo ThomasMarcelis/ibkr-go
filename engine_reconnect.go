@@ -104,7 +104,7 @@ func (e *engine) disconnectRoutes(err error) {
 	for _, or := range e.orders {
 		if !or.closed && !or.gapped {
 			or.gapped = true
-			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
+			or.handle.emitLifecycle(OrderGap, e.connectionSeq(), err)
 		}
 	}
 }
@@ -176,11 +176,14 @@ func (e *engine) resumeRoutes() {
 	}
 	e.continueResumeRoutes()
 
-	// Emit Resumed to all active order handles after reconnect.
+	// A reconnect cannot prove what happened to a live order during the gap.
+	// Keep the stable handle, but require explicit reconciliation before a
+	// replacement can be sent.
 	for _, or := range e.orders {
 		if !or.closed && or.gapped {
 			or.gapped = false
-			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
+			or.recoveryRequired = true
+			or.handle.emitLifecycle(OrderRecoveryRequired, e.connectionSeq(), ErrResumeRequired)
 		}
 	}
 }
@@ -317,7 +320,7 @@ func (e *engine) emitGap() {
 	for _, or := range e.orders {
 		if !or.closed && !or.gapped {
 			or.gapped = true
-			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: e.connectionSeq()})
+			or.handle.emitLifecycle(OrderGap, e.connectionSeq(), ErrInterrupted)
 		}
 	}
 }
@@ -338,7 +341,7 @@ func (e *engine) emitResumed() {
 	for _, or := range e.orders {
 		if !or.closed && or.gapped {
 			or.gapped = false
-			or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionResumed, ConnectionSeq: e.connectionSeq()})
+			or.handle.emitLifecycle(OrderRestored, e.connectionSeq(), nil)
 		}
 	}
 }

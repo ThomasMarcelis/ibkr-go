@@ -276,12 +276,35 @@ type OrderStatusUpdate struct {
 	MktCapPrice   decimal.Decimal // capped price for price-capped orders
 }
 
+// OrderLifecycleKind classifies local write and connection transitions for an
+// observed order.
+type OrderLifecycleKind string
+
+const (
+	OrderStarted          OrderLifecycleKind = "Started"
+	OrderGap              OrderLifecycleKind = "Gap"
+	OrderRestored         OrderLifecycleKind = "Restored"
+	OrderRecoveryRequired OrderLifecycleKind = "RecoveryRequired"
+)
+
+// OrderLifecycleEvent reports whether order observation is continuous. A
+// RecoveryRequired event means IBKR may have changed the order during a data
+// gap; reconcile with open orders, executions, and completed orders before
+// replacing it. Cancellation remains safe by stable OrderID.
+type OrderLifecycleEvent struct {
+	Kind          OrderLifecycleKind
+	ConnectionSeq uint64
+	Err           error
+}
+
 // OrderEvent is a union event dispatched to per-order handles. Exactly one field is non-nil.
 type OrderEvent struct {
 	OpenOrder         *OpenOrder
 	Status            *OrderStatusUpdate
 	Execution         *Execution
 	CommissionAndFees *CommissionAndFeesReport
+	Binding           *OrderBinding
+	Lifecycle         *OrderLifecycleEvent
 	// Warning is a non-terminal, order-targeted notice (e.g. code 399, the
 	// off-hours deferral). The order stays working at IB and the handle stays
 	// open; contrast with a terminal failure, which closes the handle and is

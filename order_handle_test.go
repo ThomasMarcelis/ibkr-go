@@ -7,28 +7,35 @@ import (
 	"testing/synctest"
 )
 
-func TestOrderHandleStateChannelClosesWhenFull(t *testing.T) {
+func TestOrderHandleLifecycleSharesLosslessEventQueue(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		handle := newOrderHandle(7, 64)
-		for i := 0; i < 12; i++ {
-			handle.emitState(SubscriptionStateEvent{Kind: SubscriptionGap, ConnectionSeq: uint64(i + 1)})
+		handle := newOrderHandle(7, 8)
+		for i := 0; i < 8; i++ {
+			if !handle.emitLifecycle(OrderGap, uint64(i+1), ErrInterrupted) {
+				t.Fatalf("emitLifecycle(%d) failed before the queue filled", i+1)
+			}
 		}
-		handle.Close()
+		if handle.emitLifecycle(OrderGap, 9, ErrInterrupted) {
+			t.Fatal("emitLifecycle() succeeded after the lossless queue filled")
+		}
 
 		var seqs []uint64
-		for evt := range handle.Lifecycle() {
-			if evt.Kind == SubscriptionGap {
-				seqs = append(seqs, evt.ConnectionSeq)
+		for evt := range handle.Events() {
+			if evt.Lifecycle != nil && evt.Lifecycle.Kind == OrderGap {
+				seqs = append(seqs, evt.Lifecycle.ConnectionSeq)
 			}
 		}
-		if len(seqs) != 7 {
-			t.Fatalf("gap event count = %d, want 7 plus the terminal Closed event", len(seqs))
+		if len(seqs) != 8 {
+			t.Fatalf("gap event count = %d, want 8", len(seqs))
 		}
 		for i, seq := range seqs {
-			want := uint64(i + 6)
+			want := uint64(i + 1)
 			if seq != want {
-				t.Fatalf("seqs[%d] = %d, want %d (keep latest 8)", i, seq, want)
+				t.Fatalf("seqs[%d] = %d, want %d", i, seq, want)
 			}
+		}
+		if err := handle.Wait(); !errors.Is(err, ErrSlowConsumer) {
+			t.Fatalf("Wait() error = %v, want ErrSlowConsumer", err)
 		}
 	})
 }

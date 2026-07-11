@@ -141,9 +141,15 @@ func (e *engine) handleIncoming(msg any) {
 			route.handle(msg, e)
 		}
 	case codec.OrderBound:
+		binding := OrderBinding{PermID: msg.PermID, ClientID: msg.ClientID, OrderID: msg.OrderID}
+		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
+			if !e.ensureOrderStarted(or) || !or.handle.emitBinding(binding) {
+				e.closeOrderRoute(msg.OrderID, or, nil)
+			}
+		}
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
 			if request, auto := route.request.(codec.OpenOrdersRequest); auto && request.Scope == string(OpenOrdersScopeAuto) {
-				route.handle(OrderBinding{PermID: msg.PermID, ClientID: msg.ClientID, OrderID: msg.OrderID}, e)
+				route.handle(binding, e)
 			}
 		}
 	case codec.CommissionReport:
@@ -279,6 +285,10 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				return
 			}
 			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
+				if !e.ensureOrderStarted(or) {
+					e.closeOrderRoute(int64(msg.ReqID), or, nil)
+					return
+				}
 				// Live handles terminate only on 10xxx codes attested as
 				// outright placement rejections: no order_status ever follows
 				// them, so this error is the handle's only completion signal.
@@ -309,6 +319,10 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// Order-specific API errors: the reqID field carries the orderID
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
+			if !e.ensureOrderStarted(or) {
+				e.closeOrderRoute(int64(msg.ReqID), or, nil)
+				return
+			}
 			if isOrderCancellationReply(msg.Code) {
 				e.emitAPIEvent(msg)
 				return
@@ -428,6 +442,10 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	}
 
 	if orderObserved && !orderRoute.closed {
+		if !e.ensureOrderStarted(orderRoute) {
+			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
+			return
+		}
 		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 		}
@@ -457,6 +475,10 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	}
 
 	if orderObserved && !orderRoute.closed {
+		if !e.ensureOrderStarted(orderRoute) {
+			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
+			return
+		}
 		if !orderRoute.handle.emitStatus(status) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
 		}
@@ -499,13 +521,22 @@ func (e *engine) handleTransportWrite(write transportWrite) {
 
 	switch write.result.Outcome {
 	case transport.WriteCompleteLocal:
-		or.handle.emitState(SubscriptionStateEvent{Kind: SubscriptionStarted, ConnectionSeq: e.connectionSeq()})
+		or.handle.emitLifecycle(OrderStarted, e.connectionSeq(), nil)
 	case transport.WriteUnwritten:
 		e.closeOrderRoute(orderID, or, ErrInterrupted)
 	case transport.WriteIncomplete:
 		// The Gateway may have observed a partial frame. The transport loss
 		// that follows keeps the route alive but marks its state uncertain.
 	}
+}
+
+func (e *engine) ensureOrderStarted(or *orderRoute) bool {
+	if or.pendingWrite.id == 0 {
+		return true
+	}
+	delete(e.pendingOrderWrites, or.pendingWrite)
+	or.pendingWrite = transportWriteKey{}
+	return or.handle.emitLifecycle(OrderStarted, e.connectionSeq(), nil)
 }
 
 const unclaimedCommissionTTL = 750 * time.Millisecond
@@ -615,6 +646,10 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	}
 	or, ok := e.orders[m.OrderID]
 	if !ok || or.closed {
+		return
+	}
+	if !e.ensureOrderStarted(or) {
+		e.closeOrderRoute(m.OrderID, or, nil)
 		return
 	}
 	// A fill already delivered to this handle must not be re-emitted when a

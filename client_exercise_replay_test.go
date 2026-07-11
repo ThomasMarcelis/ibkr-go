@@ -57,6 +57,9 @@ func requireNoMoreOrderEvents(t *testing.T, ctx context.Context, name string, ha
 			if !ok {
 				return
 			}
+			if evt.Lifecycle != nil {
+				continue
+			}
 			t.Errorf("%s saw unexpected order event: %+v", name, evt)
 		case <-ctx.Done():
 			t.Fatalf("timeout draining %s order events", name)

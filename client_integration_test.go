@@ -1794,11 +1794,11 @@ func TestOrderEventBufferOverflowPreservesOrderCoordinate(t *testing.T) {
 	if len(events) != 4 {
 		t.Fatalf("buffered event count = %d, want configured capacity 4", len(events))
 	}
-	if events[0].OpenOrder == nil || events[0].OpenOrder.Status != ibkr.OrderStatusPreSubmitted ||
-		events[1].Status == nil || events[1].Status.Status != ibkr.OrderStatusPreSubmitted ||
-		events[2].Execution == nil || events[2].Execution.ExecID != "sanitized-native-exec-001" ||
-		events[3].OpenOrder == nil || events[3].OpenOrder.Status != ibkr.OrderStatusFilled {
-		t.Fatalf("buffered live-derived prefix = %+v, want OpenOrder(PreSubmitted), PreSubmitted, Execution, OpenOrder(Filled)", events)
+	if events[0].Lifecycle == nil || events[0].Lifecycle.Kind != ibkr.OrderStarted ||
+		events[1].OpenOrder == nil || events[1].OpenOrder.Status != ibkr.OrderStatusPreSubmitted ||
+		events[2].Status == nil || events[2].Status.Status != ibkr.OrderStatusPreSubmitted ||
+		events[3].Execution == nil || events[3].Execution.ExecID != "sanitized-native-exec-001" {
+		t.Fatalf("buffered live-derived prefix = %+v, want Started, OpenOrder(PreSubmitted), PreSubmitted, Execution", events)
 	}
 
 	// Observation has ended, but this stable server coordinate remains the
@@ -2613,6 +2613,24 @@ func waitForStateKind(t *testing.T, ch <-chan ibkr.SubscriptionStateEvent, want 
 		state := waitForEvent(t, ch)
 		if state.Kind == want {
 			return state
+		}
+	}
+}
+
+func waitForOrderLifecycle(t *testing.T, ctx context.Context, ch <-chan ibkr.OrderEvent, want ibkr.OrderLifecycleKind) ibkr.OrderLifecycleEvent {
+	t.Helper()
+
+	for {
+		select {
+		case event, ok := <-ch:
+			if !ok {
+				t.Fatalf("order events closed before lifecycle %s", want)
+			}
+			if event.Lifecycle != nil && event.Lifecycle.Kind == want {
+				return *event.Lifecycle
+			}
+		case <-ctx.Done():
+			t.Fatalf("waiting for order lifecycle %s: %v", want, ctx.Err())
 		}
 	}
 }
@@ -3944,13 +3962,23 @@ func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
 	}
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
 
-	gap := waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionGap)
+	gap := waitForOrderLifecycle(t, ctx, handle.Events(), ibkr.OrderGap)
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
-	resumed := waitForStateKind(t, handle.Lifecycle(), ibkr.SubscriptionResumed)
-	if resumed.ConnectionSeq != 2 {
-		t.Fatalf("resumed.ConnectionSeq = %d, want 2", resumed.ConnectionSeq)
+	recovery := waitForOrderLifecycle(t, ctx, handle.Events(), ibkr.OrderRecoveryRequired)
+	if recovery.ConnectionSeq != 2 {
+		t.Fatalf("recovery.ConnectionSeq = %d, want 2", recovery.ConnectionSeq)
+	}
+	if err := handle.Replace(ctx, ibkr.Order{
+		Action:    ibkr.ActionBuy,
+		OrderType: ibkr.OrderTypeLimit,
+		Quantity:  decimal.RequireFromString("10"),
+		LmtPrice:  new(decimal.RequireFromString("13.27")),
+		TIF:       ibkr.TIFGTC,
+		Account:   "DU9000001",
+	}); !errors.Is(err, ibkr.ErrResumeRequired) {
+		t.Fatalf("Replace after uncertain reconnect = %v, want ErrResumeRequired", err)
 	}
 
 	if err := handle.Cancel(ctx); err != nil {

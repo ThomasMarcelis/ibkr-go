@@ -132,11 +132,12 @@ type route struct {
 }
 
 type orderRoute struct {
-	orderID      int64
-	handle       *OrderHandle
-	closed       bool
-	gapped       bool // true after Gap emitted, reset on Resumed; prevents double emission
-	pendingWrite transportWriteKey
+	orderID          int64
+	handle           *OrderHandle
+	closed           bool
+	gapped           bool // true after Gap emitted; prevents duplicate gap events
+	recoveryRequired bool
+	pendingWrite     transportWriteKey
 }
 
 type previewRoute struct {
