@@ -523,6 +523,7 @@ against the role-aware `paper-dev` Gateway.
 | api_order_trailing_cancel_aapl.txt | 20260610T195819Z | promoted; covers TRAIL off-hours partial-then-full fill with cancel-after-fill 10148, TRAIL LIMIT rest/cancel, and the UTC-dash execution times the parser now accepts (both fills and commissions reach the handle in replay) |
 | api_order_relative_cancel_aapl.txt | 20260610T195833Z | promoted; covers REL with Gateway-assigned 0.01 offset echo and full cancel lifecycle |
 | api_order_rejects_aapl.txt | 20260610T195923Z | promoted; covers 321 invalid order type, price-band 202 cancel text, 10147 unknown-order cancel, 10148 re-cancel, and 161 safety re-cancel |
+| place_order_invalid_type_live_error.txt | 20260711T041223Z | promoted from exact sv207 protobuf frames; freezes the current public Place request and its order-targeted code-321 invalid-order-type rejection (`29dcc214b5cf3c5a03b64d8fba15eb9989a0ddc8348d05c021d21f47209eddb8`) |
 | current_time_live.txt | 20260710T215126Z | promoted; exact sv206 reqCurrentTime and seconds-resolution reply update both the call and Session snapshot (`c4ad2ec73d6d2a92`) |
 | news_bulletins_live.txt | 20260710T133034Z | promoted; exact sv200 subscribe, two exchange bulletins, and cancel (`164407d1aa7df6bf`) |
 | market_depth_error.txt | 20260711T000616Z | promoted; exact sv206 resolved-AAPL regular-depth request and terminal code-10092 refusal (`c45b90e97854b1cb`) |

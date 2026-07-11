@@ -2865,10 +2865,11 @@ func TestPlaceOrderInvalidTypeLiveError(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderType("FEELINGS"),
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  decimal.RequireFromString("10"),
+			Quantity:  decimal.RequireFromString("100"),
+			LmtPrice:  decimal.RequireFromString("15.81"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "ibkrgo-redacted-20260711T041223Z-001",
 		},
 	})
 	if err != nil {
