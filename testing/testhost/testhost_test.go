@@ -3,9 +3,12 @@ package testhost
 import (
 	"bytes"
 	"encoding/base64"
+	"errors"
 	"io"
 	"net"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
 )
@@ -69,6 +72,36 @@ func TestRawClientDirection(t *testing.T) {
 
 	if err := host.Wait(); err != nil {
 		t.Fatalf("host.Wait() error = %v", err)
+	}
+}
+
+func TestRawClientMismatchClosesConnection(t *testing.T) {
+	t.Parallel()
+
+	host, err := New("raw client aGVsbG8=")
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	conn, err := net.Dial("tcp", host.Addr())
+	if err != nil {
+		t.Fatalf("Dial() error = %v", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.Write([]byte("jello")); err != nil {
+		t.Fatalf("Write() error = %v", err)
+	}
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("SetReadDeadline() error = %v", err)
+	}
+	if _, err := conn.Read(make([]byte, 1)); !errors.Is(err, io.EOF) {
+		t.Fatalf("Read() error = %v, want EOF", err)
+	}
+
+	err = host.Wait()
+	if err == nil || !strings.Contains(err.Error(), "raw client bytes") {
+		t.Fatalf("host.Wait() error = %v, want raw-client mismatch", err)
 	}
 }
 

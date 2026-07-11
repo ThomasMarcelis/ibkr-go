@@ -94,6 +94,11 @@ func (h *Host) run() {
 
 	bindings := map[string]any{}
 	var conn net.Conn
+	defer func() {
+		if conn != nil {
+			_ = conn.Close()
+		}
+	}()
 	// serverVersion tracks the wire layout each server frame is encoded at. It
 	// is captured from the transcript's handshake so a transcript declaring an
 	// older server_version replays frames in that version's layout rather than
@@ -353,9 +358,6 @@ func (h *Host) run() {
 		}
 	}
 
-	if conn != nil {
-		_ = conn.Close()
-	}
 }
 
 func (h *Host) finish(err error) {
