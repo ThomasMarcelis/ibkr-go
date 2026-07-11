@@ -3,7 +3,7 @@ package codec
 import (
 	"strings"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 type QuoteRequest struct {

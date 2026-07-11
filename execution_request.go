@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.ExecutionsRequest, error) {

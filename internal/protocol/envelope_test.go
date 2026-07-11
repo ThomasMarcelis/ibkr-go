@@ -6,7 +6,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 func TestEnvelopeNegotiatedEncoding(t *testing.T) {

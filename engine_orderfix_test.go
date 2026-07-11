@@ -7,7 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
 // newEngineForErrorTest extends the dispatch-test engine with a session-event

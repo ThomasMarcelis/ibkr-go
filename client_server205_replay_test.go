@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	ibkr "github.com/ThomasMarcelis/ibkr-go"
+	ibkr "github.com/ThomasMarcelis/ibkr-go/v2"
 	"github.com/shopspring/decimal"
 )
 

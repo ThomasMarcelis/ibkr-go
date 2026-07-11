@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 type verificationStats struct {

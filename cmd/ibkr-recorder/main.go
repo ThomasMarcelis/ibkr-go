@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
 )
 
 type recorderConfig struct {

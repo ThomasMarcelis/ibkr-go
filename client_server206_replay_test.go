@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	ibkr "github.com/ThomasMarcelis/ibkr-go"
+	ibkr "github.com/ThomasMarcelis/ibkr-go/v2"
 )
 
 func TestMarketDataServer206Replay(t *testing.T) {

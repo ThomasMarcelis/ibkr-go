@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
 func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) ([]Bar, error) {

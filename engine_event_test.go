@@ -4,7 +4,7 @@ import (
 	"testing"
 	"testing/synctest"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
 func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {

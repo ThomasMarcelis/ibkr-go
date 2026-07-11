@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 // EncodeHandshakePrefix returns the raw API prefix bytes sent before framing begins.

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 func TestCaptureFrameStateServer201(t *testing.T) {

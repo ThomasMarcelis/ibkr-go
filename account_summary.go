@@ -1,6 +1,6 @@
 package ibkr
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/codec"
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 
 type accountSummaryPlan struct {
 	request  codec.AccountSummaryRequest

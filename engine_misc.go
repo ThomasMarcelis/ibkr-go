@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
 const scannerNoItemsMessage = "Historical Market Data Service query message:no items retrieved"

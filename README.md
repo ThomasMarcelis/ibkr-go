@@ -1,8 +1,8 @@
 # ibkr-go
 
 [![CI](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml)
-[![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go)
+[![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go/v2.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go/v2)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go/v2)
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -42,14 +42,13 @@ return sub.Err()
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go@latest
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.1
 ```
 
 Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
 
-Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go).
-Upgrading from v1.5 requires the clean-break changes in
-[`docs/migration-1.6.md`](docs/migration-1.6.md).
+Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
+v2 uses Go semantic import versioning, so existing v1 applications cannot upgrade accidentally. Adopting v2 requires changing imports to `github.com/ThomasMarcelis/ibkr-go/v2` and following the [v2 migration guide](docs/migration-v2.md).
 
 ## Why ibkr-go
 

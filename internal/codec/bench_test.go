@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 // Hot-path codec benchmarks over live IB Gateway wire data (server_version

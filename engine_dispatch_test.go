@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
 // newEngineForDispatchTest builds a minimal engine suitable for exercising

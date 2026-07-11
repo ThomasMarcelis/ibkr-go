@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go"
+	"github.com/ThomasMarcelis/ibkr-go/v2"
 )
 
 // Replay freezes for read-only live-Gateway sessions and reference captures.

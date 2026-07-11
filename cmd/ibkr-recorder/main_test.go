@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/capturelog"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
 )
 
 func TestRecordFailureFlushesRedactionAndClosesResources(t *testing.T) {

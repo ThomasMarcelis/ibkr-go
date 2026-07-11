@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 const marketDataSV206CaptureHashes = "eea31798e7e59830f5cda9daadcd94223045c8e9ee0e5aa10f48428447505822, 989563f9c4cad108e34058beac205c576a9ebdc0fffe03e421e829bca851e7de"

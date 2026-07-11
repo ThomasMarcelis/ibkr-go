@@ -7,7 +7,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
 func TestEnqueueOneShotSetupSkipsCanceledContext(t *testing.T) {

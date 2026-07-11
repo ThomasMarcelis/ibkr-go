@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 // containsNull returns true if any of the given strings contain a null byte.

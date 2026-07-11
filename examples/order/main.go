@@ -16,8 +16,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go"
-	"github.com/ThomasMarcelis/ibkr-go/examples/internal/exampleutil"
+	"github.com/ThomasMarcelis/ibkr-go/v2"
+	"github.com/ThomasMarcelis/ibkr-go/v2/examples/internal/exampleutil"
 	"github.com/shopspring/decimal"
 )
 

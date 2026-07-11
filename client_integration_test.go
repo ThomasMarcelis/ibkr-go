@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go"
-	"github.com/ThomasMarcelis/ibkr-go/testing/testhost"
+	"github.com/ThomasMarcelis/ibkr-go/v2"
+	"github.com/ThomasMarcelis/ibkr-go/v2/testing/testhost"
 	"github.com/shopspring/decimal"
 )
 

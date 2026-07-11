@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 

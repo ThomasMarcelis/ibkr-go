@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/testing/ibkrlive"
+	"github.com/ThomasMarcelis/ibkr-go/v2/testing/ibkrlive"
 )
 
 func TestLiveCaptureHighSignalTradingScenarios(t *testing.T) {

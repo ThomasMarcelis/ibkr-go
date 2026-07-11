@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go"
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 type recordingDialer struct {

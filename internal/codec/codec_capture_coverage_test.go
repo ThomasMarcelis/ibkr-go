@@ -3,7 +3,7 @@ package codec
 import (
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 // Raw-frame capture-coverage gate and inbound evidence ledger.

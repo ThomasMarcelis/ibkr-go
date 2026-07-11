@@ -1,4 +1,4 @@
-module github.com/ThomasMarcelis/ibkr-go
+module github.com/ThomasMarcelis/ibkr-go/v2
 
 go 1.26
 

@@ -1,6 +1,6 @@
 package codec
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 
 // inboundProtobufDecoders is deliberately explicit. A protobuf envelope with
 // an unknown base ID remains observable as UnknownInbound; it is never fed to

@@ -3,7 +3,7 @@ package codec
 import (
 	"fmt"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 type OpenOrdersRequest struct {

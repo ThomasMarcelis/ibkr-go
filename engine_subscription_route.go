@@ -1,6 +1,6 @@
 package ibkr
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/codec"
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 
 // newEngineSubscription gives public cancellation and actor-owned overflow the
 // same route-specific implementation. Public Close queues it onto the actor;

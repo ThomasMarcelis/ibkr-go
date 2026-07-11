@@ -1,6 +1,6 @@
 package codec
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 
 type HistoricalBarsRequest struct {
 	ReqID        int

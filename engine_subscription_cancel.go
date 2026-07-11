@@ -1,6 +1,6 @@
 package ibkr
 
-import "github.com/ThomasMarcelis/ibkr-go/internal/codec"
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 
 // cancelSubscription records cancellation admission only while the route is
 // active on the current transport. A route retained across a lost connection

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	ibkr "github.com/ThomasMarcelis/ibkr-go"
+	ibkr "github.com/ThomasMarcelis/ibkr-go/v2"
 )
 
 func TestHistoricalDataUnavailableRequiresExactTypedError(t *testing.T) {

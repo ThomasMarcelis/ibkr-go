@@ -6,9 +6,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 func (e *engine) startConnect(ctx context.Context, reconnect bool) {

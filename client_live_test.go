@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go"
-	"github.com/ThomasMarcelis/ibkr-go/testing/ibkrlive"
+	"github.com/ThomasMarcelis/ibkr-go/v2"
+	"github.com/ThomasMarcelis/ibkr-go/v2/testing/ibkrlive"
 	"github.com/shopspring/decimal"
 )
 

@@ -2,9 +2,13 @@
 
 ## Supported Versions
 
-Security fixes are released for the latest tagged minor line. The current
-supported line is v1.6. Superseded minor lines receive no feature or security
-backports unless a release advisory explicitly says otherwise.
+| Version | Support |
+|---|---|
+| v2.0 release candidates | Release-candidate fixes |
+| v1.5 | Security fixes until v2.0.0 is stable |
+| v1.4 and earlier | Unsupported |
+
+After v2.0.0 is stable, security fixes are released for the latest tagged v2 minor line. Superseded lines receive no backports unless a release advisory explicitly says otherwise.
 
 Use the latest Go 1.26 patch release. The minimum language version does not
 imply that older, vulnerable toolchain patch releases are supported.

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
 func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {

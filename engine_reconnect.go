@@ -6,8 +6,8 @@ import (
 	"sort"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
 func (e *engine) handleTransportLoss(loss transportLoss) {

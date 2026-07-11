@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/wire"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 func TestCreateAndLoadEvents(t *testing.T) {

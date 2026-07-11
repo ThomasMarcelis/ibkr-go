@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/transport"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
 func TestHandleTransportLossPreservesReconnectAttempt(t *testing.T) {

@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/ThomasMarcelis/ibkr-go/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 // scenario owns the catalog metadata and its public-API runner.
