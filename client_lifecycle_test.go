@@ -603,18 +603,16 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 		t.Fatalf("SubscribeAccountSummary() first error = %v", err)
 	}
 
-	// Wait for first subscription's snapshot to complete before creating second.
-	waitForStateKind(t, sub1.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
-
 	sub2, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
 		Account: "All",
-		Tags:    []string{"BuyingPower"},
+		Tags:    []string{"TotalCashValue"},
 	})
 	if err != nil {
 		t.Fatalf("SubscribeAccountSummary() second error = %v", err)
 	}
 
-	// Wait for second subscription's snapshot to complete.
+	// The live capture issued both requests before either snapshot completed.
+	waitForStateKind(t, sub1.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
 	waitForStateKind(t, sub2.Lifecycle(), ibkr.SubscriptionSnapshotComplete)
 
 	// Third subscription must be rejected.
