@@ -190,12 +190,13 @@ func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
 		label      string
 		tickType   ibkr.TickByTickType
 		ignoreSize bool
+		wantCode   int
 	}{
-		{label: "Last", tickType: ibkr.TickByTickLast},
-		{label: "AllLast", tickType: ibkr.TickByTickAllLast},
-		{label: "AllLastIgnoreSize", tickType: ibkr.TickByTickAllLast, ignoreSize: true},
-		{label: "BidAsk", tickType: ibkr.TickByTickBidAsk},
-		{label: "MidPoint", tickType: ibkr.TickByTickMidPoint},
+		{label: "Last", tickType: ibkr.TickByTickLast, wantCode: 10189},
+		{label: "AllLast", tickType: ibkr.TickByTickAllLast, wantCode: 10089},
+		{label: "AllLastIgnoreSize", tickType: ibkr.TickByTickAllLast, ignoreSize: true, wantCode: 10089},
+		{label: "BidAsk", tickType: ibkr.TickByTickBidAsk, wantCode: 10089},
+		{label: "MidPoint", tickType: ibkr.TickByTickMidPoint, wantCode: 10089},
 	}
 	for _, tc := range cases {
 		sub, err := client.MarketData().SubscribeTickByTick(ctx, ibkr.TickByTickRequest{
@@ -218,8 +219,8 @@ func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s closed.Err type = %T, want *ibkr.APIError", tc.label, closed.Err)
 		}
-		if apiErr.Code != 10089 {
-			t.Fatalf("%s APIError.Code = %d, want 10089", tc.label, apiErr.Code)
+		if apiErr.Code != tc.wantCode {
+			t.Fatalf("%s APIError.Code = %d, want %d", tc.label, apiErr.Code, tc.wantCode)
 		}
 		if apiErr.OpKind != ibkr.OpTickByTick {
 			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpTickByTick)
@@ -236,8 +237,8 @@ func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
 		}
-		if waitAPIErr.Code != 10089 {
-			t.Fatalf("%s sub.Wait() APIError.Code = %d, want 10089", tc.label, waitAPIErr.Code)
+		if waitAPIErr.Code != tc.wantCode {
+			t.Fatalf("%s sub.Wait() APIError.Code = %d, want %d", tc.label, waitAPIErr.Code, tc.wantCode)
 		}
 	}
 }

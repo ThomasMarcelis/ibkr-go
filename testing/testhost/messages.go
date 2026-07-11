@@ -326,10 +326,6 @@ func buildMessage(name string, body map[string]any, bindings map[string]any) (co
 		return codec.AccountUpdateMultiValue{ReqID: asInt(resolve(body["req_id"])), Account: asString(resolve(body["account"])), ModelCode: asString(resolve(body["model_code"])), Key: asString(resolve(body["key"])), Value: asString(resolve(body["value"])), Currency: asString(resolve(body["currency"]))}, nil
 	case "account_update_multi_end":
 		return codec.AccountUpdateMultiEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
-	case "position_multi":
-		return codec.PositionMulti{ReqID: asInt(resolve(body["req_id"])), Account: asString(resolve(body["account"])), ModelCode: asString(resolve(body["model_code"])), Contract: asContract(resolve(body["contract"])), Position: asString(resolve(body["position"])), AvgCost: asString(resolve(body["avg_cost"]))}, nil
-	case "position_multi_end":
-		return codec.PositionMultiEnd{ReqID: asInt(resolve(body["req_id"]))}, nil
 	case "pnl":
 		return codec.PnLValue{ReqID: asInt(resolve(body["req_id"])), DailyPnL: asString(resolve(body["daily_pnl"])), UnrealizedPnL: asString(resolve(body["unrealized_pnl"])), RealizedPnL: asString(resolve(body["realized_pnl"]))}, nil
 	case "pnl_single":

@@ -1,23 +1,26 @@
-# Grounded by live API capture captures/20260415T162200Z-api_market_data_completeness_aapl.
-# server_version=200, events.jsonl sha256 prefix: f692fc168a53da9d.
-# This replay freezes tick-by-tick request variants that all returned the same
-# live paper-account code 10089 market-data subscription error.
-handshake {"server_version":200,"connection_time":"20260415 18:22:00 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":291}
+# Exact public-API capture from readonly IB Gateway server_version 207:
+# /tmp/ibkr-tick-matrix-exact-20260711/
+# 20260711T044617Z-api_tick_by_tick_entitlement_matrix_aapl
+# events.jsonl sha256:
+# fbcc0fdd77c68930d49173e78ac96abe51b71c27c697edb8a1f3a4054cefade5.
+# The managed account is a length-preserving substitution. Unrelated farm
+# status frames are omitted; every request and request-scoped response is exact.
+handshake {"server_version":207,"connection_time":"20260711 06:46:17 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
 
-client req_tick_by_tick {"req_id":"$last","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"tick_type":"Last","number_of_ticks":"0","ignore_size":false}
-server api_error {"req_id":"$last","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270122722"}
+raw client AAAAMAAAAGExADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAExhc3QAMAAwAA==
+raw server AAAA4AAAAMwIARDEzv379DMYzU8izQFGYWlsZWQgdG8gcmVxdWVzdCB0aWNrLWJ5LXRpY2sgZGF0YS5ObyBtYXJrZXQgZGF0YSBwZXJtaXNzaW9ucyBmb3IgSVNMQU5EIFNUSy4gUmVxdWVzdGVkIG1hcmtldCBkYXRhIHJlcXVpcmVzIGFkZGl0aW9uYWwgc3Vic2NyaXB0aW9uIGZvciBBUEkuIFNlZSBsaW5rIGluICdNYXJrZXQgRGF0YSBDb25uZWN0aW9ucycgZGlhbG9nIGZvciBtb3JlIGRldGFpbHMu
 
-client req_tick_by_tick {"req_id":"$all_last","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"tick_type":"AllLast","number_of_ticks":"0","ignore_size":false}
-server api_error {"req_id":"$all_last","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270122809"}
+raw client AAAAMwAAAGEyADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAEFsbExhc3QAMAAwAA==
+raw server AAAAkAAAAMwIAhCaz/379DMY6U4iflJlcXVlc3RlZCBtYXJrZXQgZGF0YSByZXF1aXJlcyBhZGRpdGlvbmFsIHN1YnNjcmlwdGlvbiBmb3IgQVBJLiBTZWUgbGluayBpbiAnTWFya2V0IERhdGEgQ29ubmVjdGlvbnMnIGRpYWxvZyBmb3IgbW9yZSBkZXRhaWxzLg==
 
-client req_tick_by_tick {"req_id":"$all_last_ignore_size","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"tick_type":"AllLast","number_of_ticks":"0","ignore_size":true}
-server api_error {"req_id":"$all_last_ignore_size","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270122902"}
+raw client AAAAMwAAAGEzADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAEFsbExhc3QAMAAxAA==
+raw server AAAAkAAAAMwIAxDwz/379DMY6U4iflJlcXVlc3RlZCBtYXJrZXQgZGF0YSByZXF1aXJlcyBhZGRpdGlvbmFsIHN1YnNjcmlwdGlvbiBmb3IgQVBJLiBTZWUgbGluayBpbiAnTWFya2V0IERhdGEgQ29ubmVjdGlvbnMnIGRpYWxvZyBmb3IgbW9yZSBkZXRhaWxzLg==
 
-client req_tick_by_tick {"req_id":"$bid_ask","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"tick_type":"BidAsk","number_of_ticks":"0","ignore_size":false}
-server api_error {"req_id":"$bid_ask","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270122992"}
+raw client AAAAMgAAAGE0ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAEJpZEFzawAwADAA
+raw server AAAAkAAAAMwIBBDH0P379DMY6U4iflJlcXVlc3RlZCBtYXJrZXQgZGF0YSByZXF1aXJlcyBhZGRpdGlvbmFsIHN1YnNjcmlwdGlvbiBmb3IgQVBJLiBTZWUgbGluayBpbiAnTWFya2V0IERhdGEgQ29ubmVjdGlvbnMnIGRpYWxvZyBmb3IgbW9yZSBkZXRhaWxzLg==
 
-client req_tick_by_tick {"req_id":"$midpoint","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","primary_exchange":"","local_symbol":""},"tick_type":"MidPoint","number_of_ticks":"0","ignore_size":false}
-server api_error {"req_id":"$midpoint","code":10089,"message":"Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.","advanced_order_reject_json":"","error_time_ms":"1776270123084"}
+raw client AAAANAAAAGE1ADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAAE1pZFBvaW50ADAAMAA=
+raw server AAAAkAAAAMwIBRCd0f379DMY6U4iflJlcXVlc3RlZCBtYXJrZXQgZGF0YSByZXF1aXJlcyBhZGRpdGlvbmFsIHN1YnNjcmlwdGlvbiBmb3IgQVBJLiBTZWUgbGluayBpbiAnTWFya2V0IERhdGEgQ29ubmVjdGlvbnMnIGRpYWxvZyBmb3IgbW9yZSBkZXRhaWxzLg==
 disconnect

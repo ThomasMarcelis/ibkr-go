@@ -1,14 +1,14 @@
-# Grounded by paper IB Gateway server_version 200 capture
-# captures/v1/positions_multi.log.
-# capture sha256: 083e158d5335c7326d23117e842c479fcecf0e6786172f003d479449dbb304b8
-#
-# The account, request id, and connection time are sanitized/rebound. Ambient
-# farm-status frames are omitted. The live request produced only the exact
-# positionMultiEnd response: this is an empty snapshot, not a synthesized row.
-handshake {"server_version":200,"connection_time":"20260405 14:35:26 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-client req_positions_multi {"req_id":"$req1","account":"DU9000001","model_code":""}
-server position_multi_end {"req_id":"$req1"}
-client cancel_positions_multi {"req_id":"$req1"}
+# Exact public-API capture from readonly IB Gateway server_version 206:
+# /tmp/ibkr-history-final-captures/20260710T224440Z-positions_multi
+# events.jsonl sha256:
+# 3d62b420e3a600a0ad1c420e7a805cc6adab8bab1ecd6ff1e0959ead167d6d29.
+# The account is a length-preserving substitution. Eighteen private position
+# rows and the unrelated current-time fence are omitted; this fixture isolates
+# the exact request, snapshot boundary, and cancellation lifecycle.
+handshake {"server_version":206,"connection_time":"20260711 00:44:39 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAAEwAAAEoxADEARFU5MDAwMDAxAAA=
+raw server AAAACAAAAEgxADEA
+raw client AAAACAAAAEsxADEA
 disconnect

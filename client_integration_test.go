@@ -2598,7 +2598,7 @@ func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 	}
 }
 
-func TestPositionsMultiSnapshot(t *testing.T) {
+func TestPositionsMultiBoundary(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "positions_multi.txt")
@@ -2613,10 +2613,10 @@ func TestPositionsMultiSnapshot(t *testing.T) {
 		ModelCode: "",
 	})
 	if err != nil {
-		t.Fatalf("PositionsMultiSnapshot() error = %v", err)
+		t.Fatalf("PositionsMulti() error = %v", err)
 	}
 	if len(values) != 0 {
-		t.Fatalf("values = %+v, want empty live snapshot", values)
+		t.Fatalf("values = %+v, want boundary-only replay", values)
 	}
 }
 
