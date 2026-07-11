@@ -1764,18 +1764,34 @@ func TestNewsArticle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	article, err := client.News().Article(ctx, ibkr.NewsArticleRequest{
-		ProviderCode: "BRFG",
-		ArticleID:    "BRFG$12345",
+	items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
+		ConID:         265598,
+		ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"},
+		TotalResults:  5,
 	})
 	if err != nil {
-		t.Fatalf("NewsArticle() error = %v", err)
+		t.Fatalf("Historical() error = %v", err)
+	}
+	if len(items) != 5 {
+		t.Fatalf("historical items = %d, want 5", len(items))
+	}
+	if items[0].ProviderCode != "BRFG" || items[0].ArticleID != "BRFG$1e4f0994" {
+		t.Fatalf("first historical item = %+v", items[0])
+	}
+
+	article, err := client.News().Article(ctx, ibkr.NewsArticleRequest{
+		ProviderCode: items[0].ProviderCode,
+		ArticleID:    items[0].ArticleID,
+	})
+	if err != nil {
+		t.Fatalf("Article() error = %v", err)
 	}
 	if article.ArticleType != 0 {
 		t.Fatalf("article type = %d, want 0", article.ArticleType)
 	}
-	if article.ArticleText != "AAPL earnings beat expectations" {
-		t.Fatalf("article text = %q, want %q", article.ArticleText, "AAPL earnings beat expectations")
+	if !strings.Contains(article.ArticleText, "Apple (AAPL +5%)") ||
+		!strings.Contains(article.ArticleText, "iPhone demand remained exceptionally strong") {
+		t.Fatalf("article text = %q, want captured Apple earnings article", article.ArticleText)
 	}
 }
 

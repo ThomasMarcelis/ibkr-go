@@ -422,7 +422,7 @@ against the role-aware `paper-dev` Gateway.
 | api_combo_option_vertical_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `495479ef4c345d96`; combo path blocked by option entitlement |
 | api_market_data_completeness_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `f692fc168a53da9d`; bare SetType cycle, real-time-bars errors, and tick-by-tick code 10089 variants replay-promoted |
 | api_historical_matrix_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `366075c3b171c44d` |
-| api_news_article_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `3c6ef62da8d60e95`; fetched article from historical-news ID |
+| api_news_article_aapl | 2026-07-11 | promoted to `news_article.txt`; server_version=207, events sha256 `7dfae9ac2dbc09028086b893fe9ad11fac068ec08ae2993acdc2974a127ed2bd`; fetched the article selected from the complete current five-item historical-news result |
 | api_fundamental_reports_aapl | 2026-04-15 | historical, retired 2026-07-09 after official API 10.47 removed the feature; the original server_version=200 capture remains traceable by events sha256 prefix `02649216ff69f306` and contained mixed XML success and real 430 errors |
 | api_wsh_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `65aeb0a3b716e4b6`; real 10276 entitlement errors |
 | api_completed_orders_variants_aapl | 2026-04-15 | recorded, verified; server_version=200, events sha256 prefix `6415ad97b4c9f33e`; exposed completed-order TRAIL LIMIT decode interruption |
