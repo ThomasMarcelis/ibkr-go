@@ -5056,6 +5056,24 @@ func runAPIForexLifecycleEURUSD(ctx context.Context, addr string, clientID int) 
 
 func runAPIWhatIfMarginAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 1*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		start := orderTimestamp(time.Now().UTC().Add(3 * time.Minute))
+		end := orderTimestamp(time.Now().UTC().Add(20 * time.Minute))
+		darkIce := withAlgo(
+			withDisplaySize(withLimit(baseAPIOrder(account, decimal.NewFromInt(1), ibkr.ActionBuy, ibkr.OrderTypeLimit), decimal.NewFromInt(150)), 1),
+			"DarkIce",
+			[]ibkr.TagValue{
+				{Tag: "displaySize", Value: "1"},
+				{Tag: "startTime", Value: start},
+				{Tag: "endTime", Value: end},
+				{Tag: "allowPastEndTime", Value: "1"},
+			},
+		)
+		_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{Contract: apiAAPL, Order: darkIce})
+		recordProbeResult("whatif_preview", "dark_ice_display_size", 0, err)
+		if err == nil {
+			return errors.New("DarkIce display-size preview unexpectedly succeeded")
+		}
+
 		order := baseAPIOrder(account, decimal.NewFromInt(100), ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{Contract: apiAAPL, Order: order})
 		if err != nil {

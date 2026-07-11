@@ -751,7 +751,7 @@ var scenarios = map[string]*scenario{
 	},
 	"api_whatif_margin_aapl": {
 		metadata:    metaWithAssets("orders", []string{"Orders().Preview"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"WhatIf margin/commission preview or real Gateway parser/permission response without execution"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
-		description: "public API campaign for WhatIf margin/commission preview on AAPL",
+		description: "public API campaign for WhatIf margin/commission success and rejection on AAPL",
 		runAPI:      runAPIWhatIfMarginAAPL,
 	},
 	"api_stress_rapid_fire_aapl": {

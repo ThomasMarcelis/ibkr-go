@@ -1,21 +1,19 @@
-# Live-derived regression fixture for the Preview 10xxx rejection path: a
-# what-if place_order answered by an order-targeted api_error in the 10xxx
-# band instead of the open_order echo. Captured live 2026-07-05T01:17:25Z
-# against paper IB Gateway server_version 200 (captures/20260705T011725Z-
-# api_whatif_darkice_reject_aapl, frames.log sha256 prefix e0eb615458f396a8):
-# the DarkIce + displaySize shape that draws code 10255 on a real placement
-# (captures/20260415T153524Z-api_algo_variants_aapl) draws the same
-# order-targeted rejection as a what-if, and no echo ever follows. Before
-# 2026-07-05 the engine emitted order-targeted 10xxx codes as session events
-# only, so the blocked Preview caller hung until its context deadline
-# (reproduced live in the probe: 15s deadline exceeded, control what-if on
-# the same session answered in 181ms).
-handshake {"server_version":200,"connection_time":"20260705 01:17:25 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":1}
-
-client place_order {"order_id":"1","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"150","aux_price":"","tif":"DAY","account":"DU9000001","order_ref":"ibkrgo-sanitized-20260705T011725Z-001","transmit":true,"display_size":"1","algo_strategy":"DarkIce","algo_params":[{"tag":"displaySize","value":"1"},{"tag":"startTime","value":"20260704 23:17:26 UTC"},{"tag":"endTime","value":"20260704 23:37:26 UTC"},{"tag":"allowPastEndTime","value":"1"}],"what_if":true}
-server api_error {"req_id":1,"code":10255,"message":"The 'Display Size' order attribute may not be specified for this order.","advanced_order_reject_json":"","error_time_ms":"1783207046310"}
+# Exact public API capture from paper IB Gateway server_version 207.
+# Source: /tmp/ibkr-whatif-matrix-first-reject-20260711/
+# 20260711T041644Z-api_whatif_margin_aapl
+# events.jsonl sha256:
+# bea3a57952da4b935416607860659b6122625ef75ad2781e06334c0f5e1e8877
+#
+# The account and order reference are length-preserving redactions. The
+# surrounding cleanup and successful control preview are omitted. The DarkIce
+# what-if request and its order-targeted code-10255 response are otherwise
+# exact and retain their captured order ID. Before 2026-07-05 the engine routed
+# this 10xxx error only as a session event, leaving Preview blocked.
+handshake {"server_version":207,"connection_time":"20260711 06:16:44 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACgAAAAkxADQ2MAA=
+raw client AAABGAAAAMsIzAMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBrvASAAKgNCVVkyATE4AUIDTE1USQAAAAAAwGJAWgNEQVliCURVOTAwMDAwMeIBJGlia3Jnby1yZWRhY3RlZC0yMDI2MDcxMVQwNDE2NDRaLTAwMfABAPgBAOoDB0RhcmtJY2XyAxUKEGFsbG93UGFzdEVuZFRpbWUSATHyAxAKC2Rpc3BsYXlTaXplEgEx8gMgCgdlbmRUaW1lEhUyMDI2MDcxMSAwNDozNjo0NSBVVEPyAyIKCXN0YXJ0VGltZRIVMjAyNjA3MTEgMDQ6MTk6NDUgVVRDiAQBkAQBqAQAwAT///////////8BkAYAygYAIgA=
+raw server AAAAWgAAAMwIzAMQxriR+/QzGI9QIkdUaGUgJ0Rpc3BsYXkgU2l6ZScgb3JkZXIgYXR0cmlidXRlIG1heSBub3QgYmUgc3BlY2lmaWVkIGZvciB0aGlzIG9yZGVyLg==
 
 sleep 100ms
 disconnect

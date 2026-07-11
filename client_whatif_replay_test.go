@@ -142,9 +142,9 @@ func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
 }
 
 // TestPreviewRejected10xxxReplay freezes the Preview 10xxx rejection path,
-// probed live on 2026-07-05 against paper Gateway server_version 200
-// (captures/20260705T011725Z-api_whatif_darkice_reject_aapl, frames.log
-// sha256 prefix e0eb615458f396a8): a what-if DarkIce order carrying a
+// recaptured on 2026-07-11 against paper Gateway server_version 207
+// (api_whatif_margin_aapl, events sha256 prefix bea3a57952da4b93): a
+// what-if DarkIce order carrying a
 // display size draws an api_error code 10255 whose req_id is the what-if
 // order id, and no open_order echo ever follows. The order-targeted error
 // must resolve the blocked Preview caller; before the fix it rode the 10xxx
@@ -168,14 +168,14 @@ func TestPreviewRejected10xxxReplay(t *testing.T) {
 			LmtPrice:    decimal.RequireFromString("150"),
 			TIF:         ibkr.TIFDay,
 			Account:     "DU9000001",
-			OrderRef:    "ibkrgo-sanitized-20260705T011725Z-001",
+			OrderRef:    "ibkrgo-redacted-20260711T041644Z-001",
 			DisplaySize: 1,
 			Algorithm: ibkr.OrderAlgorithm{
 				Strategy: "DarkIce",
 				Params: []ibkr.TagValue{
 					{Tag: "displaySize", Value: "1"},
-					{Tag: "startTime", Value: "20260704 23:17:26 UTC"},
-					{Tag: "endTime", Value: "20260704 23:37:26 UTC"},
+					{Tag: "startTime", Value: "20260711 04:19:45 UTC"},
+					{Tag: "endTime", Value: "20260711 04:36:45 UTC"},
 					{Tag: "allowPastEndTime", Value: "1"},
 				},
 			},
