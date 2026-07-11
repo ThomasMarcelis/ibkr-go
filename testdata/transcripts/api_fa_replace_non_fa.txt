@@ -1,19 +1,17 @@
-# Grounded by live API capture captures/20260611T143728Z-api_fa_replace_non_fa.
-# server_version=200, events.jsonl sha256 prefix: 81e43254856879c6.
-# Replays FA group replacement against a non-FA paper account: ReplaceConfig
-# is fire-and-forget and returns once the frame is sent; the Gateway answers
-# twenty milliseconds later with code 321 "FA data operations ignored for non
-# FA customers", which matches no route and the engine drops, so the public
-# surface of the blocker is silence and the capture is the record.
-# Account identifiers are sanitized to the DU9000001 redaction token.
-# Trimmed: farm-status frames and the startup safety global cancel with its
-# foreign code-161 replies.
-handshake {"server_version":200,"connection_time":"20260611 16:37:28 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":441}
-
-client replace_fa {"fa_data_type":"1"}
-server api_error {"req_id":58,"code":321,"message":"Error validating request.-'bW' : cause - FA data operations ignored for non FA customers.","advanced_order_reject_json":"","error_time_ms":"1781188650220"}
-
+# Exact public API capture from paper IB Gateway server_version 207.
+# Source: /tmp/ibkr-go-fa-replace-current-20260711/
+# 20260711T033010Z-api_fa_replace_non_fa
+# events.jsonl sha256:
+# 132e15c631f93b7f97f02db8749febe580ed5f0a4a5c7b5a60b0dd30d9bf4954
+#
+# The account is length-preserving redacted to DU9000001 in both the bootstrap
+# and FA XML. Ambient farm-status frames and the campaign's unrelated global
+# cancels are omitted. The exact current replace request includes its trailing
+# request ID, and the exact code-321 refusal retains that correlation.
+handshake {"server_version":207,"connection_time":"20260711 05:30:09 Central European Standard Time"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAACAAAAAkxADEA
+raw client AAAA9gAAABMxADEAPD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz48TGlzdE9mR3JvdXBzPjxHcm91cD48bmFtZT5jYXB0dXJlX3Byb2JlPC9uYW1lPjxkZWZhdWx0TWV0aG9kPkVxdWFsUXVhbnRpdHk8L2RlZmF1bHRNZXRob2Q+PExpc3RPZkFjY3RzIHZhck5hbWU9Imxpc3QiPjxBY2NvdW50PjxhY2N0PkRVOTAwMDAwMTwvYWNjdD48L0FjY291bnQ+PC9MaXN0T2ZBY2N0cz48L0dyb3VwPjwvTGlzdE9mR3JvdXBzPgAxAA==
+raw server AAAAawAAAMwIARD47+b59DMYwQIiWUVycm9yIHZhbGlkYXRpbmcgcmVxdWVzdC4tJ2JXJyA6IGNhdXNlIC0gRkEgZGF0YSBvcGVyYXRpb25zIGlnbm9yZWQgZm9yIG5vbiBGQSBjdXN0b21lcnMu
 sleep 100ms
 disconnect

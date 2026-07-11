@@ -400,8 +400,10 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 }
 
 // TestAPIFAReplaceNonFAReplay freezes the non-FA blocker for FA group
-// replacement (captures/20260611T143728Z-api_fa_replace_non_fa, events.jsonl
-// sha256 prefix 81e43254856879c6): ReplaceConfig is fire-and-forget and
+// replacement (/tmp/ibkr-go-fa-replace-current-20260711/
+// 20260711T033010Z-api_fa_replace_non_fa, events.jsonl sha256
+// 132e15c631f93b7f97f02db8749febe580ed5f0a4a5c7b5a60b0dd30d9bf4954):
+// ReplaceConfig is fire-and-forget and
 // returns nil once sent, and the Gateway's code-321 "FA data operations
 // ignored for non FA customers" reply matches no route, so the engine drops
 // it and the session stays healthy.
