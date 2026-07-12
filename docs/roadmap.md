@@ -209,8 +209,8 @@ auto-allocated from NextValidID. OpenOrder
 messages are dual-dispatched to both per-order handles and the singleton
 open-orders observer; OrderStatus remains part of the per-order handle
 contract. OrderHandle survives reconnectable disconnects, emits
-RecoveryRequired after an observation gap, and blocks replacement until the
-caller reconciles.
+RecoveryRequired after an observation gap, and permanently blocks replacement
+on that handle while retaining stable-ID cancellation.
 Terminal statuses do not end observation; the caller closes the handle after
 collecting any late execution and fee callbacks it requires.
 

@@ -12,6 +12,7 @@ var (
 	ErrNotReady                     = errors.New("ibkr: session not ready")                     // request issued before the session reached Ready
 	ErrInterrupted                  = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
 	ErrResumeRequired               = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
+	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")               // order observation crossed a gap; replacement is permanently unavailable on this handle
 	ErrNoSnapshot                   = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
 	ErrSlowConsumer                 = errors.New("ibkr: slow consumer")                         // consumer fell behind and a bounded event queue overflowed
 	ErrUnsupportedServerVersion     = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
@@ -181,8 +182,8 @@ func operationActive(operation string) error {
 // It returns true for [ErrNotReady], [ErrInterrupted], [ErrResumeRequired],
 // transient [ConnectError] values, and [APIError.IsPacingViolation]. It returns
 // false for caller context cancellation, protocol and validation failures,
-// ordinary API rejections, [ErrSlowConsumer], [ErrExecutionCorrelationOverflow], [ErrClosed],
-// [OrderRecoveryError], [ExerciseUncertainError], and
+// ordinary API rejections, [ErrOrderRecoveryRequired], [ErrSlowConsumer],
+// [ErrExecutionCorrelationOverflow], [ErrClosed], [OrderRecoveryError], [ExerciseUncertainError], and
 // [SubscriptionCancelError]. Recovery errors remain non-retryable even when
 // they wrap a transient error because a blind retry could duplicate a live
 // order, exercise instruction, or subscription.
@@ -213,6 +214,11 @@ func isRetryableError(err error) bool {
 	// transient, retrying the same unbounded result without raising the explicit
 	// limit will fail again and can conceal the missing execution evidence.
 	if errors.Is(err, ErrExecutionCorrelationOverflow) {
+		return false
+	}
+	// A gap permanently removes replacement from that handle. Joining a
+	// transient connection cause must not turn recovery into a blind retry.
+	if errors.Is(err, ErrOrderRecoveryRequired) {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

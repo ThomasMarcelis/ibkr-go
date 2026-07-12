@@ -294,7 +294,7 @@ const (
 // gap. Reconcile open orders, executions, and completed orders for business
 // decisions. Replace remains permanently disabled on this handle because that
 // reconciliation cannot restore its lost event history; cancellation remains
-// safe by stable OrderID.
+// safe by stable OrderID. Err matches [ErrOrderRecoveryRequired].
 type OrderLifecycleEvent struct {
 	Kind          OrderLifecycleKind
 	ConnectionSeq uint64

@@ -19,6 +19,8 @@ func TestIsRetryable(t *testing.T) {
 		{name: "not ready", err: ErrNotReady, want: true},
 		{name: "interrupted wrapped", err: errors.Join(errors.New("send"), ErrInterrupted), want: true},
 		{name: "resume required", err: ErrResumeRequired, want: true},
+		{name: "order recovery required", err: ErrOrderRecoveryRequired},
+		{name: "order recovery overrides interrupted", err: errors.Join(ErrInterrupted, ErrOrderRecoveryRequired)},
 		{name: "transient connect", err: &ConnectError{Op: "bootstrap", Err: io.EOF}, want: true},
 		{name: "unsupported connect", err: &ConnectError{Op: "handshake", Err: ErrUnsupportedServerVersion}},
 		{name: "caller deadline wins over joined connect", err: errors.Join(context.DeadlineExceeded, &ConnectError{Op: "bootstrap", Err: io.EOF})},

@@ -325,7 +325,9 @@ Errors are typed so callers can make a policy decision without parsing text:
 `*ValidationError` rejected local input, and `*APIError` a Gateway response.
 `*OrderRecoveryError`, `*ExerciseUncertainError`, and
 `*SubscriptionCancelError` mean remote state is uncertain and deliberately
-override any retryable wrapped cause.
+override any retryable wrapped cause. `ErrOrderRecoveryRequired` means an
+order handle crossed an observation gap and can no longer be used for
+replacement; it is distinct from retryable subscription resumption.
 
 `ibkr.IsRetryable(err)` is the single retry-with-backoff decision. It returns
 true for not-ready/session interruption, transient connection failures, and

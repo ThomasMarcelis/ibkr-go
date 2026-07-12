@@ -636,7 +636,7 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 				return ErrClosed
 			}
 			if or.recoveryRequired {
-				return ErrResumeRequired
+				return ErrOrderRecoveryRequired
 			}
 			return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
 				Contract: contract,

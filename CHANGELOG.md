@@ -26,6 +26,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Fixed
 
+- Order handles now report non-retryable `ErrOrderRecoveryRequired` after an
+  observation gap instead of reusing the retryable subscription-only
+  `ErrResumeRequired` classification.
 - An option exercise or lapse interrupted after transport admission now closes
   with non-retryable `*ExerciseUncertainError` instead of looking like a safe
   retry. Exercise replays now freeze the request-scoped pseudo-order lifecycle

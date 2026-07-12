@@ -202,7 +202,7 @@ func (e *engine) resumeRoutes() {
 		if !or.closed && or.gapped {
 			or.gapped = false
 			or.recoveryRequired = true
-			or.handle.emitLifecycle(OrderRecoveryRequired, e.connectionSeq(), ErrResumeRequired)
+			or.handle.emitLifecycle(OrderRecoveryRequired, e.connectionSeq(), ErrOrderRecoveryRequired)
 		}
 	}
 }

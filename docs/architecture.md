@@ -192,7 +192,8 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 - **Disconnect.** On session disconnect, active order handles receive `Gap`.
   A data-maintained restoration yields `Restored`; a socket reconnect yields
   `RecoveryRequired` because fills or status changes may have occurred during
-  the gap. Handles stay open, but replacement requires reconciliation.
+  the gap. Handles stay open, but replacement is permanently unavailable on
+  that handle and reports non-retryable `ErrOrderRecoveryRequired`.
 - **Close()** detaches the handle from the engine. The order continues
   executing on the server; the caller simply stops receiving events.
 - **Cancel(ctx)** sends a CancelOrder request for this order.

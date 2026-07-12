@@ -88,7 +88,7 @@ func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 
 // Replace re-sends the complete order with the handle's bound order ID. The
 // contract is fixed at placement time; omitted order fields reset to defaults.
-// After a physical connection gap it permanently returns [ErrResumeRequired]
+// After a physical connection gap it permanently returns [ErrOrderRecoveryRequired]
 // because account reconciliation cannot restore the handle's lost event
 // history. Cancellation remains available by stable OrderID.
 func (h *OrderHandle) Replace(ctx context.Context, order Order) error {

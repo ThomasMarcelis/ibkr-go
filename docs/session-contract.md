@@ -148,6 +148,8 @@ Retryability:
   are terminal by default
 - caller context cancellation, protocol/validation failures,
   `ErrSlowConsumer`, and `ErrClosed` are not retryable
+- `ErrOrderRecoveryRequired` is not retryable, even when joined with a
+  transient connection cause
 - `*SubscriptionCancelError` is not retryable even when it wraps
   `ErrInterrupted`
 - `*ExerciseUncertainError` is not retryable even when it wraps a transient
@@ -237,8 +239,10 @@ stable coordinate for open-order reconciliation and direct cancellation.
 connection gap may have hidden order changes; reconcile open orders,
 executions, and completed orders for business decisions. `Replace` remains
 permanently disabled on that handle because reconciliation cannot restore its
-lost event history. `Close()` detaches the handle without cancelling the
-server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
+lost event history. Its lifecycle error and subsequent valid replacement calls
+match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the handle
+without cancelling the server-side order. `Cancel(ctx)` sends a cancel
+request; compliance workflows
 can attach the manual cancel time, external operator, and manual-order
 indicator through `CancelOption`. `Replace(ctx, order)` sends a modified order
 with the same OrderID.
@@ -343,6 +347,7 @@ Public error taxonomy:
 - `ErrNotReady`
 - `ErrInterrupted`
 - `ErrResumeRequired`
+- `ErrOrderRecoveryRequired`
 - `ErrNoSnapshot`
 - `ErrSlowConsumer`
 - `ErrUnsupportedServerVersion`

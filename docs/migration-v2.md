@@ -87,7 +87,9 @@ ordered channel. After a physical connection gap, `RecoveryRequired` means
 fills or status changes may have occurred. Reconcile open orders, executions,
 and completed orders for business decisions; that handle remains permanently
 blocked from `Replace` because reconciliation cannot restore its lost event
-history. Cancellation remains safe by stable order ID.
+history. The lifecycle event and later replacement calls match non-retryable
+`ErrOrderRecoveryRequired`; `ErrResumeRequired` remains subscription-only.
+Cancellation remains safe by stable order ID.
 
 There is no restart-time adopt or replace-by-ID API in v2. After a process
 restart, reconcile through open orders, executions, and completed orders;

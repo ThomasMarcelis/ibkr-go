@@ -3997,15 +3997,28 @@ func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
 	if recovery.ConnectionSeq != 2 {
 		t.Fatalf("recovery.ConnectionSeq = %d, want 2", recovery.ConnectionSeq)
 	}
-	if err := handle.Replace(ctx, ibkr.Order{
+	if !errors.Is(recovery.Err, ibkr.ErrOrderRecoveryRequired) {
+		t.Fatalf("recovery.Err = %v, want ErrOrderRecoveryRequired", recovery.Err)
+	}
+	if errors.Is(recovery.Err, ibkr.ErrResumeRequired) {
+		t.Fatalf("recovery.Err = %v, must not classify as subscription resume", recovery.Err)
+	}
+	if ibkr.IsRetryable(recovery.Err) {
+		t.Fatalf("recovery.Err = %v, must not be retryable", recovery.Err)
+	}
+	replaceErr := handle.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.RequireFromString("10"),
 		LmtPrice:  new(decimal.RequireFromString("13.27")),
 		TIF:       ibkr.TIFGTC,
 		Account:   "DU9000001",
-	}); !errors.Is(err, ibkr.ErrResumeRequired) {
-		t.Fatalf("Replace after uncertain reconnect = %v, want ErrResumeRequired", err)
+	})
+	if !errors.Is(replaceErr, ibkr.ErrOrderRecoveryRequired) {
+		t.Fatalf("Replace after uncertain reconnect = %v, want ErrOrderRecoveryRequired", replaceErr)
+	}
+	if errors.Is(replaceErr, ibkr.ErrResumeRequired) || ibkr.IsRetryable(replaceErr) {
+		t.Fatalf("Replace after uncertain reconnect = %v, want non-retryable order recovery", replaceErr)
 	}
 
 	if err := handle.Cancel(ctx); err != nil {
