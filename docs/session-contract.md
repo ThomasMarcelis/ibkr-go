@@ -251,9 +251,12 @@ with the same OrderID.
 client transport queue. The handle correlates request warnings, errors, and any
 pseudo-order lifecycle emitted under that request ID. Neither a returned handle
 nor working-order evidence proves final exercise or lapse settlement. `Close`
-only detaches observation. Connection loss while the instruction is unresolved
-closes it with non-retryable `*ExerciseUncertainError`; reconcile the account or
-position independently instead of blindly resubmitting.
+only detaches observation. Any involuntary non-API end of observation while the
+instruction is unresolved, including connection loss, slow-consumer teardown,
+or callback conversion failure, returns non-retryable
+`*ExerciseUncertainError` while preserving its cause. A definitive
+request-scoped `*APIError` remains unchanged. Reconcile the account or position
+independently instead of blindly resubmitting.
 
 v2 deliberately exposes no adopt-or-replace-by-ID operation for orders found
 after a process restart. A fresh process can reconcile open orders, executions,

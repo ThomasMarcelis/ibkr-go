@@ -129,8 +129,9 @@ Use `SubscribeExecutions` when late or revised fee reports matter. It remains op
 `HistoricalNews` returns `HistoricalNewsResult`. Read articles from `Items` and
 continue pagination when `HasMore` is true. `Options().Exercise` now returns an
 `ExerciseHandle`; the returned handle proves local transport admission, not
-IBKR acceptance or settlement. If its connection is lost while unresolved,
-`Wait` returns non-retryable `*ExerciseUncertainError` and callers must
+IBKR acceptance or settlement. If observation ends involuntarily without a
+definitive request-scoped API rejection, `Wait` returns non-retryable
+`*ExerciseUncertainError` while preserving the underlying cause. Callers must
 reconcile the resulting account or position before deciding what to do next.
 
 Completed orders are split into the wire's real facets instead of projecting

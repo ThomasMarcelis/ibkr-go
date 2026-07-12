@@ -86,10 +86,10 @@ type OrderRecoveryError struct {
 	CancelErr    error
 }
 
-// ExerciseUncertainError reports that an admitted option exercise or lapse
-// instruction lost its connection before a request-scoped outcome arrived.
-// The instruction may already have reached IBKR and must not be retried
-// blindly. RequestID is the identifier exposed by the ExerciseHandle.
+// ExerciseUncertainError reports that observation of an admitted option
+// exercise or lapse ended involuntarily before a definitive request-scoped API
+// outcome arrived. The instruction may already have reached IBKR and must not
+// be retried blindly. RequestID is the identifier exposed by ExerciseHandle.
 type ExerciseUncertainError struct {
 	RequestID int
 	Err       error

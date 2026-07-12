@@ -411,9 +411,38 @@ func TestExerciseRouteTerminalErrorDeletesKeyedRoute(t *testing.T) {
 	if _, ok := e.orders[77]; ok {
 		t.Fatal("exercise order route retained after terminal exercise refusal")
 	}
-	apiErr, ok := errors.AsType[*APIError](handle.Wait())
+	waitErr := handle.Wait()
+	if _, uncertain := errors.AsType[*ExerciseUncertainError](waitErr); uncertain {
+		t.Fatalf("exercise Wait() = %v, definitive API rejection must not be uncertain", waitErr)
+	}
+	apiErr, ok := errors.AsType[*APIError](waitErr)
 	if !ok || apiErr.Code != ErrCodeServerErrorProcessingRequest {
 		t.Fatalf("exercise Wait() = %#v, want code-322 APIError", apiErr)
+	}
+}
+
+func TestExerciseHandleExplicitCloseIsCleanDetach(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	e.cmds = make(chan func(), 1)
+	handle := e.installExerciseRoute(77)
+	handle.Close()
+	select {
+	case closeOnActor := <-e.cmds:
+		closeOnActor()
+	default:
+		t.Fatal("ExerciseHandle.Close did not enqueue its detach")
+	}
+
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("exercise Wait() after Close = %v, want nil", err)
+	}
+	if _, ok := e.keyed[77]; ok {
+		t.Fatal("closed exercise left the keyed route active")
+	}
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("closed exercise left the paired order route active")
 	}
 }
 
@@ -459,8 +488,13 @@ func TestExerciseOrderSlowConsumerRemovesBothRoutes(t *testing.T) {
 	e.handleAPIError(capturedExercisePresetNotice(77))
 	e.dispatchObservedOrderStatus(capturedExerciseWorkingStatus(77))
 
-	if waitErr := handle.Wait(); !errors.Is(waitErr, ErrSlowConsumer) {
-		t.Fatalf("exercise Wait() = %v, want ErrSlowConsumer", waitErr)
+	waitErr := handle.Wait()
+	uncertain, ok := errors.AsType[*ExerciseUncertainError](waitErr)
+	if !ok || uncertain.RequestID != 77 || !errors.Is(waitErr, ErrSlowConsumer) {
+		t.Fatalf("exercise Wait() = %T %v, want request 77 uncertainty preserving ErrSlowConsumer", waitErr, waitErr)
+	}
+	if IsRetryable(waitErr) {
+		t.Fatalf("exercise Wait() = %v, slow-consumer uncertainty must not be retryable", waitErr)
 	}
 	if _, ok := e.keyed[77]; ok {
 		t.Fatal("slow exercise consumer left the keyed route active")
@@ -495,8 +529,13 @@ func TestExerciseOrderConversionFailureRemovesBothRoutes(t *testing.T) {
 	e.dispatchObservedOrderStatus(status)
 
 	waitErr := handle.Wait()
-	if waitErr == nil || !strings.Contains(waitErr.Error(), "order status filled") {
-		t.Fatalf("exercise Wait() = %v, want filled-decimal conversion failure", waitErr)
+	uncertain, ok := errors.AsType[*ExerciseUncertainError](waitErr)
+	if !ok || uncertain.RequestID != 77 || uncertain.Err == nil ||
+		!strings.Contains(uncertain.Err.Error(), "order status filled") {
+		t.Fatalf("exercise Wait() = %T %v, want request 77 uncertainty preserving filled-decimal conversion failure", waitErr, waitErr)
+	}
+	if IsRetryable(waitErr) {
+		t.Fatalf("exercise Wait() = %v, conversion uncertainty must not be retryable", waitErr)
 	}
 	if _, ok := e.keyed[77]; ok {
 		t.Fatal("exercise conversion failure left the keyed route active")
@@ -566,6 +605,9 @@ func TestExerciseRouteInterruptionIsUncertainAndNotRetryable(t *testing.T) {
 	if !errors.Is(waitErr, ErrInterrupted) || !errors.Is(waitErr, io.EOF) {
 		t.Fatalf("exercise Wait() = %v, want ErrInterrupted and io.EOF", waitErr)
 	}
+	if _, nested := errors.AsType[*ExerciseUncertainError](uncertain.Err); nested {
+		t.Fatalf("exercise uncertainty nested another uncertainty: %#v", uncertain.Err)
+	}
 	if IsRetryable(waitErr) {
 		t.Fatal("uncertain admitted exercise is retryable")
 	}
@@ -591,6 +633,9 @@ func TestExerciseRouteClientShutdownIsUncertain(t *testing.T) {
 	}
 	if !errors.Is(waitErr, ErrInterrupted) || !errors.Is(waitErr, ErrClosed) {
 		t.Fatalf("exercise Wait() = %v, want ErrInterrupted and ErrClosed", waitErr)
+	}
+	if _, nested := errors.AsType[*ExerciseUncertainError](uncertain.Err); nested {
+		t.Fatalf("exercise uncertainty nested another uncertainty: %#v", uncertain.Err)
 	}
 	if _, ok := e.keyed[77]; ok {
 		t.Fatal("client shutdown left the exercise keyed route active")

@@ -810,10 +810,7 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 			closeExercise(apiErr)
 		},
 		onDisconnect: func(e *engine, err error) bool {
-			closeExercise(&ExerciseUncertainError{
-				RequestID: reqID,
-				Err:       errors.Join(ErrInterrupted, err),
-			})
+			closeExercise(errors.Join(ErrInterrupted, err))
 			return false
 		},
 		close: func(err error) {
@@ -821,10 +818,7 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 				closeExercise(nil)
 				return
 			}
-			closeExercise(&ExerciseUncertainError{
-				RequestID: reqID,
-				Err:       errors.Join(ErrInterrupted, err),
-			})
+			closeExercise(errors.Join(ErrInterrupted, err))
 		},
 	}
 	exerciseOrderRoute = &orderRoute{
