@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
@@ -91,6 +92,14 @@ func (e *engine) handleIncoming(msg any) {
 			route.handle(m, e)
 		}
 		return
+	case codec.MarketDepthUpdate:
+		if e.handleUnattributableMarketDepth(protocol.InMarketDepth, m.ReqID) {
+			return
+		}
+	case codec.MarketDepthL2Update:
+		if e.handleUnattributableMarketDepth(protocol.InMarketDepthL2, m.ReqID) {
+			return
+		}
 	case codec.APIError:
 		e.handleAPIError(m)
 		return
@@ -110,15 +119,27 @@ func (e *engine) handleIncoming(msg any) {
 		return
 	case codec.MalformedInbound:
 		// The outer length frame and message ID decoded successfully, so this
-		// failure is confined to one self-contained message. Keep unrelated
-		// routes alive, but surface the first failure for each known msg_id.
+		// failure is confined to one self-contained message. A malformed depth
+		// row cannot be attributed to a trustworthy request ID, and dropping it
+		// would silently corrupt every matching local book. Terminate all depth
+		// routes while keeping unrelated routes and the session alive. Reporting
+		// remains once per known msg_id, independently of route teardown, so a
+		// repeated bad frame still terminates depth routes created in the interim.
+		protocolErr := &ProtocolError{
+			Direction: "inbound",
+			Message:   fmt.Sprintf("msg_id %d", m.MsgID),
+			Err:       m.Err,
+		}
+		switch m.MsgID {
+		case protocol.InMarketDepth, protocol.InMarketDepthL2:
+			for reqID, route := range e.keyed {
+				if route.opKind == OpMarketDepth {
+					e.cancelAndCloseMarketDepthRoute(reqID, protocolErr)
+				}
+			}
+		}
 		if _, seen := e.malformedInboundSeen[m.MsgID]; !seen {
 			e.malformedInboundSeen[m.MsgID] = struct{}{}
-			protocolErr := &ProtocolError{
-				Direction: "inbound",
-				Message:   fmt.Sprintf("msg_id %d", m.MsgID),
-				Err:       m.Err,
-			}
 			e.cfg.logger.Warn("ibkr: dropping malformed inbound frame",
 				"msg_id", m.MsgID, "field_count", len(m.Fields), "binary_body_bytes", len(m.Payload), "error", m.Err)
 			e.emitSessionEvent(0, fmt.Sprintf("dropping malformed inbound frame with msg_id %d", m.MsgID), protocolErr)
@@ -211,6 +232,39 @@ func (e *engine) handleIncoming(msg any) {
 			rt.handle(msg, e)
 		}
 	}
+}
+
+// handleUnattributableMarketDepth terminates every active depth stream when a
+// decoded row has no trustworthy depth-route owner. Protobuf omission decodes
+// to request ID -1, while a positive ID can collide with an unrelated keyed
+// operation. Neither row can be dropped without silently corrupting a local
+// book, and a collision must not be dispatched into the unrelated handler.
+func (e *engine) handleUnattributableMarketDepth(msgID, reqID int) bool {
+	if reqID > 0 {
+		route, found := e.keyed[reqID]
+		if !found || route.opKind == OpMarketDepth {
+			return false
+		}
+	}
+
+	protocolErr := &ProtocolError{
+		Direction: "inbound",
+		Message:   fmt.Sprintf("msg_id %d req_id %d", msgID, reqID),
+		Err:       fmt.Errorf("unattributable market depth row request id %d", reqID),
+	}
+	closedDepth := false
+	for depthReqID, route := range e.keyed {
+		if route.opKind == OpMarketDepth {
+			closedDepth = true
+			e.cancelAndCloseMarketDepthRoute(depthReqID, protocolErr)
+		}
+	}
+	if closedDepth {
+		e.cfg.logger.Warn("ibkr: terminating market depth after unattributable inbound row",
+			"msg_id", msgID, "req_id", reqID)
+		e.emitSessionEvent(0, fmt.Sprintf("terminating market depth after unattributable msg_id %d req_id %d", msgID, reqID), protocolErr)
+	}
+	return true
 }
 
 func (e *engine) handleAPIError(msg codec.APIError) {

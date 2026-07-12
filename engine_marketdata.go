@@ -471,13 +471,10 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			switch m := msg.(type) {
 			case codec.MarketDepthReroute:
 				if rerouted {
-					request := depthRoute.request.(codec.MarketDepthRequest)
-					cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{ReqID: reqID, IsSmartDepth: request.IsSmartDepth})
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(errors.Join(
+					e.cancelAndCloseMarketDepthRoute(
+						reqID,
 						fmt.Errorf("ibkr: market depth request %d was rerouted more than once", reqID),
-						cancelErr,
-					))
+					)
 					return
 				}
 				request := depthRoute.request.(codec.MarketDepthRequest)
@@ -485,22 +482,22 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 				depthRoute.request = request
 				rerouted = true
 				if err := e.send(request); err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(fmt.Errorf("ibkr: reroute market depth request %d: %w", reqID, err))
+					e.cancelAndCloseMarketDepthRoute(
+						reqID,
+						fmt.Errorf("ibkr: reroute market depth request %d: %w", reqID, err),
+					)
 				}
 			case codec.MarketDepthUpdate:
 				row, err := fromCodecMarketDepth(m)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					e.cancelAndCloseMarketDepthRoute(reqID, err)
 					return
 				}
 				sub.emit(row)
 			case codec.MarketDepthL2Update:
 				row, err := fromCodecMarketDepthL2(m)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					e.cancelAndCloseMarketDepthRoute(reqID, err)
 					return
 				}
 				sub.emit(row)
@@ -536,6 +533,26 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 		bindContext(ctx, out.sub)
 	}
 	return out.sub, out.err
+}
+
+// cancelAndCloseMarketDepthRoute is the terminal actor-owned teardown for a
+// depth stream whose local book can no longer be trusted. Cancellation must be
+// admitted before local route deletion; if admission fails, the caller needs
+// both the data-integrity failure and the uncertain remote-stream state.
+func (e *engine) cancelAndCloseMarketDepthRoute(reqID int, cause error) {
+	depthRoute, ok := e.keyed[reqID]
+	if !ok || depthRoute.opKind != OpMarketDepth {
+		return
+	}
+	request := depthRoute.request.(codec.MarketDepthRequest)
+	cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{
+		ReqID: reqID, IsSmartDepth: request.IsSmartDepth,
+	})
+	e.deleteKeyedRoute(reqID)
+	if cancelErr != nil {
+		cause = errors.Join(cause, cancelErr)
+	}
+	depthRoute.close(cause)
 }
 
 func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error) {

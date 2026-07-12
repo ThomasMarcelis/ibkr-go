@@ -292,8 +292,10 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
 		events: newObserver[Event](cfg.eventBuffer), transport: tr,
 		serverVersion: 206, keyed: make(map[int]*route), singletons: make(map[string]*route),
-		orders:         make(map[int64]*orderRoute),
-		execDeliveries: make(map[string]*execDelivery), snapshot: Snapshot{State: StateReady, ConnectionSeq: 1},
+		orders:               make(map[int64]*orderRoute),
+		execDeliveries:       make(map[string]*execDelivery),
+		malformedInboundSeen: make(map[int]struct{}),
+		snapshot:             Snapshot{State: StateReady, ConnectionSeq: 1},
 	}
 	t.Cleanup(func() {
 		_ = tr.Close()
