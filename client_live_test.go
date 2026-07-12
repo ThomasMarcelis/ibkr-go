@@ -415,14 +415,12 @@ func TestLiveSubscribeAccountSummary(t *testing.T) {
 	deadline := time.After(15 * time.Second)
 	for {
 		select {
-		case _, ok := <-sub.Events():
+		case evt, ok := <-sub.Events():
 			if !ok {
 				t.Fatal("Events channel closed before SnapshotComplete")
 			}
-			events++
-		case evt, ok := <-sub.Events():
-			if !ok {
-				t.Fatal("State channel closed unexpectedly")
+			if evt.Kind == ibkr.StreamData {
+				events++
 			}
 			if evt.Kind == ibkr.StreamSnapshotComplete {
 				if events == 0 {
@@ -1362,12 +1360,13 @@ func TestLiveSubscribeOpenOrders(t *testing.T) {
 	var events int
 	for {
 		select {
-		case _, ok := <-sub.Events():
+		case evt, ok := <-sub.Events():
 			if !ok {
 				t.Fatalf("Events closed after %d events", events)
 			}
-			events++
-		case evt := <-sub.Events():
+			if evt.Kind == ibkr.StreamData {
+				events++
+			}
 			if evt.Kind == ibkr.StreamSnapshotComplete {
 				t.Logf("SubscribeOpenOrders: %d open orders", events)
 				return

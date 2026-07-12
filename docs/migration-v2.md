@@ -316,4 +316,4 @@ FA configuration mutation, Reuters fundamental data, `ibkr-probe`, and pre-200 G
 
 Session events produced by Gateway errors now set `Event.APIError`, preserving the request ID, server time, and advanced-order-reject JSON. Existing event code and message fields remain available for simple notification handling.
 
-`MarketData().RegulatorySnapshot` is distinct from an ordinary quote snapshot and may incur an IBKR fee. `OpenOrderUpdate.Binding` is populated by `orderBound` only for the client-0 auto-open-orders subscription that owns that callback's scope.
+`MarketData().RegulatorySnapshot` is distinct from an ordinary quote snapshot and may incur an IBKR fee. After transport admission, loss of its completion evidence returns non-retryable `ErrRegulatorySnapshotUncertain`; reconcile billing before issuing another request. `OpenOrderUpdate.Binding` is populated by `orderBound` only for the client-0 auto-open-orders subscription that owns that callback's scope.

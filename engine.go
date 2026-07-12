@@ -30,8 +30,10 @@ type engine struct {
 	snapshotMu sync.RWMutex
 	snapshot   Snapshot
 
-	transport     *transport.Conn
-	serverVersion int
+	transport          *transport.Conn
+	retiringTransport  *transport.Conn
+	transportRetireErr error
+	serverVersion      int
 
 	keyed      map[int]*route
 	singletons map[string]*route
@@ -143,6 +145,8 @@ type route struct {
 	emitRestored     func(*engine)
 	emitResubscribed func(*engine)
 	validateResume   func(*engine) error
+	responsePending  func() bool
+	cancel           func(error)
 	close            func(error)
 	cleanup          func()
 	gapped           bool // true after Gap emitted; prevents double emission
@@ -356,6 +360,11 @@ func (e *engine) emitAPIEvent(msg codec.APIError) {
 	})
 }
 
+func (e *engine) apiNotice(op OpKind, msg codec.APIError) *APIError {
+	notice, _ := errors.AsType[*APIError](e.apiErr(op, msg))
+	return notice
+}
+
 func (e *engine) emitSessionEvent(code int, message string, err error) {
 	e.snapshotMu.RLock()
 	state := e.snapshot.State
@@ -388,33 +397,47 @@ func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 	if e.transport == nil {
 		return ErrNotReady
 	}
+	tr := e.transport
 	payload, err := codec.Encode(e.serverVersion, msg)
 	if err != nil {
 		return err
 	}
-	err = e.transport.Send(ctx, payload)
-	if errors.Is(err, transport.ErrSendQueueFull) {
-		return ErrInterrupted
-	}
-	return err
+	err = tr.Send(ctx, payload)
+	return normalizeSendErr(ctx, tr, err)
 }
 
 func (e *engine) sendTrackedContext(ctx context.Context, msg codec.Message) (transportWriteKey, error) {
 	if e.transport == nil {
 		return transportWriteKey{}, ErrNotReady
 	}
+	tr := e.transport
 	payload, err := codec.Encode(e.serverVersion, msg)
 	if err != nil {
 		return transportWriteKey{}, err
 	}
-	id, err := e.transport.SendTracked(ctx, payload)
-	if errors.Is(err, transport.ErrSendQueueFull) {
-		return transportWriteKey{}, ErrInterrupted
-	}
+	id, err := tr.SendTracked(ctx, payload)
 	if err != nil {
-		return transportWriteKey{}, err
+		return transportWriteKey{}, normalizeSendErr(ctx, tr, err)
 	}
-	return transportWriteKey{transport: e.transport, id: id}, nil
+	return transportWriteKey{transport: tr, id: id}, nil
+}
+
+func normalizeSendErr(ctx context.Context, tr *transport.Conn, err error) error {
+	if err == nil {
+		return nil
+	}
+	if cause := context.Cause(ctx); cause != nil {
+		return cause
+	}
+	if errors.Is(err, transport.ErrSendQueueFull) {
+		return ErrInterrupted
+	}
+	select {
+	case <-tr.Stopping():
+		return errors.Join(ErrInterrupted, err)
+	default:
+		return err
+	}
 }
 
 func normalizeTransportErr(err error) error {
@@ -485,6 +508,14 @@ func (e *engine) connectionSeq() uint64 {
 func (e *engine) isReady() bool {
 	if e.transport == nil {
 		return false
+	}
+	if e.retiringTransport == e.transport {
+		return false
+	}
+	select {
+	case <-e.transport.Stopping():
+		return false
+	default:
 	}
 	e.snapshotMu.RLock()
 	state := e.snapshot.State

@@ -106,6 +106,30 @@ func TestUnwrittenPlaceOrderClosesItsHandle(t *testing.T) {
 	}
 }
 
+func TestReconnectOffClosesAdmittedOrderAsRecoveryRequired(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.cfg.reconnect = ReconnectOff
+	handle := e.bindOrderHandle(47, Contract{ConID: 265598, Exchange: "SMART"})
+
+	e.handleTransportLoss(transportLoss{transport: e.transport, err: io.EOF})
+
+	err := handle.Wait()
+	if !errors.Is(err, ErrOrderRecoveryRequired) || !errors.Is(err, io.EOF) {
+		t.Fatalf("OrderHandle.Wait() error = %v, want ErrOrderRecoveryRequired and io.EOF", err)
+	}
+	if IsRetryable(err) {
+		t.Fatal("ReconnectOff order recovery error is retryable")
+	}
+	for event := range handle.Events() {
+		if event.Lifecycle != nil && (event.Lifecycle.Kind == OrderGap || event.Lifecycle.Kind == OrderRecoveryRequired) {
+			t.Fatalf("terminal ReconnectOff path emitted transient lifecycle event: %+v", event.Lifecycle)
+		}
+	}
+	_ = peer.Close()
+}
+
 func TestBracketAdmissionWinsCallerBoundaries(t *testing.T) {
 	t.Parallel()
 

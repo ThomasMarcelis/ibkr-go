@@ -107,6 +107,7 @@ const (
 	StreamStarted          StreamEventKind = "Started"
 	StreamData             StreamEventKind = "Data"
 	StreamSnapshotComplete StreamEventKind = "SnapshotComplete"
+	StreamNotice           StreamEventKind = "Notice"
 	StreamGap              StreamEventKind = "Gap"
 	StreamRestored         StreamEventKind = "Restored"
 	StreamResubscribed     StreamEventKind = "Resubscribed"
@@ -114,14 +115,15 @@ const (
 
 // StreamEvent is one ordered subscription event. At records when the client
 // enqueued the event, in UTC; it is observation time, not Gateway event time.
-// Value is meaningful only for StreamData. A closed Events channel is terminal;
-// call Subscription.Err for the final error.
+// Value is meaningful only for StreamData and Notice only for StreamNotice. A
+// closed Events channel is terminal; call Subscription.Err for the final error.
 type StreamEvent[T any] struct {
 	At            time.Time
 	Kind          StreamEventKind
 	Value         T
 	ConnectionSeq uint64
 	Err           error
+	Notice        *APIError
 }
 
 // ReconnectPolicy controls whether a [Client] automatically re-dials the

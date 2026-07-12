@@ -39,11 +39,17 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 	defer sub.Close()
 
 	var latest Quote
+	finish := func(err error) (Quote, error) {
+		if !regulatory {
+			return latest, err
+		}
+		return latest, regulatorySnapshotError(err)
+	}
 	for {
 		select {
 		case event, ok := <-sub.Events():
 			if !ok {
-				return latest, sub.Wait()
+				return finish(sub.Wait())
 			}
 			switch event.Kind {
 			case StreamData:
@@ -52,9 +58,36 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 				return latest, nil
 			}
 		case <-ctx.Done():
-			return Quote{}, context.Cause(ctx)
+			// A completion already queued by the actor owns the result even if
+			// the caller deadline became ready at the same instant.
+			for {
+				select {
+				case event, ok := <-sub.Events():
+					if !ok {
+						return finish(sub.Wait())
+					}
+					if event.Kind == StreamData {
+						latest = event.Value.Snapshot
+					}
+					if event.Kind == StreamSnapshotComplete {
+						return latest, nil
+					}
+				default:
+					return finish(context.Cause(ctx))
+				}
+			}
 		}
 	}
+}
+
+func regulatorySnapshotError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, definitive := errors.AsType[*APIError](err); definitive {
+		return err
+	}
+	return errors.Join(ErrRegulatorySnapshotUncertain, err)
 }
 
 func (e *engine) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
@@ -110,6 +143,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			return validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion))
 		}
 		quoteRoute.handle = func(msg any, e *engine) {
+			fail := func(err error) { sub.cancelFromActor(err) }
 			switch m := msg.(type) {
 			case codec.MarketDataReroute:
 				if rerouted {
@@ -129,20 +163,17 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				resumeContract = Contract{ConID: m.ConID, Exchange: m.Exchange}
 				rerouted = true
 				if err := e.send(request); err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(fmt.Errorf("ibkr: reroute market data request %d: %w", reqID, err))
+					fail(fmt.Errorf("ibkr: reroute market data request %d: %w", reqID, err))
 				}
 			case codec.TickPrice:
 				price, err := parseRequiredDecimal(m.Price, "quote price tick")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				size, err := parseOptionalDecimalPointer(m.Size, "quote price tick companion size")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				changed := applyTickPrice(&quote, m.TickType, price)
@@ -164,8 +195,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			case codec.TickSize:
 				size, err := parseOptionalDecimalPointer(m.Size, "quote size tick")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				var changed QuoteFields
@@ -186,8 +216,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			case codec.TickGeneric:
 				value, err := parseRequiredDecimal(m.Value, "generic tick value")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(QuoteUpdate{
@@ -206,8 +235,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			case codec.TickNews:
 				timestamp, err := parseEpochMilliseconds(m.Time)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(QuoteUpdate{
@@ -225,20 +253,17 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			case codec.TickReqParams:
 				minTick, err := parseOptionalDecimalPointer(m.MinTick, "quote parameters minimum tick")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				lastPricePrecision, err := parseOptionalDecimalPointer(m.LastPricePrecision, "quote parameters last price precision")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				lastSizePrecision, err := parseOptionalDecimalPointer(m.LastSizePrecision, "quote parameters last size precision")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(QuoteUpdate{
@@ -256,8 +281,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			case codec.TickOptionComputation:
 				computation, err := fromCodecOptionComputation(m)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(QuoteUpdate{
@@ -285,7 +309,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			// 10167: delayed market data warning — the subscription
 			// stays open and will receive delayed ticks.
 			if m.Code == 10167 {
-				e.emitAPIEvent(m)
+				sub.emitNotice(e.apiNotice(OpQuotes, m), e.connectionSeq())
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -379,8 +403,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			}
 			bar, err := fromCodecRealtimeBar(barMsg)
 			if err != nil {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(err)
+				sub.cancelFromActor(err)
 				return
 			}
 			sub.emit(bar)
@@ -390,7 +413,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				return
 			}
 			if m.Code == 10167 {
-				e.emitAPIEvent(m)
+				sub.emitNotice(e.apiNotice(OpRealTimeBars, m), e.connectionSeq())
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -510,7 +533,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 				return
 			}
 			if m.Code == ErrCodeSmartDepthExchanges {
-				e.emitAPIEvent(m)
+				sub.emitNotice(e.apiNotice(OpMarketDepth, m), e.connectionSeq())
 				return
 			}
 			e.deleteKeyedRoute(reqID)
@@ -657,10 +680,10 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 		}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.TickByTickData); ok {
+				fail := func(err error) { sub.cancelFromActor(err) }
 				ts, err := parseTickByTickTime(m.Time)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				tick := TickByTickData{Time: ts, TickType: m.TickType}
@@ -668,14 +691,12 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				case 1, 2:
 					tick.Price, err = parseOptionalDecimal(m.Price, "tick by tick price")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 					tick.Size, err = parseOptionalDecimal(m.Size, "tick by tick size")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 					tick.Exchange = m.Exchange
@@ -683,33 +704,28 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				case 3:
 					tick.BidPrice, err = parseOptionalDecimal(m.BidPrice, "tick by tick bid price")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 					tick.AskPrice, err = parseOptionalDecimal(m.AskPrice, "tick by tick ask price")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 					tick.BidSize, err = parseOptionalDecimal(m.BidSize, "tick by tick bid size")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 					tick.AskSize, err = parseOptionalDecimal(m.AskSize, "tick by tick ask size")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 				case 4:
 					tick.MidPoint, err = parseOptionalDecimal(m.MidPoint, "tick by tick midpoint")
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						fail(err)
 						return
 					}
 				}
@@ -721,7 +737,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				return
 			}
 			if m.Code == 10167 {
-				e.emitAPIEvent(m)
+				sub.emitNotice(e.apiNotice(OpTickByTick, m), e.connectionSeq())
 				return
 			}
 			e.deleteKeyedRoute(reqID)

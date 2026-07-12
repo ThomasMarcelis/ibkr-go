@@ -206,8 +206,8 @@ func awaitSubscriptionResponse[T any](ctx context.Context, e *engine, resp <-cha
 	return out, nil
 }
 
-// awaitFireAndForget sends a fire-and-forget command through the actor and
-// waits for its result, respecting context cancellation and engine shutdown.
+// awaitFireAndForget sends a fire-and-forget command through the actor. Once
+// setup runs, the exact transport-admission result wins cancellation races.
 func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context) error) error {
 	resp := make(chan error, 1)
 	enqueueReadySetup(ctx, e, func() {
@@ -215,12 +215,9 @@ func awaitFireAndForget(ctx context.Context, e *engine, fn func(context.Context)
 	}, func() {
 		resp <- fn(ctx)
 	})
-	select {
-	case err := <-resp:
+	result, err := awaitAdmittedResponse(ctx, e, resp)
+	if err != nil {
 		return err
-	case <-ctx.Done():
-		return context.Cause(ctx)
-	case <-e.done:
-		return e.closedOperationError()
 	}
+	return result
 }

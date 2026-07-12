@@ -135,6 +135,8 @@ for event := range sub.Events() {
     switch event.Kind {
     case ibkr.StreamData:
         fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
+    case ibkr.StreamNotice:
+        log.Printf("quote notice: %v", event.Notice)
     case ibkr.StreamGap:
         log.Printf("quote gap on connection %d: %v", event.ConnectionSeq, event.Err)
     case ibkr.StreamRestored, ibkr.StreamResubscribed:
@@ -145,8 +147,8 @@ return sub.Err()
 ```
 
 `Events()` and `All(ctx)` consume the same ordered queue; choose one rather
-than reading both concurrently. `AwaitSnapshot(ctx)` remains a durable initial
-snapshot boundary.
+than reading both concurrently. `All` filters lifecycle and notice events.
+`AwaitSnapshot(ctx)` remains a durable initial snapshot boundary.
 
 ### Fetch historical bars
 

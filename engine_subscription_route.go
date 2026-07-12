@@ -1,6 +1,10 @@
 package ibkr
 
-import "github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+import (
+	"errors"
+
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+)
 
 // newEngineSubscription gives public cancellation and actor-owned overflow the
 // same route-specific implementation. Public Close queues it onto the actor;
@@ -47,7 +51,8 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 			sub.closeWithErr(ErrResumeRequired)
 			return false
 		},
-		close: func(err error) { sub.closeWithErr(err) },
+		close:  func(err error) { sub.closeWithErr(err) },
+		cancel: sub.cancelFromActor,
 	}
 	return sub, ownedRoute
 }
@@ -63,13 +68,21 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 		if e.singletons[key] != ownedRoute {
 			return
 		}
+		ambiguous := sub.snapshotWant && !sub.snapshotComplete()
+		if ownedRoute.responsePending != nil {
+			ambiguous = ownedRoute.responsePending()
+		}
 		delete(e.singletons, key)
 		var err error
-		if cancel != nil {
+		if cancel != nil && !ambiguous {
 			err = e.cancelSubscription(opKind, cancel)
 		}
 		sub.closeWithErr(err)
-		e.retireSubscriptionTransport(err)
+		if ambiguous {
+			e.retireTransport(errors.Join(ErrInterrupted, err))
+		} else {
+			e.retireSubscriptionTransport(err)
+		}
 	}
 	sub = newEngineSubscription[T](cfg, e, actorCancel)
 	ownedRoute = &route{
@@ -80,7 +93,8 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 			sub.closeWithErr(ErrResumeRequired)
 			return false
 		},
-		close: func(err error) { sub.closeWithErr(err) },
+		close:  func(err error) { sub.closeWithErr(err) },
+		cancel: sub.cancelFromActor,
 	}
 	return sub, ownedRoute
 }

@@ -13,13 +13,13 @@ var (
 	ErrInterrupted                  = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
 	ErrResumeRequired               = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
 	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")               // order observation crossed a gap; replacement is permanently unavailable on this handle
+	ErrRegulatorySnapshotUncertain  = errors.New("ibkr: regulatory snapshot outcome uncertain") // admitted fee-bearing request lost its completion evidence; do not retry blindly
 	ErrNoSnapshot                   = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
 	ErrSlowConsumer                 = errors.New("ibkr: slow consumer")                         // consumer fell behind and a bounded event queue overflowed
 	ErrUnsupportedServerVersion     = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
 	ErrClosed                       = errors.New("ibkr: closed")                                // operation on a closed client
 	ErrNoMatch                      = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
 	ErrAmbiguousContract            = errors.New("ibkr: ambiguous contract")                    // Qualify matched more than one contract
-	ErrNoSubscription               = errors.New("ibkr: no active subscription")                // RefreshOpen with no active open-orders subscription
 	ErrOperationActive              = errors.New("ibkr: operation already active")              // singleton operation already owns its response route
 	ErrExecutionCorrelationOverflow = errors.New("ibkr: execution correlation limit exceeded")  // execution stream correlation state reached its configured bound
 )
@@ -184,7 +184,7 @@ func operationActive(operation string) error {
 // false for caller context cancellation, protocol and validation failures,
 // ordinary API rejections, [ErrOrderRecoveryRequired], [ErrSlowConsumer],
 // [ErrExecutionCorrelationOverflow], [ErrClosed], [OrderRecoveryError], [ExerciseUncertainError], and
-// [SubscriptionCancelError]. Recovery errors remain non-retryable even when
+// [SubscriptionCancelError], and [ErrRegulatorySnapshotUncertain]. Recovery errors remain non-retryable even when
 // they wrap a transient error because a blind retry could duplicate a live
 // order, exercise instruction, or subscription.
 func IsRetryable(err error) bool {
@@ -219,6 +219,9 @@ func isRetryableError(err error) bool {
 	// A gap permanently removes replacement from that handle. Joining a
 	// transient connection cause must not turn recovery into a blind retry.
 	if errors.Is(err, ErrOrderRecoveryRequired) {
+		return false
+	}
+	if errors.Is(err, ErrRegulatorySnapshotUncertain) {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

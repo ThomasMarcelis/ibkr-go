@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   field name.
 - `StreamEvent.At` records UTC client observation time for both data and
   lifecycle events.
+- Request-scoped non-terminal API notices are delivered losslessly on their
+  owning subscription as `StreamNotice` events with `StreamEvent.Notice`,
+  rather than through the lossy session observer.
+- `SubscribeOpen` returns an `OpenOrdersSubscription`; call `sub.Refresh(ctx)`
+  after a snapshot boundary to refresh that exact request-ID-less stream.
+  Concurrent refreshes return `ErrOperationActive`.
 - `WithExecutionCorrelationLimit` bounds retained execution IDs, pending fee
   versions, and the finite `Executions` collector at 4096 by default. Exceeding
   a bound closes with non-retryable `ErrExecutionCorrelationOverflow`. At
@@ -34,6 +40,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   failure, now returns non-retryable `*ExerciseUncertainError` while preserving
   its cause. Exercise replays freeze the request-scoped pseudo-order lifecycle
   as well as warnings and terminal errors.
+- Connection retirement now follows the transport pumps' normal ordering, so
+  admitted write outcomes and decoded callbacks are handled before routes are
+  torn down. Fire-and-forget methods likewise return the exact admission result
+  when caller cancellation races the actor.
+- With reconnect disabled, an admitted order closes with non-retryable
+  `ErrOrderRecoveryRequired` instead of appearing safely retryable. Exercise
+  routes retain their more specific uncertainty classification.
+- Abnormal teardown of a request-ID-less snapshot retires its connection
+  generation before another caller can own late replies. Stream conversion
+  failures request protocol cancellation when the operation supports it.
+- An admitted fee-bearing regulatory snapshot that loses completion evidence
+  returns non-retryable `ErrRegulatorySnapshotUncertain`; definitive Gateway
+  rejection remains an `*APIError`.
 
 ## v2.0.0-rc.2 — 2026-07-11
 

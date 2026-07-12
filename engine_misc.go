@@ -232,8 +232,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 				for i, entry := range m.Entries {
 					contract, err := fromCodecContract(entry.Contract)
 					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						sub.closeWithErr(err)
+						sub.cancelFromActor(err)
 						return
 					}
 					results[i] = ScannerResult{
@@ -254,7 +253,7 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 				return
 			}
 			if m.Code == ErrCodeHistoricalDataQueryMessage && m.Message == scannerNoItemsMessage {
-				e.emitAPIEvent(m)
+				sub.emitNotice(e.apiNotice(OpScannerSubscription, m), e.connectionSeq())
 				return
 			}
 			e.deleteKeyedRoute(reqID)

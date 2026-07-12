@@ -259,6 +259,26 @@ func (s *Subscription[T]) emitState(kind StreamEventKind, connectionSeq uint64, 
 	}
 }
 
+func (s *Subscription[T]) emitNotice(notice *APIError, connectionSeq uint64) bool {
+	select {
+	case <-s.done:
+		return false
+	default:
+	}
+	select {
+	case s.events <- StreamEvent[T]{
+		At:            time.Now().UTC(),
+		Kind:          StreamNotice,
+		ConnectionSeq: connectionSeq,
+		Notice:        notice,
+	}:
+		return true
+	default:
+		s.cancelFromActor(ErrSlowConsumer)
+		return false
+	}
+}
+
 func (s *Subscription[T]) snapshotComplete() bool {
 	s.snapshotMu.Lock()
 	defer s.snapshotMu.Unlock()

@@ -183,9 +183,15 @@ func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
 	if _, ok := e.keyed[1]; !ok {
 		t.Fatal("live code-2152 SMART-depth exchange notice deleted the route")
 	}
-	event := <-e.SessionEvents()
-	if event.Code != ErrCodeSmartDepthExchanges || event.Message == "" {
-		t.Fatalf("market-depth session event = %+v, want code-2152 availability notice", event)
+	event := <-sub.Events() // Started
+	event = <-sub.Events()
+	if event.Kind != StreamNotice || event.Notice == nil || event.Notice.Code != ErrCodeSmartDepthExchanges || event.Notice.Message == "" {
+		t.Fatalf("market-depth stream event = %+v, want code-2152 availability notice", event)
+	}
+	select {
+	case duplicate := <-e.SessionEvents():
+		t.Fatalf("request-scoped notice was duplicated as session event: %+v", duplicate)
+	default:
 	}
 	if err := sub.Err(); err != nil {
 		t.Fatalf("market-depth subscription error after notice = %v", err)
@@ -202,6 +208,23 @@ func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
 	}
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("Wait() error = %v", err)
+	}
+}
+
+func TestRegulatorySnapshotErrorPreservesDefinitiveRejection(t *testing.T) {
+	t.Parallel()
+
+	apiErr := &APIError{Code: ErrCodeMarketDataNotSubscribed, OpKind: OpQuotes}
+	if got := regulatorySnapshotError(apiErr); got != apiErr {
+		t.Fatalf("regulatorySnapshotError(APIError) = %v, want unchanged rejection", got)
+	}
+
+	got := regulatorySnapshotError(context.DeadlineExceeded)
+	if !errors.Is(got, ErrRegulatorySnapshotUncertain) || !errors.Is(got, context.DeadlineExceeded) {
+		t.Fatalf("regulatorySnapshotError(deadline) = %v, want uncertainty and deadline", got)
+	}
+	if IsRetryable(got) {
+		t.Fatal("uncertain fee-bearing request is retryable")
 	}
 }
 

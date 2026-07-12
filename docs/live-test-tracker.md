@@ -200,7 +200,7 @@ Issue #21 follow-up in the same session, capture 20260704T181808Z
 (`api_open_orders_refresh_aapl`): re-sending `req_open_orders` on an active
 open-orders subscription yields a fresh snapshot burst terminated by another
 `open_order_end`, with unsolicited open_order/order_status echo pairs arriving
-between the snapshots — this grounds `Orders().RefreshOpen`. A direct probe of
+between the snapshots — this grounds `OpenOrdersSubscription.Refresh`. A direct probe of
 `req_auto_open_orders` showed the Gateway sends no `open_order_end` for the
 auto bind (no snapshot boundary), so auto-scope refresh is rejected
 client-side with `ErrNoSnapshot`. Probe orders cancelled; zero residue.
@@ -509,7 +509,7 @@ against the role-aware `paper-dev` Gateway.
 | api_transmit_false_then_transmit_aapl.txt | 20260415T162717Z | promoted; covers staged Transmit=false then transmit/cancel replay |
 | api_reconnect_active_order_aapl.txt | 20260415T162822Z | promoted; covers GTC active order visible after reconnect |
 | api_reconnect_recovered_cancel_status_aapl.txt | 20260704T174748Z | promoted; covers unsolicited reconnect snapshot push, paired order_status in the recovery snapshot, and cancel-status delivery to SubscribeOpen for a recovered order (issue #20) |
-| api_open_orders_refresh_aapl.txt | 20260704T181808Z | promoted; covers RefreshOpen fresh snapshot burst on an active subscription with inter-snapshot echo pairs (issue #21) |
+| api_open_orders_refresh_aapl.txt | 20260704T181808Z | promoted; covers `OpenOrdersSubscription.Refresh` fresh snapshot burst with inter-snapshot echo pairs (issue #21) |
 | api_order_handle_reconnect_cancel_aapl.txt | 20260415T162822Z | promoted; covers original OrderHandle Gap/RecoveryRequired lifecycle and cancel after reconnect |
 | api_client_id0_order_observation_aapl.txt | 20260415T162840Z | promoted; covers client ID 0 observing/cancelling another client's GTC order |
 | api_cross_client_cancel_aapl.txt | 20260415T162857Z | promoted; covers client ID 2 observing/cancelling client ID 1 order |
@@ -551,7 +551,7 @@ against the role-aware `paper-dev` Gateway.
 | wsh_meta_data_error.txt | 20260710T230042Z | promoted; exact sv206 request and code-10276 entitlement refusal (`cda9d532c7edb719`) |
 | req_ids.txt / req_ids_read_only.txt | 20260711T031214Z / 20260710T215126Z | promoted exact public-API reqIds exchanges; paper sv207 returns NEXT_VALID_ID (`d1cb92f21918758c1bdc8e02106c355b872237b27d029a5ea495912f39308023`), while read-only sv206 returns code 321 (`7cbfcf62649583f0fefb6db886493ec865d56ea6027c1c7341ec5529fec81e23`) |
 | matching_symbols_partial.txt | 20260611T074053Z | promoted; covers the 97-row partial-pattern symbolSamples reply including BOND issuer ids, round-tripped field-for-field against the capture |
-| set_type_switch_while_streaming.txt | 20260611T074112Z | promoted; covers the stream-tied marketDataType(3) push, delayed ticks, mid-stream SetType(Live) acceptance, and 10167 as a session event; the four bare set_type captures add nothing beyond api_market_data_type_cycle.txt and set_type_invalid is inconclusive (driver disconnected before any reply; public API validates 1..4 client-side) |
+| set_type_switch_while_streaming.txt | 20260611T074112Z | promoted; covers the stream-tied marketDataType(3) push, delayed ticks, mid-stream SetType(Live) acceptance, and request-scoped 10167 notice; the four bare set_type captures add nothing beyond api_market_data_type_cycle.txt and set_type_invalid is inconclusive (driver disconnected before any reply; public API validates 1..4 client-side) |
 | current_time_millis.txt | 20260710T215126Z | promoted; exact sv206 bare reqCurrentTimeInMillis and live epoch-millisecond reply (`3070c6c9296d0eb2`) |
 | mkt_depth_exchanges.txt | 20260710T215127Z | promoted; exact sv206 request and complete 307-row depth-exchange response (`6ca2202028b6e8e1`) |
 | news_providers.txt | 20260710T215127Z | promoted; exact sv206 request and complete ordered eight-provider response (`999c27f32c7d8e68`) |

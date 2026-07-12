@@ -146,6 +146,29 @@ func TestAwaitSubscriptionResponseAdmissionWinsCallerBoundaries(t *testing.T) {
 	})
 }
 
+func TestFireAndForgetAdmissionResultWinsCancellation(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	e := &engine{
+		cmds:      make(chan func(), 1),
+		done:      make(chan struct{}),
+		transport: new(transport.Conn),
+		snapshot:  Snapshot{State: StateReady},
+	}
+	result := make(chan error, 1)
+	go func() {
+		result <- awaitFireAndForget(ctx, e, func(context.Context) error {
+			cancel()
+			return nil
+		})
+	}()
+	(<-e.cmds)()
+	if err := <-result; err != nil {
+		t.Fatalf("awaitFireAndForget() = %v, want admitted nil result", err)
+	}
+}
+
 func TestEnqueueOneShotSetupRunsActiveContext(t *testing.T) {
 	t.Parallel()
 

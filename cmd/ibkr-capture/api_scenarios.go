@@ -5089,7 +5089,7 @@ func drainObservers(
 	quotes *ibkr.Subscription[ibkr.QuoteUpdate],
 	updates *ibkr.Subscription[ibkr.AccountUpdate],
 	pnl *ibkr.Subscription[ibkr.PnLUpdate],
-	openOrders *ibkr.Subscription[ibkr.OpenOrderUpdate],
+	openOrders *ibkr.OpenOrdersSubscription,
 ) {
 	go func() {
 		deadline := time.After(45 * time.Second)
@@ -5153,7 +5153,7 @@ func pnlEvents(sub *ibkr.Subscription[ibkr.PnLUpdate]) <-chan ibkr.StreamEvent[i
 	return sub.Events()
 }
 
-func openOrderEvents(sub *ibkr.Subscription[ibkr.OpenOrderUpdate]) <-chan ibkr.StreamEvent[ibkr.OpenOrderUpdate] {
+func openOrderEvents(sub *ibkr.OpenOrdersSubscription) <-chan ibkr.StreamEvent[ibkr.OpenOrderUpdate] {
 	if sub == nil {
 		return nil
 	}

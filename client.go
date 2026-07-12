@@ -228,7 +228,9 @@ func (c MarketDataClient) Quote(ctx context.Context, req QuoteRequest) (Quote, e
 
 // RegulatorySnapshot requests IBKR's fee-bearing US regulatory snapshot for
 // contract. IBKR bills eligible requests individually and completes the call
-// only when tickSnapshotEnd arrives.
+// only when tickSnapshotEnd arrives. Once admitted, loss of completion
+// evidence returns [ErrRegulatorySnapshotUncertain], which is not safe for an
+// automatic retry because the fee may already have been incurred.
 func (c MarketDataClient) RegulatorySnapshot(ctx context.Context, contract Contract) (Quote, error) {
 	return c.engine.RegulatorySnapshot(ctx, contract)
 }
@@ -362,17 +364,8 @@ func (c OrdersClient) Open(ctx context.Context, scope OpenOrdersScope) ([]OpenOr
 // scope. An [OpenOrdersScopeAuto] subscription is persistent and has no
 // snapshot phase, so [Subscription.AwaitSnapshot] returns [ErrNoSnapshot];
 // closing it disables the automatic binding of future manual orders.
-func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
+func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*OpenOrdersSubscription, error) {
 	return c.engine.SubscribeOpenOrders(ctx, scope, opts...)
-}
-
-// RefreshOpen requests a fresh open-orders snapshot on the active
-// SubscribeOpen subscription: the current open orders arrive as Order events
-// followed by another SnapshotComplete lifecycle event. Returns
-// [ErrNoSubscription] when no open-orders subscription is active, or
-// [ErrNoSnapshot] when the active subscription uses [OpenOrdersScopeAuto].
-func (c OrdersClient) RefreshOpen(ctx context.Context) error {
-	return c.engine.RefreshOpenOrders(ctx)
 }
 
 // Completed returns terminal orders processed this session; apiOnly restricts

@@ -30,6 +30,7 @@ func TestCanceledSingletonRetiresTransportBeforeReplacement(t *testing.T) {
 		t.Fatalf("canceled CurrentTime() error = %v, want context.Canceled", err)
 	}
 	(<-e.cmds)()
+	finishObservedRetirement(t, e)
 	if _, ok := e.singletons[singletonCurrentTime]; ok {
 		t.Fatal("canceled CurrentTime() left its unkeyed route active")
 	}
@@ -39,6 +40,65 @@ func TestCanceledSingletonRetiresTransportBeforeReplacement(t *testing.T) {
 	if e.snapshot.State != StateReconnecting {
 		t.Fatalf("state = %s, want Reconnecting", e.snapshot.State)
 	}
+}
+
+func TestOpenOrdersCloseDuringRefreshRetiresResponseOwner(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	result := make(chan *OpenOrdersSubscription, 1)
+	go func() {
+		sub, err := e.SubscribeOpenOrders(context.Background(), OpenOrdersScopeAll)
+		if err != nil {
+			t.Errorf("SubscribeOpenOrders: %v", err)
+		}
+		result <- sub
+	}()
+	(<-e.cmds)()
+	sub := <-result
+	_ = readObservedFrame(t, peer)
+	e.handleIncoming(codec.OpenOrderEnd{})
+	<-sub.Events() // Started
+	<-sub.Events() // SnapshotComplete
+
+	refreshed := make(chan error, 1)
+	go func() { refreshed <- sub.Refresh(context.Background()) }()
+	(<-e.cmds)()
+	if err := <-refreshed; err != nil {
+		t.Fatalf("Refresh: %v", err)
+	}
+	_ = readObservedFrame(t, peer)
+
+	sub.Close()
+	(<-e.cmds)()
+	if e.retiringTransport != e.transport {
+		t.Fatal("closing an in-flight request-ID-less refresh did not retire its response owner")
+	}
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("Wait after explicit Close = %v, want clean local detach", err)
+	}
+	finishObservedRetirement(t, e)
+}
+
+func TestSendRejectedByStoppingTransportIsInterrupted(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	if err := e.transport.Close(); err != nil {
+		t.Fatalf("Close transport: %v", err)
+	}
+	err := e.sendContext(context.Background(), codec.ReqMarketDataType{DataType: int(MarketDataDelayed)})
+	if !errors.Is(err, ErrInterrupted) {
+		t.Fatalf("sendContext on stopping transport = %v, want ErrInterrupted", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	err = e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(MarketDataDelayed)})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("canceled sendContext on stopping transport = %v, want context.Canceled", err)
+	}
+	_ = peer.Close()
 }
 
 func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
@@ -56,6 +116,7 @@ func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 
 	sub.Close()
 	(<-e.cmds)()
+	finishObservedRetirement(t, e)
 
 	waitErr := sub.Wait()
 	cancelErr, ok := errors.AsType[*SubscriptionCancelError](waitErr)
@@ -99,6 +160,7 @@ func TestSubscriptionCancellationAdmissionFailureTerminatesReconnectOffClient(t 
 
 	sub.Close()
 	(<-e.cmds)()
+	finishObservedRetirement(t, e)
 
 	if _, ok := errors.AsType[*SubscriptionCancelError](sub.Wait()); !ok {
 		t.Fatalf("Wait() error = %T %v, want *SubscriptionCancelError", sub.Err(), sub.Err())
@@ -130,6 +192,7 @@ func TestSubscriptionCancellationAdmissionFailurePreservesResumeAutoSibling(t *t
 
 	canceled.Close()
 	(<-e.cmds)()
+	finishObservedRetirement(t, e)
 
 	if _, ok := errors.AsType[*SubscriptionCancelError](canceled.Wait()); !ok {
 		t.Fatalf("canceled Wait() error = %T %v, want *SubscriptionCancelError", canceled.Err(), canceled.Err())
@@ -173,6 +236,7 @@ func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
 	e.handleIncoming(decodeOne(t, []byte("58\x001\x001\x003\x00")))
 
 	waitErr := sub.Wait()
+	finishObservedRetirement(t, e)
 	if !errors.Is(waitErr, ErrSlowConsumer) || !errors.Is(waitErr, ErrInterrupted) {
 		t.Fatalf("Wait() error = %v, want slow-consumer and cancellation-admission causes", waitErr)
 	}
@@ -195,6 +259,16 @@ func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
 
 	for range sub.Events() {
 	}
+}
+
+func finishObservedRetirement(t *testing.T, e *engine) {
+	t.Helper()
+	tr := e.retiringTransport
+	if tr == nil {
+		return
+	}
+	err := tr.Wait()
+	e.handleTransportLoss(transportLoss{transport: tr, err: err})
 }
 
 func TestActorSlowConsumerCancelsWhilePublicCloseWaitsOnFullCommandQueue(t *testing.T) {

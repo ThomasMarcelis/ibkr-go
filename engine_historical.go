@@ -248,8 +248,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			case codec.HistoricalBar:
 				bar, err := fromCodecBar(m)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					sub.cancelFromActor(err)
 					return
 				}
 				sub.emit(bar)
@@ -262,8 +261,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 					Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP,
 				})
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					sub.cancelFromActor(err)
 					return
 				}
 				sub.emit(bar)
@@ -274,7 +272,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 				return
 			}
 			if m.Code == 10167 {
-				e.emitAPIEvent(m)
+				sub.emitNotice(e.apiNotice(OpHistoricalBarsStream, m), e.connectionSeq())
 				return
 			}
 			e.deleteKeyedRoute(reqID)

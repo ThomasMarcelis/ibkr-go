@@ -40,10 +40,25 @@ func (e *engine) cancelSubscription(opKind OpKind, msg codec.Message) error {
 // batch teardown record the same failed admission on every affected route
 // before disconnect processing reaches their siblings.
 func (e *engine) retireSubscriptionTransport(err error) {
-	if _, ok := errors.AsType[*SubscriptionCancelError](err); !ok || e.transport == nil {
+	if _, ok := errors.AsType[*SubscriptionCancelError](err); !ok {
+		return
+	}
+	e.retireTransport(err)
+}
+
+// retireTransport stops the current connection generation but leaves loss
+// delivery to the transport pumps. Their normal completion ordering ensures
+// admitted write outcomes and decoded frames reach the actor first.
+func (e *engine) retireTransport(err error) {
+	if e.transport == nil {
 		return
 	}
 	tr := e.transport
+	if e.retiringTransport == tr {
+		e.transportRetireErr = errors.Join(e.transportRetireErr, err)
+		return
+	}
+	e.retiringTransport = tr
+	e.transportRetireErr = err
 	_ = tr.Close()
-	e.handleTransportLoss(transportLoss{transport: tr, err: err})
 }

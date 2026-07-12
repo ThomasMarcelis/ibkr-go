@@ -4,12 +4,11 @@
 # 93fe95e3b2f7f336e6c9fced2ca7b563dd4e9c6726343ca05df02335b020b24d
 #
 # The account is length-preserving redacted to DU9000001. Private position
-# rows, the snapshot end marker, and the current-time fence are omitted. The
-# exact captured request and cancel frames are placed adjacent to exercise an
-# immediate public Close without inventing protocol data.
+# rows, snapshot end marker, cancel frame, and current-time fence are omitted.
+# The exact captured request is enough to exercise immediate local retirement;
+# no synthetic server traffic is introduced.
 handshake {"server_version":207,"connection_time":"20260711 05:24:32 Central European Standard Time"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
 raw server AAAACAAAAAkxADEA
 raw client AAAABAAAAQU=
-raw client AAAABAAAAQg=
 disconnect

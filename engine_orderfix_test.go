@@ -619,6 +619,25 @@ func TestExerciseRouteInterruptionIsUncertainAndNotRetryable(t *testing.T) {
 	}
 }
 
+func TestReconnectOffClassifiesExerciseBeforeOrders(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.cfg.reconnect = ReconnectOff
+	handle := e.installExerciseRoute(77)
+
+	e.handleTransportLoss(transportLoss{transport: e.transport, err: io.EOF})
+
+	err := handle.Wait()
+	if _, ok := errors.AsType[*ExerciseUncertainError](err); !ok {
+		t.Fatalf("ExerciseHandle.Wait() error = %T %v, want *ExerciseUncertainError", err, err)
+	}
+	if errors.Is(err, ErrOrderRecoveryRequired) {
+		t.Fatalf("exercise interruption was overwritten by order recovery: %v", err)
+	}
+	_ = peer.Close()
+}
+
 func TestExerciseRouteClientShutdownIsUncertain(t *testing.T) {
 	t.Parallel()
 

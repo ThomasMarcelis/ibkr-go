@@ -4238,7 +4238,7 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 }
 
 // TestSubscribeOpenRefreshDeliversFreshSnapshot freezes the fix for
-// https://github.com/ThomasMarcelis/ibkr-go/issues/21: RefreshOpen re-sends
+// https://github.com/ThomasMarcelis/ibkr-go/issues/21: Refresh re-sends
 // the open-orders request on the active subscription and the Gateway answers
 // with a fresh burst terminated by another SnapshotComplete, so a consumer
 // can resync without tearing the subscription down. Grounded by live capture
@@ -4254,10 +4254,6 @@ func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
 	defer client.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-
-	if err := client.Orders().RefreshOpen(ctx); !errors.Is(err, ibkr.ErrNoSubscription) {
-		t.Fatalf("RefreshOpen without subscription error = %v, want ErrNoSubscription", err)
-	}
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -4286,6 +4282,9 @@ func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
 		t.Fatalf("SubscribeOpen(all): %v", err)
 	}
 	defer sub.Close()
+	if err := sub.Refresh(ctx); !errors.Is(err, ibkr.ErrOperationActive) {
+		t.Fatalf("Refresh during initial snapshot error = %v, want ErrOperationActive", err)
+	}
 
 	// Consume until the initial SnapshotComplete, then refresh and consume
 	// until the second one. The transcript carries four open_order +
@@ -4309,8 +4308,8 @@ func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
 			case ibkr.StreamSnapshotComplete:
 				snapshots++
 				if snapshots == 1 {
-					if err := client.Orders().RefreshOpen(ctx); err != nil {
-						t.Fatalf("RefreshOpen: %v", err)
+					if err := sub.Refresh(ctx); err != nil {
+						t.Fatalf("Refresh: %v", err)
 					}
 				}
 			}
@@ -4364,8 +4363,8 @@ func TestOpenOrdersAutoScopeHasNoSnapshot(t *testing.T) {
 		t.Fatalf("AwaitSnapshot(auto) error = %v, want ErrNoSnapshot", err)
 	}
 
-	if err := client.Orders().RefreshOpen(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
-		t.Fatalf("RefreshOpen(auto) error = %v, want ErrNoSnapshot", err)
+	if err := sub.Refresh(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
+		t.Fatalf("Refresh(auto) error = %v, want ErrNoSnapshot", err)
 	}
 	waitHost(t, host)
 }

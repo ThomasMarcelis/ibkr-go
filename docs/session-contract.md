@@ -165,6 +165,16 @@ Default subscription behavior:
 - account summary, positions, open orders, account updates, multi-account
   snapshots, and live historical bars expose explicit snapshot boundaries
 
+Request-scoped warnings that do not terminate a stream are ordered with its
+data as `StreamNotice` events. Their full typed payload is in
+`StreamEvent.Notice`. They are not duplicated through `SessionEvents`, whose
+drop-oldest policy is reserved for session-scoped observation.
+
+`Orders().SubscribeOpen` returns an `OpenOrdersSubscription`. Its `Refresh`
+method requests another snapshot only after the prior `SnapshotComplete` and
+only while that exact subscription still owns the request-ID-less response
+route. Overlap returns `ErrOperationActive`; auto scope returns `ErrNoSnapshot`.
+
 ## Order Submission
 
 `Orders().Place(ctx, req)` sends a live order and returns an `OrderHandle`.
@@ -351,13 +361,13 @@ Public error taxonomy:
 - `ErrInterrupted`
 - `ErrResumeRequired`
 - `ErrOrderRecoveryRequired`
+- `ErrRegulatorySnapshotUncertain`
 - `ErrNoSnapshot`
 - `ErrSlowConsumer`
 - `ErrUnsupportedServerVersion`
 - `ErrClosed`
 - `ErrNoMatch`
 - `ErrAmbiguousContract`
-- `ErrNoSubscription`
 - `ErrOperationActive`
 
 `*APIError` exposes `IsEntitlement`, `IsPacingViolation`,

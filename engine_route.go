@@ -515,8 +515,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, err)
 		}
 		if singletonObserved {
-			delete(e.singletons, singletonOpenOrders)
-			singletonRoute.close(err)
+			singletonRoute.cancel(err)
 		}
 		return
 	}
@@ -552,8 +551,7 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, err)
 		}
 		if singletonObserved {
-			delete(e.singletons, singletonOpenOrders)
-			singletonRoute.close(err)
+			singletonRoute.cancel(err)
 		}
 		return
 	}

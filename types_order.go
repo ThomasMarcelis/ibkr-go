@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -136,6 +137,24 @@ type OpenOrderUpdate struct {
 	Order   *OpenOrder
 	Status  *OrderStatusUpdate
 	Binding *OrderBinding
+}
+
+// OpenOrdersSubscription owns one request-ID-less open-orders stream. Refresh
+// requests another snapshot on that exact stream after its current snapshot
+// boundary has completed.
+type OpenOrdersSubscription struct {
+	*Subscription[OpenOrderUpdate]
+	refreshFn func(context.Context) error
+}
+
+// Refresh requests a fresh snapshot on this subscription. Only one snapshot
+// may be in flight. Auto-open-orders streams have no snapshot boundary and
+// return [ErrNoSnapshot].
+func (s *OpenOrdersSubscription) Refresh(ctx context.Context) error {
+	if s == nil || s.Subscription == nil || s.refreshFn == nil {
+		return ErrClosed
+	}
+	return s.refreshFn(ctx)
 }
 
 // OrderBinding reports the API order ID assigned when client ID 0 binds a

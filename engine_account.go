@@ -175,8 +175,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 			case codec.Position:
 				position, err := fromCodecPosition(m)
 				if err != nil {
-					delete(e.singletons, singletonPositions)
-					sub.closeWithErr(err)
+					sub.cancelFromActor(err)
 					return
 				}
 				sub.emit(position)
@@ -300,46 +299,40 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 					return
 				}
 			case codec.UpdatePortfolio:
+				fail := func(err error) { sub.cancelFromActor(err) }
 				contract, err := fromCodecContract(m.Contract)
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				position, err := parseOptionalDecimal(m.Position, "account updates position")
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				marketPrice, err := parseOptionalDecimalPointer(m.MarketPrice, "account updates market price")
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				marketValue, err := parseOptionalDecimalPointer(m.MarketValue, "account updates market value")
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				avgCost, err := parseOptionalDecimalPointer(m.AvgCost, "account updates average cost")
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				unrealizedPNL, err := parseOptionalDecimalPointer(m.UnrealizedPNL, "account updates unrealized pnl")
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				realizedPNL, err := parseOptionalDecimalPointer(m.RealizedPNL, "account updates realized pnl")
 				if err != nil {
-					delete(e.singletons, singletonAccountUpdates)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(AccountUpdate{Portfolio: &PortfolioUpdate{
@@ -474,22 +467,20 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.PositionMulti:
+				fail := func(err error) { sub.cancelFromActor(err) }
 				contract, err := fromCodecContract(m.Contract)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				position, err := parseRequiredDecimal(m.Position, "positions multi position")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				avgCost, err := parseRequiredDecimal(m.AvgCost, "positions multi average cost")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(PositionMulti{
@@ -543,22 +534,20 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 		ownedRoute.request = codec.PnLRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.PnLValue); ok {
+				fail := func(err error) { sub.cancelFromActor(err) }
 				daily, err := parseOptionalDecimalPointer(m.DailyPnL, "pnl daily")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				unrealized, err := parseOptionalDecimalPointer(m.UnrealizedPnL, "pnl unrealized")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				realized, err := parseOptionalDecimalPointer(m.RealizedPnL, "pnl realized")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(PnLUpdate{DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized})
@@ -606,34 +595,30 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 		ownedRoute.request = codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.PnLSingleValue); ok {
+				fail := func(err error) { sub.cancelFromActor(err) }
 				pos, err := parseOptionalDecimal(m.Position, "pnl single position")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				daily, err := parseOptionalDecimalPointer(m.DailyPnL, "pnl single daily")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				unrealized, err := parseOptionalDecimalPointer(m.UnrealizedPnL, "pnl single unrealized")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				realized, err := parseOptionalDecimalPointer(m.RealizedPnL, "pnl single realized")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				value, err := parseOptionalDecimalPointer(m.Value, "pnl single value")
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					fail(err)
 					return
 				}
 				sub.emit(PnLSingleUpdate{Position: pos, DailyPnL: daily, UnrealizedPnL: unrealized, RealizedPnL: realized, Value: value})

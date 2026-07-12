@@ -578,7 +578,14 @@ func TestSubscriptionCloseImmediatelyAfterCreate(t *testing.T) {
 
 	client, host := newClient(t, "lifecycle_subscription_close_immediate.txt")
 	defer client.Close()
-	defer waitHost(t, host)
+	defer func() {
+		// Subscription creation owns transport admission, not a completed
+		// socket write. Immediate pre-snapshot retirement may therefore close
+		// before the test host observes the admitted request.
+		if err := host.Wait(); err != nil && !errors.Is(err, io.EOF) {
+			t.Fatalf("host.Wait() error = %v", err)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

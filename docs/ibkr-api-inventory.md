@@ -93,7 +93,7 @@ evidence; WSH is a separate API, not a replacement.
 | `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` |
 | `MarketData()` | `SetType`, `Quote`, `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `History()` | `Bars`, `SubscribeBars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` |
-| `Orders()` | `RefreshOrderID`, `Place`, `PlaceBracket`, `Preview`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen`, `RefreshOpen`, `Completed`, `Executions` |
+| `Orders()` | `RefreshOrderID`, `Place`, `PlaceBracket`, `Preview`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen` -> `OpenOrdersSubscription.Refresh`, `Completed`, `Executions` |
 | `Options()` | `ImpliedVolatility`, `Price`, `Exercise` |
 | `News()` | `Providers`, `Article`, `Historical`, `SubscribeBulletins` |
 | `Scanner()` | `Parameters`, `SubscribeResults` |

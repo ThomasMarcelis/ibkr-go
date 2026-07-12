@@ -20,6 +20,11 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 	if loss.transport != nil && e.transport != loss.transport {
 		return
 	}
+	if e.retiringTransport == e.transport {
+		loss.err = errors.Join(loss.err, e.transportRetireErr)
+		e.retiringTransport = nil
+		e.transportRetireErr = nil
+	}
 	err := normalizeTransportErr(loss.err)
 	e.invalidateReconnectStability()
 	if !e.bootstrap.readyReported {
@@ -30,12 +35,17 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 		if err == nil {
 			err = ErrClosed
 		}
-		e.disconnectRoutes(err)
+		e.disconnectRoutes(err, false)
+		for id, order := range e.orders {
+			if !order.closed {
+				e.closeOrderRoute(id, order, errors.Join(ErrOrderRecoveryRequired, err))
+			}
+		}
 		e.closeEngine(err, err)
 		return
 	}
 	e.setState(StateReconnecting, 0, "transport lost", err)
-	e.disconnectRoutes(err)
+	e.disconnectRoutes(err, true)
 	e.scheduleReconnect()
 }
 
@@ -64,9 +74,7 @@ func (e *engine) cancelSingletonOneShot(key string, target *route) {
 	if target == nil || e.singletons[key] != target || e.transport == nil {
 		return
 	}
-	tr := e.transport
-	_ = tr.Close()
-	e.handleTransportLoss(transportLoss{transport: tr, err: ErrInterrupted})
+	e.retireTransport(ErrInterrupted)
 }
 
 func reconnectDelay(attempt int) time.Duration {
@@ -83,7 +91,7 @@ func reconnectDelay(attempt int) time.Duration {
 	return delay
 }
 
-func (e *engine) disconnectRoutes(err error) {
+func (e *engine) disconnectRoutes(err error, preserveOrders bool) {
 	for reqID, route := range e.keyed {
 		// Already gapped (e.g. from code 1100) — route survives, skip duplicate Gap.
 		if route.gapped {
@@ -119,7 +127,11 @@ func (e *engine) disconnectRoutes(err error) {
 		preview.resolve(previewResult{err: ErrInterrupted})
 		delete(e.previews, id)
 	}
-	// Order handles survive disconnect: emit Gap, do not close.
+	if !preserveOrders {
+		return
+	}
+	// Order handles survive an automatically recovered disconnect: emit Gap,
+	// do not close.
 	for _, or := range e.orders {
 		if !or.closed && !or.gapped {
 			or.gapped = true

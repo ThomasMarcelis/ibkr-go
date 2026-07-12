@@ -253,10 +253,23 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		t.Fatalf("SubscribeQuotes() error = %v", err)
 	}
 	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
+	var notices []*ibkr.APIError
+	nextData := func() ibkr.QuoteUpdate {
+		for {
+			event := waitForEvent(t, sub.Events())
+			if event.Kind == ibkr.StreamNotice {
+				notices = append(notices, event.Notice)
+				continue
+			}
+			if event.Kind == ibkr.StreamData {
+				return event.Value
+			}
+		}
+	}
 
 	// 1. The live tickReqParams callback is ancillary and does not mutate the
 	// accumulated quote.
-	update := waitForStreamData(t, sub.Events())
+	update := nextData()
 	if update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
 		t.Fatalf("update 1 = %+v, want QuoteUpdateParameters", update)
 	}
@@ -267,13 +280,13 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 
 	// 2. The Gateway then identifies the stream as delayed.
-	update = waitForStreamData(t, sub.Events())
+	update = nextData()
 	if update.Changed != ibkr.QuoteFieldMarketDataType || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
 		t.Fatalf("update 2 = %+v, want delayed market-data type", update)
 	}
 
 	// 3. Delayed last (tick 68) lands in the normalized Last field.
-	update = waitForStreamData(t, sub.Events())
+	update = nextData()
 	if update.Changed != ibkr.QuoteFieldLast|ibkr.QuoteFieldLastSize ||
 		update.Snapshot.Last.String() != "314.96" || update.Snapshot.LastSize.String() != "53" {
 		t.Fatalf("update 3 = %+v, want delayed last 314.96 x 53", update)
@@ -286,14 +299,14 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 
 	// The delayed last timestamp was already in flight before the switch.
-	update = waitForStreamData(t, sub.Events())
+	update = nextData()
 	if update.Kind != ibkr.QuoteUpdateStringTick || update.StringTick == nil ||
 		update.StringTick.TickType != 88 || update.StringTick.Value != "1783727950" {
 		t.Fatalf("update 4 = %+v, want delayed last timestamp", update)
 	}
 
 	// The next callback remains a delayed open tick, proving no type-1 re-ack.
-	update = waitForStreamData(t, sub.Events())
+	update = nextData()
 	if update.Changed != ibkr.QuoteFieldOpen || update.Snapshot.Open.String() != "314.7" {
 		t.Fatalf("update 5 = %+v, want delayed open 314.7", update)
 	}
@@ -302,18 +315,12 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 			update.Snapshot.MarketDataType, ibkr.MarketDataDelayed)
 	}
 
-	// The code-10167 warning surfaced as a session event (the subscription
-	// stayed open); it was processed before the ticks consumed above, so it
-	// is already buffered.
-	events := client.SessionEvents()
-	deadline := time.After(2 * time.Second)
-	for found := false; !found; {
-		select {
-		case ev := <-events:
-			found = ev.Code == 10167
-		case <-deadline:
-			t.Fatal("code 10167 delayed-data warning not observed in session events")
-		}
+	found := false
+	for _, notice := range notices {
+		found = found || notice != nil && notice.Code == 10167
+	}
+	if !found {
+		t.Fatal("code 10167 delayed-data warning not observed on quote stream")
 	}
 
 	sub.Close()

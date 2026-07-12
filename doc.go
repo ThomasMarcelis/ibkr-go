@@ -175,7 +175,7 @@
 // [APIError.IsWarning]).
 //
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
-// [ErrInterrupted], [ErrOrderRecoveryRequired], [ErrSlowConsumer],
+// [ErrInterrupted], [ErrOrderRecoveryRequired], [ErrRegulatorySnapshotUncertain], [ErrSlowConsumer],
 // [ErrExecutionCorrelationOverflow], [ErrNoMatch], [ErrAmbiguousContract].
 // [IsRetryable] classifies final errors for retry/backoff policy. Recovery
 // errors are never retryable because retrying can duplicate live orders or

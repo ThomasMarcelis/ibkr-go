@@ -73,7 +73,7 @@ func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 		return nil, err
 	}
 	defer sub.Close()
-	return collectSnapshot(ctx, sub, func(update OpenOrderUpdate) (OpenOrder, bool) {
+	return collectSnapshot(ctx, sub.Subscription, func(update OpenOrderUpdate) (OpenOrder, bool) {
 		if update.Order == nil {
 			return OpenOrder{}, false
 		}
@@ -81,9 +81,9 @@ func (e *engine) OpenOrdersSnapshot(ctx context.Context, scope OpenOrdersScope) 
 	})
 }
 
-func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) {
+func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*OpenOrdersSubscription, error) {
 	type result struct {
-		sub *Subscription[OpenOrderUpdate]
+		sub *OpenOrdersSubscription
 		err error
 	}
 	resp := make(chan result, 1)
@@ -109,6 +109,8 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		sub, ownedRoute := newSingletonSubscriptionRoute[OpenOrderUpdate](
 			e, cfg, singletonOpenOrders, OpOpenOrders, cancel,
 		)
+		handle := &OpenOrdersSubscription{Subscription: sub}
+		refreshPending := scope != OpenOrdersScopeAuto
 		// Auto scope binds future manual orders and emits no open_order_end, so
 		// it is a stream with no initial snapshot phase.
 		if scope != OpenOrdersScopeAuto {
@@ -126,10 +128,12 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 				sub.emit(OpenOrderUpdate{Binding: &m})
 			case codec.OpenOrderEnd:
 				if scope != OpenOrdersScopeAuto {
+					refreshPending = false
 					sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 				}
 			}
 		}
+		ownedRoute.responsePending = func() bool { return refreshPending }
 		ownedRoute.handleAPIErr = func(m codec.APIError, e *engine) {
 			if e.singletons[singletonOpenOrders] != ownedRoute {
 				return
@@ -138,6 +142,24 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			sub.closeWithErr(e.apiErr(OpOpenOrders, m))
 		}
 		e.singletons[singletonOpenOrders] = ownedRoute
+		handle.refreshFn = func(ctx context.Context) error {
+			return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
+				if e.singletons[singletonOpenOrders] != ownedRoute {
+					return ErrClosed
+				}
+				if scope == OpenOrdersScopeAuto {
+					return fmt.Errorf("%w: auto-scope open orders", ErrNoSnapshot)
+				}
+				if refreshPending {
+					return operationActive("open orders snapshot")
+				}
+				if err := e.sendContext(ctx, ownedRoute.request); err != nil {
+					return err
+				}
+				refreshPending = true
+				return nil
+			})
+		}
 
 		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.OpenOrdersRequest{Scope: string(scope)}); err != nil {
@@ -146,7 +168,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			resp <- result{err: err}
 			return
 		}
-		resp <- result{sub: sub}
+		resp <- result{sub: handle}
 	})
 
 	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
@@ -154,7 +176,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		return nil, err
 	}
 	if out.err == nil && out.sub != nil {
-		bindContext(ctx, out.sub)
+		bindContext(ctx, out.sub.Subscription)
 	}
 	return out.sub, out.err
 }
@@ -286,8 +308,7 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			if e.keyed[reqID] != ownedRoute {
 				return
 			}
-			e.deleteKeyedRoute(reqID)
-			sub.closeWithErr(err)
+			sub.cancelFromActor(err)
 		}
 		emitExecution := func(update Execution) bool {
 			if cfg.collectSnapshot {
@@ -417,6 +438,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 				case codec.CompletedOrder:
 					order, err := fromCodecCompletedOrder(m)
 					if err != nil {
+						eng.retireTransport(err)
 						delete(eng.singletons, singletonCompletedOrders)
 						resp <- result{err: err}
 						return
@@ -744,29 +766,6 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfig) error {
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		return e.sendContext(ctx, cancelOrderRequest(orderID, cfg))
-	})
-}
-
-// RefreshOpenOrders re-sends the active open-orders subscription's request.
-// The Gateway answers with a fresh snapshot burst: the subscription receives
-// the current open orders as data events followed by another
-// StreamSnapshotComplete event. The open-orders reply carries
-// no request ID on the wire, so a one-shot snapshot cannot coexist with the
-// subscription; refresh is the supported way to resync without tearing the
-// subscription down.
-func (e *engine) RefreshOpenOrders(ctx context.Context) error {
-	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		route, ok := e.singletons[singletonOpenOrders]
-		if !ok {
-			return fmt.Errorf("%w: open orders", ErrNoSubscription)
-		}
-		// The auto scope binds future orders only; the live Gateway sends no
-		// open_order_end for req_auto_open_orders, so there is no snapshot
-		// to refresh.
-		if req, ok := route.request.(codec.OpenOrdersRequest); ok && req.Scope == string(OpenOrdersScopeAuto) {
-			return fmt.Errorf("%w: auto-scope open orders", ErrNoSnapshot)
-		}
-		return e.sendContext(ctx, route.request)
 	})
 }
 
