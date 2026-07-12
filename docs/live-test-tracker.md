@@ -4,7 +4,7 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-11. Both local Gateway roles are available. The current
+Last updated: 2026-07-12. Both local Gateway roles are available. The current
 production ceiling and latest read-only account campaign were live-checked at
 exact `server_version 207`; earlier campaign rows retain their negotiated
 version as recorded.
@@ -30,6 +30,27 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-07-12
+
+The server-207 Completed Orders silence is Gateway behavior, not a demonstrated
+`ibkr-go` codec or routing defect. Official Python SDK 10.48.01 and
+`rc2-improvements` candidate `30754b08c7a9` ran sequentially through one
+owner-only recorder session against the same paper Gateway process. Fresh
+client IDs 93 and 94 both negotiated exact `server_version=207`, sent the
+`apiOnly=true` protobuf request `0000012b0801`, and each received only the same
+four normal farm-status notices before its request-relative 15-second deadline.
+Neither leg received raw 301 `CompletedOrder`, raw 302 `CompletedOrdersEnd`, or
+a request error. No empty result is inferred from that silence.
+
+- capture: `20260712T132538Z-sdk_and_go_sv207_completed_orders`
+- `events.jsonl`: `98ec10ce208e65bfcb58238b3011401e3554c6cff62cc2325ba4ebf6e85e207c`
+- normalized frames: `6632c19c605a173ecbf89106135b8aa2b3a255147e3d242cfcfee2844f20bc75`
+- SDK outcome: `f1f3927a12e28f57a5b559790f8e63084b8893972d92ca4a06933ad633d61bcb`
+
+Completed Orders therefore remains an explicit supplemental query rather than
+a readiness prerequisite. Callers must preserve unresolved business state on
+timeout and must not replay or convert silence into a terminal empty snapshot.
 
 ### 2026-07-11
 
