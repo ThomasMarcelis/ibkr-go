@@ -9,17 +9,18 @@ import (
 
 // Sentinel errors returned across the package. Match them with [errors.Is].
 var (
-	ErrNotReady                 = errors.New("ibkr: session not ready")                     // request issued before the session reached Ready
-	ErrInterrupted              = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
-	ErrResumeRequired           = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
-	ErrNoSnapshot               = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
-	ErrSlowConsumer             = errors.New("ibkr: slow consumer")                         // consumer fell behind and a bounded event queue overflowed
-	ErrUnsupportedServerVersion = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
-	ErrClosed                   = errors.New("ibkr: closed")                                // operation on a closed client
-	ErrNoMatch                  = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
-	ErrAmbiguousContract        = errors.New("ibkr: ambiguous contract")                    // Qualify matched more than one contract
-	ErrNoSubscription           = errors.New("ibkr: no active subscription")                // RefreshOpen with no active open-orders subscription
-	ErrOperationActive          = errors.New("ibkr: operation already active")              // singleton operation already owns its response route
+	ErrNotReady                     = errors.New("ibkr: session not ready")                     // request issued before the session reached Ready
+	ErrInterrupted                  = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
+	ErrResumeRequired               = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
+	ErrNoSnapshot                   = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
+	ErrSlowConsumer                 = errors.New("ibkr: slow consumer")                         // consumer fell behind and a bounded event queue overflowed
+	ErrUnsupportedServerVersion     = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
+	ErrClosed                       = errors.New("ibkr: closed")                                // operation on a closed client
+	ErrNoMatch                      = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
+	ErrAmbiguousContract            = errors.New("ibkr: ambiguous contract")                    // Qualify matched more than one contract
+	ErrNoSubscription               = errors.New("ibkr: no active subscription")                // RefreshOpen with no active open-orders subscription
+	ErrOperationActive              = errors.New("ibkr: operation already active")              // singleton operation already owns its response route
+	ErrExecutionCorrelationOverflow = errors.New("ibkr: execution correlation limit exceeded")  // execution stream correlation state reached its configured bound
 )
 
 // ConnectError wraps a failure during the connection phase (dial, TLS
@@ -159,7 +160,7 @@ func (e *ValidationError) Error() string {
 // It returns true for [ErrNotReady], [ErrInterrupted], [ErrResumeRequired],
 // transient [ConnectError] values, and [APIError.IsPacingViolation]. It returns
 // false for caller context cancellation, protocol and validation failures,
-// ordinary API rejections, [ErrSlowConsumer], [ErrClosed],
+// ordinary API rejections, [ErrSlowConsumer], [ErrExecutionCorrelationOverflow], [ErrClosed],
 // [OrderRecoveryError], and [SubscriptionCancelError]. The two recovery error
 // types remain non-retryable even when they wrap a transient error because a
 // blind retry could duplicate a live order or subscription.
@@ -180,6 +181,12 @@ func isRetryableError(err error) bool {
 	// subscribing again could duplicate it or consume another subscription
 	// slot; callers must recycle the connection first.
 	if _, ok := errors.AsType[*SubscriptionCancelError](err); ok {
+		return false
+	}
+	// Correlation overflow is local data loss. Even if another joined cause is
+	// transient, retrying the same unbounded result without raising the explicit
+	// limit will fail again and can conceal the missing execution evidence.
+	if errors.Is(err, ErrExecutionCorrelationOverflow) {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

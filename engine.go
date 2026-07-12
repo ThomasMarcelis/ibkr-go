@@ -144,6 +144,7 @@ type route struct {
 	emitResubscribed func(*engine)
 	validateResume   func(*engine) error
 	close            func(error)
+	cleanup          func()
 	gapped           bool // true after Gap emitted; prevents double emission
 }
 

@@ -672,10 +672,16 @@ func (e *engine) activeAccountSummarySubscriptions() int {
 }
 
 func (e *engine) deleteKeyedRoute(reqID int) {
-	if _, ok := e.keyed[reqID]; !ok {
+	route, ok := e.keyed[reqID]
+	if !ok {
 		return
 	}
 	delete(e.keyed, reqID)
+	if route.cleanup != nil {
+		cleanup := route.cleanup
+		route.cleanup = nil
+		cleanup()
+	}
 }
 
 func (e *engine) routeCommissionReport(report codec.CommissionReport) {

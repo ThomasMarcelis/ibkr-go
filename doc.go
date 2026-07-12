@@ -164,6 +164,7 @@
 //   - [*APIError] — server-side rejection (error code + message)
 //   - [*ValidationError] — caller-side request validation failure
 //   - [*OrderRecoveryError] — uncertain live IDs after partial bracket rollback
+//   - [*ExerciseUncertainError] — unresolved exercise or lapse after connection loss
 //   - [*SubscriptionCancelError] — uncertain remote stream after cancellation admission failure
 //
 // IBKR codes attested in live captures have named ErrCode constants (e.g.

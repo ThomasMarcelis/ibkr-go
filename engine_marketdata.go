@@ -445,12 +445,8 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			return
 		}
 
-		cfg, err := applySubscriptionOptions(e.cfg, opts)
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpMarketDepth, opts)
 		if err != nil {
-			resp <- result{err: err}
-			return
-		}
-		if err := validateResumePolicy(OpMarketDepth, cfg.resume); err != nil {
 			resp <- result{err: err}
 			return
 		}

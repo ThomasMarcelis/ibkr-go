@@ -329,8 +329,10 @@ uncertain and deliberately override any retryable wrapped cause.
 `ibkr.IsRetryable(err)` is the single retry-with-backoff decision. It returns
 true for not-ready/session interruption, transient connection failures, and
 actual pacing violations. Ordinary API rejections, context cancellation,
-protocol/validation failures, slow consumers, and uncertain recovery errors
-are false. For finer handling:
+protocol/validation failures, slow consumers, execution-correlation overflow,
+and uncertain recovery errors are false. `SubscribeExecutions` retains at most
+4096 execution IDs and 4096 pre-execution fee-report versions by default; use
+`WithExecutionCorrelationLimit` to tune both finite bounds. For finer handling:
 
 ```go
 if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {

@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Changed
+
+- `WithExecutionCorrelationLimit` bounds retained execution IDs, pending fee
+  versions, and the finite `Executions` collector at 4096 by default. Exceeding
+  a bound closes with non-retryable `ErrExecutionCorrelationOverflow`. At
+  snapshot completion, subscriptions discard unmatched fees and then accept
+  late revisions only for execution IDs observed in that snapshot; unrelated
+  global commission broadcasts cannot exhaust a healthy long-lived route.
+
 ## v2.0.0-rc.2 — 2026-07-11
 
 v2 is a clean-break release on the `github.com/ThomasMarcelis/ibkr-go/v2` module path. Existing v1 users remain on v1 until they explicitly change imports.

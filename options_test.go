@@ -48,6 +48,7 @@ func TestApplySubscriptionOptionsRejectsInvalidConfiguration(t *testing.T) {
 		{name: "nil option", opts: []SubscriptionOption{nil}, field: "SubscriptionOption"},
 		{name: "zero queue", opts: []SubscriptionOption{WithQueueSize(0)}, field: "QueueSize"},
 		{name: "unknown resume", opts: []SubscriptionOption{WithResumePolicy("sometimes")}, field: "ResumePolicy"},
+		{name: "zero execution correlation limit", opts: []SubscriptionOption{WithExecutionCorrelationLimit(0)}, field: "ExecutionCorrelationLimit"},
 	}
 
 	for _, test := range tests {
@@ -60,5 +61,47 @@ func TestApplySubscriptionOptionsRejectsInvalidConfiguration(t *testing.T) {
 				t.Fatalf("applySubscriptionOptions() error = %v, want %s ValidationError", err, test.field)
 			}
 		})
+	}
+}
+
+func TestExecutionCorrelationLimitIsScopedToExecutionSubscriptions(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := applySubscriptionOptionsFor(
+		defaultConfig(),
+		OpExecutions,
+		[]SubscriptionOption{WithExecutionCorrelationLimit(7)},
+	)
+	if err != nil {
+		t.Fatalf("applySubscriptionOptionsFor(executions): %v", err)
+	}
+	if cfg.executionCorrelationLimit != 7 {
+		t.Fatalf("execution correlation limit = %d, want 7", cfg.executionCorrelationLimit)
+	}
+
+	_, err = applySubscriptionOptionsFor(
+		defaultConfig(),
+		OpQuotes,
+		[]SubscriptionOption{WithExecutionCorrelationLimit(7)},
+	)
+	validationErr, ok := errors.AsType[*ValidationError](err)
+	if !ok || validationErr.Field != "ExecutionCorrelationLimit" {
+		t.Fatalf("applySubscriptionOptionsFor(quotes) error = %v, want ExecutionCorrelationLimit ValidationError", err)
+	}
+}
+
+func TestExecutionCorrelationLimitHasFiniteDefault(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := applySubscriptionOptionsFor(defaultConfig(), OpExecutions, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.executionCorrelationLimit != defaultExecutionCorrelationLimit || cfg.executionCorrelationLimit <= 0 {
+		t.Fatalf(
+			"default execution correlation limit = %d, want finite default %d",
+			cfg.executionCorrelationLimit,
+			defaultExecutionCorrelationLimit,
+		)
 	}
 }

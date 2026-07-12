@@ -40,10 +40,17 @@ type config struct {
 }
 
 type subscriptionConfig struct {
-	resume          ResumePolicy
-	buffer          int
-	collectSnapshot bool
+	resume                       ResumePolicy
+	buffer                       int
+	collectSnapshot              bool
+	executionCorrelationLimit    int
+	executionCorrelationLimitSet bool
 }
+
+// This is an operational memory ceiling, not an IBKR protocol limit. It leaves
+// more than 270x headroom over the largest checked-in live-derived 15-row
+// execution snapshot while keeping every retained event family finite.
+const defaultExecutionCorrelationLimit = 1 << 12
 
 func defaultConfig() config {
 	return config{
@@ -63,8 +70,9 @@ func defaultConfig() config {
 
 func defaultSubscriptionConfig(cfg config) subscriptionConfig {
 	return subscriptionConfig{
-		resume: ResumeNever,
-		buffer: cfg.subscriptionBuffer,
+		resume:                    ResumeNever,
+		buffer:                    cfg.subscriptionBuffer,
+		executionCorrelationLimit: defaultExecutionCorrelationLimit,
 	}
 }
 
@@ -121,6 +129,11 @@ func applySubscriptionOptions(client config, opts []SubscriptionOption) (subscri
 	if !cfg.resume.valid() {
 		return subscriptionConfig{}, &ValidationError{Field: "ResumePolicy", Value: string(cfg.resume), Message: "must be ResumeNever or ResumeAuto"}
 	}
+	if cfg.executionCorrelationLimit < 1 {
+		return subscriptionConfig{}, &ValidationError{
+			Field: "ExecutionCorrelationLimit", Value: strconv.Itoa(cfg.executionCorrelationLimit), Message: "must be >= 1",
+		}
+	}
 	return cfg, nil
 }
 
@@ -131,6 +144,11 @@ func applySubscriptionOptionsFor(client config, opKind OpKind, opts []Subscripti
 	}
 	if err := validateResumePolicy(opKind, cfg.resume); err != nil {
 		return subscriptionConfig{}, err
+	}
+	if cfg.executionCorrelationLimitSet && opKind != OpExecutions {
+		return subscriptionConfig{}, &ValidationError{
+			Field: "ExecutionCorrelationLimit", Message: "only applies to execution subscriptions",
+		}
 	}
 	return cfg, nil
 }
@@ -246,5 +264,20 @@ func WithResumePolicy(policy ResumePolicy) SubscriptionOption {
 func WithQueueSize(size int) SubscriptionOption {
 	return func(cfg *subscriptionConfig) {
 		cfg.buffer = size
+	}
+}
+
+// WithExecutionCorrelationLimit caps both the distinct execution IDs retained
+// by [OrdersClient.SubscribeExecutions] and the total fee-report versions held
+// while waiting for their execution details. The default 4096 is a client
+// memory ceiling, not an IBKR protocol maximum. Immediately repeated identical
+// fee reports do not consume additional capacity. Reaching the limit is
+// accepted; the next event that would exceed it closes the subscription with
+// [ErrExecutionCorrelationOverflow]. This option is rejected for other
+// subscription types.
+func WithExecutionCorrelationLimit(limit int) SubscriptionOption {
+	return func(cfg *subscriptionConfig) {
+		cfg.executionCorrelationLimit = limit
+		cfg.executionCorrelationLimitSet = true
 	}
 }

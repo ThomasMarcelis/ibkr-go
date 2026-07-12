@@ -164,8 +164,7 @@ func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) (Executi
 	if err != nil {
 		return ExecutionSnapshot{}, err
 	}
-	defer sub.Close()
-	updates, err := collectSnapshot(ctx, sub, func(update ExecutionUpdate) (ExecutionUpdate, bool) { return update, true })
+	updates, err := collectSnapshotAndClose(ctx, sub, func(update ExecutionUpdate) (ExecutionUpdate, bool) { return update, true })
 	if err != nil {
 		return ExecutionSnapshot{}, err
 	}
@@ -179,6 +178,81 @@ func (e *engine) Executions(ctx context.Context, req ExecutionsRequest) (Executi
 		}
 	}
 	return result, nil
+}
+
+type executionCorrelation struct {
+	limit            int
+	pendingLimit     int
+	byExecID         map[string]*executionCorrelationEntry
+	pendingReports   int
+	snapshotComplete bool
+}
+
+type executionCorrelationEntry struct {
+	executionSeen bool
+	pending       []codec.CommissionReport
+	delivered     codec.CommissionReport
+	hasDelivered  bool
+}
+
+func newExecutionCorrelation(limit int) *executionCorrelation {
+	return &executionCorrelation{
+		limit:        limit,
+		pendingLimit: limit,
+		byExecID:     make(map[string]*executionCorrelationEntry),
+	}
+}
+
+func (c *executionCorrelation) entry(execID string) (*executionCorrelationEntry, error) {
+	if entry, ok := c.byExecID[execID]; ok {
+		return entry, nil
+	}
+	if len(c.byExecID) >= c.limit {
+		return nil, executionCorrelationOverflow("distinct execution IDs", c.limit)
+	}
+	entry := &executionCorrelationEntry{}
+	c.byExecID[execID] = entry
+	return entry, nil
+}
+
+func (c *executionCorrelation) queuePending(entry *executionCorrelationEntry, report codec.CommissionReport) (bool, error) {
+	if len(entry.pending) > 0 && entry.pending[len(entry.pending)-1] == report {
+		return false, nil
+	}
+	if c.pendingReports >= c.pendingLimit {
+		return false, executionCorrelationOverflow("pending fee-report versions", c.pendingLimit)
+	}
+	entry.pending = append(entry.pending, report)
+	c.pendingReports++
+	return true, nil
+}
+
+func (c *executionCorrelation) takePending(entry *executionCorrelationEntry) []codec.CommissionReport {
+	pending := entry.pending
+	entry.pending = nil
+	c.pendingReports -= len(pending)
+	return pending
+}
+
+func (c *executionCorrelation) completeSnapshot() {
+	c.snapshotComplete = true
+	for execID, entry := range c.byExecID {
+		if entry.executionSeen {
+			continue
+		}
+		c.pendingReports -= len(entry.pending)
+		delete(c.byExecID, execID)
+	}
+}
+
+func (c *executionCorrelation) clear() {
+	c.byExecID = nil
+	c.pendingReports = 0
+	c.snapshotComplete = false
+}
+
+func executionCorrelationOverflow(resource string, limit int) error {
+	return fmt.Errorf("%w: %s exceeds %d", ErrExecutionCorrelationOverflow, resource, limit)
 }
 
 func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
@@ -204,51 +278,94 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 		wireReq.ReqID = reqID
 		sub, ownedRoute := newKeyedSubscriptionRoute[ExecutionUpdate](e, cfg, reqID, OpExecutions, nil)
 		sub.expectSnapshot()
-		knownExecutions := make(map[string]struct{})
-		pendingFees := make(map[string][]codec.CommissionReport)
-		deliveredFees := make(map[string]codec.CommissionReport)
-		emitFee := func(report codec.CommissionReport) bool {
-			if delivered, ok := deliveredFees[report.ExecID]; ok && delivered == report {
+		correlation := newExecutionCorrelation(cfg.executionCorrelationLimit)
+		ownedRoute.cleanup = correlation.clear
+		collectedExecutions := 0
+		collectedFees := 0
+		terminate := func(err error) {
+			if e.keyed[reqID] != ownedRoute {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(err)
+		}
+		emitExecution := func(update Execution) bool {
+			if cfg.collectSnapshot {
+				if collectedExecutions >= cfg.executionCorrelationLimit {
+					terminate(executionCorrelationOverflow("collected execution events", cfg.executionCorrelationLimit))
+					return false
+				}
+				collectedExecutions++
+			}
+			return sub.emit(ExecutionUpdate{Execution: &update})
+		}
+		emitFee := func(entry *executionCorrelationEntry, report codec.CommissionReport) bool {
+			if entry.hasDelivered && entry.delivered == report {
 				return true
+			}
+			if cfg.collectSnapshot {
+				if collectedFees >= cfg.executionCorrelationLimit {
+					terminate(executionCorrelationOverflow("collected fee-report events", cfg.executionCorrelationLimit))
+					return false
+				}
+				collectedFees++
 			}
 			fee, err := fromCodecCommission(report)
 			if err != nil {
-				e.deleteKeyedRoute(reqID)
-				sub.closeWithErr(err)
+				terminate(err)
 				return false
 			}
-			deliveredFees[report.ExecID] = report
+			entry.delivered = report
+			entry.hasDelivered = true
 			return sub.emit(ExecutionUpdate{CommissionAndFees: &fee})
 		}
 
 		ownedRoute.request = wireReq
 		ownedRoute.handleCommission = func(report codec.CommissionReport, _ *engine) {
-			if _, ok := knownExecutions[report.ExecID]; !ok {
-				pendingFees[report.ExecID] = append(pendingFees[report.ExecID], report)
+			entry, ok := correlation.byExecID[report.ExecID]
+			if !ok {
+				if correlation.snapshotComplete {
+					return
+				}
+				var err error
+				entry, err = correlation.entry(report.ExecID)
+				if err != nil {
+					terminate(err)
+					return
+				}
+			}
+			if !entry.executionSeen {
+				if _, err := correlation.queuePending(entry, report); err != nil {
+					terminate(err)
+				}
 				return
 			}
-			emitFee(report)
+			emitFee(entry, report)
 		}
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.ExecutionDetail:
+				entry, err := correlation.entry(m.ExecID)
+				if err != nil {
+					terminate(err)
+					return
+				}
 				update, err := fromCodecExecution(m)
 				if err != nil {
-					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(err)
+					terminate(err)
 					return
 				}
-				knownExecutions[m.ExecID] = struct{}{}
-				if !sub.emit(ExecutionUpdate{Execution: &update}) {
+				entry.executionSeen = true
+				if !emitExecution(update) {
 					return
 				}
-				for _, report := range pendingFees[m.ExecID] {
-					if !emitFee(report) {
+				for _, report := range correlation.takePending(entry) {
+					if !emitFee(entry, report) {
 						return
 					}
 				}
-				delete(pendingFees, m.ExecID)
 			case codec.ExecutionsEnd:
+				correlation.completeSnapshot()
 				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			}
 		}

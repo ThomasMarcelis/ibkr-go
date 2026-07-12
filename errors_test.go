@@ -29,6 +29,7 @@ func TestIsRetryable(t *testing.T) {
 		{name: "protocol", err: &ProtocolError{Direction: "decode", Err: io.ErrUnexpectedEOF}},
 		{name: "validation", err: &ValidationError{Field: "Contract", Message: "required"}},
 		{name: "slow consumer", err: ErrSlowConsumer},
+		{name: "execution correlation overflow overrides interrupted", err: errors.Join(ErrInterrupted, ErrExecutionCorrelationOverflow)},
 		{name: "closed", err: ErrClosed},
 		{name: "order recovery overrides interrupted", err: newOrderRecoveryError([]int64{1}, ErrInterrupted, nil)},
 		{name: "subscription recovery overrides interrupted", err: &SubscriptionCancelError{OpKind: OpQuotes, Err: ErrInterrupted}},

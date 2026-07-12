@@ -380,15 +380,27 @@ func (c OrdersClient) Completed(ctx context.Context, apiOnly bool) ([]CompletedO
 }
 
 // Executions returns executions and the commission-and-fee reports observed by
-// the execution-details end marker. IBKR can send additional fee reports after
-// that boundary; use SubscribeExecutions when those late reports matter.
+// the execution-details end marker. Its finite collector accepts at most 4096
+// execution events, 4096 fee-report events, 4096 distinct execution IDs, and
+// 4096 pre-execution fee-report versions. If a legitimate snapshot can exceed
+// those fixed bounds, use [OrdersClient.SubscribeExecutions] with
+// [WithExecutionCorrelationLimit], drain through SnapshotComplete, then close
+// the subscription. Exceeding a bound returns
+// [ErrExecutionCorrelationOverflow]. IBKR can send additional fee reports
+// after the end marker; the subscription form also preserves those late reports.
 func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) (ExecutionSnapshot, error) {
 	return c.engine.Executions(ctx, req)
 }
 
 // SubscribeExecutions streams executions and their separate commission-and-fee
 // callbacks. SnapshotComplete marks executionsEnd; the stream remains open for
-// late fee reports until Close is called.
+// late fee reports for executions observed in that snapshot until Close is
+// called. Unmatched fee reports are discarded at that boundary, and later
+// reports for unknown execution IDs are ignored. Correlation memory is finite:
+// the default retains at most 4096 distinct execution IDs and 4096
+// pre-execution fee-report versions. Use [WithExecutionCorrelationLimit] to
+// change both bounds; overflow closes the stream with
+// [ErrExecutionCorrelationOverflow].
 func (c OrdersClient) SubscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
 	return c.engine.subscribeExecutions(ctx, req, opts...)
 }

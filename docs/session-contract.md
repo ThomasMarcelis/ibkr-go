@@ -259,7 +259,17 @@ observation window or an error ends it.
   execution-details end marker. Because fees are independent ExecID-correlated
   messages and may arrive or be revised after that boundary,
   `SubscribeExecutions` keeps the route open until the caller closes it and
-  emits `ExecutionUpdate` values for executions and fee reports.
+  emits `ExecutionUpdate` values for executions and fee reports. Each execution
+  route retains at most 4096 distinct ExecIDs and 4096 fee-report versions that
+  arrived before their execution by default; `WithExecutionCorrelationLimit`
+  changes both bounds. At the execution-details end marker, unmatched fee
+  reports are discarded. Later fee reports are accepted only for execution IDs
+  observed in the completed snapshot, so unrelated global commission
+  broadcasts cannot consume a finished route's correlation budget. The first
+  callback that would exceed a bound is not emitted: the exact route is removed
+  and closes with the non-retryable `ErrExecutionCorrelationOverflow`. The
+  finite `Executions` collector uses the same default and also bounds each
+  collected event family.
 - Reconnect boundaries are explicit through session `Event`, `StreamEvent`,
   and `OrderEvent` values.
 - Calls submitted while the session is reconnecting wait for the next `Ready`
