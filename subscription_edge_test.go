@@ -229,6 +229,14 @@ func TestSubscriptionEventsPreserveLifecycleAndDataOrder(t *testing.T) {
 		if complete.Kind != StreamSnapshotComplete || complete.ConnectionSeq != 3 {
 			t.Fatalf("third event = %+v, want SnapshotComplete on connection 3", complete)
 		}
+		for i, event := range []StreamEvent[int]{started, data, complete} {
+			if event.At.IsZero() || event.At.Location() != time.UTC {
+				t.Fatalf("event %d observation time = %v, want nonzero UTC", i, event.At)
+			}
+		}
+		if data.At.Before(started.At) || complete.At.Before(data.At) {
+			t.Fatalf("event observation times are out of queue order: %v, %v, %v", started.At, data.At, complete.At)
+		}
 	})
 }
 

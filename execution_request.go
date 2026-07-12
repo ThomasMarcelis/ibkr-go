@@ -10,10 +10,14 @@ import (
 
 func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.ExecutionsRequest, error) {
 	if req.Side != "" && req.Side != ExecutionFilterBuy && req.Side != ExecutionFilterSell {
-		return codec.ExecutionsRequest{}, fmt.Errorf("ibkr: executions side %q: want BUY or SELL", req.Side)
+		return codec.ExecutionsRequest{}, &ValidationError{
+			Field: "ExecutionsRequest.Side", Value: string(req.Side), Message: "must be BUY or SELL",
+		}
 	}
 	if req.LastDays < 0 || req.LastDays > 7 {
-		return codec.ExecutionsRequest{}, fmt.Errorf("ibkr: executions last days %d: want 0 through 7", req.LastDays)
+		return codec.ExecutionsRequest{}, &ValidationError{
+			Field: "ExecutionsRequest.LastDays", Value: strconv.Itoa(req.LastDays), Message: "must be between 0 and 7",
+		}
 	}
 	if (req.LastDays != 0 || len(req.SpecificDates) != 0) && serverVersion < protocol.MinServerVersionParametrizedDaysOfExecutions {
 		return codec.ExecutionsRequest{}, fmt.Errorf(
@@ -38,16 +42,19 @@ func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.Executio
 	}
 	wireReq.SpecificDates = make([]int, len(req.SpecificDates))
 	for i, date := range req.SpecificDates {
+		field := fmt.Sprintf("ExecutionsRequest.SpecificDates[%d]", i)
 		if date.IsZero() {
-			return codec.ExecutionsRequest{}, fmt.Errorf("ibkr: executions specific date %d is zero", i)
+			return codec.ExecutionsRequest{}, &ValidationError{Field: field, Message: "must not be zero"}
 		}
 		formatted := date.Format("20060102")
 		if len(formatted) != 8 {
-			return codec.ExecutionsRequest{}, fmt.Errorf("ibkr: executions specific date %d has out-of-range year %d", i, date.Year())
+			return codec.ExecutionsRequest{}, &ValidationError{
+				Field: field, Value: strconv.Itoa(date.Year()), Message: "year must fit YYYYMMDD format",
+			}
 		}
 		value, err := strconv.Atoi(formatted)
 		if err != nil {
-			return codec.ExecutionsRequest{}, fmt.Errorf("ibkr: executions specific date %d: %w", i, err)
+			return codec.ExecutionsRequest{}, &ValidationError{Field: field, Value: formatted, Message: "must be a valid YYYYMMDD date"}
 		}
 		wireReq.SpecificDates[i] = value
 	}

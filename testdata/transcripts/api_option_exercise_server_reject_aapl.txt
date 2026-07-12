@@ -2,8 +2,8 @@
 # server_version=200, events.jsonl sha256 prefix: 267e7806669f2d5c.
 # Replays the option-exercise server-rejection lifecycle (OPT-002) observed
 # on 2026-06-11 against live paper Gateway: a MKT BUY 1 of the deep-ITM AAPL
-# Jun-12 282.5 call fills at 8.90, then exerciseOptions is accepted as a
-# working instruction. The Gateway answers on the exercise request id with
+# Jun-12 282.5 call fills at 8.90, then exerciseOptions produces a working
+# instruction. The Gateway answers on the exercise request id with
 # code 10349 "Order TIF was set to DAY based on order preset." and then
 # materializes the instruction as an order whose order id IS the exercise
 # request id (live id 5, perm id sanitized to 900005 after that live id):
@@ -12,10 +12,9 @@
 # paper Gateway killed the working instruction: code 322 "Error processing
 # request.Exercise/Lapse failed due to server rejection.", order_status
 # Cancelled, and the code-202 cancellation notice, all on the exercise id.
-# Engine surfacing frozen here: the exercise request route turns 10349 and
-# 322 into session events; 322 retires that route, so the following 202 uses
-# the unmatched-request session fallback. The pseudo-order open_order and
-# order_status frames still match no order route and drop. The 161 answering
+# Engine surfacing frozen here: ExerciseHandle receives 10349, the pseudo-order
+# open_order/order_status pair, and terminal 322. The 322 retires its route, so
+# the following 202 uses the unmatched-request session fallback. The 161 answering
 # the global cancel for order 407 is also a session notice, preserving its
 # clean Filled handle result.
 # Sanitized: account identifiers redacted to DU9000001, perm ids -> 900407
@@ -40,7 +39,7 @@ server open_order {"order_id":407,"account":"DU9000001","contract":{"con_id":887
 server order_status {"order_id":407,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"8.90","perm_id":"900407","parent_id":"0","last_fill_price":"8.90","client_id":"1","why_held":"","mkt_cap_price":"0"}
 server commission_report {"exec_id":"sanitized-exercise-fill-001","commission":"0.76825","currency":"USD","realized_pnl":"1.7976931348623157E308"}
 
-# Exercise the deep-ITM call: accepted as a working DAY instruction (10349
+# Exercise the deep-ITM call: observed working as a DAY instruction (10349
 # notice), then materialized as an order keyed by the exercise request id
 client exercise_options {"req_id":"$exercise","contract":{"con_id":"887760542","symbol":"AAPL","sec_type":"OPT","expiry":"20260612 16:00:00 US/Eastern","strike":"282.5","right":"C","multiplier":"100","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260612C00282500","trading_class":"AAPL"},"exercise_action":"1","exercise_quantity":"1","account":"DU9000001","override":"0","manual_order_time":"","customer_account":"","professional_customer":"0"}
 server api_error {"req_id":"$exercise","code":10349,"message":"Order TIF was set to DAY based on order preset.","advanced_order_reject_json":"","error_time_ms":"1781185012170"}

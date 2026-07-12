@@ -32,6 +32,7 @@ func TestIsRetryable(t *testing.T) {
 		{name: "execution correlation overflow overrides interrupted", err: errors.Join(ErrInterrupted, ErrExecutionCorrelationOverflow)},
 		{name: "closed", err: ErrClosed},
 		{name: "order recovery overrides interrupted", err: newOrderRecoveryError([]int64{1}, ErrInterrupted, nil)},
+		{name: "exercise uncertainty overrides interrupted", err: &ExerciseUncertainError{RequestID: 7, Err: ErrInterrupted}},
 		{name: "subscription recovery overrides interrupted", err: &SubscriptionCancelError{OpKind: OpQuotes, Err: ErrInterrupted}},
 	}
 

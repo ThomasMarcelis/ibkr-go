@@ -45,17 +45,19 @@ func (c *Client) Session() Snapshot { return c.engine.Session() }
 // SessionEvents returns the stream of connection lifecycle [Event] values.
 func (c *Client) SessionEvents() <-chan Event { return c.engine.SessionEvents() }
 
-// CurrentTime asks the Gateway for the server's current wall-clock time. The
-// request is a one-shot keyed only by session singleton; only one request
-// may be in flight at a time. The returned time is the parsed server time
-// (UTC) as reported by IBKR's reqCurrentTime / currentTime callback pair.
+// CurrentTime asks the Gateway for the server's current wall-clock time. It
+// shares a 4.25-second admission gate with [Client.CurrentTimeMillis] because
+// live Gateway suppresses closely spaced clock requests. The context bounds
+// both that wait and the response. Only one CurrentTime call may be in flight.
+// If its context ends after admission, the client retires the owning connection
+// generation because the reply has no request ID. The returned time is UTC.
 func (c *Client) CurrentTime(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTime(ctx)
 }
 
-// CurrentTimeMillis requests the IBKR server time at millisecond precision.
-// Like [Client.CurrentTime], one request may be in flight at a time and the
-// returned time is UTC.
+// CurrentTimeMillis requests the IBKR server time at millisecond precision. It
+// has the same shared gate, context, and connection-retirement semantics as
+// [Client.CurrentTime]. Only one CurrentTimeMillis call may be in flight.
 func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	return c.engine.CurrentTimeMillis(ctx)
 }
@@ -421,8 +423,10 @@ func (c OptionsClient) Price(ctx context.Context, req CalcOptionPriceRequest) (O
 	return c.engine.CalcOptionPrice(ctx, req)
 }
 
-// Exercise admits an option exercise or lapse instruction and returns its
-// lossless request-scoped observation handle.
+// Exercise admits an option exercise or lapse instruction to the client
+// transport and returns its lossless request-scoped observation handle. A
+// returned handle does not prove IBKR accepted or settled the instruction; use
+// its events and independently reconcile the resulting account or position.
 func (c OptionsClient) Exercise(ctx context.Context, req ExerciseOptionsRequest) (*ExerciseHandle, error) {
 	if err := validateExerciseOptionsRequest(req); err != nil {
 		return nil, err

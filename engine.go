@@ -151,6 +151,7 @@ type route struct {
 type orderRoute struct {
 	orderID          int64
 	handle           *OrderHandle
+	cleanup          func()
 	closed           bool
 	gapped           bool // true after Gap emitted; prevents duplicate gap events
 	recoveryRequired bool

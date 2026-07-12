@@ -434,12 +434,12 @@ func TestSetMarketDataType(t *testing.T) {
 		t.Fatalf("MarketData().SetType(MarketDataDelayed) error = %v", err)
 	}
 
-	// Validate boundary rejection.
-	if err := client.MarketData().SetType(ctx, ibkr.MarketDataType(0)); err == nil {
-		t.Fatal("MarketData().SetType(0) error = nil, want validation error")
-	}
-	if err := client.MarketData().SetType(ctx, ibkr.MarketDataType(5)); err == nil {
-		t.Fatal("MarketData().SetType(5) error = nil, want validation error")
+	for _, dataType := range []ibkr.MarketDataType{0, 5} {
+		err := client.MarketData().SetType(ctx, dataType)
+		validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
+		if !ok || validationErr.Field != "MarketDataType" {
+			t.Fatalf("MarketData().SetType(%d) error = %v, want MarketDataType validation", dataType, err)
+		}
 	}
 }
 
@@ -486,6 +486,10 @@ func TestQuoteSnapshotRejectsGenericTicks(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("QuoteSnapshot() error = nil, want validation error")
+	}
+	validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
+	if !ok || validationErr.Field != "QuoteRequest.GenericTicks" {
+		t.Fatalf("QuoteSnapshot() error = %v, want QuoteRequest.GenericTicks validation", err)
 	}
 }
 
@@ -830,6 +834,10 @@ func TestOpenOrdersAutoRequiresClientIDZero(t *testing.T) {
 		}
 		t.Fatal("SubscribeOpenOrders() error = nil, want client-id validation")
 	}
+	validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
+	if !ok || validationErr.Field != "OpenOrdersScope" {
+		t.Fatalf("SubscribeOpenOrders() error = %v, want OpenOrdersScope validation", err)
+	}
 }
 
 func TestUnsupportedResumeAutoPolicies(t *testing.T) {
@@ -886,8 +894,10 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			if err := tc.subscribe(ctx, client); err == nil {
-				t.Fatalf("%s resume-auto error = nil, want rejection", tc.name)
+			err := tc.subscribe(ctx, client)
+			validationErr, ok := errors.AsType[*ibkr.ValidationError](err)
+			if !ok || validationErr.Field != "ResumePolicy" {
+				t.Fatalf("%s resume-auto error = %v, want ResumePolicy validation", tc.name, err)
 			}
 		})
 	}

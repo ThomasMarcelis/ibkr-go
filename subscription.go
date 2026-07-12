@@ -5,6 +5,7 @@ import (
 	"errors"
 	"iter"
 	"sync"
+	"time"
 )
 
 // Subscription is a live stream of ordered data and lifecycle events from the
@@ -155,10 +156,13 @@ func (s *Subscription[T]) Err() error {
 
 // Close initiates cancellation of the server-side subscription. It is
 // idempotent and safe to call concurrently. Events closes asynchronously; use
-// [Subscription.Done] or [Subscription.Wait] to
-// observe completion. If cancellation cannot enter the active transport queue,
-// Wait returns a non-retryable [*SubscriptionCancelError]. When cancellation
-// follows [ErrSlowConsumer], Wait preserves both causes in the terminal error.
+// [Subscription.Done] or [Subscription.Wait] to observe completion. If
+// cancellation cannot enter the active transport queue, the client retires
+// that connection generation and Wait returns a non-retryable
+// [*SubscriptionCancelError]. With [ReconnectAuto], resumable sibling streams
+// survive onto the replacement connection; with [ReconnectOff], the client
+// closes. When cancellation follows [ErrSlowConsumer], Wait preserves both
+// causes in the terminal error.
 func (s *Subscription[T]) Close() {
 	s.cancel(nil, s.cancelFn)
 }
@@ -222,7 +226,7 @@ func (s *Subscription[T]) emit(value T) bool {
 	}
 
 	select {
-	case s.events <- StreamEvent[T]{Kind: StreamData, Value: value, ConnectionSeq: s.connectionSeq}:
+	case s.events <- StreamEvent[T]{At: time.Now().UTC(), Kind: StreamData, Value: value, ConnectionSeq: s.connectionSeq}:
 		return true
 	default:
 		s.cancelFromActor(ErrSlowConsumer)
@@ -249,7 +253,7 @@ func (s *Subscription[T]) emitState(kind StreamEventKind, connectionSeq uint64, 
 		return
 	}
 	select {
-	case s.events <- StreamEvent[T]{Kind: kind, ConnectionSeq: connectionSeq, Err: err}:
+	case s.events <- StreamEvent[T]{At: time.Now().UTC(), Kind: kind, ConnectionSeq: connectionSeq, Err: err}:
 	default:
 		s.cancelFromActor(ErrSlowConsumer)
 	}

@@ -12,7 +12,11 @@ import (
 
 func (e *engine) SetMarketDataType(ctx context.Context, dataType MarketDataType) error {
 	if dataType < MarketDataLive || dataType > MarketDataDelayedFrozen {
-		return fmt.Errorf("invalid market data type %d: must be 1 (live), 2 (frozen), 3 (delayed), or 4 (delayed-frozen)", dataType)
+		return &ValidationError{
+			Field:   "MarketDataType",
+			Value:   fmt.Sprint(dataType),
+			Message: "must be Live, Frozen, Delayed, or DelayedFrozen (1..4)",
+		}
 	}
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		return e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(dataType)})
@@ -111,10 +115,12 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				if rerouted {
 					cancelErr := e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID})
 					e.deleteKeyedRoute(reqID)
-					sub.closeWithErr(errors.Join(
+					closeErr := errors.Join(
 						fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID),
 						cancelErr,
-					))
+					)
+					sub.closeWithErr(closeErr)
+					e.retireSubscriptionTransport(cancelErr)
 					return
 				}
 				request := quoteRoute.request.(codec.QuoteRequest)
@@ -536,19 +542,31 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 // admitted before local route deletion; if admission fails, the caller needs
 // both the data-integrity failure and the uncertain remote-stream state.
 func (e *engine) cancelAndCloseMarketDepthRoute(reqID int, cause error) {
-	depthRoute, ok := e.keyed[reqID]
-	if !ok || depthRoute.opKind != OpMarketDepth {
-		return
+	e.cancelAndCloseMarketDepthRoutes([]int{reqID}, cause)
+}
+
+func (e *engine) cancelAndCloseMarketDepthRoutes(reqIDs []int, cause error) {
+	var retirementErrs []error
+	for _, reqID := range reqIDs {
+		depthRoute, ok := e.keyed[reqID]
+		if !ok || depthRoute.opKind != OpMarketDepth {
+			continue
+		}
+		request := depthRoute.request.(codec.MarketDepthRequest)
+		cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{
+			ReqID: reqID, IsSmartDepth: request.IsSmartDepth,
+		})
+		e.deleteKeyedRoute(reqID)
+		closeErr := cause
+		if cancelErr != nil {
+			closeErr = errors.Join(cause, cancelErr)
+		}
+		depthRoute.close(closeErr)
+		if cancelErr != nil {
+			retirementErrs = append(retirementErrs, cancelErr)
+		}
 	}
-	request := depthRoute.request.(codec.MarketDepthRequest)
-	cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{
-		ReqID: reqID, IsSmartDepth: request.IsSmartDepth,
-	})
-	e.deleteKeyedRoute(reqID)
-	if cancelErr != nil {
-		cause = errors.Join(cause, cancelErr)
-	}
-	depthRoute.close(cause)
+	e.retireSubscriptionTransport(errors.Join(retirementErrs...))
 }
 
 func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error) {
@@ -561,7 +579,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonMktDepthExchanges]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: mkt depth exchanges request already in progress")}
+			resp <- result{err: operationActive("market depth exchanges")}
 			return
 		}
 

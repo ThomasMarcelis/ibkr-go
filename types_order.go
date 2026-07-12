@@ -291,8 +291,10 @@ const (
 
 // OrderLifecycleEvent reports whether order observation is continuous. A
 // RecoveryRequired event means IBKR may have changed the order during a data
-// gap; reconcile with open orders, executions, and completed orders before
-// replacing it. Cancellation remains safe by stable OrderID.
+// gap. Reconcile open orders, executions, and completed orders for business
+// decisions. Replace remains permanently disabled on this handle because that
+// reconciliation cannot restore its lost event history; cancellation remains
+// safe by stable OrderID.
 type OrderLifecycleEvent struct {
 	Kind          OrderLifecycleKind
 	ConnectionSeq uint64

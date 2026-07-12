@@ -3,6 +3,8 @@ package ibkr
 import (
 	"context"
 	"errors"
+	"io"
+	"strings"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -363,18 +365,18 @@ func TestFAConfigReturnsExactLiveNonFARefusal(t *testing.T) {
 	}
 }
 
-// TestHandleAPIErrorExerciseRouteShieldsCollidingOrder freezes the Bug 3
-// id-collision invariant: when an exercise request id numerically collides
-// with a live order id, the exercise's keyed route (checked before the order
-// fallback) absorbs the refusal on its scoped handle, and the unrelated order
-// handle is left untouched.
-func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
+// TestExerciseRouteCloseOwnsOnlyItsPairedOrderRoute injects an impossible
+// allocator collision after registration to freeze the ownership invariant:
+// exercise teardown closes its exact paired handle without deleting whichever
+// unrelated order route later occupies the same numeric ID.
+func TestExerciseRouteCloseOwnsOnlyItsPairedOrderRoute(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
-	handle := newOrderHandle(5, 64)
-	e.orders[5] = &orderRoute{orderID: 5, handle: handle}
 	exerciseHandle := e.installExerciseRoute(5)
+	unrelatedHandle := newOrderHandle(5, 64)
+	unrelatedRoute := &orderRoute{orderID: 5, handle: unrelatedHandle}
+	e.orders[5] = unrelatedRoute
 
 	e.handleAPIError(codec.APIError{
 		ReqID:   5,
@@ -382,8 +384,8 @@ func TestHandleAPIErrorExerciseRouteShieldsCollidingOrder(t *testing.T) {
 		Message: "Error processing request.Exercise ignored because option is not in-the-money.",
 	})
 
-	if handle.isDone() {
-		t.Fatal("exercise refusal closed the colliding order handle; keyed route must shield it")
+	if e.orders[5] != unrelatedRoute || unrelatedHandle.isDone() {
+		t.Fatal("exercise refusal changed the unrelated colliding order route")
 	}
 	apiErr, ok := errors.AsType[*APIError](exerciseHandle.Wait())
 	if !ok || apiErr.Code != ErrCodeServerErrorProcessingRequest || apiErr.OpKind != OpExerciseOptions {
@@ -406,6 +408,9 @@ func TestExerciseRouteTerminalErrorDeletesKeyedRoute(t *testing.T) {
 	if _, ok := e.keyed[77]; ok {
 		t.Fatal("exercise route retained after terminal exercise refusal")
 	}
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("exercise order route retained after terminal exercise refusal")
+	}
 	apiErr, ok := errors.AsType[*APIError](handle.Wait())
 	if !ok || apiErr.Code != ErrCodeServerErrorProcessingRequest {
 		t.Fatalf("exercise Wait() = %#v, want code-322 APIError", apiErr)
@@ -427,6 +432,9 @@ func TestExerciseRoutePresetNoticeStaysActive(t *testing.T) {
 	if _, ok := e.keyed[77]; !ok {
 		t.Fatal("exercise route deleted after non-terminal preset notice")
 	}
+	if _, ok := e.orders[77]; !ok {
+		t.Fatal("exercise order route deleted after non-terminal preset notice")
+	}
 	select {
 	case event := <-handle.Events():
 		if event.Warning == nil || event.Warning.Code != ErrCodeOrderTIFSetFromPreset {
@@ -434,6 +442,161 @@ func TestExerciseRoutePresetNoticeStaysActive(t *testing.T) {
 		}
 	default:
 		t.Fatal("exercise preset notice was not delivered to handle")
+	}
+}
+
+// TestExerciseOrderSlowConsumerRemovesBothRoutes replays the exact code-10349
+// warning and PreSubmitted status fields from the paper server_version 200
+// option-exercise capture (events SHA-256 prefix 267e7806669f2d5c). A one-event
+// handle queue makes the captured status the first undeliverable callback.
+func TestExerciseOrderSlowConsumerRemovesBothRoutes(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	e.cfg.orderEventBuffer = 1
+	handle := e.installExerciseRoute(77)
+
+	e.handleAPIError(capturedExercisePresetNotice(77))
+	e.dispatchObservedOrderStatus(capturedExerciseWorkingStatus(77))
+
+	if waitErr := handle.Wait(); !errors.Is(waitErr, ErrSlowConsumer) {
+		t.Fatalf("exercise Wait() = %v, want ErrSlowConsumer", waitErr)
+	}
+	if _, ok := e.keyed[77]; ok {
+		t.Fatal("slow exercise consumer left the keyed route active")
+	}
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("slow exercise consumer left the paired order route active")
+	}
+
+	e.handleAPIError(capturedExerciseServerRejection(77))
+	select {
+	case event := <-e.events.Chan():
+		if event.Code != ErrCodeServerErrorProcessingRequest ||
+			event.Message != "Error processing request.Exercise/Lapse failed due to server rejection." {
+			t.Fatalf("late session event = %#v, want exact exercise code-322 rejection", event)
+		}
+	default:
+		t.Fatal("late exercise code 322 disappeared after slow-consumer teardown")
+	}
+}
+
+// TestExerciseOrderConversionFailureRemovesBothRoutes starts from the same
+// captured PreSubmitted callback and changes only Filled. That explicit
+// structural conversion-fault injection proves a decode failure cannot leave
+// the request-scoped keyed route consuming later Gateway evidence.
+func TestExerciseOrderConversionFailureRemovesBothRoutes(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	handle := e.installExerciseRoute(77)
+	status := capturedExerciseWorkingStatus(77)
+	status.Filled = "not-a-decimal"
+	e.dispatchObservedOrderStatus(status)
+
+	waitErr := handle.Wait()
+	if waitErr == nil || !strings.Contains(waitErr.Error(), "order status filled") {
+		t.Fatalf("exercise Wait() = %v, want filled-decimal conversion failure", waitErr)
+	}
+	if _, ok := e.keyed[77]; ok {
+		t.Fatal("exercise conversion failure left the keyed route active")
+	}
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("exercise conversion failure left the paired order route active")
+	}
+
+	e.handleAPIError(capturedExerciseServerRejection(77))
+	select {
+	case event := <-e.events.Chan():
+		if event.Code != ErrCodeServerErrorProcessingRequest {
+			t.Fatalf("late session event code = %d, want %d", event.Code, ErrCodeServerErrorProcessingRequest)
+		}
+	default:
+		t.Fatal("late exercise code 322 disappeared after conversion teardown")
+	}
+}
+
+func capturedExercisePresetNotice(reqID int) codec.APIError {
+	return codec.APIError{
+		ReqID:       reqID,
+		Code:        ErrCodeOrderTIFSetFromPreset,
+		Message:     "Order TIF was set to DAY based on order preset.",
+		ErrorTimeMs: "1781185012170",
+	}
+}
+
+func capturedExerciseWorkingStatus(orderID int) codec.OrderStatus {
+	return codec.OrderStatus{
+		OrderID:       int64(orderID),
+		Status:        "PreSubmitted",
+		Filled:        "0",
+		Remaining:     "1",
+		AvgFillPrice:  "0",
+		PermID:        "900005",
+		ParentID:      "0",
+		LastFillPrice: "0",
+		ClientID:      "1",
+		WhyHeld:       "",
+		MktCapPrice:   "0",
+	}
+}
+
+func capturedExerciseServerRejection(reqID int) codec.APIError {
+	return codec.APIError{
+		ReqID:       reqID,
+		Code:        ErrCodeServerErrorProcessingRequest,
+		Message:     "Error processing request.Exercise/Lapse failed due to server rejection.",
+		ErrorTimeMs: "1781185032011",
+	}
+}
+
+func TestExerciseRouteInterruptionIsUncertainAndNotRetryable(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	handle := e.installExerciseRoute(77)
+	route := e.keyed[77]
+	route.onDisconnect(e, io.EOF)
+
+	waitErr := handle.Wait()
+	uncertain, ok := errors.AsType[*ExerciseUncertainError](waitErr)
+	if !ok || uncertain.RequestID != 77 {
+		t.Fatalf("exercise Wait() = %T %v, want request 77 *ExerciseUncertainError", waitErr, waitErr)
+	}
+	if !errors.Is(waitErr, ErrInterrupted) || !errors.Is(waitErr, io.EOF) {
+		t.Fatalf("exercise Wait() = %v, want ErrInterrupted and io.EOF", waitErr)
+	}
+	if IsRetryable(waitErr) {
+		t.Fatal("uncertain admitted exercise is retryable")
+	}
+	if _, ok := e.keyed[77]; ok {
+		t.Fatal("interrupted exercise route retained")
+	}
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("interrupted exercise order route retained")
+	}
+}
+
+func TestExerciseRouteClientShutdownIsUncertain(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	handle := e.installExerciseRoute(77)
+	e.keyed[77].close(ErrClosed)
+
+	waitErr := handle.Wait()
+	uncertain, ok := errors.AsType[*ExerciseUncertainError](waitErr)
+	if !ok || uncertain.RequestID != 77 {
+		t.Fatalf("exercise Wait() = %T %v, want request 77 *ExerciseUncertainError", waitErr, waitErr)
+	}
+	if !errors.Is(waitErr, ErrInterrupted) || !errors.Is(waitErr, ErrClosed) {
+		t.Fatalf("exercise Wait() = %v, want ErrInterrupted and ErrClosed", waitErr)
+	}
+	if _, ok := e.keyed[77]; ok {
+		t.Fatal("client shutdown left the exercise keyed route active")
+	}
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("client shutdown left the exercise order route active")
 	}
 }
 

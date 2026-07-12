@@ -112,10 +112,12 @@ const (
 	StreamResubscribed     StreamEventKind = "Resubscribed"
 )
 
-// StreamEvent is one ordered subscription event. Value is meaningful only for
-// StreamData. A closed Events channel is terminal; call Subscription.Err for
-// the final error.
+// StreamEvent is one ordered subscription event. At records when the client
+// enqueued the event, in UTC; it is observation time, not Gateway event time.
+// Value is meaningful only for StreamData. A closed Events channel is terminal;
+// call Subscription.Err for the final error.
 type StreamEvent[T any] struct {
+	At            time.Time
 	Kind          StreamEventKind
 	Value         T
 	ConnectionSeq uint64

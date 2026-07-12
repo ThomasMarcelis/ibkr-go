@@ -29,6 +29,7 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 			err = e.cancelSubscription(opKind, cancel)
 		}
 		sub.closeWithErr(err)
+		e.retireSubscriptionTransport(err)
 	}
 	sub = newEngineSubscription[T](cfg, e, actorCancel)
 	ownedRoute = &route{
@@ -68,6 +69,7 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 			err = e.cancelSubscription(opKind, cancel)
 		}
 		sub.closeWithErr(err)
+		e.retireSubscriptionTransport(err)
 	}
 	sub = newEngineSubscription[T](cfg, e, actorCancel)
 	ownedRoute = &route{

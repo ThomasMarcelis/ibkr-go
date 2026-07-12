@@ -42,6 +42,12 @@ Session states are `Disconnected`, `Connecting`, `Handshaking`, `Ready`,
 fresh handshake reaches `Ready`. `SessionEvents()` is bounded and observational:
 if unread, older queued events may be dropped in favor of the latest transition.
 
+`CurrentTime` and `CurrentTimeMillis` share a 4.25-second admission gate because
+live Gateway suppresses closely spaced clock requests. The call context bounds
+both the gate wait and the reply. A cancellation after a request-ID-less clock
+request was admitted retires that exact connection generation; automatic
+reconnect replaces it when enabled, while `ReconnectOff` closes the client.
+
 ## Domain Facades
 
 The root `Client` owns one shared session engine and exposes concrete domain
@@ -51,6 +57,14 @@ only; they do not create independent connections.
 
 Managed accounts are loaded into `Snapshot` during bootstrap and can be
 refreshed explicitly with `Client.ManagedAccounts`.
+
+Operation methods are the canonical validation boundary; v2 intentionally has
+no separate public `Validate` facade. Static caller mistakes return
+`*ValidationError` before a frame is sent, while negotiated-version, client-ID,
+account, entitlement, and ownership checks remain session-dependent. A zero
+`Client` is not a validation harness. Applications that need template
+compatibility tests should exercise the real operation through a deterministic
+`Dialer` or Gateway replay and assert `ValidationError.Field` where relevant.
 
 ## Subscriptions
 
@@ -71,7 +85,8 @@ event kinds are `Started`, `Data`, `SnapshotComplete`, `Gap`, `Restored`, and
 `Resubscribed`. `Restored` means the Gateway retained the remote stream (1102);
 `Resubscribed` means the client physically sent the request again. Channel
 close is terminal; inspect `Err()` or `Wait()` for its cause. There is no
-redundant `Closed` event.
+redundant `Closed` event. Every event's `At` is the UTC time the client enqueued
+it; this is local observation time, not Gateway event time.
 
 `All(ctx)` filters `Data` values from that same queue. Ranging it to exhaustion
 drains every buffered event, so `Err()`/`Wait()` are final when the loop exits.
@@ -98,8 +113,10 @@ handle. `Wait()` preserves the context's exact cancellation cause.
 `Close` initiates cancellation asynchronously and remains idempotent. `Wait`
 and `Err` report `*SubscriptionCancelError` when
 the cancel frame cannot enter the active transport queue. That error is
-non-retryable because the old remote stream may still be live; recycle the
-client connection before creating a replacement subscription. A nil close
+non-retryable. The client retires that connection generation automatically, so
+with `ReconnectAuto` wait for the replacement session to become `Ready` before
+creating a replacement subscription. Unrelated `ResumeAuto` streams survive
+onto that replacement. With `ReconnectOff`, the client closes. A nil close
 result means the cancel frame entered the queue, not that IBKR acknowledged it.
 Closing a route retained after transport loss, or before it was resumed on a
 replacement connection, is a clean local detach because no current connection
@@ -133,6 +150,8 @@ Retryability:
   `ErrSlowConsumer`, and `ErrClosed` are not retryable
 - `*SubscriptionCancelError` is not retryable even when it wraps
   `ErrInterrupted`
+- `*ExerciseUncertainError` is not retryable even when it wraps a transient
+  connection cause
 - `*OrderRecoveryError` is not retryable even when it wraps a transient cause
 
 Default subscription behavior:
@@ -216,11 +235,29 @@ stable coordinate for open-order reconciliation and direct cancellation.
 `OrderEvent.Lifecycle` carries `Started`, `Gap`, `Restored`, and
 `RecoveryRequired` in order with business events. `RecoveryRequired` means the
 connection gap may have hidden order changes; reconcile open orders,
-executions, and completed orders before replacement. `Close()` detaches the
-handle without cancelling the server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
+executions, and completed orders for business decisions. `Replace` remains
+permanently disabled on that handle because reconciliation cannot restore its
+lost event history. `Close()` detaches the handle without cancelling the
+server-side order. `Cancel(ctx)` sends a cancel request; compliance workflows
 can attach the manual cancel time, external operator, and manual-order
 indicator through `CancelOption`. `Replace(ctx, order)` sends a modified order
 with the same OrderID.
+
+`Options().Exercise` returns an `ExerciseHandle` once the request enters the
+client transport queue. The handle correlates request warnings, errors, and any
+pseudo-order lifecycle emitted under that request ID. Neither a returned handle
+nor working-order evidence proves final exercise or lapse settlement. `Close`
+only detaches observation. Connection loss while the instruction is unresolved
+closes it with non-retryable `*ExerciseUncertainError`; reconcile the account or
+position independently instead of blindly resubmitting.
+
+v2 deliberately exposes no adopt-or-replace-by-ID operation for orders found
+after a process restart. A fresh process can reconcile open orders, executions,
+and completed orders and can cancel by stable order ID through
+`Orders().Cancel`, but it must not synthesize an `OrderHandle` to replace a
+pre-existing order. Binding, ownership, `PermID`, partial projections, and the
+need to resend the complete contract and order make that unsafe without a
+separately live-attested adoption protocol.
 
 `Events()` closes before `Done()`. A Filled, Cancelled, APICancelled, or
 Inactive status is an order-state event, not the end of local observation.
@@ -284,8 +321,9 @@ observation window or an error ends it.
   previews resolve with `ErrInterrupted` (both retryable). A data-maintained
   restoration (code 1102) interrupts nothing. Live order handles survive both,
   but a reconnect that cannot prove the missing order state emits
-  `RecoveryRequired`; callers reconcile before replacement. Orders rest at IB,
-  not on the Gateway's data connection.
+  `RecoveryRequired`; callers reconcile for business decisions, while Replace
+  stays disabled on that handle. Orders rest at IB, not on the Gateway's data
+  connection.
 - Historical bars and schedules use internal endpoint admission so rapid
   repeated requests respect Gateway pacing before they are written to the
   socket.
@@ -299,6 +337,7 @@ Public error taxonomy:
 - `*APIError`
 - `*ValidationError`
 - `*SubscriptionCancelError`
+- `*ExerciseUncertainError`
 - `*OrderRecoveryError`
 - `IsRetryable(err)`
 - `ErrNotReady`

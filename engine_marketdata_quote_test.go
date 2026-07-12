@@ -319,11 +319,11 @@ func installObservedQuoteRoute(t *testing.T, e *engine, req QuoteRequest, opts .
 	return <-result
 }
 
-func installObservedDepthRoute(t *testing.T, e *engine, req MarketDepthRequest, opts ...SubscriptionOption) *Subscription[DepthRow] {
+func installObservedDepthRoute(t *testing.T, e *engine, req MarketDepthRequest) *Subscription[DepthRow] {
 	t.Helper()
 	result := make(chan *Subscription[DepthRow], 1)
 	go func() {
-		sub, err := e.SubscribeMarketDepth(context.Background(), req, opts...)
+		sub, err := e.SubscribeMarketDepth(context.Background(), req)
 		if err != nil {
 			t.Errorf("SubscribeMarketDepth: %v", err)
 		}

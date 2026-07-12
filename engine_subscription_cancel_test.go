@@ -13,7 +13,7 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
-func TestCanceledSingletonRecyclesTransportBeforeReplacement(t *testing.T) {
+func TestCanceledSingletonRetiresTransportBeforeReplacement(t *testing.T) {
 	t.Parallel()
 
 	e, peer := newObservedMarketDataEngine(t)
@@ -65,7 +65,7 @@ func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 	if cancelErr.OpKind != OpQuotes || !errors.Is(cancelErr, ErrInterrupted) {
 		t.Fatalf("cancellation error = %+v, want quotes wrapping ErrInterrupted", cancelErr)
 	}
-	if text := cancelErr.Error(); !strings.Contains(text, "recycle the client connection before subscribing again") {
+	if text := cancelErr.Error(); !strings.Contains(text, "owning connection generation retired") {
 		t.Fatalf("cancellation error = %q, want exact recovery guidance", text)
 	}
 	if sub.Err() != waitErr {
@@ -77,9 +77,81 @@ func TestSubscriptionWaitReportsCancellationAdmissionFailure(t *testing.T) {
 	if _, ok := e.keyed[20621]; ok {
 		t.Fatal("failed cancellation left the local quote route active")
 	}
+	if e.transport != nil || e.snapshot.State != StateReconnecting {
+		t.Fatalf("failed cancellation transport/state = %v/%s, want nil/Reconnecting", e.transport, e.snapshot.State)
+	}
 
 	for range sub.Events() {
 	}
+}
+
+func TestSubscriptionCancellationAdmissionFailureTerminatesReconnectOffClient(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.cfg.reconnect = ReconnectOff
+	e.nextReqID = 20621
+	sub := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
+	})
+	_ = readObservedFrame(t, peer)
+	fillTransportQueue(t, e.transport, peer)
+
+	sub.Close()
+	(<-e.cmds)()
+
+	if _, ok := errors.AsType[*SubscriptionCancelError](sub.Wait()); !ok {
+		t.Fatalf("Wait() error = %T %v, want *SubscriptionCancelError", sub.Err(), sub.Err())
+	}
+	if !e.closed || e.transport != nil || e.snapshot.State != StateClosed {
+		t.Fatalf("failed cancellation client closed/transport/state = %t/%v/%s, want true/nil/Closed", e.closed, e.transport, e.snapshot.State)
+	}
+	select {
+	case <-e.done:
+	default:
+		t.Fatal("ReconnectOff client remained running after its connection was retired")
+	}
+}
+
+func TestSubscriptionCancellationAdmissionFailurePreservesResumeAutoSibling(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 20621
+	canceled := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
+	})
+	_ = readObservedFrame(t, peer)
+	survivor := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+	}, WithResumePolicy(ResumeAuto))
+	_ = readObservedFrame(t, peer)
+	fillTransportQueue(t, e.transport, peer)
+
+	canceled.Close()
+	(<-e.cmds)()
+
+	if _, ok := errors.AsType[*SubscriptionCancelError](canceled.Wait()); !ok {
+		t.Fatalf("canceled Wait() error = %T %v, want *SubscriptionCancelError", canceled.Err(), canceled.Err())
+	}
+	if _, ok := e.keyed[20621]; ok {
+		t.Fatal("canceled route survived connection retirement")
+	}
+	route := e.keyed[20622]
+	if route == nil || !route.gapped {
+		t.Fatalf("ResumeAuto sibling route = %+v, want retained gapped route", route)
+	}
+	select {
+	case <-survivor.Done():
+		t.Fatalf("ResumeAuto sibling terminated: %v", survivor.Err())
+	default:
+	}
+	if e.transport != nil || e.snapshot.State != StateReconnecting {
+		t.Fatalf("failed cancellation transport/state = %v/%s, want nil/Reconnecting", e.transport, e.snapshot.State)
+	}
+
+	route.close(ErrClosed)
+	e.deleteKeyedRoute(20622)
 }
 
 func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
@@ -116,6 +188,9 @@ func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
 	}
 	if _, ok := e.keyed[1]; ok {
 		t.Fatal("failed slow-consumer cancellation left the quote route active")
+	}
+	if e.transport != nil || e.snapshot.State != StateReconnecting {
+		t.Fatalf("slow-consumer transport/state = %v/%s, want nil/Reconnecting", e.transport, e.snapshot.State)
 	}
 
 	for range sub.Events() {

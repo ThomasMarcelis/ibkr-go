@@ -1,7 +1,6 @@
 package ibkr
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -270,10 +269,14 @@ func formatHistoricalBarSize(barSize BarSize) (string, error) {
 
 func validateQuoteRequest(req QuoteRequest, snapshot bool, resume ResumePolicy) error {
 	if snapshot && len(req.GenericTicks) > 0 {
-		return errors.New("ibkr: quote snapshots do not support generic ticks")
+		return &ValidationError{
+			Field:   "QuoteRequest.GenericTicks",
+			Value:   strconv.Itoa(len(req.GenericTicks)),
+			Message: "must be empty for a quote snapshot",
+		}
 	}
 	if snapshot && resume == ResumeAuto {
-		return errors.New("ibkr: quote snapshots do not support automatic resume")
+		return &ValidationError{Field: "ResumePolicy", Value: string(resume), Message: "quote snapshots do not support automatic resume"}
 	}
 	return nil
 }
@@ -341,7 +344,11 @@ func validateResumePolicy(opKind OpKind, resume ResumePolicy) error {
 	case OpQuotes, OpRealTimeBars:
 		return nil
 	default:
-		return fmt.Errorf("ibkr: %s subscriptions do not support automatic resume", opKind)
+		return &ValidationError{
+			Field:   "ResumePolicy",
+			Value:   string(resume),
+			Message: fmt.Sprintf("%s subscriptions do not support automatic resume", opKind),
+		}
 	}
 }
 
@@ -351,10 +358,10 @@ func validateOpenOrdersScope(scope OpenOrdersScope, clientID int) error {
 		return nil
 	case OpenOrdersScopeAuto:
 		if clientID != 0 {
-			return errors.New("ibkr: open orders auto scope requires client ID 0")
+			return &ValidationError{Field: "OpenOrdersScope", Value: string(scope), Message: "requires client ID 0"}
 		}
 		return nil
 	default:
-		return fmt.Errorf("ibkr: unsupported open orders scope %q", scope)
+		return &ValidationError{Field: "OpenOrdersScope", Value: string(scope), Message: "must be all, client, or auto"}
 	}
 }

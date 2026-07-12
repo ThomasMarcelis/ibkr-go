@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"errors"
 	"slices"
 	"testing"
 	"time"
@@ -45,15 +46,20 @@ func TestExecutionsRequestProjectsCompleteFilter(t *testing.T) {
 func TestExecutionsRequestValidation(t *testing.T) {
 	t.Parallel()
 
-	tests := []ExecutionsRequest{
-		{Side: "BOT"},
-		{LastDays: -1},
-		{LastDays: 8},
-		{SpecificDates: []time.Time{{}}},
+	tests := []struct {
+		req   ExecutionsRequest
+		field string
+	}{
+		{req: ExecutionsRequest{Side: "BOT"}, field: "ExecutionsRequest.Side"},
+		{req: ExecutionsRequest{LastDays: -1}, field: "ExecutionsRequest.LastDays"},
+		{req: ExecutionsRequest{LastDays: 8}, field: "ExecutionsRequest.LastDays"},
+		{req: ExecutionsRequest{SpecificDates: []time.Time{{}}}, field: "ExecutionsRequest.SpecificDates[0]"},
 	}
-	for _, req := range tests {
-		if _, err := executionsRequest(req, 200); err == nil {
-			t.Errorf("executionsRequest(%+v) error = nil", req)
+	for _, tt := range tests {
+		_, err := executionsRequest(tt.req, 200)
+		validationErr, ok := errors.AsType[*ValidationError](err)
+		if !ok || validationErr.Field != tt.field {
+			t.Errorf("executionsRequest(%+v) error = %v, want %s validation", tt.req, err, tt.field)
 		}
 	}
 }

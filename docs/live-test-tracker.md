@@ -189,7 +189,7 @@ client-side with `ErrNoSnapshot`. Probe orders cancelled; zero residue.
 Campaign day two. Market-window paper captures landed regular-session
 fills (MKT buy/sell, the fill campaign, delayed modify, the order-type
 matrix), the option exercise evidence pair (barely-ITM refusal 322;
-deep-ITM accepted with the 10349 TIF preset notice then rejected by the
+deep-ITM observed working with the 10349 TIF preset notice then rejected by the
 paper clearing server with 322 and cancelled 202), the hedge rule map
 (beta and pair hedges accepted at zero size; delta requires an option
 parent and a valid ratio; FX hedging requires a matching currency-pair
@@ -548,8 +548,8 @@ against the role-aware `paper-dev` Gateway.
 | api_order_fill_aapl.txt | 20260611T133024Z | promoted; six fill lifecycles with running-average partials, the 41-update executions query with dual dispatch, and the six-161 global-cancel tail |
 | api_delayed_success_modify_aapl.txt | 20260611T133046Z | promoted; rest, modify to market, fill, flatten, 161 tail |
 | api_order_type_matrix_aapl.txt | 20260611T133103Z | promoted; 22-case order-type matrix incl. silent MOC/LOC/PEG MID/PEG BEST acceptances, PEG BENCH accepted-then-321-on-cancel, and terminal 321/387 rejections |
-| api_option_exercise_not_itm_aapl.txt | 20260611T133444Z | promoted; option fill then the silently-dropped 322 not-in-the-money refusal |
-| api_option_exercise_server_reject_aapl.txt | 20260611T133636Z | promoted; deep-ITM fill, exercise accepted with the 10349 preset session event and a routeless pseudo-order, then the paper clearing 322 rejection |
+| api_option_exercise_not_itm_aapl.txt | 20260611T133444Z | promoted; option fill then the request-scoped 322 not-in-the-money refusal returned by `ExerciseHandle` |
+| api_option_exercise_server_reject_aapl.txt | 20260611T133636Z | promoted; deep-ITM fill, request-scoped 10349 warning and working pseudo-order lifecycle, then the paper clearing 322 rejection |
 | api_hedge_order_aapl.txt | 20260611T134021Z | promoted; five hedge rules: zero-size beta/pair acceptances with Gateway-computed quantities, two delta 320 rejections, the FX 10063 currency-pair rule |
 | api_algo_variants_aapl.txt | 20260415T153524Z | promoted; thirteen-variant algo matrix: seven accepted with Gateway-normalized param echoes, six rejected with real codes 439/443/10255; the two echoes that rode as sanitized raw live-layout frames were converted to typed open_order lines after the codec encoder converged on the live layout (verified value-equal at the public OpenOrder layer) |
 | whatif_rejections.txt | 20260711T041916Z | promoted from one exact sv207 public campaign; an invalid-contract preview freezes ordinary request-error routing with code 200, then DarkIce + display size freezes 10xxx routing with code 10255; neither gets an echo, and both must resolve the blocked Preview caller (`65e6b1504557ccde75894fb5e07c126e02eac8adc3d3cafd327d0398978afcc7`) |

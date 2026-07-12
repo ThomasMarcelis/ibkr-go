@@ -132,11 +132,13 @@ func (e *engine) handleIncoming(msg any) {
 		}
 		switch m.MsgID {
 		case protocol.InMarketDepth, protocol.InMarketDepthL2:
+			var depthReqIDs []int
 			for reqID, route := range e.keyed {
 				if route.opKind == OpMarketDepth {
-					e.cancelAndCloseMarketDepthRoute(reqID, protocolErr)
+					depthReqIDs = append(depthReqIDs, reqID)
 				}
 			}
+			e.cancelAndCloseMarketDepthRoutes(depthReqIDs, protocolErr)
 		}
 		if _, seen := e.malformedInboundSeen[m.MsgID]; !seen {
 			e.malformedInboundSeen[m.MsgID] = struct{}{}
@@ -252,14 +254,14 @@ func (e *engine) handleUnattributableMarketDepth(msgID, reqID int) bool {
 		Message:   fmt.Sprintf("msg_id %d req_id %d", msgID, reqID),
 		Err:       fmt.Errorf("unattributable market depth row request id %d", reqID),
 	}
-	closedDepth := false
+	var depthReqIDs []int
 	for depthReqID, route := range e.keyed {
 		if route.opKind == OpMarketDepth {
-			closedDepth = true
-			e.cancelAndCloseMarketDepthRoute(depthReqID, protocolErr)
+			depthReqIDs = append(depthReqIDs, depthReqID)
 		}
 	}
-	if closedDepth {
+	e.cancelAndCloseMarketDepthRoutes(depthReqIDs, protocolErr)
+	if len(depthReqIDs) != 0 {
 		e.cfg.logger.Warn("ibkr: terminating market depth after unattributable inbound row",
 			"msg_id", msgID, "req_id", reqID)
 		e.emitSessionEvent(0, fmt.Sprintf("terminating market depth after unattributable msg_id %d req_id %d", msgID, reqID), protocolErr)
@@ -587,8 +589,15 @@ func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 		or.pendingWrite = transportWriteKey{}
 	}
 	or.handle.closeWithErr(err)
-	delete(e.orders, orderID)
-	e.forgetOrderExecutions(orderID)
+	if e.orders[orderID] == or {
+		delete(e.orders, orderID)
+		e.forgetOrderExecutions(orderID)
+	}
+	if or.cleanup != nil {
+		cleanup := or.cleanup
+		or.cleanup = nil
+		cleanup()
+	}
 }
 
 func (e *engine) handleTransportWrite(write transportWrite) {

@@ -42,7 +42,7 @@ return sub.Err()
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.1
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.2
 ```
 
 Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
@@ -323,8 +323,9 @@ Order placement returns `*OrderHandle` with one ordered event stream plus
 Errors are typed so callers can make a policy decision without parsing text:
 `*ConnectError` covers dial/bootstrap failures, `*ProtocolError` wire failures,
 `*ValidationError` rejected local input, and `*APIError` a Gateway response.
-`*OrderRecoveryError` and `*SubscriptionCancelError` mean remote state is
-uncertain and deliberately override any retryable wrapped cause.
+`*OrderRecoveryError`, `*ExerciseUncertainError`, and
+`*SubscriptionCancelError` mean remote state is uncertain and deliberately
+override any retryable wrapped cause.
 
 `ibkr.IsRetryable(err)` is the single retry-with-backoff decision. It returns
 true for not-ready/session interruption, transient connection failures, and

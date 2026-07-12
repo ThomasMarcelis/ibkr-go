@@ -85,10 +85,27 @@ type OrderRecoveryError struct {
 	CancelErr    error
 }
 
+// ExerciseUncertainError reports that an admitted option exercise or lapse
+// instruction lost its connection before a request-scoped outcome arrived.
+// The instruction may already have reached IBKR and must not be retried
+// blindly. RequestID is the identifier exposed by the ExerciseHandle.
+type ExerciseUncertainError struct {
+	RequestID int
+	Err       error
+}
+
+func (e *ExerciseUncertainError) Error() string {
+	return fmt.Sprintf("ibkr: exercise/lapse request %d outcome is uncertain: %v", e.RequestID, e.Err)
+}
+
+func (e *ExerciseUncertainError) Unwrap() error {
+	return e.Err
+}
+
 // SubscriptionCancelError reports that a subscription cancellation could not
-// enter the active transport queue. The remote subscription may still be live
-// on the current connection; recycle the client connection before creating a
-// replacement subscription.
+// enter the active transport queue. The engine retires the owning connection
+// generation so the remote subscription cannot survive into a replacement;
+// wait for the client to become ready again before subscribing anew.
 type SubscriptionCancelError struct {
 	OpKind OpKind
 	Err    error
@@ -96,7 +113,7 @@ type SubscriptionCancelError struct {
 
 func (e *SubscriptionCancelError) Error() string {
 	return fmt.Sprintf(
-		"ibkr: cancel %s subscription: %v; remote state is uncertain, recycle the client connection before subscribing again",
+		"ibkr: cancel %s subscription: %v; owning connection generation retired, wait for a ready replacement before subscribing again",
 		e.OpKind,
 		e.Err,
 	)
@@ -156,14 +173,19 @@ func (e *ValidationError) Error() string {
 	return fmt.Sprintf("ibkr: invalid %s %q: %s", e.Field, e.Value, e.Message)
 }
 
+func operationActive(operation string) error {
+	return fmt.Errorf("%w: %s", ErrOperationActive, operation)
+}
+
 // IsRetryable reports whether retrying with backoff is safe and useful.
 // It returns true for [ErrNotReady], [ErrInterrupted], [ErrResumeRequired],
 // transient [ConnectError] values, and [APIError.IsPacingViolation]. It returns
 // false for caller context cancellation, protocol and validation failures,
 // ordinary API rejections, [ErrSlowConsumer], [ErrExecutionCorrelationOverflow], [ErrClosed],
-// [OrderRecoveryError], and [SubscriptionCancelError]. The two recovery error
-// types remain non-retryable even when they wrap a transient error because a
-// blind retry could duplicate a live order or subscription.
+// [OrderRecoveryError], [ExerciseUncertainError], and
+// [SubscriptionCancelError]. Recovery errors remain non-retryable even when
+// they wrap a transient error because a blind retry could duplicate a live
+// order, exercise instruction, or subscription.
 func IsRetryable(err error) bool {
 	return isRetryableError(err)
 }
@@ -177,9 +199,13 @@ func isRetryableError(err error) bool {
 	if _, ok := errors.AsType[*OrderRecoveryError](err); ok {
 		return false
 	}
-	// A failed cancellation can leave the old remote stream live. Retrying by
-	// subscribing again could duplicate it or consume another subscription
-	// slot; callers must recycle the connection first.
+	// An admitted exercise or lapse may already be working at IBKR. A transport
+	// interruption cannot prove otherwise, so retry requires reconciliation.
+	if _, ok := errors.AsType[*ExerciseUncertainError](err); ok {
+		return false
+	}
+	// A failed cancellation retires its owning transport, but retrying the
+	// cancellation itself is neither necessary nor useful.
 	if _, ok := errors.AsType[*SubscriptionCancelError](err); ok {
 		return false
 	}

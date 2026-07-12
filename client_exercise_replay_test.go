@@ -67,6 +67,21 @@ func requireNoMoreOrderEvents(t *testing.T, ctx context.Context, name string, ha
 	}
 }
 
+func nextExerciseEvent(t *testing.T, ctx context.Context, handle *ibkr.ExerciseHandle) ibkr.OrderEvent {
+	t.Helper()
+
+	select {
+	case event, ok := <-handle.Events():
+		if !ok {
+			t.Fatalf("exercise events closed early: %v", handle.Wait())
+		}
+		return event
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for exercise event")
+		return ibkr.OrderEvent{}
+	}
+}
+
 // waitOptionFill drains handle events until the Filled status, the
 // execution, and the commission report have all arrived, returning them for
 // field-level assertions.
@@ -189,8 +204,8 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 // server-rejection lifecycle captured live on 2026-06-11
 // (captures/20260611T133636Z-api_option_exercise_aapl, events.jsonl sha256
 // prefix 267e7806669f2d5c): MKT BUY 1 of the AAPL Jun-12 282.5 call fills
-// at 8.90, Exercise is acknowledged as a working DAY instruction via code
-// 10349 on the exercise request id, and the Gateway materializes the
+// at 8.90, Exercise produces a working DAY instruction via code 10349 on the
+// exercise request id, and the Gateway materializes the
 // instruction as a pseudo-order under the same handle. When the
 // teardown global cancel runs, the paper Gateway kills the instruction: code
 // 322 "Exercise/Lapse failed due to server rejection." and its code-202
@@ -255,21 +270,28 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 		t.Fatalf("Exercise: %v", err)
 	}
 
-	var notice *ibkr.APIError
-	select {
-	case event := <-exerciseHandle.Events():
-		notice = event.Warning
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for exercise acceptance notice")
-	}
+	notice := nextExerciseEvent(t, ctx, exerciseHandle).Warning
 	if notice == nil || notice.Code != ibkr.ErrCodeOrderTIFSetFromPreset ||
 		notice.Message != "Order TIF was set to DAY based on order preset." {
 		t.Fatalf("exercise notice = %#v, want request-scoped code 10349", notice)
 	}
 
-	// The pseudo-order open_order/order_status arrive next; the global cancel
-	// then kills the instruction live. The code-161 for the already-filled
-	// buy order remains observable at session scope.
+	openExercise := nextExerciseEvent(t, ctx, exerciseHandle).OpenOrder
+	if openExercise == nil || openExercise.OrderID != int64(exerciseHandle.RequestID()) ||
+		openExercise.Contract.ConID != 887760542 || openExercise.Action != ibkr.ActionBuy ||
+		openExercise.OrderType != ibkr.OrderTypeLimit || !openExercise.Quantity.Equal(decimal.NewFromInt(1)) ||
+		openExercise.TIF != ibkr.TIFDay || openExercise.PermID != 900005 {
+		t.Fatalf("exercise pseudo-order = %+v, want request-bound DAY LMT BUY 1 with perm id 900005", openExercise)
+	}
+	working := nextExerciseEvent(t, ctx, exerciseHandle).Status
+	if working == nil || working.OrderID != int64(exerciseHandle.RequestID()) ||
+		working.Status != ibkr.OrderStatusPreSubmitted || !working.Remaining.Equal(decimal.NewFromInt(1)) ||
+		working.PermID != 900005 {
+		t.Fatalf("exercise status = %+v, want request-bound PreSubmitted remaining 1 with perm id 900005", working)
+	}
+
+	// The global cancel then kills the instruction live. The code-161 for the
+	// already-filled buy order remains observable at session scope.
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("CancelAll: %v", err)
 	}

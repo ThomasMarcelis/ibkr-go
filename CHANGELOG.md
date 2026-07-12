@@ -8,12 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Changed
 
+- Subscription cancellation admission failure now retires its owning
+  connection generation automatically. With automatic reconnect, unrelated
+  resumable streams survive onto the replacement connection; with reconnect
+  disabled, the client terminates.
+- Every singleton-operation conflict wraps `ErrOperationActive`, and local
+  request validation consistently returns `*ValidationError` with a stable
+  field name.
+- `StreamEvent.At` records UTC client observation time for both data and
+  lifecycle events.
 - `WithExecutionCorrelationLimit` bounds retained execution IDs, pending fee
   versions, and the finite `Executions` collector at 4096 by default. Exceeding
   a bound closes with non-retryable `ErrExecutionCorrelationOverflow`. At
   snapshot completion, subscriptions discard unmatched fees and then accept
   late revisions only for execution IDs observed in that snapshot; unrelated
   global commission broadcasts cannot exhaust a healthy long-lived route.
+
+### Fixed
+
+- An option exercise or lapse interrupted after transport admission now closes
+  with non-retryable `*ExerciseUncertainError` instead of looking like a safe
+  retry. Exercise replays now freeze the request-scoped pseudo-order lifecycle
+  as well as warnings and terminal errors.
 
 ## v2.0.0-rc.2 — 2026-07-11
 

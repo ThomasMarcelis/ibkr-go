@@ -35,7 +35,7 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if e.activeAccountSummarySubscriptions() >= 2 {
-			resp <- result{err: fmt.Errorf("ibkr: account summary supports at most two active subscriptions")}
+			resp <- result{err: operationActive("account summary subscription limit reached")}
 			return
 		}
 
@@ -108,7 +108,7 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonManagedAccounts]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: managed accounts request already in progress")}
+			resp <- result{err: operationActive("managed accounts")}
 			return
 		}
 
@@ -155,7 +155,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if _, exists := e.singletons[singletonPositions]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: positions subscription already active")}
+			resp <- result{err: operationActive("positions subscription")}
 			return
 		}
 
@@ -215,7 +215,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonFamilyCodes]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: family codes request already in progress")}
+			resp <- result{err: operationActive("family codes")}
 			return
 		}
 
@@ -275,7 +275,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if _, exists := e.singletons[singletonAccountUpdates]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: account updates subscription already active")}
+			resp <- result{err: operationActive("account updates subscription")}
 			return
 		}
 

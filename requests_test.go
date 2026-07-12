@@ -479,24 +479,27 @@ func TestValidateQuoteRequest(t *testing.T) {
 	err := validateQuoteRequest(QuoteRequest{
 		GenericTicks: []GenericTick{"233"},
 	}, true, ResumeNever)
-	if err == nil {
-		t.Fatal("validateQuoteRequest() error = nil, want rejection")
+	if !isValidationField(err, "QuoteRequest.GenericTicks") {
+		t.Fatalf("validateQuoteRequest() error = %v, want QuoteRequest.GenericTicks validation", err)
 	}
 
 	err = validateQuoteRequest(QuoteRequest{}, true, ResumeAuto)
-	if err == nil {
-		t.Fatal("validateQuoteRequest() error = nil, want auto-resume rejection")
+	if !isValidationField(err, "ResumePolicy") {
+		t.Fatalf("validateQuoteRequest() error = %v, want ResumePolicy validation", err)
 	}
 }
 
 func TestValidateOpenOrdersScope(t *testing.T) {
 	t.Parallel()
 
-	if err := validateOpenOrdersScope(OpenOrdersScopeAuto, 1); err == nil {
-		t.Fatal("validateOpenOrdersScope() error = nil, want client-id rejection")
+	if err := validateOpenOrdersScope(OpenOrdersScopeAuto, 1); !isValidationField(err, "OpenOrdersScope") {
+		t.Fatalf("validateOpenOrdersScope() error = %v, want OpenOrdersScope validation", err)
 	}
 	if err := validateOpenOrdersScope(OpenOrdersScopeAuto, 0); err != nil {
 		t.Fatalf("validateOpenOrdersScope() error = %v", err)
+	}
+	if err := validateOpenOrdersScope(OpenOrdersScope("other"), 0); !isValidationField(err, "OpenOrdersScope") {
+		t.Fatalf("validateOpenOrdersScope() invalid scope error = %v, want OpenOrdersScope validation", err)
 	}
 }
 
@@ -509,7 +512,7 @@ func TestValidateResumePolicy(t *testing.T) {
 	if err := validateResumePolicy(OpRealTimeBars, ResumeAuto); err != nil {
 		t.Fatalf("validateResumePolicy() error = %v", err)
 	}
-	if err := validateResumePolicy(OpExecutions, ResumeAuto); err == nil {
-		t.Fatal("validateResumePolicy() error = nil, want rejection")
+	if err := validateResumePolicy(OpExecutions, ResumeAuto); !isValidationField(err, "ResumePolicy") {
+		t.Fatalf("validateResumePolicy() error = %v, want ResumePolicy validation", err)
 	}
 }

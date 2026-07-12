@@ -18,7 +18,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonNewsProviders]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: news providers request already in progress")}
+			resp <- result{err: operationActive("news providers")}
 			return
 		}
 
@@ -69,7 +69,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if _, exists := e.singletons[singletonNewsBulletins]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: news bulletins subscription already active")}
+			resp <- result{err: operationActive("news bulletins subscription")}
 			return
 		}
 

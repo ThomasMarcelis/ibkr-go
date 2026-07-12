@@ -148,7 +148,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonMarketRule]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: market rule request already in progress")}
+			resp <- result{err: operationActive("market rule")}
 			return
 		}
 

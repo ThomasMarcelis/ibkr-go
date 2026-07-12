@@ -21,7 +21,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 	var ownedRoute *route
 
 	enqueueClockSetup(ctx, e, singletonCurrentTime, nil, func() {
-		resp <- result{err: fmt.Errorf("%w: current time", ErrOperationActive)}
+		resp <- result{err: operationActive("current time")}
 	}, func() {
 		// No handleAPIErr: req_current_time carries no reqID, so the engine
 		// cannot route an APIError to this singleton. ctx cancellation and
@@ -74,7 +74,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	var ownedRoute *route
 
 	enqueueClockSetup(ctx, e, singletonCurrentTimeMillis, nil, func() {
-		resp <- result{err: fmt.Errorf("%w: current time millis", ErrOperationActive)}
+		resp <- result{err: operationActive("current time millis")}
 	}, func() {
 		// Like reqCurrentTime, the request carries no reqID, so APIErrors
 		// cannot route here; ctx cancellation and onDisconnect are the only
@@ -128,7 +128,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonScannerParameters]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: scanner parameters request already in progress")}
+			resp <- result{err: operationActive("scanner parameters")}
 			return
 		}
 
@@ -297,7 +297,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 			return
 		}
 		if _, exists := e.singletons[singletonFA]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: FA request already in progress")}
+			resp <- result{err: operationActive("FA configuration")}
 			return
 		}
 
@@ -423,8 +423,9 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
-				_ = e.cancelSubscription(OpWSHMetaData, codec.CancelWSHMetaData{ReqID: reqID})
+				cancelErr := e.cancelSubscription(OpWSHMetaData, codec.CancelWSHMetaData{ReqID: reqID})
 				e.deleteKeyedRoute(reqID)
+				e.retireSubscriptionTransport(cancelErr)
 			}
 		})
 	})
@@ -480,8 +481,9 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
-				_ = e.cancelSubscription(OpWSHEventData, codec.CancelWSHEventData{ReqID: reqID})
+				cancelErr := e.cancelSubscription(OpWSHEventData, codec.CancelWSHEventData{ReqID: reqID})
 				e.deleteKeyedRoute(reqID)
+				e.retireSubscriptionTransport(cancelErr)
 			}
 		})
 	})

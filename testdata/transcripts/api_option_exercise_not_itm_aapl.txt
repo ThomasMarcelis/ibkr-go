@@ -6,10 +6,9 @@
 # report 0.76825 USD), then exerciseOptions (msg 21, with the sv200
 # manual-order-time/customer-account/professional-customer tail) draws code
 # 322 "Error processing request.Exercise ignored because option is not
-# in-the-money." on the exercise request id. The exercise request id belongs
-# to no order route, so the engine drops the 322 silently: the refusal never
-# surfaces on the order handle or as a session event, which this replay
-# freezes deliberately (the host completing proves the frame was delivered).
+# in-the-money." on the exercise request id. ExerciseHandle owns that request
+# route and returns the refusal from Wait; the filled buy order remains
+# independent.
 # Sanitized: account identifiers redacted to DU9000001, perm id -> 900406,
 # order ref -> ibkrgo-sanitized-20260611T133444Z-001, execution id ->
 # sanitized-exercise-fill-001. Trimmed: farm-status 2104/2107/2119/2158, the
@@ -34,7 +33,7 @@ server order_status {"order_id":406,"status":"Filled","filled":"1","remaining":"
 server commission_report {"exec_id":"sanitized-exercise-fill-001","commission":"0.76825","currency":"USD","realized_pnl":"1.7976931348623157E308"}
 
 # Exercise the barely-ITM call: the Gateway refuses with code 322 on the
-# exercise request id; the engine has no route for it and drops it
+# exercise request id; ExerciseHandle returns the request-scoped refusal
 client exercise_options {"req_id":"$exercise","contract":{"con_id":"886441502","symbol":"AAPL","sec_type":"OPT","expiry":"20260612 16:00:00 US/Eastern","strike":"292.5","right":"C","multiplier":"100","exchange":"SMART","currency":"USD","local_symbol":"AAPL  260612C00292500","trading_class":"AAPL"},"exercise_action":"1","exercise_quantity":"1","account":"DU9000001","override":"0","manual_order_time":"","customer_account":"","professional_customer":"0"}
 server api_error {"req_id":"$exercise","code":322,"message":"Error processing request.Exercise ignored because option is not in-the-money.","advanced_order_reject_json":"","error_time_ms":"1781184907272"}
 disconnect

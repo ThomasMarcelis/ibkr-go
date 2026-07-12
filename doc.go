@@ -81,8 +81,8 @@
 //
 // Call Close to unsubscribe. Wait blocks until termination and returns the
 // final error, if any. A [*SubscriptionCancelError] means cancellation could
-// not enter the active transport queue and the remote stream may still be live;
-// recycle the client connection before subscribing again. Err returns the
+// not enter the active transport queue; the client retires that connection
+// generation, so wait for a ready replacement before subscribing again. Err returns the
 // currently recorded terminal error without waiting for Done. If slow-consumer
 // shutdown also cannot admit its cancellation, the terminal
 // error preserves both [ErrSlowConsumer] and [*SubscriptionCancelError].
@@ -157,7 +157,7 @@
 //
 // # Errors
 //
-// Six structured error types cover the main failure modes:
+// Seven structured error types cover the main failure modes:
 //
 //   - [*ConnectError] — connection or handshake failure
 //   - [*ProtocolError] — wire protocol violation
@@ -175,7 +175,8 @@
 // [APIError.IsWarning]).
 //
 // Sentinel errors cover common conditions: [ErrNotReady], [ErrClosed],
-// [ErrInterrupted], [ErrSlowConsumer], [ErrNoMatch], [ErrAmbiguousContract].
+// [ErrInterrupted], [ErrSlowConsumer], [ErrExecutionCorrelationOverflow],
+// [ErrNoMatch], [ErrAmbiguousContract].
 // [IsRetryable] classifies final errors for retry/backoff policy. Recovery
 // errors are never retryable because retrying can duplicate live orders or
 // subscriptions.

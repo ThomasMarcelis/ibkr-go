@@ -22,7 +22,7 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 	var ownedRoute *route
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonOrderID]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: order ID refresh already in progress")}
+			resp <- result{err: operationActive("order ID refresh")}
 			return
 		}
 		ownedRoute = &route{
@@ -93,7 +93,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			return
 		}
 		if _, exists := e.singletons[singletonOpenOrders]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: open orders subscription already active")}
+			resp <- result{err: operationActive("open orders subscription")}
 			return
 		}
 
@@ -400,7 +400,7 @@ func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]Completed
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if _, exists := e.singletons[singletonCompletedOrders]; exists {
-			resp <- result{err: fmt.Errorf("ibkr: completed orders request already in progress")}
+			resp <- result{err: operationActive("completed orders")}
 			return
 		}
 
@@ -787,9 +787,10 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 	orderHandle := newOrderHandle(int64(reqID), e.cfg.orderEventBuffer)
 	handle := &ExerciseHandle{requestID: reqID, order: orderHandle}
 	var exerciseRoute *route
+	var exerciseOrderRoute *orderRoute
 	closeExercise := func(err error) {
-		if or, ok := e.orders[int64(reqID)]; ok {
-			e.closeOrderRoute(int64(reqID), or, err)
+		if !exerciseOrderRoute.closed {
+			e.closeOrderRoute(int64(reqID), exerciseOrderRoute, err)
 		}
 		if e.keyed[reqID] == exerciseRoute {
 			e.deleteKeyedRoute(reqID)
@@ -809,13 +810,34 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 			closeExercise(apiErr)
 		},
 		onDisconnect: func(e *engine, err error) bool {
-			closeExercise(ErrInterrupted)
+			closeExercise(&ExerciseUncertainError{
+				RequestID: reqID,
+				Err:       errors.Join(ErrInterrupted, err),
+			})
 			return false
 		},
-		close: closeExercise,
+		close: func(err error) {
+			if err == nil {
+				closeExercise(nil)
+				return
+			}
+			closeExercise(&ExerciseUncertainError{
+				RequestID: reqID,
+				Err:       errors.Join(ErrInterrupted, err),
+			})
+		},
+	}
+	exerciseOrderRoute = &orderRoute{
+		orderID: int64(reqID),
+		handle:  orderHandle,
+		cleanup: func() {
+			if e.keyed[reqID] == exerciseRoute {
+				e.deleteKeyedRoute(reqID)
+			}
+		},
 	}
 	e.keyed[reqID] = exerciseRoute
-	e.orders[int64(reqID)] = &orderRoute{orderID: int64(reqID), handle: orderHandle}
+	e.orders[int64(reqID)] = exerciseOrderRoute
 	orderHandle.detachFn = func() {
 		e.enqueue(func() { closeExercise(nil) })
 	}

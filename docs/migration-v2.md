@@ -7,7 +7,7 @@ v2 is an intentional clean break. Go semantic import versioning keeps existing v
 Update the dependency and every ibkr-go import:
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.1
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.2
 ```
 
 ```go
@@ -22,7 +22,7 @@ For a local checkout, keep a real v2 requirement; `replace` changes source
 location, not the module's semantic major version:
 
 ```go
-require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.1
+require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.2
 
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
@@ -83,10 +83,16 @@ if err := handle.Wait(); err != nil {
 `OrderHandle.Modify` is now `OrderHandle.Replace`.
 
 Order lifecycle transitions are now `OrderEvent.Lifecycle` values in the same
-ordered channel. After a reconnect, `RecoveryRequired` means fills or status
-changes may have occurred during the gap; reconcile open orders, executions,
-and completed orders before replacing. Cancellation remains safe by stable
-order ID.
+ordered channel. After a physical connection gap, `RecoveryRequired` means
+fills or status changes may have occurred. Reconcile open orders, executions,
+and completed orders for business decisions; that handle remains permanently
+blocked from `Replace` because reconciliation cannot restore its lost event
+history. Cancellation remains safe by stable order ID.
+
+There is no restart-time adopt or replace-by-ID API in v2. After a process
+restart, reconcile through open orders, executions, and completed orders;
+`Orders().Cancel` remains available by stable order ID. Do not synthesize an
+`OrderHandle` for a pre-existing order.
 
 Cancellation methods accept optional compliance metadata without changing old
 call sites:
@@ -118,7 +124,12 @@ fees := snapshot.CommissionAndFees
 
 Use `SubscribeExecutions` when late or revised fee reports matter. It remains open after the end marker and must be closed explicitly.
 
-`HistoricalNews` returns `HistoricalNewsResult`. Read articles from `Items` and continue pagination when `HasMore` is true. `Options().Exercise` now returns an `ExerciseHandle`.
+`HistoricalNews` returns `HistoricalNewsResult`. Read articles from `Items` and
+continue pagination when `HasMore` is true. `Options().Exercise` now returns an
+`ExerciseHandle`; the returned handle proves local transport admission, not
+IBKR acceptance or settlement. If its connection is lost while unresolved,
+`Wait` returns non-retryable `*ExerciseUncertainError` and callers must
+reconcile the resulting account or position before deciding what to do next.
 
 Completed orders are split into the wire's real facets instead of projecting
 fields the callback does not carry:

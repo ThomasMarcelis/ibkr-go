@@ -621,6 +621,9 @@ func TestSingletonSubscriptionRejectsSecond(t *testing.T) {
 		}
 		t.Fatal("SubscribePositions() second error = nil, want rejection")
 	}
+	if !errors.Is(err, ibkr.ErrOperationActive) {
+		t.Fatalf("SubscribePositions() second error = %v, want ErrOperationActive", err)
+	}
 
 	sub1.Close()
 }
@@ -667,6 +670,9 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 			sub3.Close()
 		}
 		t.Fatal("SubscribeAccountSummary() third error = nil, want rejection")
+	}
+	if !errors.Is(err, ibkr.ErrOperationActive) {
+		t.Fatalf("SubscribeAccountSummary() third error = %v, want ErrOperationActive", err)
 	}
 
 	sub1.Close()
