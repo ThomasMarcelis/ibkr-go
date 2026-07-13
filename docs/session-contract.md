@@ -7,7 +7,7 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates `server_version` 200..207; answers outside that range
+The client negotiates `server_version` 200..225; answers outside that range
 are rejected during handshake. `sv200` is the classic live-validated layout;
 exact `sv201` adds the raw-ID envelope and
 protobuf executions family, while exact `sv202` adds zero-strike contract
@@ -21,8 +21,12 @@ end responses to protobuf while retaining the same typed public operation.
 Exact `sv206` migrates market-data, market-depth, and market-data-type requests
 and their quote/depth callbacks. Exact `sv207` migrates managed accounts,
 account updates and summaries, positions, and their multi-account variants to
-protobuf without changing the public operations. Versions 208 and newer are
-not advertised.
+protobuf without changing the public operations. Exact `sv208` through `sv213`
+complete the official protobuf migration train. Versions 214..225 add UTC
+formatting, one-shot cancellation, and order parameters,
+read-only TWS configuration, volume/fractional-size semantics, security-
+definition precision, and odd-lot quotes. See
+[`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 
 ```go
 type Client struct{ /* opaque */ }
@@ -209,6 +213,10 @@ because the caller must reconcile open orders before deciding whether to place
 again. Only failure before the first place admission returns the original
 placement error directly.
 
+`TWS().Config(ctx)` is the read-only server-version-219 configuration snapshot.
+Optional scalar pointers preserve omitted values separately from explicit
+zero/false. Configuration mutation remains operator-owned and is not exposed.
+
 `Orders().Preview(ctx, req)` is the one-shot counterpart: it forces the
 what-if flag and returns the complete `OrderState` preview block, including
 status, margin currency, before/change/after margin both in and outside regular
@@ -249,7 +257,10 @@ stable coordinate for open-order reconciliation and direct cancellation.
 connection gap may have hidden order changes; reconcile open orders,
 executions, and completed orders for business decisions. `Replace` remains
 permanently disabled on that handle because reconciliation cannot restore its
-lost event history. Its lifecycle error and subsequent valid replacement calls
+lost event history. Its `ConnectionSeq` names the prospective replacement
+generation so it agrees with a later `Ready`; the marker is emitted before
+replacement callbacks and does not itself prove that handshake reached
+`Ready`. Its lifecycle error and subsequent valid replacement calls
 match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the handle
 without cancelling the server-side order. `Cancel(ctx)` sends a cancel
 request; compliance workflows

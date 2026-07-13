@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -87,7 +88,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 		err error
 	}
 	resp := make(chan result, 1)
-	enqueueSubscriptionSetup(ctx, e, resp, func() {
+	enqueueSingletonSubscriptionSetup(ctx, e, singletonOpenOrders, resp, func() {
 		if err := validateOpenOrdersScope(scope, e.cfg.clientID); err != nil {
 			resp <- result{err: err}
 			return
@@ -536,6 +537,10 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 			resp <- placeOrderResult{err: err}
 			return
 		}
+		if err := validateOrderServerVersion(req.Order, e.serverVersion); err != nil {
+			resp <- placeOrderResult{err: err}
+			return
+		}
 
 		orderID := e.allocOrderID()
 		handle := e.bindOrderHandle(orderID, req.Contract)
@@ -572,6 +577,12 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 			resp <- bracketOrderResult{err: err}
 			return
 		}
+		for _, order := range []Order{req.Parent, req.TakeProfit, req.StopLoss} {
+			if err := validateOrderServerVersion(order, e.serverVersion); err != nil {
+				resp <- bracketOrderResult{err: err}
+				return
+			}
+		}
 
 		parentID := e.allocOrderID()
 		takeProfitID := e.allocOrderID()
@@ -603,6 +614,54 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 			e.trackOrderWrite(item.id, write)
 			sentIDs = append(sentIDs, item.id)
 		}
+		resp <- bracketOrderResult{bracket: bracket}
+	})
+
+	return awaitBracketOrderResponse(ctx, e, resp)
+}
+
+// PlacePresetBracket submits one parent request whose attached-order metadata
+// asks TWS to create stop-loss and profit-taker children from its configured
+// order presets. Unlike PlaceBracket, the child instructions are owned by the
+// TWS configuration and no separate child place frames are sent.
+func (e *engine) PlacePresetBracket(ctx context.Context, req PlaceOrderRequest) (BracketOrder, error) {
+	if err := validateOrderRequest(req); err != nil {
+		return BracketOrder{}, err
+	}
+	req = clonePlaceOrderRequest(req)
+	resp := make(chan bracketOrderResult, 1)
+	enqueueReadySetup(ctx, e, func() {
+		resp <- bracketOrderResult{err: context.Cause(ctx)}
+	}, func() {
+		if e.serverVersion < protocol.MinServerVersionAttachedOrders {
+			resp <- bracketOrderResult{err: fmt.Errorf("ibkr: preset brackets require server_version %d, negotiated %d: %w", protocol.MinServerVersionAttachedOrders, e.serverVersion, ErrUnsupportedServerVersion)}
+			return
+		}
+		if err := validateContractFieldSupport(req.Contract, "place preset bracket", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
+		if err := validateOrderServerVersion(req.Order, e.serverVersion); err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
+
+		parentID := e.allocOrderID()
+		stopLossID := e.allocOrderID()
+		takeProfitID := e.allocOrderID()
+		bracket := BracketOrder{
+			Parent:     e.bindOrderHandle(parentID, req.Contract),
+			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract),
+			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract),
+		}
+		e.orders[parentID].attachedOrderIDs = []int64{stopLossID, takeProfitID}
+		allIDs := []int64{parentID, stopLossID, takeProfitID}
+		write, err := e.sendTrackedContext(ctx, toCodecPresetBracketOrder(parentID, stopLossID, takeProfitID, req))
+		if err != nil {
+			resp <- bracketOrderResult{err: e.cancelAndCloseOrderRoutes(nil, allIDs, err)}
+			return
+		}
+		e.trackOrderWrite(parentID, write)
 		resp <- bracketOrderResult{bracket: bracket}
 	})
 
@@ -651,6 +710,9 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 		order = cloneOrder(order)
 		return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 			if err := validateContractFieldSupport(contract, "modify order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+				return err
+			}
+			if err := validateOrderServerVersion(order, e.serverVersion); err != nil {
 				return err
 			}
 			or, ok := e.orders[orderID]
@@ -708,6 +770,10 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 
 	enqueueOneShotSetup(ctx, e, func() {
 		if err := validateContractFieldSupport(req.Contract, "preview order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+			setupResp <- setup{err: err}
+			return
+		}
+		if err := validateOrderServerVersion(req.Order, e.serverVersion); err != nil {
 			setupResp <- setup{err: err}
 			return
 		}
@@ -1234,12 +1300,16 @@ func fromCodecExecution(m codec.ExecutionDetail) (Execution, error) {
 }
 
 // parseExecutionTime handles the Gateway's execution time forms: the UTC
-// dash notation ("20260610-19:58:22", observed live 2026-06-10), the
+// dash notation ("20260610-19:58:22", observed live 2026-06-10), its
+// server_version 214 UTC suffix form ("20260610-19:58:22Z"), the
 // space-and-zone form ("20260413 13:35:50 US/Eastern"), and RFC3339 (from
 // test transcripts).
 func parseExecutionTime(raw string) (time.Time, error) {
 	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
 		return ts, nil
+	}
+	if ts, err := time.Parse("20060102-15:04:05Z07:00", raw); err == nil {
+		return ts.UTC(), nil
 	}
 	// IBKR UTC dash notation: "YYYYMMDD-HH:MM:SS".
 	if ts, err := time.Parse("20060102-15:04:05", raw); err == nil {

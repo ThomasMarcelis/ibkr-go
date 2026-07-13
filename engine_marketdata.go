@@ -147,7 +147,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			switch m := msg.(type) {
 			case codec.MarketDataReroute:
 				if rerouted {
-					cancelErr := e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: reqID})
+					cancelErr := e.cancelRouteSubscription(quoteRoute, OpQuotes, codec.CancelQuote{ReqID: reqID})
 					e.deleteKeyedRoute(reqID)
 					closeErr := errors.Join(
 						fmt.Errorf("ibkr: market data request %d was rerouted more than once", reqID),
@@ -226,11 +226,58 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 					ReceivedAt:  time.Now().UTC(),
 				})
 			case codec.TickString:
+				changed := applyTickString(&quote, m.TickType, m.Value)
 				sub.emit(QuoteUpdate{
 					Kind:       QuoteUpdateStringTick,
 					Snapshot:   quote,
+					Changed:    changed,
 					StringTick: new(QuoteStringTick{TickType: m.TickType, Value: m.Value}),
 					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.TickEFP:
+				basisPoints, err := parseRequiredDecimal(m.BasisPoints, "EFP basis points")
+				if err != nil {
+					fail(err)
+					return
+				}
+				impliedFuturesPrice, err := parseRequiredDecimal(m.ImpliedFuturesPrice, "EFP implied futures price")
+				if err != nil {
+					fail(err)
+					return
+				}
+				dividendImpact, err := parseRequiredDecimal(m.DividendImpact, "EFP dividend impact")
+				if err != nil {
+					fail(err)
+					return
+				}
+				dividendsToLastTradeDate, err := parseRequiredDecimal(m.DividendsToLastTradeDate, "EFP dividends to last trade date")
+				if err != nil {
+					fail(err)
+					return
+				}
+				sub.emit(QuoteUpdate{
+					Kind:     QuoteUpdateEFP,
+					Snapshot: quote,
+					EFP: new(QuoteEFP{
+						TickType: m.TickType, BasisPoints: basisPoints,
+						FormattedBasisPoints: m.FormattedBasisPoints,
+						ImpliedFuturesPrice:  impliedFuturesPrice, HoldDays: m.HoldDays,
+						FutureLastTradeDate: m.FutureLastTradeDate, DividendImpact: dividendImpact,
+						DividendsToLastTradeDate: dividendsToLastTradeDate,
+					}),
+					ReceivedAt: time.Now().UTC(),
+				})
+			case codec.DeltaNeutralValidation:
+				deltaNeutral, err := deltaNeutralFromCodec(&m.Contract)
+				if err != nil {
+					fail(err)
+					return
+				}
+				sub.emit(QuoteUpdate{
+					Kind:         QuoteUpdateDeltaNeutralValidation,
+					Snapshot:     quote,
+					DeltaNeutral: deltaNeutral,
+					ReceivedAt:   time.Now().UTC(),
 				})
 			case codec.TickNews:
 				timestamp, err := parseEpochMilliseconds(m.Time)
@@ -568,6 +615,27 @@ func (e *engine) cancelAndCloseMarketDepthRoute(reqID int, cause error) {
 	e.cancelAndCloseMarketDepthRoutes([]int{reqID}, cause)
 }
 
+func (e *engine) cancelAndCloseQuoteRoutes(reqIDs []int, cause error) {
+	var retirementErrs []error
+	for _, reqID := range reqIDs {
+		quoteRoute, ok := e.keyed[reqID]
+		if !ok || quoteRoute.opKind != OpQuotes {
+			continue
+		}
+		cancelErr := e.cancelRouteSubscription(quoteRoute, OpQuotes, codec.CancelQuote{ReqID: reqID})
+		e.deleteKeyedRoute(reqID)
+		closeErr := cause
+		if cancelErr != nil {
+			closeErr = errors.Join(cause, cancelErr)
+		}
+		quoteRoute.close(closeErr)
+		if cancelErr != nil {
+			retirementErrs = append(retirementErrs, cancelErr)
+		}
+	}
+	e.retireSubscriptionTransport(errors.Join(retirementErrs...))
+}
+
 func (e *engine) cancelAndCloseMarketDepthRoutes(reqIDs []int, cause error) {
 	var retirementErrs []error
 	for _, reqID := range reqIDs {
@@ -576,7 +644,7 @@ func (e *engine) cancelAndCloseMarketDepthRoutes(reqIDs []int, cause error) {
 			continue
 		}
 		request := depthRoute.request.(codec.MarketDepthRequest)
-		cancelErr := e.cancelSubscription(OpMarketDepth, codec.CancelMarketDepth{
+		cancelErr := e.cancelRouteSubscription(depthRoute, OpMarketDepth, codec.CancelMarketDepth{
 			ReqID: reqID, IsSmartDepth: request.IsSmartDepth,
 		})
 		e.deleteKeyedRoute(reqID)
@@ -1016,6 +1084,14 @@ func applyTickPrice(quote *Quote, field int, value decimal.Decimal) QuoteFields 
 		quote.Open = value
 		quote.Available |= QuoteFieldOpen
 		return QuoteFieldOpen
+	case TickTypeOddLotBid:
+		quote.OddLotBid = value
+		quote.Available |= QuoteFieldOddLotBid
+		return QuoteFieldOddLotBid
+	case TickTypeOddLotAsk:
+		quote.OddLotAsk = value
+		quote.Available |= QuoteFieldOddLotAsk
+		return QuoteFieldOddLotAsk
 	default:
 		return 0
 	}
@@ -1039,6 +1115,29 @@ func applyTickSize(quote *Quote, field int, value decimal.Decimal) QuoteFields {
 		quote.Volume = value
 		quote.Available |= QuoteFieldVolume
 		return QuoteFieldVolume
+	case TickTypeOddLotBidSize:
+		quote.OddLotBidSize = value
+		quote.Available |= QuoteFieldOddLotBidSize
+		return QuoteFieldOddLotBidSize
+	case TickTypeOddLotAskSize:
+		quote.OddLotAskSize = value
+		quote.Available |= QuoteFieldOddLotAskSize
+		return QuoteFieldOddLotAskSize
+	default:
+		return 0
+	}
+}
+
+func applyTickString(quote *Quote, field int, value string) QuoteFields {
+	switch field {
+	case TickTypeOddLotBidExchange:
+		quote.OddLotBidExchange = value
+		quote.Available |= QuoteFieldOddLotBidExchange
+		return QuoteFieldOddLotBidExchange
+	case TickTypeOddLotAskExchange:
+		quote.OddLotAskExchange = value
+		quote.Available |= QuoteFieldOddLotAskExchange
+		return QuoteFieldOddLotAskExchange
 	default:
 		return 0
 	}

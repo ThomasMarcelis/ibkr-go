@@ -43,8 +43,38 @@ func TestRecordScenariosWaitsForRecorderAndCopiesDriverEvidence(t *testing.T) {
 	if got := env.readPath(oldLog); got != "old evidence\n" {
 		t.Fatalf("old driver.log = %q, want untouched evidence", got)
 	}
+	if got := env.read("normalize.started"); got != "success\n" {
+		t.Fatalf("capture verification log = %q, want success", got)
+	}
 	if strings.Contains(result.output, oldDir) {
 		t.Fatalf("output lists historical capture directory:\n%s", result.output)
+	}
+}
+
+func TestRecordScenariosRejectsUnverifiedCapture(t *testing.T) {
+	env := newScriptEnvironment(t, "unverified|1")
+	env.vars["NORMALIZE_FAIL"] = "unverified"
+	result := env.run()
+	if result.err == nil {
+		t.Fatalf("record-scenarios error = nil, want verification failure\n%s", result.output)
+	}
+	if !strings.Contains(result.output, "verify_rc=12") {
+		t.Fatalf("output = %q, want verifier exit status", result.output)
+	}
+}
+
+func TestRecordScenariosRejectsMissingDriverEvidence(t *testing.T) {
+	env := newScriptEnvironment(t, "missing_events|1")
+	env.vars["CAPTURE_NO_EVENTS"] = "missing_events"
+	result := env.run()
+	if result.err == nil {
+		t.Fatalf("record-scenarios error = nil, want missing-evidence failure\n%s", result.output)
+	}
+	if !strings.Contains(result.output, "evidence_rc=1") {
+		t.Fatalf("output = %q, want evidence failure", result.output)
+	}
+	if got := env.read("normalize.started"); got != "" {
+		t.Fatalf("capture verification started without driver evidence: %q", got)
 	}
 }
 
@@ -197,8 +227,10 @@ func newScriptEnvironment(t *testing.T, scenarios string) *scriptEnvironment {
 	}
 	recorder := filepath.Join(dir, "recorder")
 	capture := filepath.Join(dir, "capture")
+	normalize := filepath.Join(dir, "normalize")
 	writeExecutable(t, recorder, recorderStub)
 	writeExecutable(t, capture, captureStub)
+	writeExecutable(t, normalize, normalizeStub)
 	return &scriptEnvironment{
 		t:        t,
 		dir:      dir,
@@ -209,6 +241,7 @@ func newScriptEnvironment(t *testing.T, scenarios string) *scriptEnvironment {
 			"SCENARIOS":                   scenarios,
 			"IBKR_RECORDER":               recorder,
 			"IBKR_CAPTURE":                capture,
+			"IBKR_NORMALIZE":              normalize,
 			"IBKR_CAPTURES":               captures,
 			"IBKR_RECORDER_START_TIMEOUT": "2",
 		},
@@ -351,7 +384,27 @@ if [ "${CAPTURE_FAIL:-}" = "$scenario" ]; then
     echo "scenario $scenario failed"
     exit 9
 fi
-echo driver-event > "$events_file"
+if [ "${CAPTURE_NO_EVENTS:-}" != "$scenario" ]; then
+    echo driver-event > "$events_file"
+fi
 touch "$STATE/release-$scenario"
 echo "scenario $scenario complete"
+`
+
+const normalizeStub = `#!/usr/bin/env bash
+set -u
+capture_dir=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -dir) capture_dir="$2"; shift 2 ;;
+        *) shift ;;
+    esac
+done
+scenario="${capture_dir##*-}"
+echo "$scenario" >> "$STATE/normalize.started"
+if [ "${NORMALIZE_FAIL:-}" = "$scenario" ]; then
+    echo "verification failed" >&2
+    exit 12
+fi
+echo "verified $scenario"
 `

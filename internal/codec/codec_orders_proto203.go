@@ -10,6 +10,18 @@ import (
 )
 
 func (m PlaceOrderRequest) encodeProto(sv int) ([]byte, error) {
+	if sv < 216 && (m.Deactivate != "" || m.PostOnly != "" || m.AllowPreOpen != "" || m.IgnoreOpenAuction != "") {
+		return nil, fmt.Errorf("codec: additional order parameters require server_version 216")
+	}
+	if sv < 217 && (m.RouteMarketableToBBO != "" || m.SeekPriceImprovement != "" || m.WhatIfType != "") {
+		return nil, fmt.Errorf("codec: additional order parameters require server_version 217")
+	}
+	if sv < 218 && (m.AttachedStopLossOrderID != 0 || m.AttachedStopLossOrderType != "" || m.AttachedTakeProfitOrderID != 0 || m.AttachedTakeProfitOrderType != "") {
+		return nil, fmt.Errorf("codec: attached orders require server_version 218")
+	}
+	if sv < 223 && m.HedgeMaxSize != "" {
+		return nil, fmt.Errorf("codec: hedge maximum size requires server_version 223")
+	}
 	orderID, err := protoInt32FromInt64(m.OrderID, "place order id")
 	if err != nil {
 		return nil, err
@@ -25,10 +37,41 @@ func (m PlaceOrderRequest) encodeProto(sv int) ([]byte, error) {
 	body := appendProtoVarint(nil, 1, orderID)
 	body = appendProtoMessage(body, 2, contract)
 	body = appendProtoMessage(body, 3, order)
-	// API 10.48.01 always emits the optional AttachedOrders message, even
-	// when it has no fields. ibkr-go does not expose the newer attached-order
-	// shortcut; brackets remain three ordinary place-order requests.
-	return appendProtoMessage(body, 4, nil), nil
+	attached, err := encodeAttachedOrdersProto(m)
+	if err != nil {
+		return nil, err
+	}
+	// API 10.48.01 always emits the optional AttachedOrders message, including
+	// when it has no fields.
+	return appendProtoMessage(body, 4, attached), nil
+}
+
+func encodeAttachedOrdersProto(m PlaceOrderRequest) ([]byte, error) {
+	body := make([]byte, 0, 32)
+	for _, field := range []struct {
+		number protowire.Number
+		id     int64
+		label  string
+	}{
+		{1, m.AttachedStopLossOrderID, "attached stop-loss order id"},
+		{3, m.AttachedTakeProfitOrderID, "attached take-profit order id"},
+	} {
+		if field.id == 0 {
+			continue
+		}
+		value, err := protoInt32FromInt64(field.id, field.label)
+		if err != nil {
+			return nil, err
+		}
+		body = appendProtoVarint(body, field.number, value)
+	}
+	if m.AttachedStopLossOrderType != "" {
+		body = appendProtoString(body, 2, m.AttachedStopLossOrderType)
+	}
+	if m.AttachedTakeProfitOrderType != "" {
+		body = appendProtoString(body, 4, m.AttachedTakeProfitOrderType)
+	}
+	return canonicalProtoFields(body), nil
 }
 
 func (m CancelOrderRequest) encodeProto(sv int) ([]byte, error) {
@@ -728,6 +771,10 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{122, m.UsePriceMgmtAlgo, "use price management algo"},
 		{123, m.Duration, "duration"}, {124, m.PostToAts, "post to ATS"},
 		{136, m.ManualOrderIndicator, "manual order indicator"},
+		{120, m.RouteMarketableToBBO, "route marketable to BBO"},
+		{142, m.SeekPriceImprovement, "seek price improvement"},
+		{143, m.WhatIfType, "what-if type"},
+		{144, m.HedgeMaxSize, "hedge maximum size"},
 	} {
 		body, err = appendOptionalProtoInt32(body, field.number, field.value, field.label)
 		if err != nil {
@@ -780,6 +827,10 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{119, m.ImbalanceOnly, "imbalance only"},
 		{133, m.ProfessionalCustomer, "professional customer"},
 		{135, m.IncludeOvernight, "include overnight"},
+		{138, m.Deactivate, "deactivate"},
+		{139, m.PostOnly, "post only"},
+		{140, m.AllowPreOpen, "allow pre-open"},
+		{141, m.IgnoreOpenAuction, "ignore open auction"},
 	} {
 		body, err = appendOptionalProtoTrue(body, field.number, field.value, field.label)
 		if err != nil {

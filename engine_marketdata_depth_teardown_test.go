@@ -12,6 +12,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 // Normal depth-row delivery in this file is anchored to
@@ -98,6 +99,40 @@ func TestMalformedMarketDepthInboundClosesEveryDepthRoute(t *testing.T) {
 				t.Fatalf("quote cleanup: %v", err)
 			}
 		})
+	}
+}
+
+func TestMalformedClassicDepthWithTrustedRequestIDClosesOnlyItsOwner(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 301
+	first := installObservedDepthRoute(t, e, observedDepthRequest(false))
+	_ = readObservedFrame(t, peer)
+	second := installObservedDepthRoute(t, e, observedDepthRequest(true))
+	_ = readObservedFrame(t, peer)
+
+	messages, err := codec.DecodeBatch(200, wire.EncodeFields([]string{
+		"12", "6", "301", "0", "0", // exact classic prefix, truncated before side/price/size
+	}))
+	if err != nil || len(messages) != 1 {
+		t.Fatalf("decode malformed depth = %v, messages=%d", err, len(messages))
+	}
+	malformed, ok := messages[0].(codec.MalformedInbound)
+	if !ok || malformed.Correlation == nil || malformed.Correlation.RequestID != 301 {
+		t.Fatalf("decoded malformed depth = %#v, want request 301 correlation", messages[0])
+	}
+	e.handleIncoming(malformed)
+
+	assertObservedDepthCancels(t, e, peer, []observedDepthSubscription{{reqID: 301, sub: first}})
+	assertMalformedDepthError(t, first.Wait(), protocol.InMarketDepth, malformed.Err)
+	if e.keyed[302] == nil || e.keyed[302].opKind != OpMarketDepth {
+		t.Fatal("trusted request-local failure removed the sibling depth route")
+	}
+	select {
+	case <-second.Done():
+		t.Fatalf("sibling depth closed: %v", second.Err())
+	default:
 	}
 }
 
@@ -462,10 +497,173 @@ func TestMarketDepthRerouteResendFailureJoinsCancellationFailure(t *testing.T) {
 	}
 }
 
+func TestUnattributableRerouteClosesOnlyItsOperationFamily(t *testing.T) {
+	tests := []struct {
+		name      string
+		msgID     int
+		opKind    OpKind
+		collision bool
+		message   func(*testing.T, int) any
+	}{
+		{
+			name:   "market data omitted protobuf request ID",
+			msgID:  protocol.InMarketDataReroute,
+			opKind: OpQuotes,
+			message: func(t *testing.T, _ int) any {
+				return omittedRequestIDRerouteMessage(t, protocol.InMarketDataReroute)
+			},
+		},
+		{
+			name:      "market data request ID owned by depth",
+			msgID:     protocol.InMarketDataReroute,
+			opKind:    OpQuotes,
+			collision: true,
+			message: func(_ *testing.T, reqID int) any {
+				return codec.MarketDataReroute{ReqID: reqID, ConID: 8314, Exchange: "SMART"}
+			},
+		},
+		{
+			name:   "market depth omitted protobuf request ID",
+			msgID:  protocol.InMarketDepthReroute,
+			opKind: OpMarketDepth,
+			message: func(t *testing.T, _ int) any {
+				return omittedRequestIDRerouteMessage(t, protocol.InMarketDepthReroute)
+			},
+		},
+		{
+			name:      "market depth request ID owned by quote",
+			msgID:     protocol.InMarketDepthReroute,
+			opKind:    OpMarketDepth,
+			collision: true,
+			message: func(_ *testing.T, reqID int) any {
+				return codec.MarketDepthReroute{ReqID: reqID, ConID: 8314, Exchange: "SMART"}
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			e, peer := newObservedMarketDataEngine(t)
+			e.serverVersion = 225
+			e.nextReqID = 901
+			quotes := []observedQuoteSubscription{
+				{reqID: 901, sub: installObservedQuoteRoute(t, e, QuoteRequest{Contract: Stock("AAPL")})},
+			}
+			_ = readObservedFrame(t, peer)
+			quotes = append(quotes, observedQuoteSubscription{
+				reqID: 902, sub: installObservedQuoteRoute(t, e, QuoteRequest{Contract: Stock("MSFT")}),
+			})
+			_ = readObservedFrame(t, peer)
+			depths := []observedDepthSubscription{
+				{reqID: 903, sub: installObservedDepthRoute(t, e, observedDepthRequest(false))},
+			}
+			_ = readObservedFrame(t, peer)
+			depths = append(depths, observedDepthSubscription{
+				reqID: 904, smart: true, sub: installObservedDepthRoute(t, e, observedDepthRequest(true)),
+			})
+			_ = readObservedFrame(t, peer)
+
+			collisionReqID := -1
+			if tc.collision && tc.opKind == OpQuotes {
+				collisionReqID = depths[0].reqID
+			} else if tc.collision {
+				collisionReqID = quotes[0].reqID
+			}
+			unrelatedCalls := 0
+			unrelatedRoute := e.keyed[collisionReqID]
+			if unrelatedRoute != nil {
+				original := unrelatedRoute.handle
+				unrelatedRoute.handle = func(msg any, e *engine) {
+					unrelatedCalls++
+					original(msg, e)
+				}
+			}
+
+			e.handleIncoming(tc.message(t, collisionReqID))
+
+			if tc.opKind == OpQuotes {
+				assertObservedQuoteCancels(t, e, peer, quotes)
+				for _, quote := range quotes {
+					assertUnattributableRerouteError(t, quote.sub.Wait(), tc.msgID, collisionReqID)
+				}
+				for _, depth := range depths {
+					if e.keyed[depth.reqID] == nil {
+						t.Fatalf("unrelated depth request %d was removed", depth.reqID)
+					}
+				}
+				closeObservedDepths(t, e, peer, depths)
+			} else {
+				assertObservedDepthCancels(t, e, peer, depths)
+				for _, depth := range depths {
+					assertUnattributableRerouteError(t, depth.sub.Wait(), tc.msgID, collisionReqID)
+				}
+				for _, quote := range quotes {
+					if e.keyed[quote.reqID] == nil {
+						t.Fatalf("unrelated quote request %d was removed", quote.reqID)
+					}
+				}
+				closeObservedQuotes(t, e, peer, quotes)
+			}
+			if unrelatedCalls != 0 {
+				t.Fatalf("reroute reached unrelated handler %d time(s)", unrelatedCalls)
+			}
+			select {
+			case <-e.done:
+				t.Fatal("unattributable reroute closed the session")
+			default:
+			}
+		})
+	}
+}
+
+func TestMalformedRerouteClosesOnlyItsOperationFamily(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		msgID  int
+		opKind OpKind
+	}{
+		{name: "market data", msgID: protocol.InMarketDataReroute, opKind: OpQuotes},
+		{name: "market depth", msgID: protocol.InMarketDepthReroute, opKind: OpMarketDepth},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e, peer := newObservedMarketDataEngine(t)
+			e.nextReqID = 951
+			quote := observedQuoteSubscription{reqID: 951, sub: installObservedQuoteRoute(t, e, QuoteRequest{Contract: Stock("AAPL")})}
+			_ = readObservedFrame(t, peer)
+			depth := observedDepthSubscription{reqID: 952, sub: installObservedDepthRoute(t, e, observedDepthRequest(false))}
+			_ = readObservedFrame(t, peer)
+			cause := errors.New("structural malformed reroute")
+
+			e.handleIncoming(codec.MalformedInbound{MsgID: tc.msgID, Err: cause})
+
+			if tc.opKind == OpQuotes {
+				assertObservedQuoteCancels(t, e, peer, []observedQuoteSubscription{quote})
+				assertMalformedDepthError(t, quote.sub.Wait(), tc.msgID, cause)
+				if e.keyed[depth.reqID] == nil {
+					t.Fatal("malformed quote reroute removed depth route")
+				}
+				closeObservedDepths(t, e, peer, []observedDepthSubscription{depth})
+			} else {
+				assertObservedDepthCancels(t, e, peer, []observedDepthSubscription{depth})
+				assertMalformedDepthError(t, depth.sub.Wait(), tc.msgID, cause)
+				if e.keyed[quote.reqID] == nil {
+					t.Fatal("malformed depth reroute removed quote route")
+				}
+				closeObservedQuotes(t, e, peer, []observedQuoteSubscription{quote})
+			}
+		})
+	}
+}
+
 type observedDepthSubscription struct {
 	reqID int
 	smart bool
 	sub   *Subscription[DepthRow]
+}
+
+type observedQuoteSubscription struct {
+	reqID int
+	sub   *Subscription[QuoteUpdate]
 }
 
 func observedDepthRequest(smart bool) MarketDepthRequest {
@@ -504,6 +702,54 @@ func assertObservedDepthCancels(t *testing.T, e *engine, peer net.Conn, depths [
 	}
 }
 
+func assertObservedQuoteCancels(t *testing.T, e *engine, peer net.Conn, quotes []observedQuoteSubscription) {
+	t.Helper()
+
+	want := make(map[string]int, len(quotes))
+	for _, quote := range quotes {
+		payload, err := codec.Encode(e.serverVersion, codec.CancelQuote{ReqID: quote.reqID})
+		if err != nil {
+			t.Fatalf("encode quote cancel for request %d: %v", quote.reqID, err)
+		}
+		want[string(payload)]++
+	}
+	for range quotes {
+		payload := readObservedFrame(t, peer)
+		if want[string(payload)] == 0 {
+			t.Fatalf("unexpected quote cancel payload %x", payload)
+		}
+		want[string(payload)]--
+	}
+}
+
+func closeObservedQuotes(t *testing.T, e *engine, peer net.Conn, quotes []observedQuoteSubscription) {
+	t.Helper()
+	for _, quote := range quotes {
+		quote.sub.Close()
+		(<-e.cmds)()
+	}
+	assertObservedQuoteCancels(t, e, peer, quotes)
+	for _, quote := range quotes {
+		if err := quote.sub.Wait(); err != nil {
+			t.Fatalf("quote %d cleanup: %v", quote.reqID, err)
+		}
+	}
+}
+
+func closeObservedDepths(t *testing.T, e *engine, peer net.Conn, depths []observedDepthSubscription) {
+	t.Helper()
+	for _, depth := range depths {
+		depth.sub.Close()
+		(<-e.cmds)()
+	}
+	assertObservedDepthCancels(t, e, peer, depths)
+	for _, depth := range depths {
+		if err := depth.sub.Wait(); err != nil {
+			t.Fatalf("depth %d cleanup: %v", depth.reqID, err)
+		}
+	}
+}
+
 func assertMalformedDepthError(t *testing.T, err error, msgID int, cause error) {
 	t.Helper()
 	protocolErr, ok := errors.AsType[*ProtocolError](err)
@@ -528,6 +774,19 @@ func assertUnattributableDepthError(t *testing.T, err error, msgID, reqID int) {
 	}
 }
 
+func assertUnattributableRerouteError(t *testing.T, err error, msgID, reqID int) {
+	t.Helper()
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Direction != "inbound" ||
+		!strings.Contains(protocolErr.Message, fmt.Sprintf("msg_id %d", msgID)) ||
+		!strings.Contains(protocolErr.Message, fmt.Sprintf("req_id %d", reqID)) {
+		t.Fatalf("error = %T %v, want inbound ProtocolError for msg_id %d req_id %d", err, err, msgID, reqID)
+	}
+	if !strings.Contains(err.Error(), "unattributable reroute") {
+		t.Fatalf("error = %v, want unattributable-reroute cause", err)
+	}
+}
+
 func omittedRequestIDDepthMessage(t *testing.T, msgID int) any {
 	t.Helper()
 	// This is the same valid field-2 empty nested message frozen by
@@ -542,6 +801,22 @@ func omittedRequestIDDepthMessage(t *testing.T, msgID int) any {
 	}
 	if len(messages) != 1 {
 		t.Fatalf("omitted-request-id depth messages = %d, want 1", len(messages))
+	}
+	return messages[0]
+}
+
+func omittedRequestIDRerouteMessage(t *testing.T, msgID int) any {
+	t.Helper()
+	payload, err := protocol.EncodeProtobufEnvelope(225, msgID, []byte{0x10, 0x01})
+	if err != nil {
+		t.Fatalf("encode omitted-request-id reroute envelope: %v", err)
+	}
+	messages, err := codec.DecodeBatch(225, payload)
+	if err != nil {
+		t.Fatalf("decode omitted-request-id reroute envelope: %v", err)
+	}
+	if len(messages) != 1 {
+		t.Fatalf("omitted-request-id reroute messages = %d, want 1", len(messages))
 	}
 	return messages[0]
 }

@@ -133,12 +133,12 @@ func TestRecordCancellationBeforeFirstLegClosesResources(t *testing.T) {
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("record() error = %v, want context.Canceled", err)
 	}
-	events, err := capturelog.LoadEvents(filepath.Join(onlyCaptureDir(t, root), "events.jsonl"))
+	entries, err := os.ReadDir(root)
 	if err != nil {
-		t.Fatalf("LoadEvents() error = %v", err)
+		t.Fatalf("ReadDir() error = %v", err)
 	}
-	if len(events) != 0 {
-		t.Fatalf("events = %+v, want none before first leg", events)
+	if len(entries) != 0 {
+		t.Fatalf("capture entries = %v, want none before listener readiness", entries)
 	}
 	rebound, err := net.Listen("tcp", listenAddr)
 	if err != nil {
@@ -158,10 +158,11 @@ func TestRecordReadyFileRequiresBoundListener(t *testing.T) {
 	defer occupied.Close()
 	readyFile := filepath.Join(t.TempDir(), "ready")
 
+	root := t.TempDir()
 	err = record(context.Background(), recorderConfig{
 		listenAddr:     listenAddr,
 		upstreamAddr:   "upstream",
-		outRoot:        t.TempDir(),
+		outRoot:        root,
 		scenario:       "recorder-bind-failure",
 		readyFile:      readyFile,
 		maxLegs:        1,
@@ -172,6 +173,13 @@ func TestRecordReadyFileRequiresBoundListener(t *testing.T) {
 	}
 	if _, statErr := os.Stat(readyFile); !errors.Is(statErr, os.ErrNotExist) {
 		t.Fatalf("ready file stat error = %v, want os.ErrNotExist", statErr)
+	}
+	entries, readErr := os.ReadDir(root)
+	if readErr != nil {
+		t.Fatalf("ReadDir() error = %v", readErr)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("bind failure created capture entries: %v", entries)
 	}
 }
 

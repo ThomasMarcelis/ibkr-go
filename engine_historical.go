@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) ([]Bar, error) {
@@ -379,6 +380,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 	}
 	resp := make(chan result, 1)
 	var reqID int
+	var ownedRoute *route
 	var midpointTicks []HistoricalTick
 	var bidAskTicks []HistoricalTickBidAsk
 	var lastTicks []HistoricalTickLast
@@ -388,8 +390,17 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 			return
 		}
 		reqID = e.allocReqID()
-		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalTicks,
+		ownedRoute = newKeyedOneShotRoute(reqID, OpHistoricalTicks,
 			func(msg any, e *engine) {
+				if got, ok := historicalTicksResponseKind(msg); ok && got != req.WhatToShow {
+					e.deleteKeyedRoute(reqID)
+					resp <- result{err: &ProtocolError{
+						Direction: "inbound",
+						Message:   "historical ticks",
+						Err:       fmt.Errorf("received %s response for %s request", got, req.WhatToShow),
+					}}
+					return
+				}
 				switch m := msg.(type) {
 				case codec.HistoricalTicksResponse:
 					ticks := make([]HistoricalTick, len(m.Ticks))
@@ -417,7 +428,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 					midpointTicks = append(midpointTicks, ticks...)
 					if m.Done {
 						e.deleteKeyedRoute(reqID)
-						resp <- result{value: HistoricalTicksResult{Ticks: midpointTicks}}
+						resp <- result{value: HistoricalTicksResult{WhatToShow: ShowMidpoint, Ticks: midpointTicks}}
 					}
 				case codec.HistoricalTicksBidAskResponse:
 					ticks := make([]HistoricalTickBidAsk, len(m.Ticks))
@@ -458,7 +469,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 					bidAskTicks = append(bidAskTicks, ticks...)
 					if m.Done {
 						e.deleteKeyedRoute(reqID)
-						resp <- result{value: HistoricalTicksResult{BidAsk: bidAskTicks}}
+						resp <- result{value: HistoricalTicksResult{WhatToShow: ShowBidAsk, BidAsk: bidAskTicks}}
 					}
 				case codec.HistoricalTicksLastResponse:
 					ticks := make([]HistoricalTickLast, len(m.Ticks))
@@ -489,12 +500,13 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 					lastTicks = append(lastTicks, ticks...)
 					if m.Done {
 						e.deleteKeyedRoute(reqID)
-						resp <- result{value: HistoricalTicksResult{Last: lastTicks}}
+						resp <- result{value: HistoricalTicksResult{WhatToShow: ShowTrades, Last: lastTicks}}
 					}
 				}
 			}, func(err error) {
 				resp <- result{err: err}
 			})
+		e.keyed[reqID] = ownedRoute
 		if err := e.sendContext(ctx, codec.HistoricalTicksRequest{
 			ReqID:         reqID,
 			Contract:      toCodecContract(req.Contract),
@@ -511,12 +523,33 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if reqID == 0 || ownedRoute == nil || e.keyed[reqID] != ownedRoute {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			if e.serverVersion >= protocol.MinServerVersionBrokerSideOneShotCancel {
+				_ = e.send(codec.CancelHistoricalTicks{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return HistoricalTicksResult{}, err
 	}
 	return out.value, out.err
+}
+
+func historicalTicksResponseKind(msg any) (WhatToShow, bool) {
+	switch msg.(type) {
+	case codec.HistoricalTicksResponse:
+		return ShowMidpoint, true
+	case codec.HistoricalTicksBidAskResponse:
+		return ShowBidAsk, true
+	case codec.HistoricalTicksLastResponse:
+		return ShowTrades, true
+	default:
+		return "", false
+	}
 }
 
 func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
@@ -556,6 +589,9 @@ func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
 }
 
 func parseBarTime(raw string) (time.Time, error) {
+	if ts, err := time.Parse("20060102 15:04:05Z07:00", raw); err == nil {
+		return ts.UTC(), nil
+	}
 	parts := strings.Fields(raw)
 	switch len(parts) {
 	case 1:
@@ -567,6 +603,11 @@ func parseBarTime(raw string) (time.Time, error) {
 			return ts.UTC(), nil
 		}
 	case 3:
+		if parts[2] == "Z" || parts[2] == "UTC" {
+			if ts, err := time.ParseInLocation("20060102 15:04:05", parts[0]+" "+parts[1], time.UTC); err == nil {
+				return ts.UTC(), nil
+			}
+		}
 		location, err := time.LoadLocation(parts[2])
 		if err != nil {
 			return time.Time{}, fmt.Errorf("ibkr: parse bar time %q: load location: %w", raw, err)
@@ -579,9 +620,10 @@ func parseBarTime(raw string) (time.Time, error) {
 }
 
 func parseHeadTimestamp(raw string) (time.Time, error) {
-	ts, err := time.Parse("20060102-15:04:05", raw)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("ibkr: parse head timestamp %q", raw)
+	for _, layout := range []string{"20060102-15:04:05", "20060102-15:04:05Z07:00"} {
+		if ts, err := time.Parse(layout, raw); err == nil {
+			return ts.UTC(), nil
+		}
 	}
-	return ts.UTC(), nil
+	return time.Time{}, fmt.Errorf("ibkr: parse head timestamp %q", raw)
 }

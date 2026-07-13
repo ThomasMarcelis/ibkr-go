@@ -100,6 +100,14 @@ func (e *engine) handleIncoming(msg any) {
 		if e.handleUnattributableMarketDepth(protocol.InMarketDepthL2, m.ReqID) {
 			return
 		}
+	case codec.MarketDataReroute:
+		if e.handleUnattributableReroute(protocol.InMarketDataReroute, m.ReqID, OpQuotes) {
+			return
+		}
+	case codec.MarketDepthReroute:
+		if e.handleUnattributableReroute(protocol.InMarketDepthReroute, m.ReqID, OpMarketDepth) {
+			return
+		}
 	case codec.APIError:
 		e.handleAPIError(m)
 		return
@@ -133,12 +141,30 @@ func (e *engine) handleIncoming(msg any) {
 		switch m.MsgID {
 		case protocol.InMarketDepth, protocol.InMarketDepthL2:
 			var depthReqIDs []int
-			for reqID, route := range e.keyed {
-				if route.opKind == OpMarketDepth {
-					depthReqIDs = append(depthReqIDs, reqID)
+			if m.Correlation != nil {
+				if route, found := e.keyed[m.Correlation.RequestID]; found && route.opKind == OpMarketDepth {
+					depthReqIDs = append(depthReqIDs, m.Correlation.RequestID)
+				} else if found {
+					// A corrupt depth ID colliding with another operation cannot
+					// dispatch there. Quarantine the bounded depth family instead.
+					for reqID, candidate := range e.keyed {
+						if candidate.opKind == OpMarketDepth {
+							depthReqIDs = append(depthReqIDs, reqID)
+						}
+					}
+				}
+			} else {
+				for reqID, route := range e.keyed {
+					if route.opKind == OpMarketDepth {
+						depthReqIDs = append(depthReqIDs, reqID)
+					}
 				}
 			}
 			e.cancelAndCloseMarketDepthRoutes(depthReqIDs, protocolErr)
+		case protocol.InMarketDataReroute:
+			e.cancelAndCloseQuoteRoutes(e.keyedRouteIDs(OpQuotes), protocolErr)
+		case protocol.InMarketDepthReroute:
+			e.cancelAndCloseMarketDepthRoutes(e.keyedRouteIDs(OpMarketDepth), protocolErr)
 		}
 		if _, seen := e.malformedInboundSeen[m.MsgID]; !seen {
 			e.malformedInboundSeen[m.MsgID] = struct{}{}
@@ -182,7 +208,7 @@ func (e *engine) handleIncoming(msg any) {
 		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
 			or.working = true
 			if !e.ensureOrderStarted(or) || !or.handle.emitBinding(binding) {
-				e.closeOrderRoute(msg.OrderID, or, nil)
+				e.closeOrderRoute(msg.OrderID, or, ErrSlowConsumer)
 			}
 		}
 		if route, ok := e.singletons[singletonOpenOrders]; ok {
@@ -269,6 +295,51 @@ func (e *engine) handleUnattributableMarketDepth(msgID, reqID int) bool {
 	return true
 }
 
+// handleUnattributableReroute confines an unusable reroute to its operation
+// family. A stale positive ID has no current owner and is dropped. An omitted
+// ID or an ID owned by another operation cannot identify the route that must
+// be replaced, so every active route in that bounded family is terminated.
+func (e *engine) handleUnattributableReroute(msgID, reqID int, opKind OpKind) bool {
+	if reqID > 0 {
+		route, found := e.keyed[reqID]
+		if !found {
+			return true
+		}
+		if route.opKind == opKind {
+			return false
+		}
+	}
+
+	protocolErr := &ProtocolError{
+		Direction: "inbound",
+		Message:   fmt.Sprintf("msg_id %d req_id %d", msgID, reqID),
+		Err:       fmt.Errorf("unattributable reroute request id %d", reqID),
+	}
+	reqIDs := e.keyedRouteIDs(opKind)
+	switch opKind {
+	case OpQuotes:
+		e.cancelAndCloseQuoteRoutes(reqIDs, protocolErr)
+	case OpMarketDepth:
+		e.cancelAndCloseMarketDepthRoutes(reqIDs, protocolErr)
+	}
+	if len(reqIDs) != 0 {
+		e.cfg.logger.Warn("ibkr: terminating request family after unattributable reroute",
+			"msg_id", msgID, "req_id", reqID, "op", opKind)
+		e.emitSessionEvent(0, fmt.Sprintf("terminating %s after unattributable msg_id %d req_id %d", opKind, msgID, reqID), protocolErr)
+	}
+	return true
+}
+
+func (e *engine) keyedRouteIDs(opKind OpKind) []int {
+	var reqIDs []int
+	for reqID, route := range e.keyed {
+		if route.opKind == opKind {
+			reqIDs = append(reqIDs, reqID)
+		}
+	}
+	return reqIDs
+}
+
 func (e *engine) handleAPIError(msg codec.APIError) {
 	// Connectivity codes drive session state transitions.
 	switch msg.Code {
@@ -286,6 +357,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// answers that are never coming.
 		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
 		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
+		e.requireOrderRecovery(e.connectionSeq())
 		e.dropLostRoutes()
 		e.resumeRoutes()
 		return
@@ -363,7 +435,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 			}
 			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 				if !e.ensureOrderStarted(or) {
-					e.closeOrderRoute(int64(msg.ReqID), or, nil)
+					e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
 					return
 				}
 				if !or.working && isInitialOrderRejection(msg.Code) {
@@ -372,7 +444,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				}
 				apiErr, _ := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
 				if !or.handle.emitWarning(apiErr) {
-					e.closeOrderRoute(int64(msg.ReqID), or, nil)
+					e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
 				}
 				return
 			}
@@ -395,13 +467,13 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// for order rejections (e.g., code 201 "order rejected").
 		if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
 			if !e.ensureOrderStarted(or) {
-				e.closeOrderRoute(int64(msg.ReqID), or, nil)
+				e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
 				return
 			}
 			orderErr, isAPIErr := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
 			if or.working || !isInitialOrderRejection(msg.Code) {
 				if !or.handle.emitWarning(orderErr) {
-					e.closeOrderRoute(int64(msg.ReqID), or, nil)
+					e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
 				}
 				return
 			}
@@ -429,13 +501,16 @@ func unkeyedAPIErrorSingleton(msg codec.APIError) string {
 		return ""
 	}
 	switch {
-	case strings.Contains(msg.Message, "-'b7'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
+	case (strings.Contains(msg.Message, "-'b7'") || strings.Contains(msg.Message, "-'aa'")) && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonOrderID
 	case strings.Contains(msg.Message, "-'as'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonOpenOrders
 	case strings.Contains(msg.Message, "-'S'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonCompletedOrders
-	case strings.Contains(msg.Message, "-'b4'") && strings.Contains(msg.Message, "FA data operations ignored for non FA customers"):
+	// The operation marker changed from b4 to X when RequestFA moved to
+	// protobuf at server version 211. The cause text is operation-specific and
+	// therefore remains the stable identity across both wire encodings.
+	case strings.Contains(msg.Message, "FA data operations ignored for non FA customers"):
 		return singletonFA
 	default:
 		return ""
@@ -522,14 +597,14 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 
 	if orderObserved && !orderRoute.closed {
 		if !e.ensureOrderStarted(orderRoute) {
-			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
+			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 			return
 		}
 		if order.Status != OrderStatusInactive && order.Status != OrderStatusAPICancelled {
 			orderRoute.working = true
 		}
 		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
-			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
+			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 		}
 	}
 	if singletonObserved {
@@ -558,14 +633,14 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 
 	if orderObserved && !orderRoute.closed {
 		if !e.ensureOrderStarted(orderRoute) {
-			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
+			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 			return
 		}
 		if status.Status != OrderStatusInactive && status.Status != OrderStatusAPICancelled {
 			orderRoute.working = true
 		}
 		if !orderRoute.handle.emitStatus(status) {
-			e.closeOrderRoute(msg.OrderID, orderRoute, nil)
+			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 		}
 	}
 	if singletonObserved {
@@ -581,6 +656,8 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 // same way filled ones once did. Frames that straggle in after the deletion
 // drop at the missing-route check, identical to the closed-route behavior.
 func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
+	attachedOrderIDs := or.attachedOrderIDs
+	or.attachedOrderIDs = nil
 	or.closed = true
 	if or.pendingWrite.id != 0 {
 		delete(e.pendingOrderWrites, or.pendingWrite)
@@ -596,6 +673,26 @@ func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 		or.cleanup = nil
 		cleanup()
 	}
+	if shouldCloseAttachedOrderRoutes(err) {
+		for _, attachedOrderID := range attachedOrderIDs {
+			if attached, ok := e.orders[attachedOrderID]; ok && !attached.closed {
+				e.closeOrderRoute(attachedOrderID, attached, err)
+			}
+		}
+	}
+}
+
+// A preset bracket is admitted as one parent frame. If that frame was never
+// written, or TWS definitively rejects the parent before working evidence, the
+// attached child IDs cannot independently become live. Other parent teardown
+// paths detach only the parent observer because accepted children are owned by
+// TWS and remain independently observable.
+func shouldCloseAttachedOrderRoutes(err error) bool {
+	if errors.Is(err, ErrInterrupted) {
+		return true
+	}
+	apiErr, ok := errors.AsType[*APIError](err)
+	return ok && apiErr.IsOrderRejection()
 }
 
 func (e *engine) handleTransportWrite(write transportWrite) {
@@ -613,7 +710,9 @@ func (e *engine) handleTransportWrite(write transportWrite) {
 
 	switch write.result.Outcome {
 	case transport.WriteCompleteLocal:
-		or.handle.emitLifecycle(OrderStarted, e.connectionSeq(), nil)
+		if !or.handle.emitLifecycle(OrderStarted, e.connectionSeq(), nil) {
+			e.closeOrderRoute(orderID, or, ErrSlowConsumer)
+		}
 	case transport.WriteUnwritten:
 		e.closeOrderRoute(orderID, or, ErrInterrupted)
 	case transport.WriteIncomplete:
@@ -714,9 +813,8 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 // the execution. An identical re-send (an Executions() snapshot replaying a
 // commission the handle already saw live) is deduped; a re-send with changed
 // content (e.g. a realizedPNL update) goes through and becomes the new
-// delivered record. The order is live on the server, so a decode failure must
-// not tear down the handle — drop the event and log so the problem is
-// observable.
+// delivered record. A projection failure makes this local event stream
+// incomplete, so terminate observation without changing the live order.
 func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.CommissionReport) {
 	if st.delivered != nil && *st.delivered == report {
 		return
@@ -728,12 +826,15 @@ func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.Commiss
 	or.working = true
 	cr, err := fromCodecCommission(report)
 	if err != nil {
-		e.cfg.logger.Warn("ibkr: drop commission report on decode error",
-			"order_id", st.orderID, "exec_id", report.ExecID, "err", err)
+		e.closeOrderRoute(st.orderID, or, &ProtocolError{
+			Direction: "inbound",
+			Message:   fmt.Sprintf("commission report order_id %d exec_id %s", st.orderID, report.ExecID),
+			Err:       err,
+		})
 		return
 	}
 	if !or.handle.emitCommissionAndFees(cr) {
-		e.closeOrderRoute(st.orderID, or, nil)
+		e.closeOrderRoute(st.orderID, or, ErrSlowConsumer)
 		return
 	}
 	st.delivered = &report
@@ -749,7 +850,7 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	}
 	or.working = true
 	if !e.ensureOrderStarted(or) {
-		e.closeOrderRoute(m.OrderID, or, nil)
+		e.closeOrderRoute(m.OrderID, or, ErrSlowConsumer)
 		return
 	}
 	// A fill already delivered to this handle must not be re-emitted when a
@@ -760,17 +861,19 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	if st != nil && st.orderID != 0 {
 		return
 	}
-	// Per-order dispatch: the order is live on the server, so a decode
-	// failure must not tear down the handle — drop the event and log so the
-	// problem is observable.
+	// Per-order dispatch: a decode failure terminates only local observation;
+	// the order remains live and no cancellation frame is sent.
 	exec, err := fromCodecExecution(m)
 	if err != nil {
-		e.cfg.logger.Warn("ibkr: drop execution detail on decode error",
-			"order_id", m.OrderID, "exec_id", m.ExecID, "err", err)
+		e.closeOrderRoute(m.OrderID, or, &ProtocolError{
+			Direction: "inbound",
+			Message:   fmt.Sprintf("execution detail order_id %d exec_id %s", m.OrderID, m.ExecID),
+			Err:       err,
+		})
 		return
 	}
 	if !or.handle.emitExecution(exec) {
-		e.closeOrderRoute(m.OrderID, or, nil)
+		e.closeOrderRoute(m.OrderID, or, ErrSlowConsumer)
 		return
 	}
 	if st == nil {

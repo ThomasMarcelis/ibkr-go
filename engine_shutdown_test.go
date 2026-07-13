@@ -1,9 +1,13 @@
 package ibkr
 
 import (
+	"context"
+	"encoding/base64"
 	"errors"
+	"io"
 	"log/slog"
 	"net"
+	"runtime"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -94,6 +98,104 @@ func TestAttachTransportPumpUnblocksOnEngineShutdown(t *testing.T) {
 	})
 }
 
+func TestCloseDrainsTrackedCompletionsWithoutActorDeadlock(t *testing.T) {
+	t.Parallel()
+
+	peer, client := net.Pipe()
+	go func() { _, _ = io.Copy(io.Discard, peer) }()
+	tr := transport.New(client, nil, 0)
+	cfg := defaultConfig()
+	e := &engine{
+		cfg:            cfg,
+		incoming:       make(chan any),
+		transportErr:   make(chan transportLoss, 1),
+		ready:          make(chan error, 1),
+		done:           make(chan struct{}),
+		events:         newObserver[Event](cfg.eventBuffer),
+		transport:      tr,
+		serverVersion:  200,
+		keyed:          make(map[int]*route),
+		singletons:     make(map[string]*route),
+		orders:         make(map[int64]*orderRoute),
+		execDeliveries: make(map[string]*execDelivery),
+		snapshot:       Snapshot{State: StateReady},
+	}
+	e.attachTransport(tr)
+
+	target := cap(tr.Completions()) + 2
+	for admitted := 0; admitted < target; {
+		if _, err := tr.SendTracked(context.Background(), []byte("tracked")); err != nil {
+			if errors.Is(err, transport.ErrSendQueueFull) {
+				<-tr.Writable()
+				continue
+			}
+			t.Fatalf("SendTracked: %v", err)
+		}
+		admitted++
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for len(tr.Completions()) != cap(tr.Completions()) {
+		if time.Now().After(deadline) {
+			t.Fatalf("completion queue len = %d, want saturated %d", len(tr.Completions()), cap(tr.Completions()))
+		}
+		runtime.Gosched()
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		e.closeEngine(ErrClosed, nil)
+		close(closed)
+	}()
+	select {
+	case <-closed:
+	case <-time.After(3 * time.Second):
+		t.Fatal("closeEngine blocked behind tracked completion backpressure")
+	}
+	select {
+	case <-tr.Done():
+	case <-time.After(3 * time.Second):
+		t.Fatal("transport writer did not finish after engine shutdown")
+	}
+	_ = peer.Close()
+}
+
+func TestClosedStateIsAbsorbing(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		incoming:       make(chan any, 1),
+		ready:          make(chan error, 1),
+		done:           make(chan struct{}),
+		events:         newObserver[Event](1),
+		keyed:          make(map[int]*route),
+		singletons:     make(map[string]*route),
+		orders:         make(map[int64]*orderRoute),
+		execDeliveries: make(map[string]*execDelivery),
+		snapshot:       Snapshot{State: StateReady},
+	}
+	e.closeEngine(ErrClosed, nil)
+	e.incoming <- codec.APIError{Code: 1102, Message: "Connectivity restored"}
+	runReturned := make(chan struct{})
+	go func() {
+		e.run()
+		close(runReturned)
+	}()
+	select {
+	case <-runReturned:
+	case <-time.After(time.Second):
+		t.Fatal("run loop did not stop after close")
+	}
+	if got := len(e.incoming); got != 1 {
+		t.Fatalf("queued post-close inputs consumed = %d, want 0", 1-got)
+	}
+
+	// The state guard remains a second boundary for any direct/internal caller.
+	e.handleIncoming(codec.APIError{Code: 1102, Message: "Connectivity restored"})
+	if got := e.Session().State; got != StateClosed {
+		t.Fatalf("state after queued post-close input = %s, want Closed", got)
+	}
+}
+
 // TestRunServicesCommandsUnderIncomingFlood freezes the actor-fairness fix.
 // The old run loop drained e.incoming to empty at the top of every iteration,
 // so a sustained inbound feed starved control commands (subscribe/cancel/place)
@@ -144,6 +246,173 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 	case <-ran:
 	case <-time.After(3 * time.Second):
 		t.Fatal("enqueued command starved: run() never serviced e.cmds under a sustained inbound feed")
+	}
+}
+
+func TestPhysicalReconnectMarksOrderRecoveryBeforeBusinessEvents(t *testing.T) {
+	t.Parallel()
+
+	peer, client := net.Pipe()
+	cfg := defaultConfig()
+	handle := newOrderHandle(444, 8)
+	e := &engine{
+		cfg:              cfg,
+		incoming:         make(chan any, 8),
+		transportErr:     make(chan transportLoss, 1),
+		done:             make(chan struct{}),
+		events:           newObserver[Event](cfg.eventBuffer),
+		keyed:            make(map[int]*route),
+		singletons:       make(map[string]*route),
+		orders:           map[int64]*orderRoute{444: {orderID: 444, handle: handle, gapped: true}},
+		execDeliveries:   make(map[string]*execDelivery),
+		connectAttemptID: 4,
+		snapshot:         Snapshot{State: StateReconnecting, ConnectionSeq: 9},
+	}
+
+	e.handleConnectResult(connectResult{
+		attempt: 4, reconnect: true, conn: client, serverVersion: 200,
+	})
+	// Capture 20260704T174748Z-api_reconnect_active_order_aapl, events.jsonl
+	// sha256 57943d05bd0242ca4a061d10c50291b8d30ef93f1f833e4da66704b400815bf7.
+	// On reconnect the Gateway sent OpenOrder and this exact OrderStatus before
+	// ManagedAccounts/NextValidID, so recovery must be published at connection
+	// attachment rather than delayed until bootstrap readiness.
+	framed, err := base64.StdEncoding.DecodeString("AAAALjMANDQ0AFByZVN1Ym1pdHRlZAAwADEwMAAwADIwMjgxNjgxMgAwADAAMQAAMAA=")
+	if err != nil {
+		t.Fatalf("decode captured reconnect order status: %v", err)
+	}
+	message, err := codec.Decode(200, framed[4:])
+	if err != nil {
+		t.Fatalf("decode captured reconnect order status: %v", err)
+	}
+	e.handleIncoming(message)
+
+	first := <-handle.Events()
+	if first.Lifecycle == nil || first.Lifecycle.Kind != OrderRecoveryRequired {
+		t.Fatalf("first reconnect order event = %+v, want RecoveryRequired", first)
+	}
+	if first.Lifecycle.ConnectionSeq != 10 {
+		t.Fatalf("RecoveryRequired connection sequence = %d, want 10", first.Lifecycle.ConnectionSeq)
+	}
+	second := <-handle.Events()
+	if second.Status == nil || second.Status.OrderID != 444 || second.Status.Status != OrderStatusPreSubmitted {
+		t.Fatalf("second reconnect order event = %+v, want captured PreSubmitted status", second)
+	}
+
+	_ = e.transport.Close()
+	_ = peer.Close()
+	_ = e.transport.Wait()
+}
+
+func TestRepeatedPhysicalReconnectEmitsRecoveryAfterEveryGap(t *testing.T) {
+	t.Parallel()
+
+	handle := newOrderHandle(77, 4)
+	e := &engine{
+		orders: map[int64]*orderRoute{77: {
+			orderID: 77, handle: handle, gapped: true, recoveryRequired: true,
+		}},
+	}
+	e.requireOrderRecovery(11)
+
+	event := <-handle.Events()
+	if event.Lifecycle == nil || event.Lifecycle.Kind != OrderRecoveryRequired {
+		t.Fatalf("repeated reconnect event = %+v, want RecoveryRequired", event)
+	}
+	if event.Lifecycle.ConnectionSeq != 11 {
+		t.Fatalf("repeated RecoveryRequired sequence = %d, want 11", event.Lifecycle.ConnectionSeq)
+	}
+	if e.orders[77].gapped {
+		t.Fatal("repeated recovery left the order route gapped")
+	}
+}
+
+func TestOrderLifecycleOverflowDeletesOnlyItsLocalRoute(t *testing.T) {
+	t.Parallel()
+
+	first := newOrderHandle(41, 1)
+	if !first.emitLifecycle(OrderStarted, 1, nil) {
+		t.Fatal("seed lifecycle event was not admitted")
+	}
+	sibling := newOrderHandle(42, 1)
+	e := &engine{
+		keyed:      make(map[int]*route),
+		singletons: make(map[string]*route),
+		orders: map[int64]*orderRoute{
+			41: {orderID: 41, handle: first},
+			42: {orderID: 42, handle: sibling},
+		},
+		pendingOrderWrites: make(map[transportWriteKey]int64),
+		execDeliveries: map[string]*execDelivery{
+			"exec-41": {orderID: 41},
+			"exec-42": {orderID: 42},
+		},
+		snapshot: Snapshot{State: StateReady, ConnectionSeq: 1},
+	}
+
+	e.disconnectRoutes(ErrInterrupted, true)
+	if err := first.Wait(); !errors.Is(err, ErrSlowConsumer) {
+		t.Fatalf("overflowed handle Wait() = %v, want ErrSlowConsumer", err)
+	}
+	if _, ok := e.orders[41]; ok {
+		t.Fatal("overflowed order retained its route")
+	}
+	if _, ok := e.execDeliveries["exec-41"]; ok {
+		t.Fatal("overflowed order retained its execution correlation")
+	}
+	if e.orders[42] == nil || e.execDeliveries["exec-42"] == nil {
+		t.Fatal("overflow cleanup removed sibling ownership")
+	}
+}
+
+func TestOrderBusinessEventOverflowReportsSlowConsumer(t *testing.T) {
+	t.Parallel()
+
+	handle := newOrderHandle(51, 1)
+	if !handle.emitLifecycle(OrderStarted, 1, nil) {
+		t.Fatal("seed lifecycle event was not admitted")
+	}
+	e := &engine{
+		orders:         map[int64]*orderRoute{51: {orderID: 51, handle: handle}},
+		execDeliveries: make(map[string]*execDelivery),
+	}
+	e.dispatchObservedOrderStatus(codec.OrderStatus{
+		OrderID: 51, Status: string(OrderStatusSubmitted), Filled: "0", Remaining: "1",
+		AvgFillPrice: "0", LastFillPrice: "0",
+	})
+
+	if err := handle.Wait(); !errors.Is(err, ErrSlowConsumer) {
+		t.Fatalf("overflowed status handle Wait() = %v, want ErrSlowConsumer", err)
+	}
+	if _, ok := e.orders[51]; ok {
+		t.Fatal("overflowed status retained its order route")
+	}
+}
+
+func TestExecutionProjectionFailureClosesLocalOrderHandle(t *testing.T) {
+	t.Parallel()
+
+	handle := newOrderHandle(91, 4)
+	e := &engine{
+		cfg:            config{logger: slog.Default()},
+		orders:         map[int64]*orderRoute{91: {orderID: 91, handle: handle}},
+		execDeliveries: make(map[string]*execDelivery),
+	}
+	e.dispatchExecutionToOrder(codec.ExecutionDetail{
+		OrderID: 91,
+		ExecID:  "bad-exec",
+		Shares:  "not-a-decimal",
+		Price:   "1",
+		Time:    "20260713-16:00:00",
+	})
+
+	if _, ok := e.orders[91]; ok {
+		t.Fatal("execution projection failure retained the order route")
+	}
+	err := handle.Wait()
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Direction != "inbound" {
+		t.Fatalf("handle Wait() = %#v, want inbound ProtocolError", err)
 	}
 }
 

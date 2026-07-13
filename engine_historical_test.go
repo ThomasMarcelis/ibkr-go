@@ -1,0 +1,76 @@
+package ibkr
+
+import (
+	"context"
+	"errors"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+)
+
+func TestHistoricalTicksRejectsMismatchedResponseFamily(t *testing.T) {
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 1
+	result := make(chan error, 1)
+	// Request shape: historical_ticks_trades.txt, server_version 206,
+	// events sha256 ecc715f0a1aea00c. The MIDPOINT callback below is deliberate
+	// fault injection across the three live-grounded response families.
+	go func() {
+		_, err := e.HistoricalTicks(context.Background(), HistoricalTicksRequest{
+			Contract: Contract{
+				ConID: 265598, Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD",
+			},
+			EndTime:       time.Date(2026, 7, 10, 22, 44, 44, 0, time.UTC),
+			NumberOfTicks: 100,
+			WhatToShow:    ShowTrades,
+			UseRTH:        true,
+		})
+		result <- err
+	}()
+
+	(<-e.cmds)()
+	_ = readObservedFrame(t, peer)
+	e.handleIncoming(codec.HistoricalTicksResponse{ReqID: 1, Done: true})
+
+	err := <-result
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Direction != "inbound" || !strings.Contains(protocolErr.Error(), "MIDPOINT response for TRADES request") {
+		t.Fatalf("HistoricalTicks() error = %T %v, want inbound family mismatch", err, err)
+	}
+	if _, ok := e.keyed[1]; ok {
+		t.Fatal("mismatched historical-tick response retained its route")
+	}
+}
+
+func TestHistoricalTicksResultIdentifiesEmptyFamily(t *testing.T) {
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 1
+	type historicalResult struct {
+		value HistoricalTicksResult
+		err   error
+	}
+	result := make(chan historicalResult, 1)
+	go func() {
+		got, err := e.HistoricalTicks(context.Background(), HistoricalTicksRequest{
+			Contract:      Contract{ConID: 265598, Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+			EndTime:       time.Date(2026, 7, 13, 17, 0, 0, 0, time.UTC),
+			NumberOfTicks: 1,
+			WhatToShow:    ShowBidAsk,
+		})
+		result <- historicalResult{value: got, err: err}
+	}()
+
+	(<-e.cmds)()
+	_ = readObservedFrame(t, peer)
+	e.handleIncoming(codec.HistoricalTicksBidAskResponse{ReqID: 1, Done: true})
+
+	got := <-result
+	if got.err != nil {
+		t.Fatalf("HistoricalTicks() error = %v", got.err)
+	}
+	if got.value.WhatToShow != ShowBidAsk || got.value.Len() != 0 {
+		t.Fatalf("HistoricalTicks() = %+v, want identified empty BID_ASK result", got.value)
+	}
+}

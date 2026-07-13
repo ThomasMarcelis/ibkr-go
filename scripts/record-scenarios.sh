@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Record live scenarios through ibkr-recorder. With no arguments, the catalog
-# batch named by IBKR_CAPTURE_BATCH is recorded (default: new-v2). Explicit
+# batch named by IBKR_CAPTURE_BATCH is recorded (default: exhaustive-read-only). Explicit
 # entries may be passed as "name" or "name|client_id".
 
 set -uo pipefail
@@ -10,7 +10,8 @@ LISTEN="${IBKR_LISTEN:-127.0.0.1:4101}"
 OUTDIR="${IBKR_CAPTURES:-captures}"
 RECORDER="${IBKR_RECORDER:-/tmp/ibkr-recorder}"
 CAPTURE="${IBKR_CAPTURE:-/tmp/ibkr-capture}"
-BATCH="${IBKR_CAPTURE_BATCH:-new-v2}"
+NORMALIZE="${IBKR_NORMALIZE:-/tmp/ibkr-normalize}"
+BATCH="${IBKR_CAPTURE_BATCH:-exhaustive-read-only}"
 RECORDER_MAX_LEGS="${IBKR_RECORDER_MAX_LEGS:-1}"
 ROLE="${IBKR_CAPTURE_ROLE:-}"
 FAIL_FAST="${IBKR_CAPTURE_FAIL_FAST:-0}"
@@ -237,16 +238,27 @@ for entry in "${SCENARIOS[@]}"; do
         cp "$recorder_log" "$capture_dir/recorder.log" || evidence_rc=1
         if [ -s "$events_file" ]; then
             cp "$events_file" "$capture_dir/driver_events.jsonl" || evidence_rc=1
+        else
+            evidence_rc=1
         fi
     else
         evidence_rc=1
     fi
 
-    last=$(tail -1 "$log_file")
+    verify_rc=1
     if [ "$capture_rc" -eq 0 ] && [ "$recorder_rc" -eq 0 ] && [ "$evidence_rc" -eq 0 ]; then
+        if "$NORMALIZE" -dir "$capture_dir" -verify >"$run_prefix.verify.log" 2>&1; then
+            verify_rc=0
+        else
+            verify_rc=$?
+        fi
+    fi
+
+    last=$(tail -1 "$log_file")
+    if [ "$capture_rc" -eq 0 ] && [ "$recorder_rc" -eq 0 ] && [ "$evidence_rc" -eq 0 ] && [ "$verify_rc" -eq 0 ]; then
         echo "ok"
     else
-        echo "FAILED (rc=$capture_rc, recorder_rc=$recorder_rc, evidence_rc=$evidence_rc, last: $last)"
+        echo "FAILED (rc=$capture_rc, recorder_rc=$recorder_rc, evidence_rc=$evidence_rc, verify_rc=$verify_rc, last: $last)"
         failures=$((failures + 1))
         if [ "$FAIL_FAST" -eq 1 ]; then
             break

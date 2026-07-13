@@ -153,7 +153,7 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 	}
 	resp := make(chan result, 1)
 
-	enqueueSubscriptionSetup(ctx, e, resp, func() {
+	enqueueSingletonSubscriptionSetup(ctx, e, singletonPositions, resp, func() {
 		if _, exists := e.singletons[singletonPositions]; exists {
 			resp <- result{err: operationActive("positions subscription")}
 			return
@@ -272,7 +272,7 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 	}
 	resp := make(chan result, 1)
 
-	enqueueSubscriptionSetup(ctx, e, resp, func() {
+	enqueueSingletonSubscriptionSetup(ctx, e, singletonAccountUpdates, resp, func() {
 		if _, exists := e.singletons[singletonAccountUpdates]; exists {
 			resp <- result{err: operationActive("account updates subscription")}
 			return

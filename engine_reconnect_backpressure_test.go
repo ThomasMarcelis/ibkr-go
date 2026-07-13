@@ -193,3 +193,67 @@ func TestResumeTransportFailureRetainsRouteForNextReconnect(t *testing.T) {
 	default:
 	}
 }
+
+func TestReconnectReadyWaitsForEveryResumeBeforeAdmittingNewWork(t *testing.T) {
+	t.Parallel()
+
+	peer, client := net.Pipe()
+	tr := transport.New(client, nil, 0)
+	e := &engine{
+		cfg:            defaultConfig(),
+		transport:      tr,
+		serverVersion:  200,
+		ready:          make(chan error, 1),
+		done:           make(chan struct{}),
+		events:         newObserver[Event](1),
+		keyed:          make(map[int]*route),
+		singletons:     make(map[string]*route),
+		orders:         make(map[int64]*orderRoute),
+		execDeliveries: make(map[string]*execDelivery),
+		bootstrap: bootstrapState{
+			serverInfo:  true,
+			managed:     true,
+			nextValidID: true,
+		},
+		snapshot: Snapshot{State: StateHandshaking, ConnectionSeq: 1},
+	}
+	t.Cleanup(func() {
+		_ = tr.Close()
+		_ = peer.Close()
+		_ = tr.Wait()
+	})
+
+	const routeCount = 300
+	for reqID := 1; reqID <= routeCount; reqID++ {
+		e.keyed[reqID] = &route{
+			opKind:       OpQuotes,
+			subscription: true,
+			resume:       ResumeAuto,
+			request: codec.QuoteRequest{
+				ReqID: reqID,
+				Contract: codec.Contract{
+					Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
+				},
+			},
+			close:  func(error) {},
+			gapped: true,
+		}
+	}
+
+	admitted := make(chan struct{})
+	e.readySetups = []*readySetup{{
+		ctx:  context.Background(),
+		stop: func() bool { return true },
+		fn:   func() { close(admitted) },
+	}}
+
+	e.maybeReady()
+	if len(e.resumePending) == 0 || !e.resumeWaiting {
+		t.Fatal("300 resumes did not leave a backpressured resume barrier")
+	}
+	select {
+	case <-admitted:
+		t.Fatal("new work ran before every reconnect resume was admitted")
+	default:
+	}
+}

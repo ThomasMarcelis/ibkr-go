@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"log"
@@ -72,12 +73,10 @@ func main() {
 		log.Fatalf("driver-events: %v", err)
 	}
 	apiDriver = recorder
-	defer func() {
-		if err := recorder.Close(); err != nil {
-			log.Printf("close driver events: %v", err)
-		}
-	}()
-	if err := sc.run(ctx, *addr, *clientID); err != nil {
+	runErr := sc.run(ctx, *addr, *clientID)
+	closeErr := recorder.Close()
+	apiDriver = nil
+	if err := errors.Join(runErr, closeErr); err != nil {
 		log.Fatalf("scenario %q: %v", *scenario, err)
 	}
 	log.Printf("scenario %q complete", *scenario)

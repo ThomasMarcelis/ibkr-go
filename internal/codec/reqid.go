@@ -13,6 +13,7 @@ func (m AccountUpdateMultiValue) RequestID() int       { return m.ReqID }
 func (m ContractDetails) RequestID() int               { return m.ReqID }
 func (m BondContractDetails) RequestID() int           { return m.ReqID }
 func (m ContractDetailsEnd) RequestID() int            { return m.ReqID }
+func (m ConfigResponse) RequestID() int                { return m.ReqID }
 func (m DisplayGroupList) RequestID() int              { return m.ReqID }
 func (m DisplayGroupUpdated) RequestID() int           { return m.ReqID }
 func (m ExecutionDetail) RequestID() int               { return m.ReqID }
@@ -47,6 +48,7 @@ func (m SmartComponentsResponse) RequestID() int       { return m.ReqID }
 func (m SoftDollarTiersResponse) RequestID() int       { return m.ReqID }
 func (m TickByTickData) RequestID() int                { return m.ReqID }
 func (m TickGeneric) RequestID() int                   { return m.ReqID }
+func (m TickEFP) RequestID() int                       { return m.ReqID }
 func (m TickNews) RequestID() int                      { return m.ReqID }
 func (m TickOptionComputation) RequestID() int         { return m.ReqID }
 func (m TickPrice) RequestID() int                     { return m.ReqID }
@@ -57,3 +59,4 @@ func (m TickString) RequestID() int                    { return m.ReqID }
 func (m UserInfo) RequestID() int                      { return m.ReqID }
 func (m WSHEventDataResponse) RequestID() int          { return m.ReqID }
 func (m WSHMetaDataResponse) RequestID() int           { return m.ReqID }
+func (m DeltaNeutralValidation) RequestID() int        { return m.ReqID }

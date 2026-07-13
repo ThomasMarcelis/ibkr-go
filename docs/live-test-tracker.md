@@ -4,10 +4,10 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-12. Both local Gateway roles are available. The current
-production ceiling and latest read-only account campaign were live-checked at
-exact `server_version 207`; earlier campaign rows retain their negotiated
-version as recorded.
+Last updated: 2026-07-13. Both local Gateway roles are available. The current
+production ceiling is `server_version 225`; exact positive, negative, SDK-
+oracle, and source-law boundaries are distinguished below. Earlier campaign
+rows retain their negotiated version as recorded.
 
 ## Current Campaign Contract
 
@@ -30,6 +30,40 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-07-13
+
+The API 10.48 protocol train was implemented from exact server version 208
+through 225. Historical, news, scanner/PnL, option/FA, reference, and session
+protobuf families now complete the staged migration through sv213. The
+sv214..225 semantic boundaries are frozen through exact SDK/live vectors and
+focused public behavior tests. The evidence ledger, hashes, and limitations
+are in [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
+
+The native public `TWS().Config` scenario negotiated exact sv219 and returned
+22 configured messages plus API/order settings and trusted IPs (events SHA-256
+`3b5a3dee08cb7cae0be4da4eb409974a37dd71ef37ca2d2bc202e06902b74082`).
+The exact response used by the codec regression has SDK/live hash
+`928ada9da43be6e71f18c31f9d3f69a07e6decadfbef33ef0e6cc7a8eb01253b`.
+
+The native sv225 odd-lot scenario requested generic tick 787 and received 19
+ordinary delayed updates plus the real code-10167 notice, but zero tick 105-110
+values (events SHA-256
+`70500b2228dc29e81e8823fa6a626bf51597317a83da257e2e3e1e520b7b52a3`).
+Official SDK 10.48.01 reproduced the same no-odd-lot entitlement boundary
+(`85d0dba58ba9d80c029fac5b658d01ac48128d0513228c07f555dbac6fbff2b0`).
+This is valid negative evidence only; positive odd-lot values remain pending.
+
+The current read-only Gateway twice closed an exact-sv200 handshake during
+bootstrap (EOF after the client advertised max version 200), while the same
+public contract-selector matrix passed at exact sv205 and sv206. Exact-sv200
+behavior remains replay-frozen; the live matrix no longer treats an obsolete
+client maximum rejected by the current Gateway as a library failure.
+
+Exact SDK sv218 proves the attached preset-order wire body, which remains
+internal. A public facade was withheld because no native paper-order lifecycle
+was captured: `IBKR_PAPER_ACCOUNT` is not configured, and the mandatory account
+guard was not bypassed.
 
 ### 2026-07-12
 
@@ -424,6 +458,9 @@ against the role-aware `paper-dev` Gateway.
 
 | Scenario | Date | Status |
 |----------|------|--------|
+| tws_config | 2026-07-13 | recorded through the public API at exact server_version=219; full presence-aware configuration returned, events sha256 `3b5a3dee08cb7cae0be4da4eb409974a37dd71ef37ca2d2bc202e06902b74082` |
+| quote_odd_lot_aapl | 2026-07-13 | recorded through the public API at exact server_version=225; generic tick 787 accepted, ordinary delayed updates observed, no odd-lot values under current entitlement, events sha256 `70500b2228dc29e81e8823fa6a626bf51597317a83da257e2e3e1e520b7b52a3` |
+| sdk_sv223_hedge_max | 2026-07-13 | official SDK oracle; exact field-144 request proven by events sha256 `205f25d37f53daf6dcc0a7b2f93a58215dcf7e1091e5a3fbafb459f018764061`; real missing-parent response means wire proof, not accepted hedge-order proof |
 | api_scanner_subscription | 2026-07-10 | recorded and verified through the strict public runner; server_version=206 returned ten ranked HOT_BY_VOLUME rows followed by public cancel and a current-time fence, events sha256 `4d32e5b9b88ae43887d7391c50b3cbea2978fd85b72933363b62cd80d26700dd`; server_version=200 success `c84c81b3ee772bcc` remains replay-promoted in `scanner_subscription_live.txt` |
 | api_fundamental_reports_aapl | 2026-07-09 | final retirement evidence; all seven legacy requests returned code 10358 on both server_version=200 roles; readonly-live events sha256 prefix `89db59e9e5abf7b7`, paper-dev prefix `c326f314cbc4f1de`; ignored capture directories retained as historical evidence only |
 | scanner_subscription | 2026-04-07 | historical raw evidence, catalog duplicate retired 2026-07-10; server_version=200 events sha256 prefix `740b5dfb138df2a4`; the Gateway returned exact code 490 for missing scanner permissions and code 365 from the now-removed redundant cancel |

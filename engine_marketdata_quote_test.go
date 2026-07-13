@@ -71,6 +71,46 @@ func TestQuoteRouteFollowsLiveRerouteAndFreezesResumeRequest(t *testing.T) {
 	}
 }
 
+func TestQuoteRouteFollowsLiveProtobufReroute225(t *testing.T) {
+	e, peer := newObservedMarketDataEngine(t)
+	e.serverVersion = 225
+	e.nextReqID = 1
+	sub := installObservedQuoteRoute(t, e, QuoteRequest{Contract: Contract{
+		Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD",
+	}})
+	_ = readObservedFrame(t, peer)
+
+	// Capture 20260713T205650Z-live_cfd_quote_reroute, events.jsonl sha256
+	// bd73e91139899a8c586856ab744269bce686bdab8bda597d00c2032f97d3952c.
+	reroute, err := codec.Decode(225, []byte{
+		0x00, 0x00, 0x01, 0x23, 0x08, 0x01, 0x10, 0xfa,
+		0x40, 0x1a, 0x05, 0x53, 0x4d, 0x41, 0x52, 0x54,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(reroute)
+
+	active := e.keyed[1]
+	routedRequest, ok := active.request.(codec.QuoteRequest)
+	if !ok {
+		t.Fatalf("route request = %T, want codec.QuoteRequest", active.request)
+	}
+	if !reflect.DeepEqual(routedRequest.Contract, codec.Contract{ConID: 8314, Exchange: "SMART"}) {
+		t.Fatalf("rerouted contract = %+v", routedRequest.Contract)
+	}
+	want, err := codec.Encode(225, routedRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readObservedFrame(t, peer); !bytes.Equal(got, want) {
+		t.Fatalf("rerouted protobuf request = %x, want %x", got, want)
+	}
+
+	sub.Close()
+	(<-e.cmds)()
+}
+
 func TestQuoteResumeRejectsContractFieldsAfterVersionDowngrade(t *testing.T) {
 	e, peer := newObservedMarketDataEngine(t)
 	e.nextReqID = 20623
@@ -314,7 +354,8 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 		cfg: cfg, cmds: make(chan func(), 8), incoming: make(chan any, 8),
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
 		events: newObserver[Event](cfg.eventBuffer), transport: tr,
-		serverVersion: 206, keyed: make(map[int]*route), singletons: make(map[string]*route),
+		transportGeneration: 1,
+		serverVersion:       206, keyed: make(map[int]*route), singletons: make(map[string]*route),
 		orders:               make(map[int64]*orderRoute),
 		execDeliveries:       make(map[string]*execDelivery),
 		malformedInboundSeen: make(map[int]struct{}),
@@ -557,6 +598,129 @@ func TestQuoteRouteAppliesLiveCompanionSize(t *testing.T) {
 	}
 	if update.Snapshot.Last.String() != "255.45" || update.Snapshot.LastSize.String() != "200" {
 		t.Fatalf("snapshot last/size = %s/%s, want 255.45/200", update.Snapshot.Last, update.Snapshot.LastSize)
+	}
+}
+
+func TestQuoteRouteAppliesServer220ShareVolume(t *testing.T) {
+	// Exact API 10.48.01 / server_version 220 delayed AAPL TickSize frame,
+	// captured 2026-07-13. The server reports US-stock market-data volume in
+	// shares at this boundary. Capture SHA-256:
+	// 0d3d9ec599a4b36c74a0885e5fbbb72af477aab0e6891d28ec480b5980155ad1.
+	e := newBenchEngine(t)
+	e.serverVersion = 220
+	e.nextReqID = 7801
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	message, err := codec.Decode(220, []byte("\x00\x00\x00\xca\x08\xf9\x3c\x10\x4a\x1a\x06\x35\x33\x37\x30\x31\x36"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(message)
+
+	update := nextQuoteUpdate(t, sub)
+	if update.Changed != QuoteFieldVolume || update.Snapshot.Available != QuoteFieldVolume || update.Snapshot.Volume.String() != "537016" {
+		t.Fatalf("share-volume update = %+v", update)
+	}
+}
+
+func TestQuoteRouteSupportsServer222FractionalLastSize(t *testing.T) {
+	// API 10.48.01 names server_version 222 as the fractional-last-size
+	// boundary and defines protobuf sizes as decimal strings. This is a
+	// source-law invariant; the live market-hours captures did not happen to
+	// contain a fractional AAPL print.
+	e := newBenchEngine(t)
+	e.serverVersion = 222
+	e.nextReqID = 7801
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+	e.handleIncoming(codec.TickSize{ReqID: 7801, TickType: 5, Size: "0.125"})
+
+	update := nextQuoteUpdate(t, sub)
+	if update.Changed != QuoteFieldLastSize || update.Snapshot.LastSize.String() != "0.125" {
+		t.Fatalf("fractional last-size update = %+v", update)
+	}
+}
+
+func TestQuoteRouteMapsOfficialOddLotTickFamily(t *testing.T) {
+	// API 10.48.01 TickType.java defines IDs 105..110, and its official
+	// MarketDataSamplesProto requests them with generic tick 787. The exact
+	// server_version 225 market-hours capture (SHA-256 below) proved the request
+	// was accepted, but delayed data returned no positive odd-lot rows:
+	// 85d0dba58ba9d80c029fac5b658d01ac48128d0513228c07f555dbac6fbff2b0.
+	e := newBenchEngine(t)
+	e.serverVersion = 225
+	e.nextReqID = 7801
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	for _, message := range []codec.Message{
+		codec.TickPrice{ReqID: 7801, TickType: TickTypeOddLotBid, Price: "316.11"},
+		codec.TickPrice{ReqID: 7801, TickType: TickTypeOddLotAsk, Price: "316.12"},
+		codec.TickSize{ReqID: 7801, TickType: TickTypeOddLotBidSize, Size: "7"},
+		codec.TickSize{ReqID: 7801, TickType: TickTypeOddLotAskSize, Size: "9"},
+		codec.TickString{ReqID: 7801, TickType: TickTypeOddLotBidExchange, Value: "NASDAQ"},
+		codec.TickString{ReqID: 7801, TickType: TickTypeOddLotAskExchange, Value: "NYSE"},
+	} {
+		e.handleIncoming(message)
+	}
+
+	wantChanged := []QuoteFields{
+		QuoteFieldOddLotBid, QuoteFieldOddLotAsk, QuoteFieldOddLotBidSize,
+		QuoteFieldOddLotAskSize, QuoteFieldOddLotBidExchange, QuoteFieldOddLotAskExchange,
+	}
+	var last QuoteUpdate
+	for _, want := range wantChanged {
+		last = nextQuoteUpdate(t, sub)
+		if last.Changed != want {
+			t.Fatalf("odd-lot Changed = %v, want %v", last.Changed, want)
+		}
+	}
+	wantAvailable := QuoteFieldOddLotBid | QuoteFieldOddLotAsk | QuoteFieldOddLotBidSize |
+		QuoteFieldOddLotAskSize | QuoteFieldOddLotBidExchange | QuoteFieldOddLotAskExchange
+	if last.Snapshot.Available != wantAvailable || last.Snapshot.OddLotBid.String() != "316.11" ||
+		last.Snapshot.OddLotAsk.String() != "316.12" || last.Snapshot.OddLotBidSize.String() != "7" ||
+		last.Snapshot.OddLotAskSize.String() != "9" || last.Snapshot.OddLotBidExchange != "NASDAQ" ||
+		last.Snapshot.OddLotAskExchange != "NYSE" {
+		t.Fatalf("odd-lot snapshot = %+v", last.Snapshot)
+	}
+	if GenericTickOddLotBidAsk != "787" {
+		t.Fatalf("GenericTickOddLotBidAsk = %q", GenericTickOddLotBidAsk)
+	}
+}
+
+func TestQuoteRouteExposesEFPAndDeltaNeutralCallbacks(t *testing.T) {
+	// These callback shapes follow API 10.48.01 EWrapper/EDecoder source law.
+	// The executable market-hours probes still lack the entitlements needed for
+	// a positive single-stock-future or BAG callback.
+	e := newBenchEngine(t)
+	e.nextReqID = 7801
+	sub := installQuoteRoute(t, e)
+	closeInstalledQuoteRoute(t, e, sub)
+
+	e.handleIncoming(codec.TickEFP{
+		ReqID: 7801, TickType: 38, BasisPoints: "12.5", FormattedBasisPoints: "12.5%",
+		ImpliedFuturesPrice: "316.25", HoldDays: 42, FutureLastTradeDate: "20260918",
+		DividendImpact: "0.75", DividendsToLastTradeDate: "1.5",
+	})
+	e.handleIncoming(codec.DeltaNeutralValidation{
+		ReqID:    7801,
+		Contract: codec.DeltaNeutralContract{ConID: 265598, Delta: "0.52", Price: "316.25"},
+	})
+
+	efp := nextQuoteUpdate(t, sub)
+	if efp.Kind != QuoteUpdateEFP || efp.EFP == nil || efp.EFP.BasisPoints.String() != "12.5" ||
+		efp.EFP.FormattedBasisPoints != "12.5%" || efp.EFP.ImpliedFuturesPrice.String() != "316.25" ||
+		efp.EFP.HoldDays != 42 || efp.EFP.FutureLastTradeDate != "20260918" ||
+		efp.EFP.DividendImpact.String() != "0.75" || efp.EFP.DividendsToLastTradeDate.String() != "1.5" ||
+		efp.Changed != 0 {
+		t.Fatalf("EFP update = %+v", efp)
+	}
+	validation := nextQuoteUpdate(t, sub)
+	if validation.Kind != QuoteUpdateDeltaNeutralValidation || validation.DeltaNeutral == nil ||
+		validation.DeltaNeutral.ConID != 265598 || validation.DeltaNeutral.Delta.String() != "0.52" ||
+		validation.DeltaNeutral.Price.String() != "316.25" || validation.Changed != 0 {
+		t.Fatalf("delta-neutral validation update = %+v", validation)
 	}
 }
 

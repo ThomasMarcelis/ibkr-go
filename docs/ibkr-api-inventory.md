@@ -48,19 +48,19 @@ committed.
 |-------|------------------|----------------|
 | Connection/session | `eConnect`, `eDisconnect`, `startApi`, `Close`, `IsConnected`, `SetConnectOptions`, `redirect`, `DisableUseV100Plus`, `reqCurrentTime`, `reqIds`, `reqManagedAccts`, `setServerLogLevel` | Connect/start/close are implemented through `DialContext` and lifecycle APIs. `reqCurrentTime` is `Client.CurrentTime`; `reqIds` is `Orders().RefreshOrderID`; `reqManagedAccts` is `Client.ManagedAccounts`. Server log level, redirect, and old connection toggles are explicit non-goals. |
 | Verification/internal auth | `verifyRequest`, `verifyMessage`, `verifyAndAuthRequest`, `verifyAndAuthMessage` | Officially internal-purpose. Matrix as out of public scope unless live Gateway emits callbacks. |
-| Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Quote streams preserve every classic price/size callback, including unmapped numeric tick types, price attributes, and optional companion size, while also delivering normalized fields plus generic, string, request-parameter, option-computation, and contract-specific news callbacks. The remaining matrix needs live/frozen families, tickEFP, and more generic tick IDs. |
+| Market data L1 | `reqMktData`, `cancelMktData`, `reqMarketDataType` | Implemented. Quote streams preserve every classic price/size callback, including unmapped numeric tick types, price attributes, and optional companion size, while also delivering normalized fields plus generic, string, request-parameter, option-computation, EFP, delta-neutral validation, and contract-specific news callbacks. Generic tick 787 projects odd-lot tick IDs 105-110; positive entitled values remain a live-evidence target. |
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
 | Real-time and historical bars | `reqRealTimeBars`, `cancelRealTimeBars`, `reqHistoricalData`, `cancelHistoricalData`, `reqHeadTimestamp`, `cancelHeadTimestamp`, `reqHistogramData`, `cancelHistogramData`, `reqHistoricalTicks` | Implemented, including historical schedule support through `History().Schedule`. Needs separate rows for keep-up updates, schedule, time zones, and pacing/errors. |
 | Market depth | `reqMarketDepth`, `cancelMktDepth`, `reqMktDepthExchanges` | Implemented. Needs regular depth, L2, smart depth, entitlement error, cancel, and depth metadata rows. |
 | Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. `Contract` owns include-expired/external-ID selectors and BAG/delta-neutral composition; nil versus explicit zero is preserved for strike and leg exempt code. Exact classic and protobuf selector/composition vectors freeze the request-specific layouts without adding unsupported fields. Delta-neutral composition is BAG-only: the exact-200 OPT request is retained only as code-320 negative evidence. Regular contract details preserve the complete classic v200 response, including the FUND tail. Exact sv205 protobuf requests are live-frozen for stock, bond, fund, option, and issuer selectors. Bond issuer lookup and the distinct message-18 bond details shape are live-attested; empty coupon/maturity/rating fields remain unset rather than inferred. |
 | Accounts/portfolio | `reqAccountSummary`, `cancelAccountSummary`, `reqAccountUpdates`, `reqPositions`, `cancelPositions`, `reqPositionsMulti`, `cancelPositionsMulti`, `reqAccountUpdatesMulti`, `cancelAccountUpdatesMulti`, `reqFamilyCodes`, `reqPnL`, `cancelPnL`, `reqPnLSingle`, `cancelPnLSingle` | Implemented, including distinct account-summary group selection and local result filtering. Needs FA named-group, account/model, concurrent, streaming, and trade-interaction rows. |
-| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Open and completed orders return BAG legs and delta-neutral composition on their canonical `Contract`; the shared order-level `OrderCombo` contains only prices and routing. Completed orders and classic sv200 execution/commission-and-fees results are fully projected; exact-sv201 execution protobuf and sv202 zero-strike semantics are live-attested. A refreshed exact-sv203 capture live-attests the official encoder's explicit zero contract conId, place/open/status/targeted-cancel behavior, and a global-cancel request flushed after the order was terminal that returned code 161. Exact sv204 live-attests all open/completed-order query requests plus cancelled and filled completed-order protobuf results. Nondefault execution filters, rare advanced-order branches, protobuf execution-fee encoding, and bond yield/redemption still need live attestation. |
+| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Open and completed orders return BAG legs and delta-neutral composition on their canonical `Contract`; the shared order-level `OrderCombo` contains only prices and routing. Completed orders and classic sv200 execution/commission-and-fees results are fully projected. Exact sv203-sv218 evidence covers the migrated family and additional order fields. Attached preset-order metadata is internally wire-frozen but has no public facade pending a native paper-order lifecycle. Hedge maximum size is covered at sv223. Nondefault execution filters, rare advanced-order branches, protobuf execution-fee encoding, and bond yield/redemption still need live attestation. |
 | Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Implemented. Exact live calculation requests/results, unavailable-field sentinels, and two real exercise rejection paths are replay-promoted. Cancellation-before-first-result, lapse, override, and successful clearing settlement remain matrix work. |
 | News | `reqNewsProviders`, `reqNewsBulletins`, `cancelNewsBulletins`, `reqNewsArticle`, `reqHistoricalNews` | Implemented. `api_news_article_aapl` captures the article follow-up path from a historical-news result; invalid article/provider variants remain matrix work. |
 | Scanner | `reqScannerParameters`, `reqScannerSubscription`, `cancelScannerSubscription` | Complete classic request implemented, including every legacy field and both generic option lists. The public request, ten-row `scannerData` response, and clean cancel are live-captured; an older permission-denied run also freezes codes 490 and 365. |
 | FA/advisor | `requestFA`, `reqSoftDollarTiers` | Implemented. Mutating FA configuration is outside the library charter. |
 | WSH | `reqWshMetaData`, `cancelWshMetaData`, `reqWshEventData`, `cancelWshEventData` | Implemented. Needs metadata, event, cancel, filter/date/portfolio/watchlist variants. |
-| Display groups/TWS | `queryDisplayGroups`, `subscribeToGroupEvents`, `updateDisplayGroup`, `unsubscribeFromGroupEvents`, `reqUserInfo` | Implemented. Needs invalid group/update cases and TWS vs Gateway differences. |
+| Display groups/TWS | `queryDisplayGroups`, `subscribeToGroupEvents`, `updateDisplayGroup`, `unsubscribeFromGroupEvents`, `reqUserInfo`, `reqConfig` | Implemented, including presence-aware read-only `TWS().Config` at sv219. Configuration mutation is intentionally not exposed. Needs invalid group/update cases and TWS vs Gateway differences. |
 
 Historical note: IBKR API 10.47 removed `reqFundamentalData`,
 `cancelFundamentalData`, the matching callback, and fundamental-ratios tick
@@ -73,7 +73,7 @@ evidence; WSH is a separate API, not a replacement.
 | Group | Official Callbacks | ibkr-go Status |
 |-------|--------------------|----------------|
 | Errors/session | `error`, `connectionClosed`, `currentTime`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
-| Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | All are implemented except `tickEFP`. `tickNews` is inbound message 84 and is delivered as `QuoteUpdateNewsTick`. |
+| Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | All are implemented as typed quote updates. `tickEFP` is official-layout frozen but awaits a positive entitled callback. `tickNews` is inbound message 84 and is delivered as `QuoteUpdateNewsTick`. |
 | Tick-by-tick | `tickByTickAllLast`, `tickByTickBidAsk`, `tickByTickMidPoint` | Implemented through unified tick-by-tick decode. Needs separate verification rows. |
 | Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Complete for the live classic v200 shapes and the exact-sv205 protobuf stock/bond/fund/option matrix. `bondContractDetails` is projected through `ContractDetails.Bond`; tagged CUSIP/ISIN values, size rules, algorithmic minimum, precision fields, and real ineligibility reasons are preserved without inference. |
 | Historical | `historicalData`, `historicalDataEnd`, `historicalDataUpdate`, `historicalSchedule`, `headTimestamp`, `histogramData`, `historicalTicks`, `historicalTicksBidAsk`, `historicalTicksLast`, `historicalNews`, `historicalNewsEnd` | Implemented. |
@@ -82,7 +82,7 @@ evidence; WSH is a separate API, not a replacement.
 | Market depth | `updateMktDepth`, `updateMktDepthL2` | Implemented. Needs success plus entitlement captures. |
 | News/scanner | `newsProviders`, `newsArticle`, `updateNewsBulletin`, `scannerParameters`, `scannerData`, `scannerDataEnd` | Implemented. News article has live capture coverage through `api_news_article_aapl`; invalid article/provider variants remain matrix work. |
 | FA/WSH/display | `receiveFA`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented. |
-| Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Both reroute callbacks are live-attested at exact sv206 and handled transparently by active quote/depth routes. Verification/auth, connectAck, and delta-neutral validation remain outside the implemented inventory. |
+| Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Both reroute callbacks are live-attested at exact sv206 and handled transparently by active quote/depth routes. Delta-neutral validation is decoded and delivered through the requesting quote subscription; positive BAG evidence remains pending. Verification/auth and connectAck remain outside the implemented inventory. |
 
 ## Current ibkr-go Public Facade Methods
 
@@ -99,7 +99,7 @@ evidence; WSH is a separate API, not a replacement.
 | `Scanner()` | `Parameters`, `SubscribeResults` |
 | `Advisors()` | `Config`, `SoftDollarTiers` |
 | `WSH()` | `MetaData`, `EventData` |
-| `TWS()` | `UserInfo`, `DisplayGroups`, `SubscribeDisplayGroup` |
+| `TWS()` | `Config`, `UserInfo`, `DisplayGroups`, `SubscribeDisplayGroup` |
 
 ## Current Classic Message Inventory
 
@@ -180,6 +180,9 @@ Outbound message IDs:
 | `OutReqIds` | 8 | Explicit next-valid-ID refresh |
 | `OutReqCurrentTime` | 49 | Server wall-clock time request |
 | `OutReqCurrentTimeInMillis` | 105 | Server wall-clock time request at millisecond precision |
+| `OutCancelContractData` | 106 | Broker-side contract-details cancellation at sv215+ |
+| `OutCancelHistoricalTicks` | 107 | Broker-side historical-ticks cancellation at sv215+ |
+| `OutReqConfig` | 108 | Read-only TWS/Gateway configuration at sv219+ |
 
 Inbound message IDs:
 
@@ -208,6 +211,7 @@ Inbound message IDs:
 | `InTickOptionComputation` | 21 | Option computation |
 | `InTickGeneric` | 45 | Market data generic tick |
 | `InTickString` | 46 | Market data string tick |
+| `InTickEFP` | 47 | Market data exchange-for-physical tick |
 | `InCurrentTime` | 49 | Current time |
 | `InCurrentTimeInMillis` | 109 | Current time in milliseconds |
 | `InRealTimeBars` | 50 | Real-time bars |
@@ -215,6 +219,7 @@ Inbound message IDs:
 | `InOpenOrderEnd` | 53 | Open order end |
 | `InAccountDownloadEnd` | 54 | Account download end |
 | `InExecutionDataEnd` | 55 | Executions end |
+| `InDeltaNeutralValidation` | 56 | Delta-neutral contract validation |
 | `InTickSnapshotEnd` | 57 | Market data snapshot end |
 | `InMarketDataType` | 58 | Market data type |
 | `InCommissionReport` | 59 | Commission-and-fees report (legacy wire name) |
@@ -260,6 +265,7 @@ Inbound message IDs:
 | `InHistoricalSchedule` | 106 | Historical schedule (whatToShow=SCHEDULE) |
 | `InHistoricalDataUpdate` | 90 | Historical bar updates (keepUpToDate) |
 | `InHistoricalDataEnd` | 108 | Historical batch end marker |
+| `InConfig` | 110 | Read-only TWS/Gateway configuration |
 
 ## Known Official Gaps Or Deferred Branches
 
@@ -268,8 +274,9 @@ and project scope decide whether to implement, defer, or mark out of scope.
 
 - `setServerLogLevel`.
 - Verification/auth callbacks and redirect callbacks.
-- `tickEFP` and `deltaNeutralValidation`.
+- Positive entitled `tickEFP`, `deltaNeutralValidation`, and odd-lot 105-110
+  callbacks; all three public/codec paths are implemented.
 - Raw paper-TWS evidence for `orderBound`, plus rare non-empty OpenOrder and
   what-if allocation/margin branches.
-- Hedge, scale, delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
+- Scale, nondefault delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
   order, soft-dollar-on-order, and advanced-reject override order branches.

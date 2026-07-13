@@ -7,7 +7,7 @@ import "slices"
 
 const (
 	SupportedMinServerVersion = 200
-	SupportedMaxServerVersion = 207
+	SupportedMaxServerVersion = 225
 )
 
 // Direction identifies which peer sends a message.
@@ -123,82 +123,86 @@ const (
 
 // Inbound message IDs (server to client).
 const (
-	InTickPrice             = 1
-	InTickSize              = 2
-	InOrderStatus           = 3
-	InErrMsg                = 4
-	InOpenOrder             = 5
-	InUpdateAccountValue    = 6
-	InUpdatePortfolio       = 7
-	InUpdateAccountTime     = 8
-	InNextValidID           = 9
-	InContractData          = 10
-	InExecutionData         = 11
-	InMarketDepth           = 12
-	InMarketDepthL2         = 13
-	InNewsBulletins         = 14
-	InManagedAccounts       = 15
-	InReceiveFA             = 16
-	InHistoricalData        = 17
-	InBondContractData      = 18
-	InScannerParameters     = 19
-	InScannerData           = 20
-	InTickOptionComputation = 21
-	InTickGeneric           = 45
-	InTickString            = 46
-	InCurrentTime           = 49
-	InRealTimeBars          = 50
-	InContractDataEnd       = 52
-	InOpenOrderEnd          = 53
-	InAccountDownloadEnd    = 54
-	InExecutionDataEnd      = 55
-	InTickSnapshotEnd       = 57
-	InMarketDataType        = 58
-	InCommissionReport      = 59
-	InPositionData          = 61
-	InPositionEnd           = 62
-	InAccountSummary        = 63
-	InAccountSummaryEnd     = 64
-	InDisplayGroupList      = 67
-	InDisplayGroupUpdated   = 68
-	InPositionMulti         = 71
-	InPositionMultiEnd      = 72
-	InAccountUpdateMulti    = 73
-	InAccountUpdateMultiEnd = 74
-	InSecDefOptParams       = 75
-	InSecDefOptParamsEnd    = 76
-	InSoftDollarTiers       = 77
-	InFamilyCodes           = 78
-	InSymbolSamples         = 79
-	InMktDepthExchanges     = 80
-	InTickReqParams         = 81
-	InSmartComponents       = 82
-	InNewsArticle           = 83
-	InTickNews              = 84
-	InNewsProviders         = 85
-	InHistoricalNews        = 86
-	InHistoricalNewsEnd     = 87
-	InHeadTimestamp         = 88
-	InHistogramData         = 89
-	InHistoricalDataUpdate  = 90
-	InMarketDataReroute     = 91
-	InMarketDepthReroute    = 92
-	InMarketRule            = 93
-	InPnL                   = 94
-	InPnLSingle             = 95
-	InHistoricalTicks       = 96
-	InHistoricalTicksBidAsk = 97
-	InHistoricalTicksLast   = 98
-	InTickByTick            = 99
-	InOrderBound            = 100
-	InCompletedOrder        = 101
-	InCompletedOrderEnd     = 102
-	InWSHMetaData           = 104
-	InWSHEventData          = 105
-	InHistoricalSchedule    = 106
-	InUserInfo              = 107
-	InHistoricalDataEnd     = 108
-	InCurrentTimeInMillis   = 109
+	InTickPrice              = 1
+	InTickSize               = 2
+	InOrderStatus            = 3
+	InErrMsg                 = 4
+	InOpenOrder              = 5
+	InUpdateAccountValue     = 6
+	InUpdatePortfolio        = 7
+	InUpdateAccountTime      = 8
+	InNextValidID            = 9
+	InContractData           = 10
+	InExecutionData          = 11
+	InMarketDepth            = 12
+	InMarketDepthL2          = 13
+	InNewsBulletins          = 14
+	InManagedAccounts        = 15
+	InReceiveFA              = 16
+	InHistoricalData         = 17
+	InBondContractData       = 18
+	InScannerParameters      = 19
+	InScannerData            = 20
+	InTickOptionComputation  = 21
+	InTickGeneric            = 45
+	InTickString             = 46
+	InTickEFP                = 47
+	InCurrentTime            = 49
+	InRealTimeBars           = 50
+	InContractDataEnd        = 52
+	InOpenOrderEnd           = 53
+	InAccountDownloadEnd     = 54
+	InExecutionDataEnd       = 55
+	InDeltaNeutralValidation = 56
+	InTickSnapshotEnd        = 57
+	InMarketDataType         = 58
+	InCommissionReport       = 59
+	InPositionData           = 61
+	InPositionEnd            = 62
+	InAccountSummary         = 63
+	InAccountSummaryEnd      = 64
+	InDisplayGroupList       = 67
+	InDisplayGroupUpdated    = 68
+	InPositionMulti          = 71
+	InPositionMultiEnd       = 72
+	InAccountUpdateMulti     = 73
+	InAccountUpdateMultiEnd  = 74
+	InSecDefOptParams        = 75
+	InSecDefOptParamsEnd     = 76
+	InSoftDollarTiers        = 77
+	InFamilyCodes            = 78
+	InSymbolSamples          = 79
+	InMktDepthExchanges      = 80
+	InTickReqParams          = 81
+	InSmartComponents        = 82
+	InNewsArticle            = 83
+	InTickNews               = 84
+	InNewsProviders          = 85
+	InHistoricalNews         = 86
+	InHistoricalNewsEnd      = 87
+	InHeadTimestamp          = 88
+	InHistogramData          = 89
+	InHistoricalDataUpdate   = 90
+	InMarketDataReroute      = 91
+	InMarketDepthReroute     = 92
+	InMarketRule             = 93
+	InPnL                    = 94
+	InPnLSingle              = 95
+	InHistoricalTicks        = 96
+	InHistoricalTicksBidAsk  = 97
+	InHistoricalTicksLast    = 98
+	InTickByTick             = 99
+	InOrderBound             = 100
+	InCompletedOrder         = 101
+	InCompletedOrderEnd      = 102
+	InWSHMetaData            = 104
+	InWSHEventData           = 105
+	InHistoricalSchedule     = 106
+	InUserInfo               = 107
+	InHistoricalDataEnd      = 108
+	InCurrentTimeInMillis    = 109
+	InConfig                 = 110
+	InUpdateConfig           = 111
 )
 
 var messages = [...]Message{
@@ -275,6 +279,9 @@ var messages = [...]Message{
 	{"OutCancelWSHEventData", OutCancelWSHEventData, ClientToServer},
 	{"OutReqUserInfo", OutReqUserInfo, ClientToServer},
 	{"OutReqCurrentTimeInMillis", OutReqCurrentTimeInMillis, ClientToServer},
+	{"OutCancelContractData", OutCancelContractData, ClientToServer},
+	{"OutCancelHistoricalTicks", OutCancelHistoricalTicks, ClientToServer},
+	{"OutReqConfig", OutReqConfig, ClientToServer},
 	{"InTickPrice", InTickPrice, ServerToClient},
 	{"InTickSize", InTickSize, ServerToClient},
 	{"InOrderStatus", InOrderStatus, ServerToClient},
@@ -298,12 +305,14 @@ var messages = [...]Message{
 	{"InTickOptionComputation", InTickOptionComputation, ServerToClient},
 	{"InTickGeneric", InTickGeneric, ServerToClient},
 	{"InTickString", InTickString, ServerToClient},
+	{"InTickEFP", InTickEFP, ServerToClient},
 	{"InCurrentTime", InCurrentTime, ServerToClient},
 	{"InRealTimeBars", InRealTimeBars, ServerToClient},
 	{"InContractDataEnd", InContractDataEnd, ServerToClient},
 	{"InOpenOrderEnd", InOpenOrderEnd, ServerToClient},
 	{"InAccountDownloadEnd", InAccountDownloadEnd, ServerToClient},
 	{"InExecutionDataEnd", InExecutionDataEnd, ServerToClient},
+	{"InDeltaNeutralValidation", InDeltaNeutralValidation, ServerToClient},
 	{"InTickSnapshotEnd", InTickSnapshotEnd, ServerToClient},
 	{"InMarketDataType", InMarketDataType, ServerToClient},
 	{"InCommissionReport", InCommissionReport, ServerToClient},
@@ -351,6 +360,7 @@ var messages = [...]Message{
 	{"InUserInfo", InUserInfo, ServerToClient},
 	{"InHistoricalDataEnd", InHistoricalDataEnd, ServerToClient},
 	{"InCurrentTimeInMillis", InCurrentTimeInMillis, ServerToClient},
+	{"InConfig", InConfig, ServerToClient},
 }
 
 // Messages returns the implemented base-message registry in ID-independent

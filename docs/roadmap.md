@@ -53,8 +53,10 @@ Current IBKR baseline and drift to check first:
   [IBKR API Software](https://interactivebrokers.github.io/) page lists API
   Latest 10.48, released 2026-07-07, and Stable 10.45, released 2026-03-30,
   and recommends TWS or IB Gateway 1045+ for comprehensive feature support.
-  Both local Gateway roles were live-confirmed at `server_version 200` on
-  2026-07-09; that remains the classic-wire evidence baseline.
+  `server_version 200` remains the classic-wire evidence baseline. Exact
+  version negotiation, protobuf migrations, and gated semantics are now
+  implemented through 225; see
+  [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 - API 10.47 removed `reqFundamentalData`, its cancellation and callback, and
   fundamental-ratios tick type 47. The corresponding ibkr-go surface and
   classic message IDs have been retired. A final 2026-07-09 probe sent all
@@ -64,14 +66,12 @@ Current IBKR baseline and drift to check first:
   earlier sv200 captures remain historical evidence only. WSH is a separate
   API, not a replacement.
 - API 10.48 changes `reqOpenOrders` results to include de-activated orders.
-  This is not an announced wire-shape change, but `Orders().Open` and
-  `Orders().SubscribeOpen` result sets need a fresh live capture once the
-  local Gateways run the updated release.
+  The result-set behavior still needs a live deactivated-order capture; the
+  wire family itself is covered.
 - `$LEDGER-` account-value prefixes from the new account-value setting.
-- Fractional `tickSize` values and newer generic tick families. Concrete
-  probe target: odd-lot ticks 105-110 behind generic tick 787 (official docs
-  gate them on TWS/API 10.46+; observe what a `server_version 200` session
-  returns).
+- Positive odd-lot ticks 105-110 behind generic tick 787. The request and
+  ordinary delayed stream are live-proven at exact sv225, but the current
+  account returned no odd-lot values.
 - New or shifted order/account tail fields that affect OpenOrder,
   CompletedOrder, Execution, or Commission decoding.
 
@@ -125,10 +125,9 @@ focused on the next slice and its completion criteria.
 
 ibkr-go covers the current public facade across the major Interactive Brokers
 TWS/Gateway socket protocol domains. The core protocol areas below are
-implemented and validated against live IB Gateway `server_version 200`, but
-rare official callbacks, new SDK additions, entitlement-dependent products, and
-some advanced order branches still need the live-evidence path described
-above.
+implemented across negotiated versions 200..225, but rare official callbacks,
+entitlement-dependent products, and some advanced order branches still need
+the live-evidence path described above.
 
 ### Bootstrap and session
 
@@ -159,7 +158,8 @@ tick size, and market data type. TickGeneric (inbound 45), TickString
 (outbound 59), cancelHistoricalData encoder (outbound 25),
 reqTickByTickData (msg 97/98), and historical bars keepUpToDate flag. Quote
 subscriptions deliver generic, string, request-parameter, and option-
-computation callbacks and contract-specific news headlines as discriminated
+computation, EFP, delta-neutral validation, and contract-specific news
+headlines as discriminated
 `QuoteUpdate` values while keeping the normalized `Quote` snapshot small.
 Every classic price and size callback is also preserved with its numeric tick
 type, exact price-attribute mask, and optional companion size even when it has
@@ -167,7 +167,8 @@ no normalized field. Live/delayed volume and matching companion sizes are
 normalized. The public path is frozen
 against exact server-version-200 frames from the April 5 generic-tick, June 11
 option campaign, July 9 generic-tick-matrix, and exact server-version-201 BRFG
-TickNews captures. TickEFP remains the classic L1 callback gap.
+TickNews captures. TickEFP and delta-neutral validation are typed and source-
+law frozen; positive live callbacks remain entitlement/product-state gaps.
 
 ### Historical data extensions
 
@@ -264,34 +265,24 @@ free-entitlement SDK surface. Closing it means: typed Go facade, deterministic
 replay fixture seeded from a sanitized SDK/live capture, and live verification
 against the local paper Gateway when applicable.
 
-- Delta-neutral order extensions.
 - Scale order extensions.
 - Remaining ungrounded OpenOrder branches.
-- CompletedOrder full-detail public projection (the exact classic wire parser is complete).
 - Order-side coverage promised by the public API but not yet exhaustively
   grounded: OCA group semantics, bracket parent/child sequencing, condition
   families (price, time, margin, execution, volume, percent-change), IB algo
   parameter passthrough, hedging, and short-sale fields. Sequenced after the
   protobuf decision (see below), since these are classic-branch fields.
-- ~~Server-version coverage through exactly `server_version 207`~~ **Done.**
-  The client negotiates `server_version` 200..207. Version 200 is the fixed
-  classic layout, and exact 201 is covered by the live-attested
-  envelope and executions slice below. Exact 202 is separately live-attested:
-  the official API 10.48.01 source names only its zero-strike gate, the
-  migration table contains no v202 message transition, and a live protobuf
-  execution contract carried both a nonzero conId and an explicitly present
-  zero strike. Exact 203 is covered by a guarded live place/cancel/global-
-  cancel lifecycle and its sanitized protobuf replay. Exact 204 is covered by
-  official-SDK client/all/auto/completed query captures, representative
-  cancelled/filled completed-order replay, and a read-only public live probe.
-  Exact 205 is covered by official-source request vectors, live stock, bond,
-  fund, option, issuer, and ineligibility responses, a compact public replay,
-  and read-only public live probes. Exact 206 is covered by official-source
-  schemas, byte-exact quote/depth request and callback captures, classic CFD
-  reroute captures, a curated public replay, and a read-only public live probe.
-  Exact 207 is covered by the complete official accounts/positions request and
-  callback family, an exact SDK capture, a compact bootstrap/refresh replay,
-  and native public account scenarios. Version 208 is the next gap.
+- ~~Server-version coverage through exactly `server_version 225`~~ **Done.**
+  The client negotiates `server_version` 200..225. Exact 201..207 retain their
+  individual protocol audits below. Exact 208..213 complete the protobuf
+  migration table, and 214..225 implement every version gate in API 10.48,
+  including one-shot cancels and order fields, read-only TWS configuration,
+  share/fractional size semantics, precision metadata, and
+  odd-lot quote projection. Byte-exact SDK/live vectors and the remaining
+  positive-live entitlement boundaries are recorded in
+  [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
+  Attached-preset wire support remains internal pending a native paper-order
+  lifecycle.
 
 [`docs/live-coverage-matrix.md`](live-coverage-matrix.md) and
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
@@ -344,8 +335,10 @@ metadata rather than contract identity. See
 
 Exact `server_version 206` is implemented and live-attested. Quote, market-
 depth, their cancellations, and market-data-type requests move to protobuf,
-along with ten L1/depth callbacks. CFD reroute callbacks 91 and 92 remain
-classic and transparently replace the active quote/depth request. See
+along with ten L1/depth callbacks. At exactly sv206, CFD reroute callbacks 91
+and 92 retain classic bodies. The current sv225 Gateway sends market-data
+reroute as protobuf raw ID 291; both encodings transparently replace the active
+request. See
 [`protocol-audit-sv206.md`](protocol-audit-sv206.md).
 
 Exact `server_version 207` is implemented and live-attested. Managed accounts,
@@ -353,11 +346,12 @@ account updates, account summary, positions, and their multi-account variants
 move to protobuf together. Public routing and lifecycle semantics remain
 unchanged. See [`protocol-audit-sv207.md`](protocol-audit-sv207.md).
 
-The production ceiling is 207. Server version 208 and later remain a deliberate
-wall: each later migration gate must add its encoder/decoder, live capture, and
-deterministic replay before the advertised maximum moves again. The migration
-table fails closed rather than sending a classic body after IBKR has retired
-it.
+Exact `server_version 208` through 225 are implemented and audited together in
+[`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md). The production
+ceiling is 225. Each later migration gate must add its encoder/decoder, live or
+official-SDK evidence, and deterministic coverage before the advertised
+maximum moves again. The migration table fails closed rather than sending a
+classic body after IBKR has retired it.
 
 ## Ongoing
 

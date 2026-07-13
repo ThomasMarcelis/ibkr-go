@@ -80,6 +80,67 @@ func TestEncodePlaceOrderContractSourceLaws(t *testing.T) {
 	}
 }
 
+func TestEncodeAdditionalOrderParametersFromLiveSDKCaptures(t *testing.T) {
+	t.Parallel()
+
+	order216, err := encodeOrderProto(PlaceOrderRequest{
+		Deactivate: "1", PostOnly: "1", AllowPreOpen: "1", IgnoreOpenAuction: "1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := decodeHex(t, "ca0600d00801d80801e00801e80801"); !bytes.Equal(order216, want) {
+		t.Fatalf("sv216 fields = %x, want %x; capture events sha256 %s", order216, want, "dd8e34848c2de885947f2eec9c77b4901d428c5719dc85bcaea4e9417212b7cc")
+	}
+
+	order217, err := encodeOrderProto(PlaceOrderRequest{
+		RouteMarketableToBBO: "1", SeekPriceImprovement: "1", WhatIfType: "1",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := decodeHex(t, "ca0600c00701f00801f80801"); !bytes.Equal(order217, want) {
+		t.Fatalf("sv217 fields = %x, want %x; capture events sha256 %s", order217, want, "302d403d32b43f1107b8e15fa62ac6fd318658d61bc10496d8331907f6e10dc2")
+	}
+
+	attached, err := encodeAttachedOrdersProto(PlaceOrderRequest{
+		AttachedStopLossOrderID: 4, AttachedStopLossOrderType: "PRESET",
+		AttachedTakeProfitOrderID: 5, AttachedTakeProfitOrderType: "PRESET",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := decodeHex(t, "0804120650524553455418052206505245534554"); !bytes.Equal(attached, want) {
+		t.Fatalf("sv218 attached orders = %x, want %x; capture events sha256 %s", attached, want, "34ebb09db5b427aed962859ba2f5c137fcd328987eb1c8aa72f18688960fcf62")
+	}
+
+	hedge223, err := encodeOrderProto(PlaceOrderRequest{HedgeMaxSize: "7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := decodeHex(t, "ca0600800907"); !bytes.Equal(hedge223, want) {
+		t.Fatalf("sv223 hedge maximum size = %x, want %x; capture events sha256 %s", hedge223, want, "205f25d37f53daf6dcc0a7b2f93a58215dcf7e1091e5a3fbafb459f018764061")
+	}
+}
+
+func TestEncodeAdditionalOrderParameterBoundaries(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		sv  int
+		msg PlaceOrderRequest
+	}{
+		{215, PlaceOrderRequest{OrderID: 1, PostOnly: "1"}},
+		{216, PlaceOrderRequest{OrderID: 1, SeekPriceImprovement: "1"}},
+		{217, PlaceOrderRequest{OrderID: 1, AttachedStopLossOrderID: 2, AttachedStopLossOrderType: "PRESET"}},
+		{222, PlaceOrderRequest{OrderID: 1, HedgeMaxSize: "7"}},
+	} {
+		if _, err := Encode(tc.sv, tc.msg); err == nil {
+			t.Fatalf("Encode(%d, %+v) accepted fields before their server-version boundary", tc.sv, tc.msg)
+		}
+	}
+}
+
 func TestDecodeServer203OrderCallbacks(t *testing.T) {
 	t.Parallel()
 

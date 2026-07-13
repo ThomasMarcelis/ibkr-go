@@ -21,8 +21,9 @@ go test ./...
 
 All six must pass locally before opening a pull request. The API check rejects
 incompatible changes from the v2 release-candidate baseline while allowing
-additive APIs. CI runs the same checks on every push and pull request against
-`main`.
+additive APIs. Deliberately approved clean breaks are enumerated separately
+under `testdata/api`; the baseline itself remains an exact record of rc.2. CI
+runs the same checks on every push and pull request against `main`.
 
 ## Testing discipline
 

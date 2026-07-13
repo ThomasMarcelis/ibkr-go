@@ -165,6 +165,12 @@ const (
 	QuoteFieldClose
 	QuoteFieldMarketDataType
 	QuoteFieldVolume
+	QuoteFieldOddLotBid
+	QuoteFieldOddLotAsk
+	QuoteFieldOddLotBidSize
+	QuoteFieldOddLotAskSize
+	QuoteFieldOddLotBidExchange
+	QuoteFieldOddLotAskExchange
 )
 
 // MarketDataType selects live, frozen, delayed, or delayed-frozen market data.
@@ -198,25 +204,45 @@ func (t MarketDataType) String() string {
 // Available tracks which fields have been populated by the server; unpopulated
 // fields remain at their zero value.
 type Quote struct {
-	Available      QuoteFields
-	Bid            decimal.Decimal
-	Ask            decimal.Decimal
-	Last           decimal.Decimal
-	BidSize        decimal.Decimal
-	AskSize        decimal.Decimal
-	LastSize       decimal.Decimal
-	Volume         decimal.Decimal
-	Open           decimal.Decimal
-	High           decimal.Decimal
-	Low            decimal.Decimal
-	Close          decimal.Decimal
-	MarketDataType MarketDataType
+	Available         QuoteFields
+	Bid               decimal.Decimal
+	Ask               decimal.Decimal
+	Last              decimal.Decimal
+	BidSize           decimal.Decimal
+	AskSize           decimal.Decimal
+	LastSize          decimal.Decimal
+	Volume            decimal.Decimal
+	Open              decimal.Decimal
+	High              decimal.Decimal
+	Low               decimal.Decimal
+	Close             decimal.Decimal
+	MarketDataType    MarketDataType
+	OddLotBid         decimal.Decimal
+	OddLotAsk         decimal.Decimal
+	OddLotBidSize     decimal.Decimal
+	OddLotAskSize     decimal.Decimal
+	OddLotBidExchange string
+	OddLotAskExchange string
 }
 
 // GenericTick is an IBKR generic tick type ID requested alongside a quote to
 // pull in extra fields (for example "233" for RTVolume). Encoded on the wire as
 // a comma-separated list.
 type GenericTick string
+
+// GenericTickOddLotBidAsk requests the v225 odd-lot bid, ask, size, and
+// exchange tick family defined by the official API.
+const GenericTickOddLotBidAsk GenericTick = "787"
+
+// Odd-lot quote tick types from the official API 10.48.01 TickType table.
+const (
+	TickTypeOddLotBid         = 105
+	TickTypeOddLotAsk         = 106
+	TickTypeOddLotBidSize     = 107
+	TickTypeOddLotAskSize     = 108
+	TickTypeOddLotBidExchange = 109
+	TickTypeOddLotAskExchange = 110
+)
 
 // QuoteRequest describes a market-data quote request for
 // [MarketDataClient.Quote] and [MarketDataClient.SubscribeQuotes].
@@ -239,6 +265,8 @@ const (
 	QuoteUpdatePriceTick
 	QuoteUpdateSizeTick
 	QuoteUpdateNewsTick
+	QuoteUpdateEFP
+	QuoteUpdateDeltaNeutralValidation
 )
 
 func (k QuoteUpdateKind) String() string {
@@ -249,6 +277,10 @@ func (k QuoteUpdateKind) String() string {
 		return "GenericTick"
 	case QuoteUpdateStringTick:
 		return "StringTick"
+	case QuoteUpdateEFP:
+		return "EFP"
+	case QuoteUpdateDeltaNeutralValidation:
+		return "DeltaNeutralValidation"
 	case QuoteUpdateParameters:
 		return "Parameters"
 	case QuoteUpdateOptionComputation:
@@ -303,11 +335,24 @@ type QuoteGenericTick struct {
 	Value    decimal.Decimal
 }
 
-// QuoteStringTick is one textual IBKR tick that has no normalized [Quote]
-// field. TickType is IBKR's numeric tick-type ID.
+// QuoteStringTick preserves one textual IBKR tick. Known fields, including
+// odd-lot exchanges, are also accumulated in [Quote].
 type QuoteStringTick struct {
 	TickType int
 	Value    string
+}
+
+// QuoteEFP is one Exchange-for-Physical market-data callback. Decimal fields
+// preserve the wire values without binary floating-point loss.
+type QuoteEFP struct {
+	TickType                 int
+	BasisPoints              decimal.Decimal
+	FormattedBasisPoints     string
+	ImpliedFuturesPrice      decimal.Decimal
+	HoldDays                 int
+	FutureLastTradeDate      string
+	DividendImpact           decimal.Decimal
+	DividendsToLastTradeDate decimal.Decimal
 }
 
 // QuoteNewsTick is one contract-specific news headline. Time is the provider
@@ -341,9 +386,9 @@ type QuoteOptionComputation struct {
 }
 
 // QuoteUpdate is one event from a quote subscription. Kind selects exactly one
-// payload. Snapshot is always the full accumulated [Quote]; ancillary ticks do
-// not mutate it. Changed reports the normalized fields touched by price, size,
-// or market-data-type callbacks and is zero when a tick has no [Quote] mapping.
+// payload. Snapshot is always the full accumulated [Quote]. Changed reports
+// normalized fields touched by price, size, string, or market-data-type
+// callbacks and is zero when a tick has no [Quote] mapping.
 // Every kind except [QuoteUpdateFields] sets its corresponding payload pointer;
 // unrelated payload pointers are nil.
 type QuoteUpdate struct {
@@ -354,6 +399,8 @@ type QuoteUpdate struct {
 	SizeTick          *QuoteSizeTick
 	GenericTick       *QuoteGenericTick
 	StringTick        *QuoteStringTick
+	EFP               *QuoteEFP
+	DeltaNeutral      *DeltaNeutralContract
 	NewsTick          *QuoteNewsTick
 	Parameters        *QuoteParameters
 	OptionComputation *QuoteOptionComputation
@@ -537,11 +584,18 @@ type HistoricalTickLast struct {
 }
 
 // HistoricalTicksResult holds the result of a historical ticks request.
-// Exactly one of the three slices is populated based on WhatToShow.
+// WhatToShow identifies the selected slice even when the Gateway returned no
+// ticks. Exactly one of the three slices is populated for non-empty results.
 type HistoricalTicksResult struct {
-	Ticks  []HistoricalTick       // populated for MIDPOINT
-	BidAsk []HistoricalTickBidAsk // populated for BID_ASK
-	Last   []HistoricalTickLast   // populated for TRADES
+	WhatToShow WhatToShow
+	Ticks      []HistoricalTick       // populated for MIDPOINT
+	BidAsk     []HistoricalTickBidAsk // populated for BID_ASK
+	Last       []HistoricalTickLast   // populated for TRADES
+}
+
+// Len reports the number of ticks in the selected result family.
+func (r HistoricalTicksResult) Len() int {
+	return len(r.Ticks) + len(r.BidAsk) + len(r.Last)
 }
 
 // MarketDepthRequest describes a market depth (Level 2 order book)

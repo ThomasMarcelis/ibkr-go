@@ -2,8 +2,9 @@
 
 This matrix tracks the implemented message surface. The canonical
 `internal/protocol` registry owns numeric identities and version gates; the
-codec consumes aliases from it. Field layouts are validated against
-server_version 200 captures.
+codec consumes aliases from it. Classic layouts are validated against
+server_version 200 captures; exact migrations and semantic gates are covered
+through server_version 225.
 
 ## Bootstrap
 
@@ -42,6 +43,7 @@ server version and managed-account bootstrap fields are known.
 | in | 76 | SecurityDefinitionOptionParameterEnd | landed |
 | out | 83 | reqSmartComponents | landed |
 | in | 82 | SmartComponents | landed |
+| out | 106 | cancelContractDetails | landed at sv215+ |
 
 Canonical Contract fields fail closed against each request layout. Classic
 contract details carry IncludeExpired/SecurityID/IssuerID; classic quotes carry
@@ -106,6 +108,8 @@ respectively.
 | in | 21 | TickOptionComputation | landed |
 | in | 45 | TickGeneric | landed |
 | in | 46 | TickString | landed |
+| in | 47 | TickEFP | landed; official-layout frozen, positive live callback pending |
+| in | 56 | DeltaNeutralValidation | landed; official-layout frozen, positive live callback pending |
 | in | 81 | TickReqParams | landed |
 | in | 58 | MarketDataType | landed |
 | in | 57 | TickSnapshotEnd | landed |
@@ -132,8 +136,13 @@ option computation is attested by
 TickNews is attested by the exact server-version-201 frames in
 `captures/20260709T230825Z-api_tick_news_aapl_probe` and frozen at the public
 API boundary by `tick_news_aapl_live.txt`.
-Exact server-version-206 request/callback protobuf vectors, parameter
-precision, and transparent classic CFD reroutes are frozen by codec/engine
+TickEFP and delta-neutral validation are distinct typed updates. Generic tick
+787 maps odd-lot tick IDs 105-110 into typed quote prices, sizes, and exchanges;
+the exact-sv225 public and SDK probes received ordinary delayed values but no
+odd-lot values under the current entitlement, so positive live evidence stays
+pending. Exact server-version-206 request/callback protobuf vectors, parameter
+precision, and transparent CFD reroutes at exact-sv206 classic and sv225
+protobuf boundaries are frozen by codec/engine
 tests backed by `protocol-audit-sv206.md`; the quote-focused
 `market_data_sv206_live.txt` replay covers the public quote path. Positive
 raw-213 L2 evidence remains pending because the capture account lacked
@@ -164,6 +173,7 @@ entitlement.
 | out | 89 | cancelHistogramData | landed | |
 | in | 89 | HistogramData | landed | |
 | out | 96 | reqHistoricalTicks | landed | |
+| out | 107 | cancelHistoricalTicks | landed at sv215+ | sent only while the caller still owns the route |
 | in | 96 | HistoricalTicks | landed | |
 | in | 97 | HistoricalTicksBidAsk | landed | tickAttribBidAsk decoded and exposed |
 | in | 98 | HistoricalTicksLast | landed | tickAttribLast decoded and exposed |
@@ -324,6 +334,12 @@ recorded in [`live-test-tracker.md`](live-test-tracker.md).
 | in | 80 | MktDepthExchanges | landed |
 | out | 104 | reqUserInfo | landed |
 | in | 107 | UserInfo | landed |
+| out | 108 | reqConfig | landed at sv219+ |
+| in | 110 | Config | landed at sv219+ |
+
+`TWS().Config` exposes the full current configuration response with pointer
+presence preserved. `updateConfig` is intentionally not registered or exposed:
+operator-owned TWS/Gateway configuration mutation is outside the library API.
 
 ## Session-Level Status
 

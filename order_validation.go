@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -58,6 +59,28 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 		return err
 	}
 	return validateOrderAdjustment(order.Adjustment)
+}
+
+func validateOrderServerVersion(order Order, serverVersion int) error {
+	for _, requirement := range []struct {
+		set     bool
+		field   string
+		version int
+	}{
+		{order.Deactivate, "Order.Deactivate", protocol.MinServerVersionAdditionalOrderParams1},
+		{order.PostOnly, "Order.PostOnly", protocol.MinServerVersionAdditionalOrderParams1},
+		{order.AllowPreOpen, "Order.AllowPreOpen", protocol.MinServerVersionAdditionalOrderParams1},
+		{order.IgnoreOpenAuction, "Order.IgnoreOpenAuction", protocol.MinServerVersionAdditionalOrderParams1},
+		{order.RouteMarketableToBBO != nil, "Order.RouteMarketableToBBO", protocol.MinServerVersionAdditionalOrderParams2},
+		{order.SeekPriceImprovement != nil, "Order.SeekPriceImprovement", protocol.MinServerVersionAdditionalOrderParams2},
+		{order.WhatIfType != nil, "Order.WhatIfType", protocol.MinServerVersionAdditionalOrderParams2},
+		{order.Hedge.MaxSize != nil, "Order.Hedge.MaxSize", protocol.MinServerVersionHedgeMaxSize},
+	} {
+		if requirement.set && serverVersion < requirement.version {
+			return fmt.Errorf("ibkr: %s requires server_version %d, negotiated %d: %w", requirement.field, requirement.version, serverVersion, ErrUnsupportedServerVersion)
+		}
+	}
+	return nil
 }
 
 func validateExerciseOptionsRequest(req ExerciseOptionsRequest) error {

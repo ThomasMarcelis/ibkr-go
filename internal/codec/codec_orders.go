@@ -563,6 +563,19 @@ type PlaceOrderRequest struct {
 	IncludeOvernight            string
 	ManualOrderIndicator        string // empty = UNSET
 	ImbalanceOnly               string
+	Deactivate                  string
+	PostOnly                    string
+	AllowPreOpen                string
+	IgnoreOpenAuction           string
+	RouteMarketableToBBO        string // empty = server default; 0 or 1 when explicit
+	SeekPriceImprovement        string // empty = server default; 0 or 1 when explicit
+	WhatIfType                  string // empty = UNSET
+	HedgeMaxSize                string // empty = UNSET
+
+	AttachedStopLossOrderID     int64
+	AttachedStopLossOrderType   string
+	AttachedTakeProfitOrderID   int64
+	AttachedTakeProfitOrderType string
 }
 
 func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {

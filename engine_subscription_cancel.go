@@ -6,12 +6,29 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
-// cancelSubscription records cancellation admission only while the route is
-// active on the current transport. A route retained across a lost connection
-// is already gone remotely, and a route closed during the replacement
-// handshake has not yet been resumed, so both are clean local detachments.
-func (e *engine) cancelSubscription(opKind OpKind, msg codec.Message) error {
-	if !e.isReady() {
+// cancelRouteSubscription records cancellation only when this route has been
+// admitted on the current transport generation. A route still waiting in the
+// reconnect resume queue is absent remotely and needs only local teardown.
+func (e *engine) cancelRouteSubscription(route *route, opKind OpKind, msg codec.Message) error {
+	if route == nil || route.generation != e.transportGeneration || e.routeAwaitingResume(route) {
+		return nil
+	}
+	return e.cancelCurrentRequest(opKind, msg)
+}
+
+func (e *engine) routeAwaitingResume(target *route) bool {
+	for _, pending := range e.resumePending {
+		if pending.route == target {
+			return true
+		}
+	}
+	return false
+}
+
+// cancelCurrentRequest records cancellation admission for an in-flight
+// request that is known to belong to the current transport.
+func (e *engine) cancelCurrentRequest(opKind OpKind, msg codec.Message) error {
+	if !e.hasReadyTransport() {
 		return nil
 	}
 	tr := e.transport

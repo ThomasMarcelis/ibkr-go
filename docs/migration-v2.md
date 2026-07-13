@@ -27,6 +27,26 @@ require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.2
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
 
+## From rc.2 to the current release candidate
+
+Open-order refresh now belongs to the exact subscription that owns the
+request-ID-less response stream:
+
+```go
+sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll)
+if err != nil {
+    return err
+}
+if err := sub.Refresh(ctx); err != nil {
+    return err
+}
+```
+
+Replace `Orders().RefreshOpen(ctx)` with `sub.Refresh(ctx)`. The former
+`ErrNoSubscription` sentinel is gone because there is no longer a global
+refresh lookup; overlapping refreshes return `ErrOperationActive`, and auto
+scope returns `ErrNoSnapshot`.
+
 ## Subscription events
 
 Subscriptions now expose one ordered stream. Data and reconnect boundaries no

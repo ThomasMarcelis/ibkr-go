@@ -67,7 +67,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 	}
 	resp := make(chan result, 1)
 
-	enqueueSubscriptionSetup(ctx, e, resp, func() {
+	enqueueSingletonSubscriptionSetup(ctx, e, singletonNewsBulletins, resp, func() {
 		if _, exists := e.singletons[singletonNewsBulletins]; exists {
 			resp <- result{err: operationActive("news bulletins subscription")}
 			return
@@ -201,6 +201,8 @@ func parseHistoricalNewsTime(raw string) (time.Time, error) {
 		return ts, nil
 	}
 	for _, layout := range []string{
+		"2006-01-02 15:04:05.0Z07:00",
+		"2006-01-02 15:04:05Z07:00",
 		"2006-01-02 15:04:05.0",
 		"2006-01-02 15:04:05",
 	} {

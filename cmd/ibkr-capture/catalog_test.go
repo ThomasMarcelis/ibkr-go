@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	ibkr "github.com/ThomasMarcelis/ibkr-go/v2"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
@@ -59,6 +60,27 @@ func TestUserInfoCatalogMessageIDs(t *testing.T) {
 	want := []int{protocol.OutReqUserInfo, protocol.InUserInfo}
 	if !slices.Equal(got, want) {
 		t.Fatalf("user_info message IDs = %v, want request/response %v", got, want)
+	}
+}
+
+func TestTWSConfigCatalogMessageIDs(t *testing.T) {
+	t.Parallel()
+
+	got := scenarios["tws_config"].metadata.MessageIDs
+	want := []int{protocol.OutReqConfig, protocol.InConfig}
+	if !slices.Equal(got, want) {
+		t.Fatalf("tws_config message IDs = %v, want request/response %v", got, want)
+	}
+}
+
+func TestOddLotScenarioUsesNamedGenericTick(t *testing.T) {
+	t.Parallel()
+
+	if GenericTickOddLotBidAsk := string(ibkr.GenericTickOddLotBidAsk); GenericTickOddLotBidAsk != "787" {
+		t.Fatalf("GenericTickOddLotBidAsk = %q, want 787", GenericTickOddLotBidAsk)
+	}
+	if !slices.Contains(scenarios["quote_odd_lot_aapl"].metadata.Requirements, "live_market_data_for_odd_lots") {
+		t.Fatal("odd-lot scenario does not expose its live entitlement requirement")
 	}
 }
 
@@ -275,17 +297,25 @@ func TestOrderTypeMatrixCoversPublicOrderTypes(t *testing.T) {
 	}
 }
 
-func TestAggressivePaperSizingDefaults(t *testing.T) {
+func TestMinimalPaperSizingDefaults(t *testing.T) {
 	t.Parallel()
 
-	if got := apiStockOrderQuantity.String(); got != "100" {
-		t.Fatalf("apiStockOrderQuantity = %s, want 100", got)
+	if got := apiStockOrderQuantity.String(); got != "1" {
+		t.Fatalf("apiStockOrderQuantity = %s, want 1", got)
 	}
-	if got := apiStockCampaignOrderQuantity.String(); got != "500" {
-		t.Fatalf("apiStockCampaignOrderQuantity = %s, want 500", got)
+	if got := apiStockCampaignOrderQuantity.String(); got != "1" {
+		t.Fatalf("apiStockCampaignOrderQuantity = %s, want 1", got)
 	}
-	if got := apiOptionContractQuantity.String(); got != "5" {
-		t.Fatalf("apiOptionContractQuantity = %s, want 5", got)
+	if got := apiOptionContractQuantity.String(); got != "1" {
+		t.Fatalf("apiOptionContractQuantity = %s, want 1", got)
+	}
+}
+
+func TestScenarioCaptureRoleRejectsUnknownRisk(t *testing.T) {
+	t.Parallel()
+
+	if _, err := scenarioCaptureRole(scenarioMetadata{RiskClass: "future_mutation"}); err == nil {
+		t.Fatal("scenarioCaptureRole() error = nil, want fail-closed unknown risk")
 	}
 }
 

@@ -179,6 +179,11 @@ var scenarios = map[string]*scenario{
 		description: "observe generic ticks 233 and 236 on a delayed AAPL quote stream through the public API",
 		run:         runAPIQuoteStreamGenericTicksAAPL,
 	},
+	"quote_odd_lot_aapl": {
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickString, protocol.InTickReqParams, protocol.InErrMsg}, "entitlement_probe", []string{"market_hours", "live_market_data_for_odd_lots"}, []string{"generic tick 787 request with typed odd-lot fields or an exact entitlement/no-row boundary and fenced cancellation"}, 1, "candidate", batchNewV2, batchReadOnly, batchExhaustiveMarketHours),
+		description: "request and observe the v225 AAPL odd-lot quote family through the public API",
+		run:         runAPIOddLotQuotesAAPL,
+	},
 
 	// --- Real-time bars ---
 
@@ -238,6 +243,11 @@ var scenarios = map[string]*scenario{
 		metadata:    meta("tws", []string{"TWS().UserInfo"}, []int{protocol.OutReqUserInfo, protocol.InUserInfo}, "read_only", nil, []string{"user info response"}, 1, "promoted", batchReadOnly),
 		description: "request and decode TWS user information through the public API",
 		run:         runAPIUserInfo,
+	},
+	"tws_config": {
+		metadata:    meta("tws", []string{"TWS().Config"}, []int{protocol.OutReqConfig, protocol.InConfig}, "read_only", nil, []string{"presence-preserving TWS or Gateway configuration snapshot"}, 1, "candidate", batchNewV2, batchReadOnly),
+		description: "request the current TWS or Gateway configuration through the public API",
+		run:         runAPITWSConfig,
 	},
 	"matching_symbols_aapl": {
 		metadata:    meta("contracts", []string{"Contracts().Search"}, []int{protocol.OutReqMatchingSymbols, protocol.InSymbolSamples}, "read_only", nil, []string{"exact-ish symbol samples"}, 1, "promoted", batchReadOnly),
@@ -303,7 +313,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPICompletedOrders,
 	},
 	"tick_efp_probe": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InTickPrice, protocol.InTickSize, protocol.InErrMsg, protocol.OutReqCurrentTime}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"raw TickEFP callback capture or real contract, entitlement, or no-data result with fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InTickPrice, protocol.InTickSize, protocol.InTickEFP, protocol.InDeltaNeutralValidation, protocol.InErrMsg, protocol.OutReqCurrentTime}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"typed TickEFP or delta-neutral validation callback, or a real contract, entitlement, or no-data result with fenced cancellation"}, 1, "candidate", batchReadOnly),
 		description: "live EFP market-data probe using DTE/EUREX and Tencent/HKFE single-stock-future BAGs",
 		run:         runAPITickEFPProbe,
 	},

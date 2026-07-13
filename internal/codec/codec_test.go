@@ -284,6 +284,28 @@ func TestDecodeKnownMalformedBodyIsMessageScoped(t *testing.T) {
 	}
 }
 
+func TestMalformedClassicDepthCarriesMessageSpecificRequestIdentity(t *testing.T) {
+	t.Parallel()
+
+	msgs, err := DecodeBatch(200, wire.EncodeFields([]string{
+		"12", "6", "301", "0", "0", // captured layout prefix; side/price/size truncated
+	}))
+	malformed := requireMalformedInbound(t, msgs, err)
+	if malformed.Correlation == nil || malformed.Correlation.RequestID != 301 {
+		t.Fatalf("MalformedInbound.Correlation = %+v, want request 301", malformed.Correlation)
+	}
+
+	payload, err := protocol.EncodeProtobufEnvelope(206, protocol.InMarketDepth, []byte{0x08, 0xad, 0x02, 0x12})
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs, err = DecodeBatch(206, payload)
+	malformed = requireMalformedInbound(t, msgs, err)
+	if malformed.Correlation != nil {
+		t.Fatalf("partial protobuf correlation = %+v, want untrusted nil", malformed.Correlation)
+	}
+}
+
 func TestDecodeMalformedMessageIDRemainsProtocolError(t *testing.T) {
 	t.Parallel()
 

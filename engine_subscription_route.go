@@ -30,7 +30,7 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 		e.deleteKeyedRoute(reqID)
 		var err error
 		if cancel != nil {
-			err = e.cancelSubscription(opKind, cancel)
+			err = e.cancelRouteSubscription(ownedRoute, opKind, cancel)
 		}
 		sub.closeWithErr(err)
 		e.retireSubscriptionTransport(err)
@@ -40,6 +40,7 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 		opKind:       opKind,
 		subscription: true,
 		resume:       cfg.resume,
+		generation:   e.transportGeneration,
 		handleAPIErr: func(msg codec.APIError, e *engine) {
 			if e.keyed[reqID] != ownedRoute {
 				return
@@ -73,9 +74,10 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 			ambiguous = ownedRoute.responsePending()
 		}
 		delete(e.singletons, key)
+		e.markSingletonGenerationDirty(key, ownedRoute)
 		var err error
 		if cancel != nil && !ambiguous {
-			err = e.cancelSubscription(opKind, cancel)
+			err = e.cancelRouteSubscription(ownedRoute, opKind, cancel)
 		}
 		sub.closeWithErr(err)
 		if ambiguous {
@@ -89,6 +91,7 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 		opKind:       opKind,
 		subscription: true,
 		resume:       cfg.resume,
+		generation:   e.transportGeneration,
 		onDisconnect: func(_ *engine, _ error) bool {
 			sub.closeWithErr(ErrResumeRequired)
 			return false
@@ -97,4 +100,19 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 		cancel: sub.cancelFromActor,
 	}
 	return sub, ownedRoute
+}
+
+func (e *engine) markSingletonGenerationDirty(key string, ownedRoute *route) {
+	if ownedRoute == nil || e.transport == nil || ownedRoute.generation != e.transportGeneration {
+		return
+	}
+	if e.dirtySingletons == nil {
+		e.dirtySingletons = make(map[string]uint64)
+	}
+	e.dirtySingletons[key] = ownedRoute.generation
+}
+
+func (e *engine) singletonGenerationDirty(key string) bool {
+	generation, ok := e.dirtySingletons[key]
+	return ok && generation == e.transportGeneration
 }

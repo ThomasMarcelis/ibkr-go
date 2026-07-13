@@ -504,6 +504,13 @@ func (c WSHClient) EventData(ctx context.Context, req WSHEventDataRequest) (JSON
 // [Client.TWS].
 type TWSClient struct{ engine *engine }
 
+// Config returns the current TWS or IB Gateway configuration exposed by the
+// socket API. Pointer fields preserve protobuf presence independently of a
+// setting's zero value.
+func (c TWSClient) Config(ctx context.Context) (TWSConfig, error) {
+	return c.engine.Config(ctx)
+}
+
 // UserInfo returns the white-branding user information string for this login.
 func (c TWSClient) UserInfo(ctx context.Context) (string, error) {
 	return c.engine.UserInfo(ctx)

@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"strings"
 	"testing"
@@ -28,11 +29,10 @@ func newEngineForDispatchTest() (*engine, *bytes.Buffer) {
 	return e, buf
 }
 
-// TestRouteCommissionReportLogsAndDropsOnDecodeError freezes the W3 fix:
-// a malformed CommissionReport routed to a live OrderHandle must not
-// terminate the handle, and the decode failure must be surfaced via the
-// configured slog logger so it is observable in production.
-func TestRouteCommissionReportLogsAndDropsOnDecodeError(t *testing.T) {
+// TestRouteCommissionReportClosesObservationOnDecodeError freezes the
+// lossless local stream contract: a malformed report terminates observation
+// without cancelling the live order.
+func TestRouteCommissionReportClosesObservationOnDecodeError(t *testing.T) {
 	t.Parallel()
 
 	e, logs := newEngineForDispatchTest()
@@ -49,26 +49,16 @@ func TestRouteCommissionReportLogsAndDropsOnDecodeError(t *testing.T) {
 		Currency:   "USD",
 	})
 
-	if handle.isDone() {
-		t.Fatal("order handle was closed on decode error; must remain live")
+	err := handle.Wait()
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Direction != "inbound" {
+		t.Fatalf("Wait() = %#v, want inbound ProtocolError", err)
 	}
-
-	select {
-	case evt, ok := <-handle.Events():
-		t.Fatalf("handle emitted event (%+v, ok=%v) after decode failure; must drop", evt, ok)
-	default:
-		// expected: no event emitted.
+	if _, ok := e.orders[42]; ok {
+		t.Fatal("commission projection failure retained the local order route")
 	}
-
-	got := logs.String()
-	if !strings.Contains(got, "drop commission report on decode error") {
-		t.Errorf("logger missing commission drop diagnostic: %s", got)
-	}
-	if !strings.Contains(got, "exec-bad") {
-		t.Errorf("logger missing exec_id attribute: %s", got)
-	}
-	if !strings.Contains(got, "order_id=42") {
-		t.Errorf("logger missing order_id attribute: %s", got)
+	if got := logs.String(); strings.Contains(got, "cancel") {
+		t.Errorf("local projection failure logged a broker cancellation: %s", got)
 	}
 }
 
@@ -109,10 +99,9 @@ func TestRouteCommissionReportDeliversValidReport(t *testing.T) {
 	}
 }
 
-// TestDispatchExecutionToOrderLogsAndDropsOnDecodeError freezes the symmetric
-// W3 fix for execution dispatch: a malformed ExecutionDetail routed to a live
-// OrderHandle must be logged and dropped without tearing the handle down.
-func TestDispatchExecutionToOrderLogsAndDropsOnDecodeError(t *testing.T) {
+// TestDispatchExecutionToOrderClosesObservationOnDecodeError freezes the
+// symmetric lossless-stream behavior for execution projection failures.
+func TestDispatchExecutionToOrderClosesObservationOnDecodeError(t *testing.T) {
 	t.Parallel()
 
 	e, logs := newEngineForDispatchTest()
@@ -129,29 +118,15 @@ func TestDispatchExecutionToOrderLogsAndDropsOnDecodeError(t *testing.T) {
 		Time:    "not-a-timestamp",
 	})
 
-	if handle.isDone() {
-		t.Fatal("order handle was closed on decode error; must remain live")
+	err := handle.Wait()
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Direction != "inbound" {
+		t.Fatalf("Wait() = %#v, want inbound ProtocolError", err)
 	}
-
-	select {
-	case evt, ok := <-handle.Events():
-		t.Fatalf("handle emitted event (%+v, ok=%v) after decode failure; must drop", evt, ok)
-	default:
-		// expected: no event emitted.
+	if _, ok := e.orders[77]; ok {
+		t.Fatal("execution projection failure retained the local order route")
 	}
-
-	if st, ok := e.execDeliveries["exec-bad-time"]; ok && st.orderID != 0 {
-		t.Error("delivery record was claimed despite decode failure")
-	}
-
-	got := logs.String()
-	if !strings.Contains(got, "drop execution detail on decode error") {
-		t.Errorf("logger missing execution drop diagnostic: %s", got)
-	}
-	if !strings.Contains(got, "exec-bad-time") {
-		t.Errorf("logger missing exec_id attribute: %s", got)
-	}
-	if !strings.Contains(got, "order_id=77") {
-		t.Errorf("logger missing order_id attribute: %s", got)
+	if got := logs.String(); strings.Contains(got, "cancel") {
+		t.Errorf("local projection failure logged a broker cancellation: %s", got)
 	}
 }

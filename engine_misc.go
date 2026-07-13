@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 const scannerNoItemsMessage = "Historical Market Data Service query message:no items retrieved"
@@ -199,6 +200,50 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return out.whiteBrandingID, out.err
+}
+
+func (e *engine) Config(ctx context.Context) (TWSConfig, error) {
+	type result struct {
+		config TWSConfig
+		err    error
+	}
+	resp := make(chan result, 1)
+	var reqID int
+	var ownedRoute *route
+
+	enqueueOneShotSetup(ctx, e, func() {
+		if e.serverVersion < protocol.MinServerVersionConfig {
+			resp <- result{err: fmt.Errorf("ibkr: config requires server_version %d, negotiated %d: %w", protocol.MinServerVersionConfig, e.serverVersion, ErrUnsupportedServerVersion)}
+			return
+		}
+		reqID = e.allocReqID()
+		ownedRoute = newKeyedOneShotRoute(reqID, OpConfig,
+			func(msg any, eng *engine) {
+				if config, ok := msg.(codec.ConfigResponse); ok {
+					eng.deleteKeyedRoute(reqID)
+					resp <- result{config: fromCodecTWSConfig(config)}
+				}
+			}, func(err error) {
+				resp <- result{err: err}
+			})
+		e.keyed[reqID] = ownedRoute
+		if err := e.sendContext(ctx, codec.ConfigRequest{ReqID: reqID}); err != nil {
+			e.deleteKeyedRoute(reqID)
+			resp <- result{err: err}
+		}
+	})
+
+	out, err := awaitOneShotResponse(ctx, e, resp, func() {
+		e.enqueue(func() {
+			if e.keyed[reqID] == ownedRoute {
+				e.deleteKeyedRoute(reqID)
+			}
+		})
+	})
+	if err != nil {
+		return TWSConfig{}, err
+	}
+	return out.config, out.err
 }
 
 func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscriptionRequest, opts ...SubscriptionOption) (*Subscription[[]ScannerResult], error) {
@@ -422,7 +467,7 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
-				cancelErr := e.cancelSubscription(OpWSHMetaData, codec.CancelWSHMetaData{ReqID: reqID})
+				cancelErr := e.cancelCurrentRequest(OpWSHMetaData, codec.CancelWSHMetaData{ReqID: reqID})
 				e.deleteKeyedRoute(reqID)
 				e.retireSubscriptionTransport(cancelErr)
 			}
@@ -480,7 +525,7 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
 		e.enqueue(func() {
 			if _, ok := e.keyed[reqID]; ok {
-				cancelErr := e.cancelSubscription(OpWSHEventData, codec.CancelWSHEventData{ReqID: reqID})
+				cancelErr := e.cancelCurrentRequest(OpWSHEventData, codec.CancelWSHEventData{ReqID: reqID})
 				e.deleteKeyedRoute(reqID)
 				e.retireSubscriptionTransport(cancelErr)
 			}

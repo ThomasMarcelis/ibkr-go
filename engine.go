@@ -30,10 +30,11 @@ type engine struct {
 	snapshotMu sync.RWMutex
 	snapshot   Snapshot
 
-	transport          *transport.Conn
-	retiringTransport  *transport.Conn
-	transportRetireErr error
-	serverVersion      int
+	transport           *transport.Conn
+	retiringTransport   *transport.Conn
+	transportRetireErr  error
+	transportGeneration uint64
+	serverVersion       int
 
 	keyed      map[int]*route
 	singletons map[string]*route
@@ -58,6 +59,7 @@ type engine struct {
 	// hot misdecoded feed logs and emits once instead of per frame.
 	unknownInboundSeen   map[int]struct{}
 	malformedInboundSeen map[int]struct{}
+	dirtySingletons      map[string]uint64
 	readySetups          []*readySetup
 
 	nextReqID                int
@@ -109,7 +111,7 @@ type bootstrapState struct {
 
 const (
 	// Supported versions are the live-validated 200 classic layout and the
-	// staged protobuf migrations through 207.
+	// staged protobuf migrations and protocol additions through 225.
 	minServerVersion = protocol.SupportedMinServerVersion
 	maxServerVersion = protocol.SupportedMaxServerVersion
 	bootstrapTimeout = 5 * time.Second
@@ -150,12 +152,14 @@ type route struct {
 	close            func(error)
 	cleanup          func()
 	gapped           bool // true after Gap emitted; prevents double emission
+	generation       uint64
 }
 
 type orderRoute struct {
 	orderID          int64
 	handle           *OrderHandle
 	cleanup          func()
+	attachedOrderIDs []int64
 	closed           bool
 	gapped           bool // true after Gap emitted; prevents duplicate gap events
 	recoveryRequired bool
@@ -206,6 +210,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		execDeliveries:           make(map[string]*execDelivery),
 		unknownInboundSeen:       make(map[int]struct{}),
 		malformedInboundSeen:     make(map[int]struct{}),
+		dirtySingletons:          make(map[string]uint64),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
 		snapshot: Snapshot{
@@ -316,6 +321,9 @@ func (e *engine) lastConnectionError() error {
 }
 
 func (e *engine) setState(next State, code int, message string, err error, apiErrors ...*APIError) {
+	if e.closed && next != StateClosed {
+		return
+	}
 	e.snapshotMu.Lock()
 	prev := e.snapshot.State
 	e.snapshot.State = next
@@ -506,6 +514,16 @@ func (e *engine) connectionSeq() uint64 {
 }
 
 func (e *engine) isReady() bool {
+	if !e.hasReadyTransport() {
+		return false
+	}
+	return len(e.resumePending) == 0 && !e.resumeWaiting
+}
+
+// hasReadyTransport reports whether the current physical connection can
+// admit protocol teardown. Ordinary new work additionally waits for the
+// reconnect resume barrier in isReady.
+func (e *engine) hasReadyTransport() bool {
 	if e.transport == nil {
 		return false
 	}

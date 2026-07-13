@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -23,6 +24,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 
 	resp := make(chan result, 1)
 	var reqID int
+	var ownedRoute *route
 	enqueueOneShotSetup(ctx, e, func() {
 		if err := validateContractFieldSupport(contract, "contract details", e.serverVersion, contractDetailsContractFields(e.serverVersion)); err != nil {
 			resp <- result{err: err}
@@ -31,7 +33,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 
 		reqID = e.allocReqID()
 		values := make([]ContractDetails, 0, 4)
-		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpContractDetails,
+		ownedRoute = newKeyedOneShotRoute(reqID, OpContractDetails,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
 				case codec.ContractDetails:
@@ -57,6 +59,7 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 			}, func(err error) {
 				resp <- result{err: err}
 			})
+		e.keyed[reqID] = ownedRoute
 		if err := e.sendContext(ctx, codec.ContractDetailsRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(contract),
@@ -67,7 +70,15 @@ func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]Cont
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
+		e.enqueue(func() {
+			if reqID == 0 || ownedRoute == nil || e.keyed[reqID] != ownedRoute {
+				return
+			}
+			e.deleteKeyedRoute(reqID)
+			if e.serverVersion >= protocol.MinServerVersionBrokerSideOneShotCancel {
+				_ = e.send(codec.CancelContractData{ReqID: reqID})
+			}
+		})
 	})
 	if err != nil {
 		return nil, err

@@ -113,14 +113,19 @@ scenario.
 | 103 | cancelWSHEventData | partial | partial | no | |
 | 104 | reqUserInfo | yes | yes | yes | |
 | 105 | reqCurrentTimeInMillis | yes | yes | yes | exact supported request/response |
+| 106 | cancelContractDetails | yes | yes | yes | exact-sv215 broker-side cancellation |
+| 107 | cancelHistoricalTicks | yes | yes | yes | exact-sv215 broker-side cancellation |
+| 108 | reqConfig | yes | yes | yes | exact-sv219 response and public scenario |
 
-### 1.2 Inbound (server → client): 76 message IDs
+### 1.2 Inbound (server → client): 79 message IDs
 
 All are exercised through the outbound scenarios above. Individual gaps:
 
 | ID | Name | Gap |
 |----|------|-----|
-| 1 | tickPrice | EFP tick type never observed |
+| 47 | tickEFP | typed official layout; positive entitled callback not observed |
+| 56 | deltaNeutralValidation | typed official layout; positive BAG callback not observed |
+| 110 | config | exact-sv219 SDK/live and public evidence |
 | 14 | newsBulletins | live capture exists; allMessages variant untested |
 | 21 | tickOptionComputation | live calc scenarios exist; streaming OPT tick untested |
 | 83 | newsArticle | captured through `api_news_article_aapl`; invalid article/provider variants remain |
@@ -450,7 +455,7 @@ tests.
 | PnL: single-position | yes | with open position |
 | Family codes | yes | multi-family account |
 | Completed orders: apiOnly filter | replay promoted | `api_completed_orders_variants_aapl` recaptured after the TRAIL LIMIT completed-order decode fix; apiOnly=false and apiOnly=true both reached `completedOrdersEnd` |
-| Completed orders: full details | codec complete | exact source-aligned parser is frozen by the live TRAIL LIMIT frame; public full-detail projection remains |
+| Completed orders: full details | yes | exact source-aligned parser and public full-detail projection are frozen; rare nondefault branches remain live-attestation targets |
 
 ## 10. Error and Edge Case Coverage
 
@@ -608,7 +613,9 @@ rejections or no-status cleanup evidence.
 - [ ] Tick-by-tick AllLast
 - [ ] All generic tick families
 - [ ] Regulatory snapshot
-- [ ] tickEFP callback (`tick_efp_probe` now sends live-derived DTE/EUREX and Tencent/HKFE EFP BAGs; repeat during an active single-stock-future session)
+- [ ] Positive tickEFP callback (typed implementation is source-law frozen; `tick_efp_probe` needs an entitled active single-stock future)
+- [ ] Positive delta-neutral validation callback (typed implementation is source-law frozen; needs an accepted BAG request)
+- [ ] Positive odd-lot ticks 105-110 (generic tick 787 is exact-sv225 negative-live proven under the current entitlement)
 
 ### Phase 8: Complete error catalog
 

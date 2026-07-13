@@ -206,10 +206,6 @@ func DialTradingContext(t testing.TB, timeout time.Duration, extra ...ibkr.Optio
 
 func dialContext(t testing.TB, cfg Config, timeout time.Duration, extra ...ibkr.Option) (*ibkr.Client, context.Context, context.CancelFunc) {
 	t.Helper()
-	if os.Getenv(envClientID) == "" {
-		cfg.ClientID = int(generatedClientID.Add(1))
-	}
-
 	liveSessionMu.Lock()
 	locked := true
 	unlock := func() {
@@ -219,8 +215,22 @@ func dialContext(t testing.TB, cfg Config, timeout time.Duration, extra ...ibkr.
 		}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	client, err := ibkr.DialContext(ctx, Options(cfg, extra...)...)
+	dial := func() (*ibkr.Client, context.Context, context.CancelFunc, error) {
+		attemptCfg := cfg
+		if os.Getenv(envClientID) == "" {
+			attemptCfg.ClientID = int(generatedClientID.Add(1))
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
+		client, err := ibkr.DialContext(ctx, Options(attemptCfg, extra...)...)
+		return client, ctx, cancel, err
+	}
+
+	client, ctx, cancel, err := dial()
+	if err != nil {
+		cancel()
+		t.Logf("first live Gateway dial failed; retrying once with a fresh generated client ID: %v", err)
+		client, ctx, cancel, err = dial()
+	}
 	if err != nil {
 		cancel()
 		unlock()

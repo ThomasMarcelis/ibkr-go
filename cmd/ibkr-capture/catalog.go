@@ -85,6 +85,9 @@ func catalogEntries() ([]scenarioCatalogEntry, error) {
 		if sc.run == nil {
 			return nil, fmt.Errorf("scenario %s: missing runner", name)
 		}
+		if err := validateRiskClass(sc.metadata.RiskClass); err != nil {
+			return nil, fmt.Errorf("scenario %s: %w", name, err)
+		}
 		entries = append(entries, scenarioCatalogEntry{
 			Name:             name,
 			Description:      sc.description,
@@ -106,7 +109,7 @@ func writeCatalogJSON(w io.Writer) error {
 
 func writeBatchList(w io.Writer, batch string) error {
 	if batch == "" {
-		batch = batchNewV2
+		batch = batchExhaustiveReadOnly
 	}
 	entries, err := catalogEntries()
 	if err != nil {
@@ -134,7 +137,11 @@ func writeScenarioRole(w io.Writer, scenarioNames []string) error {
 		if !ok {
 			return fmt.Errorf("unknown scenario %q", scenarioName)
 		}
-		if scenarioCaptureRole(sc.metadata) == captureRolePaperDev {
+		scenarioRole, err := scenarioCaptureRole(sc.metadata)
+		if err != nil {
+			return fmt.Errorf("scenario %q: %w", scenarioName, err)
+		}
+		if scenarioRole == captureRolePaperDev {
 			role = captureRolePaperDev
 		}
 	}
@@ -157,11 +164,23 @@ func cancelsAllowedForRiskClass(riskClass string) bool {
 	}
 }
 
-func scenarioCaptureRole(md scenarioMetadata) string {
-	if cancelsAllowedForRiskClass(md.RiskClass) {
-		return captureRolePaperDev
+func validateRiskClass(riskClass string) error {
+	switch riskClass {
+	case "read_only", "entitlement_probe", "paper_order", "paper_marketable_order", "paper_trigger", "paper_destructive":
+		return nil
+	default:
+		return fmt.Errorf("unknown risk class %q", riskClass)
 	}
-	return captureRoleReadOnlyLive
+}
+
+func scenarioCaptureRole(md scenarioMetadata) (string, error) {
+	if err := validateRiskClass(md.RiskClass); err != nil {
+		return "", err
+	}
+	if cancelsAllowedForRiskClass(md.RiskClass) {
+		return captureRolePaperDev, nil
+	}
+	return captureRoleReadOnlyLive, nil
 }
 
 func (e scenarioCatalogEntry) inBatch(batch string) bool {

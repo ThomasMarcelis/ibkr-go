@@ -313,7 +313,9 @@ const (
 // gap. Reconcile open orders, executions, and completed orders for business
 // decisions. Replace remains permanently disabled on this handle because that
 // reconciliation cannot restore its lost event history; cancellation remains
-// safe by stable OrderID. Err matches [ErrOrderRecoveryRequired].
+// safe by stable OrderID. RecoveryRequired uses the prospective replacement
+// ConnectionSeq before that connection reaches Ready. Err matches
+// [ErrOrderRecoveryRequired].
 type OrderLifecycleEvent struct {
 	Kind          OrderLifecycleKind
 	ConnectionSeq uint64
@@ -387,6 +389,7 @@ type OrderHedge struct {
 	Type                  HedgeType
 	Param                 string
 	DisableAutomaticPrice *bool
+	MaxSize               *int // maximum hedge size; requires server_version 223
 }
 
 // OrderAlgorithm configures an IB algorithm and its strategy-specific
@@ -469,6 +472,13 @@ type Order struct {
 	UsePriceMgmtAlgo      *bool            // nil = server default; enable IB's price management algo
 	AdvancedErrorOverride string           // override token for advanced-order warnings
 	ManualOrderTime       string           // manual order entry time for compliance
+	Deactivate            bool             // submit the order inactive; requires server_version 216
+	PostOnly              bool             // reject instead of taking liquidity; requires server_version 216
+	AllowPreOpen          bool             // allow routing in the venue pre-open; requires server_version 216
+	IgnoreOpenAuction     bool             // exclude the opening auction; requires server_version 216
+	RouteMarketableToBBO  *bool            // nil = server default; requires server_version 217
+	SeekPriceImprovement  *bool            // nil = server default; requires server_version 217
+	WhatIfType            *int             // optional IBKR what-if mode; requires server_version 217
 }
 
 // PlaceOrderRequest pairs the [Contract] to trade with the [Order] instruction.

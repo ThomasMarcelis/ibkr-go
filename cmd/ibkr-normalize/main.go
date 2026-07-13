@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -26,34 +27,45 @@ func main() {
 	verify := flag.Bool("verify", false, "verify capture integrity and print a protocol-aware summary")
 	flag.Parse()
 
-	if *dir == "" {
-		log.Fatal("-dir is required")
+	if err := runNormalize(os.Stdout, *dir, *rawOut, *replayDir, *transcriptOut, *verify); err != nil {
+		log.Fatal(err)
 	}
-	if *rawOut == "" {
-		*rawOut = filepath.Join(*dir, "raw.txt")
-	}
-	if *replayDir == "" {
-		*replayDir = filepath.Join(*dir, "replay")
+}
+
+func runNormalize(out io.Writer, dir, rawOut, replayDir, transcriptOut string, verify bool) error {
+	if dir == "" {
+		return fmt.Errorf("-dir is required")
 	}
 
-	events, err := capturelog.LoadEvents(filepath.Join(*dir, "events.jsonl"))
+	events, err := capturelog.LoadEvents(filepath.Join(dir, "events.jsonl"))
 	if err != nil {
-		log.Fatalf("load events: %v", err)
+		return fmt.Errorf("load events: %w", err)
 	}
-	meta, err := capturelog.LoadMeta(filepath.Join(*dir, "meta.json"))
+	meta, err := capturelog.LoadMeta(filepath.Join(dir, "meta.json"))
 	if err != nil {
-		log.Fatalf("load meta: %v", err)
+		return fmt.Errorf("load meta: %w", err)
 	}
 	replayEvents, err := capturelog.NormalizeEvents(events)
 	if err != nil {
-		log.Fatalf("normalize events: %v", err)
+		return fmt.Errorf("normalize events: %w", err)
+	}
+	if verify {
+		if transcriptOut != "" || rawOut != "" || replayDir != "" {
+			return fmt.Errorf("-verify cannot be combined with output flags")
+		}
+		return writeVerification(out, dir, meta, events, replayEvents)
+	}
+	if rawOut == "" {
+		rawOut = filepath.Join(dir, "raw.txt")
+	}
+	if replayDir == "" {
+		replayDir = filepath.Join(dir, "replay")
 	}
 
-	file, err := os.OpenFile(*rawOut, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	file, err := os.OpenFile(rawOut, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- the caller explicitly selects this CLI output path.
 	if err != nil {
-		log.Fatalf("create output: %v", err)
+		return fmt.Errorf("create raw output: %w", err)
 	}
-	defer file.Close()
 
 	for _, event := range events {
 		kind := event.Kind
@@ -64,7 +76,8 @@ func main() {
 		if kind == capturelog.EventChunk {
 			data, err := capturelog.DecodeData(event)
 			if err != nil {
-				log.Fatalf("decode event: %v", err)
+				_ = file.Close()
+				return fmt.Errorf("decode event: %w", err)
 			}
 			line = fmt.Sprintf("%s direction=%s len=%d hex=%s quoted=%q",
 				line,
@@ -75,23 +88,23 @@ func main() {
 			)
 		}
 		if _, err := fmt.Fprintln(file, line); err != nil {
-			log.Fatalf("write output: %v", err)
+			_ = file.Close()
+			return fmt.Errorf("write raw output: %w", err)
 		}
+	}
+	if err := file.Close(); err != nil {
+		return fmt.Errorf("close raw output: %w", err)
 	}
 
-	if err := capturelog.WriteReplay(*replayDir, *dir, meta, replayEvents); err != nil {
-		log.Fatalf("write replay: %v", err)
+	if err := capturelog.WriteReplay(replayDir, dir, meta, replayEvents); err != nil {
+		return fmt.Errorf("write replay: %w", err)
 	}
-	if *verify {
-		if err := writeVerification(os.Stdout, *dir, events, replayEvents); err != nil {
-			log.Fatalf("verify capture: %v", err)
+	if transcriptOut != "" {
+		if err := writeTranscriptSkeleton(transcriptOut, meta, replayEvents); err != nil {
+			return fmt.Errorf("write transcript skeleton: %w", err)
 		}
 	}
-	if *transcriptOut != "" {
-		if err := writeTranscriptSkeleton(*transcriptOut, meta, replayEvents); err != nil {
-			log.Fatalf("write transcript skeleton: %v", err)
-		}
-	}
+	return nil
 }
 
 func writeTranscriptSkeleton(path string, meta capturelog.Meta, replayEvents []capturelog.ReplayEvent) error {

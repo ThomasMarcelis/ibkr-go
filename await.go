@@ -33,14 +33,18 @@ func enqueueReadySetup(ctx context.Context, e *engine, onCanceled func(), fn fun
 			return
 		}
 
-		setup := &readySetup{ctx: ctx, onCanceled: onCanceled, fn: fn}
-		setup.stop = context.AfterFunc(ctx, func() {
-			e.enqueue(func() {
-				e.cancelReadySetup(setup)
-			})
-		})
-		e.readySetups = append(e.readySetups, setup)
+		e.parkReadySetup(ctx, onCanceled, fn)
 	})
+}
+
+func (e *engine) parkReadySetup(ctx context.Context, onCanceled func(), fn func()) {
+	setup := &readySetup{ctx: ctx, onCanceled: onCanceled, fn: fn}
+	setup.stop = context.AfterFunc(ctx, func() {
+		e.enqueue(func() {
+			e.cancelReadySetup(setup)
+		})
+	})
+	e.readySetups = append(e.readySetups, setup)
 }
 
 func (e *engine) cancelReadySetup(target *readySetup) {
@@ -143,6 +147,28 @@ func enqueueSubscriptionSetup[T any](ctx context.Context, e *engine, resp chan<-
 		var zero T
 		resp <- zero
 	}, fn)
+}
+
+// enqueueSingletonSubscriptionSetup prevents a closed request-ID-less stream
+// from reusing its routing key on the same physical connection generation.
+// The broker provides no cancellation acknowledgement or request ID on later
+// rows, so replacement waits for a fresh generation instead of guessing at a
+// local drain interval.
+func enqueueSingletonSubscriptionSetup[T any](ctx context.Context, e *engine, key string, resp chan<- T, fn func()) {
+	onCanceled := func() {
+		var zero T
+		resp <- zero
+	}
+	var attempt func()
+	attempt = func() {
+		if e.singletonGenerationDirty(key) {
+			e.parkReadySetup(ctx, onCanceled, attempt)
+			e.retireTransport(ErrInterrupted)
+			return
+		}
+		fn()
+	}
+	enqueueReadySetup(ctx, e, onCanceled, attempt)
 }
 
 func awaitOneShotResponse[T any](ctx context.Context, e *engine, resp <-chan T, cancel func()) (T, error) {

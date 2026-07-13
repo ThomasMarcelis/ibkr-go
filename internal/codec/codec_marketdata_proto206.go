@@ -323,6 +323,59 @@ func decodeMarketDataTypeProto(body []byte, sv int) ([]Message, error) {
 	}
 }
 
+func decodeMarketDataRerouteProto(body []byte, sv int) ([]Message, error) {
+	reqID, conID, exchange, err := decodeMarketDataRerouteBodyProto(body, "market data reroute")
+	if err != nil {
+		return nil, err
+	}
+	return []Message{MarketDataReroute{ReqID: reqID, ConID: conID, Exchange: exchange}}, nil
+}
+
+func decodeMarketDepthRerouteProto(body []byte, sv int) ([]Message, error) {
+	reqID, conID, exchange, err := decodeMarketDataRerouteBodyProto(body, "market depth reroute")
+	if err != nil {
+		return nil, err
+	}
+	return []Message{MarketDepthReroute{ReqID: reqID, ConID: conID, Exchange: exchange}}, nil
+}
+
+func decodeMarketDataRerouteBodyProto(body []byte, label string) (int, int, string, error) {
+	reqID := -1
+	var conID int
+	var exchange string
+	for {
+		number, typ, ok, err := consumeProtoTag(&body)
+		if err != nil {
+			return 0, 0, "", err
+		}
+		if !ok {
+			return reqID, conID, exchange, nil
+		}
+		switch number {
+		case 1, 2:
+			value, err := consumeProtoVarint(&body, typ)
+			if err != nil {
+				return 0, 0, "", protoFieldError(label, number, err)
+			}
+			if number == 1 {
+				reqID = decodeProtoInt32(value)
+			} else {
+				conID = decodeProtoInt32(value)
+			}
+		case 3:
+			value, err := consumeProtoBytes(&body, typ)
+			if err != nil {
+				return 0, 0, "", protoFieldError(label, number, err)
+			}
+			exchange = string(value)
+		default:
+			if err := skipProtoField(&body, number, typ); err != nil {
+				return 0, 0, "", protoFieldError(label, number, err)
+			}
+		}
+	}
+}
+
 func decodeMarketDepthProto(body []byte, sv int) ([]Message, error) {
 	reqID, depth, present, err := decodeMarketDepthMessageProto(body, "market depth")
 	if err != nil || !present {

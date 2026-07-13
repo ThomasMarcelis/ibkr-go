@@ -52,6 +52,36 @@ func TestLiveContractDetailsAAPL(t *testing.T) {
 	}
 }
 
+func TestLiveCFDQuoteReroute(t *testing.T) {
+	client, _, cancel := ibkrlive.DialContext(t, 30*time.Second)
+	defer cancel()
+	defer client.Close()
+
+	ctx, cancelReq := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancelReq()
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
+		Symbol: "IBM", SecType: ibkr.SecTypeCFD, Exchange: "SMART", Currency: "USD",
+	}})
+	if err != nil {
+		t.Fatalf("SubscribeQuotes(IBM CFD): %v", err)
+	}
+	defer sub.Close()
+
+	for {
+		select {
+		case event, ok := <-sub.Events():
+			if !ok {
+				t.Fatalf("IBM CFD quote closed before rerouted data: %v", sub.Err())
+			}
+			if event.Kind == ibkr.StreamData {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("IBM CFD quote produced no rerouted data: %v", context.Cause(ctx))
+		}
+	}
+}
+
 func TestLiveAccountSummary(t *testing.T) {
 	t.Parallel()
 
@@ -222,7 +252,8 @@ func TestLiveCurrentTime(t *testing.T) {
 }
 
 func TestLiveManagedAccountsRefresh(t *testing.T) {
-	t.Parallel()
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(207)
+	defer restore()
 
 	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
 	defer cancel()

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
@@ -32,7 +34,10 @@ type verificationStats struct {
 	apiErrors      []codec.APIError
 }
 
-func writeVerification(out io.Writer, captureDir string, events []capturelog.Event, replayEvents []capturelog.ReplayEvent) error {
+func writeVerification(out io.Writer, captureDir string, meta capturelog.Meta, events []capturelog.Event, replayEvents []capturelog.ReplayEvent) error {
+	if strings.TrimSpace(meta.Scenario) == "" {
+		return fmt.Errorf("capture metadata has no scenario")
+	}
 	stats := verificationStats{
 		clientMessages: make(map[string]int),
 		serverMessages: make(map[string]int),
@@ -147,7 +152,7 @@ func writeVerification(out io.Writer, captureDir string, events []capturelog.Eve
 		stats.serverBytes,
 		stats.serverFrames,
 		formatServerVersions(stats.serverVersions),
-		hash[:8],
+		hash[:],
 	); err != nil {
 		return err
 	}
@@ -167,12 +172,12 @@ func writeVerification(out io.Writer, captureDir string, events []capturelog.Eve
 			return err
 		}
 	}
-	driverEvents, err := countNonEmptyLines(filepath.Join(captureDir, "driver_events.jsonl"))
+	driver, err := verifyDriverEvents(filepath.Join(captureDir, "driver_events.jsonl"), meta)
 	if err != nil {
 		return err
 	}
-	if driverEvents >= 0 {
-		_, err = fmt.Fprintf(out, "    driver_events: %d\n", driverEvents)
+	if driver.count >= 0 {
+		_, err = fmt.Fprintf(out, "    driver_events: %d run_id=%s outcomes=%d\n", driver.count, driver.runID, driver.outcomes)
 		return err
 	}
 	return nil
@@ -207,27 +212,100 @@ func fileSHA256(path string) ([sha256.Size]byte, error) {
 	return sum, nil
 }
 
-func countNonEmptyLines(path string) (int, error) {
+type driverEvidence struct {
+	At       time.Time `json:"at"`
+	Scenario string    `json:"scenario"`
+	RunID    string    `json:"run_id"`
+	Kind     string    `json:"kind"`
+	Server   string    `json:"server"`
+	ClientID int       `json:"client_id"`
+	Error    string    `json:"error"`
+}
+
+type driverEvidenceStats struct {
+	count    int
+	runID    string
+	outcomes int
+}
+
+func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats, error) {
 	// #nosec G304 -- the operator explicitly selects the capture directory.
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
-		return -1, nil
+		return driverEvidenceStats{count: -1}, nil
 	}
 	if err != nil {
-		return 0, fmt.Errorf("count driver events: %w", err)
+		return driverEvidenceStats{}, fmt.Errorf("open driver events: %w", err)
 	}
 	defer file.Close()
-	count := 0
+	stats := driverEvidenceStats{}
+	var previous time.Time
+	var starts, ready, ends int
+	var lastKind string
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		if strings.TrimSpace(scanner.Text()) != "" {
-			count++
+		line := scanner.Bytes()
+		if len(strings.TrimSpace(string(line))) == 0 {
+			return driverEvidenceStats{}, fmt.Errorf("driver events line %d is empty", stats.count+1)
+		}
+		var event driverEvidence
+		if err := json.Unmarshal(line, &event); err != nil {
+			return driverEvidenceStats{}, fmt.Errorf("decode driver event line %d: %w", stats.count+1, err)
+		}
+		stats.count++
+		if event.Scenario != meta.Scenario {
+			return driverEvidenceStats{}, fmt.Errorf("driver event line %d scenario %q does not match capture %q", stats.count, event.Scenario, meta.Scenario)
+		}
+		if event.RunID == "" {
+			return driverEvidenceStats{}, fmt.Errorf("driver event line %d has no run_id", stats.count)
+		}
+		if stats.runID == "" {
+			stats.runID = event.RunID
+		} else if event.RunID != stats.runID {
+			return driverEvidenceStats{}, fmt.Errorf("driver event line %d run_id %q does not match %q", stats.count, event.RunID, stats.runID)
+		}
+		if event.At.IsZero() || !previous.IsZero() && event.At.Before(previous) {
+			return driverEvidenceStats{}, fmt.Errorf("driver event line %d has invalid chronology", stats.count)
+		}
+		previous = event.At
+		lastKind = event.Kind
+		switch event.Kind {
+		case "scenario_start":
+			starts++
+			if stats.count != 1 {
+				return driverEvidenceStats{}, fmt.Errorf("scenario_start is driver event %d, want first", stats.count)
+			}
+			if event.ClientID != meta.ClientID {
+				return driverEvidenceStats{}, fmt.Errorf("driver client_id %d does not match capture %d", event.ClientID, meta.ClientID)
+			}
+			if meta.ListenAddr != "" && event.Server != meta.ListenAddr {
+				return driverEvidenceStats{}, fmt.Errorf("driver server %q does not match capture listen_addr %q", event.Server, meta.ListenAddr)
+			}
+		case "session_ready":
+			ready++
+		case "scenario_end":
+			ends++
+			if event.Error != "" {
+				return driverEvidenceStats{}, fmt.Errorf("scenario_end reports failure: %s", event.Error)
+			}
+		default:
+			stats.outcomes++
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return 0, fmt.Errorf("count driver events: %w", err)
+		return driverEvidenceStats{}, fmt.Errorf("scan driver events: %w", err)
 	}
-	return count, nil
+	if stats.count == 0 {
+		return driverEvidenceStats{}, fmt.Errorf("driver events are empty")
+	}
+	if starts != 1 || ready == 0 || ends != 1 {
+		return driverEvidenceStats{}, fmt.Errorf("driver lifecycle start=%d ready=%d end=%d, want 1/>=1/1", starts, ready, ends)
+	}
+	if lastKind != "scenario_end" {
+		return driverEvidenceStats{}, fmt.Errorf("last driver event is %q, want scenario_end", lastKind)
+	}
+	return stats, nil
 }
 
 func formatServerVersions(versions map[int]bool) string {

@@ -2089,6 +2089,24 @@ func TestCaptureDecode_MarketDataReroutesLive(t *testing.T) {
 	}
 }
 
+func TestCaptureDecode_MarketDataRerouteProto225Live(t *testing.T) {
+	t.Parallel()
+
+	// Capture 20260713T205650Z-live_cfd_quote_reroute, events.jsonl sha256
+	// bd73e91139899a8c586856ab744269bce686bdab8bda597d00c2032f97d3952c.
+	// The Gateway returned raw ID 291 with protobuf fields reqID=1, conID=8314,
+	// exchange=SMART after a CFD quote request.
+	payload := decodeHex(t, "00000123080110fa401a05534d415254")
+	got, err := Decode(225, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := MarketDataReroute{ReqID: 1, ConID: 8314, Exchange: "SMART"}
+	if got != want {
+		t.Fatalf("Decode() = %#v, want %#v", got, want)
+	}
+}
+
 func TestCaptureDecode_HistoricalDataEndLive(t *testing.T) {
 	t.Parallel()
 	// captures/v1/historical_bars_keepup.log line 8 (IB Gateway paper

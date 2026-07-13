@@ -1,0 +1,3 @@
+- ErrNoSubscription: removed
+- OrdersClient.RefreshOpen: removed
+- OrdersClient.SubscribeOpen: changed from func(context.Context, OpenOrdersScope, ...SubscriptionOption) (*Subscription[OpenOrderUpdate], error) to func(context.Context, OpenOrdersScope, ...SubscriptionOption) (*OpenOrdersSubscription, error)

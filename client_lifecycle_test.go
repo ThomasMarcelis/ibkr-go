@@ -194,8 +194,8 @@ func serveUnsupportedVersionGateway(conn net.Conn, serverVersion string) error {
 	if err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if string(versionRange) != "v200..207" {
-		return fmt.Errorf("version range = %q, want v200..207", string(versionRange))
+	if string(versionRange) != "v200..225" {
+		return fmt.Errorf("version range = %q, want v200..225", string(versionRange))
 	}
 	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{serverVersion, "2026-04-14T12:00:00Z"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
@@ -299,7 +299,7 @@ func TestDialContextRejectsInvalidEventBuffers(t *testing.T) {
 func TestDialContextRejectsUnsupportedServerVersion(t *testing.T) {
 	t.Parallel()
 
-	for _, serverVersion := range []string{"199", "208"} {
+	for _, serverVersion := range []string{"199", "226"} {
 		t.Run(serverVersion, func(t *testing.T) {
 			t.Parallel()
 			gateway := newUnsupportedVersionGateway(t, serverVersion)

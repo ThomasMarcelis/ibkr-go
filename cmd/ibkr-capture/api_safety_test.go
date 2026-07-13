@@ -3,11 +3,27 @@ package main
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	ibkr "github.com/ThomasMarcelis/ibkr-go/v2"
 )
+
+func TestAPIDriverRecorderRetainsEncodeFailure(t *testing.T) {
+	recorder, err := newAPIDriverRecorder(filepath.Join(t.TempDir(), "driver.jsonl"), "test", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := recorder.file.Close(); err != nil {
+		t.Fatal(err)
+	}
+	recorder.file = nil
+	recorder.record("scenario_start", "", nil)
+	if err := recorder.Close(); err == nil || !strings.Contains(err.Error(), "encode scenario_start driver event") {
+		t.Fatalf("Close() error = %v, want retained encode failure", err)
+	}
+}
 
 func TestHistoricalDataUnavailableRequiresExactTypedError(t *testing.T) {
 	t.Parallel()
@@ -65,13 +81,13 @@ func TestCancelsAllowedForRiskClass(t *testing.T) {
 // accounts and refuses anything else with an error naming both the account and
 // the attempted operation.
 func TestRequirePaperAccount(t *testing.T) {
-	t.Parallel()
-
-	// Only the DU9000001 redaction token may carry a full account-id shape in
-	// tracked files (see sanitization_test.go); the other samples stay short.
-	for _, account := range []string{"DU9000001", "DU12345", "DUP12345"} {
-		if err := requirePaperAccount(account, "global cancel"); err != nil {
-			t.Errorf("requirePaperAccount(%q) = %v, want nil", account, err)
+	t.Setenv("IBKR_PAPER_ACCOUNT", "DU9000001")
+	if err := requirePaperAccount("DU9000001", "place order"); err != nil {
+		t.Fatalf("requirePaperAccount(allowlisted) = %v, want nil", err)
+	}
+	for _, account := range []string{"DU12345", "DUP12345"} {
+		if err := requirePaperAccount(account, "place order"); err == nil {
+			t.Errorf("requirePaperAccount(%q) = nil, want exact-account refusal", account)
 		}
 	}
 
@@ -91,7 +107,7 @@ func TestRequirePaperAccount(t *testing.T) {
 }
 
 func TestRequirePaperAccountsRefusesMixedManagedSession(t *testing.T) {
-	t.Parallel()
+	t.Setenv("IBKR_PAPER_ACCOUNT", "DU9000001")
 
 	err := requirePaperAccounts([]string{"DU9000001", "U123456"}, "global cancel")
 	if err == nil {
@@ -107,7 +123,7 @@ func TestRequirePaperAccountsRefusesMixedManagedSession(t *testing.T) {
 // on the nil client would panic. Returning the refusal error proves no order
 // mutation is attempted on a live account.
 func TestGuardedCancelAllRefusesNonPaperAccountBeforeMutating(t *testing.T) {
-	t.Parallel()
+	t.Setenv("IBKR_PAPER_ACCOUNT", "DU9000001")
 
 	err := guardedCancelAll(context.Background(), nil, "U123456", "cleanup global cancel")
 	if err == nil {
@@ -115,6 +131,16 @@ func TestGuardedCancelAllRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "U123456") {
 		t.Errorf("guardedCancelAll error %q does not name the live account", err)
+	}
+}
+
+func TestGuardedCancelAllRequiresPurposeSpecificGate(t *testing.T) {
+	t.Setenv("IBKR_PAPER_ACCOUNT", "DU9000001")
+	t.Setenv("IBKR_CAPTURE_GLOBAL_CANCEL", "0")
+
+	err := guardedCancelAll(context.Background(), nil, "DU9000001", "global cancel proof")
+	if err == nil || !strings.Contains(err.Error(), "IBKR_CAPTURE_GLOBAL_CANCEL") {
+		t.Fatalf("guardedCancelAll() error = %v, want purpose-specific gate refusal", err)
 	}
 }
 
@@ -191,7 +217,11 @@ func TestScenarioCaptureRoleMatchesCancelPolicy(t *testing.T) {
 	for name, scenario := range scenarios {
 		md := scenario.metadata
 		wantPaper := cancelsAllowedForRiskClass(md.RiskClass)
-		gotPaper := scenarioCaptureRole(md) == captureRolePaperDev
+		role, err := scenarioCaptureRole(md)
+		if err != nil {
+			t.Fatalf("scenarioCaptureRole(%q) error = %v", md.RiskClass, err)
+		}
+		gotPaper := role == captureRolePaperDev
 		if wantPaper != gotPaper {
 			t.Errorf("scenario %q: cancels=%t but capture role paper-dev=%t", name, wantPaper, gotPaper)
 		}

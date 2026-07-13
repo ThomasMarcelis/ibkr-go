@@ -190,7 +190,7 @@ header should say that account-specific identifiers are sanitized.
 - prefer complex live scenarios over one-request smoke captures when adding
   new coverage, especially for order, execution, account, PnL, historical
   window, and multi-subscription behavior
-- broaden live capture coverage from exact `server_version 207` onward, one
+- broaden live capture coverage beyond exact `server_version 225`, one
   migration gate at a time
 - use the recorder and normalization tooling to derive new scenarios from
   contributor-owned Gateway or TWS sessions

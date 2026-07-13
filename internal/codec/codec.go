@@ -68,11 +68,13 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 
 	if len(envelope.Body) > 0 && envelope.Body[len(envelope.Body)-1] != 0 {
 		if _, known := inboundDecoders[envelope.MsgID]; known {
+			fields := copyClassicFields(envelope.Body)
 			return []Message{MalformedInbound{
-				MsgID:    envelope.MsgID,
-				Encoding: protocol.ClassicBody,
-				Fields:   copyClassicFields(envelope.Body),
-				Err:      wire.ErrMalformedFrame,
+				MsgID:       envelope.MsgID,
+				Encoding:    protocol.ClassicBody,
+				Fields:      fields,
+				Correlation: classicMalformedCorrelation(envelope.MsgID, fields),
+				Err:         wire.ErrMalformedFrame,
 			}}, nil
 		}
 		return nil, wire.ErrMalformedFrame
@@ -85,11 +87,13 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 	r.total++
 	msgs, err := decodeByMsgID(sv, envelope.MsgID, r)
 	if err != nil {
+		fields := copyClassicFields(envelope.Body)
 		return []Message{MalformedInbound{
-			MsgID:    envelope.MsgID,
-			Encoding: protocol.ClassicBody,
-			Fields:   copyClassicFields(envelope.Body),
-			Err:      fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err),
+			MsgID:       envelope.MsgID,
+			Encoding:    protocol.ClassicBody,
+			Fields:      fields,
+			Correlation: classicMalformedCorrelation(envelope.MsgID, fields),
+			Err:         fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err),
 		}}, nil
 	}
 	return msgs, nil
@@ -157,82 +161,84 @@ type protobufEncoder interface {
 // inboundDecoders maps msg_id to its decoder. One explicit table, no
 // init() registration.
 var inboundDecoders = map[int]decodeFunc{
-	protocol.InTickPrice:             decodeTickPrice,
-	protocol.InTickSize:              decodeTickSize,
-	protocol.InOrderStatus:           decodeOrderStatus,
-	protocol.InErrMsg:                decodeErrMsg,
-	protocol.InOpenOrder:             decodeOpenOrder,
-	protocol.InCurrentTimeInMillis:   decodeCurrentTimeInMillis,
-	protocol.InNextValidID:           decodeNextValidID,
-	protocol.InContractData:          decodeContractData,
-	protocol.InExecutionData:         decodeExecutionData,
-	protocol.InMarketDepth:           decodeMarketDepth,
-	protocol.InMarketDepthL2:         decodeMarketDepthL2,
-	protocol.InManagedAccounts:       decodeManagedAccounts,
-	protocol.InHistoricalData:        decodeHistoricalData,
-	protocol.InBondContractData:      decodeBondContractData,
-	protocol.InScannerParameters:     decodeScannerParameters,
-	protocol.InScannerData:           decodeScannerData,
-	protocol.InTickOptionComputation: decodeTickOptionComputation,
-	protocol.InTickGeneric:           decodeTickGeneric,
-	protocol.InTickString:            decodeTickString,
-	protocol.InTickReqParams:         decodeTickReqParams,
-	protocol.InCurrentTime:           decodeCurrentTime,
-	protocol.InRealTimeBars:          decodeRealTimeBars,
-	protocol.InContractDataEnd:       decodeContractDataEnd,
-	protocol.InOpenOrderEnd:          decodeOpenOrderEnd,
-	protocol.InExecutionDataEnd:      decodeExecutionDataEnd,
-	protocol.InTickSnapshotEnd:       decodeTickSnapshotEnd,
-	protocol.InMarketDataType:        decodeMarketDataType,
-	protocol.InCommissionReport:      decodeCommissionReport,
-	protocol.InPositionData:          decodePositionData,
-	protocol.InPositionEnd:           decodePositionEnd,
-	protocol.InAccountSummary:        decodeAccountSummary,
-	protocol.InAccountSummaryEnd:     decodeAccountSummaryEnd,
-	protocol.InSecDefOptParams:       decodeSecDefOptParams,
-	protocol.InSecDefOptParamsEnd:    decodeSecDefOptParamsEnd,
-	protocol.InFamilyCodes:           decodeFamilyCodes,
-	protocol.InMktDepthExchanges:     decodeMktDepthExchanges,
-	protocol.InNewsArticle:           decodeNewsArticle,
-	protocol.InTickNews:              decodeTickNews,
-	protocol.InNewsProviders:         decodeNewsProviders,
-	protocol.InSymbolSamples:         decodeSymbolSamples,
-	protocol.InSmartComponents:       decodeSmartComponents,
-	protocol.InHistoricalNews:        decodeHistoricalNews,
-	protocol.InHistoricalNewsEnd:     decodeHistoricalNewsEnd,
-	protocol.InHeadTimestamp:         decodeHeadTimestamp,
-	protocol.InHistogramData:         decodeHistogramData,
-	protocol.InMarketRule:            decodeMarketRule,
-	protocol.InMarketDataReroute:     decodeMarketDataReroute,
-	protocol.InMarketDepthReroute:    decodeMarketDepthReroute,
-	protocol.InCompletedOrder:        decodeCompletedOrder,
-	protocol.InOrderBound:            decodeOrderBound,
-	protocol.InCompletedOrderEnd:     decodeCompletedOrderEnd,
-	protocol.InUserInfo:              decodeUserInfo,
-	protocol.InUpdateAccountValue:    decodeUpdateAccountValue,
-	protocol.InUpdatePortfolio:       decodeUpdatePortfolio,
-	protocol.InUpdateAccountTime:     decodeUpdateAccountTime,
-	protocol.InAccountDownloadEnd:    decodeAccountDownloadEnd,
-	protocol.InNewsBulletins:         decodeNewsBulletins,
-	protocol.InPositionMulti:         decodePositionMulti,
-	protocol.InPositionMultiEnd:      decodePositionMultiEnd,
-	protocol.InAccountUpdateMulti:    decodeAccountUpdateMulti,
-	protocol.InAccountUpdateMultiEnd: decodeAccountUpdateMultiEnd,
-	protocol.InPnL:                   decodePnL,
-	protocol.InPnLSingle:             decodePnLSingle,
-	protocol.InHistoricalTicks:       decodeHistoricalTicks,
-	protocol.InHistoricalTicksBidAsk: decodeHistoricalTicksBidAsk,
-	protocol.InHistoricalTicksLast:   decodeHistoricalTicksLast,
-	protocol.InTickByTick:            decodeTickByTick,
-	protocol.InHistoricalDataUpdate:  decodeHistoricalDataUpdate,
-	protocol.InHistoricalDataEnd:     decodeHistoricalDataEnd,
-	protocol.InReceiveFA:             decodeReceiveFA,
-	protocol.InSoftDollarTiers:       decodeSoftDollarTiers,
-	protocol.InWSHMetaData:           decodeWSHMetaData,
-	protocol.InWSHEventData:          decodeWSHEventData,
-	protocol.InHistoricalSchedule:    decodeHistoricalSchedule,
-	protocol.InDisplayGroupList:      decodeDisplayGroupList,
-	protocol.InDisplayGroupUpdated:   decodeDisplayGroupUpdated,
+	protocol.InTickPrice:              decodeTickPrice,
+	protocol.InTickSize:               decodeTickSize,
+	protocol.InOrderStatus:            decodeOrderStatus,
+	protocol.InErrMsg:                 decodeErrMsg,
+	protocol.InOpenOrder:              decodeOpenOrder,
+	protocol.InCurrentTimeInMillis:    decodeCurrentTimeInMillis,
+	protocol.InNextValidID:            decodeNextValidID,
+	protocol.InContractData:           decodeContractData,
+	protocol.InExecutionData:          decodeExecutionData,
+	protocol.InMarketDepth:            decodeMarketDepth,
+	protocol.InMarketDepthL2:          decodeMarketDepthL2,
+	protocol.InManagedAccounts:        decodeManagedAccounts,
+	protocol.InHistoricalData:         decodeHistoricalData,
+	protocol.InBondContractData:       decodeBondContractData,
+	protocol.InScannerParameters:      decodeScannerParameters,
+	protocol.InScannerData:            decodeScannerData,
+	protocol.InTickOptionComputation:  decodeTickOptionComputation,
+	protocol.InTickGeneric:            decodeTickGeneric,
+	protocol.InTickString:             decodeTickString,
+	protocol.InTickEFP:                decodeTickEFP,
+	protocol.InTickReqParams:          decodeTickReqParams,
+	protocol.InCurrentTime:            decodeCurrentTime,
+	protocol.InRealTimeBars:           decodeRealTimeBars,
+	protocol.InContractDataEnd:        decodeContractDataEnd,
+	protocol.InOpenOrderEnd:           decodeOpenOrderEnd,
+	protocol.InExecutionDataEnd:       decodeExecutionDataEnd,
+	protocol.InDeltaNeutralValidation: decodeDeltaNeutralValidation,
+	protocol.InTickSnapshotEnd:        decodeTickSnapshotEnd,
+	protocol.InMarketDataType:         decodeMarketDataType,
+	protocol.InCommissionReport:       decodeCommissionReport,
+	protocol.InPositionData:           decodePositionData,
+	protocol.InPositionEnd:            decodePositionEnd,
+	protocol.InAccountSummary:         decodeAccountSummary,
+	protocol.InAccountSummaryEnd:      decodeAccountSummaryEnd,
+	protocol.InSecDefOptParams:        decodeSecDefOptParams,
+	protocol.InSecDefOptParamsEnd:     decodeSecDefOptParamsEnd,
+	protocol.InFamilyCodes:            decodeFamilyCodes,
+	protocol.InMktDepthExchanges:      decodeMktDepthExchanges,
+	protocol.InNewsArticle:            decodeNewsArticle,
+	protocol.InTickNews:               decodeTickNews,
+	protocol.InNewsProviders:          decodeNewsProviders,
+	protocol.InSymbolSamples:          decodeSymbolSamples,
+	protocol.InSmartComponents:        decodeSmartComponents,
+	protocol.InHistoricalNews:         decodeHistoricalNews,
+	protocol.InHistoricalNewsEnd:      decodeHistoricalNewsEnd,
+	protocol.InHeadTimestamp:          decodeHeadTimestamp,
+	protocol.InHistogramData:          decodeHistogramData,
+	protocol.InMarketRule:             decodeMarketRule,
+	protocol.InMarketDataReroute:      decodeMarketDataReroute,
+	protocol.InMarketDepthReroute:     decodeMarketDepthReroute,
+	protocol.InCompletedOrder:         decodeCompletedOrder,
+	protocol.InOrderBound:             decodeOrderBound,
+	protocol.InCompletedOrderEnd:      decodeCompletedOrderEnd,
+	protocol.InUserInfo:               decodeUserInfo,
+	protocol.InUpdateAccountValue:     decodeUpdateAccountValue,
+	protocol.InUpdatePortfolio:        decodeUpdatePortfolio,
+	protocol.InUpdateAccountTime:      decodeUpdateAccountTime,
+	protocol.InAccountDownloadEnd:     decodeAccountDownloadEnd,
+	protocol.InNewsBulletins:          decodeNewsBulletins,
+	protocol.InPositionMulti:          decodePositionMulti,
+	protocol.InPositionMultiEnd:       decodePositionMultiEnd,
+	protocol.InAccountUpdateMulti:     decodeAccountUpdateMulti,
+	protocol.InAccountUpdateMultiEnd:  decodeAccountUpdateMultiEnd,
+	protocol.InPnL:                    decodePnL,
+	protocol.InPnLSingle:              decodePnLSingle,
+	protocol.InHistoricalTicks:        decodeHistoricalTicks,
+	protocol.InHistoricalTicksBidAsk:  decodeHistoricalTicksBidAsk,
+	protocol.InHistoricalTicksLast:    decodeHistoricalTicksLast,
+	protocol.InTickByTick:             decodeTickByTick,
+	protocol.InHistoricalDataUpdate:   decodeHistoricalDataUpdate,
+	protocol.InHistoricalDataEnd:      decodeHistoricalDataEnd,
+	protocol.InReceiveFA:              decodeReceiveFA,
+	protocol.InSoftDollarTiers:        decodeSoftDollarTiers,
+	protocol.InWSHMetaData:            decodeWSHMetaData,
+	protocol.InWSHEventData:           decodeWSHEventData,
+	protocol.InHistoricalSchedule:     decodeHistoricalSchedule,
+	protocol.InDisplayGroupList:       decodeDisplayGroupList,
+	protocol.InDisplayGroupUpdated:    decodeDisplayGroupUpdated,
 }
 
 // UnknownInbound carries a frame whose msg_id has no registered decoder. An
@@ -257,11 +263,20 @@ func (m UnknownInbound) encodeWire(sv int) ([]string, error) {
 // trustworthy, so callers can report and skip this message without tearing
 // down unrelated routes on the connection.
 type MalformedInbound struct {
-	MsgID    int
-	Encoding protocol.BodyEncoding
-	Fields   []string
-	Payload  []byte
-	Err      error
+	MsgID       int
+	Encoding    protocol.BodyEncoding
+	Fields      []string
+	Payload     []byte
+	Correlation *MalformedCorrelation
+	Err         error
+}
+
+// MalformedCorrelation is routing identity recovered by a message-specific
+// classic layout after the outer frame boundary succeeded. It is deliberately
+// absent for generic/protobuf recovery: a partial protobuf scan cannot prove
+// last-one-wins singular-field identity.
+type MalformedCorrelation struct {
+	RequestID int
 }
 
 func (m MalformedInbound) encodeWire(sv int) ([]string, error) {
@@ -276,6 +291,26 @@ func copyClassicFields(body []byte) []string {
 		body = body[:len(body)-1]
 	}
 	return strings.Split(string(body), "\x00")
+}
+
+func classicMalformedCorrelation(msgID int, fields []string) *MalformedCorrelation {
+	var requestIDField int
+	switch msgID {
+	case protocol.InMarketDepth, protocol.InMarketDepthL2:
+		// Classic depth rows are [version, reqID, ...]. No other layout is
+		// inferred here; add cases only with their own captured field law.
+		requestIDField = 1
+	default:
+		return nil
+	}
+	if len(fields) <= requestIDField {
+		return nil
+	}
+	requestID, err := strconv.Atoi(fields[requestIDField])
+	if err != nil || requestID <= 0 {
+		return nil
+	}
+	return &MalformedCorrelation{RequestID: requestID}
 }
 
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.

@@ -175,5 +175,13 @@ type DisplayGroupHandle struct {
 
 // Update sends an UpdateDisplayGroup request for this subscription's group.
 func (h *DisplayGroupHandle) Update(ctx context.Context, contractInfo string) error {
+	if h == nil || h.Subscription == nil || h.updateFn == nil {
+		return ErrClosed
+	}
+	select {
+	case <-h.Done():
+		return ErrClosed
+	default:
+	}
 	return h.updateFn(ctx, contractInfo)
 }

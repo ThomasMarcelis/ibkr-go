@@ -2,6 +2,13 @@ package ibkr
 
 func (e *engine) run() {
 	for {
+		// Closed is absorbing. Once closeEngine closes done, do not let a fair
+		// select choose already-buffered input and mutate the terminal state.
+		select {
+		case <-e.done:
+			return
+		default:
+		}
 		// One fair select per iteration. An earlier version drained e.incoming
 		// to empty at the top of every loop; under a sustained hot feed that
 		// drain never returned and control commands (subscribe/cancel/place)

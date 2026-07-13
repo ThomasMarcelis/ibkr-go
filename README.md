@@ -58,8 +58,8 @@ v2 uses Go semantic import versioning, so existing v1 applications cannot upgrad
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
   configuration, WSH, display groups, and more. The client negotiates
-  `server_version` 200..207: 200 is the classic-wire live baseline, with exact
-  post-200 protocol migrations through 207. Remaining official branches are
+  `server_version` 200..225: 200 is the classic-wire live baseline, with exact
+  post-200 protocol migrations and version-gated semantics through 225. Remaining official branches are
   tracked explicitly in the roadmap and coverage matrix.
 - **Reconnects are explicit.** Subscription events preserve `Gap`, `Restored`,
   `Resubscribed`, and `SnapshotComplete` in order with data. Channel close plus
@@ -175,7 +175,12 @@ for _, bar := range bars {
 union — exactly one of `Status`, `Execution`, `CommissionAndFees`, `OpenOrder`,
 `Warning`, `Binding`, or `Lifecycle` is non-nil per event. A terminal order status does not close the
 handle because IBKR can deliver executions and fees afterward. The caller ends
-its observation window explicitly after collecting the evidence it needs.
+its observation window explicitly after collecting the evidence it needs. This
+example stops at the first terminal status; applications that require trailing
+fees should use their own bounded post-terminal window. Ending observation does
+not cancel a working order. If the context expires first, the order remains
+potentially live at IBKR and its `OrderID` must be reconciled or cancelled with
+a fresh, non-cancelled context.
 
 ```go
 handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -186,22 +191,33 @@ if err != nil {
     return err
 }
 
-var terminal, execution bool
-for !terminal || !execution {
-    evt := <-handle.Events()
-    switch {
-    case evt.Status != nil:
-        fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
-        terminal = ibkr.IsTerminalOrderStatus(evt.Status.Status)
-    case evt.Execution != nil:
-        fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
-        execution = true
-    case evt.CommissionAndFees != nil:
-        fmt.Println("commission and fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
+for {
+    select {
+    case evt, ok := <-handle.Events():
+        if !ok {
+            return handle.Wait()
+        }
+        switch {
+        case evt.Status != nil:
+            fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
+            if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
+                handle.Close()
+                return handle.Wait()
+            }
+        case evt.Execution != nil:
+            fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
+        case evt.CommissionAndFees != nil:
+            fmt.Println("commission and fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
+        }
+    case <-ctx.Done():
+        orderID := handle.OrderID()
+        handle.Close() // Detach local observation; this does not cancel the order.
+        if err := handle.Wait(); err != nil {
+            return err
+        }
+        return fmt.Errorf("stopped observing order %d; it may still be live at IBKR: %w", orderID, ctx.Err())
     }
 }
-handle.Close()
-return handle.Wait()
 ```
 
 Order events use a bounded, lossless queue with a default capacity of 64;
@@ -307,13 +323,13 @@ Every domain is accessed through a facade on the client:
 | `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | — |
 | `client.MarketData()` | `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
-| `client.Orders()` | `Open`, `Completed`, `Executions` | `Place` -> `OrderHandle`, `SubscribeOpen`, `SubscribeExecutions` |
+| `client.Orders()` | `Open`, `Completed`, `Executions`, `Preview` | `Place` -> `OrderHandle`, `PlaceBracket`, `SubscribeOpen`, `SubscribeExecutions` |
 | `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` -> `ExerciseHandle` |
 | `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
 | `client.Scanner()` | `Parameters` | `SubscribeResults` |
 | `client.Advisors()` | `Config`, `SoftDollarTiers` | — |
 | `client.WSH()` | `MetaData`, `EventData` | — |
-| `client.TWS()` | `UserInfo`, `DisplayGroups` | `SubscribeDisplayGroup` |
+| `client.TWS()` | `Config`, `UserInfo`, `DisplayGroups` | `SubscribeDisplayGroup` |
 
 One-shots return `(T, error)` or `([]T, error)`. Subscriptions return
 `*Subscription[T]` with `Events()`, `All(ctx)`, `Done()`, and `Close()`.
@@ -388,11 +404,11 @@ stressed, and extended without guessing. For more on that approach, see
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
 domains through an idiomatic Go facade. It negotiates `server_version`
-200..207. Version 200 is the live-attested classic-wire baseline; exact
-raw-ID/protobuf migrations from 201 through 207 are implemented and
-live-attested. Protocol boundaries from 208 onward and remaining advanced
-branches stay explicit in the coverage matrix rather than being claimed as
-supported.
+200..225. Version 200 is the live-attested classic-wire baseline; exact
+raw-ID/protobuf migrations from 201 through 213 and the version-gated 214..225
+features are implemented. Positive entitlement-dependent callbacks and
+remaining advanced branches stay explicit in the coverage matrix rather than
+being overclaimed. See the [sv208-225 protocol audit](docs/protocol-audit-sv208-225.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full

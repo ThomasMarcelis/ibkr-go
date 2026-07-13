@@ -3993,7 +3993,16 @@ func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
 	if gap.ConnectionSeq != 1 {
 		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
 	}
-	recovery := waitForOrderLifecycle(t, ctx, handle.Events(), ibkr.OrderRecoveryRequired)
+	var recovery ibkr.OrderLifecycleEvent
+	select {
+	case event := <-handle.Events():
+		if event.Lifecycle == nil || event.Lifecycle.Kind != ibkr.OrderRecoveryRequired {
+			t.Fatalf("first order event after reconnect gap = %+v, want RecoveryRequired", event)
+		}
+		recovery = *event.Lifecycle
+	case <-ctx.Done():
+		t.Fatalf("waiting for immediate RecoveryRequired: %v", context.Cause(ctx))
+	}
 	if recovery.ConnectionSeq != 2 {
 		t.Fatalf("recovery.ConnectionSeq = %d, want 2", recovery.ConnectionSeq)
 	}

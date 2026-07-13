@@ -268,8 +268,20 @@ func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 		})
 	}
 
+	// Request IDs moves from classic marker b7 to protobuf marker aa at
+	// server_version 213. This exact refusal is from the official SDK capture
+	// with events SHA-256
+	// 6e793d3f48bd609810aede9a4f483f44ab70ebf09cd4da5c9fa0e5ba8a79c9d3.
 	e := newEngineForErrorTest()
 	hit := false
+	e.singletons[singletonOrderID] = &route{handleAPIErr: func(codec.APIError, *engine) { hit = true }}
+	e.handleAPIError(codec.APIError{ReqID: -1, Code: 321, Message: "Error validating request.-'aa'" + cause})
+	if !hit {
+		t.Fatal("server_version 213 request-ID refusal was not routed to the active request")
+	}
+
+	e = newEngineForErrorTest()
+	hit = false
 	e.singletons[singletonOpenOrders] = &route{
 		request:      codec.OpenOrdersRequest{Scope: string(OpenOrdersScopeClient)},
 		handleAPIErr: func(codec.APIError, *engine) { hit = true },
@@ -304,6 +316,30 @@ func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 		}
 	default:
 		t.Fatal("unowned open-orders rejection was not surfaced as a session event")
+	}
+}
+
+// TestHandleAPIErrorRoutesFARefusalByCause freezes the exact Gateway
+// server_version 211 refusal captured through the SDK on 2026-07-13
+// (events.jsonl SHA-256
+// 562c394c0570e39ebf34776710f9d7c146005144b96b990a00eb9a93e3b601ae).
+// RequestFA has no request ID, and its protobuf operation marker differs from
+// the classic marker, so the operation-specific cause is the routing identity.
+func TestHandleAPIErrorRoutesFARefusalByCause(t *testing.T) {
+	t.Parallel()
+
+	e := newEngineForErrorTest()
+	hit := false
+	e.singletons[singletonFA] = &route{handleAPIErr: func(msg codec.APIError, _ *engine) {
+		hit = msg.Code == 321
+	}}
+	e.handleAPIError(codec.APIError{
+		ReqID:   -1,
+		Code:    321,
+		Message: "Error validating request.-'X' : cause - FA data operations ignored for non FA customers",
+	})
+	if !hit {
+		t.Fatal("server_version 211 FA refusal was not routed to the active FA request")
 	}
 }
 

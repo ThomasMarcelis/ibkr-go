@@ -6,11 +6,14 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
@@ -118,6 +121,83 @@ func TestWriteVerificationLiveClassicCapture(t *testing.T) {
 	}
 }
 
+func TestRunNormalizeVerifyDoesNotWriteArtifacts(t *testing.T) {
+	t.Parallel()
+
+	events := liveCaptureEvents(t, 100, 200, "20260611 09:40:46 Central European Standard Time",
+		[]captureFrame{{"client", wire.EncodeFields([]string{"71", "2", "1", ""})}},
+		[]captureFrame{
+			{"client", wire.EncodeFields([]string{"49", "1"})},
+			{"server", wire.EncodeFields([]string{"49", "1", "1781163646"})},
+		},
+	)
+	dir := t.TempDir()
+	writeCaptureFiles(t, dir, events)
+
+	before, err := snapshotFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output bytes.Buffer
+	if err := runNormalize(&output, dir, "", "", "", true); err != nil {
+		t.Fatalf("runNormalize(-verify) error = %v", err)
+	}
+	after, err := snapshotFiles(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) {
+		t.Fatalf("capture directory changed during verification\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	for _, path := range []string{"raw.txt", "replay"} {
+		if _, err := os.Stat(filepath.Join(dir, path)); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("verification created %s: %v", path, err)
+		}
+	}
+}
+
+func TestVerifyDriverEventsBindsScenarioRunAndSuccessfulLifecycle(t *testing.T) {
+	t.Parallel()
+
+	meta := capturelog.Meta{Scenario: "quote", ListenAddr: "127.0.0.1:4101", ClientID: 7}
+	start := time.Date(2026, time.July, 13, 12, 0, 0, 0, time.UTC)
+	valid := []driverEvidence{
+		{At: start, Scenario: "quote", RunID: "run-1", Kind: "scenario_start", Server: meta.ListenAddr, ClientID: meta.ClientID},
+		{At: start.Add(time.Second), Scenario: "quote", RunID: "run-1", Kind: "session_ready"},
+		{At: start.Add(2 * time.Second), Scenario: "quote", RunID: "run-1", Kind: "quote_snapshot"},
+		{At: start.Add(3 * time.Second), Scenario: "quote", RunID: "run-1", Kind: "scenario_end"},
+	}
+	path := filepath.Join(t.TempDir(), "driver_events.jsonl")
+	writeDriverEvidence(t, path, valid)
+	stats, err := verifyDriverEvents(path, meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.count != 4 || stats.runID != "run-1" || stats.outcomes != 1 {
+		t.Fatalf("driver stats = %+v", stats)
+	}
+
+	for _, test := range []struct {
+		name   string
+		mutate func([]driverEvidence)
+	}{
+		{"scenario mismatch", func(events []driverEvidence) { events[2].Scenario = "other" }},
+		{"run mismatch", func(events []driverEvidence) { events[2].RunID = "run-2" }},
+		{"failed end", func(events []driverEvidence) { events[3].Error = "timeout" }},
+		{"missing end", func(events []driverEvidence) { events[3].Kind = "quote_update" }},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			events := append([]driverEvidence(nil), valid...)
+			test.mutate(events)
+			path := filepath.Join(t.TempDir(), "driver_events.jsonl")
+			writeDriverEvidence(t, path, events)
+			if _, err := verifyDriverEvents(path, meta); err == nil {
+				t.Fatal("verifyDriverEvents() error = nil")
+			}
+		})
+	}
+}
+
 func TestWriteVerificationLiveProtobufEndAndAPIError(t *testing.T) {
 	t.Parallel()
 
@@ -212,6 +292,44 @@ func captureChunk(direction string, data []byte) capturelog.Event {
 func verifyLiveEvents(t *testing.T, events []capturelog.Event) string {
 	t.Helper()
 	dir := t.TempDir()
+	writeCaptureFiles(t, dir, events)
+	path := filepath.Join(dir, "events.jsonl")
+	replayEvents, err := capturelog.NormalizeEvents(events)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var first, second bytes.Buffer
+	meta := capturelog.Meta{Scenario: "test", StartedAt: time.Date(2026, time.July, 13, 12, 0, 0, 0, time.UTC)}
+	if err := writeVerification(&first, dir, meta, events, replayEvents); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeVerification(&second, dir, meta, events, replayEvents); err != nil {
+		t.Fatal(err)
+	}
+	if first.String() != second.String() {
+		t.Fatalf("verification output is unstable:\nfirst:\n%s\nsecond:\n%s", first.String(), second.String())
+	}
+	contents, err := os.ReadFile(path) // #nosec G304 -- path is beneath the test's temporary directory.
+	if err != nil {
+		t.Fatal(err)
+	}
+	hash := sha256.Sum256(contents)
+	if want := fmt.Sprintf("sha256=%x", hash[:]); !strings.Contains(first.String(), want) {
+		t.Fatalf("verification output missing %q:\n%s", want, first.String())
+	}
+	return first.String()
+}
+
+func writeCaptureFiles(t *testing.T, dir string, events []capturelog.Event) {
+	t.Helper()
+	meta := capturelog.Meta{Scenario: "test", StartedAt: time.Date(2026, time.July, 13, 12, 0, 0, 0, time.UTC)}
+	metaData, err := json.Marshal(meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), append(metaData, '\n'), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(dir, "events.jsonl")
 	// #nosec G304 -- the path is beneath this test's temporary directory.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
@@ -230,29 +348,49 @@ func verifyLiveEvents(t *testing.T, events []capturelog.Event) string {
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	replayEvents, err := capturelog.NormalizeEvents(events)
+}
+
+func writeDriverEvidence(t *testing.T, path string, events []driverEvidence) {
+	t.Helper()
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600) // #nosec G304 -- test-owned temporary path.
 	if err != nil {
 		t.Fatal(err)
 	}
-	var first, second bytes.Buffer
-	if err := writeVerification(&first, dir, events, replayEvents); err != nil {
+	encoder := json.NewEncoder(file)
+	for _, event := range events {
+		if err := encoder.Encode(event); err != nil {
+			_ = file.Close()
+			t.Fatal(err)
+		}
+	}
+	if err := file.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeVerification(&second, dir, events, replayEvents); err != nil {
-		t.Fatal(err)
-	}
-	if first.String() != second.String() {
-		t.Fatalf("verification output is unstable:\nfirst:\n%s\nsecond:\n%s", first.String(), second.String())
-	}
-	contents, err := os.ReadFile(path) // #nosec G304 -- path is beneath the test's temporary directory.
+}
+
+func snapshotFiles(root string) ([]byte, error) {
+	rootDir, err := os.OpenRoot(root)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
-	hash := sha256.Sum256(contents)
-	if want := fmt.Sprintf("sha256=%x", hash[:8]); !strings.Contains(first.String(), want) {
-		t.Fatalf("verification output missing %q:\n%s", want, first.String())
-	}
-	return first.String()
+	defer rootDir.Close()
+
+	var out strings.Builder
+	err = fs.WalkDir(rootDir.FS(), ".", func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		data, err := rootDir.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(&out, "%s %x\n", path, sha256.Sum256(data))
+		return nil
+	})
+	return []byte(out.String()), err
 }
 
 func decodeOuterFrame(t *testing.T, value string) []byte {

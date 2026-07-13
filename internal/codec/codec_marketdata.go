@@ -127,6 +127,39 @@ type TickString struct {
 	Value    string
 }
 
+type TickEFP struct {
+	ReqID                    int
+	TickType                 int
+	BasisPoints              string
+	FormattedBasisPoints     string
+	ImpliedFuturesPrice      string
+	HoldDays                 int
+	FutureLastTradeDate      string
+	DividendImpact           string
+	DividendsToLastTradeDate string
+}
+
+func (m TickEFP) encodeWire(sv int) ([]string, error) {
+	return []string{
+		itoa(protocol.InTickEFP), "1", itoa(m.ReqID), itoa(m.TickType),
+		m.BasisPoints, m.FormattedBasisPoints, m.ImpliedFuturesPrice,
+		itoa(m.HoldDays), m.FutureLastTradeDate, m.DividendImpact,
+		m.DividendsToLastTradeDate,
+	}, nil
+}
+
+type DeltaNeutralValidation struct {
+	ReqID    int
+	Contract DeltaNeutralContract
+}
+
+func (m DeltaNeutralValidation) encodeWire(sv int) ([]string, error) {
+	return []string{
+		itoa(protocol.InDeltaNeutralValidation), "1", itoa(m.ReqID),
+		itoa(m.Contract.ConID), m.Contract.Delta, m.Contract.Price,
+	}, nil
+}
+
 type TickReqParams struct {
 	ReqID               int
 	MinTick             string
@@ -485,6 +518,46 @@ func decodeTickString(r *fieldReader, sv int) ([]Message, error) {
 
 func (m TickString) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(protocol.InTickString), "6", itoa(m.ReqID), itoa(m.TickType), m.Value}, nil
+}
+
+// [47, version, reqID, tickType, basisPoints, formattedBasisPoints,
+// impliedFuturesPrice, holdDays, futureLastTradeDate, dividendImpact,
+// dividendsToLastTradeDate]
+func decodeTickEFP(r *fieldReader, sv int) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	tickType, _ := r.ReadInt()
+	basisPoints := r.ReadString()
+	formattedBasisPoints := r.ReadString()
+	impliedFuturesPrice := r.ReadString()
+	holdDays, _ := r.ReadInt()
+	message := TickEFP{
+		ReqID:                    reqID,
+		TickType:                 tickType,
+		BasisPoints:              basisPoints,
+		FormattedBasisPoints:     formattedBasisPoints,
+		ImpliedFuturesPrice:      impliedFuturesPrice,
+		HoldDays:                 holdDays,
+		FutureLastTradeDate:      r.ReadString(),
+		DividendImpact:           r.ReadString(),
+		DividendsToLastTradeDate: r.ReadString(),
+	}
+	return []Message{message}, nil
+}
+
+func decodeDeltaNeutralValidation(r *fieldReader, sv int) ([]Message, error) {
+	r.Skip(1) // version
+	reqID, _ := r.ReadInt()
+	conID, _ := r.ReadInt()
+	message := DeltaNeutralValidation{
+		ReqID: reqID,
+		Contract: DeltaNeutralContract{
+			ConID: conID,
+			Delta: r.ReadString(),
+			Price: r.ReadString(),
+		},
+	}
+	return []Message{message}, nil
 }
 
 // [81, reqID, minTick, bboExchange, snapshotPermissions] — no version

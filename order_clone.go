@@ -50,8 +50,20 @@ func cloneOrder(order Order) Order {
 	if order.Hedge.DisableAutomaticPrice != nil {
 		order.Hedge.DisableAutomaticPrice = new(*order.Hedge.DisableAutomaticPrice)
 	}
+	if order.Hedge.MaxSize != nil {
+		order.Hedge.MaxSize = new(*order.Hedge.MaxSize)
+	}
 	if order.UsePriceMgmtAlgo != nil {
 		order.UsePriceMgmtAlgo = new(*order.UsePriceMgmtAlgo)
+	}
+	if order.RouteMarketableToBBO != nil {
+		order.RouteMarketableToBBO = new(*order.RouteMarketableToBBO)
+	}
+	if order.SeekPriceImprovement != nil {
+		order.SeekPriceImprovement = new(*order.SeekPriceImprovement)
+	}
+	if order.WhatIfType != nil {
+		order.WhatIfType = new(*order.WhatIfType)
 	}
 	order.Combo = cloneOrderCombo(order.Combo)
 	order.Algorithm.Params = append([]TagValue(nil), order.Algorithm.Params...)

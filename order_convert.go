@@ -49,6 +49,7 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		ActiveStopTime:           req.Order.Scale.ActiveStopTime,
 		HedgeType:                string(req.Order.Hedge.Type),
 		HedgeParam:               req.Order.Hedge.Param,
+		HedgeMaxSize:             intPointerOrEmpty(req.Order.Hedge.MaxSize),
 		AlgoStrategy:             req.Order.Algorithm.Strategy,
 		AlgoParams:               tagValuesToCodec(req.Order.Algorithm.Params),
 		WhatIf:                   "",
@@ -67,7 +68,23 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		UsePriceMgmtAlgo:         optBoolToString(req.Order.UsePriceMgmtAlgo, ""),
 		AdvancedErrorOverride:    req.Order.AdvancedErrorOverride,
 		ManualOrderTime:          req.Order.ManualOrderTime,
+		Deactivate:               trueOrEmpty(req.Order.Deactivate),
+		PostOnly:                 trueOrEmpty(req.Order.PostOnly),
+		AllowPreOpen:             trueOrEmpty(req.Order.AllowPreOpen),
+		IgnoreOpenAuction:        trueOrEmpty(req.Order.IgnoreOpenAuction),
+		RouteMarketableToBBO:     optBoolToString(req.Order.RouteMarketableToBBO, ""),
+		SeekPriceImprovement:     optBoolToString(req.Order.SeekPriceImprovement, ""),
+		WhatIfType:               intPointerOrEmpty(req.Order.WhatIfType),
 	}
+}
+
+func toCodecPresetBracketOrder(parentID, stopLossID, takeProfitID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
+	order := toCodecPlaceOrder(parentID, req)
+	order.AttachedStopLossOrderID = stopLossID
+	order.AttachedStopLossOrderType = "PRESET"
+	order.AttachedTakeProfitOrderID = takeProfitID
+	order.AttachedTakeProfitOrderType = "PRESET"
+	return order
 }
 
 func toCodecPreviewOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
@@ -97,6 +114,20 @@ func boolToString(b bool) string {
 		return "1"
 	}
 	return "0"
+}
+
+func trueOrEmpty(value bool) string {
+	if value {
+		return "1"
+	}
+	return ""
+}
+
+func intPointerOrEmpty(value *int) string {
+	if value == nil {
+		return ""
+	}
+	return strconv.Itoa(*value)
 }
 
 func optBoolToString(b *bool, dflt string) string {

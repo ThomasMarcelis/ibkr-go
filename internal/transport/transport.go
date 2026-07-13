@@ -307,18 +307,21 @@ func (c *Conn) writeLoop() {
 
 func (c *Conn) stop(err error) {
 	c.stopOnce.Do(func() {
-		c.queueMu.Lock()
-		c.outgoingClosed = true
-		c.queueCond.Broadcast()
-		c.queueMu.Unlock()
-
-		if err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {
+		logErr := err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.ErrClosedPipe)
+		if logErr {
 			c.waitErrMu.Lock()
 			c.waitErr = err
 			c.waitErrMu.Unlock()
+		}
+
+		c.queueMu.Lock()
+		c.outgoingClosed = true
+		close(c.stopping)
+		c.queueCond.Broadcast()
+		c.queueMu.Unlock()
+		if logErr {
 			c.logger.Debug("transport closed", "error", err)
 		}
-		close(c.stopping)
 		c.closeErr = c.conn.Close()
 	})
 }

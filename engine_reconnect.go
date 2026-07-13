@@ -132,10 +132,12 @@ func (e *engine) disconnectRoutes(err error, preserveOrders bool) {
 	}
 	// Order handles survive an automatically recovered disconnect: emit Gap,
 	// do not close.
-	for _, or := range e.orders {
+	for id, or := range e.orders {
 		if !or.closed && !or.gapped {
 			or.gapped = true
-			or.handle.emitLifecycle(OrderGap, e.connectionSeq(), err)
+			if !or.handle.emitLifecycle(OrderGap, e.connectionSeq(), err) {
+				e.closeOrderRoute(id, or, ErrSlowConsumer)
+			}
 		}
 	}
 }
@@ -206,17 +208,6 @@ func (e *engine) resumeRoutes() {
 		e.resumePending = append(e.resumePending, resumeRoute{key: key, route: e.singletons[key]})
 	}
 	e.continueResumeRoutes()
-
-	// A reconnect cannot prove what happened to a live order during the gap.
-	// Keep the stable handle, but require explicit reconciliation before a
-	// replacement can be sent.
-	for _, or := range e.orders {
-		if !or.closed && or.gapped {
-			or.gapped = false
-			or.recoveryRequired = true
-			or.handle.emitLifecycle(OrderRecoveryRequired, e.connectionSeq(), ErrOrderRecoveryRequired)
-		}
-	}
 }
 
 func (e *engine) continueResumeRoutes() {
@@ -267,12 +258,14 @@ func (e *engine) continueResumeRoutes() {
 		default:
 		}
 		e.resumePending = e.resumePending[1:]
+		route.generation = e.transportGeneration
 		if route.gapped && route.emitResubscribed != nil {
 			route.emitResubscribed(e)
 		}
 		route.gapped = false
 	}
 	e.scheduleReconnectStability(e.transport)
+	e.flushReadySetups()
 }
 
 func (e *engine) waitForResumeCapacity(tr *transport.Conn) {
@@ -284,10 +277,10 @@ func (e *engine) waitForResumeCapacity(tr *transport.Conn) {
 		select {
 		case <-tr.Writable():
 			e.enqueue(func() {
+				e.resumeWaiting = false
 				if e.transport != tr {
 					return
 				}
-				e.resumeWaiting = false
 				e.continueResumeRoutes()
 			})
 		case <-tr.Done():
@@ -323,7 +316,6 @@ func (e *engine) closeEngine(err, waitErr error) {
 	e.clearReadySetups()
 	if e.transport != nil {
 		_ = e.transport.Close()
-		_ = e.transport.Wait()
 	}
 	for reqID, route := range e.keyed {
 		route.close(err)
@@ -396,10 +388,12 @@ func (e *engine) emitGap() {
 			route.emitGap(e)
 		}
 	}
-	for _, or := range e.orders {
+	for id, or := range e.orders {
 		if !or.closed && !or.gapped {
 			or.gapped = true
-			or.handle.emitLifecycle(OrderGap, e.connectionSeq(), ErrInterrupted)
+			if !or.handle.emitLifecycle(OrderGap, e.connectionSeq(), ErrInterrupted) {
+				e.closeOrderRoute(id, or, ErrSlowConsumer)
+			}
 		}
 	}
 }
@@ -417,10 +411,29 @@ func (e *engine) emitResumed() {
 			route.emitRestored(e)
 		}
 	}
-	for _, or := range e.orders {
+	for id, or := range e.orders {
 		if !or.closed && or.gapped {
 			or.gapped = false
-			or.handle.emitLifecycle(OrderRestored, e.connectionSeq(), nil)
+			if !or.handle.emitLifecycle(OrderRestored, e.connectionSeq(), nil) {
+				e.closeOrderRoute(id, or, ErrSlowConsumer)
+			}
+		}
+	}
+}
+
+// requireOrderRecovery publishes the uncertainty boundary before any business
+// callback from a replacement connection can be dispatched. The caller
+// supplies the sequence that the replacement connection will publish at
+// readiness so the lifecycle marker and eventual Ready event agree.
+func (e *engine) requireOrderRecovery(connectionSeq uint64) {
+	for id, or := range e.orders {
+		if or.closed || !or.gapped {
+			continue
+		}
+		or.gapped = false
+		or.recoveryRequired = true
+		if !or.handle.emitLifecycle(OrderRecoveryRequired, connectionSeq, ErrOrderRecoveryRequired) {
+			e.closeOrderRoute(id, or, ErrSlowConsumer)
 		}
 	}
 }

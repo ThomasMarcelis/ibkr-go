@@ -152,9 +152,14 @@ func (e *engine) handleConnectResult(result connectResult) {
 	}
 
 	e.serverVersion = result.serverVersion
+	e.transportGeneration++
+	clear(e.dirtySingletons)
 	e.updateSnapshot(func(s *Snapshot) {
 		s.ServerVersion = result.serverVersion
 	})
+	if result.reconnect {
+		e.requireOrderRecovery(e.connectionSeq() + 1)
+	}
 	e.bootstrap.serverInfo = true
 	e.transport = transport.New(result.conn, e.cfg.logger, e.cfg.sendRate)
 	e.attachTransport(e.transport)
@@ -217,11 +222,19 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 	writesDone := make(chan struct{})
 	go func() {
 		defer close(writesDone)
+		discard := false
 		for result := range tr.Completions() {
+			if discard {
+				continue
+			}
 			select {
 			case e.incoming <- transportWrite{transport: tr, result: result}:
 			case <-e.done:
-				return
+				// The transport writer must remain able to publish every tracked
+				// outcome before it can close Done. Drain the source after engine
+				// termination instead of leaving the writer blocked behind a full
+				// completion channel.
+				discard = true
 			}
 		}
 	}()
@@ -267,5 +280,4 @@ func (e *engine) maybeReady() {
 	e.setState(StateReady, 0, "", nil)
 	e.reportReady(nil)
 	e.resumeRoutes()
-	e.flushReadySetups()
 }

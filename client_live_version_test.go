@@ -244,12 +244,14 @@ func TestLiveServer205ContractDataBoundary(t *testing.T) {
 	}
 }
 
-// TestLiveCanonicalContractRequestMatrix crosses the classic/protobuf request
-// boundaries with the public Contract selectors and composition fields. All
-// operations are read-only: external-ID and expired-future lookups plus a BAG
-// quote snapshot assembled from dynamically qualified AAPL option legs.
+// TestLiveCanonicalContractRequestMatrix crosses the current contract-data and
+// market-data protobuf boundaries with the public Contract selectors and
+// composition fields. Exact-sv200 classic coverage remains frozen by replay;
+// the current Gateway closes max-client-version 200 during bootstrap. All live
+// operations here are read-only: external-ID and expired-future lookups plus a
+// BAG quote snapshot assembled from dynamically qualified AAPL option legs.
 func TestLiveCanonicalContractRequestMatrix(t *testing.T) {
-	for _, sv := range []int{200, 205, 206} {
+	for _, sv := range []int{205, 206} {
 		t.Run(versionName(sv), func(t *testing.T) {
 			restore := ibkr.SetAdvertisedServerVersionMaxForTest(sv)
 			defer restore()

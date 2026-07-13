@@ -90,6 +90,17 @@ func record(ctx context.Context, cfg recorderConfig) (err error) {
 	if cfg.dial == nil {
 		cfg.dial = new(net.Dialer).DialContext
 	}
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("capture context: %w", err)
+	}
+
+	listener, err := net.Listen("tcp", cfg.listenAddr)
+	if err != nil {
+		return fmt.Errorf("listen: %w", err)
+	}
+	defer func() {
+		err = combineErrors(err, expectedClose("close listener", listener.Close()))
+	}()
 
 	session, err := capturelog.Create(cfg.outRoot, capturelog.Meta{
 		Scenario:   cfg.scenario,
@@ -113,14 +124,6 @@ func record(ctx context.Context, cfg recorderConfig) (err error) {
 			session.Redact(secret, "papertrader")
 		}
 	}
-
-	listener, err := net.Listen("tcp", cfg.listenAddr)
-	if err != nil {
-		return fmt.Errorf("listen: %w", err)
-	}
-	defer func() {
-		err = combineErrors(err, expectedClose("close listener", listener.Close()))
-	}()
 
 	tcpListener, ok := listener.(*net.TCPListener)
 	if !ok {

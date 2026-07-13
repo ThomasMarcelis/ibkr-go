@@ -8,7 +8,7 @@ import (
 
 // Raw-frame capture-coverage gate and inbound evidence ledger.
 //
-// Every decoder registered in inboundDecoders must be attested by at least one
+// Every decoder registered in either inbound decoder table must be attested by at least one
 // test that feeds a hardcoded live-derived wire frame through the production
 // decoder and asserts on the typed result. The frame may live directly in a
 // codec test or in an exact raw public replay fixture; large frames should not
@@ -46,10 +46,10 @@ import (
 // static catalog, not reflection over test names: the membership set is the
 // contract.
 
-// TestInboundDecoderRegistryCoverage keeps the decoder table and canonical
-// protocol registry in lockstep. A classic inbound message is either decoded
-// deliberately or absent from the implemented registry; silent half-support
-// is not allowed.
+// TestInboundDecoderRegistryCoverage keeps both decoder tables and the
+// canonical protocol registry in lockstep. An inbound message is either
+// decoded deliberately or absent from the implemented registry; silent
+// half-support is not allowed.
 func TestInboundDecoderRegistryCoverage(t *testing.T) {
 	t.Parallel()
 
@@ -64,8 +64,15 @@ func TestInboundDecoderRegistryCoverage(t *testing.T) {
 			t.Errorf("decoder for inbound message ID %d is absent from protocol registry", id)
 		}
 	}
+	for id := range inboundProtobufDecoders {
+		if _, ok := registered[id]; !ok {
+			t.Errorf("protobuf decoder for inbound message ID %d is absent from protocol registry", id)
+		}
+	}
 	for id, message := range registered {
-		if _, ok := inboundDecoders[id]; !ok {
+		_, classic := inboundDecoders[id]
+		_, protobuf := inboundProtobufDecoders[id]
+		if !classic && !protobuf {
 			t.Errorf("protocol registry claims %s (%d), but no decoder is registered", message.Name, id)
 		}
 	}
@@ -107,7 +114,7 @@ var rawFrameAttested = map[int]string{
 	protocol.InTickGeneric:           "TestCaptureDecode_QuoteAncillaryTicksLive",
 	protocol.InTickString:            "TestCaptureDecode_QuoteAncillaryTicksLive",
 	protocol.InTickReqParams:         "TestCaptureDecode_QuoteAncillaryTicksLive",
-	protocol.InMarketDataReroute:     "TestCaptureDecode_MarketDataReroutesLive",
+	protocol.InMarketDataReroute:     "TestCaptureDecode_MarketDataRerouteProto225Live",
 	protocol.InMarketDepthReroute:    "TestCaptureDecode_MarketDataReroutesLive",
 	protocol.InTickNews:              "TestCaptureDecode_TickNewsLive",
 	protocol.InScannerData:           "TestCaptureDecode_ScannerDataLive",
@@ -139,6 +146,7 @@ var rawFrameAttested = map[int]string{
 	protocol.InHeadTimestamp:         "TestCaptureDecode_HeadTimestampLive",
 	protocol.InCompletedOrderEnd:     "TestCaptureDecode_CompletedOrderEndLive",
 	protocol.InHistoricalTicksLast:   "TestHistoricalTicksTrades",
+	protocol.InConfig:                "TestDecodeConfigResponseProto219LiveVector",
 }
 
 // pendingLiveAttestation maps a decoder's msg_id to a one-line reason it has no
@@ -146,18 +154,20 @@ var rawFrameAttested = map[int]string{
 // here is a promise to capture, not a license to skip: move the id to
 // rawFrameAttested the moment a cited live frame exists.
 var pendingLiveAttestation = map[int]string{
-	protocol.InMarketDepthL2:         "exact-sv206 protobuf dispatch/schema are official-source-attested; positive raw 213 remains pending because the local capture account lacked L2 entitlement",
-	protocol.InReceiveFA:             "needs a requestFA capture (FA account entitlement)",
-	protocol.InScannerParameters:     "live sv206 response is attested by capture e50db8964130d14bcf8c5d02fe8c1383d15f55daf58363ab1433b999ccd79660, but its 1.8 MB XML frame is intentionally not checked in",
-	protocol.InRealTimeBars:          "needs a reqRealTimeBars 5s-bar capture (market hours)",
-	protocol.InHistoricalDataUpdate:  "source-referenced from the official client library; live attestation pending (needs a market-hours keepUpToDate reqHistoricalData capture) — see captures/v1/WIRE_TRUTH.md",
-	protocol.InPnLSingle:             "needs a reqPnLSingle capture",
-	protocol.InHistoricalTicks:       "needs a reqHistoricalTicks whatToShow=MIDPOINT capture",
-	protocol.InHistoricalTicksBidAsk: "needs a reqHistoricalTicks whatToShow=BID_ASK capture",
-	protocol.InTickByTick:            "needs a reqTickByTickData capture (market hours)",
-	protocol.InOrderBound:            "needs a client-ID-0 reqAutoOpenOrders capture after binding a manual paper-TWS order",
-	protocol.InWSHMetaData:           "needs a reqWSHMetaData capture (WSH entitlement)",
-	protocol.InWSHEventData:          "needs a reqWSHEventData capture (WSH entitlement)",
+	protocol.InMarketDepthL2:          "exact-sv206 protobuf dispatch/schema are official-source-attested; positive raw 213 remains pending because the local capture account lacked L2 entitlement",
+	protocol.InReceiveFA:              "needs a requestFA capture (FA account entitlement)",
+	protocol.InScannerParameters:      "live sv206 response is attested by capture e50db8964130d14bcf8c5d02fe8c1383d15f55daf58363ab1433b999ccd79660, but its 1.8 MB XML frame is intentionally not checked in",
+	protocol.InRealTimeBars:           "needs a reqRealTimeBars 5s-bar capture (market hours)",
+	protocol.InHistoricalDataUpdate:   "source-referenced from the official client library; live attestation pending (needs a market-hours keepUpToDate reqHistoricalData capture) — see captures/v1/WIRE_TRUTH.md",
+	protocol.InPnLSingle:              "needs a reqPnLSingle capture",
+	protocol.InHistoricalTicks:        "needs a reqHistoricalTicks whatToShow=MIDPOINT capture",
+	protocol.InHistoricalTicksBidAsk:  "needs a reqHistoricalTicks whatToShow=BID_ASK capture",
+	protocol.InTickByTick:             "needs a reqTickByTickData capture (market hours)",
+	protocol.InTickEFP:                "official API 10.48.01 layout is implemented; the market-hours EFP probe returned no callback and needs entitled single-stock-future data",
+	protocol.InDeltaNeutralValidation: "official API 10.48.01 layout is implemented; needs a successful BAG delta-neutral market-data request",
+	protocol.InOrderBound:             "needs a client-ID-0 reqAutoOpenOrders capture after binding a manual paper-TWS order",
+	protocol.InWSHMetaData:            "needs a reqWSHMetaData capture (WSH entitlement)",
+	protocol.InWSHEventData:           "needs a reqWSHEventData capture (WSH entitlement)",
 }
 
 // TestInboundDecoderRawFrameCoverage enforces that the two catalogs above
@@ -165,7 +175,15 @@ var pendingLiveAttestation = map[int]string{
 // attested by a cited raw live frame or explicitly pending, never both and
 // never neither, and neither catalog names an unregistered id.
 func TestInboundDecoderRawFrameCoverage(t *testing.T) {
+	registered := make(map[int]struct{}, len(inboundDecoders)+len(inboundProtobufDecoders))
 	for id := range inboundDecoders {
+		registered[id] = struct{}{}
+	}
+	for id := range inboundProtobufDecoders {
+		registered[id] = struct{}{}
+	}
+
+	for id := range registered {
 		_, attested := rawFrameAttested[id]
 		_, pending := pendingLiveAttestation[id]
 
@@ -183,13 +201,13 @@ func TestInboundDecoderRawFrameCoverage(t *testing.T) {
 	}
 
 	for id := range rawFrameAttested {
-		if _, ok := inboundDecoders[id]; !ok {
+		if _, ok := registered[id]; !ok {
 			t.Errorf("rawFrameAttested names msg id %d, which has no decoder in inboundDecoders; "+
 				"drop the entry or fix the id", id)
 		}
 	}
 	for id := range pendingLiveAttestation {
-		if _, ok := inboundDecoders[id]; !ok {
+		if _, ok := registered[id]; !ok {
 			t.Errorf("pendingLiveAttestation names msg id %d, which has no decoder in inboundDecoders; "+
 				"drop the entry or fix the id", id)
 		}

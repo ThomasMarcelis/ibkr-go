@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Added
+
+- Complete negotiated protocol coverage through `server_version 225`: the
+  remaining protobuf migrations at 208..213 and every API 10.48 semantic gate
+  at 214..225 are implemented with exact vectors and boundary tests.
+- `TWS().Config` returns the presence-aware read-only TWS or Gateway
+  configuration introduced at server version 219.
+- Quote subscriptions now deliver typed EFP and delta-neutral validation
+  callbacks. Generic tick 787 exposes odd-lot bid/ask prices, sizes, and
+  exchanges through the normalized quote at server version 225.
+- Historical tick results identify their `WhatToShow` family even when empty
+  and expose `Len()` across midpoint, bid/ask, and trade result slices.
+
 ### Changed
 
 - Subscription cancellation admission failure now retires its owning

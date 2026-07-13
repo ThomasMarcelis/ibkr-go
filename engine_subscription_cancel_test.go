@@ -80,6 +80,72 @@ func TestOpenOrdersCloseDuringRefreshRetiresResponseOwner(t *testing.T) {
 	finishObservedRetirement(t, e)
 }
 
+func TestClosedUnkeyedStreamCannotBeReusedBeforeNewTransportGeneration(t *testing.T) {
+	t.Parallel()
+
+	e, oldPeer := newObservedMarketDataEngine(t)
+	first := installObservedPositionsRoute(t, e)
+	_ = readObservedFrame(t, oldPeer)
+	e.handleIncoming(codec.PositionEnd{})
+	<-first.Events() // Started
+	<-first.Events() // SnapshotComplete
+
+	first.Close()
+	(<-e.cmds)()
+	_ = readObservedFrame(t, oldPeer) // cancel positions
+	if !e.singletonGenerationDirty(singletonPositions) {
+		t.Fatal("closed request-ID-less stream did not dirty its transport generation")
+	}
+
+	type result struct {
+		sub *Subscription[Position]
+		err error
+	}
+	replacement := make(chan result, 1)
+	go func() {
+		sub, err := e.SubscribePositions(context.Background())
+		replacement <- result{sub: sub, err: err}
+	}()
+	(<-e.cmds)()
+	if e.retiringTransport != e.transport {
+		t.Fatal("same-generation replacement did not retire the ambiguous transport")
+	}
+	if _, ok := e.singletons[singletonPositions]; ok {
+		t.Fatal("same-generation replacement installed a route before rotation")
+	}
+	select {
+	case out := <-replacement:
+		t.Fatalf("replacement completed before transport rotation: %+v", out)
+	default:
+	}
+
+	finishObservedRetirement(t, e)
+	newPeer, newClient := net.Pipe()
+	t.Cleanup(func() { _ = newPeer.Close() })
+	e.connectAttemptID = 7
+	e.handleConnectResult(connectResult{
+		attempt: 7, reconnect: true, conn: newClient, serverVersion: 206,
+	})
+	// A buffered callback from the retired generation has no replacement owner.
+	e.handleIncoming(codec.Position{Account: "DU9000001", Position: "999"})
+	e.bootstrap.managed = true
+	e.bootstrap.nextValidID = true
+	e.maybeReady()
+
+	out := <-replacement
+	if out.err != nil || out.sub == nil {
+		t.Fatalf("replacement after generation rotation = %+v", out)
+	}
+	_ = readObservedFrame(t, newPeer)
+	select {
+	case update := <-out.sub.Events():
+		if update.Value.Position.String() == "999" {
+			t.Fatal("retired-generation position reached the replacement subscription")
+		}
+	default:
+	}
+}
+
 func TestSendRejectedByStoppingTransportIsInterrupted(t *testing.T) {
 	t.Parallel()
 
@@ -330,8 +396,9 @@ func TestSubscriptionCancelSkipsUnresumedReconnectRoute(t *testing.T) {
 
 	e, peer := newObservedMarketDataEngine(t)
 	e.snapshot.State = StateHandshaking
+	staleRoute := &route{generation: e.transportGeneration - 1}
 
-	if err := e.cancelSubscription(OpQuotes, codec.CancelQuote{ReqID: 20621}); err != nil {
+	if err := e.cancelRouteSubscription(staleRoute, OpQuotes, codec.CancelQuote{ReqID: 20621}); err != nil {
 		t.Fatalf("cancel during replacement handshake = %v, want clean local detach", err)
 	}
 	fence := codec.ReqMarketDataType{DataType: int(MarketDataLive)}
@@ -344,6 +411,62 @@ func TestSubscriptionCancelSkipsUnresumedReconnectRoute(t *testing.T) {
 	}
 	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantFence) {
 		t.Fatalf("first frame after unresumed cancellation = %x, want fence %x", got, wantFence)
+	}
+}
+
+func TestSubscriptionCancelUsesRouteResumeOwnership(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 801
+	resumed := installObservedQuoteRoute(t, e, QuoteRequest{Contract: Stock("AAPL")}, WithResumePolicy(ResumeAuto))
+	_ = readObservedFrame(t, peer)
+	pending := installObservedQuoteRoute(t, e, QuoteRequest{Contract: Stock("MSFT")}, WithResumePolicy(ResumeAuto))
+	_ = readObservedFrame(t, peer)
+
+	resumedRoute := e.keyed[801]
+	pendingRoute := e.keyed[802]
+	e.transportGeneration++
+	resumedRoute.generation = e.transportGeneration
+	// Same-generation pending models a data-lost 1101 replay on the existing
+	// socket. Physical reconnect pending routes are also excluded by their old
+	// generation.
+	pendingRoute.generation = e.transportGeneration
+	e.resumePending = []resumeRoute{{reqID: 802, route: pendingRoute}}
+	e.resumeWaiting = true
+
+	resumed.Close()
+	(<-e.cmds)()
+	wantCancel, err := codec.Encode(e.serverVersion, codec.CancelQuote{ReqID: 801})
+	if err != nil {
+		t.Fatalf("encode resumed cancel: %v", err)
+	}
+	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantCancel) {
+		t.Fatalf("resumed route cancel = %x, want %x", got, wantCancel)
+	}
+	if err := resumed.Wait(); err != nil {
+		t.Fatalf("resumed route close: %v", err)
+	}
+
+	pending.Close()
+	(<-e.cmds)()
+	if err := pending.Wait(); err != nil {
+		t.Fatalf("pending route close: %v", err)
+	}
+	if e.retiringTransport != nil {
+		t.Fatal("closing a pending resume route retired the replacement transport")
+	}
+
+	fence := codec.ReqMarketDataType{DataType: int(MarketDataLive)}
+	if err := e.sendContext(context.Background(), fence); err != nil {
+		t.Fatalf("send post-close fence: %v", err)
+	}
+	wantFence, err := codec.Encode(e.serverVersion, fence)
+	if err != nil {
+		t.Fatalf("encode post-close fence: %v", err)
+	}
+	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantFence) {
+		t.Fatalf("first frame after pending close = %x, want fence %x", got, wantFence)
 	}
 }
 
@@ -426,7 +549,6 @@ func TestDisplayGroupUpdateAfterCloseReturnsErrClosed(t *testing.T) {
 
 	updateErr := make(chan error, 1)
 	go func() { updateErr <- handle.Update(context.Background(), "265598@SMART") }()
-	(<-e.cmds)()
 	if err := <-updateErr; !errors.Is(err, ErrClosed) {
 		t.Fatalf("Update() error = %v, want ErrClosed", err)
 	}
@@ -440,6 +562,21 @@ func TestDisplayGroupUpdateAfterCloseReturnsErrClosed(t *testing.T) {
 	}
 	if got := readObservedFrame(t, peer); !bytes.Equal(got, wantFence) {
 		t.Fatalf("first frame after closed Update() = %x, want fence %x", got, wantFence)
+	}
+}
+
+func TestDisplayGroupUpdateOnNilOrZeroHandleReturnsErrClosed(t *testing.T) {
+	t.Parallel()
+
+	for name, handle := range map[string]*DisplayGroupHandle{
+		"nil":  nil,
+		"zero": {},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := handle.Update(context.Background(), "265598@SMART"); !errors.Is(err, ErrClosed) {
+				t.Fatalf("Update() error = %v, want ErrClosed", err)
+			}
+		})
 	}
 }
 
