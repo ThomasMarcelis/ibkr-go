@@ -26,17 +26,18 @@ type Dialer interface {
 }
 
 type config struct {
-	host               string
-	port               int
-	clientID           int
-	dialer             Dialer
-	logger             *slog.Logger
-	reconnect          ReconnectPolicy
-	tcpKeepAlive       time.Duration
-	sendRate           int
-	eventBuffer        int
-	subscriptionBuffer int
-	orderEventBuffer   int
+	host                 string
+	port                 int
+	clientID             ClientID
+	dialer               Dialer
+	logger               *slog.Logger
+	reconnect            ReconnectPolicy
+	tcpKeepAlive         time.Duration
+	sendRate             int
+	eventBuffer          int
+	subscriptionBuffer   int
+	orderEventBuffer     int
+	maxInboundFrameBytes int
 }
 
 type subscriptionConfig struct {
@@ -54,17 +55,18 @@ const defaultExecutionCorrelationLimit = 1 << 12
 
 func defaultConfig() config {
 	return config{
-		host:               "127.0.0.1",
-		port:               7497,
-		clientID:           1,
-		dialer:             &net.Dialer{},
-		logger:             slog.New(slog.NewTextHandler(io.Discard, nil)),
-		reconnect:          ReconnectAuto,
-		tcpKeepAlive:       30 * time.Second,
-		sendRate:           50,
-		eventBuffer:        64,
-		subscriptionBuffer: 64,
-		orderEventBuffer:   64,
+		host:                 "127.0.0.1",
+		port:                 7497,
+		clientID:             1,
+		dialer:               &net.Dialer{},
+		logger:               slog.New(slog.NewTextHandler(io.Discard, nil)),
+		reconnect:            ReconnectAuto,
+		tcpKeepAlive:         30 * time.Second,
+		sendRate:             50,
+		eventBuffer:          64,
+		subscriptionBuffer:   64,
+		orderEventBuffer:     64,
+		maxInboundFrameBytes: 64 << 20,
 	}
 }
 
@@ -98,7 +100,7 @@ func validateConfig(cfg config) error {
 		return &ValidationError{Field: "Port", Value: strconv.Itoa(cfg.port), Message: "must be between 1 and 65535"}
 	}
 	if cfg.clientID < 0 {
-		return &ValidationError{Field: "ClientID", Value: strconv.Itoa(cfg.clientID), Message: "must be >= 0"}
+		return &ValidationError{Field: "ClientID", Value: strconv.FormatInt(int64(cfg.clientID), 10), Message: "must be >= 0"}
 	}
 	if cfg.eventBuffer < 1 {
 		return &ValidationError{Field: "EventBuffer", Value: strconv.Itoa(cfg.eventBuffer), Message: "must be >= 1"}
@@ -108,6 +110,9 @@ func validateConfig(cfg config) error {
 	}
 	if cfg.orderEventBuffer < 1 {
 		return &ValidationError{Field: "OrderEventBuffer", Value: strconv.Itoa(cfg.orderEventBuffer), Message: "must be >= 1"}
+	}
+	if cfg.maxInboundFrameBytes < 1 || cfg.maxInboundFrameBytes > 64<<20 {
+		return &ValidationError{Field: "MaxInboundFrameBytes", Value: strconv.Itoa(cfg.maxInboundFrameBytes), Message: "must be between 1 and 67108864"}
 	}
 	if !cfg.reconnect.valid() {
 		return &ValidationError{Field: "ReconnectPolicy", Value: string(cfg.reconnect), Message: "must be ReconnectOff or ReconnectAuto"}
@@ -172,9 +177,18 @@ func WithPort(port int) Option {
 // WithClientID sets the TWS API client ID. Default: 1. Each concurrent
 // connection to the same Gateway needs a distinct ID; ID 0 additionally binds
 // manually entered TWS orders (see [OpenOrdersScopeAuto]).
-func WithClientID(clientID int) Option {
+func WithClientID(clientID ClientID) Option {
 	return func(cfg *config) {
 		cfg.clientID = clientID
+	}
+}
+
+// WithMaxInboundFrameBytes lowers the per-frame inbound allocation ceiling.
+// The default and hard maximum are 64 MiB. The limit applies to the server
+// handshake and every subsequent raw frame, before decoded expansion.
+func WithMaxInboundFrameBytes(limit int) Option {
+	return func(cfg *config) {
+		cfg.maxInboundFrameBytes = limit
 	}
 }
 

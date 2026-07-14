@@ -213,7 +213,7 @@ func historicalContractPacingKey(contract Contract) string {
 	}
 	for _, leg := range contract.ComboLegs {
 		parts = append(parts,
-			strconv.Itoa(leg.ConID),
+			strconv.FormatInt(int64(leg.ConID), 10),
 			strconv.Itoa(leg.Ratio),
 			string(leg.Action),
 			leg.Exchange,
@@ -352,7 +352,7 @@ func validateResumePolicy(opKind OpKind, resume ResumePolicy) error {
 	}
 }
 
-func validateOpenOrdersScope(scope OpenOrdersScope, clientID int) error {
+func validateOpenOrdersScope(scope OpenOrdersScope, clientID ClientID) error {
 	switch scope {
 	case OpenOrdersScopeAll, OpenOrdersScopeClient:
 		return nil

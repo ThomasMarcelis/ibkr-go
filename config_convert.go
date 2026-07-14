@@ -44,7 +44,7 @@ func fromCodecTWSConfig(config codec.ConfigResponse) TWSConfig {
 				ExposeTradingScheduleToAPI: s.ExposeTradingScheduleToAPI, SplitInsuredDepositFromCashBalance: s.SplitInsuredDepositFromCashBalance,
 				SendZeroPositionsForTodayOnly: s.SendZeroPositionsForTodayOnly, LetAPIAccountRequestsSwitchSubscription: s.LetAPIAccountRequestsSwitchSubscription,
 				UseAccountGroupsWithAllocationMethods: s.UseAccountGroupsWithAllocationMethods, LoggingLevel: s.LoggingLevel,
-				MasterClientID: s.MasterClientID, BulkDataTimeout: s.BulkDataTimeout, ComponentExchangeSeparator: s.ComponentExchangeSeparator,
+				MasterClientID: optionalClientID(s.MasterClientID), BulkDataTimeout: s.BulkDataTimeout, ComponentExchangeSeparator: s.ComponentExchangeSeparator,
 				ShowForexDataInOneTenthPips: s.ShowForexDataInOneTenthPips, AllowForexTradingInOneTenthPips: s.AllowForexTradingInOneTenthPips,
 				RoundAccountValuesToNearestWholeNumber: s.RoundAccountValuesToNearestWholeNumber,
 				SendMarketDataInLotsForUSStocks:        s.SendMarketDataInLotsForUSStocks, ShowAdvancedOrderRejectInUI: s.ShowAdvancedOrderRejectInUI,
@@ -68,4 +68,11 @@ func fromCodecTWSConfig(config codec.ConfigResponse) TWSConfig {
 		}
 	}
 	return result
+}
+
+func optionalClientID(value *int) *ClientID {
+	if value == nil {
+		return nil
+	}
+	return new(protocolIDFromInt[ClientID](*value))
 }

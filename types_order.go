@@ -105,7 +105,7 @@ type OpenOrder struct {
 	OpenClose             string
 	Origin                int
 	OrderRef              string
-	ClientID              int
+	ClientID              ClientID
 	PermID                int64
 	OutsideRTH            bool
 	Hidden                bool
@@ -161,7 +161,7 @@ func (s *OpenOrdersSubscription) Refresh(ctx context.Context) error {
 // manual TWS order through an auto-open-orders subscription.
 type OrderBinding struct {
 	PermID   int64
-	ClientID int
+	ClientID ClientID
 	OrderID  int64
 }
 
@@ -214,7 +214,7 @@ const (
 // the account's complete trade history. Since is transmitted in UTC as IBKR's
 // time lower bound. SpecificDates use only their calendar components.
 type ExecutionsRequest struct {
-	ClientID      int // zero disables the client-ID filter
+	ClientID      ClientID // zero disables the client-ID filter
 	Account       string
 	Since         time.Time
 	Symbol        string
@@ -246,6 +246,17 @@ type ExecutionUpdate struct {
 	CommissionAndFees *CommissionAndFeesReport
 }
 
+// ExecutionEvent is one unfiltered execution-related Gateway callback.
+// Exactly one payload field is non-nil. RequestID is present only for an
+// execution-detail callback; commission-and-fee callbacks have no request ID
+// on the wire. Unlike an executions query, this observer does not correlate,
+// deduplicate, or discard callbacks.
+type ExecutionEvent struct {
+	RequestID         *RequestID
+	Execution         *Execution
+	CommissionAndFees *CommissionAndFeesReport
+}
+
 // ExecutionSnapshot is the executions and commission-and-fee reports observed
 // through the Gateway's executions-end boundary. The boundary does not promise
 // that every fee report has arrived; use [OrdersClient.SubscribeExecutions] to
@@ -268,7 +279,7 @@ type Execution struct {
 	Shares                  decimal.Decimal
 	Price                   decimal.Decimal
 	PermID                  int64
-	ClientID                int
+	ClientID                ClientID
 	Liquidation             int
 	CumulativeQuantity      decimal.Decimal
 	AveragePrice            decimal.Decimal
@@ -292,7 +303,7 @@ type OrderStatusUpdate struct {
 	PermID        int64           // IBKR permanent order ID, stable across sessions
 	ParentID      int64           // parent order ID for bracket/child orders, else 0
 	LastFillPrice decimal.Decimal // price of the most recent fill
-	ClientID      int             // client ID that owns the order
+	ClientID      ClientID        // client ID that owns the order
 	WhyHeld       string          // reason the order is held (e.g. "locate"), else empty
 	MktCapPrice   decimal.Decimal // capped price for price-capped orders
 }
@@ -575,7 +586,7 @@ type CompletedOrderDetails struct {
 	// replies, whose wire shape does not carry those identities. A non-nil
 	// pointer preserves an explicit zero from protobuf replies.
 	OrderID       *int64
-	ClientID      *int
+	ClientID      *ClientID
 	ParentID      *int64
 	Action        OrderAction
 	Quantity      decimal.Decimal
@@ -680,7 +691,7 @@ type CompletedOrderExecution struct {
 	TriggerMethod            int
 	RandomizeSize            bool
 	RandomizePrice           bool
-	RefFuturesConID          *int
+	RefFuturesConID          *ContractID
 	MinTradeQty              *int
 	MinCompeteSize           *int
 	CompeteAgainstBestOffset *decimal.Decimal
@@ -703,7 +714,7 @@ type CompletedOrderVolatility struct {
 type CompletedOrderDeltaNeutral struct {
 	OrderType          OrderType
 	AuxPrice           *decimal.Decimal
-	ConID              int
+	ConID              ContractID
 	ShortSale          bool
 	ShortSaleSlot      int
 	DesignatedLocation string
@@ -726,7 +737,7 @@ type CompletedOrderScale struct {
 // CompletedOrderPeggedBenchmark contains PEG BENCH parameters from a
 // completed order.
 type CompletedOrderPeggedBenchmark struct {
-	ReferenceContractID   int
+	ReferenceContractID   ContractID
 	ChangeAmountDecrease  bool
 	ChangeAmount          decimal.Decimal
 	ReferenceChangeAmount *decimal.Decimal

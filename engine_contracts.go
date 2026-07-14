@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"strconv"
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
@@ -13,77 +12,90 @@ import (
 )
 
 func (e *engine) ContractDetails(ctx context.Context, contract Contract) ([]ContractDetails, error) {
+	sub, err := e.StreamContractDetails(ctx, contract, withSnapshotCollector())
+	if err != nil {
+		return nil, err
+	}
+	return collectSnapshotAndClose(ctx, sub, func(detail ContractDetails) (ContractDetails, bool) { return detail, true })
+}
+
+func (e *engine) StreamContractDetails(ctx context.Context, contract Contract, opts ...SubscriptionOption) (*Subscription[ContractDetails], error) {
 	if err := validateContract(contract); err != nil {
 		return nil, err
 	}
 	contract = cloneContract(contract)
 	type result struct {
-		values []ContractDetails
-		err    error
+		sub *Subscription[ContractDetails]
+		err error
 	}
 
 	resp := make(chan result, 1)
-	var reqID int
-	var ownedRoute *route
-	enqueueOneShotSetup(ctx, e, func() {
+	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if err := validateContractFieldSupport(contract, "contract details", e.serverVersion, contractDetailsContractFields(e.serverVersion)); err != nil {
 			resp <- result{err: err}
 			return
 		}
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpContractDetails, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 
-		reqID = e.allocReqID()
-		values := make([]ContractDetails, 0, 4)
-		ownedRoute = newKeyedOneShotRoute(reqID, OpContractDetails,
-			func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.ContractDetails:
-					detail, err := fromCodecContractDetails(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						resp <- result{err: err}
-						return
-					}
-					values = append(values, detail)
-				case codec.BondContractDetails:
-					detail, err := fromCodecBondContractDetails(m)
-					if err != nil {
-						e.deleteKeyedRoute(reqID)
-						resp <- result{err: err}
-						return
-					}
-					values = append(values, detail)
-				case codec.ContractDetailsEnd:
-					e.deleteKeyedRoute(reqID)
-					resp <- result{values: values}
-				}
-			}, func(err error) {
-				resp <- result{err: err}
-			})
+		reqID := e.allocReqID()
+		var cancel codec.Message
+		if e.serverVersion >= protocol.MinServerVersionBrokerSideOneShotCancel {
+			cancel = codec.CancelContractData{ReqID: reqID}
+		}
+		sub, ownedRoute := newKeyedSubscriptionRoute[ContractDetails](e, cfg, reqID, OpContractDetails, cancel)
+		sub.expectSnapshot()
+		ownedRoute.onDisconnect = func(_ *engine, err error) bool {
+			sub.closeWithErr(interrupted(err))
+			return false
+		}
+		ownedRoute.handle = func(msg any, e *engine) {
+			var detail ContractDetails
+			var err error
+			switch m := msg.(type) {
+			case codec.ContractDetails:
+				detail, err = fromCodecContractDetails(m)
+			case codec.BondContractDetails:
+				detail, err = fromCodecBondContractDetails(m)
+			case codec.ContractDetailsEnd:
+				e.deleteKeyedRoute(reqID)
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
+				sub.closeWithErr(nil)
+				return
+			default:
+				return
+			}
+			if err != nil {
+				sub.cancelFromActor(err)
+				return
+			}
+			sub.emit(detail)
+		}
 		e.keyed[reqID] = ownedRoute
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.ContractDetailsRequest{
 			ReqID:    reqID,
 			Contract: toCodecContract(contract),
 		}); err != nil {
 			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(err)
 			resp <- result{err: err}
+			return
 		}
+		resp <- result{sub: sub}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() {
-			if reqID == 0 || ownedRoute == nil || e.keyed[reqID] != ownedRoute {
-				return
-			}
-			e.deleteKeyedRoute(reqID)
-			if e.serverVersion >= protocol.MinServerVersionBrokerSideOneShotCancel {
-				_ = e.send(codec.CancelContractData{ReqID: reqID})
-			}
-		})
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
-	return out.values, out.err
+	if out.err == nil && out.sub != nil {
+		bindContext(ctx, out.sub)
+	}
+	return out.sub, out.err
 }
 
 func (e *engine) QualifyContract(ctx context.Context, contract Contract) (ContractDetails, error) {
@@ -122,7 +134,7 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 						derivTypes := make([]string, len(s.DerivativeSecTypes))
 						copy(derivTypes, s.DerivativeSecTypes)
 						symbols[i] = MatchingSymbol{
-							ConID: s.ConID, Symbol: s.Symbol, SecType: SecType(s.SecType),
+							ConID: protocolIDFromInt[ContractID](s.ConID), Symbol: s.Symbol, SecType: SecType(s.SecType),
 							PrimaryExchange: s.PrimaryExchange, Currency: s.Currency,
 							DerivativeSecTypes: derivTypes,
 							Description:        s.Description,
@@ -149,7 +161,7 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 	return out.symbols, out.err
 }
 
-func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleResult, error) {
+func (e *engine) MarketRule(ctx context.Context, marketRuleID MarketRuleID) (MarketRuleResult, error) {
 	type result struct {
 		rule MarketRuleResult
 		err  error
@@ -168,7 +180,7 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.MarketRule:
-					if m.MarketRuleID != marketRuleID {
+					if protocolIDFromInt[MarketRuleID](m.MarketRuleID) != marketRuleID {
 						return
 					}
 					delete(eng.singletons, singletonMarketRule)
@@ -192,13 +204,13 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 						}
 					}
 					resp <- result{rule: MarketRuleResult{
-						MarketRuleID: m.MarketRuleID,
+						MarketRuleID: protocolIDFromInt[MarketRuleID](m.MarketRuleID),
 						Increments:   increments,
 					}}
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -206,14 +218,14 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 			},
 		}
 		e.singletons[singletonMarketRule] = ownedRoute
-		if err := e.sendContext(ctx, codec.MarketRuleRequest{MarketRuleID: marketRuleID}); err != nil {
+		if err := e.sendContext(ctx, codec.MarketRuleRequest{MarketRuleID: int(marketRuleID)}); err != nil {
 			delete(e.singletons, singletonMarketRule)
 			resp <- result{err: err}
 		}
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonMarketRule, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonMarketRule, ownedRoute) })
 	})
 	if err != nil {
 		return MarketRuleResult{}, err
@@ -222,63 +234,83 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleRe
 }
 
 func (e *engine) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest) ([]SecDefOptParams, error) {
+	sub, err := e.StreamSecDefOptParams(ctx, req, withSnapshotCollector())
+	if err != nil {
+		return nil, err
+	}
+	return collectSnapshotAndClose(ctx, sub, func(params SecDefOptParams) (SecDefOptParams, bool) { return params, true })
+}
+
+func (e *engine) StreamSecDefOptParams(ctx context.Context, req SecDefOptParamsRequest, opts ...SubscriptionOption) (*Subscription[SecDefOptParams], error) {
 	type result struct {
-		values []SecDefOptParams
-		err    error
+		sub *Subscription[SecDefOptParams]
+		err error
 	}
 	resp := make(chan result, 1)
-	var reqID int
-	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
-		values := make([]SecDefOptParams, 0, 4)
-		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSecDefOptParams,
-			func(msg any, e *engine) {
-				switch m := msg.(type) {
-				case codec.SecDefOptParamsResponse:
-					strikes := make([]decimal.Decimal, len(m.Strikes))
-					for i, s := range m.Strikes {
-						strike, err := parseRequiredDecimal(s, "sec def opt params strike")
-						if err != nil {
-							e.deleteKeyedRoute(reqID)
-							resp <- result{err: err}
-							return
-						}
-						strikes[i] = strike
+	enqueueSubscriptionSetup(ctx, e, resp, func() {
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpSecDefOptParams, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID := e.allocReqID()
+		sub, ownedRoute := newKeyedSubscriptionRoute[SecDefOptParams](e, cfg, reqID, OpSecDefOptParams, nil)
+		sub.expectSnapshot()
+		ownedRoute.onDisconnect = func(_ *engine, err error) bool {
+			sub.closeWithErr(interrupted(err))
+			return false
+		}
+		ownedRoute.handle = func(msg any, e *engine) {
+			switch m := msg.(type) {
+			case codec.SecDefOptParamsResponse:
+				strikes := make([]decimal.Decimal, len(m.Strikes))
+				for i, s := range m.Strikes {
+					strike, err := parseRequiredDecimal(s, "sec def opt params strike")
+					if err != nil {
+						sub.cancelFromActor(err)
+						return
 					}
-					values = append(values, SecDefOptParams{
-						Exchange:        m.Exchange,
-						UnderlyingConID: m.UnderlyingConID,
-						TradingClass:    m.TradingClass,
-						Multiplier:      m.Multiplier,
-						Expirations:     append([]string(nil), m.Expirations...),
-						Strikes:         strikes,
-					})
-				case codec.SecDefOptParamsEnd:
-					e.deleteKeyedRoute(reqID)
-					resp <- result{values: values}
+					strikes[i] = strike
 				}
-			}, func(err error) {
-				resp <- result{err: err}
-			})
+				sub.emit(SecDefOptParams{
+					Exchange:        m.Exchange,
+					UnderlyingConID: protocolIDFromInt[ContractID](m.UnderlyingConID),
+					TradingClass:    m.TradingClass,
+					Multiplier:      m.Multiplier,
+					Expirations:     append([]string(nil), m.Expirations...),
+					Strikes:         strikes,
+				})
+			case codec.SecDefOptParamsEnd:
+				e.deleteKeyedRoute(reqID)
+				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
+				sub.closeWithErr(nil)
+			}
+		}
+		e.keyed[reqID] = ownedRoute
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.SecDefOptParamsRequest{
 			ReqID:             reqID,
 			UnderlyingSymbol:  req.UnderlyingSymbol,
 			FutFopExchange:    req.FutFopExchange,
 			UnderlyingSecType: string(req.UnderlyingSecType),
-			UnderlyingConID:   req.UnderlyingConID,
+			UnderlyingConID:   int(req.UnderlyingConID),
 		}); err != nil {
 			e.deleteKeyedRoute(reqID)
+			sub.closeWithErr(err)
 			resp <- result{err: err}
+			return
 		}
+		resp <- result{sub: sub}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.deleteKeyedRoute(reqID) })
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
-	return out.values, out.err
+	if out.err == nil && out.sub != nil {
+		bindContext(ctx, out.sub)
+	}
+	return out.sub, out.err
 }
 
 func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]SmartComponent, error) {
@@ -360,9 +392,9 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 	if err != nil {
 		return ContractDetails{}, err
 	}
-	var aggGroup *int
+	var aggGroup *AggregateGroupID
 	if m.AggGroup != math.MaxInt32 {
-		aggGroup = new(m.AggGroup)
+		aggGroup = new(protocolIDFromInt[AggregateGroupID](m.AggGroup))
 	}
 
 	exchanges, err := contractExchanges(m.ValidExchanges, m.MarketRuleIDs)
@@ -414,7 +446,7 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 		PriceMagnifier:            m.PriceMagnifier,
 		OrderTypes:                splitContractList(m.OrderTypes),
 		ValidExchanges:            exchanges,
-		UnderConID:                m.UnderConID,
+		UnderConID:                protocolIDFromInt[ContractID](m.UnderConID),
 		ContractMonth:             m.ContractMonth,
 		Industry:                  m.Industry,
 		Category:                  m.Category,
@@ -471,15 +503,15 @@ func contractExchanges(validExchanges, marketRuleIDs string) ([]ContractExchange
 	exchanges := splitContractList(validExchanges)
 	rules := splitContractList(marketRuleIDs)
 	if len(exchanges) != len(rules) {
-		return nil, fmt.Errorf("ibkr: contract details: %d valid exchanges but %d market rule ids", len(exchanges), len(rules))
+		return nil, inboundProtocolError("contract details exchanges", fmt.Errorf("%d valid exchanges but %d market rule ids", len(exchanges), len(rules)))
 	}
 	result := make([]ContractExchange, len(exchanges))
 	for i := range exchanges {
-		marketRuleID, err := strconv.Atoi(rules[i])
+		marketRuleID, err := parseOptionalInt32(rules[i], "contract details market rule ID")
 		if err != nil {
-			return nil, fmt.Errorf("ibkr: contract details market rule id %q: %w", rules[i], err)
+			return nil, err
 		}
-		result[i] = ContractExchange{Exchange: exchanges[i], MarketRuleID: marketRuleID}
+		result[i] = ContractExchange{Exchange: exchanges[i], MarketRuleID: MarketRuleID(marketRuleID)}
 	}
 	return result, nil
 }

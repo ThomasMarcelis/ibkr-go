@@ -4,7 +4,7 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-13. Both local Gateway roles are available. The current
+Last updated: 2026-07-14. Both local Gateway roles are available. The current
 production ceiling is `server_version 225`; exact positive, negative, SDK-
 oracle, and source-law boundaries are distinguished below. Earlier campaign
 rows retain their negotiated version as recorded.
@@ -30,6 +30,17 @@ Gateway. Every new row below should record the role, server version, account
 class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
+
+### 2026-07-14
+
+The `paper-dev` doctor and selected public live suite negotiated
+`server_version 225`. Contract details, historical bars, executions,
+historical news, and matching-symbol queries passed. Completed Orders again
+received neither a result, end marker, nor request error before 15 seconds.
+Official C++ SDK 10.46.01 reproduced the same silence against the same Gateway
+for both `apiOnly=true` and `apiOnly=false`; its source also emitted the same
+server-204+ protobuf request. This confirms the deadline as unresolved Gateway
+behavior, not an empty snapshot and not evidence of an ibkr-go routing defect.
 
 ### 2026-07-13
 

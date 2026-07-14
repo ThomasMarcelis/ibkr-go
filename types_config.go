@@ -60,7 +60,7 @@ type TWSAPISettingsConfig struct {
 	LetAPIAccountRequestsSwitchSubscription *bool
 	UseAccountGroupsWithAllocationMethods   *bool
 	LoggingLevel                            *string
-	MasterClientID                          *int
+	MasterClientID                          *ClientID
 	BulkDataTimeout                         *int
 	ComponentExchangeSeparator              *string
 	ShowForexDataInOneTenthPips             *bool

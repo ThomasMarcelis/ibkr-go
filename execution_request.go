@@ -27,7 +27,7 @@ func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.Executio
 	}
 
 	wireReq := codec.ExecutionsRequest{
-		ClientID: req.ClientID,
+		ClientID: int(req.ClientID),
 		Account:  req.Account,
 		Symbol:   req.Symbol,
 		SecType:  string(req.SecType),

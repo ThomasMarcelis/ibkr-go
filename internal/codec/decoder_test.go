@@ -16,6 +16,9 @@ func TestFieldReaderReadInt(t *testing.T) {
 		{"positive", "42", 42, false},
 		{"zero", "0", 0, false},
 		{"negative", "-1", -1, false},
+		{"max int32", "2147483647", math.MaxInt32, false},
+		{"above int32", "2147483648", 0, true},
+		{"below int32", "-2147483649", 0, true},
 		{"empty", "", 0, false},
 		{"invalid", "abc", 0, true},
 	}

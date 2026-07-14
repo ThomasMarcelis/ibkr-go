@@ -3,6 +3,7 @@ package wire
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 )
 
@@ -14,8 +15,27 @@ var (
 	ErrFrameTooLarge  = errors.New("wire: frame exceeds maximum size")
 )
 
+// FrameTooLargeError reports the rejected payload length and configured
+// ceiling. The body has not been allocated or read when this is returned.
+type FrameTooLargeError struct {
+	Size  int
+	Limit int
+}
+
+func (e *FrameTooLargeError) Error() string {
+	return fmt.Sprintf("%v: size %d exceeds limit %d", ErrFrameTooLarge, e.Size, e.Limit)
+}
+
+func (e *FrameTooLargeError) Unwrap() error { return ErrFrameTooLarge }
+
 // ReadFrame reads one length-prefixed payload.
 func ReadFrame(r io.Reader) ([]byte, error) {
+	return ReadFrameWithLimit(r, MaxFrameSize)
+}
+
+// ReadFrameWithLimit reads one frame while rejecting an oversized header
+// before allocating or consuming the payload.
+func ReadFrameWithLimit(r io.Reader, limit int) ([]byte, error) {
 	var header [4]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
 		return nil, err
@@ -25,8 +45,8 @@ func ReadFrame(r io.Reader) ([]byte, error) {
 	if size == 0 {
 		return nil, ErrEmptyMessage
 	}
-	if size > MaxFrameSize {
-		return nil, ErrFrameTooLarge
+	if limit < 1 || uint64(size) > uint64(limit) {
+		return nil, &FrameTooLargeError{Size: int(size), Limit: limit}
 	}
 
 	payload := make([]byte, size)

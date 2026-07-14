@@ -42,7 +42,7 @@ return sub.Err()
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.2
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.3
 ```
 
 Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
@@ -127,8 +127,9 @@ if err := sub.Err(); err != nil {
 is canceled, then `sub.Err()` reports why: nil for a clean close, or e.g.
 `ibkr.ErrSlowConsumer` / `ibkr.ErrInterrupted` otherwise — check
 `ibkr.IsRetryable(err)` to distinguish retry-with-backoff conditions from
-terminal failures. `All` filters lifecycle transitions from the subscription's
-single queue. To observe reconnect boundaries, consume `Events()` instead:
+terminal failures. `All` consumes and filters lifecycle transitions and
+request-scoped notices from the subscription's single queue. To observe either,
+consume `Events()` instead:
 
 ```go
 for event := range sub.Events() {
@@ -320,10 +321,10 @@ Every domain is accessed through a facade on the client:
 | Facade | Snapshots | Subscriptions |
 |--------|-----------|---------------|
 | `client.Accounts()` | `Summary`, `Positions`, `Updates`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribePnL`, `SubscribePnLSingle` |
-| `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | — |
+| `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | `StreamDetails`, `StreamSecDefOptParams` |
 | `client.MarketData()` | `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
-| `client.Orders()` | `Open`, `Completed`, `Executions`, `Preview` | `Place` -> `OrderHandle`, `PlaceBracket`, `SubscribeOpen`, `SubscribeExecutions` |
+| `client.Orders()` | `Open`, `Completed`, `Executions`, `Preview` | `Place` -> `OrderHandle`, `PlaceBracket`, `StreamCompleted`, `SubscribeOpen`, `SubscribeExecutions`, `SubscribeExecutionEvents` |
 | `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` -> `ExerciseHandle` |
 | `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
 | `client.Scanner()` | `Parameters` | `SubscribeResults` |
@@ -341,6 +342,7 @@ Order placement returns `*OrderHandle` with one ordered event stream plus
 Errors are typed so callers can make a policy decision without parsing text:
 `*ConnectError` covers dial/bootstrap failures, `*ProtocolError` wire failures,
 `*ValidationError` rejected local input, and `*APIError` a Gateway response.
+`*InboundFrameTooLargeError` reports a raw frame rejected before body allocation.
 `*OrderRecoveryError`, `*ExerciseUncertainError`, and
 `*SubscriptionCancelError` mean remote state is uncertain and deliberately
 override any retryable wrapped cause. `ErrOrderRecoveryRequired` means an
@@ -369,11 +371,12 @@ if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {
 ```
 
 `IsWarning`, `IsFarmStatus`, and `IsConnectivityTransition` classify
-informational codes. Delayed-data notice 10167 is normally a session `Event`
-while the quote stream continues, so consumers that care about the downgrade
-must also observe `Client.SessionEvents()`. See the
+informational codes. Delayed-data notice 10167 is a request-scoped
+`StreamNotice` on the quote subscription, so consumers that care about the
+downgrade must use `Events()` rather than the data-only `All()` iterator. See the
 [session contract](docs/session-contract.md) for the full terminal and recovery
-semantics.
+semantics and [operation control](docs/operation-control.md) for cancellation
+and connection-retirement behavior.
 
 ## Examples
 

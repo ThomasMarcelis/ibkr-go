@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -27,6 +28,12 @@ type bootstrapDropDialer struct {
 	conn     net.Conn
 	redialed chan struct{}
 	once     sync.Once
+}
+
+type connectTestDialer func(context.Context, string, string) (net.Conn, error)
+
+func (d connectTestDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	return d(ctx, network, address)
 }
 
 func (d *bootstrapDropDialer) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -134,6 +141,45 @@ func TestStaleConnectResultClosesConnection(t *testing.T) {
 		t.Fatal("stale connection remained open")
 	} else if timeout, ok := errors.AsType[net.Error](err); ok && timeout.Timeout() {
 		t.Fatal("stale connection was not closed")
+	}
+}
+
+func TestDialConnectionRejectsOversizedHandshakeFrame(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer server.Close()
+	cfg := defaultConfig()
+	cfg.maxInboundFrameBytes = 8
+	cfg.dialer = connectTestDialer(func(context.Context, string, string) (net.Conn, error) {
+		return client, nil
+	})
+
+	serverErr := make(chan error, 1)
+	go func() {
+		prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+		if _, err := io.ReadFull(server, prefix); err != nil {
+			serverErr <- err
+			return
+		}
+		if _, err := wire.ReadFrame(server); err != nil {
+			serverErr <- err
+			return
+		}
+		_, err := server.Write(bytes.Join([][]byte{{0, 0, 0, 9}, []byte("unreadbody")}, nil))
+		serverErr <- err
+	}()
+
+	result := dialConnection(context.Background(), cfg, advertisedServerVersionMax)
+	frameErr, ok := errors.AsType[*InboundFrameTooLargeError](result.err)
+	if !ok || frameErr.Size != 9 || frameErr.Limit != 8 || result.op != "handshake" {
+		t.Fatalf("dialConnection() = op %q err %v", result.op, result.err)
+	}
+	if IsRetryable(errors.Join(ErrInterrupted, result.err)) {
+		t.Fatal("oversized handshake frame became retryable when joined with ErrInterrupted")
+	}
+	if err := <-serverErr; err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {
+		t.Fatal(err)
 	}
 }
 

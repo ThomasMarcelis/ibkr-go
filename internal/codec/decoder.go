@@ -105,13 +105,13 @@ func (r *fieldReader) ReadInt() (int, error) {
 	if len(f) == 0 {
 		return 0, nil
 	}
-	v, err := strconv.Atoi(asString(f))
+	v, err := strconv.ParseInt(asString(f), 10, 32)
 	if err != nil {
 		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
-	return v, nil
+	return int(v), nil
 }
 
 func (r *fieldReader) ReadInt64() (int64, error) {
@@ -175,13 +175,13 @@ func (r *fieldReader) ReadMaxInt() (int, error) {
 	if len(f) == 0 {
 		return math.MaxInt32, nil
 	}
-	v, err := strconv.Atoi(asString(f))
+	v, err := strconv.ParseInt(asString(f), 10, 32)
 	if err != nil {
 		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, f, err)
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
-	return v, nil
+	return int(v), nil
 }
 
 // ReadString returns the next field as a string. A missing field records a

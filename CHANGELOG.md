@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## v2.0.0-rc.3 — 2026-07-14
 
 ### Added
 
@@ -18,6 +18,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   exchanges through the normalized quote at server version 225.
 - Historical tick results identify their `WhatToShow` family even when empty
   and expose `Len()` across midpoint, bid/ask, and trade result slices.
+- Bounded finite streams are available for contract details, option-chain
+  parameters, and completed orders; the existing slice methods delegate to
+  those implementations.
+- `Orders().SubscribeExecutionEvents` passively exposes every execution-detail
+  and commission callback before query correlation or order-handle
+  deduplication.
+- Historical-news pagination has a lazy `HistoricalAll` iterator with overlap,
+  boundary deduplication, and stalled-cursor detection.
+- Session events carry `TransitionSeq` and their exact resulting `Snapshot`.
+  `WithMaxInboundFrameBytes` bounds handshake and steady-state raw frames
+  before body allocation.
 
 ### Changed
 
@@ -42,6 +53,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   snapshot completion, subscriptions discard unmatched fees and then accept
   late revisions only for execution IDs observed in that snapshot; unrelated
   global commission broadcasts cannot exhaust a healthy long-lived route.
+- Public protocol identifiers use named signed 32-bit types instead of
+  platform `int`; news article payload kind is a named `NewsArticleType`.
+  Public order IDs remain `int64` but are range-checked before encoding.
+- `Subscription.All` documentation now states that it consumes and filters
+  `StreamNotice` as well as lifecycle events. A per-operation control matrix
+  documents wire cancellation, safe detach, and connection-retirement blast
+  radius. The reconnect default remains `ReconnectAuto`.
 
 ### Fixed
 
@@ -66,6 +84,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - An admitted fee-bearing regulatory snapshot that loses completion evidence
   returns non-retryable `ErrRegulatorySnapshotUncertain`; definitive Gateway
   rejection remains an `*APIError`.
+- Historical update bars preserve the wire count; real-time bars parse their
+  Unix-seconds timestamp as an absolute UTC instant instead of a formatted
+  date. Malformed inbound time, decimal, integer, boolean, exchange-rule, and
+  WSH JSON projections consistently surface as non-retryable `*ProtocolError`.
+- The signed 32-bit order-ID boundary is enforced for placement, parent IDs,
+  and cancellation. An invalid `nextValidId` no longer advances bootstrap.
 
 ## v2.0.0-rc.2 — 2026-07-11
 

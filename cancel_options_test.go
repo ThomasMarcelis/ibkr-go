@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -22,6 +23,16 @@ func TestCancelOrderRequestAppliesComplianceOptions(t *testing.T) {
 	if req.OrderID != 295 || req.ManualOrderCancelTime != "20220314-19:00:00" ||
 		req.ExtOperator != "IB" || req.ManualOrderIndicator != "1" {
 		t.Fatalf("cancelOrderRequest() = %+v", req)
+	}
+}
+
+func TestCancelOrderRejectsIDOutsideWireRangeBeforeEnqueue(t *testing.T) {
+	t.Parallel()
+
+	err := new(engine).CancelOrder(context.Background(), maxWireOrderID+1, cancelConfig{})
+	validation, ok := errors.AsType[*ValidationError](err)
+	if !ok || validation.Field != "OrderID" {
+		t.Fatalf("CancelOrder() error = %#v, want OrderID ValidationError", err)
 	}
 }
 

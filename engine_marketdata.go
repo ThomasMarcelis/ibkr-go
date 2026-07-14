@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
@@ -160,7 +162,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				request := quoteRoute.request.(codec.QuoteRequest)
 				request.Contract = codec.Contract{ConID: m.ConID, Exchange: m.Exchange}
 				quoteRoute.request = request
-				resumeContract = Contract{ConID: m.ConID, Exchange: m.Exchange}
+				resumeContract = Contract{ConID: protocolIDFromInt[ContractID](m.ConID), Exchange: m.Exchange}
 				rerouted = true
 				if err := e.send(request); err != nil {
 					fail(fmt.Errorf("ibkr: reroute market data request %d: %w", reqID, err))
@@ -685,14 +687,14 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 						exchanges[i] = DepthExchange{
 							Exchange: x.Exchange, SecType: SecType(x.SecType),
 							ListingExch: x.ListingExch, ServiceDataType: x.ServiceDataType,
-							AggGroup: x.AggGroup,
+							AggGroup: protocolIDFromInt[AggregateGroupID](x.AggGroup),
 						}
 					}
 					resp <- result{exchanges: exchanges}
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -707,7 +709,7 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonMktDepthExchanges, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonMktDepthExchanges, ownedRoute) })
 	})
 	if err != nil {
 		return nil, err
@@ -1004,13 +1006,17 @@ func fromCodecOptionComputation(m codec.TickOptionComputation) (OptionComputatio
 }
 
 func fromCodecRealtimeBar(m codec.RealTimeBar) (Bar, error) {
-	return fromCodecBar(codec.HistoricalBar(m))
+	seconds, err := strconv.ParseInt(strings.TrimSpace(m.Time), 10, 64)
+	if err != nil {
+		return Bar{}, inboundProtocolError("real-time bar epoch", fmt.Errorf("parse %q: %w", m.Time, err))
+	}
+	return fromCodecBarAt(codec.HistoricalBar(m), time.Unix(seconds, 0).UTC())
 }
 
 func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
 	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
-		return DepthRow{}, fmt.Errorf("ibkr: market depth price: %w", err)
+		return DepthRow{}, inboundProtocolError("market depth price", err)
 	}
 	size, err := parseOptionalDecimalPointer(m.Size, "market depth size")
 	if err != nil {
@@ -1028,7 +1034,7 @@ func fromCodecMarketDepth(m codec.MarketDepthUpdate) (DepthRow, error) {
 func fromCodecMarketDepthL2(m codec.MarketDepthL2Update) (DepthRow, error) {
 	price, err := decimal.NewFromString(m.Price)
 	if err != nil {
-		return DepthRow{}, fmt.Errorf("ibkr: market depth l2 price: %w", err)
+		return DepthRow{}, inboundProtocolError("market depth l2 price", err)
 	}
 	size, err := parseOptionalDecimalPointer(m.Size, "market depth l2 size")
 	if err != nil {

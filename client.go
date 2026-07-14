@@ -42,7 +42,9 @@ func (c *Client) Wait() error { return c.engine.Wait() }
 // Session returns a point-in-time [Snapshot] of the connection state.
 func (c *Client) Session() Snapshot { return c.engine.Session() }
 
-// SessionEvents returns the stream of connection lifecycle [Event] values.
+// SessionEvents returns the bounded stream of connection lifecycle [Event]
+// values. Compare TransitionSeq values to detect evicted state transitions;
+// each event carries its exact post-transition Snapshot.
 func (c *Client) SessionEvents() <-chan Event { return c.engine.SessionEvents() }
 
 // CurrentTime asks the Gateway for the server's current wall-clock time. It
@@ -181,6 +183,13 @@ func (c ContractsClient) Details(ctx context.Context, contract Contract) ([]Cont
 	return c.engine.ContractDetails(ctx, contract)
 }
 
+// StreamDetails streams contract matches through a bounded queue and closes
+// after SnapshotComplete. Use it instead of Details when the result cardinality
+// is not known in advance.
+func (c ContractsClient) StreamDetails(ctx context.Context, contract Contract, opts ...SubscriptionOption) (*Subscription[ContractDetails], error) {
+	return c.engine.StreamContractDetails(ctx, contract, opts...)
+}
+
 // Qualify resolves a partial contract to a single fully specified contract,
 // returning [ErrNoMatch] or [ErrAmbiguousContract] when it does not resolve uniquely.
 func (c ContractsClient) Qualify(ctx context.Context, contract Contract) (ContractDetails, error) {
@@ -193,13 +202,19 @@ func (c ContractsClient) Search(ctx context.Context, pattern string) ([]Matching
 }
 
 // MarketRule returns the tick-size schedule for a market rule ID (from [ContractDetails]).
-func (c ContractsClient) MarketRule(ctx context.Context, marketRuleID int) (MarketRuleResult, error) {
+func (c ContractsClient) MarketRule(ctx context.Context, marketRuleID MarketRuleID) (MarketRuleResult, error) {
 	return c.engine.MarketRule(ctx, marketRuleID)
 }
 
 // SecDefOptParams returns the option chain parameters for an underlying.
 func (c ContractsClient) SecDefOptParams(ctx context.Context, req SecDefOptParamsRequest) ([]SecDefOptParams, error) {
 	return c.engine.SecDefOptParams(ctx, req)
+}
+
+// StreamSecDefOptParams streams option-chain parameter sets through a bounded
+// queue and closes after SnapshotComplete.
+func (c ContractsClient) StreamSecDefOptParams(ctx context.Context, req SecDefOptParamsRequest, opts ...SubscriptionOption) (*Subscription[SecDefOptParams], error) {
+	return c.engine.StreamSecDefOptParams(ctx, req, opts...)
 }
 
 // SmartComponents returns the exchange mapping for a SMART-routed BBO exchange.
@@ -374,6 +389,13 @@ func (c OrdersClient) Completed(ctx context.Context, apiOnly bool) ([]CompletedO
 	return c.engine.CompletedOrders(ctx, apiOnly)
 }
 
+// StreamCompleted streams terminal orders through a bounded queue and closes
+// after SnapshotComplete. Closing before that boundary retires the owning
+// connection generation because the callback sequence has no request ID.
+func (c OrdersClient) StreamCompleted(ctx context.Context, apiOnly bool, opts ...SubscriptionOption) (*Subscription[CompletedOrderResult], error) {
+	return c.engine.StreamCompletedOrders(ctx, apiOnly, opts...)
+}
+
 // Executions returns executions and the commission-and-fee reports observed by
 // the execution-details end marker. Its finite collector accepts at most 4096
 // execution events, 4096 fee-report events, 4096 distinct execution IDs, and
@@ -398,6 +420,16 @@ func (c OrdersClient) Executions(ctx context.Context, req ExecutionsRequest) (Ex
 // [ErrExecutionCorrelationOverflow].
 func (c OrdersClient) SubscribeExecutions(ctx context.Context, req ExecutionsRequest, opts ...SubscriptionOption) (*Subscription[ExecutionUpdate], error) {
 	return c.engine.subscribeExecutions(ctx, req, opts...)
+}
+
+// SubscribeExecutionEvents observes every execution-detail and
+// commission-and-fee callback received by this client without issuing a
+// Gateway request. It does not correlate, deduplicate, or discard unmatched
+// callbacks. Only one observer may be active per client. WithQueueSize is the
+// only operation-specific subscription option; the stream follows the local
+// client across automatic reconnects and marks evidence gaps explicitly.
+func (c OrdersClient) SubscribeExecutionEvents(ctx context.Context, opts ...SubscriptionOption) (*Subscription[ExecutionEvent], error) {
+	return c.engine.SubscribeExecutionEvents(ctx, opts...)
 }
 
 // OptionsClient groups option pricing, implied-volatility, and exercise
@@ -538,7 +570,7 @@ func parseDisplayGroups(raw string) ([]DisplayGroupID, error) {
 	parts := strings.Split(raw, "|")
 	groups := make([]DisplayGroupID, 0, len(parts))
 	for _, part := range parts {
-		value, err := strconv.Atoi(strings.TrimSpace(part))
+		value, err := strconv.ParseInt(strings.TrimSpace(part), 10, 32)
 		if err != nil {
 			return nil, fmt.Errorf("ibkr: parse display group %q: %w", part, err)
 		}

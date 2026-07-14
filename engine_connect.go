@@ -105,8 +105,11 @@ func dialConnection(ctx context.Context, cfg config, advertisedMax int) connectR
 	if err := wire.WriteFrame(conn, codec.EncodeVersionRange(minServerVersion, advertisedMax)); err != nil {
 		return fail("handshake", err)
 	}
-	serverPayload, err := transport.ReadOneFrame(conn, deadline)
+	serverPayload, err := transport.ReadOneFrameWithLimit(conn, deadline, cfg.maxInboundFrameBytes)
 	if err != nil {
+		if publicErr, ok := inboundFrameError(err); ok {
+			err = publicErr
+		}
 		return fail("handshake", err)
 	}
 	info, err := codec.DecodeServerInfo(serverPayload)
@@ -117,7 +120,7 @@ func dialConnection(ctx context.Context, cfg config, advertisedMax int) connectR
 		_ = conn.Close()
 		return connectResult{unsupported: true, err: ErrUnsupportedServerVersion}
 	}
-	startPayload, err := codec.Encode(info.ServerVersion, codec.StartAPI{ClientID: cfg.clientID})
+	startPayload, err := codec.Encode(info.ServerVersion, codec.StartAPI{ClientID: int(cfg.clientID)})
 	if err != nil {
 		return fail("handshake", err)
 	}
@@ -161,7 +164,7 @@ func (e *engine) handleConnectResult(result connectResult) {
 		e.requireOrderRecovery(e.connectionSeq() + 1)
 	}
 	e.bootstrap.serverInfo = true
-	e.transport = transport.New(result.conn, e.cfg.logger, e.cfg.sendRate)
+	e.transport = transport.NewWithInboundFrameLimit(result.conn, e.cfg.logger, e.cfg.sendRate, e.cfg.maxInboundFrameBytes)
 	e.attachTransport(e.transport)
 	e.scheduleBootstrapTimeout(e.transport)
 	e.setState(StateHandshaking, 0, "", nil)
@@ -246,11 +249,23 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 		// The ordering guarantee (all of this connection's decoded messages
 		// and tracked write outcomes reach e.incoming before transportErr) is
 		// preserved by waiting for both pumps.
+		lossErr := errors.Join(tr.Wait(), decodeErr)
+		if publicErr, ok := inboundFrameError(lossErr); ok {
+			lossErr = errors.Join(lossErr, publicErr)
+		}
 		select {
-		case e.transportErr <- transportLoss{transport: tr, err: errors.Join(tr.Wait(), decodeErr)}:
+		case e.transportErr <- transportLoss{transport: tr, err: lossErr}:
 		case <-e.done:
 		}
 	}()
+}
+
+func inboundFrameError(err error) (*InboundFrameTooLargeError, bool) {
+	frameErr, ok := errors.AsType[*wire.FrameTooLargeError](err)
+	if !ok {
+		return nil, false
+	}
+	return &InboundFrameTooLargeError{Size: frameErr.Size, Limit: frameErr.Limit}, true
 }
 
 func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
@@ -278,6 +293,7 @@ func (e *engine) maybeReady() {
 		s.ConnectionSeq++
 	})
 	e.setState(StateReady, 0, "", nil)
+	e.restoreExecutionEvents()
 	e.reportReady(nil)
 	e.resumeRoutes()
 }

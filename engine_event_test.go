@@ -98,3 +98,54 @@ func TestSessionEventsDropOldestKeepsLatest(t *testing.T) {
 		t.Fatalf("codes = %v, want [2106 2158]", codes)
 	}
 }
+
+func TestSessionEventCarriesAtomicStateRevision(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		events: newObserver[Event](1),
+		snapshot: Snapshot{
+			State:           StateReady,
+			ConnectionSeq:   4,
+			ManagedAccounts: []string{"DU123"},
+		},
+	}
+
+	e.setState(StateDegraded, 1100, "lost", nil)
+	e.setState(StateReady, 1102, "restored", nil)
+	e.emitEvent(2104, "farm ready")
+
+	event := <-e.SessionEvents()
+	if event.Code != 2104 {
+		t.Fatalf("Event.Code = %d, want 2104", event.Code)
+	}
+	if event.TransitionSeq != 2 || event.Snapshot.TransitionSeq != 2 {
+		t.Fatalf("transition sequence = %d/%d, want 2", event.TransitionSeq, event.Snapshot.TransitionSeq)
+	}
+	if event.State != StateReady || event.State != event.Snapshot.State || event.ConnectionSeq != event.Snapshot.ConnectionSeq {
+		t.Fatalf("Event and Snapshot disagree: %+v", event)
+	}
+	event.Snapshot.ManagedAccounts[0] = "mutated"
+	if got := e.Session().ManagedAccounts[0]; got != "DU123" {
+		t.Fatalf("Session.ManagedAccounts[0] = %q after event mutation", got)
+	}
+}
+
+func TestSessionTransitionSequenceIgnoresSameStateAndNotices(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{events: newObserver[Event](4), snapshot: Snapshot{State: StateReady}}
+	e.setState(StateReady, 0, "same", nil)
+	e.emitEvent(2104, "notice")
+	e.setState(StateDegraded, 1100, "lost", nil)
+
+	for i := range 3 {
+		event := <-e.SessionEvents()
+		if i < 2 && event.TransitionSeq != 0 {
+			t.Fatalf("event %d TransitionSeq = %d, want 0", i, event.TransitionSeq)
+		}
+		if i == 2 && event.TransitionSeq != 1 {
+			t.Fatalf("transition event TransitionSeq = %d, want 1", event.TransitionSeq)
+		}
+	}
+}

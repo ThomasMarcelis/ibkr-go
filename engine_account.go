@@ -123,7 +123,7 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 				resp <- result{accounts: append([]string(nil), m.Accounts...)}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -138,7 +138,7 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonManagedAccounts, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonManagedAccounts, ownedRoute) })
 	})
 	if err != nil {
 		return nil, err
@@ -232,7 +232,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -247,7 +247,7 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonFamilyCodes, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonFamilyCodes, ownedRoute) })
 	})
 	if err != nil {
 		return nil, err
@@ -592,7 +592,7 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			e, cfg, reqID, OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID},
 		)
 
-		ownedRoute.request = codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: req.ConID}
+		ownedRoute.request = codec.PnLSingleRequest{ReqID: reqID, Account: req.Account, ModelCode: req.ModelCode, ConID: int(req.ConID)}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.PnLSingleValue); ok {
 				fail := func(err error) { sub.cancelFromActor(err) }

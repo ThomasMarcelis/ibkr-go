@@ -104,7 +104,7 @@ type HistoricalBarsRequest struct {
 // Bar is an OHLCV price bar for a single time interval, returned by
 // historical and real-time bar requests.
 type Bar struct {
-	Time   time.Time
+	Time   time.Time // absolute bar time normalized to UTC; the Gateway presentation zone is not retained
 	Open   decimal.Decimal
 	High   decimal.Decimal
 	Low    decimal.Decimal
@@ -672,5 +672,5 @@ type DepthExchange struct {
 	SecType         SecType
 	ListingExch     string
 	ServiceDataType string // depth service type, e.g. "Deep" or "Deep2"
-	AggGroup        int
+	AggGroup        AggregateGroupID
 }

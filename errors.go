@@ -9,20 +9,34 @@ import (
 
 // Sentinel errors returned across the package. Match them with [errors.Is].
 var (
-	ErrNotReady                     = errors.New("ibkr: session not ready")                     // request issued before the session reached Ready
-	ErrInterrupted                  = errors.New("ibkr: request interrupted")                   // in-flight request cut short by a connection loss; retryable
-	ErrResumeRequired               = errors.New("ibkr: subscription resume required")          // subscription needs re-establishment after a gap; retryable
-	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")               // order observation crossed a gap; replacement is permanently unavailable on this handle
-	ErrRegulatorySnapshotUncertain  = errors.New("ibkr: regulatory snapshot outcome uncertain") // admitted fee-bearing request lost its completion evidence; do not retry blindly
-	ErrNoSnapshot                   = errors.New("ibkr: subscription has no snapshot boundary") // AwaitSnapshot on a stream with no snapshot phase
-	ErrSlowConsumer                 = errors.New("ibkr: slow consumer")                         // consumer fell behind and a bounded event queue overflowed
-	ErrUnsupportedServerVersion     = errors.New("ibkr: unsupported server version")            // request requires a newer server_version than negotiated
-	ErrClosed                       = errors.New("ibkr: closed")                                // operation on a closed client
-	ErrNoMatch                      = errors.New("ibkr: no contract match")                     // Qualify found no matching contract
-	ErrAmbiguousContract            = errors.New("ibkr: ambiguous contract")                    // Qualify matched more than one contract
-	ErrOperationActive              = errors.New("ibkr: operation already active")              // singleton operation already owns its response route
-	ErrExecutionCorrelationOverflow = errors.New("ibkr: execution correlation limit exceeded")  // execution stream correlation state reached its configured bound
+	ErrNotReady                     = errors.New("ibkr: session not ready")                      // request issued before the session reached Ready
+	ErrInterrupted                  = errors.New("ibkr: request interrupted")                    // in-flight request cut short by a connection loss; retryable
+	ErrResumeRequired               = errors.New("ibkr: subscription resume required")           // subscription needs re-establishment after a gap; retryable
+	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")                // order observation crossed a gap; replacement is permanently unavailable on this handle
+	ErrRegulatorySnapshotUncertain  = errors.New("ibkr: regulatory snapshot outcome uncertain")  // admitted fee-bearing request lost its completion evidence; do not retry blindly
+	ErrNoSnapshot                   = errors.New("ibkr: subscription has no snapshot boundary")  // AwaitSnapshot on a stream with no snapshot phase
+	ErrSlowConsumer                 = errors.New("ibkr: slow consumer")                          // consumer fell behind and a bounded event queue overflowed
+	ErrUnsupportedServerVersion     = errors.New("ibkr: unsupported server version")             // request requires a newer server_version than negotiated
+	ErrClosed                       = errors.New("ibkr: closed")                                 // operation on a closed client
+	ErrNoMatch                      = errors.New("ibkr: no contract match")                      // Qualify found no matching contract
+	ErrAmbiguousContract            = errors.New("ibkr: ambiguous contract")                     // Qualify matched more than one contract
+	ErrOperationActive              = errors.New("ibkr: operation already active")               // singleton operation already owns its response route
+	ErrExecutionCorrelationOverflow = errors.New("ibkr: execution correlation limit exceeded")   // execution stream correlation state reached its configured bound
+	ErrInboundFrameTooLarge         = errors.New("ibkr: inbound frame exceeds configured limit") // raw frame rejected before body allocation
 )
+
+// InboundFrameTooLargeError reports a raw inbound frame rejected from its
+// four-byte header, before its body was allocated or read.
+type InboundFrameTooLargeError struct {
+	Size  int
+	Limit int
+}
+
+func (e *InboundFrameTooLargeError) Error() string {
+	return fmt.Sprintf("%v: size %d exceeds limit %d", ErrInboundFrameTooLarge, e.Size, e.Limit)
+}
+
+func (e *InboundFrameTooLargeError) Unwrap() error { return ErrInboundFrameTooLarge }
 
 // ConnectError wraps a failure during the connection phase (dial, TLS
 // negotiation, or protocol handshake).
@@ -58,11 +72,15 @@ func (e *ProtocolError) Unwrap() error {
 	return e.Err
 }
 
+func inboundProtocolError(message string, err error) error {
+	return &ProtocolError{Direction: "inbound", Message: message, Err: err}
+}
+
 // APIError is an error or notification returned by TWS or IB Gateway. RequestID
 // identifies the request when the callback is scoped; session notifications
 // commonly use zero or -1. Code and Message preserve the Gateway payload.
 type APIError struct {
-	RequestID               int
+	RequestID               RequestID
 	Code                    int
 	Message                 string
 	AdvancedOrderRejectJSON string
@@ -91,7 +109,7 @@ type OrderRecoveryError struct {
 // outcome arrived. The instruction may already have reached IBKR and must not
 // be retried blindly. RequestID is the identifier exposed by ExerciseHandle.
 type ExerciseUncertainError struct {
-	RequestID int
+	RequestID RequestID
 	Err       error
 }
 
@@ -178,6 +196,20 @@ func operationActive(operation string) error {
 	return fmt.Errorf("%w: %s", ErrOperationActive, operation)
 }
 
+func interrupted(cause error) error {
+	if cause == nil {
+		return ErrInterrupted
+	}
+	return errors.Join(ErrInterrupted, cause)
+}
+
+func resumeRequired(cause error) error {
+	if cause == nil {
+		return ErrResumeRequired
+	}
+	return errors.Join(ErrResumeRequired, cause)
+}
+
 // IsRetryable reports whether retrying with backoff is safe and useful.
 // It returns true for [ErrNotReady], [ErrInterrupted], [ErrResumeRequired],
 // transient [ConnectError] values, and [APIError.IsPacingViolation]. It returns
@@ -222,6 +254,9 @@ func isRetryableError(err error) bool {
 		return false
 	}
 	if errors.Is(err, ErrRegulatorySnapshotUncertain) {
+		return false
+	}
+	if errors.Is(err, ErrInboundFrameTooLarge) {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

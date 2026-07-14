@@ -1,6 +1,8 @@
 package ibkr
 
 import (
+	"errors"
+	"math"
 	"sync"
 	"testing"
 
@@ -87,6 +89,21 @@ func TestRequestIDSkipsPendingPreview(t *testing.T) {
 	}
 }
 
+func TestRequestIDWrapsWithinProtocolRangeWithoutColliding(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		nextReqID: math.MaxInt32,
+		keyed:     map[int]*route{math.MaxInt32: {}},
+		orders:    map[int64]*orderRoute{1: {}},
+		previews:  map[int64]*previewRoute{2: {}},
+	}
+
+	if got := e.allocReqID(); got != 3 {
+		t.Fatalf("allocReqID() = %d, want 3 after wrapping past live IDs", got)
+	}
+}
+
 func TestOrderIDRemainsMonotonicAfterBackwardReseed(t *testing.T) {
 	t.Parallel()
 
@@ -96,7 +113,7 @@ func TestOrderIDRemainsMonotonicAfterBackwardReseed(t *testing.T) {
 		previews: make(map[int64]*previewRoute),
 		snapshot: Snapshot{NextValidID: 47},
 	}
-	if got := e.allocOrderID(); got != 47 {
+	if got, err := e.allocOrderID(); err != nil || got != 47 {
 		t.Fatalf("first allocOrderID() = %d, want 47", got)
 	}
 
@@ -104,7 +121,7 @@ func TestOrderIDRemainsMonotonicAfterBackwardReseed(t *testing.T) {
 	if got := e.snapshot.NextValidID; got != 48 {
 		t.Fatalf("NextValidID after backward reseed = %d, want 48", got)
 	}
-	if got := e.allocOrderID(); got != 48 {
+	if got, err := e.allocOrderID(); err != nil || got != 48 {
 		t.Fatalf("second allocOrderID() = %d, want 48", got)
 	}
 }
@@ -124,7 +141,49 @@ func TestOrderIDSkipsEveryLiveRouteNamespace(t *testing.T) {
 		},
 		snapshot: Snapshot{NextValidID: 47},
 	}
-	if got := e.allocOrderID(); got != 50 {
+	if got, err := e.allocOrderID(); err != nil || got != 50 {
 		t.Fatalf("allocOrderID() = %d, want 50 after keyed/order/preview conflicts", got)
+	}
+}
+
+func TestOrderIDAllocationStopsAtSignedWireBoundary(t *testing.T) {
+	t.Parallel()
+
+	e := &engine{
+		keyed:    make(map[int]*route),
+		orders:   make(map[int64]*orderRoute),
+		previews: make(map[int64]*previewRoute),
+		snapshot: Snapshot{NextValidID: maxWireOrderID},
+	}
+	if got, err := e.allocOrderID(); err != nil || got != maxWireOrderID {
+		t.Fatalf("boundary allocOrderID() = %d, %v", got, err)
+	}
+	if got, err := e.allocOrderID(); got != 0 {
+		t.Fatalf("overflow allocOrderID() ID = %d, want 0", got)
+	} else if _, ok := errors.AsType[*ValidationError](err); !ok {
+		t.Fatalf("overflow allocOrderID() error = %#v, want ValidationError", err)
+	}
+}
+
+func TestInvalidNextValidOrderIDIsInboundProtocolError(t *testing.T) {
+	t.Parallel()
+
+	var got error
+	e := &engine{
+		singletons: map[string]*route{
+			singletonOrderID: {close: func(err error) { got = err }},
+		},
+	}
+	e.handleIncoming(codec.NextValidID{OrderID: maxWireOrderID + 1})
+
+	protocolErr, ok := errors.AsType[*ProtocolError](got)
+	if !ok || protocolErr.Direction != "inbound" {
+		t.Fatalf("refresh error = %#v, want inbound ProtocolError", got)
+	}
+	if e.bootstrap.nextValidID {
+		t.Fatal("invalid next-valid ID satisfied bootstrap")
+	}
+	if _, ok := e.singletons[singletonOrderID]; ok {
+		t.Fatal("invalid next-valid ID retained refresh route")
 	}
 }

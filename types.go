@@ -5,6 +5,21 @@ import (
 	"time"
 )
 
+// ContractID is an IBKR contract identifier on the signed 32-bit wire.
+type ContractID int32
+
+// ClientID is a TWS API client identifier on the signed 32-bit wire.
+type ClientID int32
+
+// RequestID correlates a request with Gateway callbacks on the signed 32-bit wire.
+type RequestID int32
+
+// MarketRuleID identifies an IBKR market rule on the signed 32-bit wire.
+type MarketRuleID int32
+
+// AggregateGroupID identifies a market-data aggregate group on the signed 32-bit wire.
+type AggregateGroupID int32
+
 // State is the connection lifecycle state of a [Client], reported by
 // [Client.Session] and on the [Client.SessionEvents] stream.
 type State string
@@ -85,6 +100,8 @@ type Event struct {
 	State         State     // the state entered
 	Previous      State     // the state left
 	ConnectionSeq uint64    // generation counter, incremented on each reconnect
+	TransitionSeq uint64    // client-lifetime state revision; gaps reveal dropped transitions
+	Snapshot      Snapshot  // exact post-event session snapshot
 	Code          int       // IBKR notification code when the transition carries one, else 0
 	Message       string    // human-readable detail, may be empty
 	Err           error     // non-nil when the transition was caused by an error
@@ -95,6 +112,7 @@ type Event struct {
 type Snapshot struct {
 	State           State     // current connection state
 	ConnectionSeq   uint64    // generation counter, incremented on each reconnect
+	TransitionSeq   uint64    // incremented exactly once for each actual state change
 	ServerVersion   int       // negotiated TWS API server version
 	ManagedAccounts []string  // account IDs this login controls
 	NextValidID     int64     // next order ID the server has reserved for this client

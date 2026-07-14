@@ -46,6 +46,10 @@ configuration, volume/precision, and odd-lot gates. See
   syscalls per frame into roughly one per buffer fill; the reader goroutine
   owns every post-handshake read, so this is safe without extra
   synchronization.
+- The reader rejects a frame from its four-byte length header before allocating
+  or reading the body when it exceeds `WithMaxInboundFrameBytes`. The default
+  and hard ceiling are 64 MiB; the same limit covers the handshake and steady
+  state.
 - One writer goroutine serializes outbound frames and applies global pacing.
 - Public methods talk to the actor through typed commands instead of sharing
   mutable maps or callback registries.
@@ -122,6 +126,11 @@ pattern:
   placed order registers a route keyed by `orderID`. OpenOrder, OrderStatus,
   Execution, and commission-and-fees messages dispatch to the matching order route.
 
+- **Passive execution observer** — at most one client-wide
+  `SubscribeExecutionEvents` route owns no request ID and sends no wire
+  request. Every execution-detail and commission callback reaches it before
+  query correlation or order-handle deduplication.
+
 ### Open-order and order-handle routing
 
 OpenOrder messages are dispatched to both the per-order handle (if one exists
@@ -158,7 +167,9 @@ singleton open-orders observer.
 Order IDs are auto-allocated from `NextValidID`, which is received during
 bootstrap and tracked on `Snapshot`. Each `Orders().Place` call increments
 the counter atomically within the actor goroutine. Callers never need to manage
-order IDs manually. `Orders().PlaceBracket` reserves three consecutive IDs in
+order IDs manually. The engine rejects values outside the protocol's signed
+32-bit range before encoding and does not accept an out-of-range
+`nextValidId` as bootstrap evidence. `Orders().PlaceBracket` reserves three consecutive IDs in
 one actor turn and sends all three frames without interleaving another request;
 the final child is the only frame with `Transmit=true`.
 
@@ -223,6 +234,8 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 - One-shots, subscriptions, and order handles are separate public contracts.
 - Subscriptions expose data and lifecycle boundaries through one ordered
   `Events()` stream. `All(ctx)` is the data-only view over that same queue.
+  It also consumes and discards request-scoped `StreamNotice` values, so
+  consumers that need warnings use `Events()` directly.
   Channel close plus `Err()`/`Wait()` is terminal. OrderHandle uses the same
   single-stream principle with order-specific events.
 
@@ -230,9 +243,15 @@ These public contracts are intended to survive the remaining protocol work.
 
 ## Reconnect
 
-- Reconnect policy is a client policy.
+- Reconnect policy is a client policy; the default remains `ReconnectAuto`.
 - Resume policy is a per-subscription policy.
 - One-shots are never replayed automatically.
 - Order handles survive disconnects and require explicit reconciliation after
   an observation gap.
 - Session reconnect boundaries are surfaced via `ConnectionSeq`.
+- `SessionEvents` is bounded and drop-oldest, but each actual state transition
+  increments `TransitionSeq`; gaps are therefore detectable, and every event
+  carries its exact resulting `Snapshot`.
+
+See [`operation-control.md`](operation-control.md) for the per-operation
+request-ID, cancellation, detach, and connection-retirement matrix.

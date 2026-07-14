@@ -603,7 +603,7 @@ func TestDisplayGroupUpdateWaitsForReconnectReady(t *testing.T) {
 	if err := <-updateErr; err != nil {
 		t.Fatalf("Update() after reconnect readiness = %v", err)
 	}
-	want, err := codec.Encode(206, codec.UpdateDisplayGroupRequest{ReqID: 0, ContractInfo: "265598@SMART"})
+	want, err := codec.Encode(206, codec.UpdateDisplayGroupRequest{ReqID: 1, ContractInfo: "265598@SMART"})
 	if err != nil {
 		t.Fatalf("encode display group update: %v", err)
 	}

@@ -37,8 +37,8 @@ func newKeyedOneShotRoute(reqID int, opKind OpKind, handle func(any, *engine), f
 			e.deleteKeyedRoute(reqID)
 			fail(e.apiErr(opKind, msg))
 		},
-		onDisconnect: func(*engine, error) bool {
-			fail(ErrInterrupted)
+		onDisconnect: func(_ *engine, err error) bool {
+			fail(interrupted(err))
 			return false
 		},
 		close: fail,
@@ -58,6 +58,19 @@ func (e *engine) handleIncoming(msg any) {
 		}
 		return
 	case codec.NextValidID:
+		if m.OrderID <= 0 || m.OrderID > maxWireOrderID {
+			err := &ProtocolError{
+				Direction: "inbound",
+				Message:   "next valid order ID",
+				Err:       fmt.Errorf("value %d is outside the signed 32-bit order-ID range", m.OrderID),
+			}
+			if route, ok := e.singletons[singletonOrderID]; ok {
+				delete(e.singletons, singletonOrderID)
+				route.close(err)
+			}
+			e.retireTransport(err)
+			return
+		}
 		e.observeNextValidID(m.OrderID)
 		e.bootstrap.nextValidID = true
 		e.maybeReady()
@@ -92,6 +105,10 @@ func (e *engine) handleIncoming(msg any) {
 			route.handle(m, e)
 		}
 		return
+	case codec.ExecutionDetail:
+		e.emitExecutionDetailEvent(m)
+	case codec.CommissionReport:
+		e.emitCommissionEvent(m)
 	case codec.MarketDepthUpdate:
 		if e.handleUnattributableMarketDepth(protocol.InMarketDepth, m.ReqID) {
 			return
@@ -204,7 +221,7 @@ func (e *engine) handleIncoming(msg any) {
 			route.handle(msg, e)
 		}
 	case codec.OrderBound:
-		binding := OrderBinding{PermID: msg.PermID, ClientID: msg.ClientID, OrderID: msg.OrderID}
+		binding := OrderBinding{PermID: msg.PermID, ClientID: protocolIDFromInt[ClientID](msg.ClientID), OrderID: msg.OrderID}
 		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
 			or.working = true
 			if !e.ensureOrderStarted(or) || !or.handle.emitBinding(binding) {
@@ -357,6 +374,10 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// answers that are never coming.
 		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
 		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
+		// A 1101 can arrive without a preceding 1100. Preserve that explicit
+		// evidence-loss boundary for the passive execution observer.
+		e.gapExecutionEvents(ErrInterrupted)
+		e.restoreExecutionEvents()
 		e.requireOrderRecovery(e.connectionSeq())
 		e.dropLostRoutes()
 		e.resumeRoutes()
@@ -519,7 +540,7 @@ func unkeyedAPIErrorSingleton(msg codec.APIError) string {
 
 func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
 	apiErr := &APIError{
-		RequestID:               msg.ReqID,
+		RequestID:               protocolIDFromInt[RequestID](msg.ReqID),
 		Code:                    msg.Code,
 		Message:                 msg.Message,
 		AdvancedOrderRejectJSON: msg.AdvancedOrderRejectJSON,

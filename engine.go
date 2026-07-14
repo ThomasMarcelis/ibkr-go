@@ -3,6 +3,8 @@ package ibkr
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -55,6 +57,10 @@ type engine struct {
 	// drain window. Entries are dropped with their order's route
 	// (forgetOrderExecutions).
 	execDeliveries map[string]*execDelivery
+	// executionEvents is a passive, client-wide observer. It owns no Gateway
+	// request and sees each execution-detail and commission callback before
+	// query correlation or per-order deduplication.
+	executionEvents *executionEventRoute
 	// unknownInboundSeen records msg ids already reported as unknown, so a
 	// hot misdecoded feed logs and emits once instead of per frame.
 	unknownInboundSeen   map[int]struct{}
@@ -276,10 +282,14 @@ func (e *engine) closedOperationError() error {
 func (e *engine) Session() Snapshot {
 	e.snapshotMu.RLock()
 	defer e.snapshotMu.RUnlock()
+	return cloneSnapshot(e.snapshot)
+}
 
-	snap := e.snapshot
-	snap.ManagedAccounts = append([]string(nil), snap.ManagedAccounts...)
-	return snap
+func cloneSnapshot(snapshot Snapshot) Snapshot {
+	if snapshot.ManagedAccounts != nil {
+		snapshot.ManagedAccounts = append([]string(nil), snapshot.ManagedAccounts...)
+	}
+	return snapshot
 }
 
 func (e *engine) SessionEvents() <-chan Event {
@@ -326,15 +336,20 @@ func (e *engine) setState(next State, code int, message string, err error, apiEr
 	}
 	e.snapshotMu.Lock()
 	prev := e.snapshot.State
+	if prev != next {
+		e.snapshot.TransitionSeq++
+	}
 	e.snapshot.State = next
-	connSeq := e.snapshot.ConnectionSeq
+	snapshot := cloneSnapshot(e.snapshot)
 	e.snapshotMu.Unlock()
 
 	event := Event{
 		At:            time.Now().UTC(),
-		State:         next,
+		State:         snapshot.State,
 		Previous:      prev,
-		ConnectionSeq: connSeq,
+		ConnectionSeq: snapshot.ConnectionSeq,
+		TransitionSeq: snapshot.TransitionSeq,
+		Snapshot:      snapshot,
 		Code:          code,
 		Message:       message,
 		Err:           err,
@@ -354,14 +369,15 @@ func (e *engine) emitEvent(code int, message string) {
 func (e *engine) emitAPIEvent(msg codec.APIError) {
 	apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
 	e.snapshotMu.RLock()
-	state := e.snapshot.State
-	connSeq := e.snapshot.ConnectionSeq
+	snapshot := cloneSnapshot(e.snapshot)
 	e.snapshotMu.RUnlock()
 	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
-		State:         state,
-		Previous:      state,
-		ConnectionSeq: connSeq,
+		State:         snapshot.State,
+		Previous:      snapshot.State,
+		ConnectionSeq: snapshot.ConnectionSeq,
+		TransitionSeq: snapshot.TransitionSeq,
+		Snapshot:      snapshot,
 		Code:          msg.Code,
 		Message:       msg.Message,
 		APIError:      apiErr,
@@ -375,14 +391,15 @@ func (e *engine) apiNotice(op OpKind, msg codec.APIError) *APIError {
 
 func (e *engine) emitSessionEvent(code int, message string, err error) {
 	e.snapshotMu.RLock()
-	state := e.snapshot.State
-	connSeq := e.snapshot.ConnectionSeq
+	snapshot := cloneSnapshot(e.snapshot)
 	e.snapshotMu.RUnlock()
 	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
-		State:         state,
-		Previous:      state,
-		ConnectionSeq: connSeq,
+		State:         snapshot.State,
+		Previous:      snapshot.State,
+		ConnectionSeq: snapshot.ConnectionSeq,
+		TransitionSeq: snapshot.TransitionSeq,
+		Snapshot:      snapshot,
 		Code:          code,
 		Message:       message,
 		Err:           err,
@@ -408,7 +425,7 @@ func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 	tr := e.transport
 	payload, err := codec.Encode(e.serverVersion, msg)
 	if err != nil {
-		return err
+		return &ProtocolError{Direction: "outbound", Message: fmt.Sprintf("%T", msg), Err: err}
 	}
 	err = tr.Send(ctx, payload)
 	return normalizeSendErr(ctx, tr, err)
@@ -421,7 +438,7 @@ func (e *engine) sendTrackedContext(ctx context.Context, msg codec.Message) (tra
 	tr := e.transport
 	payload, err := codec.Encode(e.serverVersion, msg)
 	if err != nil {
-		return transportWriteKey{}, err
+		return transportWriteKey{}, &ProtocolError{Direction: "outbound", Message: fmt.Sprintf("%T", msg), Err: err}
 	}
 	id, err := tr.SendTracked(ctx, payload)
 	if err != nil {
@@ -457,8 +474,18 @@ func normalizeTransportErr(err error) error {
 
 func (e *engine) allocReqID() int {
 	for {
+		if e.nextReqID < 1 || e.nextReqID > math.MaxInt32 {
+			e.nextReqID = 1
+		}
 		id := e.nextReqID
-		e.nextReqID++
+		if id == math.MaxInt32 {
+			e.nextReqID = 1
+		} else {
+			e.nextReqID++
+		}
+		if _, conflict := e.keyed[id]; conflict {
+			continue
+		}
 		if _, conflict := e.orders[int64(id)]; conflict {
 			continue
 		}
@@ -468,9 +495,12 @@ func (e *engine) allocReqID() int {
 	}
 }
 
-func (e *engine) allocOrderID() int64 {
+func (e *engine) allocOrderID() (int64, error) {
 	for {
 		id := max(e.snapshot.NextValidID, e.orderIDHighWater+1)
+		if err := validateOrderID("OrderID", id, false); err != nil {
+			return 0, err
+		}
 		e.updateSnapshot(func(s *Snapshot) {
 			s.NextValidID = id + 1
 		})
@@ -484,7 +514,7 @@ func (e *engine) allocOrderID() int64 {
 			continue
 		}
 		e.orderIDHighWater = id
-		return id
+		return id, nil
 	}
 }
 

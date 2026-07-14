@@ -45,6 +45,7 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 		return
 	}
 	e.setState(StateReconnecting, 0, "transport lost", err)
+	e.gapExecutionEvents(err)
 	e.disconnectRoutes(err, true)
 	e.scheduleReconnect()
 }
@@ -66,11 +67,11 @@ func (e *engine) scheduleReconnect() {
 	})
 }
 
-// cancelSingletonOneShot retires the connection generation that owns an
+// abortUnresolvedSingletonOneShot retires the connection generation that owns an
 // unresolved request-ID-less reply. Merely deleting target would let a late
 // reply satisfy a newer call of the same operation, so reconnecting is the
 // only safe way to release the singleton slot.
-func (e *engine) cancelSingletonOneShot(key string, target *route) {
+func (e *engine) abortUnresolvedSingletonOneShot(key string, target *route) {
 	if target == nil || e.singletons[key] != target || e.transport == nil {
 		return
 	}
@@ -98,7 +99,7 @@ func (e *engine) disconnectRoutes(err error, preserveOrders bool) {
 			continue
 		}
 		if route.onDisconnect == nil {
-			route.close(ErrInterrupted)
+			route.close(interrupted(err))
 			e.deleteKeyedRoute(reqID)
 			continue
 		}
@@ -113,7 +114,7 @@ func (e *engine) disconnectRoutes(err error, preserveOrders bool) {
 			continue
 		}
 		if route.onDisconnect == nil {
-			route.close(ErrInterrupted)
+			route.close(interrupted(err))
 			delete(e.singletons, key)
 			continue
 		}
@@ -124,7 +125,7 @@ func (e *engine) disconnectRoutes(err error, preserveOrders bool) {
 		}
 	}
 	for id, preview := range e.previews {
-		preview.resolve(previewResult{err: ErrInterrupted})
+		preview.resolve(previewResult{err: interrupted(err)})
 		delete(e.previews, id)
 	}
 	if !preserveOrders {
@@ -325,6 +326,10 @@ func (e *engine) closeEngine(err, waitErr error) {
 		route.close(err)
 		delete(e.singletons, key)
 	}
+	if e.executionEvents != nil {
+		e.executionEvents.sub.closeWithErr(err)
+		e.executionEvents = nil
+	}
 	previewErr := err
 	if previewErr == nil {
 		previewErr = ErrInterrupted
@@ -376,6 +381,7 @@ func (e *engine) scheduleReconnectStability(tr *transport.Conn) {
 }
 
 func (e *engine) emitGap() {
+	e.gapExecutionEvents(ErrInterrupted)
 	for _, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
 			route.gapped = true
@@ -399,6 +405,7 @@ func (e *engine) emitGap() {
 }
 
 func (e *engine) emitResumed() {
+	e.restoreExecutionEvents()
 	for _, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto && route.emitRestored != nil && route.gapped {
 			route.gapped = false

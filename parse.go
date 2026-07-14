@@ -14,7 +14,7 @@ const unsetDecimalSentinel = "-9223372036854775808"
 func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
 	value, err := decimal.NewFromString(raw)
 	if err != nil {
-		return decimal.Decimal{}, fmt.Errorf("ibkr: %s: %w", field, err)
+		return decimal.Decimal{}, inboundProtocolError(field, err)
 	}
 	return value, nil
 }
@@ -26,7 +26,7 @@ func parseOptionalDecimal(raw string, field string) (decimal.Decimal, error) {
 	}
 	value, err := decimal.NewFromString(trimmed)
 	if err != nil {
-		return decimal.Decimal{}, fmt.Errorf("ibkr: %s: %w", field, err)
+		return decimal.Decimal{}, inboundProtocolError(field, err)
 	}
 	return value, nil
 }
@@ -38,7 +38,7 @@ func parseOptionalDecimalPointer(raw string, field string) (*decimal.Decimal, er
 	}
 	value, err := decimal.NewFromString(trimmed)
 	if err != nil {
-		return nil, fmt.Errorf("ibkr: %s: %w", field, err)
+		return nil, inboundProtocolError(field, err)
 	}
 	return new(value), nil
 }
@@ -61,9 +61,20 @@ func parseOptionalInt(raw string, field string) (int, error) {
 	}
 	value, err := strconv.Atoi(raw)
 	if err != nil {
-		return 0, fmt.Errorf("ibkr: %s: parse int %q: %w", field, raw, err)
+		return 0, inboundProtocolError(field, fmt.Errorf("parse int %q: %w", raw, err))
 	}
 	return value, nil
+}
+
+func parseOptionalInt32(raw string, field string) (int32, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 0, nil
+	}
+	value, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil {
+		return 0, inboundProtocolError(field, fmt.Errorf("parse int32 %q: %w", raw, err))
+	}
+	return int32(value), nil // #nosec G115 -- ParseInt's 32-bit bound proves the conversion
 }
 
 func parseOptionalInt64(raw string, field string) (int64, error) {
@@ -72,7 +83,7 @@ func parseOptionalInt64(raw string, field string) (int64, error) {
 	}
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return 0, fmt.Errorf("ibkr: %s: parse int64 %q: %w", field, raw, err)
+		return 0, inboundProtocolError(field, fmt.Errorf("parse int64 %q: %w", raw, err))
 	}
 	return value, nil
 }
@@ -84,7 +95,7 @@ func parseOptionalMaxIntPointer(raw string, field string) (*int, error) {
 	}
 	value, err := strconv.Atoi(trimmed)
 	if err != nil {
-		return nil, fmt.Errorf("ibkr: %s: parse int %q: %w", field, raw, err)
+		return nil, inboundProtocolError(field, fmt.Errorf("parse int %q: %w", raw, err))
 	}
 	return new(value), nil
 }
@@ -96,7 +107,7 @@ func parseOptionalMaxInt64Pointer(raw string, field string) (*int64, error) {
 	}
 	value, err := strconv.ParseInt(trimmed, 10, 64)
 	if err != nil {
-		return nil, fmt.Errorf("ibkr: %s: parse int64 %q: %w", field, raw, err)
+		return nil, inboundProtocolError(field, fmt.Errorf("parse int64 %q: %w", raw, err))
 	}
 	return new(value), nil
 }
@@ -108,7 +119,7 @@ func parseOptionalBoolString(raw string, field string) (bool, error) {
 	case "1", "true":
 		return true, nil
 	default:
-		return false, fmt.Errorf("ibkr: %s: parse bool %q", field, raw)
+		return false, inboundProtocolError(field, fmt.Errorf("parse bool %q", raw))
 	}
 }
 

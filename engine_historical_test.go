@@ -74,3 +74,38 @@ func TestHistoricalTicksResultIdentifiesEmptyFamily(t *testing.T) {
 		t.Fatalf("HistoricalTicks() = %+v, want identified empty BID_ASK result", got.value)
 	}
 }
+
+func TestHistoricalDataUpdatePreservesCapturedBarCount(t *testing.T) {
+	t.Parallel()
+
+	bar, err := fromCodecHistoricalDataUpdate(codec.HistoricalDataUpdate{
+		ReqID: 7, BarCount: 14193, Time: "20260713 17:00:00 Europe/Amsterdam",
+		Open: "319.13", High: "319.23", Low: "316.85", Close: "317.07",
+		Volume: "1520619", WAP: "318.027",
+	})
+	if err != nil {
+		t.Fatalf("fromCodecHistoricalDataUpdate() error = %v", err)
+	}
+	if bar.Count != 14193 {
+		t.Fatalf("Bar.Count = %d, want captured count 14193", bar.Count)
+	}
+}
+
+func TestRealtimeBarUsesCapturedEpochSeconds(t *testing.T) {
+	t.Parallel()
+
+	bar, err := fromCodecRealtimeBar(codec.RealTimeBar{
+		ReqID: 7, Time: "1752423600", Open: "317", High: "318", Low: "316",
+		Close: "317.5", Volume: "1000", WAP: "317.2", Count: "42",
+	})
+	if err != nil {
+		t.Fatalf("fromCodecRealtimeBar() error = %v", err)
+	}
+	want := time.Unix(1752423600, 0).UTC()
+	if !bar.Time.Equal(want) || bar.Time.Location() != time.UTC {
+		t.Fatalf("Bar.Time = %s (%s), want %s UTC", bar.Time, bar.Time.Location(), want)
+	}
+	if bar.Count != 42 {
+		t.Fatalf("Bar.Count = %d, want 42", bar.Count)
+	}
+}

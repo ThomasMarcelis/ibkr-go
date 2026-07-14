@@ -21,6 +21,8 @@ func TestApplyOptionsRejectsInvalidConfigurationBeforeDial(t *testing.T) {
 		{name: "zero event buffer", opts: []Option{WithEventBuffer(0)}, field: "EventBuffer"},
 		{name: "zero subscription buffer", opts: []Option{WithSubscriptionBuffer(0)}, field: "SubscriptionBuffer"},
 		{name: "zero order event buffer", opts: []Option{WithOrderEventBuffer(0)}, field: "OrderEventBuffer"},
+		{name: "zero inbound frame limit", opts: []Option{WithMaxInboundFrameBytes(0)}, field: "MaxInboundFrameBytes"},
+		{name: "large inbound frame limit", opts: []Option{WithMaxInboundFrameBytes(64<<20 + 1)}, field: "MaxInboundFrameBytes"},
 		{name: "unknown reconnect", opts: []Option{WithReconnectPolicy("sometimes")}, field: "ReconnectPolicy"},
 	}
 

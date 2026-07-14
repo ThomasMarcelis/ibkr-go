@@ -123,7 +123,7 @@ type PnLUpdate struct {
 type PnLSingleRequest struct {
 	Account   string
 	ModelCode string
-	ConID     int // contract ID of the position to track
+	ConID     ContractID // contract ID of the position to track
 }
 
 // PnLSingleUpdate is a single-position profit-and-loss snapshot. Optional

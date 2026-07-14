@@ -36,7 +36,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -51,7 +51,7 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonNewsProviders, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonNewsProviders, ownedRoute) })
 	})
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 		ownedRoute.request = codec.NewsBulletinsRequest{AllMessages: allMessages}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.NewsBulletin); ok {
-				sub.emit(NewsBulletin{MsgID: m.MsgID, MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
+				sub.emit(NewsBulletin{MsgID: protocolIDFromInt[int32](m.MsgID), MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
 			}
 		}
 		e.singletons[singletonNewsBulletins] = ownedRoute
@@ -123,7 +123,7 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 				switch m := msg.(type) {
 				case codec.NewsArticleResponse:
 					e.deleteKeyedRoute(reqID)
-					resp <- result{article: NewsArticle{ArticleType: m.ArticleType, ArticleText: m.ArticleText}}
+					resp <- result{article: NewsArticle{ArticleType: protocolIDFromInt[NewsArticleType](m.ArticleType), ArticleText: m.ArticleText}}
 				}
 			}, func(err error) {
 				resp <- result{err: err}
@@ -179,7 +179,7 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 				resp <- result{err: err}
 			})
 		if err := e.sendContext(ctx, codec.HistoricalNewsRequest{
-			ReqID: reqID, ConID: req.ConID, ProviderCodes: providerCodes,
+			ReqID: reqID, ConID: int(req.ConID), ProviderCodes: providerCodes,
 			StartDate: formatHistoricalNewsTime(req.StartTime), EndDate: formatHistoricalNewsTime(req.EndTime), TotalResults: req.TotalResults,
 		}); err != nil {
 			e.deleteKeyedRoute(reqID)
@@ -210,5 +210,5 @@ func parseHistoricalNewsTime(raw string) (time.Time, error) {
 			return ts.UTC(), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("ibkr: parse historical news time %q", raw)
+	return time.Time{}, inboundProtocolError("historical news time", fmt.Errorf("parse %q", raw))
 }

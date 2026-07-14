@@ -21,26 +21,33 @@ func WriteRaw(conn net.Conn, data []byte) error {
 
 // ReadOneFrame reads a single length-prefixed frame with a deadline.
 func ReadOneFrame(conn net.Conn, deadline time.Time) ([]byte, error) {
+	return ReadOneFrameWithLimit(conn, deadline, wire.MaxFrameSize)
+}
+
+// ReadOneFrameWithLimit reads one length-prefixed frame with a deadline and
+// rejects an oversized header before reading its body.
+func ReadOneFrameWithLimit(conn net.Conn, deadline time.Time, limit int) ([]byte, error) {
 	if err := conn.SetReadDeadline(deadline); err != nil {
 		return nil, err
 	}
 	defer conn.SetReadDeadline(time.Time{})
-	return wire.ReadFrame(conn)
+	return wire.ReadFrameWithLimit(conn, limit)
 }
 
 type Conn struct {
-	conn      net.Conn
-	logger    *slog.Logger
-	sendRate  int
-	incoming  chan []byte
-	completed chan WriteResult
-	writable  chan struct{}
-	stopping  chan struct{}
-	done      chan struct{}
-	stopOnce  sync.Once
-	closeErr  error
-	waitErr   error
-	waitErrMu sync.Mutex
+	conn                 net.Conn
+	logger               *slog.Logger
+	sendRate             int
+	maxInboundFrameBytes int
+	incoming             chan []byte
+	completed            chan WriteResult
+	writable             chan struct{}
+	stopping             chan struct{}
+	done                 chan struct{}
+	stopOnce             sync.Once
+	closeErr             error
+	waitErr              error
+	waitErrMu            sync.Mutex
 
 	queueMu        sync.Mutex
 	queueCond      *sync.Cond
@@ -92,6 +99,12 @@ var (
 )
 
 func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
+	return NewWithInboundFrameLimit(conn, logger, sendRate, wire.MaxFrameSize)
+}
+
+// NewWithInboundFrameLimit starts a connection whose inbound reader rejects
+// frames larger than maxInboundFrameBytes before allocation.
+func NewWithInboundFrameLimit(conn net.Conn, logger *slog.Logger, sendRate, maxInboundFrameBytes int) *Conn {
 	if logger == nil {
 		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
@@ -99,14 +112,15 @@ func New(conn net.Conn, logger *slog.Logger, sendRate int) *Conn {
 		sendRate = maxSendRate
 	}
 	c := &Conn{
-		conn:      conn,
-		logger:    logger,
-		sendRate:  sendRate,
-		incoming:  make(chan []byte, 64),
-		completed: make(chan WriteResult, outgoingQueueCap+1),
-		writable:  make(chan struct{}, 1),
-		stopping:  make(chan struct{}),
-		done:      make(chan struct{}),
+		conn:                 conn,
+		logger:               logger,
+		sendRate:             sendRate,
+		maxInboundFrameBytes: maxInboundFrameBytes,
+		incoming:             make(chan []byte, 64),
+		completed:            make(chan WriteResult, outgoingQueueCap+1),
+		writable:             make(chan struct{}, 1),
+		stopping:             make(chan struct{}),
+		done:                 make(chan struct{}),
 	}
 	c.queueCond = sync.NewCond(&c.queueMu)
 	go c.readLoop()
@@ -221,7 +235,7 @@ func (c *Conn) readLoop() {
 	// coalesces many small tick frames into each TCP segment.
 	br := bufio.NewReaderSize(c.conn, 64<<10)
 	for {
-		payload, err := wire.ReadFrame(br)
+		payload, err := wire.ReadFrameWithLimit(br, c.maxInboundFrameBytes)
 		if err != nil {
 			c.stop(err)
 			return

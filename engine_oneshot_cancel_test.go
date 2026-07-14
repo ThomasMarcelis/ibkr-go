@@ -101,7 +101,6 @@ func TestContractDetailsCanceledBeforeAdmissionDoesNotSendRequestZero(t *testing
 	setup := <-e.cmds
 	cancel()
 	setup()
-	(<-e.cmds)()
 	if err := <-result; !errors.Is(err, context.Canceled) {
 		t.Fatalf("ContractDetails() error = %v, want context.Canceled", err)
 	}

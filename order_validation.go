@@ -2,6 +2,7 @@ package ibkr
 
 import (
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
@@ -31,8 +32,8 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 	if err := validateOrderTIF(order); err != nil {
 		return err
 	}
-	if order.ParentID < 0 {
-		return invalidOrderField("Order.ParentID", order.ParentID, "must be >= 0")
+	if err := validateOrderID("Order.ParentID", order.ParentID, true); err != nil {
+		return err
 	}
 	if order.DisplaySize < 0 {
 		return invalidOrderField("Order.DisplaySize", order.DisplaySize, "must be >= 0")
@@ -59,6 +60,21 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 		return err
 	}
 	return validateOrderAdjustment(order.Adjustment)
+}
+
+const maxWireOrderID = int64(math.MaxInt32)
+
+func validateOrderID(field string, orderID int64, allowZero bool) error {
+	minimum := int64(1)
+	message := "must be between 1 and 2147483647"
+	if allowZero {
+		minimum = 0
+		message = "must be between 0 and 2147483647"
+	}
+	if orderID < minimum || orderID > maxWireOrderID {
+		return invalidOrderField(field, orderID, message)
+	}
+	return nil
 }
 
 func validateOrderServerVersion(order Order, serverVersion int) error {

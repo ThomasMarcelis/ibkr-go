@@ -10,9 +10,19 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// protocolIDFromInt narrows integer fields after the protocol boundary has
+// applied the signed-int32 invariant. Classic fields are rejected by ReadInt,
+// protobuf int32 fields use int32 wire semantics, and locally allocated request
+// IDs wrap inside the same range. Keeping the narrowing here makes that proof
+// explicit instead of scattering unchecked platform-int conversions through
+// the public bridge.
+func protocolIDFromInt[T ~int32](value int) T {
+	return T(value) // #nosec G115 -- the protocol boundary owns and enforces the signed-int32 invariant
+}
+
 func toCodecContract(c Contract) codec.Contract {
 	return codec.Contract{
-		ConID:           c.ConID,
+		ConID:           int(c.ConID),
 		Symbol:          c.Symbol,
 		SecType:         string(c.SecType),
 		Expiry:          c.Expiry,
@@ -51,7 +61,7 @@ func fromCodecContract(c codec.Contract) (Contract, error) {
 		right = ""
 	}
 	return Contract{
-		ConID:           c.ConID,
+		ConID:           protocolIDFromInt[ContractID](c.ConID),
 		Symbol:          c.Symbol,
 		SecType:         SecType(c.SecType),
 		Expiry:          c.Expiry,
@@ -86,7 +96,7 @@ func deltaNeutralToCodec(value *DeltaNeutralContract) *codec.DeltaNeutralContrac
 		return nil
 	}
 	return &codec.DeltaNeutralContract{
-		ConID: value.ConID,
+		ConID: int(value.ConID),
 		Delta: value.Delta.String(),
 		Price: value.Price.String(),
 	}
@@ -104,12 +114,12 @@ func deltaNeutralFromCodec(value *codec.DeltaNeutralContract) (*DeltaNeutralCont
 	if err != nil {
 		return nil, err
 	}
-	return &DeltaNeutralContract{ConID: value.ConID, Delta: delta, Price: price}, nil
+	return &DeltaNeutralContract{ConID: protocolIDFromInt[ContractID](value.ConID), Delta: delta, Price: price}, nil
 }
 
 func validateContract(contract Contract) error {
 	if contract.ConID < 0 {
-		return &ValidationError{Field: "Contract.ConID", Value: strconv.Itoa(contract.ConID), Message: "must be >= 0"}
+		return &ValidationError{Field: "Contract.ConID", Value: strconv.FormatInt(int64(contract.ConID), 10), Message: "must be >= 0"}
 	}
 	securityIDType := string(contract.SecurityID.Type)
 	if securityIDType != strings.TrimSpace(securityIDType) {
@@ -135,7 +145,7 @@ func validateContract(contract Contract) error {
 	for i, leg := range contract.ComboLegs {
 		prefix := fmt.Sprintf("Contract.ComboLegs[%d]", i)
 		if leg.ConID <= 0 {
-			return &ValidationError{Field: prefix + ".ConID", Value: strconv.Itoa(leg.ConID), Message: "must be > 0"}
+			return &ValidationError{Field: prefix + ".ConID", Value: strconv.FormatInt(int64(leg.ConID), 10), Message: "must be > 0"}
 		}
 		if leg.Ratio <= 0 {
 			return &ValidationError{Field: prefix + ".Ratio", Value: strconv.Itoa(leg.Ratio), Message: "must be > 0"}
@@ -166,7 +176,7 @@ func validateContract(contract Contract) error {
 			return &ValidationError{Field: "Contract.DeltaNeutral", Message: "requires a BAG contract"}
 		}
 		if contract.DeltaNeutral.ConID <= 0 {
-			return &ValidationError{Field: "Contract.DeltaNeutral.ConID", Value: strconv.Itoa(contract.DeltaNeutral.ConID), Message: "must be > 0"}
+			return &ValidationError{Field: "Contract.DeltaNeutral.ConID", Value: strconv.FormatInt(int64(contract.DeltaNeutral.ConID), 10), Message: "must be > 0"}
 		}
 	}
 	return nil

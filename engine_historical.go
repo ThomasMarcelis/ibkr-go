@@ -3,6 +3,7 @@ package ibkr
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -256,11 +257,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			case codec.HistoricalBarsEnd:
 				sub.emitState(StreamSnapshotComplete, e.connectionSeq(), nil)
 			case codec.HistoricalDataUpdate:
-				// Streaming updates carry no per-bar trade count on the wire.
-				bar, err := fromCodecBar(codec.HistoricalBar{
-					ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
-					Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP,
-				})
+				bar, err := fromCodecHistoricalDataUpdate(m)
 				if err != nil {
 					sub.cancelFromActor(err)
 					return
@@ -557,6 +554,18 @@ func fromCodecBar(m codec.HistoricalBar) (Bar, error) {
 	if err != nil {
 		return Bar{}, err
 	}
+	return fromCodecBarAt(m, ts)
+}
+
+func fromCodecHistoricalDataUpdate(m codec.HistoricalDataUpdate) (Bar, error) {
+	return fromCodecBar(codec.HistoricalBar{
+		ReqID: m.ReqID, Time: m.Time, Open: m.Open, High: m.High,
+		Low: m.Low, Close: m.Close, Volume: m.Volume, WAP: m.WAP,
+		Count: strconv.Itoa(m.BarCount),
+	})
+}
+
+func fromCodecBarAt(m codec.HistoricalBar, ts time.Time) (Bar, error) {
 	open, err := parseRequiredDecimal(m.Open, "bar open")
 	if err != nil {
 		return Bar{}, err
@@ -610,13 +619,13 @@ func parseBarTime(raw string) (time.Time, error) {
 		}
 		location, err := time.LoadLocation(parts[2])
 		if err != nil {
-			return time.Time{}, fmt.Errorf("ibkr: parse bar time %q: load location: %w", raw, err)
+			return time.Time{}, inboundProtocolError("bar time", fmt.Errorf("parse %q: load location: %w", raw, err))
 		}
 		if ts, err := time.ParseInLocation("20060102 15:04:05", parts[0]+" "+parts[1], location); err == nil {
 			return ts.UTC(), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("ibkr: parse bar time %q", raw)
+	return time.Time{}, inboundProtocolError("bar time", fmt.Errorf("parse %q", raw))
 }
 
 func parseHeadTimestamp(raw string) (time.Time, error) {
@@ -625,5 +634,5 @@ func parseHeadTimestamp(raw string) (time.Time, error) {
 			return ts.UTC(), nil
 		}
 	}
-	return time.Time{}, fmt.Errorf("ibkr: parse head timestamp %q", raw)
+	return time.Time{}, inboundProtocolError("head timestamp", fmt.Errorf("parse %q", raw))
 }

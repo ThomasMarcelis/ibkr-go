@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"os"
 	"slices"
@@ -211,7 +212,11 @@ func dialAPI(ctx context.Context, addr string, clientID int) (*ibkr.Client, erro
 	if err != nil {
 		return nil, fmt.Errorf("parse port %q: %w", portText, err)
 	}
-	return ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port), ibkr.WithClientID(clientID))
+	if clientID < 0 || int64(clientID) > math.MaxInt32 {
+		return nil, fmt.Errorf("client id %d is outside signed-int32 range", clientID)
+	}
+	protocolClientID := ibkr.ClientID(clientID) // #nosec G115 -- range checked above
+	return ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port), ibkr.WithClientID(protocolClientID))
 }
 
 func firstManagedAccount(client *ibkr.Client) (string, error) {
@@ -909,7 +914,7 @@ func runAPIContractDetails(ctx context.Context, addr string, clientID int, timeo
 			event.Count = len(details)
 			event.Symbol = details[0].Symbol
 			event.SecType = string(details[0].SecType)
-			event.Values = map[string]string{"first_con_id": strconv.Itoa(details[0].ConID)}
+			event.Values = map[string]string{"first_con_id": strconv.FormatInt(int64(details[0].ConID), 10)}
 		})
 		return nil
 	})
@@ -960,7 +965,7 @@ func runAPIContractDetailsAAPLOptions(ctx context.Context, addr string, clientID
 			event.SecType = string(details[0].SecType)
 			event.Values = map[string]string{
 				"expiry":       expiry,
-				"first_con_id": strconv.Itoa(details[0].ConID),
+				"first_con_id": strconv.FormatInt(int64(details[0].ConID), 10),
 			}
 		})
 		return nil
@@ -1011,7 +1016,7 @@ func runAPIQualifyContractAAPL(ctx context.Context, addr string, clientID int) e
 		recordAPIEvent("contract_qualified", "", func(event *apiDriverEvent) {
 			event.Symbol = details.Symbol
 			event.SecType = string(details.SecType)
-			event.Values = map[string]string{"con_id": strconv.Itoa(details.ConID)}
+			event.Values = map[string]string{"con_id": strconv.FormatInt(int64(details.ConID), 10)}
 		})
 		return nil
 	})
@@ -2988,7 +2993,7 @@ func runAPIPnLSingle(ctx context.Context, addr string, clientID int) error {
 			event.SecType = string(held.Contract.SecType)
 			event.Count = count
 			event.Values = map[string]string{
-				"con_id":     strconv.Itoa(held.Contract.ConID),
+				"con_id":     strconv.FormatInt(int64(held.Contract.ConID), 10),
 				"position":   update.Position.String(),
 				"daily":      optionalDecimalString(update.DailyPnL),
 				"unrealized": optionalDecimalString(update.UnrealizedPnL),
@@ -3318,7 +3323,7 @@ func runAPINewsArticleAAPL(ctx context.Context, addr string, clientID int) error
 		recordAPIEvent("news_article", string(articleReq.ProviderCode), func(event *apiDriverEvent) {
 			event.Values = map[string]string{
 				"article_id":   articleReq.ArticleID,
-				"article_type": strconv.Itoa(article.ArticleType),
+				"article_type": strconv.FormatInt(int64(article.ArticleType), 10),
 				"text_bytes":   strconv.Itoa(len(article.ArticleText)),
 			}
 		})
@@ -3619,7 +3624,7 @@ func runAPIOptionCalculationsAAPL(ctx context.Context, addr string, clientID int
 			event.Symbol = opt.Symbol
 			event.SecType = string(opt.SecType)
 			event.Values = map[string]string{
-				"con_id":      strconv.Itoa(opt.ConID),
+				"con_id":      strconv.FormatInt(int64(opt.ConID), 10),
 				"expiry":      opt.Expiry,
 				"strike":      opt.Strike.String(),
 				"right":       string(opt.Right),

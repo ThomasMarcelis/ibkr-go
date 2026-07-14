@@ -100,6 +100,13 @@ func TestValidateOrderRequest(t *testing.T) {
 			field: "Contract.ComboLegs[0].ExemptCode",
 		},
 		{
+			name: "parent ID exceeds wire range",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.ParentID = maxWireOrderID + 1
+			},
+			field: "Order.ParentID",
+		},
+		{
 			name: "algo params without strategy",
 			mutate: func(req *PlaceOrderRequest) {
 				req.Order.Algorithm.Params = []TagValue{{Tag: "adaptivePriority", Value: "Normal"}}

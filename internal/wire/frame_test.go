@@ -143,3 +143,32 @@ func TestReadFrameRejectsOversizeHeader(t *testing.T) {
 		t.Fatalf("ReadFrame() error = %v, want ErrFrameTooLarge", err)
 	}
 }
+
+func TestReadFrameWithLimitAcceptsExactBoundary(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	if err := WriteFrame(&buf, []byte("1234")); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := ReadFrameWithLimit(&buf, 4)
+	if err != nil || string(payload) != "1234" {
+		t.Fatalf("ReadFrameWithLimit() = %q, %v", payload, err)
+	}
+}
+
+func TestReadFrameWithLimitRejectsBeforeBodyRead(t *testing.T) {
+	t.Parallel()
+
+	var buf bytes.Buffer
+	buf.Write([]byte{0, 0, 0, 5})
+	buf.WriteString("abcde")
+	_, err := ReadFrameWithLimit(&buf, 4)
+	frameErr, ok := errors.AsType[*FrameTooLargeError](err)
+	if !ok || frameErr.Size != 5 || frameErr.Limit != 4 {
+		t.Fatalf("ReadFrameWithLimit() error = %v", err)
+	}
+	if buf.String() != "abcde" {
+		t.Fatalf("oversized body was consumed: %q", buf.String())
+	}
+}

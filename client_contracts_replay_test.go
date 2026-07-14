@@ -83,7 +83,7 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	}
 
 	wantCalls := []struct {
-		conID  int
+		conID  ibkr.ContractID
 		strike string
 	}{
 		{896781604, "210"},

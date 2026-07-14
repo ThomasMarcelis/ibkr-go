@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"os"
 	"strconv"
@@ -39,7 +40,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	role := fs.String("role", roleDefault, "gateway role: readonly-live or paper-dev")
 	addr := fs.String("addr", "", "gateway address; defaults from role-specific environment")
-	clientID := fs.Int("client-id", intEnv(envClientID, 91), "TWS API client id")
+	clientID := fs.Int64("client-id", int64Env(envClientID, 91), "TWS API client id")
 	timeout := fs.Duration("timeout", 15*time.Second, "overall diagnostic timeout")
 	quoteSymbol := fs.String("quote-symbol", "AAPL", "stock symbol for quote probe")
 	skipQuote := fs.Bool("skip-quote", false, "skip market data quote probe")
@@ -49,6 +50,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	if *role != roleReadOnlyLive && *role != rolePaperDev {
 		fmt.Fprintf(stderr, "role: want %q or %q, got %q\n", roleReadOnlyLive, rolePaperDev, *role)
+		return 2
+	}
+	if *clientID < 0 || *clientID > math.MaxInt32 {
+		fmt.Fprintf(stderr, "client-id: must be between 0 and %d\n", math.MaxInt32)
 		return 2
 	}
 	if *addr == "" {
@@ -76,7 +81,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	client, err := ibkr.DialContext(ctx,
 		ibkr.WithHost(host),
 		ibkr.WithPort(port),
-		ibkr.WithClientID(*clientID),
+		ibkr.WithClientID(ibkr.ClientID(*clientID)),
 	)
 	if err != nil {
 		fmt.Fprintf(stderr, "dial: %v\n", err)
@@ -165,12 +170,12 @@ func getenv(name, fallback string) string {
 	return fallback
 }
 
-func intEnv(name string, fallback int) int {
+func int64Env(name string, fallback int64) int64 {
 	value := os.Getenv(name)
 	if value == "" {
 		return fallback
 	}
-	parsed, err := strconv.Atoi(value)
+	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		return fallback
 	}

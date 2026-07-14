@@ -1,6 +1,10 @@
 package codec
 
-import "github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
+import (
+	"fmt"
+
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
+)
 
 type HistoricalBarsRequest struct {
 	ReqID        int
@@ -477,6 +481,9 @@ func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
 }
 
 func (m HistoricalDataUpdate) encodeWire(sv int) ([]string, error) {
+	if m.BarCount < 0 {
+		return nil, fmt.Errorf("codec: historical data update bar count %d must be non-negative", m.BarCount)
+	}
 	w := fieldWriter{}
 	w.WriteInt(protocol.InHistoricalDataUpdate)
 	w.WriteInt(m.ReqID)

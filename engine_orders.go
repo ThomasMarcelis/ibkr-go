@@ -45,7 +45,7 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 				resp <- result{err: eng.apiErr(OpOrderID, msg)}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) { resp <- result{err: err} },
@@ -57,7 +57,7 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 		}
 	})
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonOrderID, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonOrderID, ownedRoute) })
 	})
 	if err != nil {
 		return 0, err
@@ -413,65 +413,79 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 }
 
 func (e *engine) CompletedOrders(ctx context.Context, apiOnly bool) ([]CompletedOrderResult, error) {
+	sub, err := e.StreamCompletedOrders(ctx, apiOnly, withSnapshotCollector())
+	if err != nil {
+		return nil, err
+	}
+	return collectSnapshotAndClose(ctx, sub, func(order CompletedOrderResult) (CompletedOrderResult, bool) { return order, true })
+}
+
+func (e *engine) StreamCompletedOrders(ctx context.Context, apiOnly bool, opts ...SubscriptionOption) (*Subscription[CompletedOrderResult], error) {
 	type result struct {
-		orders []CompletedOrderResult
-		err    error
+		sub *Subscription[CompletedOrderResult]
+		err error
 	}
 	resp := make(chan result, 1)
-	var ownedRoute *route
 
-	enqueueOneShotSetup(ctx, e, func() {
+	enqueueSingletonSubscriptionSetup(ctx, e, singletonCompletedOrders, resp, func() {
 		if _, exists := e.singletons[singletonCompletedOrders]; exists {
 			resp <- result{err: operationActive("completed orders")}
 			return
 		}
-
-		var collected []CompletedOrderResult
-
-		ownedRoute = &route{
-			opKind: OpCompletedOrders,
-			handleAPIErr: func(msg codec.APIError, eng *engine) {
-				delete(eng.singletons, singletonCompletedOrders)
-				resp <- result{err: eng.apiErr(OpCompletedOrders, msg)}
-			},
-			handle: func(msg any, eng *engine) {
-				switch m := msg.(type) {
-				case codec.CompletedOrder:
-					order, err := fromCodecCompletedOrder(m)
-					if err != nil {
-						eng.retireTransport(err)
-						delete(eng.singletons, singletonCompletedOrders)
-						resp <- result{err: err}
-						return
-					}
-					collected = append(collected, order)
-				case codec.CompletedOrderEnd:
-					delete(eng.singletons, singletonCompletedOrders)
-					resp <- result{orders: collected}
+		cfg, err := applySubscriptionOptionsFor(e.cfg, OpCompletedOrders, opts)
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		sub, ownedRoute := newSingletonSubscriptionRoute[CompletedOrderResult](
+			e, cfg, singletonCompletedOrders, OpCompletedOrders, nil,
+		)
+		sub.expectSnapshot()
+		ownedRoute.onDisconnect = func(_ *engine, err error) bool {
+			sub.closeWithErr(interrupted(err))
+			return false
+		}
+		ownedRoute.handleAPIErr = func(msg codec.APIError, eng *engine) {
+			if eng.singletons[singletonCompletedOrders] != ownedRoute {
+				return
+			}
+			delete(eng.singletons, singletonCompletedOrders)
+			sub.closeWithErr(eng.apiErr(OpCompletedOrders, msg))
+		}
+		ownedRoute.handle = func(msg any, eng *engine) {
+			switch m := msg.(type) {
+			case codec.CompletedOrder:
+				order, err := fromCodecCompletedOrder(m)
+				if err != nil {
+					sub.cancelFromActor(err)
+					return
 				}
-			},
-			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
-				return false
-			},
-			close: func(err error) {
-				resp <- result{err: err}
-			},
+				sub.emit(order)
+			case codec.CompletedOrderEnd:
+				delete(eng.singletons, singletonCompletedOrders)
+				sub.emitState(StreamSnapshotComplete, eng.connectionSeq(), nil)
+				sub.closeWithErr(nil)
+			}
 		}
 		e.singletons[singletonCompletedOrders] = ownedRoute
+		sub.emitState(StreamStarted, e.connectionSeq(), nil)
 		if err := e.sendContext(ctx, codec.CompletedOrdersRequest{APIOnly: apiOnly}); err != nil {
 			delete(e.singletons, singletonCompletedOrders)
+			sub.closeWithErr(err)
 			resp <- result{err: err}
+			return
 		}
+		resp <- result{sub: sub}
 	})
 
-	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonCompletedOrders, ownedRoute) })
-	})
+	out, err := awaitSubscriptionResponse(ctx, e, resp, func(out result) bool { return out.sub != nil })
 	if err != nil {
 		return nil, err
 	}
-	return out.orders, out.err
+	if out.err == nil && out.sub != nil {
+		bindContext(ctx, out.sub)
+	}
+	return out.sub, out.err
 }
 
 // orderRollbackTimeout bounds cancellation admission after a bracket place
@@ -542,7 +556,11 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 			return
 		}
 
-		orderID := e.allocOrderID()
+		orderID, err := e.allocOrderID()
+		if err != nil {
+			resp <- placeOrderResult{err: err}
+			return
+		}
 		handle := e.bindOrderHandle(orderID, req.Contract)
 
 		write, err := e.sendTrackedContext(ctx, toCodecPlaceOrder(orderID, req))
@@ -584,9 +602,21 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 			}
 		}
 
-		parentID := e.allocOrderID()
-		takeProfitID := e.allocOrderID()
-		stopLossID := e.allocOrderID()
+		parentID, err := e.allocOrderID()
+		if err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
+		takeProfitID, err := e.allocOrderID()
+		if err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
+		stopLossID, err := e.allocOrderID()
+		if err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
 		req.TakeProfit.ParentID = parentID
 		req.StopLoss.ParentID = parentID
 
@@ -646,9 +676,21 @@ func (e *engine) PlacePresetBracket(ctx context.Context, req PlaceOrderRequest) 
 			return
 		}
 
-		parentID := e.allocOrderID()
-		stopLossID := e.allocOrderID()
-		takeProfitID := e.allocOrderID()
+		parentID, err := e.allocOrderID()
+		if err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
+		stopLossID, err := e.allocOrderID()
+		if err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
+		takeProfitID, err := e.allocOrderID()
+		if err != nil {
+			resp <- bracketOrderResult{err: err}
+			return
+		}
 		bracket := BracketOrder{
 			Parent:     e.bindOrderHandle(parentID, req.Contract),
 			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract),
@@ -778,7 +820,11 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 			return
 		}
 
-		orderID := e.allocOrderID()
+		orderID, err := e.allocOrderID()
+		if err != nil {
+			setupResp <- setup{err: err}
+			return
+		}
 		orderIDCh <- orderID
 		ch := make(chan previewResult, 1)
 		e.previews[orderID] = &previewRoute{result: ch}
@@ -830,6 +876,9 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 // fire-and-forget; the cancellation result arrives via the OrderHandle's
 // events channel as an OrderStatus with Status "Cancelled".
 func (e *engine) CancelOrder(ctx context.Context, orderID int64, cfg cancelConfig) error {
+	if err := validateOrderID("OrderID", orderID, false); err != nil {
+		return err
+	}
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
 		return e.sendContext(ctx, cancelOrderRequest(orderID, cfg))
 	})
@@ -850,7 +899,7 @@ func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 
 func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 	orderHandle := newOrderHandle(int64(reqID), e.cfg.orderEventBuffer)
-	handle := &ExerciseHandle{requestID: reqID, order: orderHandle}
+	handle := &ExerciseHandle{requestID: protocolIDFromInt[RequestID](reqID), order: orderHandle}
 	var exerciseRoute *route
 	var exerciseOrderRoute *orderRoute
 	closeExercise := func(err error) {
@@ -1080,7 +1129,7 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
-	clientID, err := parseOptionalInt(m.ClientID, "open order client id")
+	clientIDValue, err := parseOptionalInt32(m.ClientID, "open order client id")
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
@@ -1147,7 +1196,7 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 		OpenClose:     m.OpenClose,
 		Origin:        origin,
 		OrderRef:      m.OrderRef,
-		ClientID:      clientID,
+		ClientID:      ClientID(clientIDValue),
 		PermID:        permID,
 		OutsideRTH:    outsideRTH,
 		Hidden:        hidden,
@@ -1197,7 +1246,7 @@ func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
 	if err != nil {
 		return OrderStatusUpdate{}, err
 	}
-	clientID, err := parseOptionalInt(m.ClientID, "order status client id")
+	clientIDValue, err := parseOptionalInt32(m.ClientID, "order status client id")
 	if err != nil {
 		return OrderStatusUpdate{}, err
 	}
@@ -1210,7 +1259,7 @@ func fromCodecOrderStatus(m codec.OrderStatus) (OrderStatusUpdate, error) {
 		PermID:        permID,
 		ParentID:      parentID,
 		LastFillPrice: lastFillPrice,
-		ClientID:      clientID,
+		ClientID:      ClientID(clientIDValue),
 		WhyHeld:       m.WhyHeld,
 		MktCapPrice:   mktCapPrice,
 	}, nil
@@ -1237,7 +1286,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (Execution, error) {
 	if err != nil {
 		return Execution{}, err
 	}
-	clientID, err := parseOptionalInt(m.ClientID, "execution client id")
+	clientIDValue, err := parseOptionalInt32(m.ClientID, "execution client id")
 	if err != nil {
 		return Execution{}, err
 	}
@@ -1284,7 +1333,7 @@ func fromCodecExecution(m codec.ExecutionDetail) (Execution, error) {
 		Shares:                  shares,
 		Price:                   price,
 		PermID:                  permID,
-		ClientID:                clientID,
+		ClientID:                ClientID(clientIDValue),
 		Liquidation:             liquidation,
 		CumulativeQuantity:      cumulativeQuantity,
 		AveragePrice:            averagePrice,
@@ -1327,7 +1376,7 @@ func parseExecutionTime(raw string) (time.Time, error) {
 			}
 		}
 	}
-	return time.Time{}, fmt.Errorf("ibkr: parse execution time %q", raw)
+	return time.Time{}, inboundProtocolError("execution time", fmt.Errorf("parse %q", raw))
 }
 
 func fromCodecCommission(m codec.CommissionReport) (CommissionAndFeesReport, error) {
@@ -1363,7 +1412,7 @@ func parseYieldRedemptionDate(raw string) (string, error) {
 		return "", nil
 	}
 	if _, err := time.Parse("20060102", trimmed); err != nil {
-		return "", fmt.Errorf("ibkr: parse commission and fees yield redemption date %q: %w", raw, err)
+		return "", inboundProtocolError("commission and fees yield redemption date", fmt.Errorf("parse %q: %w", raw, err))
 	}
 	return trimmed, nil
 }

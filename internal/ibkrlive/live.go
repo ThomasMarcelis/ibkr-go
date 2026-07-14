@@ -27,7 +27,7 @@ const (
 	defaultPaperDevAddr     = "127.0.0.1:4002"
 )
 
-var generatedClientID atomic.Int64
+var generatedClientID atomic.Int32
 var liveSessionMu sync.Mutex
 
 type Role string
@@ -41,7 +41,7 @@ type Config struct {
 	Addr     string
 	Host     string
 	Port     int
-	ClientID int
+	ClientID ibkr.ClientID
 	Role     Role
 }
 
@@ -85,12 +85,14 @@ func LoadRole(role Role) (Config, error) {
 	if err != nil {
 		return Config{}, fmt.Errorf("ibkrlive: parse %s port: %w", role, err)
 	}
-	clientID := 1
+	clientID := ibkr.ClientID(1)
 	if raw := os.Getenv(envClientID); raw != "" {
-		clientID, err = strconv.Atoi(raw)
+		value, parseErr := strconv.ParseInt(raw, 10, 32)
+		err = parseErr
 		if err != nil {
 			return Config{}, fmt.Errorf("ibkrlive: parse %s: %w", envClientID, err)
 		}
+		clientID = ibkr.ClientID(value)
 	}
 	return Config{
 		Addr:     addr,
@@ -218,7 +220,7 @@ func dialContext(t testing.TB, cfg Config, timeout time.Duration, extra ...ibkr.
 	dial := func() (*ibkr.Client, context.Context, context.CancelFunc, error) {
 		attemptCfg := cfg
 		if os.Getenv(envClientID) == "" {
-			attemptCfg.ClientID = int(generatedClientID.Add(1))
+			attemptCfg.ClientID = ibkr.ClientID(generatedClientID.Add(1))
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		client, err := ibkr.DialContext(ctx, Options(attemptCfg, extra...)...)

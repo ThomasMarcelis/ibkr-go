@@ -147,7 +147,7 @@ func comboLegsToCodec(legs []ComboLeg) []codec.ComboLeg {
 	out := make([]codec.ComboLeg, len(legs))
 	for i, leg := range legs {
 		out[i] = codec.ComboLeg{
-			ConID:              leg.ConID,
+			ConID:              int(leg.ConID),
 			Ratio:              leg.Ratio,
 			Action:             string(leg.Action),
 			Exchange:           leg.Exchange,
@@ -183,7 +183,7 @@ func orderConditionsToCodec(values []OrderCondition) []codec.OrderCondition {
 		out[i] = codec.OrderCondition{
 			Type:          int(value.Type),
 			Conjunction:   string(value.Conjunction),
-			ConID:         value.ConID,
+			ConID:         int(value.ConID),
 			Exchange:      value.Exchange,
 			Operator:      int(value.Operator),
 			Value:         value.Value,
@@ -207,14 +207,14 @@ func comboLegsFromCodec(legs []codec.ComboLeg) ([]ComboLeg, error) {
 			return nil, err
 		}
 		if openClose < int(ComboLegSame) || openClose > int(ComboLegUnknown) {
-			return nil, fmt.Errorf("%s open/close: value %d is outside IBKR range 0..3", prefix, openClose)
+			return nil, inboundProtocolError(prefix+" open/close", fmt.Errorf("value %d is outside IBKR range 0..3", openClose))
 		}
 		shortSaleSlot, err := parseOptionalInt(leg.ShortSaleSlot, prefix+" short-sale slot")
 		if err != nil {
 			return nil, err
 		}
 		out[i] = ComboLeg{
-			ConID:              leg.ConID,
+			ConID:              protocolIDFromInt[ContractID](leg.ConID),
 			Ratio:              leg.Ratio,
 			Action:             OrderAction(leg.Action),
 			Exchange:           leg.Exchange,
@@ -229,7 +229,7 @@ func comboLegsFromCodec(legs []codec.ComboLeg) ([]ComboLeg, error) {
 				return nil, err
 			}
 			if exemptCode < 0 {
-				return nil, fmt.Errorf("%s exempt code: value %d must be >= 0 or the -1 unset sentinel", prefix, exemptCode)
+				return nil, inboundProtocolError(prefix+" exempt code", fmt.Errorf("value %d must be >= 0 or the -1 unset sentinel", exemptCode))
 			}
 			out[i].ExemptCode = new(exemptCode)
 		}
@@ -283,7 +283,7 @@ func orderConditionsFromCodec(values []codec.OrderCondition) []OrderCondition {
 		out[i] = OrderCondition{
 			Type:          OrderConditionType(value.Type),
 			Conjunction:   ConditionConjunction(value.Conjunction),
-			ConID:         value.ConID,
+			ConID:         protocolIDFromInt[ContractID](value.ConID),
 			Exchange:      value.Exchange,
 			Operator:      ConditionOperator(value.Operator),
 			Value:         value.Value,
@@ -346,6 +346,16 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		}
 		return value
 	}
+	int32Value := func(raw, field string) int32 {
+		if parseErr != nil {
+			return 0
+		}
+		value, err := parseOptionalInt32(raw, "completed order "+field)
+		if err != nil {
+			parseErr = err
+		}
+		return value
+	}
 	int64Value := func(raw, field string) int64 {
 		if parseErr != nil {
 			return 0
@@ -391,7 +401,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		deltaNeutralOrder = &CompletedOrderDeltaNeutral{
 			OrderType:          OrderType(deltaNeutralOrderType),
 			AuxPrice:           decimalPointer(m.DeltaNeutralAuxPrice, "delta-neutral aux price"),
-			ConID:              intValue(m.DeltaNeutralConID, "delta-neutral contract id"),
+			ConID:              ContractID(int32Value(m.DeltaNeutralConID, "delta-neutral contract id")),
 			ShortSale:          boolValue(m.DeltaNeutralShortSale, "delta-neutral short sale"),
 			ShortSaleSlot:      intValue(m.DeltaNeutralShortSaleSlot, "delta-neutral short-sale slot"),
 			DesignatedLocation: m.DeltaNeutralDesignatedLocation,
@@ -406,9 +416,9 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	if strings.TrimSpace(m.OrderID) != "" {
 		orderID = new(int64Value(m.OrderID, "order id"))
 	}
-	var clientID *int
+	var clientID *ClientID
 	if strings.TrimSpace(m.ClientID) != "" {
-		clientID = new(intValue(m.ClientID, "client id"))
+		clientID = new(ClientID(int32Value(m.ClientID, "client id")))
 	}
 	var parentID *int64
 	if strings.TrimSpace(m.ParentID) != "" {
@@ -421,7 +431,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	var peggedBenchmark *CompletedOrderPeggedBenchmark
 	if OrderType(m.OrderType) == OrderTypePeggedBenchmark {
 		peggedBenchmark = &CompletedOrderPeggedBenchmark{
-			ReferenceContractID:   intValue(m.ReferenceContractID, "pegged reference contract id"),
+			ReferenceContractID:   ContractID(int32Value(m.ReferenceContractID, "pegged reference contract id")),
 			ChangeAmountDecrease:  boolValue(m.PeggedChangeAmountDecrease, "pegged change amount decrease"),
 			ChangeAmount:          decimalValue(m.PeggedChangeAmount, "pegged change amount"),
 			ReferenceChangeAmount: decimalPointer(m.ReferenceChangeAmount, "pegged reference change amount"),
@@ -502,7 +512,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				TriggerMethod:            intValue(m.TriggerMethod, "trigger method"),
 				RandomizeSize:            boolValue(m.RandomizeSize, "randomize size"),
 				RandomizePrice:           boolValue(m.RandomizePrice, "randomize price"),
-				RefFuturesConID:          intPointer(m.RefFuturesConID, "reference futures contract id"),
+				RefFuturesConID:          contractIDPointer(intPointer(m.RefFuturesConID, "reference futures contract id")),
 				MinTradeQty:              intPointer(m.MinTradeQty, "minimum trade quantity"),
 				MinCompeteSize:           intPointer(m.MinCompeteSize, "minimum compete size"),
 				CompeteAgainstBestOffset: decimalPointer(m.CompeteAgainstBestOffset, "compete against best offset"),
@@ -570,4 +580,11 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		return CompletedOrderResult{}, parseErr
 	}
 	return result, nil
+}
+
+func contractIDPointer(value *int) *ContractID {
+	if value == nil {
+		return nil
+	}
+	return new(protocolIDFromInt[ContractID](*value))
 }

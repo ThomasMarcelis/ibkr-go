@@ -320,7 +320,7 @@ func livePlaceFillAndFlatten(t *testing.T, ctx context.Context, client *ibkr.Cli
 }
 
 // liveQualifyOption qualifies the nearest ATM option for the given underlying.
-func liveQualifyOption(t *testing.T, ctx context.Context, client *ibkr.Client, underlyingConID int, anchor decimal.Decimal, right ibkr.Right) ibkr.Contract {
+func liveQualifyOption(t *testing.T, ctx context.Context, client *ibkr.Client, underlyingConID ibkr.ContractID, anchor decimal.Decimal, right ibkr.Right) ibkr.Contract {
 	t.Helper()
 	params, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
 		UnderlyingSymbol:  "AAPL",

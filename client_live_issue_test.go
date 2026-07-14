@@ -389,8 +389,8 @@ func closeLiveIssueClient(t *testing.T, client *ibkr.Client) {
 	time.Sleep(500 * time.Millisecond)
 }
 
-func liveIssueClientID() int {
-	return 10_000 + int(time.Now().UnixNano()%1_000_000)
+func liveIssueClientID() ibkr.ClientID {
+	return 10_000 + ibkr.ClientID(time.Now().UnixNano()%1_000_000)
 }
 
 type liveGatewayProxy struct {

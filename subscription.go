@@ -66,8 +66,11 @@ func (s *Subscription[T]) Events() <-chan StreamEvent[T] { return s.events }
 //		log.Fatal(err)
 //	}
 //
-// Lifecycle transitions are filtered out. Events and All consume the same
-// queue, so use one or the other rather than reading them concurrently.
+// Every non-data event is consumed and filtered out, including lifecycle
+// transitions and StreamNotice warnings. Callers that need reconciliation
+// boundaries or request-scoped warnings must read Events directly. Events and
+// All consume the same queue, so use one or the other rather than reading them
+// concurrently.
 func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		for {
@@ -154,8 +157,11 @@ func (s *Subscription[T]) Err() error {
 	return s.err
 }
 
-// Close initiates cancellation of the server-side subscription. It is
-// idempotent and safe to call concurrently. Events closes asynchronously; use
+// Close ends the operation using its documented control path: broker-side
+// cancellation when the wire supports it, safe local detach for correlated
+// replies, or connection retirement when an unresolved request-ID-less stream
+// cannot be detached safely. It is idempotent and safe to call concurrently.
+// Events closes asynchronously; use
 // [Subscription.Done] or [Subscription.Wait] to observe completion. If
 // cancellation cannot enter the active transport queue, the client retires
 // that connection generation and Wait returns a non-retryable

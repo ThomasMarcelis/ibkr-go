@@ -8,12 +8,12 @@ import "errors"
 // because the live socket protocol does not provide an attested request-scoped
 // control operation for an admitted instruction.
 type ExerciseHandle struct {
-	requestID int
+	requestID RequestID
 	order     *OrderHandle
 }
 
 // RequestID returns the request ID used to correlate Gateway replies.
-func (h *ExerciseHandle) RequestID() int { return h.requestID }
+func (h *ExerciseHandle) RequestID() RequestID { return h.requestID }
 
 // Events returns warnings and pseudo-order lifecycle events for the
 // instruction. Working-order evidence is observable progress, not proof of

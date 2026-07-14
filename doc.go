@@ -23,7 +23,8 @@
 // Once DialContext returns, [Client.Session] provides the negotiated server
 // version, managed accounts, and connection sequence number. [Client.SessionEvents]
 // is a bounded observational channel: if unread, older queued session events
-// may be dropped in favor of the latest one.
+// may be dropped in favor of the latest one. Event.TransitionSeq exposes such
+// gaps, and Event.Snapshot is the exact post-transition session snapshot.
 //
 // # One-Shot Requests
 //
@@ -70,8 +71,9 @@
 //	    return err
 //	}
 //
-// All filters lifecycle transitions from the same queue. A consumer that needs
-// reconnect boundaries reads Events directly and switches on StreamEvent.Kind.
+// All consumes and filters every non-data event from the same queue, including
+// reconnect boundaries and request-scoped StreamNotice warnings. A consumer
+// that needs either reads Events directly and switches on StreamEvent.Kind.
 // Events and All are alternative consumers; do not read them concurrently.
 //
 // Admission to the transport queue is the ownership boundary for a
@@ -147,7 +149,7 @@
 // The session state machine is observable through [Client.SessionEvents].
 // States progress through Connecting, Handshaking, Ready, and optionally
 // Degraded or Reconnecting on connection loss. Set [WithReconnectPolicy] to
-// control automatic reconnect behavior.
+// control automatic reconnect behavior; the default remains [ReconnectAuto].
 //
 // During a reconnect cycle, active subscriptions receive a Gap event on their
 // ordered Events stream. Recovery is Restored when IBKR retained the stream or
@@ -157,7 +159,7 @@
 //
 // # Errors
 //
-// Seven structured error types cover the main failure modes:
+// Eight structured error types cover the main failure modes:
 //
 //   - [*ConnectError] — connection or handshake failure
 //   - [*ProtocolError] — wire protocol violation
@@ -166,6 +168,7 @@
 //   - [*OrderRecoveryError] — uncertain live IDs after partial bracket rollback
 //   - [*ExerciseUncertainError] — unresolved exercise or lapse after involuntary observation loss
 //   - [*SubscriptionCancelError] — uncertain remote stream after cancellation admission failure
+//   - [*InboundFrameTooLargeError] — raw frame rejected before body allocation
 //
 // IBKR codes attested in live captures have named ErrCode constants (e.g.
 // [ErrCodeOrderCanceled], [ErrCodeMarketDataNotSubscribed]) and [*APIError]

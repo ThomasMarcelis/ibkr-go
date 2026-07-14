@@ -21,7 +21,7 @@ type NewsProvider struct {
 // NewsBulletin is a system or exchange news bulletin from
 // [NewsClient.SubscribeBulletins].
 type NewsBulletin struct {
-	MsgID    int
+	MsgID    int32
 	MsgType  int // bulletin type: 1 regular, 2 exchange unavailable, 3 exchange available
 	Headline string
 	Source   string // originating exchange or source
@@ -34,17 +34,26 @@ type NewsArticleRequest struct {
 	ArticleID    string
 }
 
-// NewsArticle is the body of a news article. ArticleType distinguishes plain
-// text from binary/HTML payloads.
+// NewsArticleType identifies the representation of a news article body.
+// Unknown values are preserved so the type remains open to protocol additions.
+type NewsArticleType int32
+
+const (
+	NewsArticleTypeText   NewsArticleType = 0
+	NewsArticleTypeBinary NewsArticleType = 1
+)
+
+// NewsArticle is the body of a news article. Binary bodies remain the
+// base64-encoded text supplied by IBKR.
 type NewsArticle struct {
-	ArticleType int // 0 = plain text/HTML, 1 = binary (e.g. PDF, base64-encoded)
+	ArticleType NewsArticleType
 	ArticleText string
 }
 
 // HistoricalNewsRequest queries historical news headlines for a contract via
 // [NewsClient.Historical].
 type HistoricalNewsRequest struct {
-	ConID         int
+	ConID         ContractID
 	ProviderCodes []NewsProviderCode
 	StartTime     time.Time // exclusive upper bound in the descending result stream; cannot be combined with EndTime
 	EndTime       time.Time // inclusive lower bound in the descending result stream; cannot be combined with StartTime
@@ -145,7 +154,7 @@ func (t FADataType) String() string {
 // [WSHClient.EventData]. Filter is a raw JSON filter document; the Fill flags
 // scope results to the user's watchlist, portfolio, or competitors.
 type WSHEventDataRequest struct {
-	ConID           int
+	ConID           ContractID
 	Filter          JSONDocument // raw JSON event filter; empty for no filter
 	FillWatchlist   bool
 	FillPortfolio   bool
@@ -157,7 +166,7 @@ type WSHEventDataRequest struct {
 
 // DisplayGroupID identifies a TWS display group, as listed by
 // [TWSClient.DisplayGroups].
-type DisplayGroupID int
+type DisplayGroupID int32
 
 // DisplayGroupUpdate reports the contract currently selected in a subscribed
 // display group. ContractInfo is "none" when the group is empty, otherwise an

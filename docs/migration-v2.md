@@ -7,7 +7,7 @@ v2 is an intentional clean break. Go semantic import versioning keeps existing v
 Update the dependency and every ibkr-go import:
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.2
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.3
 ```
 
 ```go
@@ -22,12 +22,35 @@ For a local checkout, keep a real v2 requirement; `replace` changes source
 location, not the module's semantic major version:
 
 ```go
-require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.2
+require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.3
 
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
 
 ## From rc.2 to the current release candidate
+
+Protocol identifiers that are signed 32-bit values on the wire now use named
+fixed-width types: `ContractID`, `ClientID`, `RequestID`, `MarketRuleID`,
+`AggregateGroupID`, and `DisplayGroupID`. Convert application-owned integers
+explicitly at the boundary. Order IDs remain `int64` in the public order API,
+but values outside 1..2147483647 are rejected before encoding.
+
+`NewsArticle.ArticleType` is now `NewsArticleType`; use
+`NewsArticleTypeText` or `NewsArticleTypeBinary`. `NewsBulletin.MsgID` is `int32`.
+
+Session events remain bounded, but loss is now detectable:
+
+```go
+for event := range client.SessionEvents() {
+    if previous != 0 && event.TransitionSeq != previous+1 {
+        reconcile(event.Snapshot)
+    }
+    previous = event.TransitionSeq
+}
+```
+
+`Event.Snapshot` is the exact post-transition snapshot. Informational notices
+do not advance `TransitionSeq`.
 
 Open-order refresh now belongs to the exact subscription that owns the
 request-ID-less response stream:
@@ -46,6 +69,36 @@ Replace `Orders().RefreshOpen(ctx)` with `sub.Refresh(ctx)`. The former
 `ErrNoSubscription` sentinel is gone because there is no longer a global
 refresh lookup; overlapping refreshes return `ErrOperationActive`, and auto
 scope returns `ErrNoSnapshot`.
+
+Large finite results have bounded streaming alternatives. They close
+automatically after `SnapshotComplete`:
+
+```go
+sub, err := client.Contracts().StreamDetails(ctx, partial, ibkr.WithQueueSize(256))
+for event := range sub.Events() {
+    if event.Kind == ibkr.StreamData {
+        use(event.Value)
+    }
+}
+return sub.Wait()
+```
+
+The corresponding `Details`, `SecDefOptParams`, and `Completed` methods remain
+slice-returning convenience collectors. `News().HistoricalAll` is the lazy
+overlap-and-deduplicate iterator for second-resolution historical-news pages.
+
+`Orders().SubscribeExecutionEvents` is a passive, unfiltered observer for
+every execution-detail and commission callback received by the client. It
+sends no request and does no query correlation or deduplication. Keep using
+`SubscribeExecutions` when a filtered executions query is the intended scope.
+
+`WithMaxInboundFrameBytes` can lower the default 64 MiB raw-frame allocation
+ceiling. Oversized handshake and steady-state frames return
+`*InboundFrameTooLargeError`.
+
+The reconnect default remains `ReconnectAuto`; rc.3 does not silently change
+that policy. See [operation control](operation-control.md) for the cancellation,
+detach, and connection-retirement behavior of each operation family.
 
 ## Subscription events
 
@@ -74,8 +127,10 @@ for event := range sub.Events() {
 return sub.Err()
 ```
 
-Use `sub.All(ctx)` when only data values matter. `Events()` and `All(ctx)`
-consume the same queue and must not be read concurrently. `Restored` means the
+Use `sub.All(ctx)` when only data values matter. It consumes and discards all
+non-data events, including `StreamNotice`; callers that need request-scoped
+warnings must use `Events()`. `Events()` and `All(ctx)` consume the same queue
+and must not be read concurrently. `Restored` means the
 Gateway retained the stream; `Resubscribed` means the client sent the request
 again.
 

@@ -48,8 +48,8 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 			e.deleteKeyedRoute(reqID)
 			sub.closeWithErr(e.apiErr(opKind, msg))
 		},
-		onDisconnect: func(_ *engine, _ error) bool {
-			sub.closeWithErr(ErrResumeRequired)
+		onDisconnect: func(_ *engine, err error) bool {
+			sub.closeWithErr(resumeRequired(err))
 			return false
 		},
 		close:  func(err error) { sub.closeWithErr(err) },
@@ -92,8 +92,8 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 		subscription: true,
 		resume:       cfg.resume,
 		generation:   e.transportGeneration,
-		onDisconnect: func(_ *engine, _ error) bool {
-			sub.closeWithErr(ErrResumeRequired)
+		onDisconnect: func(_ *engine, err error) bool {
+			sub.closeWithErr(resumeRequired(err))
 			return false
 		},
 		close:  func(err error) { sub.closeWithErr(err) },

@@ -99,7 +99,7 @@ type SecurityID struct {
 // order or protobuf leg. The shared protobuf Contract used by place order at
 // 203, contract details at 205, and quotes/depth at 206 carries all fields.
 type Contract struct {
-	ConID           int              // IBKR contract ID; nonzero pins an exact contract
+	ConID           ContractID       // IBKR contract ID; nonzero pins an exact contract
 	Symbol          string           // underlying symbol (ticker); base currency for forex
 	SecType         SecType          // instrument class; drives which other fields matter
 	Expiry          string           // YYYYMMDD (or YYYYMM) for derivatives; empty for cash instruments
@@ -120,7 +120,7 @@ type Contract struct {
 
 // ComboLeg is one leg of a multi-leg (BAG) combo contract.
 type ComboLeg struct {
-	ConID              int               // contract ID of the leg instrument
+	ConID              ContractID        // contract ID of the leg instrument
 	Ratio              int               // relative size of this leg within the combo
 	Action             OrderAction       // BUY, SELL, or SSHORT for this leg
 	Exchange           string            // routing exchange for the leg
@@ -144,7 +144,7 @@ const (
 // contract. It can be sent by request families whose wire layout carries the
 // block and is preserved when IBKR echoes it.
 type DeltaNeutralContract struct {
-	ConID int
+	ConID ContractID
 	Delta decimal.Decimal
 	Price decimal.Decimal
 }
@@ -190,8 +190,8 @@ const (
 type OrderCondition struct {
 	Type          OrderConditionType
 	Conjunction   ConditionConjunction
-	ConID         int    // contract the condition observes
-	Exchange      string // exchange the condition observes
+	ConID         ContractID // contract the condition observes
+	Exchange      string     // exchange the condition observes
 	Operator      ConditionOperator
 	Value         string  // threshold value
 	TriggerMethod int     // trigger method for price conditions
@@ -210,7 +210,7 @@ type ContractDetails struct {
 	PriceMagnifier            int
 	OrderTypes                []string // IBKR order capabilities; includes order types and modifiers
 	ValidExchanges            []ContractExchange
-	UnderConID                int
+	UnderConID                ContractID
 	ContractMonth             string
 	Industry                  string
 	Category                  string
@@ -221,7 +221,7 @@ type ContractDetails struct {
 	EconomicValueRule         string
 	EconomicValueMultiplier   *decimal.Decimal
 	SecurityIDs               []TagValue
-	AggGroup                  *int
+	AggGroup                  *AggregateGroupID
 	UnderSymbol               string
 	UnderSecType              SecType
 	RealExpirationDate        string
@@ -268,7 +268,7 @@ type BondDetails struct {
 // [ContractsClient.MarketRule] to resolve the complete tick-size schedule.
 type ContractExchange struct {
 	Exchange     string
-	MarketRuleID int
+	MarketRuleID MarketRuleID
 }
 
 // FundDetails carries the mutual-fund-only tail of [ContractDetails]. IBKR
@@ -303,7 +303,7 @@ type IneligibilityReason struct {
 
 // MatchingSymbol is one hit from a [ContractsClient.Search] symbol lookup.
 type MatchingSymbol struct {
-	ConID              int
+	ConID              ContractID
 	Symbol             string
 	SecType            SecType
 	PrimaryExchange    string
@@ -317,16 +317,16 @@ type MatchingSymbol struct {
 // underlying via [ContractsClient.SecDefOptParams].
 type SecDefOptParamsRequest struct {
 	UnderlyingSymbol  string
-	FutFopExchange    string  // exchange for FOP chains; empty for equity options
-	UnderlyingSecType SecType // security type of the underlying
-	UnderlyingConID   int     // contract ID of the underlying
+	FutFopExchange    string     // exchange for FOP chains; empty for equity options
+	UnderlyingSecType SecType    // security type of the underlying
+	UnderlyingConID   ContractID // contract ID of the underlying
 }
 
 // SecDefOptParams is one exchange's option chain definition for an underlying:
 // the available expirations and strikes under a trading class.
 type SecDefOptParams struct {
 	Exchange        string
-	UnderlyingConID int
+	UnderlyingConID ContractID
 	TradingClass    string
 	Multiplier      string
 	Expirations     []string
@@ -343,6 +343,6 @@ type PriceIncrement struct {
 // MarketRuleResult is the tick-size schedule for a market rule ID, returned by
 // [ContractsClient.MarketRule].
 type MarketRuleResult struct {
-	MarketRuleID int
+	MarketRuleID MarketRuleID
 	Increments   []PriceIncrement
 }

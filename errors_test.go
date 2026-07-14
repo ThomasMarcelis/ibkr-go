@@ -34,6 +34,7 @@ func TestIsRetryable(t *testing.T) {
 		{name: "validation", err: &ValidationError{Field: "Contract", Message: "required"}},
 		{name: "slow consumer", err: ErrSlowConsumer},
 		{name: "execution correlation overflow overrides interrupted", err: errors.Join(ErrInterrupted, ErrExecutionCorrelationOverflow)},
+		{name: "inbound frame limit overrides interrupted", err: errors.Join(ErrInterrupted, &InboundFrameTooLargeError{Size: 9, Limit: 8})},
 		{name: "closed", err: ErrClosed},
 		{name: "order recovery overrides interrupted", err: newOrderRecoveryError([]int64{1}, ErrInterrupted, nil)},
 		{name: "exercise uncertainty overrides interrupted", err: &ExerciseUncertainError{RequestID: 7, Err: ErrInterrupted}},

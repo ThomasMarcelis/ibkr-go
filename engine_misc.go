@@ -43,7 +43,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				resp <- result{ts: ts}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -58,7 +58,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonCurrentTime, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonCurrentTime, ownedRoute) })
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -96,7 +96,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 				resp <- result{ts: ts}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -111,7 +111,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonCurrentTimeMillis, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonCurrentTimeMillis, ownedRoute) })
 	})
 	if err != nil {
 		return time.Time{}, err
@@ -143,7 +143,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -158,7 +158,7 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonScannerParameters, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonScannerParameters, ownedRoute) })
 	})
 	if err != nil {
 		return "", err
@@ -359,7 +359,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 				}
 			},
 			onDisconnect: func(eng *engine, err error) bool {
-				resp <- result{err: ErrInterrupted}
+				resp <- result{err: interrupted(err)}
 				return false
 			},
 			close: func(err error) {
@@ -374,7 +374,7 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 	})
 
 	out, err := awaitOneShotResponse(ctx, e, resp, func() {
-		e.enqueue(func() { e.cancelSingletonOneShot(singletonFA, ownedRoute) })
+		e.enqueue(func() { e.abortUnresolvedSingletonOneShot(singletonFA, ownedRoute) })
 	})
 	if err != nil {
 		return "", err
@@ -450,7 +450,7 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 				case codec.WSHMetaDataResponse:
 					e.deleteKeyedRoute(reqID)
 					if !json.Valid([]byte(m.DataJSON)) {
-						resp <- result{err: fmt.Errorf("ibkr: invalid WSH metadata JSON")}
+						resp <- result{err: inboundProtocolError("WSH metadata JSON", fmt.Errorf("invalid JSON"))}
 						return
 					}
 					resp <- result{dataJSON: m.DataJSON}
@@ -498,7 +498,7 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 				case codec.WSHEventDataResponse:
 					e.deleteKeyedRoute(reqID)
 					if !json.Valid([]byte(m.DataJSON)) {
-						resp <- result{err: fmt.Errorf("ibkr: invalid WSH event-data JSON")}
+						resp <- result{err: inboundProtocolError("WSH event-data JSON", fmt.Errorf("invalid JSON"))}
 						return
 					}
 					resp <- result{dataJSON: m.DataJSON}
@@ -508,7 +508,7 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 			})
 		if err := e.sendContext(ctx, codec.WSHEventDataRequest{
 			ReqID:           reqID,
-			ConID:           req.ConID,
+			ConID:           int(req.ConID),
 			Filter:          string(req.Filter),
 			FillWatchlist:   req.FillWatchlist,
 			FillPortfolio:   req.FillPortfolio,
@@ -657,7 +657,7 @@ func (e *engine) updateDisplayGroup(ctx context.Context, reqID int, contractInfo
 func parseEpochSeconds(raw string) (time.Time, error) {
 	epoch, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("ibkr: parse epoch seconds %q", raw)
+		return time.Time{}, inboundProtocolError("epoch seconds", fmt.Errorf("parse %q: %w", raw, err))
 	}
 	return time.Unix(epoch, 0).UTC(), nil
 }
@@ -665,7 +665,7 @@ func parseEpochSeconds(raw string) (time.Time, error) {
 func parseEpochMilliseconds(raw string) (time.Time, error) {
 	epoch, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil {
-		return time.Time{}, fmt.Errorf("ibkr: parse epoch milliseconds %q", raw)
+		return time.Time{}, inboundProtocolError("epoch milliseconds", fmt.Errorf("parse %q: %w", raw, err))
 	}
 	return time.UnixMilli(epoch).UTC(), nil
 }

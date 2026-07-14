@@ -45,6 +45,20 @@ Session states are `Disconnected`, `Connecting`, `Handshaking`, `Ready`,
 `Degraded`, `Reconnecting`, and `Closed`. `ConnectionSeq` increments each time a
 fresh handshake reaches `Ready`. `SessionEvents()` is bounded and observational:
 if unread, older queued events may be dropped in favor of the latest transition.
+`TransitionSeq` increments once per actual state change, so consumers can detect
+an evicted transition. Every `Event` carries the exact post-transition
+`Snapshot`, including that same sequence number; informational notices do not
+increment it.
+
+The default reconnect policy is `ReconnectAuto`. Applications that require a
+connection loss to terminate the client set `WithReconnectPolicy(ReconnectOff)`
+explicitly.
+
+Inbound raw frames are bounded before body allocation by
+`WithMaxInboundFrameBytes`. The default and hard maximum are 64 MiB, and the
+limit covers both the server-info handshake frame and every steady-state frame.
+An oversized frame terminates the owning connection with non-retryable
+`*InboundFrameTooLargeError`.
 
 `CurrentTime` and `CurrentTimeMillis` share a 4.25-second admission gate because
 live Gateway suppresses closely spaced clock requests. The call context bounds
@@ -92,8 +106,10 @@ close is terminal; inspect `Err()` or `Wait()` for its cause. There is no
 redundant `Closed` event. Every event's `At` is the UTC time the client enqueued
 it; this is local observation time, not Gateway event time.
 
-`All(ctx)` filters `Data` values from that same queue. Ranging it to exhaustion
-drains every buffered event, so `Err()`/`Wait()` are final when the loop exits.
+`All(ctx)` yields only `Data` values from that same queue. It consumes and
+discards every non-data event, including `StreamNotice`; callers that need
+request-scoped warnings or lifecycle evidence must use `Events()` directly.
+Ranging it to exhaustion drains every buffered event, so `Err()`/`Wait()` are final when the loop exits.
 `Events()` and `All()` are alternative consumers and must not be read
 concurrently. `Err()` does not wait for `Done()` and returns nil until a
 terminal close reason is known.
@@ -178,6 +194,19 @@ drop-oldest policy is reserved for session-scoped observation.
 method requests another snapshot only after the prior `SnapshotComplete` and
 only while that exact subscription still owns the request-ID-less response
 route. Overlap returns `ErrOperationActive`; auto scope returns `ErrNoSnapshot`.
+
+Finite result families with potentially large cardinality also expose bounded
+stream forms: `Contracts().StreamDetails`,
+`Contracts().StreamSecDefOptParams`, and `Orders().StreamCompleted`. Each emits
+`SnapshotComplete` and then closes cleanly. The corresponding slice-returning
+methods remain convenience collectors and retain the full result in memory.
+Closing `StreamCompleted` before its request-ID-less end marker retires the
+owning connection generation; the two contract streams are request-ID keyed
+and can detach safely (contract-details cancellation is also sent at server
+version 215+).
+
+The complete per-operation control matrix is in
+[`operation-control.md`](operation-control.md).
 
 ## Order Submission
 
@@ -335,6 +364,11 @@ observation window or an error ends it.
   and closes with the non-retryable `ErrExecutionCorrelationOverflow`. The
   finite `Executions` collector uses the same default and also bounds each
   collected event family.
+- `Orders().SubscribeExecutionEvents` is the unfiltered client-wide observer
+  for consumers that must see every execution-detail and commission callback.
+  It sends no query, performs no correlation or deduplication, and never drops
+  unmatched fees while continuing. It follows automatic reconnects locally
+  and publishes `Gap`/`Restored`; only one may be active per client.
 - Reconnect boundaries are explicit through session `Event`, `StreamEvent`,
   and `OrderEvent` values.
 - Calls submitted while the session is reconnecting wait for the next `Ready`
