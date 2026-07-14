@@ -35,8 +35,15 @@ if [[ $# -gt 0 ]]; then
     verify "$1"
 else
     echo "=== capture verification ==="
+    status=0
     for dir in captures/20*; do
         [[ -d "$dir" ]] || continue
-        verify "$dir"
+        printf '%s: ' "${dir##*/}"
+        if verify "$dir"; then
+            echo "ok"
+        else
+            status=1
+        fi
     done
+    exit "$status"
 fi

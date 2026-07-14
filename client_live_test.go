@@ -934,7 +934,7 @@ func waitLiveOrderFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHand
 				return filled, sawExecution
 			}
 			if evt.OpenOrder != nil {
-				t.Logf("%s open order: orderID=%d status=%s", label, evt.OpenOrder.OrderID, evt.OpenOrder.Status)
+				t.Logf("%s open order: orderID=%d status=%s", label, (*evt.OpenOrder.Order.OrderID), evt.OpenOrder.State.Status)
 			}
 			if evt.Execution != nil {
 				sawExecution = true
@@ -1221,8 +1221,8 @@ func TestLivePlaceOrderModify(t *testing.T) {
 		select {
 		case evt := <-handle.Events():
 			if evt.OpenOrder != nil {
-				t.Logf("OpenOrder after modify: lmt_price=%s", evt.OpenOrder.LmtPrice)
-				if evt.OpenOrder.LmtPrice.String() == "51" {
+				t.Logf("OpenOrder after modify: lmt_price=%s", evt.OpenOrder.Order.Prices.LmtPrice)
+				if evt.OpenOrder.Order.Prices.LmtPrice.String() == "51" {
 					sawModified = true
 				}
 			}
@@ -1498,9 +1498,9 @@ func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 			}
 			switch event.Kind {
 			case ibkr.StreamData:
-				if event.Value.Order != nil && event.Value.Order.OrderID == orderID {
+				if event.Value.Order != nil && *event.Value.Order.Order.OrderID == orderID {
 					order := event.Value.Order
-					t.Logf("recovered order %d (client %d, status %q)", order.OrderID, order.ClientID, order.Status)
+					t.Logf("recovered order %d (client %d, status %q)", *order.Order.OrderID, *order.Order.ClientID, order.State.Status)
 					recovered = true
 				}
 			case ibkr.StreamSnapshotComplete:

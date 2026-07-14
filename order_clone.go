@@ -47,6 +47,39 @@ func cloneOrder(order Order) Order {
 	if order.AllOrNone != nil {
 		order.AllOrNone = new(*order.AllOrNone)
 	}
+	for _, field := range []**decimal.Decimal{
+		&order.Scale.PriceAdjustValue,
+		&order.Scale.ProfitOffset,
+		&order.Auction.StartingPrice,
+		&order.Auction.StockRefPrice,
+		&order.Auction.Delta,
+		&order.Auction.StockRangeLower,
+		&order.Auction.StockRangeUpper,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	for _, field := range []**int{
+		&order.Scale.PriceAdjustInterval,
+		&order.Scale.InitialPosition,
+		&order.Scale.InitialFillQty,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	for _, field := range []**bool{
+		&order.Scale.AutoReset,
+		&order.Scale.RandomPercent,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	if order.ShortSale.ExemptCode != nil {
+		order.ShortSale.ExemptCode = new(*order.ShortSale.ExemptCode)
+	}
 	if order.Hedge.DisableAutomaticPrice != nil {
 		order.Hedge.DisableAutomaticPrice = new(*order.Hedge.DisableAutomaticPrice)
 	}
@@ -64,6 +97,12 @@ func cloneOrder(order Order) Order {
 	}
 	if order.WhatIfType != nil {
 		order.WhatIfType = new(*order.WhatIfType)
+	}
+	if order.PeggedBenchmark != nil {
+		order.PeggedBenchmark = new(*order.PeggedBenchmark)
+		if order.PeggedBenchmark.ReferenceChangeAmount != nil {
+			order.PeggedBenchmark.ReferenceChangeAmount = new(*order.PeggedBenchmark.ReferenceChangeAmount)
+		}
 	}
 	order.Combo = cloneOrderCombo(order.Combo)
 	order.Algorithm.Params = append([]TagValue(nil), order.Algorithm.Params...)
@@ -84,16 +123,83 @@ func cloneOrderCombo(combo OrderCombo) OrderCombo {
 
 func cloneOpenOrder(order OpenOrder) OpenOrder {
 	order.Contract = cloneContract(order.Contract)
-	if order.LmtPrice != nil {
-		order.LmtPrice = new(*order.LmtPrice)
+	order.Order = cloneOrderDetails(order.Order)
+	order.State = cloneOrderState(order.State)
+	return order
+}
+
+func cloneOrderDetails(order OrderDetails) OrderDetails {
+	for _, field := range []**int64{&order.OrderID, &order.ParentID, &order.PermID} {
+		if *field != nil {
+			*field = new(**field)
+		}
 	}
-	if order.AuxPrice != nil {
-		order.AuxPrice = new(*order.AuxPrice)
+	if order.ClientID != nil {
+		order.ClientID = new(*order.ClientID)
+	}
+	for _, field := range []**bool{
+		&order.Transmit,
+		&order.Routing.RouteMarketableToBBO,
+		&order.Scale.AutoReset,
+		&order.Scale.RandomPercent,
+		&order.Hedge.DisableAutomaticPrice,
+		&order.UsePriceMgmtAlgo,
+		&order.Deactivate,
+		&order.PostOnly,
+		&order.AllowPreOpen,
+		&order.IgnoreOpenAuction,
+		&order.SeekPriceImprovement,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	for _, field := range []**decimal.Decimal{
+		&order.Prices.LmtPrice, &order.Prices.AuxPrice, &order.Prices.DiscretionaryAmount,
+		&order.Prices.PercentOffset, &order.Prices.TrailStopPrice, &order.Prices.TrailingPercent,
+		&order.Prices.StopPrice, &order.Prices.LmtPriceOffset, &order.Prices.CashQty,
+		&order.Auction.StartingPrice, &order.Auction.StockRefPrice, &order.Auction.Delta,
+		&order.Auction.StockRangeLower, &order.Auction.StockRangeUpper,
+		&order.Execution.CompeteAgainstBestOffset, &order.Execution.MidOffsetAtWhole,
+		&order.Execution.MidOffsetAtHalf, &order.Volatility.Value,
+		&order.Scale.PriceIncrement, &order.Scale.PriceAdjustValue, &order.Scale.ProfitOffset,
+		&order.Adjustment.TriggerPrice, &order.Adjustment.StopPrice,
+		&order.Adjustment.StopLimitPrice, &order.Adjustment.TrailingAmount,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	for _, field := range []**int{
+		&order.Routing.ExemptCode, &order.Execution.DisplaySize, &order.Execution.MinQty,
+		&order.Execution.MinTradeQty, &order.Execution.MinCompeteSize, &order.Volatility.Type,
+		&order.Volatility.ReferencePriceType, &order.Scale.InitialLevelSize,
+		&order.Scale.SubsequentLevelSize, &order.Scale.PriceAdjustInterval,
+		&order.Scale.InitialPosition, &order.Scale.InitialFillQty, &order.Hedge.MaxSize,
+		&order.Adjustment.TrailingUnit, &order.WhatIfType,
+	} {
+		if *field != nil {
+			*field = new(**field)
+		}
+	}
+	if order.Execution.RefFuturesConID != nil {
+		order.Execution.RefFuturesConID = new(*order.Execution.RefFuturesConID)
+	}
+	if order.Volatility.DeltaNeutral != nil {
+		order.Volatility.DeltaNeutral = new(*order.Volatility.DeltaNeutral)
+		if order.Volatility.DeltaNeutral.AuxPrice != nil {
+			order.Volatility.DeltaNeutral.AuxPrice = new(*order.Volatility.DeltaNeutral.AuxPrice)
+		}
 	}
 	order.Combo = cloneOrderCombo(order.Combo)
-	order.AlgoParams = append([]TagValue(nil), order.AlgoParams...)
-	order.Conditions = append([]OrderCondition(nil), order.Conditions...)
-	order.State = cloneOrderState(order.State)
+	order.Algorithm.Params = append([]TagValue(nil), order.Algorithm.Params...)
+	order.Conditions.Values = append([]OrderCondition(nil), order.Conditions.Values...)
+	if order.PeggedBenchmark != nil {
+		order.PeggedBenchmark = new(*order.PeggedBenchmark)
+		if order.PeggedBenchmark.ReferenceChangeAmount != nil {
+			order.PeggedBenchmark.ReferenceChangeAmount = new(*order.PeggedBenchmark.ReferenceChangeAmount)
+		}
+	}
 	return order
 }
 

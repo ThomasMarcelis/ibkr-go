@@ -103,8 +103,8 @@ func run() (err error) {
 				}
 			case evt.OpenOrder != nil:
 				fmt.Printf("open order: %s %s %s @ %s\n",
-					evt.OpenOrder.Action, evt.OpenOrder.Quantity,
-					evt.OpenOrder.OrderType, evt.OpenOrder.LmtPrice)
+					evt.OpenOrder.Order.Action, evt.OpenOrder.Order.Quantity,
+					evt.OpenOrder.Order.OrderType, evt.OpenOrder.Order.Prices.LmtPrice)
 			case evt.Execution != nil:
 				fmt.Printf("execution: %s shares @ %s\n",
 					evt.Execution.Shares, evt.Execution.Price)

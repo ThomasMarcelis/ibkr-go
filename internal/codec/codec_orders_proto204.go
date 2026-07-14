@@ -99,6 +99,10 @@ func decodeCompletedOrderContractProto(body []byte) (Contract, string, []string,
 }
 
 func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
+	return decodeOrderDetailsProto(body, &m.OrderDetails)
+}
+
+func decodeOrderDetailsProto(body []byte, m *OrderDetails) error {
 	for {
 		number, typ, ok, err := consumeProtoTag(&body)
 		if err != nil {
@@ -109,8 +113,9 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 		}
 		switch number {
 		case 1, 2, 3, 4, 7, 16, 18, 19, 20, 24, 30, 31, 38, 39, 40, 43, 45, 46,
-			48, 49, 52, 54, 55, 56, 57, 69, 70, 72, 83, 85, 86, 87, 88, 90, 101,
-			102, 111, 112, 116, 117, 119, 120, 121, 127, 128, 133:
+			48, 49, 52, 54, 55, 56, 57, 66, 69, 70, 72, 83, 85, 86, 87, 88, 90, 98, 101,
+			102, 111, 112, 116, 117, 119, 120, 121, 122, 127, 128, 133, 138, 139,
+			140, 141, 142, 143, 144:
 			value, err := consumeProtoVarint(&body, typ)
 			if err != nil {
 				return protoFieldError("order", number, err)
@@ -168,6 +173,8 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.ScaleInitFillQty = formattedInt
 			case 57:
 				m.ScaleRandomPercent = formattedBool
+			case 66:
+				m.Transmit = formattedBool
 			case 69:
 				m.Origin = formattedInt
 			case 70:
@@ -186,6 +193,8 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.ReferenceContractID = formattedInt
 			case 90:
 				m.PeggedChangeAmountDecrease = formattedBool
+			case 98:
+				m.AdjustableTrailingUnit = formattedInt
 			case 101:
 				m.ConditionsCancelOrder = formattedBool
 			case 102:
@@ -204,15 +213,32 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.RouteMarketableToBBO = formattedInt
 			case 121:
 				m.ParentPermID = i64toa(decodeProtoInt64(value))
+			case 122:
+				m.UsePriceMgmtAlgo = formattedInt
 			case 127:
 				m.MinTradeQty = formattedInt
 			case 128:
 				m.MinCompeteSize = formattedInt
 			case 133:
 				m.ProfessionalCustomer = formattedBool
+			case 138:
+				m.Deactivate = formattedBool
+			case 139:
+				m.PostOnly = formattedBool
+			case 140:
+				m.AllowPreOpen = formattedBool
+			case 141:
+				m.IgnoreOpenAuction = formattedBool
+			case 142:
+				m.SeekPriceImprovement = formattedInt
+			case 143:
+				m.WhatIfType = formattedInt
+			case 144:
+				m.HedgeMaxSize = formattedInt
 			}
-		case 5, 6, 8, 11, 12, 13, 14, 15, 25, 26, 27, 28, 29, 34, 35, 36, 41, 47,
-			59, 60, 61, 68, 71, 92, 103, 114, 115, 118, 132, 137:
+		case 5, 6, 8, 11, 12, 13, 14, 15, 25, 26, 27, 28, 29, 32, 33, 34, 35, 36,
+			41, 47, 58, 59, 60, 61, 68, 71, 92, 93, 103, 114, 115, 118, 125, 126,
+			132, 137:
 			value, err := consumeProtoBytes(&body, typ)
 			if err != nil {
 				return protoFieldError("order", number, err)
@@ -245,6 +271,10 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.OrderRef = formatted
 			case 29:
 				m.Rule80A = formatted
+			case 32:
+				m.ActiveStartTime = formatted
+			case 33:
+				m.ActiveStopTime = formatted
 			case 34:
 				m.FAGroup = formatted
 			case 35:
@@ -255,6 +285,8 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.DeltaNeutralOrderType = formatted
 			case 47:
 				m.DeltaNeutralDesignatedLocation = formatted
+			case 58:
+				m.ScaleTable = formatted
 			case 59:
 				m.HedgeType = formatted
 			case 60:
@@ -267,6 +299,8 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.DesignatedLocation = formatted
 			case 92:
 				m.ReferenceExchangeID = formatted
+			case 93:
+				m.AdjustedOrderType = formatted
 			case 103:
 				m.ModelCode = formatted
 			case 114:
@@ -275,13 +309,17 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 				m.Filled = formatted
 			case 118:
 				m.Shareholder = formatted
+			case 125:
+				m.AdvancedErrorOverride = formatted
+			case 126:
+				m.ManualOrderTime = formatted
 			case 132:
 				m.CustomerAccount = formatted
 			case 137:
 				m.Submitter = formatted
 			}
 		case 9, 10, 21, 22, 23, 37, 42, 50, 51, 53, 76, 78, 79, 80, 81, 82, 89,
-			91, 94, 99, 106, 129, 130, 131:
+			91, 94, 95, 96, 97, 99, 106, 129, 130, 131:
 			value, err := consumeProtoDouble(&body, typ)
 			if err != nil {
 				return protoFieldError("order", number, err)
@@ -325,7 +363,13 @@ func decodeCompletedOrderOrderProto(body []byte, m *CompletedOrder) error {
 			case 91:
 				m.ReferenceChangeAmount = formatted
 			case 94:
-				m.StopPrice = formatted
+				m.TriggerPrice = formatted
+			case 95:
+				m.AdjustedStopPrice = formatted
+			case 96:
+				m.AdjustedStopLimitPrice = formatted
+			case 97:
+				m.AdjustedTrailingAmount = formatted
 			case 99:
 				m.LmtPriceOffset = formatted
 			case 106:

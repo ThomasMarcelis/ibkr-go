@@ -29,6 +29,34 @@ replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 
 ## From rc.2 to the current release candidate
 
+RC.3 completes the final breaking broker-echo cleanup. `OpenOrder` is now
+faceted exactly like the wire result: `Contract`, complete `OrderDetails`, and
+`State`. It has no `Partial` mode and no flattened price fields:
+
+```go
+// Before
+fmt.Println(open.LmtPrice)
+
+// After
+fmt.Println(open.Order.Prices.LmtPrice)
+```
+
+Open and completed orders share `OrderDetails`, `OrderPrices`, routing,
+auction, execution, volatility, scale, compliance, adjustment, and allocation
+facets. Placement adds the corresponding classic scale extensions,
+`Order.ShortSale`, `Order.Auction`, and `Order.PeggedBenchmark`. `Order.MinQty`
+is `*int`, preserving omitted versus explicit zero without imposing an
+artificial 32-bit public limit.
+
+Tick-by-tick last and bid/ask results now expose their IBKR attribute masks as
+`LastAttributes` and `BidAskAttributes`. Historical tick masks use the same
+`Attributes` naming. `Bar1Sec` now sends IBKR's canonical `"1 secs"` token.
+
+`RegulatorySnapshot` uncertainty is a typed
+`*RegulatorySnapshotUncertainError`; inspect its `RequestID` and
+`ConnectionSeq` before reconciling a possible fee. It still matches
+`ErrRegulatorySnapshotUncertain` through `errors.Is`.
+
 Protocol identifiers that are signed 32-bit values on the wire now use named
 fixed-width types: `ContractID`, `ClientID`, `RequestID`, `MarketRuleID`,
 `AggregateGroupID`, and `DisplayGroupID`. Convert application-owned integers
@@ -244,9 +272,10 @@ Contract{Strike: "150"}
 Contract{Strike: new(decimal.NewFromInt(150))}
 ```
 
-`OpenOrder.LmtPrice`, `OpenOrder.AuxPrice`, and optional `Order` decimals such as
-`LmtPriceOffset` are now `*decimal.Decimal`. Nil means omitted or unset; a
-pointer to zero means an explicit zero. `LmtPriceOffset` remains on `Order`; only
+`OpenOrder.Order.Prices.LmtPrice`, `OpenOrder.Order.Prices.AuxPrice`, and
+optional placement `Order` decimals such as `LmtPriceOffset` are
+`*decimal.Decimal`. Nil means omitted or unset; a pointer to zero means an
+explicit zero. `LmtPriceOffset` remains directly on placement `Order`; only
 its representation changed.
 
 The margin/commission block formerly flattened onto `OpenOrder` is now the

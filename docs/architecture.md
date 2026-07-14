@@ -90,9 +90,10 @@ configuration, volume/precision, and odd-lot gates. See
   `codec.ReqIDer` (`RequestID() int`); the engine's keyed routing table type-
   asserts against this interface instead of maintaining a parallel switch.
   `OpenOrder`, `OrderStatus`, and `CompletedOrder` deliberately do not
-  implement it — they carry an order ID and route through order-handle
-  dispatch instead — and `APIError` is routed ahead of keyed dispatch because
-  its `ReqID` can be `-1` for unsolicited errors.
+  implement it. Open-order and order-status messages carry an order ID and
+  dual-dispatch through order observation; completed orders belong to their
+  request-ID-less singleton snapshot. `APIError` is routed ahead of keyed
+  dispatch because its `ReqID` can be `-1` for unsolicited errors.
 
 ## Protocol Evidence
 
@@ -136,9 +137,9 @@ pattern:
 OpenOrder messages are dispatched to both the per-order handle (if one exists
 in the orders table) and the singleton open-orders observer (if one is
 registered). `Orders().SubscribeOpen` therefore observes open-order snapshots and
-updates through `OpenOrder`, including its embedded status fields. OrderStatus,
-execution, and commission messages are routed through `OrderHandle`, not the
-singleton open-orders observer.
+updates through `OpenOrder`. OrderStatus messages are likewise dispatched to
+both owners, while execution and commission messages are routed through
+`OrderHandle` and the execution observers, not the open-orders observer.
 
 ## Version Negotiation
 
@@ -154,9 +155,9 @@ singleton open-orders observer.
   `internal/protocol/version.go` to protobuf, and 214..225 gate later semantics.
   Handshake rejects versions outside that range instead of carrying dead
   classic-layout compatibility branches.
-- `OpenOrder.Partial` reports when a decode hit a version- or layout-gated
-  boundary it could not fully resolve, so a degraded parse is observable
-  instead of silently dropping fields.
+- Classic OpenOrder decoding is strict: every supported field is consumed in
+  sequence and malformed or trailing layout drift fails the affected route.
+  It never returns a partially decoded broker echo.
 - The advertised handshake maximum (`maxServerVersion`, currently 225) is a
   package-level override point used only by the version-matrix live tests to
   force a lower supported layout for verification; production

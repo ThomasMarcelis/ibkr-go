@@ -12,13 +12,15 @@ func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 	t.Parallel()
 
 	_, err := fromCodecOpenOrder(codec.OpenOrder{
-		OrderID:   1,
-		Account:   "DU12345",
-		Contract:  codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
-		Action:    "BUY",
-		OrderType: "LMT",
-		Quantity:  "1",
-		ClientID:  "not-an-int",
+		OrderID: 1,
+		OrderDetails: codec.OrderDetails{
+			Account:   "DU12345",
+			Contract:  codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+			Action:    "BUY",
+			OrderType: "LMT",
+			Quantity:  "1",
+			ClientID:  "not-an-int",
+		},
 	})
 	if err == nil {
 		t.Fatal("fromCodecOpenOrder() error = nil, want malformed client id rejection")
@@ -122,7 +124,7 @@ func TestContractConversionAcceptsProtobufDeltaNeutralDefaults(t *testing.T) {
 func TestFromCodecOpenOrderRejectsMalformedComboLegPrice(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecOpenOrder(codec.OpenOrder{OrderID: 1, Quantity: "1", OrderComboLegPrices: []string{"market"}})
+	_, err := fromCodecOpenOrder(codec.OpenOrder{OrderID: 1, OrderDetails: codec.OrderDetails{Quantity: "1", OrderComboLegPrices: []string{"market"}}})
 	if err == nil {
 		t.Fatal("fromCodecOpenOrder() accepted malformed combo leg price")
 	}
@@ -202,24 +204,26 @@ func TestFromCodecCompletedOrderProjectsLiveTrailLimitFields(t *testing.T) {
 	// captures/20260415T162637Z-api_completed_orders_variants_aapl,
 	// server_version=200, events SHA-256 prefix 6415ad97b4c9f33e.
 	order, err := fromCodecCompletedOrder(codec.CompletedOrder{
-		Contract:        codec.Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Strike: "0", Right: "?", Exchange: "SMART", Currency: "USD", LocalSymbol: "AAPL", TradingClass: "NMS"},
-		Action:          "BUY",
-		Quantity:        "1",
-		OrderType:       "TRAIL LIMIT",
-		LmtPrice:        "2000.05",
-		AuxPrice:        "1.0",
-		TIF:             "DAY",
-		PermID:          "1426085924",
-		TrailStopPrice:  "2000.0",
-		Status:          "Cancelled",
-		StopPrice:       "2000.0",
-		LmtPriceOffset:  "0.05",
-		Filled:          "0",
-		ParentPermID:    "9223372036854775807",
-		CompletedTime:   "20260415 11:00:11 US/Eastern",
-		CompletedStatus: "Cancelled by Trader",
-		Shareholder:     "Not an insider or substantial shareholder",
-		Submitter:       "paper-user",
+		OrderDetails: codec.OrderDetails{
+			Contract:        codec.Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Strike: "0", Right: "?", Exchange: "SMART", Currency: "USD", LocalSymbol: "AAPL", TradingClass: "NMS"},
+			Action:          "BUY",
+			Quantity:        "1",
+			OrderType:       "TRAIL LIMIT",
+			LmtPrice:        "2000.05",
+			AuxPrice:        "1.0",
+			TIF:             "DAY",
+			PermID:          "1426085924",
+			TrailStopPrice:  "2000.0",
+			Status:          "Cancelled",
+			StopPrice:       "2000.0",
+			LmtPriceOffset:  "0.05",
+			Filled:          "0",
+			ParentPermID:    "9223372036854775807",
+			CompletedTime:   "20260415 11:00:11 US/Eastern",
+			CompletedStatus: "Cancelled by Trader",
+			Shareholder:     "Not an insider or substantial shareholder",
+			Submitter:       "paper-user",
+		},
 	})
 	if err != nil {
 		t.Fatalf("fromCodecCompletedOrder() error = %v", err)
@@ -255,9 +259,7 @@ func TestFromCodecCompletedOrderRejectsMalformedTypedField(t *testing.T) {
 	t.Parallel()
 
 	_, err := fromCodecCompletedOrder(codec.CompletedOrder{
-		Quantity:    "1",
-		Filled:      "0",
-		DisplaySize: "not-an-int",
+		OrderDetails: codec.OrderDetails{Quantity: "1", Filled: "0", DisplaySize: "not-an-int"},
 	})
 	if err == nil {
 		t.Fatal("fromCodecCompletedOrder() error = nil, want malformed display size rejection")
@@ -476,15 +478,17 @@ func TestFromCodecOpenOrderAcceptsSentinelCommissionFields(t *testing.T) {
 	const sentinel = "1.7976931348623157E308"
 
 	order, state, err := decodeCodecOpenOrder(codec.OpenOrder{
-		OrderID:              1,
-		Account:              "DU12345",
-		Contract:             codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
-		Action:               "BUY",
-		OrderType:            "LMT",
+		OrderID: 1,
+		OrderDetails: codec.OrderDetails{
+			Account:   "DU12345",
+			Contract:  codec.Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+			Action:    "BUY",
+			OrderType: "LMT",
+			Quantity:  "1",
+			LmtPrice:  "150.00",
+			AuxPrice:  "0",
+		},
 		Status:               "PreSubmitted",
-		Quantity:             "1",
-		LmtPrice:             "150.00",
-		AuxPrice:             "0",
 		InitMarginBefore:     sentinel,
 		MaintMarginBefore:    sentinel,
 		EquityWithLoanBefore: sentinel,

@@ -50,6 +50,12 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 	if err := validateOrderScale(order.Scale); err != nil {
 		return err
 	}
+	if err := validateOrderAuction(order.Auction); err != nil {
+		return err
+	}
+	if err := validateOrderShortSale(order); err != nil {
+		return err
+	}
 	if err := validateOrderHedge(order); err != nil {
 		return err
 	}
@@ -59,7 +65,10 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 	if err := validateOrderConditions(order.Conditions); err != nil {
 		return err
 	}
-	return validateOrderAdjustment(order.Adjustment)
+	if err := validateOrderAdjustment(order.Adjustment); err != nil {
+		return err
+	}
+	return validateOrderPeggedBenchmark(order)
 }
 
 const maxWireOrderID = int64(math.MaxInt32)
@@ -206,10 +215,10 @@ func validateOrderQuantity(order Order) error {
 	if order.Quantity.IsZero() && order.CashQty == nil && order.Hedge.Type == "" {
 		return invalidOrderField("Order.Quantity", order.Quantity, "Quantity or CashQty must be positive; only hedge children may omit both")
 	}
-	if order.MinQty != nil && order.MinQty.IsNegative() {
+	if order.MinQty != nil && *order.MinQty < 0 {
 		return invalidOrderField("Order.MinQty", order.MinQty, "must be >= 0")
 	}
-	if !order.Quantity.IsZero() && order.MinQty != nil && order.MinQty.GreaterThan(order.Quantity) {
+	if !order.Quantity.IsZero() && order.MinQty != nil && decimal.NewFromInt(int64(*order.MinQty)).GreaterThan(order.Quantity) {
 		return invalidOrderField("Order.MinQty", order.MinQty, "must not exceed Quantity")
 	}
 	return nil
@@ -217,7 +226,6 @@ func validateOrderQuantity(order Order) error {
 
 func validateOrderPrices(order Order) error {
 	// Outright prices may legitimately be negative for some futures and
-	// commodity markets. Only percentage and amount fields are sign-limited.
 	if order.TrailingPercent != nil && order.TrailingPercent.IsNegative() {
 		return invalidOrderField("Order.TrailingPercent", order.TrailingPercent, "must be >= 0")
 	}
@@ -298,13 +306,75 @@ func validateOrderScale(scale OrderScale) error {
 	if scale.PriceIncrement.IsNegative() {
 		return invalidOrderField("Order.Scale.PriceIncrement", scale.PriceIncrement, "must be >= 0")
 	}
+	extensionSet := scale.PriceAdjustValue != nil || scale.PriceAdjustInterval != nil || scale.ProfitOffset != nil ||
+		scale.AutoReset != nil || scale.InitialPosition != nil || scale.InitialFillQty != nil || scale.RandomPercent != nil
+	if extensionSet && !scale.PriceIncrement.IsPositive() {
+		return invalidOrderField("Order.Scale.PriceIncrement", scale.PriceIncrement, "must be positive when scale adjustment fields are set")
+	}
+	for _, value := range []struct {
+		field string
+		value *int
+	}{
+		{"Order.Scale.PriceAdjustInterval", scale.PriceAdjustInterval},
+		{"Order.Scale.InitialPosition", scale.InitialPosition},
+		{"Order.Scale.InitialFillQty", scale.InitialFillQty},
+	} {
+		if value.value != nil && *value.value < 0 {
+			return invalidOrderField(value.field, *value.value, "must be >= 0")
+		}
+	}
+	for _, value := range []struct {
+		field string
+		value *decimal.Decimal
+	}{
+		{"Order.Scale.PriceAdjustValue", scale.PriceAdjustValue},
+		{"Order.Scale.ProfitOffset", scale.ProfitOffset},
+	} {
+		if value.value != nil && value.value.IsNegative() {
+			return invalidOrderField(value.field, value.value, "must be >= 0")
+		}
+	}
+	return nil
+}
+
+func validateOrderShortSale(order Order) error {
+	shortSale := order.ShortSale
+	set := shortSale.Slot != 0 || shortSale.DesignatedLocation != "" || shortSale.ExemptCode != nil
+	if !set {
+		return nil
+	}
+	if order.Action != ActionSellShort && order.Action != ActionSellLong {
+		return invalidOrderField("Order.ShortSale", shortSale, "requires action SSHORT or SLONG")
+	}
+	if shortSale.Slot < 0 || shortSale.Slot > 2 {
+		return invalidOrderField("Order.ShortSale.Slot", shortSale.Slot, "must be 0, 1, or 2")
+	}
+	if shortSale.Slot == 2 && strings.TrimSpace(shortSale.DesignatedLocation) == "" {
+		return invalidOrderField("Order.ShortSale.DesignatedLocation", shortSale.DesignatedLocation, "is required when Slot is 2")
+	}
+	if shortSale.Slot != 2 && shortSale.DesignatedLocation != "" {
+		return invalidOrderField("Order.ShortSale.DesignatedLocation", shortSale.DesignatedLocation, "requires Slot 2")
+	}
+	if shortSale.ExemptCode != nil && *shortSale.ExemptCode < -1 {
+		return invalidOrderField("Order.ShortSale.ExemptCode", *shortSale.ExemptCode, "must be >= -1")
+	}
+	return nil
+}
+
+func validateOrderAuction(auction OrderAuction) error {
+	if auction.Strategy < 0 || auction.Strategy > 3 {
+		return invalidOrderField("Order.Auction.Strategy", auction.Strategy, "must be 0, 1, 2, or 3")
+	}
+	if auction.StockRangeLower != nil && auction.StockRangeUpper != nil && auction.StockRangeLower.GreaterThan(*auction.StockRangeUpper) {
+		return invalidOrderField("Order.Auction.StockRangeLower", auction.StockRangeLower, "must not exceed StockRangeUpper")
+	}
 	return nil
 }
 
 func validateOrderHedge(order Order) error {
 	hedge := order.Hedge
 	if hedge.Type == "" {
-		if hedge.Param != "" || hedge.DisableAutomaticPrice != nil {
+		if hedge.Param != "" || hedge.DisableAutomaticPrice != nil || hedge.MaxSize != nil {
 			return invalidOrderField("Order.Hedge.Type", hedge.Type, "is required when other hedge fields are set")
 		}
 		return nil
@@ -316,6 +386,9 @@ func validateOrderHedge(order Order) error {
 	}
 	if order.ParentID <= 0 {
 		return invalidOrderField("Order.ParentID", order.ParentID, "must identify the parent of a hedge order")
+	}
+	if hedge.MaxSize != nil && *hedge.MaxSize <= 0 {
+		return invalidOrderField("Order.Hedge.MaxSize", *hedge.MaxSize, "must be positive")
 	}
 	return nil
 }
@@ -400,6 +473,45 @@ func validateOrderAdjustment(adjustment OrderAdjustment) error {
 	return nil
 }
 
+func validateOrderPeggedBenchmark(order Order) error {
+	pegged := order.PeggedBenchmark
+	if order.OrderType != OrderTypePeggedBenchmark {
+		if pegged != nil {
+			return invalidOrderField("Order.PeggedBenchmark", pegged, "requires OrderType PEG BENCH")
+		}
+		return nil
+	}
+	if pegged == nil {
+		return invalidOrderField("Order.PeggedBenchmark", pegged, "is required for OrderType PEG BENCH")
+	}
+	if pegged.ReferenceContractID <= 0 {
+		return invalidOrderField("Order.PeggedBenchmark.ReferenceContractID", pegged.ReferenceContractID, "must be positive")
+	}
+	if pegged.ChangeAmount.IsNegative() {
+		return invalidOrderField("Order.PeggedBenchmark.ChangeAmount", pegged.ChangeAmount, "must be >= 0")
+	}
+	if pegged.ReferenceChangeAmount != nil && pegged.ReferenceChangeAmount.IsNegative() {
+		return invalidOrderField("Order.PeggedBenchmark.ReferenceChangeAmount", pegged.ReferenceChangeAmount, "must be >= 0")
+	}
+	if strings.TrimSpace(pegged.ReferenceExchangeID) == "" {
+		return invalidOrderField("Order.PeggedBenchmark.ReferenceExchangeID", pegged.ReferenceExchangeID, "is required")
+	}
+	for _, value := range []struct {
+		field string
+		value *decimal.Decimal
+	}{
+		{"Order.Auction.StartingPrice", order.Auction.StartingPrice},
+		{"Order.Auction.StockRefPrice", order.Auction.StockRefPrice},
+		{"Order.Auction.StockRangeLower", order.Auction.StockRangeLower},
+		{"Order.Auction.StockRangeUpper", order.Auction.StockRangeUpper},
+	} {
+		if value.value == nil {
+			return invalidOrderField(value.field, value.value, "is required for OrderType PEG BENCH")
+		}
+	}
+	return nil
+}
+
 func validOrderTriggerMethod(method int) bool {
 	switch method {
 	case 0, 1, 2, 3, 4, 7, 8:
@@ -410,10 +522,16 @@ func validOrderTriggerMethod(method int) bool {
 }
 
 func validateTagValues(field string, values []TagValue) error {
+	seen := make(map[string]struct{}, len(values))
 	for i, value := range values {
-		if strings.TrimSpace(value.Tag) == "" {
+		tag := strings.TrimSpace(value.Tag)
+		if tag == "" {
 			return invalidOrderField(fmt.Sprintf("%s[%d].Tag", field, i), value.Tag, "is required")
 		}
+		if _, ok := seen[tag]; ok {
+			return invalidOrderField(fmt.Sprintf("%s[%d].Tag", field, i), value.Tag, "must be unique")
+		}
+		seen[tag] = struct{}{}
 	}
 	return nil
 }

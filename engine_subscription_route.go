@@ -36,6 +36,7 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 		e.retireSubscriptionTransport(err)
 	}
 	sub = newEngineSubscription[T](cfg, e, actorCancel)
+	sub.requestID = protocolIDFromInt[RequestID](reqID)
 	ownedRoute = &route{
 		opKind:       opKind,
 		subscription: true,

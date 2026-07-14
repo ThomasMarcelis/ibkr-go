@@ -436,7 +436,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 							resp <- result{err: err}
 							return
 						}
-						ticks[i].TickAttrib = HistoricalBidAskAttributes(t.TickAttrib)
+						ticks[i].Attributes = TickBidAskAttributes(t.TickAttrib)
 						ticks[i].Time = parsedTime
 						ticks[i].BidPrice, err = parseRequiredDecimal(t.BidPrice, "historical bid price")
 						if err != nil {
@@ -477,7 +477,7 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 							resp <- result{err: err}
 							return
 						}
-						ticks[i].TickAttrib = HistoricalLastAttributes(t.TickAttrib)
+						ticks[i].Attributes = TickLastAttributes(t.TickAttrib)
 						ticks[i].Time = parsedTime
 						ticks[i].Price, err = parseRequiredDecimal(t.Price, "historical trade tick price")
 						if err != nil {

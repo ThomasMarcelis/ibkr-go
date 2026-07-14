@@ -150,17 +150,17 @@ func TestAPIOrderRestCancelReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, handle)
-	if open.OrderID != 337 || open.PermID != 9000000337 {
-		t.Fatalf("open order id/perm = %d/%d, want 337/9000000337", open.OrderID, open.PermID)
+	if (*open.Order.OrderID) != 337 || (*open.Order.PermID) != 9000000337 {
+		t.Fatalf("open order id/perm = %d/%d, want 337/9000000337", (*open.Order.OrderID), (*open.Order.PermID))
 	}
-	if open.OrderType != ibkr.OrderTypeLimit {
-		t.Fatalf("open order type = %s, want LMT", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeLimit {
+		t.Fatalf("open order type = %s, want LMT", open.Order.OrderType)
 	}
-	if !open.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
-		t.Fatalf("open lmt price = %s, want 14.61", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
+		t.Fatalf("open lmt price = %s, want 14.61", open.Order.Prices.LmtPrice)
 	}
-	if open.OrderRef != "ibkrgo-redacted-20260610T195746Z-001" {
-		t.Fatalf("open order ref = %q", open.OrderRef)
+	if open.Order.OrderRef != "ibkrgo-redacted-20260610T195746Z-001" {
+		t.Fatalf("open order ref = %q", open.Order.OrderRef)
 	}
 
 	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
@@ -224,18 +224,18 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, stop)
-	if open.OrderType != ibkr.OrderTypeStop {
-		t.Fatalf("stop open order type = %s, want STP", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeStop {
+		t.Fatalf("stop open order type = %s, want STP", open.Order.OrderType)
 	}
-	if !open.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
-		t.Fatalf("stop aux price = %s, want 2921.2", open.AuxPrice)
+	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
+		t.Fatalf("stop aux price = %s, want 2921.2", open.Order.Prices.AuxPrice)
 	}
 	// The live Gateway echoed a computed limit price next to the stop.
-	if !open.LmtPrice.Equal(decimal.RequireFromString("2921.23")) {
-		t.Fatalf("stop echoed lmt price = %s, want 2921.23", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2921.23")) {
+		t.Fatalf("stop echoed lmt price = %s, want 2921.23", open.Order.Prices.LmtPrice)
 	}
-	if open.PermID != 9000000338 {
-		t.Fatalf("stop perm id = %d, want 9000000338", open.PermID)
+	if (*open.Order.PermID) != 9000000338 {
+		t.Fatalf("stop perm id = %d, want 9000000338", (*open.Order.PermID))
 	}
 
 	preSubmitted := waitOrderStatusUpdate(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
@@ -270,17 +270,17 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	}
 
 	open = waitForOpenOrder(t, ctx, stopLimit)
-	if open.OrderType != ibkr.OrderTypeStopLimit {
-		t.Fatalf("stop-limit open order type = %s, want STP LMT", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeStopLimit {
+		t.Fatalf("stop-limit open order type = %s, want STP LMT", open.Order.OrderType)
 	}
-	if !open.LmtPrice.Equal(decimal.RequireFromString("2922.2")) {
-		t.Fatalf("stop-limit lmt price = %s, want 2922.2", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2922.2")) {
+		t.Fatalf("stop-limit lmt price = %s, want 2922.2", open.Order.Prices.LmtPrice)
 	}
-	if !open.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
-		t.Fatalf("stop-limit aux price = %s, want 2921.2", open.AuxPrice)
+	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
+		t.Fatalf("stop-limit aux price = %s, want 2921.2", open.Order.Prices.AuxPrice)
 	}
-	if open.PermID != 9000000339 {
-		t.Fatalf("stop-limit perm id = %d, want 9000000339", open.PermID)
+	if (*open.Order.PermID) != 9000000339 {
+		t.Fatalf("stop-limit perm id = %d, want 9000000339", (*open.Order.PermID))
 	}
 
 	preSubmitted = waitOrderStatusUpdate(t, ctx, stopLimit, ibkr.OrderStatusPreSubmitted)
@@ -348,19 +348,19 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, trail)
-	if open.OrderType != ibkr.OrderTypeTrailingStop {
-		t.Fatalf("trail open order type = %s, want TRAIL", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeTrailingStop {
+		t.Fatalf("trail open order type = %s, want TRAIL", open.Order.OrderType)
 	}
 	// First echo carries the Gateway-computed trigger limit 2921.03 next to
 	// the trailing amount 1.
-	if !open.LmtPrice.Equal(decimal.RequireFromString("2921.03")) {
-		t.Fatalf("trail echoed lmt price = %s, want 2921.03", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2921.03")) {
+		t.Fatalf("trail echoed lmt price = %s, want 2921.03", open.Order.Prices.LmtPrice)
 	}
-	if !open.AuxPrice.Equal(decimal.RequireFromString("1")) {
-		t.Fatalf("trail aux price = %s, want 1", open.AuxPrice)
+	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("1")) {
+		t.Fatalf("trail aux price = %s, want 1", open.Order.Prices.AuxPrice)
 	}
-	if open.PermID != 9000000340 {
-		t.Fatalf("trail perm id = %d, want 9000000340", open.PermID)
+	if (*open.Order.PermID) != 9000000340 {
+		t.Fatalf("trail perm id = %d, want 9000000340", (*open.Order.PermID))
 	}
 
 	// Drain to Filled, tracking the partial fill (80/20 @ 292.14) and
@@ -446,16 +446,16 @@ func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	}
 
 	open = waitForOpenOrder(t, ctx, trailLimit)
-	if open.OrderType != ibkr.OrderTypeTrailingLimit {
-		t.Fatalf("trail-limit open order type = %s, want TRAIL LIMIT", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeTrailingLimit {
+		t.Fatalf("trail-limit open order type = %s, want TRAIL LIMIT", open.Order.OrderType)
 	}
 	// The Gateway computed limit 2920.95 from trail stop 2921 minus the
 	// 0.05 offset.
-	if !open.LmtPrice.Equal(decimal.RequireFromString("2920.95")) {
-		t.Fatalf("trail-limit echoed lmt price = %s, want 2920.95", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2920.95")) {
+		t.Fatalf("trail-limit echoed lmt price = %s, want 2920.95", open.Order.Prices.LmtPrice)
 	}
-	if open.PermID != 9000000341 {
-		t.Fatalf("trail-limit perm id = %d, want 9000000341", open.PermID)
+	if (*open.Order.PermID) != 9000000341 {
+		t.Fatalf("trail-limit perm id = %d, want 9000000341", (*open.Order.PermID))
 	}
 
 	preSubmitted := waitOrderStatusUpdate(t, ctx, trailLimit, ibkr.OrderStatusPreSubmitted)
@@ -541,18 +541,18 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, rel)
-	if open.OrderType != ibkr.OrderTypeRelative {
-		t.Fatalf("open order type = %s, want REL", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeRelative {
+		t.Fatalf("open order type = %s, want REL", open.Order.OrderType)
 	}
-	if !open.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
-		t.Fatalf("lmt price = %s, want 14.61", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
+		t.Fatalf("lmt price = %s, want 14.61", open.Order.Prices.LmtPrice)
 	}
 	// The client sent no offset; the live Gateway assigned 0.01.
-	if !open.AuxPrice.Equal(decimal.RequireFromString("0.01")) {
-		t.Fatalf("gateway-assigned offset = %s, want 0.01", open.AuxPrice)
+	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("0.01")) {
+		t.Fatalf("gateway-assigned offset = %s, want 0.01", open.Order.Prices.AuxPrice)
 	}
-	if open.PermID != 9000000342 {
-		t.Fatalf("perm id = %d, want 9000000342", open.PermID)
+	if (*open.Order.PermID) != 9000000342 {
+		t.Fatalf("perm id = %d, want 9000000342", (*open.Order.PermID))
 	}
 
 	waitForOrderStatus(t, ctx, rel, ibkr.OrderStatusPreSubmitted)
@@ -637,11 +637,11 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 	}
 
 	open := waitForOpenOrder(t, ctx, aggressive)
-	if open.PermID != 9000000348 {
-		t.Fatalf("aggressive perm id = %d, want 9000000348", open.PermID)
+	if (*open.Order.PermID) != 9000000348 {
+		t.Fatalf("aggressive perm id = %d, want 9000000348", (*open.Order.PermID))
 	}
-	if !open.LmtPrice.Equal(decimal.RequireFromString("2922.3")) {
-		t.Fatalf("aggressive lmt price = %s, want 2922.3", open.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2922.3")) {
+		t.Fatalf("aggressive lmt price = %s, want 2922.3", open.Order.Prices.LmtPrice)
 	}
 	waitForOrderStatus(t, ctx, aggressive, ibkr.OrderStatusPreSubmitted)
 	waitForOrderStatus(t, ctx, aggressive, ibkr.OrderStatusPendingCancel)

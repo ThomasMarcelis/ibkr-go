@@ -1003,23 +1003,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 }
 
 func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
-	contract, err := fromCodecContract(m.Contract)
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	comboLegPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, "open order combo leg price")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	quantity, err := parseOptionalDecimal(m.Quantity, "open order quantity")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	lmtPrice, err := parseOptionalDecimalPointer(m.LmtPrice, "open order limit price")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	auxPrice, err := parseOptionalDecimalPointer(m.AuxPrice, "open order aux price")
+	details, err := fromCodecCompletedOrder(codec.CompletedOrder{OrderDetails: m.OrderDetails})
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
@@ -1125,30 +1109,6 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 			return OpenOrder{}, OrderState{}, err
 		}
 	}
-	origin, err := parseOptionalInt(m.Origin, "open order origin")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	clientIDValue, err := parseOptionalInt32(m.ClientID, "open order client id")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	permID, err := parseOptionalInt64(m.PermID, "open order perm id")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	parentID, err := parseOptionalInt64(m.ParentID, "open order parent id")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	outsideRTH, err := parseOptionalBoolString(m.OutsideRTH, "open order outside rth")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
-	hidden, err := parseOptionalBoolString(m.Hidden, "open order hidden")
-	if err != nil {
-		return OpenOrder{}, OrderState{}, err
-	}
 	state := OrderState{
 		Status:                         OrderStatus(m.Status),
 		InitMarginBefore:               initMarginBefore,
@@ -1179,41 +1139,7 @@ func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
 		Allocations:                    allocations,
 		WarningText:                    m.WarningText,
 	}
-	order := OpenOrder{
-		OrderID:       m.OrderID,
-		Account:       m.Account,
-		Contract:      contract,
-		Action:        OrderAction(m.Action),
-		OrderType:     OrderType(m.OrderType),
-		Status:        OrderStatus(m.Status),
-		State:         state,
-		WarningText:   m.WarningText,
-		Quantity:      quantity,
-		LmtPrice:      lmtPrice,
-		AuxPrice:      auxPrice,
-		TIF:           TimeInForce(m.TIF),
-		OcaGroup:      m.OcaGroup,
-		OpenClose:     m.OpenClose,
-		Origin:        origin,
-		OrderRef:      m.OrderRef,
-		ClientID:      ClientID(clientIDValue),
-		PermID:        permID,
-		OutsideRTH:    outsideRTH,
-		Hidden:        hidden,
-		GoodAfterTime: m.GoodAfterTime,
-		ParentID:      parentID,
-		Combo: OrderCombo{
-			LegPrices:    comboLegPrices,
-			SmartRouting: tagValuesFromCodec(m.SmartComboRouting),
-		},
-		ComboDescription:      m.ComboLegsDescription,
-		AlgoStrategy:          m.AlgoStrategy,
-		AlgoParams:            tagValuesFromCodec(m.AlgoParams),
-		Conditions:            orderConditionsFromCodec(m.Conditions),
-		ConditionsIgnoreRTH:   m.ConditionsIgnoreRTH == "1",
-		ConditionsCancelOrder: m.ConditionsCancelOrder == "1",
-		Partial:               m.Partial,
-	}
+	order := OpenOrder{Contract: details.Contract, Order: details.Order, State: state}
 	return order, state, nil
 }
 

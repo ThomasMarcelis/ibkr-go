@@ -13,6 +13,30 @@ import (
 
 func versionName(sv int) string { return "sv" + strconv.Itoa(sv) }
 
+// TestLiveReleaseVersionSmoke independently checks the release's classic,
+// order-protobuf, and current protocol ceilings through a read-only round
+// trip. Run it once per Gateway role by selecting IBKR_LIVE_ADDR. Subtests are
+// independent because current Gateway builds may reject an older advertised
+// client maximum even though its deterministic replay remains supported.
+func TestLiveReleaseVersionSmoke(t *testing.T) {
+	for _, sv := range []int{200, 203, 225} {
+		t.Run(versionName(sv), func(t *testing.T) {
+			restore := ibkr.SetAdvertisedServerVersionMaxForTest(sv)
+			defer restore()
+
+			client, ctx, cancel := ibkrlive.DialContext(t, 20*time.Second)
+			defer cancel()
+			defer client.Close()
+			if got := client.Session().ServerVersion; got != sv {
+				t.Fatalf("negotiated ServerVersion = %d, want %d", got, sv)
+			}
+			if _, err := client.CurrentTime(ctx); err != nil {
+				t.Fatalf("CurrentTime() at sv%d: %v", sv, err)
+			}
+		})
+	}
+}
+
 // TestLiveServer202ZeroStrikeBoundary freezes the only named API 10.48.01
 // boundary at server_version 202. No message family migrates at this version:
 // a conId-only contract request stays raw-ID classic, while executions stay on
@@ -102,7 +126,7 @@ func TestLiveServer203OrderProtobufBoundary(t *testing.T) {
 		case event := <-handle.Events():
 			if event.OpenOrder != nil {
 				sawOpen = true
-				if event.OpenOrder.Contract.Symbol != "AAPL" || event.OpenOrder.OrderType != ibkr.OrderTypeLimit {
+				if event.OpenOrder.Contract.Symbol != "AAPL" || event.OpenOrder.Order.OrderType != ibkr.OrderTypeLimit {
 					t.Fatalf("sv203 open order = %+v", event.OpenOrder)
 				}
 			}
@@ -116,10 +140,24 @@ func TestLiveServer203OrderProtobufBoundary(t *testing.T) {
 	if err := handle.Cancel(ctx); err != nil {
 		t.Fatalf("Cancel at sv203: %v", err)
 	}
-	select {
-	case <-handle.Done():
-	case <-ctx.Done():
-		t.Fatalf("waiting for sv203 targeted cancellation: %v", ctx.Err())
+cancelLoop:
+	for {
+		select {
+		case event, ok := <-handle.Events():
+			if !ok {
+				t.Fatalf("sv203 handle closed before targeted cancellation: %v", handle.Wait())
+			}
+			if event.Status == nil || (event.Status.Status != ibkr.OrderStatusCancelled && event.Status.Status != ibkr.OrderStatusAPICancelled) {
+				continue
+			}
+			handle.Close()
+			if err := handle.Wait(); err != nil {
+				t.Fatalf("detach sv203 handle: %v", err)
+			}
+			break cancelLoop
+		case <-ctx.Done():
+			t.Fatalf("waiting for sv203 targeted cancellation: %v", ctx.Err())
+		}
 	}
 	if err := client.Orders().CancelAll(ctx); err != nil {
 		t.Fatalf("global cancel at sv203: %v", err)

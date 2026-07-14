@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,6 +26,53 @@ var eurusdContract = ibkr.Contract{
 	SecType:  ibkr.SecTypeForex,
 	Exchange: "IDEALPRO",
 	Currency: "USD",
+}
+
+func TestLiveManualTWSOrderBound(t *testing.T) {
+	if os.Getenv("IBKR_LIVE_MANUAL_ORDER_BOUND") != "1" {
+		t.Skip("set IBKR_LIVE_MANUAL_ORDER_BOUND=1 only while a manual paper-TWS order is ready to be created")
+	}
+
+	client, ctx, cancel := ibkrlive.DialTradingContext(t, 3*time.Minute, ibkr.WithClientID(0))
+	defer cancel()
+	defer client.Close()
+
+	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAuto, ibkr.WithResumePolicy(ibkr.ResumeNever))
+	if err != nil {
+		t.Fatalf("SubscribeOpen(auto): %v", err)
+	}
+	defer func() {
+		sub.Close()
+		if err := sub.Wait(); err != nil {
+			t.Errorf("auto-open subscription cleanup: %v", err)
+		}
+		probeCtx, probeCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer probeCancel()
+		if _, err := client.CurrentTime(probeCtx); err != nil {
+			t.Errorf("CurrentTime after disabling auto-open binding: %v", err)
+		}
+	}()
+
+	t.Log("AUTO-OPEN ARMED: create one safely non-marketable manual order in paper TWS now; cancel it in TWS after capture")
+	for {
+		select {
+		case event, ok := <-sub.Events():
+			if !ok {
+				t.Fatalf("auto-open subscription closed before orderBound: %v", sub.Err())
+			}
+			if event.Kind != ibkr.StreamData || event.Value.Binding == nil {
+				continue
+			}
+			binding := *event.Value.Binding
+			if binding.ClientID != 0 || binding.OrderID <= 0 || binding.PermID <= 0 {
+				t.Fatalf("orderBound = %+v, want positive IDs bound to client 0", binding)
+			}
+			t.Logf("ORDER_BOUND_CAPTURED permID=%d clientID=%d orderID=%d serverVersion=%d", binding.PermID, binding.ClientID, binding.OrderID, client.Session().ServerVersion)
+			return
+		case <-ctx.Done():
+			t.Fatalf("waiting for manual paper-TWS orderBound: %v", context.Cause(ctx))
+		}
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -119,12 +167,12 @@ func liveObserveOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandl
 		result.events = append(result.events, evt)
 		if evt.OpenOrder != nil {
 			t.Logf("%s open_order: orderID=%d type=%s status=%s lmt=%s qty=%s parent=%d oca=%q",
-				label, evt.OpenOrder.OrderID, evt.OpenOrder.OrderType, evt.OpenOrder.Status,
-				evt.OpenOrder.LmtPrice, evt.OpenOrder.Quantity, evt.OpenOrder.ParentID, evt.OpenOrder.OcaGroup)
-			if evt.OpenOrder.LmtPrice != nil {
-				result.lastLmtPrice = *evt.OpenOrder.LmtPrice
+				label, (*evt.OpenOrder.Order.OrderID), evt.OpenOrder.Order.OrderType, evt.OpenOrder.State.Status,
+				evt.OpenOrder.Order.Prices.LmtPrice, evt.OpenOrder.Order.Quantity, (*evt.OpenOrder.Order.ParentID), evt.OpenOrder.Order.OCA.Group)
+			if evt.OpenOrder.Order.Prices.LmtPrice != nil {
+				result.lastLmtPrice = *evt.OpenOrder.Order.Prices.LmtPrice
 			}
-			result.lastQuantity = evt.OpenOrder.Quantity
+			result.lastQuantity = evt.OpenOrder.Order.Quantity
 		}
 		if evt.Status != nil {
 			t.Logf("%s status: %s filled=%s remaining=%s avg=%s",
@@ -240,7 +288,7 @@ func liveCancelAllAndVerifyGone(t *testing.T, client *ibkr.Client, orderID int64
 		}
 		found := false
 		for _, order := range orders {
-			if order.OrderID == orderID {
+			if *order.Order.OrderID == orderID {
 				found = true
 				break
 			}
@@ -1184,8 +1232,8 @@ func TestLiveOrderModifyQuantity(t *testing.T) {
 	for !sawModified {
 		select {
 		case evt := <-handle.Events():
-			if evt.OpenOrder != nil && evt.OpenOrder.Quantity.Equal(decimal.NewFromInt(3)) {
-				t.Logf("confirmed modified qty: %s", evt.OpenOrder.Quantity)
+			if evt.OpenOrder != nil && evt.OpenOrder.Order.Quantity.Equal(decimal.NewFromInt(3)) {
+				t.Logf("confirmed modified qty: %s", evt.OpenOrder.Order.Quantity)
 				sawModified = true
 			}
 		case <-handle.Done():
@@ -1264,8 +1312,8 @@ func TestLiveOrderRapidModifications(t *testing.T) {
 				goto done
 			}
 			if evt.OpenOrder != nil {
-				if evt.OpenOrder.LmtPrice != nil {
-					lastSeen = *evt.OpenOrder.LmtPrice
+				if evt.OpenOrder.Order.Prices.LmtPrice != nil {
+					lastSeen = *evt.OpenOrder.Order.Prices.LmtPrice
 				}
 				t.Logf("rapid modify OpenOrder lmt=%s", lastSeen)
 			}
@@ -1849,8 +1897,8 @@ func TestLiveOrderAdaptiveAlgo(t *testing.T) {
 		select {
 		case evt := <-handle.Events():
 			if evt.OpenOrder != nil {
-				t.Logf("Adaptive open_order: algo=%s params=%v", evt.OpenOrder.AlgoStrategy, evt.OpenOrder.AlgoParams)
-				if evt.OpenOrder.AlgoStrategy == "Adaptive" {
+				t.Logf("Adaptive open_order: algo=%s params=%v", evt.OpenOrder.Order.Algorithm.Strategy, evt.OpenOrder.Order.Algorithm.Params)
+				if evt.OpenOrder.Order.Algorithm.Strategy == "Adaptive" {
 					sawAlgo = true
 				}
 			}

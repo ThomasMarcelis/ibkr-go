@@ -6,6 +6,8 @@ import (
 	"encoding/binary"
 	"math"
 	"testing"
+
+	"google.golang.org/protobuf/encoding/protowire"
 )
 
 func TestEncodeServer203OrderRequestVectors(t *testing.T) {
@@ -120,6 +122,54 @@ func TestEncodeAdditionalOrderParametersFromLiveSDKCaptures(t *testing.T) {
 	}
 	if want := decodeHex(t, "ca0600800907"); !bytes.Equal(hedge223, want) {
 		t.Fatalf("sv223 hedge maximum size = %x, want %x; capture events sha256 %s", hedge223, want, "205f25d37f53daf6dcc0a7b2f93a58215dcf7e1091e5a3fbafb459f018764061")
+	}
+}
+
+func TestEncodeScaleAndPeggedBenchmarkOrderSourceLaws(t *testing.T) {
+	t.Parallel()
+
+	// These are the official API 10.48.01 Testbed sample values. The assertion
+	// freezes Order.proto field numbers and presence, not live acceptance.
+	got, err := encodeOrderProto(PlaceOrderRequest{
+		ScalePriceAdjustValue: "189", ScalePriceAdjustInterval: "3600", ScaleProfitOffset: "2",
+		ScaleAutoReset: "1", ScaleInitPosition: "10", ScaleInitFillQty: "40", ScaleRandomPercent: "1",
+		ScaleTable: "scale-table", StartingPrice: "33", StockRefPrice: "750", StockRangeLower: "650", StockRangeUpper: "800",
+		ReferenceContractID: "208813720", PeggedChangeAmount: "0.1",
+		PeggedChangeAmountDecrease: "1", ReferenceChangeAmount: "1", ReferenceExchangeID: "ARCA",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := appendProtoTestDouble(nil, 51, 189)
+	want = protowire.AppendTag(want, 52, protowire.VarintType)
+	want = protowire.AppendVarint(want, 3600)
+	want = appendProtoTestDouble(want, 53, 2)
+	for _, field := range []struct {
+		number protowire.Number
+		value  uint64
+	}{{54, 1}, {55, 10}, {56, 40}, {57, 1}} {
+		want = protowire.AppendTag(want, field.number, protowire.VarintType)
+		want = protowire.AppendVarint(want, field.value)
+	}
+	want = protowire.AppendTag(want, 58, protowire.BytesType)
+	want = protowire.AppendString(want, "scale-table")
+	want = appendProtoTestDouble(want, 78, 33)
+	want = appendProtoTestDouble(want, 79, 750)
+	want = appendProtoTestDouble(want, 81, 650)
+	want = appendProtoTestDouble(want, 82, 800)
+	want = protowire.AppendTag(want, 88, protowire.VarintType)
+	want = protowire.AppendVarint(want, 208813720)
+	want = appendProtoTestDouble(want, 89, 0.1)
+	want = protowire.AppendTag(want, 90, protowire.VarintType)
+	want = protowire.AppendVarint(want, 1)
+	want = appendProtoTestDouble(want, 91, 1)
+	want = protowire.AppendTag(want, 92, protowire.BytesType)
+	want = protowire.AppendString(want, "ARCA")
+	want = protowire.AppendTag(want, 105, protowire.BytesType)
+	want = protowire.AppendBytes(want, nil)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("advanced order protobuf = %x, want API 10.48.01 Order.proto field vector %x", got, want)
 	}
 }
 

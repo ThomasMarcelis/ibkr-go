@@ -621,7 +621,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 			return
 		}
-		if order.Status != OrderStatusInactive && order.Status != OrderStatusAPICancelled {
+		if order.State.Status != OrderStatusInactive && order.State.Status != OrderStatusAPICancelled {
 			orderRoute.working = true
 		}
 		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {

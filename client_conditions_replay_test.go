@@ -142,17 +142,17 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		// The exact live open_order frame fully decodes; these assertions pin
 		// the base fields needed by every condition family.
 		open := waitForOpenOrder(t, ctx, handle)
-		if open.OrderID != tc.orderID {
-			t.Fatalf("%s open order id = %d, want %d", tc.name, open.OrderID, tc.orderID)
+		if (*open.Order.OrderID) != tc.orderID {
+			t.Fatalf("%s open order id = %d, want %d", tc.name, (*open.Order.OrderID), tc.orderID)
 		}
-		if open.PermID != tc.permID {
-			t.Fatalf("%s perm id = %d, want %d", tc.name, open.PermID, tc.permID)
+		if (*open.Order.PermID) != tc.permID {
+			t.Fatalf("%s perm id = %d, want %d", tc.name, (*open.Order.PermID), tc.permID)
 		}
-		if open.OrderRef != "ibkrgo-redacted-20260610T200936Z-001" {
-			t.Fatalf("%s order ref = %q", tc.name, open.OrderRef)
+		if open.Order.OrderRef != "ibkrgo-redacted-20260610T200936Z-001" {
+			t.Fatalf("%s order ref = %q", tc.name, open.Order.OrderRef)
 		}
-		if !open.LmtPrice.Equal(decimal.RequireFromString("14.59")) {
-			t.Fatalf("%s lmt price = %s, want 14.59", tc.name, open.LmtPrice)
+		if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("14.59")) {
+			t.Fatalf("%s lmt price = %s, want 14.59", tc.name, open.Order.Prices.LmtPrice)
 		}
 
 		// Every condition family was accepted live and drew the code-399

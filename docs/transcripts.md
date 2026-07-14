@@ -212,3 +212,16 @@ version. Use `splitraw <server|client> <sizes> <base64-frame>` when a transport
 test must deliver or read an exact captured frame in partial chunks; chunking
 changes transport behavior without reconstructing the protocol message through
 the codec under test.
+
+## Provenance gate
+
+Every transcript starts with a provenance header. The temporary exception
+inventory is [`testdata/transcripts/provenance.json`](../testdata/transcripts/provenance.json):
+it names legacy headerless fixtures and any derived fixture that depends on
+one. `TestTranscriptProvenanceInventory` rejects drift in either direction.
+
+Release candidates may retain a named exception while replacement evidence is
+being captured. A stable release runs the same test with
+`IBKR_STABLE_RELEASE=1`, which requires both exception lists to be empty. Do
+not add a guessed source or promote an exception by editing the manifest; land
+the sanitized live-derived replacement and its capture hash first.

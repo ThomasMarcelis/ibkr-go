@@ -2,10 +2,10 @@ package ibkr
 
 import "testing"
 
-func TestHistoricalBidAskAttributes(t *testing.T) {
+func TestTickBidAskAttributes(t *testing.T) {
 	t.Parallel()
 
-	attributes := HistoricalBidAskAttributes(1 | 2 | 8)
+	attributes := TickBidAskAttributes(1 | 2 | 8)
 	if !attributes.BidPastLow() || !attributes.AskPastHigh() {
 		t.Fatalf("attributes %d did not expose both known bits", attributes)
 	}
@@ -14,10 +14,10 @@ func TestHistoricalBidAskAttributes(t *testing.T) {
 	}
 }
 
-func TestHistoricalLastAttributes(t *testing.T) {
+func TestTickLastAttributes(t *testing.T) {
 	t.Parallel()
 
-	attributes := HistoricalLastAttributes(1 | 2 | 8)
+	attributes := TickLastAttributes(1 | 2 | 8)
 	if !attributes.PastLimit() || !attributes.Unreported() {
 		t.Fatalf("attributes %d did not expose both known bits", attributes)
 	}

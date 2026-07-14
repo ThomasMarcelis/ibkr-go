@@ -688,8 +688,8 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 
 // TestMultipleOneShotsInFlight verifies that concurrent one-shot requests
 // are correctly demultiplexed even when the server responds out of order.
-// Both requests are issued from goroutines. The server responds to MSFT
-// ($req2) before AAPL ($req1), exercising req-id-based routing.
+// Both requests are issued from goroutines. The replay deliberately delivers
+// the captured EURUSD response before AAPL, exercising req-id-based routing.
 func TestMultipleOneShotsInFlight(t *testing.T) {
 	t.Parallel()
 
@@ -721,12 +721,12 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 	}()
 	go func() {
 		defer wg.Done()
-		// Small delay so AAPL request is queued first, matching transcript.
+		// Small delay so AAPL request is queued first, matching the replay.
 		time.Sleep(50 * time.Millisecond)
 		d, err := client.Contracts().Details(ctx, ibkr.Contract{
-			Symbol:   "MSFT",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
+			Symbol:   "EUR",
+			SecType:  ibkr.SecTypeForex,
+			Exchange: "IDEALPRO",
 			Currency: "USD",
 		})
 		results[1] = result{details: d, err: err}
@@ -744,13 +744,13 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 	}
 
 	if results[1].err != nil {
-		t.Fatalf("MSFT ContractDetails() error = %v", results[1].err)
+		t.Fatalf("EURUSD ContractDetails() error = %v", results[1].err)
 	}
 	if len(results[1].details) != 1 {
-		t.Fatalf("MSFT details len = %d, want 1", len(results[1].details))
+		t.Fatalf("EURUSD details len = %d, want 1", len(results[1].details))
 	}
-	if results[1].details[0].Symbol != "MSFT" {
-		t.Fatalf("MSFT symbol = %q, want MSFT", results[1].details[0].Symbol)
+	if details := results[1].details[0]; details.Symbol != "EUR" || details.SecType != ibkr.SecTypeForex {
+		t.Fatalf("EURUSD details = %+v, want EUR CASH", details)
 	}
 }
 

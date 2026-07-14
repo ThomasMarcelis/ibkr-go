@@ -20,61 +20,81 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		LmtPrice:      decimalPointerOrEmpty(req.Order.LmtPrice),
 		AuxPrice:      decimalPointerOrEmpty(req.Order.AuxPrice),
 
-		TIF:                      string(req.Order.TIF),
-		OcaGroup:                 req.Order.OCA.Group,
-		OcaType:                  strconv.Itoa(int(req.Order.OCA.Type)),
-		Account:                  req.Order.Account,
-		Origin:                   "0",
-		OrderRef:                 req.Order.OrderRef,
-		Transmit:                 optBoolToString(req.Order.Transmit, "1"),
-		ParentID:                 strconv.FormatInt(req.Order.ParentID, 10),
-		TriggerMethod:            strconv.Itoa(req.Order.TriggerMethod),
-		OutsideRTH:               boolToString(req.Order.OutsideRTH),
-		DisplaySize:              strconv.Itoa(req.Order.DisplaySize),
-		OrderComboLegPrices:      comboLegPricesToCodec(req.Order.Combo.LegPrices),
-		SmartComboRoutingParams:  tagValuesToCodec(req.Order.Combo.SmartRouting),
-		ExemptCode:               "-1",
-		GoodAfterTime:            req.Order.GoodAfterTime,
-		GoodTillDate:             req.Order.GoodTillDate,
-		AllOrNone:                optBoolToString(req.Order.AllOrNone, ""),
-		MinQty:                   decimalPointerOrEmpty(req.Order.MinQty),
-		PercentOffset:            decimalPointerOrEmpty(req.Order.PercentOffset),
-		TrailStopPrice:           decimalPointerOrEmpty(req.Order.TrailStopPrice),
-		TrailingPercent:          decimalPointerOrEmpty(req.Order.TrailingPercent),
-		ScaleInitLevelSize:       scaleSizeOrEmpty(req.Order.Scale.InitialLevelSize),
-		ScaleSubsLevelSize:       scaleSizeOrEmpty(req.Order.Scale.SubsequentLevelSize),
-		ScalePriceIncrement:      decimalOrEmpty(req.Order.Scale.PriceIncrement),
-		ScaleTable:               req.Order.Scale.Table,
-		ActiveStartTime:          req.Order.Scale.ActiveStartTime,
-		ActiveStopTime:           req.Order.Scale.ActiveStopTime,
-		HedgeType:                string(req.Order.Hedge.Type),
-		HedgeParam:               req.Order.Hedge.Param,
-		HedgeMaxSize:             intPointerOrEmpty(req.Order.Hedge.MaxSize),
-		AlgoStrategy:             req.Order.Algorithm.Strategy,
-		AlgoParams:               tagValuesToCodec(req.Order.Algorithm.Params),
-		WhatIf:                   "",
-		Conditions:               orderConditionsToCodec(req.Order.Conditions.Values),
-		ConditionsIgnoreRTH:      boolToString(req.Order.Conditions.IgnoreRTH),
-		ConditionsCancelOrder:    boolToString(req.Order.Conditions.CancelOrder),
-		AdjustedOrderType:        string(req.Order.Adjustment.OrderType),
-		TriggerPrice:             decimalOrEmpty(req.Order.Adjustment.TriggerPrice),
-		LmtPriceOffset:           decimalPointerOrEmpty(req.Order.LmtPriceOffset),
-		AdjustedStopPrice:        decimalOrEmpty(req.Order.Adjustment.StopPrice),
-		AdjustedStopLimitPrice:   decimalOrEmpty(req.Order.Adjustment.StopLimitPrice),
-		AdjustedTrailingAmount:   decimalOrEmpty(req.Order.Adjustment.TrailingAmount),
-		AdjustableTrailingUnit:   strconv.Itoa(req.Order.Adjustment.TrailingUnit),
-		CashQty:                  decimalPointerOrEmpty(req.Order.CashQty),
-		DontUseAutoPriceForHedge: optBoolToString(req.Order.Hedge.DisableAutomaticPrice, ""),
-		UsePriceMgmtAlgo:         optBoolToString(req.Order.UsePriceMgmtAlgo, ""),
-		AdvancedErrorOverride:    req.Order.AdvancedErrorOverride,
-		ManualOrderTime:          req.Order.ManualOrderTime,
-		Deactivate:               trueOrEmpty(req.Order.Deactivate),
-		PostOnly:                 trueOrEmpty(req.Order.PostOnly),
-		AllowPreOpen:             trueOrEmpty(req.Order.AllowPreOpen),
-		IgnoreOpenAuction:        trueOrEmpty(req.Order.IgnoreOpenAuction),
-		RouteMarketableToBBO:     optBoolToString(req.Order.RouteMarketableToBBO, ""),
-		SeekPriceImprovement:     optBoolToString(req.Order.SeekPriceImprovement, ""),
-		WhatIfType:               intPointerOrEmpty(req.Order.WhatIfType),
+		TIF:                        string(req.Order.TIF),
+		OcaGroup:                   req.Order.OCA.Group,
+		OcaType:                    strconv.Itoa(int(req.Order.OCA.Type)),
+		Account:                    req.Order.Account,
+		Origin:                     "0",
+		OrderRef:                   req.Order.OrderRef,
+		Transmit:                   optBoolToString(req.Order.Transmit, "1"),
+		ParentID:                   strconv.FormatInt(req.Order.ParentID, 10),
+		TriggerMethod:              strconv.Itoa(req.Order.TriggerMethod),
+		OutsideRTH:                 boolToString(req.Order.OutsideRTH),
+		DisplaySize:                strconv.Itoa(req.Order.DisplaySize),
+		OrderComboLegPrices:        comboLegPricesToCodec(req.Order.Combo.LegPrices),
+		SmartComboRoutingParams:    tagValuesToCodec(req.Order.Combo.SmartRouting),
+		ShortSaleSlot:              scaleSizeOrEmpty(req.Order.ShortSale.Slot),
+		DesignatedLocation:         req.Order.ShortSale.DesignatedLocation,
+		ExemptCode:                 intPointerOrDefault(req.Order.ShortSale.ExemptCode, "-1"),
+		GoodAfterTime:              req.Order.GoodAfterTime,
+		GoodTillDate:               req.Order.GoodTillDate,
+		AllOrNone:                  optBoolToString(req.Order.AllOrNone, ""),
+		MinQty:                     intPointerOrEmpty(req.Order.MinQty),
+		AuctionStrategy:            scaleSizeOrEmpty(req.Order.Auction.Strategy),
+		StartingPrice:              decimalPointerOrEmpty(req.Order.Auction.StartingPrice),
+		StockRefPrice:              decimalPointerOrEmpty(req.Order.Auction.StockRefPrice),
+		Delta:                      decimalPointerOrEmpty(req.Order.Auction.Delta),
+		StockRangeLower:            decimalPointerOrEmpty(req.Order.Auction.StockRangeLower),
+		StockRangeUpper:            decimalPointerOrEmpty(req.Order.Auction.StockRangeUpper),
+		PercentOffset:              decimalPointerOrEmpty(req.Order.PercentOffset),
+		TrailStopPrice:             decimalPointerOrEmpty(req.Order.TrailStopPrice),
+		TrailingPercent:            decimalPointerOrEmpty(req.Order.TrailingPercent),
+		ScaleInitLevelSize:         scaleSizeOrEmpty(req.Order.Scale.InitialLevelSize),
+		ScaleSubsLevelSize:         scaleSizeOrEmpty(req.Order.Scale.SubsequentLevelSize),
+		ScalePriceIncrement:        decimalOrEmpty(req.Order.Scale.PriceIncrement),
+		ScalePriceAdjustValue:      decimalPointerOrEmpty(req.Order.Scale.PriceAdjustValue),
+		ScalePriceAdjustInterval:   intPointerOrEmpty(req.Order.Scale.PriceAdjustInterval),
+		ScaleProfitOffset:          decimalPointerOrEmpty(req.Order.Scale.ProfitOffset),
+		ScaleAutoReset:             optBoolToString(req.Order.Scale.AutoReset, ""),
+		ScaleInitPosition:          intPointerOrEmpty(req.Order.Scale.InitialPosition),
+		ScaleInitFillQty:           intPointerOrEmpty(req.Order.Scale.InitialFillQty),
+		ScaleRandomPercent:         optBoolToString(req.Order.Scale.RandomPercent, ""),
+		ScaleTable:                 req.Order.Scale.Table,
+		ActiveStartTime:            req.Order.Scale.ActiveStartTime,
+		ActiveStopTime:             req.Order.Scale.ActiveStopTime,
+		HedgeType:                  string(req.Order.Hedge.Type),
+		HedgeParam:                 req.Order.Hedge.Param,
+		HedgeMaxSize:               intPointerOrEmpty(req.Order.Hedge.MaxSize),
+		AlgoStrategy:               req.Order.Algorithm.Strategy,
+		AlgoParams:                 tagValuesToCodec(req.Order.Algorithm.Params),
+		WhatIf:                     "",
+		Conditions:                 orderConditionsToCodec(req.Order.Conditions.Values),
+		ConditionsIgnoreRTH:        boolToString(req.Order.Conditions.IgnoreRTH),
+		ConditionsCancelOrder:      boolToString(req.Order.Conditions.CancelOrder),
+		ReferenceContractID:        peggedReferenceContractID(req.Order.PeggedBenchmark),
+		PeggedChangeAmountDecrease: peggedBool(req.Order.PeggedBenchmark),
+		PeggedChangeAmount:         peggedChangeAmount(req.Order.PeggedBenchmark),
+		ReferenceChangeAmount:      peggedReferenceChangeAmount(req.Order.PeggedBenchmark),
+		ReferenceExchangeID:        peggedReferenceExchangeID(req.Order.PeggedBenchmark),
+		AdjustedOrderType:          string(req.Order.Adjustment.OrderType),
+		TriggerPrice:               decimalOrEmpty(req.Order.Adjustment.TriggerPrice),
+		LmtPriceOffset:             decimalPointerOrEmpty(req.Order.LmtPriceOffset),
+		AdjustedStopPrice:          decimalOrEmpty(req.Order.Adjustment.StopPrice),
+		AdjustedStopLimitPrice:     decimalOrEmpty(req.Order.Adjustment.StopLimitPrice),
+		AdjustedTrailingAmount:     decimalOrEmpty(req.Order.Adjustment.TrailingAmount),
+		AdjustableTrailingUnit:     strconv.Itoa(req.Order.Adjustment.TrailingUnit),
+		CashQty:                    decimalPointerOrEmpty(req.Order.CashQty),
+		DontUseAutoPriceForHedge:   optBoolToString(req.Order.Hedge.DisableAutomaticPrice, ""),
+		UsePriceMgmtAlgo:           optBoolToString(req.Order.UsePriceMgmtAlgo, ""),
+		AdvancedErrorOverride:      req.Order.AdvancedErrorOverride,
+		ManualOrderTime:            req.Order.ManualOrderTime,
+		Deactivate:                 trueOrEmpty(req.Order.Deactivate),
+		PostOnly:                   trueOrEmpty(req.Order.PostOnly),
+		AllowPreOpen:               trueOrEmpty(req.Order.AllowPreOpen),
+		IgnoreOpenAuction:          trueOrEmpty(req.Order.IgnoreOpenAuction),
+		RouteMarketableToBBO:       optBoolToString(req.Order.RouteMarketableToBBO, ""),
+		SeekPriceImprovement:       optBoolToString(req.Order.SeekPriceImprovement, ""),
+		WhatIfType:                 intPointerOrEmpty(req.Order.WhatIfType),
 	}
 }
 
@@ -128,6 +148,48 @@ func intPointerOrEmpty(value *int) string {
 		return ""
 	}
 	return strconv.Itoa(*value)
+}
+
+func intPointerOrDefault(value *int, dflt string) string {
+	if value == nil {
+		return dflt
+	}
+	return strconv.Itoa(*value)
+}
+
+func peggedReferenceContractID(value *OrderPeggedBenchmark) string {
+	if value == nil {
+		return ""
+	}
+	return strconv.FormatInt(int64(value.ReferenceContractID), 10)
+}
+
+func peggedBool(value *OrderPeggedBenchmark) string {
+	if value == nil {
+		return ""
+	}
+	return boolToString(value.ChangeAmountDecrease)
+}
+
+func peggedChangeAmount(value *OrderPeggedBenchmark) string {
+	if value == nil {
+		return ""
+	}
+	return value.ChangeAmount.String()
+}
+
+func peggedReferenceChangeAmount(value *OrderPeggedBenchmark) string {
+	if value == nil {
+		return ""
+	}
+	return decimalPointerOrEmpty(value.ReferenceChangeAmount)
+}
+
+func peggedReferenceExchangeID(value *OrderPeggedBenchmark) string {
+	if value == nil {
+		return ""
+	}
+	return value.ReferenceExchangeID
 }
 
 func optBoolToString(b *bool, dflt string) string {
@@ -386,6 +448,16 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		}
 		return value
 	}
+	boolPointer := func(raw, field string) *bool {
+		if parseErr != nil {
+			return nil
+		}
+		value, err := parseOptionalBoolPointer(raw, "completed order "+field)
+		if err != nil {
+			parseErr = err
+		}
+		return value
+	}
 
 	legPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, "completed order combo leg price")
 	if err != nil {
@@ -396,9 +468,9 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	if strings.EqualFold(deltaNeutralOrderType, "None") {
 		deltaNeutralOrderType = ""
 	}
-	var deltaNeutralOrder *CompletedOrderDeltaNeutral
+	var deltaNeutralOrder *OrderDeltaNeutralDetails
 	if deltaNeutralOrderType != "" {
-		deltaNeutralOrder = &CompletedOrderDeltaNeutral{
+		deltaNeutralOrder = &OrderDeltaNeutralDetails{
 			OrderType:          OrderType(deltaNeutralOrderType),
 			AuxPrice:           decimalPointer(m.DeltaNeutralAuxPrice, "delta-neutral aux price"),
 			ConID:              ContractID(int32Value(m.DeltaNeutralConID, "delta-neutral contract id")),
@@ -428,9 +500,9 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	if raw := strings.TrimSpace(m.ExemptCode); raw != "" && raw != "-1" {
 		exemptCode = new(intValue(raw, "exempt code"))
 	}
-	var peggedBenchmark *CompletedOrderPeggedBenchmark
+	var peggedBenchmark *OrderPeggedBenchmark
 	if OrderType(m.OrderType) == OrderTypePeggedBenchmark {
-		peggedBenchmark = &CompletedOrderPeggedBenchmark{
+		peggedBenchmark = &OrderPeggedBenchmark{
 			ReferenceContractID:   ContractID(int32Value(m.ReferenceContractID, "pegged reference contract id")),
 			ChangeAmountDecrease:  boolValue(m.PeggedChangeAmountDecrease, "pegged change amount decrease"),
 			ChangeAmount:          decimalValue(m.PeggedChangeAmount, "pegged change amount"),
@@ -450,7 +522,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 	}
 	result := CompletedOrderResult{
 		Contract: contract,
-		Order: CompletedOrderDetails{
+		Order: OrderDetails{
 			OrderID:       orderID,
 			ClientID:      clientID,
 			ParentID:      parentID,
@@ -468,7 +540,8 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 			GoodAfterTime: m.GoodAfterTime,
 			GoodTillDate:  m.GoodTillDate,
 			ModelCode:     m.ModelCode,
-			Prices: CompletedOrderPrices{
+			Transmit:      boolPointer(m.Transmit, "transmit"),
+			Prices: OrderPrices{
 				LmtPrice:            decimalPointer(m.LmtPrice, "limit price"),
 				AuxPrice:            decimalPointer(m.AuxPrice, "aux price"),
 				DiscretionaryAmount: decimalPointer(m.DiscretionAmt, "discretionary amount"),
@@ -480,12 +553,12 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				CashQty:             decimalPointer(m.CashQty, "cash quantity"),
 			},
 			OCA: OrderOCA{Group: m.OcaGroup, Type: OCAType(intValue(m.OcaType, "OCA type"))},
-			Allocation: CompletedOrderAllocation{
+			Allocation: OrderAllocationDetails{
 				Group:      m.FAGroup,
 				Method:     m.FAMethod,
 				Percentage: m.FAPercentage,
 			},
-			Routing: CompletedOrderRouting{
+			Routing: OrderRoutingDetails{
 				Rule80A:              m.Rule80A,
 				SettlingFirm:         m.SettlingFirm,
 				ShortSaleSlot:        intValue(m.ShortSaleSlot, "short-sale slot"),
@@ -495,16 +568,17 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				ClearingIntent:       m.ClearingIntent,
 				NotHeld:              boolValue(m.NotHeld, "not held"),
 				ImbalanceOnly:        boolValue(m.ImbalanceOnly, "imbalance only"),
-				RouteMarketableToBBO: boolValue(m.RouteMarketableToBBO, "route marketable to BBO"),
+				RouteMarketableToBBO: boolPointer(m.RouteMarketableToBBO, "route marketable to BBO"),
 			},
-			Auction: CompletedOrderAuction{
+			Auction: OrderAuctionDetails{
+				Strategy:        intPointer(m.AuctionStrategy, "auction strategy"),
 				StartingPrice:   decimalPointer(m.StartingPrice, "starting price"),
 				StockRefPrice:   decimalPointer(m.StockRefPrice, "stock reference price"),
 				Delta:           decimalPointer(m.Delta, "delta"),
 				StockRangeLower: decimalPointer(m.StockRangeLower, "stock range lower"),
 				StockRangeUpper: decimalPointer(m.StockRangeUpper, "stock range upper"),
 			},
-			Execution: CompletedOrderExecution{
+			Execution: OrderExecutionDetails{
 				DisplaySize:              intPointer(m.DisplaySize, "display size"),
 				SweepToFill:              boolValue(m.SweepToFill, "sweep to fill"),
 				AllOrNone:                boolValue(m.AllOrNone, "all or none"),
@@ -519,7 +593,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				MidOffsetAtWhole:         decimalPointer(m.MidOffsetAtWhole, "mid offset at whole"),
 				MidOffsetAtHalf:          decimalPointer(m.MidOffsetAtHalf, "mid offset at half"),
 			},
-			Volatility: CompletedOrderVolatility{
+			Volatility: OrderVolatilityDetails{
 				Value:              decimalPointer(m.Volatility, "volatility"),
 				Type:               intPointer(m.VolatilityType, "volatility type"),
 				DeltaNeutral:       deltaNeutralOrder,
@@ -531,22 +605,26 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				SmartRouting: tagValuesFromCodec(m.SmartComboRouting),
 			},
 			ComboDescription: m.ComboLegsDescription,
-			Scale: CompletedOrderScale{
+			Scale: OrderScaleDetails{
 				InitialLevelSize:    intPointer(m.ScaleInitLevelSize, "scale initial level size"),
 				SubsequentLevelSize: intPointer(m.ScaleSubsLevelSize, "scale subsequent level size"),
 				PriceIncrement:      decimalPointer(m.ScalePriceIncrement, "scale price increment"),
 				PriceAdjustValue:    decimalPointer(m.ScalePriceAdjustValue, "scale price adjust value"),
 				PriceAdjustInterval: intPointer(m.ScalePriceAdjustInterval, "scale price adjust interval"),
 				ProfitOffset:        decimalPointer(m.ScaleProfitOffset, "scale profit offset"),
-				AutoReset:           boolValue(m.ScaleAutoReset, "scale auto reset"),
+				AutoReset:           boolPointer(m.ScaleAutoReset, "scale auto reset"),
 				InitialPosition:     intPointer(m.ScaleInitPosition, "scale initial position"),
 				InitialFillQty:      intPointer(m.ScaleInitFillQty, "scale initial fill quantity"),
-				RandomPercent:       boolValue(m.ScaleRandomPercent, "scale random percent"),
+				RandomPercent:       boolPointer(m.ScaleRandomPercent, "scale random percent"),
+				Table:               m.ScaleTable,
+				ActiveStartTime:     m.ActiveStartTime,
+				ActiveStopTime:      m.ActiveStopTime,
 			},
 			Hedge: OrderHedge{
 				Type:                  HedgeType(m.HedgeType),
 				Param:                 m.HedgeParam,
 				DisableAutomaticPrice: disableAutomaticHedgePrice,
+				MaxSize:               intPointer(m.HedgeMaxSize, "hedge maximum size"),
 			},
 			Algorithm: OrderAlgorithm{Strategy: m.AlgoStrategy, Params: tagValuesFromCodec(m.AlgoParams)},
 			Conditions: OrderConditions{
@@ -555,7 +633,15 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				CancelOrder: boolValue(m.ConditionsCancelOrder, "conditions cancel order"),
 			},
 			PeggedBenchmark: peggedBenchmark,
-			Compliance: CompletedOrderCompliance{
+			Adjustment: OrderAdjustmentDetails{
+				OrderType:      OrderType(m.AdjustedOrderType),
+				TriggerPrice:   decimalPointer(m.TriggerPrice, "adjustment trigger price"),
+				StopPrice:      decimalPointer(m.AdjustedStopPrice, "adjusted stop price"),
+				StopLimitPrice: decimalPointer(m.AdjustedStopLimitPrice, "adjusted stop limit price"),
+				TrailingAmount: decimalPointer(m.AdjustedTrailingAmount, "adjusted trailing amount"),
+				TrailingUnit:   intPointer(m.AdjustableTrailingUnit, "adjustable trailing unit"),
+			},
+			Compliance: OrderComplianceDetails{
 				Solicited:            boolValue(m.Solicited, "solicited"),
 				OMSContainer:         boolValue(m.IsOMSContainer, "OMS container"),
 				Shareholder:          m.Shareholder,
@@ -563,6 +649,15 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 				ProfessionalCustomer: boolValue(m.ProfessionalCustomer, "professional customer"),
 				Submitter:            m.Submitter,
 			},
+			UsePriceMgmtAlgo:      boolPointer(m.UsePriceMgmtAlgo, "use price management algo"),
+			AdvancedErrorOverride: m.AdvancedErrorOverride,
+			ManualOrderTime:       m.ManualOrderTime,
+			Deactivate:            boolPointer(m.Deactivate, "deactivate"),
+			PostOnly:              boolPointer(m.PostOnly, "post only"),
+			AllowPreOpen:          boolPointer(m.AllowPreOpen, "allow pre-open"),
+			IgnoreOpenAuction:     boolPointer(m.IgnoreOpenAuction, "ignore open auction"),
+			SeekPriceImprovement:  boolPointer(m.SeekPriceImprovement, "seek price improvement"),
+			WhatIfType:            intPointer(m.WhatIfType, "what-if type"),
 		},
 		Completion: CompletedOrderCompletion{
 			Status:                    OrderStatus(m.Status),

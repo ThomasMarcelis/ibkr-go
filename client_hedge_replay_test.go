@@ -175,8 +175,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 
 		// The stock parent's first echo lands now.
 		parentOpen := waitForOpenOrder(t, ctx, stockParent)
-		if parentOpen.PermID != 9000000420 {
-			t.Fatalf("stock parent perm id = %d, want 9000000420", parentOpen.PermID)
+		if (*parentOpen.Order.PermID) != 9000000420 {
+			t.Fatalf("stock parent perm id = %d, want 9000000420", (*parentOpen.Order.PermID))
 		}
 		waitForOrderStatus(t, ctx, stockParent, ibkr.OrderStatusSubmitted)
 
@@ -184,17 +184,17 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		// quantity 100, floored the limit to 0.01, and bound the child to
 		// the parent's perm id via oca_group.
 		open := waitForOpenOrder(t, ctx, beta)
-		if !open.Quantity.Equal(decimal.RequireFromString("100")) {
-			t.Fatalf("gateway-assigned quantity = %s, want 100", open.Quantity)
+		if !open.Order.Quantity.Equal(decimal.RequireFromString("100")) {
+			t.Fatalf("gateway-assigned quantity = %s, want 100", open.Order.Quantity)
 		}
-		if !open.LmtPrice.Equal(decimal.RequireFromString("0.01")) {
-			t.Fatalf("gateway-floored lmt price = %s, want 0.01", open.LmtPrice)
+		if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("0.01")) {
+			t.Fatalf("gateway-floored lmt price = %s, want 0.01", open.Order.Prices.LmtPrice)
 		}
-		if open.OcaGroup != "9000000420" {
-			t.Fatalf("oca group = %q, want parent perm id 9000000420", open.OcaGroup)
+		if open.Order.OCA.Group != "9000000420" {
+			t.Fatalf("oca group = %q, want parent perm id 9000000420", open.Order.OCA.Group)
 		}
-		if open.ParentID != 420 || open.PermID != 9000000422 {
-			t.Fatalf("parent/perm = %d/%d, want 420/9000000422", open.ParentID, open.PermID)
+		if (*open.Order.ParentID) != 420 || (*open.Order.PermID) != 9000000422 {
+			t.Fatalf("parent/perm = %d/%d, want 420/9000000422", (*open.Order.ParentID), (*open.Order.PermID))
 		}
 		held := waitOrderStatusUpdate(t, ctx, beta, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "child" {
@@ -240,8 +240,8 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		// The option parent's cancel from before the stock-parent stage
 		// finally processes: PendingCancel -> Cancelled + code 202.
 		parentOpen := waitForOpenOrder(t, ctx, optionParent)
-		if parentOpen.PermID != 9000000418 || parentOpen.Contract.ConID != 886441502 {
-			t.Fatalf("option parent echo = perm %d con %d, want 9000000418/886441502", parentOpen.PermID, parentOpen.Contract.ConID)
+		if (*parentOpen.Order.PermID) != 9000000418 || parentOpen.Contract.ConID != 886441502 {
+			t.Fatalf("option parent echo = perm %d con %d, want 9000000418/886441502", (*parentOpen.Order.PermID), parentOpen.Contract.ConID)
 		}
 		waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusPendingCancel)
 		waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusCancelled)
@@ -276,11 +276,11 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		// Accepted with the Gateway-computed quantity 80 (= 0.8 x the
 		// parent's 100), same oca binding to the parent's perm id.
 		open := waitForOpenOrder(t, ctx, pair)
-		if !open.Quantity.Equal(decimal.RequireFromString("80")) {
-			t.Fatalf("gateway-computed quantity = %s, want 80", open.Quantity)
+		if !open.Order.Quantity.Equal(decimal.RequireFromString("80")) {
+			t.Fatalf("gateway-computed quantity = %s, want 80", open.Order.Quantity)
 		}
-		if open.OcaGroup != "9000000420" || open.ParentID != 420 || open.PermID != 9000000424 {
-			t.Fatalf("oca/parent/perm = %q/%d/%d, want 9000000420/420/9000000424", open.OcaGroup, open.ParentID, open.PermID)
+		if open.Order.OCA.Group != "9000000420" || (*open.Order.ParentID) != 420 || (*open.Order.PermID) != 9000000424 {
+			t.Fatalf("oca/parent/perm = %q/%d/%d, want 9000000420/420/9000000424", open.Order.OCA.Group, (*open.Order.ParentID), (*open.Order.PermID))
 		}
 		held := waitOrderStatusUpdate(t, ctx, pair, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "child" {

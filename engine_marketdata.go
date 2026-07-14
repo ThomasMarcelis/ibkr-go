@@ -45,7 +45,7 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 		if !regulatory {
 			return latest, err
 		}
-		return latest, regulatorySnapshotError(err)
+		return latest, regulatorySnapshotError(sub.requestID, sub.connectionSeq, err)
 	}
 	for {
 		select {
@@ -82,14 +82,18 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 	}
 }
 
-func regulatorySnapshotError(err error) error {
+func regulatorySnapshotError(requestID RequestID, connectionSeq uint64, err error) error {
 	if err == nil {
 		return nil
 	}
 	if _, definitive := errors.AsType[*APIError](err); definitive {
 		return err
 	}
-	return errors.Join(ErrRegulatorySnapshotUncertain, err)
+	return &RegulatorySnapshotUncertainError{
+		RequestID:     requestID,
+		ConnectionSeq: connectionSeq,
+		Err:           err,
+	}
 }
 
 func (e *engine) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
@@ -759,6 +763,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 				tick := TickByTickData{Time: ts, TickType: m.TickType}
 				switch m.TickType {
 				case 1, 2:
+					tick.LastAttributes = TickLastAttributes(m.TickAttribLast)
 					tick.Price, err = parseOptionalDecimal(m.Price, "tick by tick price")
 					if err != nil {
 						fail(err)
@@ -772,6 +777,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 					tick.Exchange = m.Exchange
 					tick.SpecialConditions = m.SpecialConditions
 				case 3:
+					tick.BidAskAttributes = TickBidAskAttributes(m.TickAttribBidAsk)
 					tick.BidPrice, err = parseOptionalDecimal(m.BidPrice, "tick by tick bid price")
 					if err != nil {
 						fail(err)

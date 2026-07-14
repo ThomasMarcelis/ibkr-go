@@ -4,7 +4,7 @@ Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). Tracks every
 live test run against IB Gateway paper account, what passed, what failed, what
 was fixed, and what remains untested.
 
-Last updated: 2026-07-14. Both local Gateway roles are available. The current
+Last updated: 2026-07-15. Both local Gateway roles are available. The current
 production ceiling is `server_version 225`; exact positive, negative, SDK-
 oracle, and source-law boundaries are distinguished below. Earlier campaign
 rows retain their negotiated version as recorded.
@@ -31,7 +31,68 @@ class, and promoted transcript or remaining blocker.
 
 ## Gateway Bring-Up Runs
 
+### 2026-07-15
+
+After immediate explicit authorization, `readonly-live` reached Ready at
+`server_version 225` and exactly one fee-bearing AAPL regulatory-snapshot
+request was sent. The Gateway returned definitive API error 10213, "API access
+is restricted on regulatory snapshot," for request ID 2. No quote field or
+snapshot-end marker arrived, and the request was not retried. Capture
+`20260715T152010Z-regulatory_snapshot_aapl_authorized` has events SHA-256
+`42e466e6af9ecb65d091579cd4b4546815bc414fd76b6457aa5618621c40dff4`
+and normalized replay-frame SHA-256
+`f36e064a77c52819cd98cc6e77f67e0d728f401a29dffd1c41de07783f5d8599`.
+The verifier confirms one regulatory request on the wire. The raw capture is
+private and unsanitized, so it remains ignored rather than being promoted.
+
+This is conclusive restriction evidence, not a successful regulatory snapshot
+and not `ErrRegulatorySnapshotUncertain`. The stable proof remains empty. A
+future attempt requires the account's regulatory-snapshot API access to be
+resolved and new immediate authorization; this authorization has been
+consumed.
+
 ### 2026-07-14
+
+Both role-aware doctors reached Ready at `server_version 225`. A safe
+read-only `account_updates` capture then returned 231 public update arms: 194
+account values, 18 portfolio values, and 19 account-time values, followed by
+the download end and unsubscribe. Capture
+`20260714T200703Z-account_updates` has events SHA-256
+`43f1637f84252a75345e3ba6080ae398e493b1c066f346f973842a6113b7e4b0`
+and normalized replay-frame SHA-256
+`bb6908aed896bf3348b94f0269dbcff5506fc5514c505ba210581005c110d82f`.
+The promoted exact-sv225 minimal replay covers one arm of each callback family
+and hashes to
+`56fca257974a67c77a95ea9189282f5303cd98487b586f4ab9a8f1a3ff3e45d5`.
+
+The RC release-version smoke completed exact 200, 203, and 225 read-only
+current-time round trips against both local roles. Paper completed all three
+on the first dial. Read-only completed 200 and 225 on the first dial; its
+first exact-203 bootstrap ended in EOF and the built-in fresh-client retry
+completed successfully. The paper-only exact-203 order boundary then placed a
+one-share nonmarketable AAPL limit, received protobuf OpenOrder and
+OrderStatus, observed typed cancellation, detached the handle explicitly,
+flushed global cancel, and fenced with CurrentTime. No order remained working.
+
+The RC.3 provenance audit found ten headerless legacy transcripts and three
+fixtures that depended on one. The debt is now closed: exact captures replaced
+the historical, concurrent-one-shot, and transport-reconnect paths; redundant
+replays were retired; and connectivity fault semantics moved to direct engine
+tests instead of fabricated wire transcripts. The now-empty inventory remains
+enforced by `testdata/transcripts/provenance.json`.
+The active private corpus contains 231 verifier-clean captures. Forty-four
+empty capture directories were removed, while three non-empty failures were
+moved to ignored `captures/quarantine/` instead of being represented as
+evidence.
+
+At this checkpoint no fee-bearing regulatory snapshot had been issued. The
+2026-07-15 authorized attempt above supersedes that status but did not satisfy
+the successful-snapshot requirement. Both local services are Gateways, so
+neither can produce the required manual paper-TWS `orderBound` callback.
+`TestLiveManualTWSOrderBound` and the raw-proxy runbook in
+`docs/v2-release-readiness.md` are ready for the first TWS session: they
+connect as client ID 0, validate the binding, disable auto binding, and fence
+the surviving session without placing or cancelling an order in code.
 
 The `paper-dev` doctor and selected public live suite negotiated
 `server_version 225`. Contract details, historical bars, executions,

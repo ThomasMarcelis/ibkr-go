@@ -39,16 +39,19 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 		{ExecutionDetail{ReqID: 1, OrderID: 42, Contract: Contract{Symbol: "AAPL"}, ExecID: "0001", Account: "DU12345", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "codec.ExecutionDetail"},
 		{ExecutionsEnd{ReqID: 1}, "codec.ExecutionsEnd"},
 		{OpenOrder{
-			OrderID: 42, Account: "DU12345",
-			Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
-			Action:   "BUY", Quantity: "10", OrderType: "LMT",
-			LmtPrice: "150.00", AuxPrice: "0.0", TIF: "DAY",
-			OpenClose: "", Origin: "0", OrderRef: "test-ref",
-			ClientID: "99", PermID: "123456", OutsideRTH: "0",
-			Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
+			OrderID: 42,
+			OrderDetails: OrderDetails{
+				Account:  "DU12345",
+				Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+				Action:   "BUY", Quantity: "10", OrderType: "LMT",
+				LmtPrice: "150.00", AuxPrice: "0.0", TIF: "DAY",
+				OpenClose: "", Origin: "0", OrderRef: "test-ref",
+				ClientID: "99", PermID: "123456", OutsideRTH: "0",
+				Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
+				ParentID: "99",
+			},
 			Status:           "Submitted",
 			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
-			ParentID: "99",
 		}, "codec.OpenOrder"},
 		{OpenOrderEnd{}, "codec.OpenOrderEnd"},
 		{PositionEnd{}, "codec.PositionEnd"},
@@ -390,9 +393,8 @@ func TestDecodeHistoricalDataUpdateBar(t *testing.T) {
 }
 
 // TestDecodeOpenOrderNonSimple verifies that an OpenOrder payload whose
-// variable sections do not follow the live sv200 layout (here: an empty
-// DeltaNeutralOrderType instead of the live "None" sentinel) produces a
-// partial parse with only the reliably-positioned pre-variable-section fields.
+// variable sections do not follow the live sv200 layout is rejected instead
+// of exposing a lossy partial order as valid broker state.
 func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	t.Parallel()
 
@@ -418,43 +420,12 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	if len(msgs) != 1 {
 		t.Fatalf("len = %d, want 1", len(msgs))
 	}
-	oo, ok := msgs[0].(OpenOrder)
+	malformed, ok := msgs[0].(MalformedInbound)
 	if !ok {
-		t.Fatalf("type = %T, want OpenOrder", msgs[0])
+		t.Fatalf("type = %T, want MalformedInbound", msgs[0])
 	}
-
-	// Pre-variable fields should be correctly parsed.
-	if oo.OrderID != 42 {
-		t.Errorf("OrderID = %d, want 42", oo.OrderID)
-	}
-	if oo.Contract.Symbol != "AAPL" {
-		t.Errorf("Symbol = %q, want AAPL", oo.Contract.Symbol)
-	}
-	if oo.Action != "BUY" {
-		t.Errorf("Action = %q, want BUY", oo.Action)
-	}
-	if oo.Quantity != "10" {
-		t.Errorf("Quantity = %q, want 10", oo.Quantity)
-	}
-	if oo.OrderType != "LMT" {
-		t.Errorf("OrderType = %q, want LMT", oo.OrderType)
-	}
-	if oo.LmtPrice != "150.00" {
-		t.Errorf("LmtPrice = %q, want 150.00", oo.LmtPrice)
-	}
-	if oo.Account != "DU9000001" {
-		t.Errorf("Account = %q, want DU9000001", oo.Account)
-	}
-	if oo.OrderRef != "myref" {
-		t.Errorf("OrderRef = %q, want myref", oo.OrderRef)
-	}
-
-	// Post-variable fields should be zero-valued (partial parse).
-	if oo.Status != "" {
-		t.Errorf("Status = %q, want empty (partial parse)", oo.Status)
-	}
-	if oo.ParentID != "" {
-		t.Errorf("ParentID = %q, want empty (partial parse)", oo.ParentID)
+	if malformed.Err == nil {
+		t.Fatal("MalformedInbound.Err = nil")
 	}
 }
 
@@ -463,33 +434,36 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 
 	payload, err := Encode(200, OpenOrder{
 		OrderID: 42,
-		Contract: Contract{
-			ConID: 265598, Symbol: "AAPL", SecType: "STK",
-			Strike: "0", Exchange: "SMART", Currency: "USD",
-			LocalSymbol: "AAPL", TradingClass: "NMS",
-			ComboLegs: []ComboLeg{{ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}, {ConID: 2, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}},
+		OrderDetails: OrderDetails{
+			Contract: Contract{
+				ConID: 265598, Symbol: "AAPL", SecType: "STK",
+				Strike: "0", Exchange: "SMART", Currency: "USD",
+				LocalSymbol: "AAPL", TradingClass: "NMS",
+				ComboLegs: []ComboLeg{{ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}, {ConID: 2, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}},
+			},
+			Account:             "DU9000001",
+			Action:              "BUY",
+			Quantity:            "1",
+			OrderType:           "LMT",
+			LmtPrice:            "150.00",
+			AuxPrice:            "0",
+			TIF:                 "DAY",
+			Origin:              "0",
+			ClientID:            "1",
+			PermID:              "12345",
+			OutsideRTH:          "0",
+			Hidden:              "0",
+			DiscretionAmt:       "0",
+			Status:              "PreSubmitted",
+			OrderComboLegPrices: []string{"1.25", "2.50"},
+			SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
+			AlgoStrategy:        "Adaptive",
+			AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
+			Conditions:          []OrderCondition{{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "175.0", TriggerMethod: 4}},
+			ConditionsIgnoreRTH: "1",
+			ParentID:            "0",
 		},
-		Account:             "DU9000001",
-		Action:              "BUY",
-		Quantity:            "1",
-		OrderType:           "LMT",
-		LmtPrice:            "150.00",
-		AuxPrice:            "0",
-		TIF:                 "DAY",
-		Origin:              "0",
-		ClientID:            "1",
-		PermID:              "12345",
-		OutsideRTH:          "0",
-		Hidden:              "0",
-		DiscretionAmt:       "0",
-		Status:              "PreSubmitted",
-		OrderComboLegPrices: []string{"1.25", "2.50"},
-		SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
-		AlgoStrategy:        "Adaptive",
-		AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
-		Conditions:          []OrderCondition{{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "175.0", TriggerMethod: 4}},
-		ConditionsIgnoreRTH: "1",
-		ParentID:            "0",
+		Status: "PreSubmitted",
 	})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
@@ -571,6 +545,38 @@ func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 	assertSubsequence(t, fields, []string{"2", "101", "1", "BUY", "SMART", "0", "0", "", "-1", "102", "1", "SELL", "SMART", "0", "0", "", "-1", "2", "1.10", "2.40", "1", "NonGuaranteed", "1"})
 	assertSubsequence(t, fields, []string{"Adaptive", "1", "adaptivePriority", "Patient"})
 	assertSubsequence(t, fields, []string{"0", "0", "1", "3", "a", "1", "20260409 10:00:00 US/Eastern", "1", "0"})
+}
+
+func TestEncodePlaceOrderScaleAndPeggedBenchmarkSections(t *testing.T) {
+	t.Parallel()
+
+	// Values come from the official API 10.48.01 Testbed scale and PEG BENCH
+	// samples. This is a client-source field-order law, not live acceptance.
+	payload, err := Encode(200, PlaceOrderRequest{
+		OrderID:  77,
+		Contract: Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
+		Action:   "BUY", TotalQuantity: "10", OrderType: "PEG BENCH", TIF: "DAY", Transmit: "1", ParentID: "0",
+		Origin: "0", OutsideRTH: "0", ExemptCode: "-1", OcaType: "0", TriggerMethod: "0",
+		ScaleInitLevelSize: "2000", ScaleSubsLevelSize: "500", ScalePriceIncrement: "0.02",
+		ScalePriceAdjustValue: "189", ScalePriceAdjustInterval: "3600", ScaleProfitOffset: "2",
+		ScaleAutoReset: "1", ScaleInitPosition: "10", ScaleInitFillQty: "40", ScaleRandomPercent: "1",
+		ScaleTable: "scale-table", ActiveStartTime: "start", ActiveStopTime: "stop",
+		StartingPrice: "33", StockRefPrice: "750", StockRangeLower: "650", StockRangeUpper: "800",
+		ReferenceContractID: "208813720", PeggedChangeAmountDecrease: "1", PeggedChangeAmount: "0.1",
+		ReferenceChangeAmount: "1", ReferenceExchangeID: "ARCA",
+	})
+	if err != nil {
+		t.Fatalf("Encode() error = %v", err)
+	}
+	fields, err := wire.ParseFields(payload)
+	if err != nil {
+		t.Fatalf("ParseFields() error = %v", err)
+	}
+	assertSubsequence(t, fields, []string{
+		"2000", "500", "0.02", "189", "3600", "2", "1", "10", "40", "1",
+		"scale-table", "start", "stop",
+	})
+	assertSubsequence(t, fields, []string{"208813720", "1", "0.1", "1", "ARCA", "0"})
 }
 
 func TestEncodeContractConditionValueBeforeContract(t *testing.T) {

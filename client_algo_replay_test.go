@@ -377,19 +377,19 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 
 			echoes := collectAlgoLifecycle(t, ctx, handle, v.echoCount, v.initialStatuses)
 			for i, echo := range echoes {
-				if echo.AlgoStrategy != v.strategy {
-					t.Fatalf("echo %d algo strategy = %q, want %q", i, echo.AlgoStrategy, v.strategy)
+				if echo.Order.Algorithm.Strategy != v.strategy {
+					t.Fatalf("echo %d algo strategy = %q, want %q", i, echo.Order.Algorithm.Strategy, v.strategy)
 				}
-				if echo.PermID != v.permID {
-					t.Fatalf("echo %d perm id = %d, want %d", i, echo.PermID, v.permID)
+				if *echo.Order.PermID != v.permID {
+					t.Fatalf("echo %d perm id = %d, want %d", i, *echo.Order.PermID, v.permID)
 				}
-				requireAlgoParams(t, fmt.Sprintf("echo %d", i), echo.AlgoParams, v.echoParams)
+				requireAlgoParams(t, fmt.Sprintf("echo %d", i), echo.Order.Algorithm.Params, v.echoParams)
 			}
-			if !echoes[0].LmtPrice.Equal(decimal.RequireFromString("15.81")) {
-				t.Fatalf("echoed lmt price = %s, want 15.81", echoes[0].LmtPrice)
+			if !echoes[0].Order.Prices.LmtPrice.Equal(decimal.RequireFromString("15.81")) {
+				t.Fatalf("echoed lmt price = %s, want 15.81", echoes[0].Order.Prices.LmtPrice)
 			}
-			if echoes[0].OrderRef != ref {
-				t.Fatalf("echoed order ref = %q, want %q", echoes[0].OrderRef, ref)
+			if echoes[0].Order.OrderRef != ref {
+				t.Fatalf("echoed order ref = %q, want %q", echoes[0].Order.OrderRef, ref)
 			}
 			if err := handle.Cancel(ctx); err != nil {
 				t.Fatalf("Cancel: %v", err)

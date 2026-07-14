@@ -58,37 +58,8 @@ type OrderCondition struct {
 }
 
 type OpenOrder struct {
-	OrderID  int64
-	Contract Contract
-
-	// Core order fields (fixed wire positions r[12]-r[19] after contract block).
-	Action    string
-	Quantity  string // totalQuantity on wire
-	OrderType string
-	LmtPrice  string
-	AuxPrice  string
-	TIF       string
-	OcaGroup  string
-	Account   string
-
-	// Order detail fields (r[20]-r[28]).
-	OpenClose             string
-	Origin                string
-	OrderRef              string
-	ClientID              string
-	PermID                string
-	OutsideRTH            string
-	Hidden                string
-	DiscretionAmt         string
-	GoodAfterTime         string
-	ComboLegsDescription  string
-	OrderComboLegPrices   []string
-	SmartComboRouting     []TagValue
-	AlgoStrategy          string
-	AlgoParams            []TagValue
-	Conditions            []OrderCondition
-	ConditionsIgnoreRTH   string
-	ConditionsCancelOrder string
+	OrderID int64
+	OrderDetails
 
 	// Status at wire position r[92] of the live sv200 layout.
 	Status string
@@ -121,17 +92,6 @@ type OpenOrder struct {
 	RejectReason                   string
 	Allocations                    []OrderAllocation
 	WarningText                    string
-
-	// ParentID rides the pre-status slot of the live layout (bracket
-	// children carry real values there). Live open_order frames carry no
-	// fill echo; fills arrive on the separate order_status message.
-	ParentID string
-
-	// Partial marks a frame whose layout diverged from the attested
-	// server->client shape at some advanced-order block, so decoding stopped
-	// early and returned only the pre-status fields; Status and the margin
-	// section are empty.
-	Partial bool
 }
 
 type OrderAllocation struct {
@@ -142,6 +102,13 @@ type OrderAllocation struct {
 	DesiredAllocQty string
 	AllowedAllocQty string
 	IsMonetary      string
+}
+
+func defaultWireValue(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	return value
 }
 
 type OpenOrderEnd struct{}
@@ -278,7 +245,7 @@ func (m CompletedOrdersRequest) encodeWire(sv int) ([]string, error) {
 	return w.Fields(), nil
 }
 
-type CompletedOrder struct {
+type OrderDetails struct {
 	Contract Contract
 
 	ClientID           string
@@ -300,6 +267,7 @@ type CompletedOrder struct {
 	Hidden             string
 	DiscretionAmt      string
 	GoodAfterTime      string
+	Transmit           string
 	FAGroup            string
 	FAMethod           string
 	FAPercentage       string
@@ -311,6 +279,7 @@ type CompletedOrder struct {
 	ShortSaleSlot      string
 	DesignatedLocation string
 	ExemptCode         string
+	AuctionStrategy    string
 	StartingPrice      string
 	StockRefPrice      string
 	Delta              string
@@ -350,9 +319,13 @@ type CompletedOrder struct {
 	ScaleInitPosition        string
 	ScaleInitFillQty         string
 	ScaleRandomPercent       string
+	ScaleTable               string
+	ActiveStartTime          string
+	ActiveStopTime           string
 
 	HedgeType       string
 	HedgeParam      string
+	HedgeMaxSize    string
 	ClearingAccount string
 	ClearingIntent  string
 	NotHeld         string
@@ -373,10 +346,25 @@ type CompletedOrder struct {
 	ConditionsIgnoreRTH        string
 	ConditionsCancelOrder      string
 
+	AdjustedOrderType        string
+	TriggerPrice             string
 	StopPrice                string
 	LmtPriceOffset           string
+	AdjustedStopPrice        string
+	AdjustedStopLimitPrice   string
+	AdjustedTrailingAmount   string
+	AdjustableTrailingUnit   string
 	CashQty                  string
 	DontUseAutoPriceForHedge string
+	UsePriceMgmtAlgo         string
+	AdvancedErrorOverride    string
+	ManualOrderTime          string
+	Deactivate               string
+	PostOnly                 string
+	AllowPreOpen             string
+	IgnoreOpenAuction        string
+	SeekPriceImprovement     string
+	WhatIfType               string
 	IsOMSContainer           string
 	AutoCancelDate           string
 	Filled                   string
@@ -398,6 +386,10 @@ type CompletedOrder struct {
 	Submitter                string
 	CommissionAndFees        string
 	CommissionCurrency       string
+}
+
+type CompletedOrder struct {
+	OrderDetails
 }
 
 type CompletedOrderEnd struct{}
@@ -499,30 +491,42 @@ type PlaceOrderRequest struct {
 	TrailingPercent string // empty = UNSET
 
 	// Scale
-	ScaleInitLevelSize  string // empty = UNSET
-	ScaleSubsLevelSize  string // empty = UNSET
-	ScalePriceIncrement string // empty = UNSET
-	ScaleTable          string
-	ActiveStartTime     string
-	ActiveStopTime      string
+	ScaleInitLevelSize       string // empty = UNSET
+	ScaleSubsLevelSize       string // empty = UNSET
+	ScalePriceIncrement      string // empty = UNSET
+	ScalePriceAdjustValue    string // empty = UNSET
+	ScalePriceAdjustInterval string // empty = UNSET
+	ScaleProfitOffset        string // empty = UNSET
+	ScaleAutoReset           string // empty = UNSET
+	ScaleInitPosition        string // empty = UNSET
+	ScaleInitFillQty         string // empty = UNSET
+	ScaleRandomPercent       string // empty = UNSET
+	ScaleTable               string
+	ActiveStartTime          string
+	ActiveStopTime           string
 
 	// Hedge
 	HedgeType  string
 	HedgeParam string
 
 	// Misc
-	OptOutSmartRouting string
-	ClearingAccount    string
-	ClearingIntent     string
-	NotHeld            string
-	AlgoStrategy       string
-	AlgoParams         []TagValue
-	AlgoID             string
-	WhatIf             string
-	OrderMiscOptions   string
-	Solicited          string
-	RandomizeSize      string
-	RandomizePrice     string
+	OptOutSmartRouting         string
+	ClearingAccount            string
+	ClearingIntent             string
+	NotHeld                    string
+	AlgoStrategy               string
+	AlgoParams                 []TagValue
+	AlgoID                     string
+	WhatIf                     string
+	OrderMiscOptions           string
+	Solicited                  string
+	RandomizeSize              string
+	RandomizePrice             string
+	ReferenceContractID        string
+	PeggedChangeAmountDecrease string
+	PeggedChangeAmount         string
+	ReferenceChangeAmount      string
+	ReferenceExchangeID        string
 
 	// Conditions
 	Conditions            []OrderCondition
@@ -684,7 +688,15 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.ScaleInitLevelSize)
 	w.WriteString(m.ScaleSubsLevelSize)
 	w.WriteString(m.ScalePriceIncrement)
-	// grounded v1.2 leaves scale extension fields deferred
+	if isPositiveWireNumber(m.ScalePriceIncrement) && m.ScalePriceIncrement != unsetDoubleSentinel {
+		w.WriteString(m.ScalePriceAdjustValue)
+		w.WriteString(m.ScalePriceAdjustInterval)
+		w.WriteString(m.ScaleProfitOffset)
+		w.WriteString(m.ScaleAutoReset)
+		w.WriteString(m.ScaleInitPosition)
+		w.WriteString(m.ScaleInitFillQty)
+		w.WriteString(m.ScaleRandomPercent)
+	}
 	w.WriteString(m.ScaleTable)
 	w.WriteString(m.ActiveStartTime)
 	w.WriteString(m.ActiveStopTime)
@@ -714,7 +726,13 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.Solicited)
 	w.WriteString(m.RandomizeSize)
 	w.WriteString(m.RandomizePrice)
-	// [OrderType != "PEG BENCH" => skip peg bench fields]
+	if m.OrderType == "PEG BENCH" {
+		w.WriteString(m.ReferenceContractID)
+		w.WriteString(m.PeggedChangeAmountDecrease)
+		w.WriteString(m.PeggedChangeAmount)
+		w.WriteString(m.ReferenceChangeAmount)
+		w.WriteString(m.ReferenceExchangeID)
+	}
 	w.WriteInt(len(m.Conditions))
 	for _, cond := range m.Conditions {
 		if err := writeOrderCondition(&w, cond); err != nil {
@@ -894,55 +912,54 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	discretionAmt := r.ReadString() // r[27]
 	goodAfterTime := r.ReadString() // r[28]
 
-	partial := OpenOrder{
-		OrderID: orderID, Contract: contract,
+	details := OrderDetails{
+		OrderID: i64toa(orderID), Contract: contract,
 		Action: action, Quantity: quantity, OrderType: orderType,
 		LmtPrice: lmtPrice, AuxPrice: auxPrice, TIF: tif,
 		OcaGroup: ocaGroup, Account: account,
 		OpenClose: openClose, Origin: origin, OrderRef: orderRef,
 		ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
 		Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
-		Partial: true,
 	}
 
 	// Shared pre-status order fields in the observed server->client layout.
 	r.ReadString() // deprecated sharesAllocation
-	r.ReadString() // FAGroup
-	r.ReadString() // FAMethod
-	r.ReadString() // FAPercentage
-	r.ReadString() // ModelCode
-	r.ReadString() // GoodTillDate
-	r.ReadString() // Rule80A
-	r.ReadString() // PercentOffset
-	r.ReadString() // SettlingFirm
-	r.ReadString() // ShortSaleSlot
-	r.ReadString() // DesignatedLocation
-	r.ReadString() // ExemptCode
-	r.ReadString() // AuctionStrategy
-	r.ReadString() // StartingPrice
-	r.ReadString() // StockRefPrice
-	r.ReadString() // Delta
-	r.ReadString() // StockRangeLower
-	r.ReadString() // StockRangeUpper
-	r.ReadString() // DisplaySize
+	details.FAGroup = r.ReadString()
+	details.FAMethod = r.ReadString()
+	details.FAPercentage = r.ReadString()
+	details.ModelCode = r.ReadString()
+	details.GoodTillDate = r.ReadString()
+	details.Rule80A = r.ReadString()
+	details.PercentOffset = r.ReadString()
+	details.SettlingFirm = r.ReadString()
+	details.ShortSaleSlot = r.ReadString()
+	details.DesignatedLocation = r.ReadString()
+	details.ExemptCode = r.ReadString()
+	details.AuctionStrategy = r.ReadString()
+	details.StartingPrice = r.ReadString()
+	details.StockRefPrice = r.ReadString()
+	details.Delta = r.ReadString()
+	details.StockRangeLower = r.ReadString()
+	details.StockRangeUpper = r.ReadString()
+	details.DisplaySize = r.ReadString()
 	r.ReadString() // BlockOrder
-	r.ReadString() // SweepToFill
-	r.ReadString() // AllOrNone
-	r.ReadString() // MinQty
-	r.ReadString() // OcaType
+	details.SweepToFill = r.ReadString()
+	details.AllOrNone = r.ReadString()
+	details.MinQty = r.ReadString()
+	details.OcaType = r.ReadString()
 	r.ReadString() // deprecated ETradeOnly
 	r.ReadString() // deprecated FirmQuoteOnly
 	r.ReadString() // deprecated NBBOPriceCap
 	// The pre-status slot carries the wire's parentId on every live
 	// frame (bracket children hold real values here); the live tail has
 	// no second copy, so this slot feeds OpenOrder.ParentID.
-	preStatusParentID := r.ReadString()
-	r.ReadString() // TriggerMethod
+	details.ParentID = r.ReadString()
+	details.TriggerMethod = r.ReadString()
 
-	r.ReadString() // Volatility
-	r.ReadString() // VolatilityType
-	deltaNeutralOrderType := r.ReadString()
-	r.ReadString() // DeltaNeutralAuxPrice
+	details.Volatility = r.ReadString()
+	details.VolatilityType = r.ReadString()
+	details.DeltaNeutralOrderType = r.ReadString()
+	details.DeltaNeutralAuxPrice = r.ReadString()
 	// Live IB Gateway (server_version 200) sends the sentinel "None" for
 	// orders without a delta-neutral leg. "None" is non-empty, so per the
 	// official field order the 8-field delta-neutral block still follows
@@ -956,14 +973,20 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	// DeltaNeutralOrderType (a real delta-neutral order, or the empty
 	// pre-sentinel form) remains unattested live and falls back to the
 	// partial decode.
-	if deltaNeutralOrderType != "None" {
-		return []Message{partial}, nil
+	if details.DeltaNeutralOrderType != "" {
+		details.DeltaNeutralConID = r.ReadString()
+		r.ReadString() // delta-neutral settling firm
+		r.ReadString() // delta-neutral clearing account
+		r.ReadString() // delta-neutral clearing intent
+		r.ReadString() // delta-neutral open/close
+		details.DeltaNeutralShortSale = r.ReadString()
+		details.DeltaNeutralShortSaleSlot = r.ReadString()
+		details.DeltaNeutralDesignatedLocation = r.ReadString()
 	}
-	r.Skip(8)      // delta-neutral block (see layout note above)
-	r.ReadString() // ContinuousUpdate
-	r.ReadString() // ReferencePriceType
-	r.ReadString() // TrailStopPrice
-	r.ReadString() // TrailingPercent
+	details.ContinuousUpdate = r.ReadString()
+	details.ReferencePriceType = r.ReadString()
+	details.TrailStopPrice = r.ReadString()
+	details.TrailingPercent = r.ReadString()
 	r.ReadString() // BasisPoints
 	r.ReadString() // BasisPointsType
 	comboLegsDescription := r.ReadString()
@@ -989,7 +1012,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		}
 	}
 	contract.ComboLegs = comboLegs
-	partial.Contract = contract
+	details.Contract = contract
 
 	orderComboLegsCount, err := r.ReadOptionalCount("open order combo leg prices")
 	if err != nil {
@@ -1012,25 +1035,26 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		return nil, err
 	}
 
-	r.ReadString() // ScaleInitLevelSize
-	r.ReadString() // ScaleSubsLevelSize
-	scalePriceIncrement := r.ReadString()
-	if scalePriceIncrement != unsetDoubleSentinel && isPositiveWireNumber(scalePriceIncrement) {
-		// A real scale order appends scale fields that are unattested
-		// live; no-scale frames echo 2147483647/2147483647 with the
-		// increment empty or carrying the unset-double sentinel, and go
-		// straight to hedgeType (official decoding appends the scale
-		// block only for a real positive increment).
-		return []Message{partial}, nil
+	details.ScaleInitLevelSize = r.ReadString()
+	details.ScaleSubsLevelSize = r.ReadString()
+	details.ScalePriceIncrement = r.ReadString()
+	if details.ScalePriceIncrement != unsetDoubleSentinel && isPositiveWireNumber(details.ScalePriceIncrement) {
+		details.ScalePriceAdjustValue = r.ReadString()
+		details.ScalePriceAdjustInterval = r.ReadString()
+		details.ScaleProfitOffset = r.ReadString()
+		details.ScaleAutoReset = r.ReadString()
+		details.ScaleInitPosition = r.ReadString()
+		details.ScaleInitFillQty = r.ReadString()
+		details.ScaleRandomPercent = r.ReadString()
 	}
-	hedgeType := r.ReadString()
-	if hedgeType != "" {
-		r.ReadString() // HedgeParam
+	details.HedgeType = r.ReadString()
+	if details.HedgeType != "" {
+		details.HedgeParam = r.ReadString()
 	}
 	r.ReadString() // OptOutSmartRouting
-	r.ReadString() // ClearingAccount
-	r.ReadString() // ClearingIntent
-	r.ReadString() // NotHeld
+	details.ClearingAccount = r.ReadString()
+	details.ClearingIntent = r.ReadString()
+	details.NotHeld = r.ReadString()
 	deltaNeutralContractPresent := r.ReadString()
 	if deltaNeutralContractPresent == "1" {
 		contract.DeltaNeutral = &DeltaNeutralContract{
@@ -1038,21 +1062,20 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 			Delta: r.ReadString(),
 			Price: r.ReadString(),
 		}
-		partial.Contract = contract
+		details.Contract = contract
 	}
-	algoStrategy := r.ReadString()
-	var algoParams []TagValue
-	if algoStrategy != "" {
+	details.AlgoStrategy = r.ReadString()
+	if details.AlgoStrategy != "" {
 		algoParamsCount, err := r.ReadCount("open order algo params")
 		if err != nil {
 			return nil, err
 		}
-		algoParams, err = readTagValuePairs(r, "open order algo params", algoParamsCount)
+		details.AlgoParams, err = readTagValuePairs(r, "open order algo params", algoParamsCount)
 		if err != nil {
 			return nil, err
 		}
 	}
-	r.ReadString() // Solicited
+	details.Solicited = r.ReadString()
 	r.ReadString() // WhatIf
 
 	status := r.ReadString()
@@ -1103,12 +1126,14 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	warningText := r.ReadString()
 
 	// Post-status advanced-order fields needed to reach conditional blocks.
-	r.ReadString() // RandomizeSize
-	r.ReadString() // RandomizePrice
+	details.RandomizeSize = r.ReadString()
+	details.RandomizePrice = r.ReadString()
 	if orderType == "PEG BENCH" {
-		for range 5 {
-			r.ReadString()
-		}
+		details.ReferenceContractID = r.ReadString()
+		details.PeggedChangeAmountDecrease = r.ReadString()
+		details.PeggedChangeAmount = r.ReadString()
+		details.ReferenceChangeAmount = r.ReadString()
+		details.ReferenceExchangeID = r.ReadString()
 	}
 
 	conditionsCount, err := r.ReadOptionalCount("open order conditions")
@@ -1137,49 +1162,50 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		conditionsIgnoreRTH = btoa(mustReadBool(r))
 		conditionsCancelOrder = btoa(mustReadBool(r))
 	}
-	// Live v200 frames end with the official 32-field tail:
-	// adjustedOrderType, triggerPrice, trailStopPrice, lmtPriceOffset,
-	// adjustedStopPrice, adjustedStopLimitPrice, adjustedTrailingAmount,
-	// adjustableTrailingUnit, softDollar name/value/displayName,
-	// cashQty, dontUseAutoPriceForHedge, isOmsContainer,
-	// discretionaryUpToLimitPrice, usePriceMgmtAlgo, duration,
-	// postToAts, autoCancelParent, minTradeQty, minCompeteSize,
-	// competeAgainstBestOffset, midOffsetAtWhole, midOffsetAtHalf,
-	// customerAccount, professionalCustomer, bondAccruedInterest,
-	// includeOvernight, extOperator, manualOrderIndicator, submitter,
-	// imbalanceOnly. None map to OpenOrder fields, and there is no fill
-	// echo; fills arrive on the separate order_status frame. Any other
-	// tail width is an unattested shape and falls back to the partial
-	// decode.
-	//
-	// The tail is a fixed 24-field base
-	// (adjustedOrderParams 8, softDollarTier 3, cashQty, autoPriceForHedge,
-	// omsContainer, discretionaryUpToLimit, usePriceMgmtAlgo, duration,
-	// postToAts, autoCancelParent, pegBest/pegMid offsets 5) plus one field
-	// plus eight fields present throughout the supported range
-	// (orderdecoder.py:372-391).
+	// Live v200 frames end with the official 32-field order tail. Every
+	// supported layout is consumed completely; a width mismatch is a protocol
+	// error rather than a successful partial order.
 	const expectedTail = 32
 	if r.Remaining() != expectedTail {
-		return []Message{partial}, nil
+		return nil, fmt.Errorf("codec: open order tail has %d fields, want %d", r.Remaining(), expectedTail)
 	}
-	r.Skip(expectedTail)
+	details.AdjustedOrderType = r.ReadString()
+	details.TriggerPrice = r.ReadString()
+	details.StopPrice = r.ReadString()
+	details.LmtPriceOffset = r.ReadString()
+	details.AdjustedStopPrice = r.ReadString()
+	details.AdjustedStopLimitPrice = r.ReadString()
+	details.AdjustedTrailingAmount = r.ReadString()
+	details.AdjustableTrailingUnit = r.ReadString()
+	r.Skip(3) // soft-dollar tier name, value, display name
+	details.CashQty = r.ReadString()
+	details.DontUseAutoPriceForHedge = r.ReadString()
+	details.IsOMSContainer = r.ReadString()
+	r.ReadString() // discretionary up to limit price
+	details.UsePriceMgmtAlgo = r.ReadString()
+	r.Skip(2) // duration, post-to-ATS
+	details.AutoCancelParent = r.ReadString()
+	details.MinTradeQty = r.ReadString()
+	details.MinCompeteSize = r.ReadString()
+	details.CompeteAgainstBestOffset = r.ReadString()
+	details.MidOffsetAtWhole = r.ReadString()
+	details.MidOffsetAtHalf = r.ReadString()
+	details.CustomerAccount = r.ReadString()
+	details.ProfessionalCustomer = r.ReadString()
+	r.Skip(4) // bond interest, overnight, external operator, manual indicator
+	details.Submitter = r.ReadString()
+	details.ImbalanceOnly = r.ReadString()
+	details.ComboLegsDescription = comboLegsDescription
+	details.OrderComboLegPrices = orderComboLegPrices
+	details.SmartComboRouting = smartComboRouting
+	details.Conditions = conditions
+	details.ConditionsIgnoreRTH = conditionsIgnoreRTH
+	details.ConditionsCancelOrder = conditionsCancelOrder
+	details.Status = status
 
 	return []Message{OpenOrder{
-		OrderID: orderID, Contract: contract,
-		Action: action, Quantity: quantity, OrderType: orderType,
-		LmtPrice: lmtPrice, AuxPrice: auxPrice, TIF: tif,
-		OcaGroup: ocaGroup, Account: account,
-		OpenClose: openClose, Origin: origin, OrderRef: orderRef,
-		ClientID: clientID, PermID: permID, OutsideRTH: outsideRTH,
-		Hidden: hidden, DiscretionAmt: discretionAmt, GoodAfterTime: goodAfterTime,
-		ComboLegsDescription:           comboLegsDescription,
-		OrderComboLegPrices:            orderComboLegPrices,
-		SmartComboRouting:              smartComboRouting,
-		AlgoStrategy:                   algoStrategy,
-		AlgoParams:                     algoParams,
-		Conditions:                     conditions,
-		ConditionsIgnoreRTH:            conditionsIgnoreRTH,
-		ConditionsCancelOrder:          conditionsCancelOrder,
+		OrderID:                        orderID,
+		OrderDetails:                   details,
 		Status:                         status,
 		InitMarginBefore:               initMarginBefore,
 		MaintMarginBefore:              maintMarginBefore,
@@ -1208,7 +1234,6 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		RejectReason:                   rejectReason,
 		Allocations:                    allocations,
 		WarningText:                    warningText,
-		ParentID:                       preStatusParentID,
 	}}, nil
 }
 
@@ -1235,55 +1260,63 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.DiscretionAmt)
 	w.WriteString(m.GoodAfterTime)
 	w.WriteString("") // deprecated sharesAllocation
-	w.WriteString("") // FAGroup
-	w.WriteString("") // FAMethod
-	w.WriteString("") // FAPercentage
-	w.WriteString("") // ModelCode
-	w.WriteString("") // GoodTillDate
-	w.WriteString("") // Rule80A
-	w.WriteString("") // PercentOffset
-	w.WriteString("") // SettlingFirm
-	w.WriteString("") // ShortSaleSlot
-	w.WriteString("") // DesignatedLocation
-	w.WriteString("") // ExemptCode
-	w.WriteString("") // AuctionStrategy
-	w.WriteString("") // StartingPrice
-	w.WriteString("") // StockRefPrice
-	w.WriteString("") // Delta
-	w.WriteString("") // StockRangeLower
-	w.WriteString("") // StockRangeUpper
-	w.WriteString("") // DisplaySize
+	w.WriteString(m.FAGroup)
+	w.WriteString(m.FAMethod)
+	w.WriteString(m.FAPercentage)
+	w.WriteString(m.ModelCode)
+	w.WriteString(m.GoodTillDate)
+	w.WriteString(m.Rule80A)
+	w.WriteString(m.PercentOffset)
+	w.WriteString(m.SettlingFirm)
+	w.WriteString(m.ShortSaleSlot)
+	w.WriteString(m.DesignatedLocation)
+	w.WriteString(m.ExemptCode)
+	w.WriteString(m.AuctionStrategy)
+	w.WriteString(m.StartingPrice)
+	w.WriteString(m.StockRefPrice)
+	w.WriteString(m.Delta)
+	w.WriteString(m.StockRangeLower)
+	w.WriteString(m.StockRangeUpper)
+	w.WriteString(m.DisplaySize)
 	w.WriteString("") // BlockOrder
-	w.WriteString("") // SweepToFill
-	w.WriteString("") // AllOrNone
-	w.WriteString("") // MinQty
-	w.WriteString("") // OcaType
+	w.WriteString(m.SweepToFill)
+	w.WriteString(m.AllOrNone)
+	w.WriteString(m.MinQty)
+	w.WriteString(m.OcaType)
 	w.WriteString("") // deprecated ETradeOnly
 	w.WriteString("") // deprecated FirmQuoteOnly
 	w.WriteString("") // deprecated NBBOPriceCap
 	w.WriteString(m.ParentID)
-	w.WriteString("") // TriggerMethod
-	w.WriteString("") // Volatility
-	w.WriteString("") // VolatilityType
+	w.WriteString(m.TriggerMethod)
+	w.WriteString(m.Volatility)
+	w.WriteString(m.VolatilityType)
 	// Live sv200 layout: DeltaNeutralOrderType "None" for orders without
 	// a delta-neutral leg, followed by the 8-field delta-neutral block in
 	// the captured shape (see the InOpenOrder decode note).
-	w.WriteString("None") // DeltaNeutralOrderType
-	w.WriteString("")     // DeltaNeutralAuxPrice
-	w.WriteString("0")    // delta-neutral conId
-	w.WriteString("")     // delta-neutral settlingFirm
-	w.WriteString("")     // delta-neutral clearingAccount
-	w.WriteString("")     // delta-neutral clearingIntent
-	w.WriteString("?")    // delta-neutral openClose
-	w.WriteString("0")    // delta-neutral shortSale
-	w.WriteString("0")    // delta-neutral shortSaleSlot
-	w.WriteString("")     // delta-neutral designatedLocation
-	w.WriteString("")     // ContinuousUpdate
-	w.WriteString("")     // ReferencePriceType
-	w.WriteString("")     // TrailStopPrice
-	w.WriteString("")     // TrailingPercent
-	w.WriteString("")     // BasisPoints
-	w.WriteString("")     // BasisPointsType
+	deltaNeutralOrderType := m.DeltaNeutralOrderType
+	if deltaNeutralOrderType == "" {
+		deltaNeutralOrderType = "None"
+	}
+	w.WriteString(deltaNeutralOrderType)
+	w.WriteString(m.DeltaNeutralAuxPrice)
+	deltaNeutralConID := m.DeltaNeutralConID
+	if deltaNeutralConID == "" {
+		deltaNeutralConID = "0"
+	}
+	w.WriteString(deltaNeutralConID)
+	w.WriteString("")  // delta-neutral settlingFirm
+	w.WriteString("")  // delta-neutral clearingAccount
+	w.WriteString("")  // delta-neutral clearingIntent
+	w.WriteString("?") // delta-neutral openClose
+	w.WriteString(defaultWireValue(m.DeltaNeutralShortSale, "0"))
+	w.WriteString(defaultWireValue(m.DeltaNeutralShortSaleSlot, "0"))
+	w.WriteString(m.DeltaNeutralDesignatedLocation)
+	w.WriteString(m.ContinuousUpdate)
+	w.WriteString(m.ReferencePriceType)
+	w.WriteString(m.TrailStopPrice)
+	w.WriteString(m.TrailingPercent)
+	w.WriteString("") // BasisPoints
+	w.WriteString("") // BasisPointsType
 	w.WriteString(m.ComboLegsDescription)
 	w.WriteInt(len(m.Contract.ComboLegs))
 	for _, leg := range m.Contract.ComboLegs {
@@ -1301,17 +1334,26 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 		w.WriteString(price)
 	}
 	writeTagValuePairs(&w, m.SmartComboRouting)
-	// Live no-scale echo: UNSET-int level sizes, empty increment, then
-	// straight to hedgeType (no scaleTable/activeStartTime/activeStopTime
-	// on the live layout).
-	w.WriteString("2147483647") // ScaleInitLevelSize
-	w.WriteString("2147483647") // ScaleSubsLevelSize
-	w.WriteString("")           // ScalePriceIncrement
-	w.WriteString("")           // HedgeType
-	w.WriteString("")           // OptOutSmartRouting
-	w.WriteString("")           // ClearingAccount
-	w.WriteString("")           // ClearingIntent
-	w.WriteString("")           // NotHeld
+	w.WriteString(defaultWireValue(m.ScaleInitLevelSize, "2147483647"))
+	w.WriteString(defaultWireValue(m.ScaleSubsLevelSize, "2147483647"))
+	w.WriteString(m.ScalePriceIncrement)
+	if isPositiveWireNumber(m.ScalePriceIncrement) && m.ScalePriceIncrement != unsetDoubleSentinel {
+		w.WriteString(m.ScalePriceAdjustValue)
+		w.WriteString(m.ScalePriceAdjustInterval)
+		w.WriteString(m.ScaleProfitOffset)
+		w.WriteString(m.ScaleAutoReset)
+		w.WriteString(m.ScaleInitPosition)
+		w.WriteString(m.ScaleInitFillQty)
+		w.WriteString(m.ScaleRandomPercent)
+	}
+	w.WriteString(m.HedgeType)
+	if m.HedgeType != "" {
+		w.WriteString(m.HedgeParam)
+	}
+	w.WriteString("") // OptOutSmartRouting
+	w.WriteString(m.ClearingAccount)
+	w.WriteString(m.ClearingIntent)
+	w.WriteString(m.NotHeld)
 	w.WriteBool(m.Contract.DeltaNeutral != nil)
 	if m.Contract.DeltaNeutral != nil {
 		w.WriteInt(m.Contract.DeltaNeutral.ConID)
@@ -1322,7 +1364,7 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	if m.AlgoStrategy != "" {
 		writeTagValuePairs(&w, m.AlgoParams)
 	}
-	w.WriteString("") // Solicited
+	w.WriteString(m.Solicited)
 	w.WriteString("") // WhatIf
 	w.WriteString(m.Status)
 	w.WriteString(m.InitMarginBefore)
@@ -1361,8 +1403,15 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 		w.WriteString(allocation.IsMonetary)
 	}
 	w.WriteString(m.WarningText)
-	w.WriteString("") // RandomizeSize
-	w.WriteString("") // RandomizePrice
+	w.WriteString(m.RandomizeSize)
+	w.WriteString(m.RandomizePrice)
+	if m.OrderType == "PEG BENCH" {
+		w.WriteString(m.ReferenceContractID)
+		w.WriteString(m.PeggedChangeAmountDecrease)
+		w.WriteString(m.PeggedChangeAmount)
+		w.WriteString(m.ReferenceChangeAmount)
+		w.WriteString(m.ReferenceExchangeID)
+	}
 	w.WriteInt(len(m.Conditions))
 	for _, cond := range m.Conditions {
 		if err := writeOrderCondition(&w, cond); err != nil {
@@ -1376,38 +1425,38 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	// Official 32-field tail of the live sv200 layout (must mirror the
 	// InOpenOrder decode tail). No fill echo on open_order; fills ride
 	// the separate order_status frame.
-	w.WriteString("") // AdjustedOrderType
-	w.WriteString("") // TriggerPrice
-	w.WriteString("") // TrailStopPrice
-	w.WriteString("") // LmtPriceOffset
-	w.WriteString("") // AdjustedStopPrice
-	w.WriteString("") // AdjustedStopLimitPrice
-	w.WriteString("") // AdjustedTrailingAmount
-	w.WriteString("") // AdjustableTrailingUnit
+	w.WriteString(m.AdjustedOrderType)
+	w.WriteString(m.TriggerPrice)
+	w.WriteString(m.StopPrice)
+	w.WriteString(m.LmtPriceOffset)
+	w.WriteString(m.AdjustedStopPrice)
+	w.WriteString(m.AdjustedStopLimitPrice)
+	w.WriteString(m.AdjustedTrailingAmount)
+	w.WriteString(m.AdjustableTrailingUnit)
 	w.WriteString("") // SoftDollarName
 	w.WriteString("") // SoftDollarValue
 	w.WriteString("") // SoftDollarDisplayName
-	w.WriteString("") // CashQty
-	w.WriteString("") // DontUseAutoPriceForHedge
-	w.WriteString("") // IsOmsContainer
+	w.WriteString(m.CashQty)
+	w.WriteString(m.DontUseAutoPriceForHedge)
+	w.WriteString(m.IsOMSContainer)
 	w.WriteString("") // DiscretionaryUpToLimitPrice
-	w.WriteString("") // UsePriceMgmtAlgo
+	w.WriteString(m.UsePriceMgmtAlgo)
 	w.WriteString("") // Duration
 	w.WriteString("") // PostToAts
-	w.WriteString("") // AutoCancelParent
-	w.WriteString("") // MinTradeQty
-	w.WriteString("") // MinCompeteSize
-	w.WriteString("") // CompeteAgainstBestOffset
-	w.WriteString("") // MidOffsetAtWhole
-	w.WriteString("") // MidOffsetAtHalf
-	w.WriteString("") // CustomerAccount
-	w.WriteString("") // ProfessionalCustomer
+	w.WriteString(m.AutoCancelParent)
+	w.WriteString(m.MinTradeQty)
+	w.WriteString(m.MinCompeteSize)
+	w.WriteString(m.CompeteAgainstBestOffset)
+	w.WriteString(m.MidOffsetAtWhole)
+	w.WriteString(m.MidOffsetAtHalf)
+	w.WriteString(m.CustomerAccount)
+	w.WriteString(m.ProfessionalCustomer)
 	w.WriteString("") // BondAccruedInterest
 	w.WriteString("") // IncludeOvernight
 	w.WriteString("") // ExtOperator
 	w.WriteString("") // ManualOrderIndicator
-	w.WriteString("") // Submitter
-	w.WriteString("") // ImbalanceOnly
+	w.WriteString(m.Submitter)
+	w.WriteString(m.ImbalanceOnly)
 	return w.Fields(), nil
 }
 
@@ -1530,7 +1579,7 @@ func (m CommissionReport) encodeWire(sv int) ([]string, error) {
 
 // [101, contract(11-field), action, totalQty, orderType, ...]
 func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
-	m := CompletedOrder{Contract: readWireContract(r)}
+	m := CompletedOrder{OrderDetails: OrderDetails{Contract: readWireContract(r)}}
 	m.Action = r.ReadString()
 	m.Quantity = r.ReadString()
 	m.OrderType = r.ReadString()

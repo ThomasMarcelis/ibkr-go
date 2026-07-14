@@ -121,6 +121,31 @@ func (e *ExerciseUncertainError) Unwrap() error {
 	return e.Err
 }
 
+// RegulatorySnapshotUncertainError reports that an admitted fee-bearing
+// snapshot lost its definitive completion evidence. RequestID and ConnectionSeq
+// identify the exact request and physical session that may have incurred the
+// charge. The request must be reconciled before it is retried.
+type RegulatorySnapshotUncertainError struct {
+	RequestID     RequestID
+	ConnectionSeq uint64
+	Err           error
+}
+
+func (e *RegulatorySnapshotUncertainError) Error() string {
+	return fmt.Sprintf(
+		"ibkr: regulatory snapshot request %d on connection %d outcome is uncertain: %v",
+		e.RequestID,
+		e.ConnectionSeq,
+		e.Err,
+	)
+}
+
+func (e *RegulatorySnapshotUncertainError) Unwrap() error { return e.Err }
+
+func (e *RegulatorySnapshotUncertainError) Is(target error) bool {
+	return target == ErrRegulatorySnapshotUncertain
+}
+
 // SubscriptionCancelError reports that a subscription cancellation could not
 // enter the active transport queue. The engine retires the owning connection
 // generation so the remote subscription cannot survive into a replacement;

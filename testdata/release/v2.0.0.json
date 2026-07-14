@@ -1,0 +1,24 @@
+{
+  "schema": 1,
+  "release": "v2.0.0",
+  "status": "blocked",
+  "evidence": {
+    "regulatory_snapshot": null,
+    "order_bound": null,
+    "soak_days": []
+  },
+  "blockers": [
+    {
+      "id": "regulatory-snapshot",
+      "requirement": "Record one explicitly authorized successful fee-bearing regulatory snapshot."
+    },
+    {
+      "id": "order-bound",
+      "requirement": "Record and promote a raw orderBound callback from a manual order in paper TWS."
+    },
+    {
+      "id": "seven-day-soak",
+      "requirement": "Complete seven consecutive feedback-monitoring days on the unchanged RC3 candidate."
+    }
+  ]
+}

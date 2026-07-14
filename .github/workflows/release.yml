@@ -14,7 +14,7 @@ env:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
         with:
@@ -51,6 +51,9 @@ jobs:
           git fetch origin main
           commit=$(git rev-list -n 1 "$TAG")
           git merge-base --is-ancestor "$commit" origin/main
+          if [[ "$TAG" != *-* ]]; then
+            echo 'IBKR_STABLE_RELEASE=1' >> "$GITHUB_ENV"
+          fi
 
       - name: Verify release commit
         run: |
@@ -60,6 +63,7 @@ jobs:
           ./scripts/check-api.sh
           go vet ./...
           go test -race -shuffle=on -count=1 ./...
+          ./scripts/fuzz-all.sh 30s
           go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
       - name: Extract required changelog section

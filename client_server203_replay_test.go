@@ -38,7 +38,7 @@ func TestOrderLifecycleServer203Replay(t *testing.T) {
 		case event := <-handle.Events():
 			if event.OpenOrder != nil {
 				sawOpen = true
-				if event.OpenOrder.Contract.ConID != 265598 || event.OpenOrder.Status != ibkr.OrderStatusPreSubmitted {
+				if event.OpenOrder.Contract.ConID != 265598 || event.OpenOrder.State.Status != ibkr.OrderStatusPreSubmitted {
 					t.Fatalf("OpenOrder = %+v", event.OpenOrder)
 				}
 			}

@@ -84,49 +84,15 @@ const (
 	OpenOrdersScopeAuto   OpenOrdersScope = "auto"   // persistently bind future manual TWS orders; client ID 0 only, no snapshot
 )
 
-// OpenOrder is the typed open_order echo from the Gateway. State preserves the
-// margin, commission, allocation, and rejection details carried by the same
-// frame. Live open_order frames carry no fill progress; track fills through
-// [OrderStatusUpdate] and executions instead.
+// OpenOrder is the typed open_order echo from the Gateway. Order uses the same
+// complete broker-echo model as [CompletedOrderResult], while State preserves
+// the margin, commission, allocation, and rejection details carried by the
+// open-order frame. Live open_order frames carry no fill progress; track fills
+// through [OrderStatusUpdate] and executions instead.
 type OpenOrder struct {
-	OrderID   int64
-	Account   string
-	Contract  Contract
-	Action    OrderAction
-	OrderType OrderType
-	Status    OrderStatus
-	Quantity  decimal.Decimal
-	State     OrderState
-
-	LmtPrice              *decimal.Decimal
-	AuxPrice              *decimal.Decimal
-	TIF                   TimeInForce
-	OcaGroup              string
-	OpenClose             string
-	Origin                int
-	OrderRef              string
-	ClientID              ClientID
-	PermID                int64
-	OutsideRTH            bool
-	Hidden                bool
-	GoodAfterTime         string
-	ParentID              int64
-	Combo                 OrderCombo
-	ComboDescription      string // BAG description echoed by IBKR; never sent on placement
-	AlgoStrategy          string
-	AlgoParams            []TagValue
-	Conditions            []OrderCondition
-	ConditionsIgnoreRTH   bool
-	ConditionsCancelOrder bool
-
-	// WarningText carries the Gateway's advisory for this order, e.g. price
-	// cap adjustments; empty when the server sent none.
-	WarningText string
-
-	// Partial reports that an advanced or unattested order layout degraded to
-	// a partial parse: the core order fields above are populated, but Status
-	// and State are empty.
-	Partial bool
+	Contract Contract
+	Order    OrderDetails
+	State    OrderState
 }
 
 // OpenOrderUpdate is a union event from the open-orders subscription. Exactly
@@ -378,9 +344,24 @@ type OrderScale struct {
 	InitialLevelSize    int
 	SubsequentLevelSize int
 	PriceIncrement      decimal.Decimal
+	PriceAdjustValue    *decimal.Decimal
+	PriceAdjustInterval *int
+	ProfitOffset        *decimal.Decimal
+	AutoReset           *bool
+	InitialPosition     *int
+	InitialFillQty      *int
+	RandomPercent       *bool
 	Table               string
 	ActiveStartTime     string
 	ActiveStopTime      string
+}
+
+// OrderShortSale carries the locate metadata required by SSHORT and SLONG
+// orders. ExemptCode is nil when IBKR's default exemption code should be used.
+type OrderShortSale struct {
+	Slot               int
+	DesignatedLocation string
+	ExemptCode         *int
 }
 
 // HedgeType selects the relationship between a child hedge order and its
@@ -430,6 +411,16 @@ type OrderAdjustment struct {
 	TrailingUnit   int
 }
 
+// OrderPeggedBenchmark configures or reports the reference contract and price
+// movement relationship for a PEG BENCH order.
+type OrderPeggedBenchmark struct {
+	ReferenceContractID   ContractID
+	ChangeAmountDecrease  bool
+	ChangeAmount          decimal.Decimal
+	ReferenceChangeAmount *decimal.Decimal
+	ReferenceExchangeID   string
+}
+
 // Order is the instruction a user fills in to place or replace an order via
 // [OrdersClient.Place], [OrdersClient.Preview], or [OrderHandle.Replace]. Only a
 // handful of fields are needed for a common order; the rest cover advanced
@@ -451,45 +442,48 @@ type OrderAdjustment struct {
 // A minimal market order needs only Action, OrderType, and Quantity. A limit
 // order additionally sets LmtPrice.
 type Order struct {
-	Action                OrderAction      // BUY or SELL (required)
-	OrderType             OrderType        // execution instruction (required); selects which price fields apply
-	Quantity              decimal.Decimal  // order size (required); zero is treated as unset
-	LmtPrice              *decimal.Decimal // limit price for LMT / STP LMT
-	AuxPrice              *decimal.Decimal // stop trigger for STP / STP LMT, trailing amount for TRAIL
-	TIF                   TimeInForce      // time in force; empty defaults to DAY at the server
-	Account               string           // account to place under; required only for multi-account logins
-	Transmit              *bool            // nil = transmit (true); false stages an untransmitted order
-	ParentID              int64            // parent order ID for a bracket child; 0 = no parent
-	OCA                   OrderOCA         // one-cancels-all behavior; zero value disables it
-	OutsideRTH            bool             // allow execution outside regular trading hours
-	TriggerMethod         int              // stop-trigger method; 0 = default
-	DisplaySize           int              // iceberg display size; 0 = show full size
-	OrderRef              string           // free-form client order reference/tag
-	GoodAfterTime         string           // activate at this time; "YYYYMMDD HH:MM:SS tz"
-	GoodTillDate          string           // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
-	AllOrNone             *bool            // nil = server default; require the whole quantity to fill at once
-	MinQty                *decimal.Decimal // minimum fill quantity
-	PercentOffset         *decimal.Decimal // offset percent for REL/pegged orders
-	TrailStopPrice        *decimal.Decimal // trailing-stop trigger price
-	TrailingPercent       *decimal.Decimal // trailing amount as a percent
-	LmtPriceOffset        *decimal.Decimal // limit offset for TRAIL LIMIT and adjustable orders
-	Scale                 OrderScale       // scale-order sizing and active window
-	Hedge                 OrderHedge       // hedge-child behavior
-	Combo                 OrderCombo       // BAG legs, per-leg prices, and smart routing
-	Algorithm             OrderAlgorithm   // IB algo strategy and parameters
-	Conditions            OrderConditions  // conditional submission/cancellation triggers
-	Adjustment            OrderAdjustment  // adjustable-stop transition
-	CashQty               *decimal.Decimal // cash quantity for cash-quantity orders
-	UsePriceMgmtAlgo      *bool            // nil = server default; enable IB's price management algo
-	AdvancedErrorOverride string           // override token for advanced-order warnings
-	ManualOrderTime       string           // manual order entry time for compliance
-	Deactivate            bool             // submit the order inactive; requires server_version 216
-	PostOnly              bool             // reject instead of taking liquidity; requires server_version 216
-	AllowPreOpen          bool             // allow routing in the venue pre-open; requires server_version 216
-	IgnoreOpenAuction     bool             // exclude the opening auction; requires server_version 216
-	RouteMarketableToBBO  *bool            // nil = server default; requires server_version 217
-	SeekPriceImprovement  *bool            // nil = server default; requires server_version 217
-	WhatIfType            *int             // optional IBKR what-if mode; requires server_version 217
+	Action                OrderAction           // BUY or SELL (required)
+	OrderType             OrderType             // execution instruction (required); selects which price fields apply
+	Quantity              decimal.Decimal       // order size (required); zero is treated as unset
+	LmtPrice              *decimal.Decimal      // limit price for LMT / STP LMT
+	AuxPrice              *decimal.Decimal      // stop trigger for STP / STP LMT, trailing amount for TRAIL
+	TIF                   TimeInForce           // time in force; empty defaults to DAY at the server
+	Account               string                // account to place under; required only for multi-account logins
+	Transmit              *bool                 // nil = transmit (true); false stages an untransmitted order
+	ParentID              int64                 // parent order ID for a bracket child; 0 = no parent
+	OCA                   OrderOCA              // one-cancels-all behavior; zero value disables it
+	OutsideRTH            bool                  // allow execution outside regular trading hours
+	TriggerMethod         int                   // stop-trigger method; 0 = default
+	DisplaySize           int                   // iceberg display size; 0 = show full size
+	OrderRef              string                // free-form client order reference/tag
+	GoodAfterTime         string                // activate at this time; "YYYYMMDD HH:MM:SS tz"
+	GoodTillDate          string                // expiry for TIF GTD; "YYYYMMDD HH:MM:SS tz"
+	AllOrNone             *bool                 // nil = server default; require the whole quantity to fill at once
+	MinQty                *int                  // minimum fill quantity
+	PercentOffset         *decimal.Decimal      // offset percent for REL/pegged orders
+	TrailStopPrice        *decimal.Decimal      // trailing-stop trigger price
+	TrailingPercent       *decimal.Decimal      // trailing amount as a percent
+	LmtPriceOffset        *decimal.Decimal      // limit offset for TRAIL LIMIT and adjustable orders
+	Scale                 OrderScale            // scale-order sizing and active window
+	Auction               OrderAuction          // auction and PEG BENCH reference-price controls
+	ShortSale             OrderShortSale        // locate metadata for SSHORT and SLONG
+	Hedge                 OrderHedge            // hedge-child behavior
+	Combo                 OrderCombo            // BAG legs, per-leg prices, and smart routing
+	Algorithm             OrderAlgorithm        // IB algo strategy and parameters
+	Conditions            OrderConditions       // conditional submission/cancellation triggers
+	Adjustment            OrderAdjustment       // adjustable-stop transition
+	PeggedBenchmark       *OrderPeggedBenchmark // PEG BENCH reference relationship
+	CashQty               *decimal.Decimal      // cash quantity for cash-quantity orders
+	UsePriceMgmtAlgo      *bool                 // nil = server default; enable IB's price management algo
+	AdvancedErrorOverride string                // override token for advanced-order warnings
+	ManualOrderTime       string                // manual order entry time for compliance
+	Deactivate            bool                  // submit the order inactive; requires server_version 216
+	PostOnly              bool                  // reject instead of taking liquidity; requires server_version 216
+	AllowPreOpen          bool                  // allow routing in the venue pre-open; requires server_version 216
+	IgnoreOpenAuction     bool                  // exclude the opening auction; requires server_version 216
+	RouteMarketableToBBO  *bool                 // nil = server default; requires server_version 217
+	SeekPriceImprovement  *bool                 // nil = server default; requires server_version 217
+	WhatIfType            *int                  // optional IBKR what-if mode; requires server_version 217
 }
 
 // PlaceOrderRequest pairs the [Contract] to trade with the [Order] instruction.
@@ -574,14 +568,14 @@ type OrderAllocation struct {
 // quantity that are absent from the completed-order message.
 type CompletedOrderResult struct {
 	Contract   Contract
-	Order      CompletedOrderDetails
+	Order      OrderDetails
 	Completion CompletedOrderCompletion
 }
 
-// CompletedOrderDetails is the complete order specification echoed by the
-// classic completed-order message. Pointer-valued numbers distinguish an
-// explicit zero from an IBKR unset sentinel.
-type CompletedOrderDetails struct {
+// OrderDetails is the complete order specification echoed by open-order and
+// completed-order messages. Pointer-valued values distinguish an explicit
+// zero or false from a field the broker did not send.
+type OrderDetails struct {
 	// OrderID, ClientID, and ParentID are nil for classic completed-order
 	// replies, whose wire shape does not carry those identities. A non-nil
 	// pointer preserves an explicit zero from protobuf replies.
@@ -602,22 +596,33 @@ type CompletedOrderDetails struct {
 	GoodAfterTime string
 	GoodTillDate  string
 	ModelCode     string
+	Transmit      *bool
 
-	Prices           CompletedOrderPrices
-	OCA              OrderOCA
-	Allocation       CompletedOrderAllocation
-	Routing          CompletedOrderRouting
-	Auction          CompletedOrderAuction
-	Execution        CompletedOrderExecution
-	Volatility       CompletedOrderVolatility
-	Combo            OrderCombo
-	ComboDescription string
-	Scale            CompletedOrderScale
-	Hedge            OrderHedge
-	Algorithm        OrderAlgorithm
-	Conditions       OrderConditions
-	PeggedBenchmark  *CompletedOrderPeggedBenchmark
-	Compliance       CompletedOrderCompliance
+	Prices                OrderPrices
+	OCA                   OrderOCA
+	Allocation            OrderAllocationDetails
+	Routing               OrderRoutingDetails
+	Auction               OrderAuctionDetails
+	Execution             OrderExecutionDetails
+	Volatility            OrderVolatilityDetails
+	Combo                 OrderCombo
+	ComboDescription      string
+	Scale                 OrderScaleDetails
+	Hedge                 OrderHedge
+	Algorithm             OrderAlgorithm
+	Conditions            OrderConditions
+	PeggedBenchmark       *OrderPeggedBenchmark
+	Adjustment            OrderAdjustmentDetails
+	Compliance            OrderComplianceDetails
+	UsePriceMgmtAlgo      *bool
+	AdvancedErrorOverride string
+	ManualOrderTime       string
+	Deactivate            *bool
+	PostOnly              *bool
+	AllowPreOpen          *bool
+	IgnoreOpenAuction     *bool
+	SeekPriceImprovement  *bool
+	WhatIfType            *int
 }
 
 // CompletedOrderCompletion is the terminal state returned with a completed
@@ -637,9 +642,9 @@ type CompletedOrderCompletion struct {
 	StatusText                string
 }
 
-// CompletedOrderPrices contains price and quantity-like optional values from
+// OrderPrices contains price and quantity-like optional values from
 // a completed order.
-type CompletedOrderPrices struct {
+type OrderPrices struct {
 	LmtPrice            *decimal.Decimal
 	AuxPrice            *decimal.Decimal
 	DiscretionaryAmount *decimal.Decimal
@@ -651,15 +656,15 @@ type CompletedOrderPrices struct {
 	CashQty             *decimal.Decimal
 }
 
-// CompletedOrderAllocation contains the financial-advisor allocation fields.
-type CompletedOrderAllocation struct {
+// OrderAllocationDetails contains the financial-advisor allocation fields.
+type OrderAllocationDetails struct {
 	Group      string
 	Method     string
 	Percentage string
 }
 
-// CompletedOrderRouting contains short-sale, clearing, and routing metadata.
-type CompletedOrderRouting struct {
+// OrderRoutingDetails contains short-sale, clearing, and routing metadata.
+type OrderRoutingDetails struct {
 	Rule80A              string
 	SettlingFirm         string
 	ShortSaleSlot        int
@@ -669,11 +674,12 @@ type CompletedOrderRouting struct {
 	ClearingIntent       string
 	NotHeld              bool
 	ImbalanceOnly        bool
-	RouteMarketableToBBO bool
+	RouteMarketableToBBO *bool
 }
 
-// CompletedOrderAuction contains BOX auction and pegged-to-stock price inputs.
-type CompletedOrderAuction struct {
+// OrderAuction contains BOX auction and pegged-to-stock price inputs.
+type OrderAuction struct {
+	Strategy        int
 	StartingPrice   *decimal.Decimal
 	StockRefPrice   *decimal.Decimal
 	Delta           *decimal.Decimal
@@ -681,9 +687,19 @@ type CompletedOrderAuction struct {
 	StockRangeUpper *decimal.Decimal
 }
 
-// CompletedOrderExecution contains execution controls and venue competition
+// OrderAuctionDetails contains BOX auction and pegged-to-stock price echoes.
+type OrderAuctionDetails struct {
+	Strategy        *int
+	StartingPrice   *decimal.Decimal
+	StockRefPrice   *decimal.Decimal
+	Delta           *decimal.Decimal
+	StockRangeLower *decimal.Decimal
+	StockRangeUpper *decimal.Decimal
+}
+
+// OrderExecutionDetails contains execution controls and venue competition
 // parameters from a completed order.
-type CompletedOrderExecution struct {
+type OrderExecutionDetails struct {
 	DisplaySize              *int
 	SweepToFill              bool
 	AllOrNone                bool
@@ -699,19 +715,19 @@ type CompletedOrderExecution struct {
 	MidOffsetAtHalf          *decimal.Decimal
 }
 
-// CompletedOrderVolatility contains volatility-order and delta-neutral hedge
+// OrderVolatilityDetails contains volatility-order and delta-neutral hedge
 // parameters from a completed order.
-type CompletedOrderVolatility struct {
+type OrderVolatilityDetails struct {
 	Value              *decimal.Decimal
 	Type               *int
-	DeltaNeutral       *CompletedOrderDeltaNeutral
+	DeltaNeutral       *OrderDeltaNeutralDetails
 	ContinuousUpdate   bool
 	ReferencePriceType *int
 }
 
-// CompletedOrderDeltaNeutral contains the active delta-neutral order block of
+// OrderDeltaNeutralDetails contains the active delta-neutral order block of
 // a volatility order.
-type CompletedOrderDeltaNeutral struct {
+type OrderDeltaNeutralDetails struct {
 	OrderType          OrderType
 	AuxPrice           *decimal.Decimal
 	ConID              ContractID
@@ -720,39 +736,42 @@ type CompletedOrderDeltaNeutral struct {
 	DesignatedLocation string
 }
 
-// CompletedOrderScale contains the full scale-order block echoed by IBKR.
-type CompletedOrderScale struct {
+// OrderScaleDetails contains the full scale-order block echoed by IBKR.
+type OrderScaleDetails struct {
 	InitialLevelSize    *int
 	SubsequentLevelSize *int
 	PriceIncrement      *decimal.Decimal
 	PriceAdjustValue    *decimal.Decimal
 	PriceAdjustInterval *int
 	ProfitOffset        *decimal.Decimal
-	AutoReset           bool
+	AutoReset           *bool
 	InitialPosition     *int
 	InitialFillQty      *int
-	RandomPercent       bool
+	RandomPercent       *bool
+	Table               string
+	ActiveStartTime     string
+	ActiveStopTime      string
 }
 
-// CompletedOrderPeggedBenchmark contains PEG BENCH parameters from a
-// completed order.
-type CompletedOrderPeggedBenchmark struct {
-	ReferenceContractID   ContractID
-	ChangeAmountDecrease  bool
-	ChangeAmount          decimal.Decimal
-	ReferenceChangeAmount *decimal.Decimal
-	ReferenceExchangeID   string
-}
-
-// CompletedOrderCompliance contains operator and account-classification
+// OrderComplianceDetails contains operator and account-classification
 // metadata attached to a completed order.
-type CompletedOrderCompliance struct {
+type OrderComplianceDetails struct {
 	Solicited            bool
 	OMSContainer         bool
 	Shareholder          string
 	CustomerAccount      string
 	ProfessionalCustomer bool
 	Submitter            string
+}
+
+// OrderAdjustmentDetails contains the optional adjustable-order echo values.
+type OrderAdjustmentDetails struct {
+	OrderType      OrderType
+	TriggerPrice   *decimal.Decimal
+	StopPrice      *decimal.Decimal
+	StopLimitPrice *decimal.Decimal
+	TrailingAmount *decimal.Decimal
+	TrailingUnit   *int
 }
 
 // SoftDollarTier is a soft-dollar commission tier from

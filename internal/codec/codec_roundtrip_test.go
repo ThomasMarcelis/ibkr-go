@@ -151,34 +151,46 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			// "None"-sentinel delta-neutral block, the no-scale section, and
 			// the official 32-field tail. Variable sections (combo legs, leg
 			// prices, smart routing, algo params, conditions) are populated
-			// so the count-prefixed walks are exercised end to end.
+			// so the count-prefixed walks are exercised end to end. The scale
+			// extension values are the official API 10.48.01 Testbed sample.
 			name: "OpenOrder",
 			msg: OpenOrder{
 				OrderID: 42,
-				Contract: Contract{
-					ConID: 265598, Symbol: "AAPL", SecType: "STK",
-					Strike: "0", Exchange: "SMART", Currency: "USD",
-					LocalSymbol: "AAPL", TradingClass: "AAPL",
-					ComboLegs: []ComboLeg{{
-						ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART",
-						OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1",
+				OrderDetails: OrderDetails{
+					OrderID: "42",
+					Contract: Contract{
+						ConID: 265598, Symbol: "AAPL", SecType: "STK",
+						Strike: "0", Exchange: "SMART", Currency: "USD",
+						LocalSymbol: "AAPL", TradingClass: "AAPL",
+						ComboLegs: []ComboLeg{{
+							ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART",
+							OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1",
+						}},
+					},
+					Account: "DU12345", Action: "BUY", Quantity: "10",
+					OrderType: "LMT", LmtPrice: "150.00", AuxPrice: "0.0",
+					TIF: "DAY", OcaGroup: "", OpenClose: "", Origin: "0",
+					OrderRef: "test-ref", ClientID: "99", PermID: "123456",
+					OutsideRTH: "0", Hidden: "0", DiscretionAmt: "0",
+					GoodAfterTime:       "",
+					AuctionStrategy:     "1",
+					OrderComboLegPrices: []string{"1.25"},
+					SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
+					AlgoStrategy:        "Adaptive",
+					AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
+					Conditions: []OrderCondition{{
+						Type: 1, Conjunction: "a", Operator: 2, Value: "175.0",
+						ConID: 265598, Exchange: "SMART", TriggerMethod: 4,
 					}},
+					ConditionsIgnoreRTH: "1", ConditionsCancelOrder: "0",
+					ParentID:              "99",
+					DeltaNeutralOrderType: "None",
+					DeltaNeutralConID:     "0", DeltaNeutralShortSale: "0", DeltaNeutralShortSaleSlot: "0",
+					ScaleInitLevelSize: "2000", ScaleSubsLevelSize: "500", ScalePriceIncrement: "0.02",
+					ScalePriceAdjustValue: "189", ScalePriceAdjustInterval: "3600", ScaleProfitOffset: "2",
+					ScaleAutoReset: "1", ScaleInitPosition: "10", ScaleInitFillQty: "40", ScaleRandomPercent: "1",
+					Status: "Submitted",
 				},
-				Account: "DU12345", Action: "BUY", Quantity: "10",
-				OrderType: "LMT", LmtPrice: "150.00", AuxPrice: "0.0",
-				TIF: "DAY", OcaGroup: "", OpenClose: "", Origin: "0",
-				OrderRef: "test-ref", ClientID: "99", PermID: "123456",
-				OutsideRTH: "0", Hidden: "0", DiscretionAmt: "0",
-				GoodAfterTime:       "",
-				OrderComboLegPrices: []string{"1.25"},
-				SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
-				AlgoStrategy:        "Adaptive",
-				AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
-				Conditions: []OrderCondition{{
-					Type: 1, Conjunction: "a", Operator: 2, Value: "175.0",
-					ConID: 265598, Exchange: "SMART", TriggerMethod: 4,
-				}},
-				ConditionsIgnoreRTH: "1", ConditionsCancelOrder: "0",
 				Status:           "Submitted",
 				InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
 				EquityWithLoanBefore: "1.7976931348623157E308",
@@ -189,7 +201,6 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 				Commission:          "1.7976931348623157E308", MinCommission: "1.7976931348623157E308",
 				MaxCommission: "1.7976931348623157E308", CommissionCurrency: "",
 				WarningText: "",
-				ParentID:    "99",
 			},
 		},
 		{
@@ -470,12 +481,13 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			// layout. The wire has a filled quantity but no remaining quantity.
 			name: "CompletedOrder",
 			msg: CompletedOrder{
-				Contract: Contract{
+				OrderDetails: OrderDetails{Contract: Contract{
 					ConID: 265598, Symbol: "AAPL", SecType: "STK",
 					Strike: "0", Exchange: "SMART", Currency: "USD",
 				},
-				Action: "BUY", OrderType: "LMT", Status: "Filled",
-				Quantity: "100", Filled: "100",
+					Action: "BUY", OrderType: "LMT", Status: "Filled",
+					Quantity: "100", Filled: "100",
+				},
 			},
 		},
 		{

@@ -147,19 +147,36 @@ func (h *Host) run() {
 				h.finish(fmt.Errorf("testhost: handshake: decode start_api envelope: %w", err))
 				return
 			}
-			if startEnvelope.MsgID != protocol.OutStartAPI || startEnvelope.Encoding != protocol.ClassicBody {
-				h.finish(fmt.Errorf("testhost: handshake: start_api envelope = {msg_id:%d encoding:%d}, want classic msg_id %d", startEnvelope.MsgID, startEnvelope.Encoding, protocol.OutStartAPI))
+			if startEnvelope.MsgID != protocol.OutStartAPI {
+				h.finish(fmt.Errorf("testhost: handshake: start_api msg_id = %d, want %d", startEnvelope.MsgID, protocol.OutStartAPI))
 				return
 			}
-			startFields, err := parseClassicEnvelopeBody(startEnvelope.Body)
-			if err != nil {
-				h.finish(fmt.Errorf("testhost: handshake: parse start_api: %w", err))
+			var clientID string
+			switch startEnvelope.Encoding {
+			case protocol.ClassicBody:
+				startFields, err := parseClassicEnvelopeBody(startEnvelope.Body)
+				if err != nil {
+					h.finish(fmt.Errorf("testhost: handshake: parse classic start_api: %w", err))
+					return
+				}
+				if len(startFields) >= 2 {
+					clientID = startFields[1]
+				}
+			case protocol.ProtobufBody:
+				value, err := decodeStartAPIClientID(startEnvelope.Body)
+				if err != nil {
+					h.finish(fmt.Errorf("testhost: handshake: parse protobuf start_api: %w", err))
+					return
+				}
+				clientID = strconv.Itoa(value)
+			default:
+				h.finish(fmt.Errorf("testhost: handshake: unsupported start_api encoding %d", startEnvelope.Encoding))
 				return
 			}
 			if cid, ok := cur.body["client_id"]; ok {
 				if s, ok := cid.(string); ok && strings.HasPrefix(s, "$") {
-					if len(startFields) >= 2 {
-						bindings[s] = startFields[1]
+					if clientID != "" {
+						bindings[s] = clientID
 					}
 				}
 			}
@@ -345,6 +362,34 @@ func (h *Host) run() {
 		}
 	}
 
+}
+
+func decodeStartAPIClientID(body []byte) (int, error) {
+	for len(body) > 0 {
+		number, typ, n := protowire.ConsumeTag(body)
+		if n < 0 {
+			return 0, protowire.ParseError(n)
+		}
+		body = body[n:]
+		if number == 1 {
+			value, n := protowire.ConsumeVarint(body)
+			if typ != protowire.VarintType {
+				return 0, fmt.Errorf("client id has wire type %d, want varint", typ)
+			}
+			if n < 0 {
+				return 0, fmt.Errorf("client id: %w", protowire.ParseError(n))
+			}
+			// StartAPI.client_id is int32 in the official protobuf schema. A
+			// negative value is encoded as the corresponding ten-byte varint.
+			return int(int32(value)), nil // #nosec G115 -- schema-defined int32 narrowing
+		}
+		n = protowire.ConsumeFieldValue(number, typ, body)
+		if n < 0 {
+			return 0, protowire.ParseError(n)
+		}
+		body = body[n:]
+	}
+	return 0, fmt.Errorf("missing client id")
 }
 
 func (h *Host) finish(err error) {

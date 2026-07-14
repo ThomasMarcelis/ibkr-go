@@ -67,7 +67,7 @@ func historicalDuration(n int, unit string) HistoricalDuration {
 type BarSize string
 
 const (
-	Bar1Sec   BarSize = "1 sec"
+	Bar1Sec   BarSize = "1 secs"
 	Bar5Secs  BarSize = "5 secs"
 	Bar10Secs BarSize = "10 secs"
 	Bar15Secs BarSize = "15 secs"
@@ -448,6 +448,8 @@ type TickByTickRequest struct {
 type TickByTickData struct {
 	Time              time.Time
 	TickType          int // numeric tick type reported by the Gateway
+	LastAttributes    TickLastAttributes
+	BidAskAttributes  TickBidAskAttributes
 	Price             decimal.Decimal
 	Size              decimal.Decimal
 	Exchange          string
@@ -549,23 +551,23 @@ type HistoricalTick struct {
 	Size  decimal.Decimal
 }
 
-// HistoricalBidAskAttributes is the exact attribute bitmask attached to a
-// historical bid/ask tick. Unknown bits remain preserved in the value.
-type HistoricalBidAskAttributes int
+// TickBidAskAttributes is the exact attribute bitmask attached to a bid/ask
+// tick. Unknown bits remain preserved in the value.
+type TickBidAskAttributes int
 
-func (a HistoricalBidAskAttributes) BidPastLow() bool  { return a&1 != 0 }
-func (a HistoricalBidAskAttributes) AskPastHigh() bool { return a&2 != 0 }
+func (a TickBidAskAttributes) BidPastLow() bool  { return a&1 != 0 }
+func (a TickBidAskAttributes) AskPastHigh() bool { return a&2 != 0 }
 
-// HistoricalLastAttributes is the exact attribute bitmask attached to a
-// historical trade tick. Unknown bits remain preserved in the value.
-type HistoricalLastAttributes int
+// TickLastAttributes is the exact attribute bitmask attached to a trade tick.
+// Unknown bits remain preserved in the value.
+type TickLastAttributes int
 
-func (a HistoricalLastAttributes) PastLimit() bool  { return a&1 != 0 }
-func (a HistoricalLastAttributes) Unreported() bool { return a&2 != 0 }
+func (a TickLastAttributes) PastLimit() bool  { return a&1 != 0 }
+func (a TickLastAttributes) Unreported() bool { return a&2 != 0 }
 
 // HistoricalTickBidAsk is a single bid/ask historical tick.
 type HistoricalTickBidAsk struct {
-	TickAttrib HistoricalBidAskAttributes
+	Attributes TickBidAskAttributes
 	Time       time.Time
 	BidPrice   decimal.Decimal
 	AskPrice   decimal.Decimal
@@ -575,7 +577,7 @@ type HistoricalTickBidAsk struct {
 
 // HistoricalTickLast is a single trade (last) historical tick.
 type HistoricalTickLast struct {
-	TickAttrib        HistoricalLastAttributes
+	Attributes        TickLastAttributes
 	Time              time.Time
 	Price             decimal.Decimal
 	Size              decimal.Decimal

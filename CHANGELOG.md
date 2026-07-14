@@ -4,92 +4,21 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## v2.0.0-rc.3 — 2026-07-14
+## v2.0.0-rc.3 — 2026-07-16
 
-### Added
+RC.3 continues the RC.2 hardening work. It extends the supported Gateway range
+from `server_version` 200–207 to 200–225, completes the API 10.48 protobuf and
+wire-layout migrations, and freezes the advanced order and broker-echo model.
 
-- Complete negotiated protocol coverage through `server_version 225`: the
-  remaining protobuf migrations at 208..213 and every API 10.48 semantic gate
-  at 214..225 are implemented with exact vectors and boundary tests.
-- `TWS().Config` returns the presence-aware read-only TWS or Gateway
-  configuration introduced at server version 219.
-- Quote subscriptions now deliver typed EFP and delta-neutral validation
-  callbacks. Generic tick 787 exposes odd-lot bid/ask prices, sizes, and
-  exchanges through the normalized quote at server version 225.
-- Historical tick results identify their `WhatToShow` family even when empty
-  and expose `Len()` across midpoint, bid/ask, and trade result slices.
-- Bounded finite streams are available for contract details, option-chain
-  parameters, and completed orders; the existing slice methods delegate to
-  those implementations.
-- `Orders().SubscribeExecutionEvents` passively exposes every execution-detail
-  and commission callback before query correlation or order-handle
-  deduplication.
-- Historical-news pagination has a lazy `HistoricalAll` iterator with overlap,
-  boundary deduplication, and stalled-cursor detection.
-- Session events carry `TransitionSeq` and their exact resulting `Snapshot`.
-  `WithMaxInboundFrameBytes` bounds handshake and steady-state raw frames
-  before body allocation.
+The candidate also tightens ownership and terminal-error behavior across
+disconnects, reconnects, cancellation, order placement, option exercise, and
+regulatory snapshots. Finite streams, passive execution events, historical-news
+iteration, TWS configuration, and odd-lot quote data round out the public API.
 
-### Changed
-
-- Subscription cancellation admission failure now retires its owning
-  connection generation automatically. With automatic reconnect, unrelated
-  resumable streams survive onto the replacement connection; with reconnect
-  disabled, the client terminates.
-- Every singleton-operation conflict wraps `ErrOperationActive`, and local
-  request validation consistently returns `*ValidationError` with a stable
-  field name.
-- `StreamEvent.At` records UTC client observation time for both data and
-  lifecycle events.
-- Request-scoped non-terminal API notices are delivered losslessly on their
-  owning subscription as `StreamNotice` events with `StreamEvent.Notice`,
-  rather than through the lossy session observer.
-- `SubscribeOpen` returns an `OpenOrdersSubscription`; call `sub.Refresh(ctx)`
-  after a snapshot boundary to refresh that exact request-ID-less stream.
-  Concurrent refreshes return `ErrOperationActive`.
-- `WithExecutionCorrelationLimit` bounds retained execution IDs, pending fee
-  versions, and the finite `Executions` collector at 4096 by default. Exceeding
-  a bound closes with non-retryable `ErrExecutionCorrelationOverflow`. At
-  snapshot completion, subscriptions discard unmatched fees and then accept
-  late revisions only for execution IDs observed in that snapshot; unrelated
-  global commission broadcasts cannot exhaust a healthy long-lived route.
-- Public protocol identifiers use named signed 32-bit types instead of
-  platform `int`; news article payload kind is a named `NewsArticleType`.
-  Public order IDs remain `int64` but are range-checked before encoding.
-- `Subscription.All` documentation now states that it consumes and filters
-  `StreamNotice` as well as lifecycle events. A per-operation control matrix
-  documents wire cancellation, safe detach, and connection-retirement blast
-  radius. The reconnect default remains `ReconnectAuto`.
-
-### Fixed
-
-- Order handles now report non-retryable `ErrOrderRecoveryRequired` after an
-  observation gap instead of reusing the retryable subscription-only
-  `ErrResumeRequired` classification.
-- Every involuntary non-API loss of an admitted option exercise or lapse,
-  including disconnect, slow-consumer teardown, and callback conversion
-  failure, now returns non-retryable `*ExerciseUncertainError` while preserving
-  its cause. Exercise replays freeze the request-scoped pseudo-order lifecycle
-  as well as warnings and terminal errors.
-- Connection retirement now follows the transport pumps' normal ordering, so
-  admitted write outcomes and decoded callbacks are handled before routes are
-  torn down. Fire-and-forget methods likewise return the exact admission result
-  when caller cancellation races the actor.
-- With reconnect disabled, an admitted order closes with non-retryable
-  `ErrOrderRecoveryRequired` instead of appearing safely retryable. Exercise
-  routes retain their more specific uncertainty classification.
-- Abnormal teardown of a request-ID-less snapshot retires its connection
-  generation before another caller can own late replies. Stream conversion
-  failures request protocol cancellation when the operation supports it.
-- An admitted fee-bearing regulatory snapshot that loses completion evidence
-  returns non-retryable `ErrRegulatorySnapshotUncertain`; definitive Gateway
-  rejection remains an `*APIError`.
-- Historical update bars preserve the wire count; real-time bars parse their
-  Unix-seconds timestamp as an absolute UTC instant instead of a formatted
-  date. Malformed inbound time, decimal, integer, boolean, exchange-rule, and
-  WSH JSON projections consistently surface as non-retryable `*ProtocolError`.
-- The signed 32-bit order-ID boundary is enforced for placement, parent IDs,
-  and cancellation. An invalid `nextValidId` no longer advances bootstrap.
+All legacy transcript exceptions have been replaced or retired, and the full
+build, test, race, lint, vulnerability, capture, and 17-target fuzz gates pass.
+The remaining regulatory-snapshot, manual paper-TWS `orderBound`, and seven-day
+soak requirements apply to the stable v2.0.0 release, not this candidate.
 
 ## v2.0.0-rc.2 — 2026-07-11
 
@@ -140,8 +69,10 @@ matrix passed on its second complete run (one earlier sv205 bootstrap ended in
 EOF), keep-up-to-date bars, tick-by-tick midpoint, historical bid/ask and
 midpoint ticks, and PnLSingle completed. Real-time bars returned the expected
 10089 entitlement error; historical TRADES ticks received no Gateway reply in
-two isolated 20-second captures. A successful explicitly authorized
-fee-bearing regulatory snapshot and a raw paper-TWS `orderBound` capture remain
+two isolated 20-second captures. On 2026-07-15, exactly one explicitly
+authorized fee-bearing regulatory request reached readonly-live at sv225 and
+received definitive restriction code 10213; it was not retried. A successful
+regulatory snapshot and a raw paper-TWS `orderBound` capture therefore remain
 validation targets before v2.0.0 stable.
 
 ## v1.5.1 — 2026-07-04

@@ -31,6 +31,7 @@ type Subscription[T any] struct {
 	snapshotOnce   sync.Once
 	snapshotEvents []T
 	cfg            subscriptionConfig
+	requestID      RequestID
 	connectionSeq  uint64
 }
 

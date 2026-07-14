@@ -7,6 +7,8 @@ TWS/Gateway socket protocol. The runtime stays pure Go: no cgo, no C++
 toolchain, no SDK dependency on the production import path. See
 [`AGENTS.md`](../AGENTS.md) for the full policy and
 [`docs/architecture.md`](architecture.md) for the runtime model.
+The RC.3-to-stable evidence boundary is tracked in
+[`v2-release-readiness.md`](v2-release-readiness.md).
 
 The goal is end-to-end coverage of the IBKR TWS/Gateway socket surface that
 the official C++ SDK exposes for free entitlements — every request, every
@@ -115,7 +117,7 @@ The next high-value workstreams are:
 | 4 | Protocol drift and version edges | Keeps the pure-Go codec current with IBKR releases | current-time millis, `$LEDGER-` account values, fractional tick sizes, order/completed-order tail fields |
 | 5 | Multi-asset expansion | Proves the facade across real product classes | OPT/BAG/FOP with permissions, bond order/data permissions, CFD/CRYPTO/FUND probes |
 | 6 | Public ergonomics and examples | Helps users trust and adopt the library | examples for live roles, error handling, replay-backed behavior notes, pkg.go.dev polish |
-| 7 | Advanced order semantics (after the protobuf decision) | Closes gaps between "order placement works" and "order model is trustworthy", but these are classic-branch fields whose shape a future protobuf migration could touch — see [Protobuf era](#protobuf-era-sv-201) | brackets, OCA, conditions, scale, hedge, pegged/adjusted families |
+| 7 | Advanced-order live attestation | Placement and broker-echo shapes are implemented; nondefault live callbacks must now prove the rarer semantics without invented fixtures | scale extensions, PEG BENCH, auction, short-sale locate, adjusted families |
 
 Each workstream should stay scoped to one logical change. If the work needs a
 large plan, put the plan in a repo doc and keep the next handoff request
@@ -206,10 +208,10 @@ meaningful bond yield/redemption remain live-attestation targets.
 PlaceOrder (msg 3), CancelOrder (msg 4), reqGlobalCancel (msg 58). OrderHandle
 tracks business and lifecycle evidence through one ordered Events() stream,
 plus Done(), Wait(), Close(), Cancel(), and Replace(). Order IDs are
-auto-allocated from NextValidID. OpenOrder
-messages are dual-dispatched to both per-order handles and the singleton
-open-orders observer; OrderStatus remains part of the per-order handle
-contract. OrderHandle survives reconnectable disconnects, emits
+auto-allocated from NextValidID. OpenOrder and OrderStatus messages are
+dual-dispatched to both per-order handles and the singleton open-orders
+observer. Execution and fee callbacks stay on order handles and execution
+observers. OrderHandle survives reconnectable disconnects, emits
 RecoveryRequired after an observation gap, and permanently blocks replacement
 on that handle while retaining stable-ID cancellation.
 Terminal statuses do not end observation; the caller closes the handle after

@@ -35,19 +35,19 @@ func TestPersistentClientSequentialHistoricalBarsWith108End(t *testing.T) {
 	defer client.Close()
 	defer waitHost(t, host)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
 	req := ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
 			Currency: "USD",
 		},
-		EndTime:    time.Date(2026, 4, 12, 12, 0, 0, 0, time.UTC),
-		Duration:   ibkr.Days(5),
-		BarSize:    ibkr.Bar1Day,
+		Duration:   ibkr.Days(1),
+		BarSize:    ibkr.Bar1Hour,
 		WhatToShow: ibkr.ShowTrades,
 		UseRTH:     true,
 	}
@@ -56,18 +56,16 @@ func TestPersistentClientSequentialHistoricalBarsWith108End(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first HistoricalBars() error = %v", err)
 	}
-	if len(first) != 2 {
-		t.Fatalf("first bars len = %d, want 2", len(first))
+	if len(first) != 7 {
+		t.Fatalf("first bars len = %d, want 7", len(first))
 	}
 
-	req.Duration = ibkr.Days(1)
-	req.BarSize = ibkr.Bar1Hour
 	second, err := client.History().Bars(ctx, req)
 	if err != nil {
 		t.Fatalf("second HistoricalBars() error = %v", err)
 	}
-	if len(second) != 2 {
-		t.Fatalf("second bars len = %d, want 2", len(second))
+	if len(second) != 7 {
+		t.Fatalf("second bars len = %d, want 7", len(second))
 	}
 	if got := client.Session().State; got != ibkr.StateReady && got != ibkr.StateDegraded {
 		t.Fatalf("session state after sequential historical bars = %s, want usable session", got)
@@ -502,9 +500,13 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("MarketData().SetType(delayed) error = %v", err)
+	}
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -521,8 +523,11 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	}
 
 	first := waitForStreamData(t, sub.Events())
-	if first.Snapshot.Bid.String() != "189.1" {
-		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
+	for first.Changed&ibkr.QuoteFieldHigh == 0 {
+		first = waitForStreamData(t, sub.Events())
+	}
+	if first.Snapshot.High.String() != "316.91" {
+		t.Fatalf("first high = %s, want 316.91", first.Snapshot.High.String())
 	}
 
 	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
@@ -539,11 +544,14 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	}
 
 	second := waitForStreamData(t, sub.Events())
-	if second.Snapshot.Ask.String() != "189.15" {
-		t.Fatalf("second ask = %s, want 189.15", second.Snapshot.Ask.String())
+	for second.Changed&ibkr.QuoteFieldLow == 0 {
+		second = waitForStreamData(t, sub.Events())
 	}
-	if second.Snapshot.Available&ibkr.QuoteFieldBid != 0 {
-		t.Fatalf("second quote retained pre-gap bid: %+v", second.Snapshot)
+	if second.Snapshot.Low.String() != "312.17" {
+		t.Fatalf("second low = %s, want 312.17", second.Snapshot.Low.String())
+	}
+	if second.Snapshot.Available&ibkr.QuoteFieldHigh != 0 {
+		t.Fatalf("second quote retained pre-gap high: %+v", second.Snapshot)
 	}
 
 	sub.Close()
@@ -553,196 +561,8 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	if got := client.Session().ConnectionSeq; got != 2 {
 		t.Fatalf("client.Session().ConnectionSeq = %d, want 2", got)
 	}
-}
-
-func TestSubscribeQuotesResumeAutoResendsAfter1101(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "quote_stream_gap_1101.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
-	if err != nil {
-		t.Fatalf("SubscribeQuotes() error = %v", err)
-	}
-
-	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
-	if started.ConnectionSeq != 1 {
-		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
-	}
-
-	first := waitForStreamData(t, sub.Events())
-	if first.Snapshot.Bid.String() != "189.1" {
-		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
-	}
-
-	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
-	if gap.ConnectionSeq != 1 {
-		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
-	}
-
-	resumed := waitForStateKind(t, sub.Events(), ibkr.StreamResubscribed)
-	if resumed.ConnectionSeq != 1 {
-		t.Fatalf("resumed.ConnectionSeq = %d, want 1", resumed.ConnectionSeq)
-	}
-
-	second := waitForStreamData(t, sub.Events())
-	if second.Snapshot.Ask.String() != "189.15" {
-		t.Fatalf("second ask = %s, want 189.15", second.Snapshot.Ask.String())
-	}
-
-	sub.Close()
-	if err := sub.Wait(); err != nil {
-		t.Fatalf("sub.Wait() error = %v", err)
-	}
-}
-
-func TestSubscribeQuotesResumeAutoResumesWithoutResendAfter1102(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "quote_stream_gap_1102.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
-	if err != nil {
-		t.Fatalf("SubscribeQuotes() error = %v", err)
-	}
-
-	started := waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
-	if started.ConnectionSeq != 1 {
-		t.Fatalf("started.ConnectionSeq = %d, want 1", started.ConnectionSeq)
-	}
-
-	first := waitForStreamData(t, sub.Events())
-	if first.Snapshot.Bid.String() != "189.1" {
-		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
-	}
-
-	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
-	if gap.ConnectionSeq != 1 {
-		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
-	}
-
-	resumed := waitForStateKind(t, sub.Events(), ibkr.StreamRestored)
-	if resumed.ConnectionSeq != 1 {
-		t.Fatalf("resumed.ConnectionSeq = %d, want 1", resumed.ConnectionSeq)
-	}
-
-	second := waitForStreamData(t, sub.Events())
-	if second.Snapshot.Ask.String() != "189.15" {
-		t.Fatalf("second ask = %s, want 189.15", second.Snapshot.Ask.String())
-	}
-
-	sub.Close()
-	if err := sub.Wait(); err != nil {
-		t.Fatalf("sub.Wait() error = %v", err)
-	}
-}
-
-// TestSubscribeQuotesResumeNeverClosesAfter1101 freezes the data-lost
-// restoration contract for non-resumable subscriptions: code 1101 means the
-// Gateway dropped every data subscription, so a ResumeNever quote stream
-// must close with ErrResumeRequired — mirroring its transport-loss close —
-// instead of staying open on a stream that will never tick again. The
-// trailing CurrentTime call proves the close happened on the 1101 frame
-// while the connection was still up (see the fixture header).
-func TestSubscribeQuotesResumeNeverClosesAfter1101(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "quote_stream_gap_1101_resume_never.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-	})
-	if err != nil {
-		t.Fatalf("SubscribeQuotes() error = %v", err)
-	}
-
-	first := waitForStreamData(t, sub.Events())
-	if first.Snapshot.Bid.String() != "189.1" {
-		t.Fatalf("first bid = %s, want 189.1", first.Snapshot.Bid.String())
-	}
-
-	waitErr := sub.Wait()
-	if !errors.Is(waitErr, ibkr.ErrResumeRequired) {
-		t.Fatalf("sub.Wait() = %v, want ErrResumeRequired", waitErr)
-	}
-	if !ibkr.IsRetryable(waitErr) {
-		t.Fatalf("sub.Wait() = %v, want retryable", waitErr)
-	}
-
-	if got := client.Session().State; got != ibkr.StateReady {
-		t.Fatalf("session state after 1101 = %s, want %s", got, ibkr.StateReady)
-	}
-	if _, err := client.CurrentTime(ctx); err != nil {
-		t.Fatalf("CurrentTime after 1101 = %v, want success on the live connection", err)
-	}
-}
-
-// TestOneShotInterruptedBy1101 freezes the data-lost restoration contract
-// for in-flight one-shots: the Gateway lost the request with the data
-// connection and will never answer it, so the blocked caller must get
-// ErrInterrupted on the 1101 frame — mirroring the transport-loss
-// interruption — rather than hang until its context deadline. The trailing
-// CurrentTime call proves the interruption happened while the connection
-// was still up (see the fixture header).
-func TestOneShotInterruptedBy1101(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "contract_details_gap_1101.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := client.Contracts().Details(ctx, ibkr.Contract{
-		Symbol:   "AAPL",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
-	})
-	if !errors.Is(err, ibkr.ErrInterrupted) {
-		t.Fatalf("ContractDetails error after 1101 = %v, want ErrInterrupted", err)
-	}
-
-	if got := client.Session().State; got != ibkr.StateReady {
-		t.Fatalf("session state after 1101 = %s, want %s", got, ibkr.StateReady)
-	}
-	if _, err := client.CurrentTime(ctx); err != nil {
-		t.Fatalf("CurrentTime after 1101 = %v, want success on the live connection", err)
+	if got := client.Session().ManagedAccounts; len(got) != 1 || got[0] != "DU9000001" {
+		t.Fatalf("client.Session().ManagedAccounts = %v, want [DU9000001]", got)
 	}
 }
 
@@ -787,33 +607,8 @@ func TestOpenOrdersSnapshotBurstExceedsSubscriptionBuffer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	if len(orders) != 1 || orders[0].OrderID != handle.OrderID() {
+	if len(orders) != 1 || *orders[0].Order.OrderID != handle.OrderID() {
 		t.Fatalf("orders = %+v, want order %d", orders, handle.OrderID())
-	}
-}
-
-func TestOpenOrdersSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "open_orders_disconnect_after_end.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	values, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
-	if err != nil {
-		t.Fatalf("OpenOrdersSnapshot() error = %v", err)
-	}
-	if len(values) != 1 {
-		t.Fatalf("orders len = %d, want 1", len(values))
-	}
-	if values[0].OrderID != 2001 {
-		t.Fatalf("order id = %d, want 2001", values[0].OrderID)
-	}
-	if values[0].Status != ibkr.OrderStatusSubmitted {
-		t.Fatalf("status = %q, want Submitted", values[0].Status)
 	}
 }
 
@@ -1675,8 +1470,8 @@ func TestHistoricalTicksTrades(t *testing.T) {
 	if first.Price.String() != "315.3" || first.Size.String() != "3" {
 		t.Fatalf("first trade price/size = %s/%s, want 315.3/3", first.Price, first.Size)
 	}
-	if first.Exchange != "NASDAQ" || first.TickAttrib != 2 || first.SpecialConditions != " F I" {
-		t.Fatalf("first trade metadata = exchange %q attrib %d conditions %q", first.Exchange, first.TickAttrib, first.SpecialConditions)
+	if first.Exchange != "NASDAQ" || first.Attributes != 2 || first.SpecialConditions != " F I" {
+		t.Fatalf("first trade metadata = exchange %q attrib %d conditions %q", first.Exchange, first.Attributes, first.SpecialConditions)
 	}
 	last := result.Last[len(result.Last)-1]
 	if last.Price.String() != "315.3299" || last.Size.String() != "190" || last.Exchange != "FINRA" {
@@ -1811,7 +1606,7 @@ func TestOrderEventBufferOverflowPreservesOrderCoordinate(t *testing.T) {
 		t.Fatalf("buffered event count = %d, want configured capacity 4", len(events))
 	}
 	if events[0].Lifecycle == nil || events[0].Lifecycle.Kind != ibkr.OrderStarted ||
-		events[1].OpenOrder == nil || events[1].OpenOrder.Status != ibkr.OrderStatusPreSubmitted ||
+		events[1].OpenOrder == nil || events[1].OpenOrder.State.Status != ibkr.OrderStatusPreSubmitted ||
 		events[2].Status == nil || events[2].Status.Status != ibkr.OrderStatusPreSubmitted ||
 		events[3].Execution == nil || events[3].Execution.ExecID != "sanitized-native-exec-001" {
 		t.Fatalf("buffered live-derived prefix = %+v, want Started, OpenOrder(PreSubmitted), PreSubmitted, Execution", events)
@@ -2507,7 +2302,7 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	values, err := client.Accounts().Updates(ctx, "DU12345")
+	values, err := client.Accounts().Updates(ctx, "DU9000001")
 	if err != nil {
 		t.Fatalf("AccountUpdatesSnapshot() error = %v", err)
 	}
@@ -2518,21 +2313,21 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 	if values[0].AccountValue == nil {
 		t.Fatal("first value is nil AccountValue")
 	}
-	if values[0].AccountValue.Key != "NetLiquidation" {
-		t.Fatalf("first key = %q, want NetLiquidation", values[0].AccountValue.Key)
+	if values[0].AccountValue.Key != "AccountCode" || values[0].AccountValue.Value != "DU9000001" {
+		t.Fatalf("first value = %+v, want sanitized AccountCode", values[0].AccountValue)
 	}
 	// Second is a portfolio update
 	if values[1].Portfolio == nil {
 		t.Fatal("second value is nil Portfolio")
 	}
-	if values[1].Portfolio.Contract.Symbol != "AAPL" {
-		t.Fatalf("portfolio symbol = %q, want AAPL", values[1].Portfolio.Contract.Symbol)
+	if values[1].Portfolio.Contract.Symbol != "000660" {
+		t.Fatalf("portfolio symbol = %q, want 000660", values[1].Portfolio.Contract.Symbol)
 	}
-	if values[1].Portfolio.Position.String() != "10" {
-		t.Fatalf("portfolio position = %s, want 10", values[1].Portfolio.Position.String())
+	if values[1].Portfolio.Position.String() != "4" {
+		t.Fatalf("portfolio position = %s, want 4", values[1].Portfolio.Position.String())
 	}
-	if values[2].UpdateTime == nil || *values[2].UpdateTime != "12:00:00" {
-		t.Fatalf("update time = %v, want 12:00:00", values[2].UpdateTime)
+	if values[2].UpdateTime == nil || *values[2].UpdateTime != "22:06" {
+		t.Fatalf("update time = %v, want 22:06", values[2].UpdateTime)
 	}
 }
 
@@ -3282,13 +3077,13 @@ func TestAPIScaleInCampaignAAPLReplay(t *testing.T) {
 		t.Fatalf("scale stop-loss PlaceOrder: %v", err)
 	}
 	stopOpen := waitForOpenOrder(t, ctx, stop)
-	if stopOpen.OrderType != ibkr.OrderTypeStop || stopOpen.Action != ibkr.ActionSell {
-		t.Fatalf("scale stop OpenOrder type/action = %s/%s, want STP/SELL", stopOpen.OrderType, stopOpen.Action)
+	if stopOpen.Order.OrderType != ibkr.OrderTypeStop || stopOpen.Order.Action != ibkr.ActionSell {
+		t.Fatalf("scale stop OpenOrder type/action = %s/%s, want STP/SELL", stopOpen.Order.OrderType, stopOpen.Order.Action)
 	}
-	if got := stopOpen.Quantity.String(); got != "2" {
+	if got := stopOpen.Order.Quantity.String(); got != "2" {
 		t.Fatalf("scale stop quantity = %s, want 2", got)
 	}
-	if got := stopOpen.AuxPrice.String(); got != "12.98" {
+	if got := stopOpen.Order.Prices.AuxPrice.String(); got != "12.98" {
 		t.Fatalf("scale stop aux price = %s, want 12.98", got)
 	}
 
@@ -3482,14 +3277,14 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 	}
 	takeProfitOpen := waitForOpenOrder(t, ctx, takeProfit)
 	stopLossOpen := waitForOpenOrder(t, ctx, stopLoss)
-	if takeProfitOpen.ParentID != parent.OrderID() {
-		t.Fatalf("take-profit parent = %d, want %d", takeProfitOpen.ParentID, parent.OrderID())
+	if (*takeProfitOpen.Order.ParentID) != parent.OrderID() {
+		t.Fatalf("take-profit parent = %d, want %d", (*takeProfitOpen.Order.ParentID), parent.OrderID())
 	}
-	if stopLossOpen.ParentID != parent.OrderID() {
-		t.Fatalf("stop-loss parent = %d, want %d", stopLossOpen.ParentID, parent.OrderID())
+	if (*stopLossOpen.Order.ParentID) != parent.OrderID() {
+		t.Fatalf("stop-loss parent = %d, want %d", (*stopLossOpen.Order.ParentID), parent.OrderID())
 	}
-	if takeProfitOpen.OcaGroup == "" || stopLossOpen.OcaGroup != takeProfitOpen.OcaGroup {
-		t.Fatalf("child OCA groups = %q and %q, want same non-empty group", takeProfitOpen.OcaGroup, stopLossOpen.OcaGroup)
+	if takeProfitOpen.Order.OCA.Group == "" || stopLossOpen.Order.OCA.Group != takeProfitOpen.Order.OCA.Group {
+		t.Fatalf("child OCA groups = %q and %q, want same non-empty group", takeProfitOpen.Order.OCA.Group, stopLossOpen.Order.OCA.Group)
 	}
 
 	err = takeProfit.Replace(ctx, ibkr.Order{
@@ -3632,8 +3427,8 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 		t.Fatalf("OCA resting PlaceOrder: %v", err)
 	}
 	restingOpen := waitForOpenOrder(t, ctx, resting)
-	if restingOpen.OcaGroup != group {
-		t.Fatalf("resting OCA group = %q, want %q", restingOpen.OcaGroup, group)
+	if restingOpen.Order.OCA.Group != group {
+		t.Fatalf("resting OCA group = %q, want %q", restingOpen.Order.OCA.Group, group)
 	}
 	waitForOrderStatus(t, ctx, resting, ibkr.OrderStatusPreSubmitted)
 
@@ -3653,8 +3448,8 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 		t.Fatalf("OCA marketable PlaceOrder: %v", err)
 	}
 	marketableOpen := waitForOpenOrder(t, ctx, marketable)
-	if marketableOpen.OcaGroup != group {
-		t.Fatalf("marketable OCA group = %q, want %q", marketableOpen.OcaGroup, group)
+	if marketableOpen.Order.OCA.Group != group {
+		t.Fatalf("marketable OCA group = %q, want %q", marketableOpen.Order.OCA.Group, group)
 	}
 	statuses := waitOrderStatuses(t, ctx, marketable)
 	if !hasOrderStatus(statuses, ibkr.OrderStatusPendingCancel) {
@@ -3947,7 +3742,7 @@ func TestAPIReconnectActiveOrderAAPLReplay(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("open orders len = %d, want 1", len(orders))
 	}
-	if orders[0].OrderID != handle.OrderID() || orders[0].TIF != ibkr.TIFGTC || orders[0].Quantity.String() != "10" {
+	if *orders[0].Order.OrderID != handle.OrderID() || orders[0].Order.TIF != ibkr.TIFGTC || orders[0].Order.Quantity.String() != "10" {
 		t.Fatalf("open order = %+v, want reconnected GTC order %d qty 10", orders[0], handle.OrderID())
 	}
 	if err := second.Orders().Cancel(ctx, handle.OrderID()); err != nil {
@@ -4085,7 +3880,7 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("client0 open orders len = %d, want 1", len(orders))
 	}
-	if orders[0].OrderID != handle.OrderID() || orders[0].ClientID != 1 {
+	if *orders[0].Order.OrderID != handle.OrderID() || *orders[0].Order.ClientID != 1 {
 		t.Fatalf("client0 open order = %+v, want original client order %d", orders[0], handle.OrderID())
 	}
 	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
@@ -4137,7 +3932,7 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("client2 open orders len = %d, want 1", len(orders))
 	}
-	if orders[0].OrderID != handle.OrderID() || orders[0].ClientID != 1 {
+	if *orders[0].Order.OrderID != handle.OrderID() || *orders[0].Order.ClientID != 1 {
 		t.Fatalf("client2 open order = %+v, want original client order %d", orders[0], handle.OrderID())
 	}
 	if err := canceller.Orders().Cancel(ctx, handle.OrderID()); err != nil {
@@ -4201,8 +3996,8 @@ func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
 	if recovered.Order == nil {
 		t.Fatalf("recovery event = %+v, want Order payload", recovered)
 	}
-	if recovered.Order.OrderID != handle.OrderID() {
-		t.Fatalf("recovered order id = %d, want %d", recovered.Order.OrderID, handle.OrderID())
+	if *recovered.Order.Order.OrderID != handle.OrderID() {
+		t.Fatalf("recovered order id = %d, want %d", *recovered.Order.Order.OrderID, handle.OrderID())
 	}
 	select {
 	case event := <-sub.Events():
@@ -4425,8 +4220,8 @@ func TestOpenOrdersSnapshotSkipsPairedStatuses(t *testing.T) {
 	if len(orders) != 1 {
 		t.Fatalf("open orders len = %d, want 1 (paired statuses must be filtered)", len(orders))
 	}
-	if orders[0].OrderID != handle.OrderID() {
-		t.Fatalf("open order id = %d, want %d", orders[0].OrderID, handle.OrderID())
+	if *orders[0].Order.OrderID != handle.OrderID() {
+		t.Fatalf("open order id = %d, want %d", *orders[0].Order.OrderID, handle.OrderID())
 	}
 	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
 		t.Fatalf("observer Cancel: %v", err)

@@ -23,7 +23,7 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 			TriggerMethod:   4,
 			DisplaySize:     3,
 			AllOrNone:       new(true),
-			MinQty:          new(decimal.RequireFromString("2")),
+			MinQty:          new(2),
 			PercentOffset:   new(decimal.RequireFromString("0.05")),
 			TrailStopPrice:  new(decimal.RequireFromString("190.50")),
 			TrailingPercent: new(decimal.RequireFromString("1.5")),
@@ -118,6 +118,93 @@ func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 		"UsePriceMgmtAlgo":         "0",
 		"AdvancedErrorOverride":    "IBDBUYTX",
 		"ManualOrderTime":          "20260413 15:00:00 US/Eastern",
+	}
+	for field, wantValue := range want {
+		if checks[field] != wantValue {
+			t.Fatalf("%s = %q, want %q", field, checks[field], wantValue)
+		}
+	}
+}
+
+func TestToCodecPlaceOrderMapsCompleteAdvancedShapes(t *testing.T) {
+	t.Parallel()
+
+	// Scale and PEG BENCH values are the official API 10.48.01 Python Testbed
+	// sample vectors. This freezes public-to-wire ownership, not live acceptance.
+	request := PlaceOrderRequest{
+		Contract: Contract{ConID: 265598},
+		Order: Order{
+			Action:    ActionSellShort,
+			OrderType: OrderTypePeggedBenchmark,
+			Quantity:  decimal.NewFromInt(10),
+			ShortSale: OrderShortSale{Slot: 2, DesignatedLocation: "LOCATE", ExemptCode: new(0)},
+			Scale: OrderScale{
+				InitialLevelSize:    2000,
+				SubsequentLevelSize: 500,
+				PriceIncrement:      decimal.RequireFromString("0.02"),
+				PriceAdjustValue:    new(decimal.RequireFromString("189")),
+				PriceAdjustInterval: new(3600),
+				ProfitOffset:        new(decimal.RequireFromString("2")),
+				AutoReset:           new(true),
+				InitialPosition:     new(10),
+				InitialFillQty:      new(40),
+				RandomPercent:       new(true),
+			},
+			Auction: OrderAuction{
+				StartingPrice: new(decimal.RequireFromString("33")), StockRefPrice: new(decimal.RequireFromString("750")),
+				StockRangeLower: new(decimal.RequireFromString("650")), StockRangeUpper: new(decimal.RequireFromString("800")),
+			},
+			PeggedBenchmark: &OrderPeggedBenchmark{
+				ReferenceContractID:   208813720,
+				ChangeAmountDecrease:  true,
+				ChangeAmount:          decimal.RequireFromString("0.1"),
+				ReferenceChangeAmount: new(decimal.RequireFromString("1")),
+				ReferenceExchangeID:   "ARCA",
+			},
+		},
+	}
+	got := toCodecPlaceOrder(77, request)
+	checks := map[string]string{
+		"ShortSaleSlot":              got.ShortSaleSlot,
+		"DesignatedLocation":         got.DesignatedLocation,
+		"ExemptCode":                 got.ExemptCode,
+		"ScalePriceAdjustValue":      got.ScalePriceAdjustValue,
+		"ScalePriceAdjustInterval":   got.ScalePriceAdjustInterval,
+		"ScaleProfitOffset":          got.ScaleProfitOffset,
+		"ScaleAutoReset":             got.ScaleAutoReset,
+		"ScaleInitPosition":          got.ScaleInitPosition,
+		"ScaleInitFillQty":           got.ScaleInitFillQty,
+		"ScaleRandomPercent":         got.ScaleRandomPercent,
+		"StartingPrice":              got.StartingPrice,
+		"StockRefPrice":              got.StockRefPrice,
+		"StockRangeLower":            got.StockRangeLower,
+		"StockRangeUpper":            got.StockRangeUpper,
+		"ReferenceContractID":        got.ReferenceContractID,
+		"PeggedChangeAmountDecrease": got.PeggedChangeAmountDecrease,
+		"PeggedChangeAmount":         got.PeggedChangeAmount,
+		"ReferenceChangeAmount":      got.ReferenceChangeAmount,
+		"ReferenceExchangeID":        got.ReferenceExchangeID,
+	}
+	want := map[string]string{
+		"ShortSaleSlot":              "2",
+		"DesignatedLocation":         "LOCATE",
+		"ExemptCode":                 "0",
+		"ScalePriceAdjustValue":      "189",
+		"ScalePriceAdjustInterval":   "3600",
+		"ScaleProfitOffset":          "2",
+		"ScaleAutoReset":             "1",
+		"ScaleInitPosition":          "10",
+		"ScaleInitFillQty":           "40",
+		"ScaleRandomPercent":         "1",
+		"StartingPrice":              "33",
+		"StockRefPrice":              "750",
+		"StockRangeLower":            "650",
+		"StockRangeUpper":            "800",
+		"ReferenceContractID":        "208813720",
+		"PeggedChangeAmountDecrease": "1",
+		"PeggedChangeAmount":         "0.1",
+		"ReferenceChangeAmount":      "1",
+		"ReferenceExchangeID":        "ARCA",
 	}
 	for field, wantValue := range want {
 		if checks[field] != wantValue {

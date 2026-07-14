@@ -2392,8 +2392,8 @@ func runAPIOrderDirectCancelAAPL(ctx context.Context, addr string, clientID int)
 		if err != nil {
 			return err
 		}
-		if ibkr.IsTerminalOrderStatus(open.Status) {
-			return fmt.Errorf("direct-cancel order reached terminal status %s before cancellation", open.Status)
+		if ibkr.IsTerminalOrderStatus(open.State.Status) {
+			return fmt.Errorf("direct-cancel order reached terminal status %s before cancellation", open.State.Status)
 		}
 
 		recordAPIEvent("direct_cancel_start", "direct cancel resting", func(event *apiDriverEvent) {
@@ -2465,8 +2465,8 @@ func runAPIBracketPlaceAAPL(ctx context.Context, addr string, clientID int) erro
 		if err != nil {
 			return err
 		}
-		if parentOpen.ParentID != 0 || takeProfitOpen.ParentID != parentID || stopLossOpen.ParentID != parentID {
-			return fmt.Errorf("bracket callback parent IDs = %d/%d/%d, want 0/%d/%d", parentOpen.ParentID, takeProfitOpen.ParentID, stopLossOpen.ParentID, parentID, parentID)
+		if (*parentOpen.Order.ParentID) != 0 || (*takeProfitOpen.Order.ParentID) != parentID || (*stopLossOpen.Order.ParentID) != parentID {
+			return fmt.Errorf("bracket callback parent IDs = %d/%d/%d, want 0/%d/%d", (*parentOpen.Order.ParentID), (*takeProfitOpen.Order.ParentID), (*stopLossOpen.Order.ParentID), parentID, parentID)
 		}
 
 		if err := guardedCancelAll(ctx, client, account, "resting bracket cleanup"); err != nil {
@@ -2490,8 +2490,8 @@ func runAPIBracketPlaceAAPL(ctx context.Context, addr string, clientID int) erro
 			return fmt.Errorf("verify bracket cleanup: %w", err)
 		}
 		for _, open := range openOrders {
-			if open.OrderID == parentID || open.OrderID == parentID+1 || open.OrderID == parentID+2 {
-				return fmt.Errorf("bracket order %d survived cleanup", open.OrderID)
+			if (*open.Order.OrderID) == parentID || (*open.Order.OrderID) == parentID+1 || (*open.Order.OrderID) == parentID+2 {
+				return fmt.Errorf("bracket order %d survived cleanup", (*open.Order.OrderID))
 			}
 		}
 		return fenceAPIWrites(ctx, client, "resting bracket cleanup")
@@ -2741,7 +2741,7 @@ func runAPITIFAttributeMatrixAAPL(ctx context.Context, addr string, clientID int
 			{label: "gtd_far_lmt", order: withGoodTillDate(withTIF(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), ibkr.TIFGTD), orderTimestamp(now.Add(2*time.Hour)))},
 			{label: "good_after_far_lmt", order: withGoodAfterTime(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), orderTimestamp(now.Add(2*time.Minute)))},
 			{label: "all_or_none_far_lmt", order: withAllOrNone(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)))},
-			{label: "min_qty_far_lmt", order: withMinQty(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), decimal.NewFromInt(3), decimal.NewFromInt(2))},
+			{label: "min_qty_far_lmt", order: withMinQty(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)), decimal.NewFromInt(3), 2)},
 			{label: "rel_percent_offset", order: withPercentOffset(withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeRelative), farBuy(anchor)), decimal.RequireFromString("0.03"))},
 			{label: "trailing_percent", order: withTrailingPercent(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionSell, ibkr.OrderTypeTrailingStop), anchor, decimal.RequireFromString("1.5"))},
 			{label: "trigger_method_stop", order: withTriggerMethod(withAux(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeStop), farSell(anchor)), 4)},
@@ -4266,7 +4266,7 @@ func withAllOrNone(order ibkr.Order) ibkr.Order {
 	return order
 }
 
-func withMinQty(order ibkr.Order, quantity decimal.Decimal, minQty decimal.Decimal) ibkr.Order {
+func withMinQty(order ibkr.Order, quantity decimal.Decimal, minQty int) ibkr.Order {
 	order.Quantity = quantity
 	order.MinQty = new(minQty)
 	return order
@@ -4656,7 +4656,7 @@ func observeOrder(ctx context.Context, handle *ibkr.OrderHandle, label string, w
 func logOrderEvent(label string, evt ibkr.OrderEvent) {
 	if evt.OpenOrder != nil {
 		log.Printf("%s open_order order_id=%d type=%s action=%s status=%s lmt=%s aux=%s parent=%d oca=%s",
-			label, evt.OpenOrder.OrderID, evt.OpenOrder.OrderType, evt.OpenOrder.Action, evt.OpenOrder.Status, evt.OpenOrder.LmtPrice, evt.OpenOrder.AuxPrice, evt.OpenOrder.ParentID, evt.OpenOrder.OcaGroup)
+			label, (*evt.OpenOrder.Order.OrderID), evt.OpenOrder.Order.OrderType, evt.OpenOrder.Order.Action, evt.OpenOrder.State.Status, evt.OpenOrder.Order.Prices.LmtPrice, evt.OpenOrder.Order.Prices.AuxPrice, (*evt.OpenOrder.Order.ParentID), evt.OpenOrder.Order.OCA.Group)
 	}
 	if evt.Status != nil {
 		log.Printf("%s status order_id=%d status=%s filled=%s remaining=%s avg=%s last=%s why_held=%s",
@@ -4676,22 +4676,22 @@ func recordOrderEvent(label string, evt ibkr.OrderEvent) {
 	if evt.OpenOrder != nil {
 		recordAPIEvent("open_order", label, func(event *apiDriverEvent) {
 			order := evt.OpenOrder
-			event.OrderID = order.OrderID
-			event.Account = order.Account
+			event.OrderID = *order.Order.OrderID
+			event.Account = order.Order.Account
 			event.Symbol = order.Contract.Symbol
 			event.SecType = string(order.Contract.SecType)
-			event.Action = string(order.Action)
-			event.OrderType = string(order.OrderType)
-			event.TIF = string(order.TIF)
-			event.Quantity = order.Quantity.String()
-			setRecordedOrderPrices(event, order.LmtPrice, order.AuxPrice)
-			event.Status = string(order.Status)
-			event.ParentID = order.ParentID
-			event.OCAGroup = order.OcaGroup
-			event.OrderRef = order.OrderRef
-			event.PermID = order.PermID
-			if len(order.AlgoParams) > 0 {
-				event.Values = tagValuesMap(order.AlgoParams)
+			event.Action = string(order.Order.Action)
+			event.OrderType = string(order.Order.OrderType)
+			event.TIF = string(order.Order.TIF)
+			event.Quantity = order.Order.Quantity.String()
+			setRecordedOrderPrices(event, order.Order.Prices.LmtPrice, order.Order.Prices.AuxPrice)
+			event.Status = string(order.State.Status)
+			event.ParentID = *order.Order.ParentID
+			event.OCAGroup = order.Order.OCA.Group
+			event.OrderRef = order.Order.OrderRef
+			event.PermID = *order.Order.PermID
+			if len(order.Order.Algorithm.Params) > 0 {
+				event.Values = tagValuesMap(order.Order.Algorithm.Params)
 			}
 		})
 	}
@@ -4907,15 +4907,15 @@ func recordOpenOrdersResult(label string, orders []ibkr.OpenOrder, err error) {
 	recordAPIEvent("open_orders_query", label, func(event *apiDriverEvent) {
 		event.Count = len(orders)
 		if len(orders) > 0 {
-			event.OrderID = orders[0].OrderID
-			event.Account = orders[0].Account
+			event.OrderID = *orders[0].Order.OrderID
+			event.Account = orders[0].Order.Account
 			event.Symbol = orders[0].Contract.Symbol
 			event.SecType = string(orders[0].Contract.SecType)
-			event.Action = string(orders[0].Action)
-			event.OrderType = string(orders[0].OrderType)
-			event.TIF = string(orders[0].TIF)
-			event.Quantity = orders[0].Quantity.String()
-			event.Status = string(orders[0].Status)
+			event.Action = string(orders[0].Order.Action)
+			event.OrderType = string(orders[0].Order.OrderType)
+			event.TIF = string(orders[0].Order.TIF)
+			event.Quantity = orders[0].Order.Quantity.String()
+			event.Status = string(orders[0].State.Status)
 		}
 	})
 }
@@ -5128,7 +5128,7 @@ func drainObservers(
 				if ok && evt.Kind == ibkr.StreamData {
 					value := evt.Value
 					if value.Order != nil {
-						log.Printf("observer open order_id=%d status=%s", value.Order.OrderID, value.Order.Status)
+						log.Printf("observer open order_id=%d status=%s", *value.Order.Order.OrderID, value.Order.State.Status)
 					}
 					if value.Status != nil {
 						log.Printf("observer open status order_id=%d status=%s", value.Status.OrderID, value.Status.Status)

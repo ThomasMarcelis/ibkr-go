@@ -134,6 +134,45 @@ func TestValidateOrderRequest(t *testing.T) {
 			},
 			field: "Order.ParentID",
 		},
+		{
+			name: "fractional minimum quantity cannot be represented",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.Quantity = decimal.RequireFromString("1.5")
+				req.Order.MinQty = new(2)
+			},
+			field: "Order.MinQty",
+		},
+		{
+			name: "scale extension without increment",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.Scale.PriceAdjustInterval = new(30)
+			},
+			field: "Order.Scale.PriceIncrement",
+		},
+		{
+			name: "short sale metadata on buy",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.ShortSale = OrderShortSale{Slot: 2, DesignatedLocation: "LOCATE"}
+			},
+			field: "Order.ShortSale",
+		},
+		{
+			name: "peg benchmark without parameters",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.OrderType = OrderTypePeggedBenchmark
+			},
+			field: "Order.PeggedBenchmark",
+		},
+		{
+			name: "duplicate algorithm parameter",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.Algorithm = OrderAlgorithm{Strategy: "Adaptive", Params: []TagValue{
+					{Tag: "adaptivePriority", Value: "Normal"},
+					{Tag: "adaptivePriority", Value: "Patient"},
+				}}
+			},
+			field: "Order.Algorithm.Params[1].Tag",
+		},
 	}
 
 	for _, tc := range cases {
@@ -206,6 +245,49 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 				Order: Order{
 					Action: ActionBuy, OrderType: OrderTypeLimit,
 					Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.RequireFromString("-1.25")),
+				},
+			},
+		},
+		{
+			name: "complete scale order",
+			req: PlaceOrderRequest{
+				Contract: Contract{ConID: 265598},
+				Order: Order{
+					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(10), LmtPrice: new(decimal.NewFromInt(150)),
+					Scale: OrderScale{
+						InitialLevelSize: 2, SubsequentLevelSize: 1, PriceIncrement: decimal.RequireFromString("0.1"),
+						PriceAdjustValue: new(decimal.RequireFromString("0.02")), PriceAdjustInterval: new(30),
+						ProfitOffset: new(decimal.RequireFromString("0.03")), AutoReset: new(false),
+						InitialPosition: new(1), InitialFillQty: new(1), RandomPercent: new(true),
+					},
+				},
+			},
+		},
+		{
+			name: "short sale locate",
+			req: PlaceOrderRequest{
+				Contract: Contract{ConID: 265598},
+				Order: Order{
+					Action: ActionSellShort, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.NewFromInt(150)),
+					ShortSale: OrderShortSale{Slot: 2, DesignatedLocation: "LOCATE", ExemptCode: new(0)},
+				},
+			},
+		},
+		{
+			name: "pegged benchmark",
+			req: PlaceOrderRequest{
+				Contract: Contract{ConID: 265598},
+				Order: Order{
+					Action: ActionBuy, OrderType: OrderTypePeggedBenchmark, Quantity: decimal.NewFromInt(1),
+					Auction: OrderAuction{
+						StartingPrice: new(decimal.RequireFromString("33")), StockRefPrice: new(decimal.RequireFromString("750")),
+						StockRangeLower: new(decimal.RequireFromString("650")), StockRangeUpper: new(decimal.RequireFromString("800")),
+					},
+					PeggedBenchmark: &OrderPeggedBenchmark{
+						ReferenceContractID: 208813720, ChangeAmountDecrease: true,
+						ChangeAmount: decimal.RequireFromString("0.1"), ReferenceChangeAmount: new(decimal.RequireFromString("1")),
+						ReferenceExchangeID: "ARCA",
+					},
 				},
 			},
 		},

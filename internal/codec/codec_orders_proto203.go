@@ -279,121 +279,7 @@ func decodeComboLegProto(body []byte) (ComboLeg, string, error) {
 }
 
 func decodeOpenOrderOrderProto(body []byte, m *OpenOrder) error {
-	for {
-		number, typ, ok, err := consumeProtoTag(&body)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return nil
-		}
-		switch number {
-		case 1, 3, 4, 69:
-			value, err := consumeProtoVarint(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			switch number {
-			case 1:
-				m.ClientID = itoa(decodeProtoInt32(value))
-			case 3:
-				m.PermID = i64toa(decodeProtoInt64(value))
-			case 4:
-				m.ParentID = itoa(decodeProtoInt32(value))
-			case 69:
-				m.Origin = itoa(decodeProtoInt32(value))
-			}
-		case 5, 6, 8, 11, 12, 27, 28, 61, 68:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			switch number {
-			case 5:
-				m.Action = string(value)
-			case 6:
-				m.Quantity = string(value)
-			case 8:
-				m.OrderType = string(value)
-			case 11:
-				m.TIF = string(value)
-			case 12:
-				m.Account = string(value)
-			case 27:
-				m.OcaGroup = string(value)
-			case 28:
-				m.OrderRef = string(value)
-			case 61:
-				m.AlgoStrategy = string(value)
-			case 68:
-				m.OpenClose = string(value)
-			}
-		case 9, 10, 76:
-			value, err := consumeProtoDouble(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			formatted := formatProtoDouble(value)
-			switch number {
-			case 9:
-				m.LmtPrice = formatted
-			case 10:
-				m.AuxPrice = formatted
-			case 76:
-				m.DiscretionAmt = formatted
-			}
-		case 18, 19, 101, 102:
-			value, err := consumeProtoVarint(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			formatted := protoBoolString(value)
-			switch number {
-			case 18:
-				m.Hidden = formatted
-			case 19:
-				m.OutsideRTH = formatted
-			case 101:
-				m.ConditionsCancelOrder = formatted
-			case 102:
-				m.ConditionsIgnoreRTH = formatted
-			}
-		case 25:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			m.GoodAfterTime = string(value)
-		case 62, 64:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			pair, err := decodeProtoMapEntry(value)
-			if err != nil {
-				return protoFieldError("order map", number, err)
-			}
-			if number == 62 {
-				m.AlgoParams = append(m.AlgoParams, pair)
-			} else {
-				m.SmartComboRouting = append(m.SmartComboRouting, pair)
-			}
-		case 100:
-			value, err := consumeProtoBytes(&body, typ)
-			if err != nil {
-				return protoFieldError("order", number, err)
-			}
-			condition, err := decodeOrderConditionProto(value)
-			if err != nil {
-				return protoFieldError("order condition", number, err)
-			}
-			m.Conditions = append(m.Conditions, condition)
-		default:
-			if err := skipProtoField(&body, number, typ); err != nil {
-				return protoFieldError("order", number, err)
-			}
-		}
-	}
+	return decodeOrderDetailsProto(body, &m.OrderDetails)
 }
 
 func decodeProtoMapEntry(body []byte) (TagValue, error) {
@@ -745,7 +631,7 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{35, m.FAMethod}, {36, m.FAPercentage}, {41, m.DeltaNeutralOrderType},
 		{58, m.ScaleTable}, {59, m.HedgeType}, {60, m.HedgeParam},
 		{63, m.AlgoID}, {68, m.OpenClose}, {71, m.DesignatedLocation},
-		{93, m.AdjustedOrderType}, {103, m.ModelCode}, {104, m.ExtOperator},
+		{92, m.ReferenceExchangeID}, {93, m.AdjustedOrderType}, {103, m.ModelCode}, {104, m.ExtOperator},
 		{107, m.Mifid2DecisionMaker}, {108, m.Mifid2DecisionAlgo},
 		{109, m.Mifid2ExecutionTrader}, {110, m.Mifid2ExecutionAlgo},
 		{125, m.AdvancedErrorOverride}, {126, m.ManualOrderTime},
@@ -766,8 +652,12 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{38, m.VolatilityType, "volatility type"}, {40, m.ReferencePriceType, "reference price type"},
 		{48, m.ScaleInitLevelSize, "scale initial level size"},
 		{49, m.ScaleSubsLevelSize, "scale subsequent level size"},
+		{52, m.ScalePriceAdjustInterval, "scale price adjust interval"},
+		{55, m.ScaleInitPosition, "scale initial position"},
+		{56, m.ScaleInitFillQty, "scale initial fill quantity"},
 		{69, m.Origin, "origin"}, {70, m.ShortSaleSlot, "short sale slot"},
 		{72, m.ExemptCode, "exempt code"}, {98, m.AdjustableTrailingUnit, "adjustable trailing unit"},
+		{88, m.ReferenceContractID, "pegged benchmark reference contract id"},
 		{122, m.UsePriceMgmtAlgo, "use price management algo"},
 		{123, m.Duration, "duration"}, {124, m.PostToAts, "post to ATS"},
 		{136, m.ManualOrderIndicator, "manual order indicator"},
@@ -791,9 +681,13 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{23, m.TrailStopPrice, "trail stop price"}, {37, m.Volatility, "volatility"},
 		{42, m.DeltaNeutralAuxPrice, "delta-neutral aux price"},
 		{50, m.ScalePriceIncrement, "scale price increment"},
+		{51, m.ScalePriceAdjustValue, "scale price adjust value"},
+		{53, m.ScaleProfitOffset, "scale profit offset"},
 		{76, m.DiscretionaryAmt, "discretionary amount"}, {78, m.StartingPrice, "starting price"},
 		{79, m.StockRefPrice, "stock reference price"}, {80, m.Delta, "delta"},
 		{81, m.StockRangeLower, "stock range lower"}, {82, m.StockRangeUpper, "stock range upper"},
+		{89, m.PeggedChangeAmount, "pegged benchmark change amount"},
+		{91, m.ReferenceChangeAmount, "pegged benchmark reference change amount"},
 		{94, m.TriggerPrice, "adjustment trigger price"},
 		{95, m.AdjustedStopPrice, "adjusted stop price"},
 		{96, m.AdjustedStopLimitPrice, "adjusted stop limit price"},
@@ -818,6 +712,9 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{77, m.OptOutSmartRouting, "opt out smart routing"}, {83, m.NotHeld, "not held"},
 		{85, m.Solicited, "solicited"}, {86, m.RandomizeSize, "randomize size"},
 		{87, m.RandomizePrice, "randomize price"},
+		{54, m.ScaleAutoReset, "scale auto reset"},
+		{57, m.ScaleRandomPercent, "scale random percent"},
+		{90, m.PeggedChangeAmountDecrease, "pegged benchmark change amount decrease"},
 		{101, m.ConditionsCancelOrder, "conditions cancel order"},
 		{102, m.ConditionsIgnoreRTH, "conditions ignore RTH"},
 		{111, m.DontUseAutoPriceForHedge, "disable automatic hedge price"},

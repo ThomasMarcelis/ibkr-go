@@ -205,7 +205,7 @@ as IBKR's unavailable sentinels.
 | out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf. `Contract.conId` is proto3 optional; official EClientUtils nevertheless emits zero because `Utils::isValidValue(0)` is true, and a fresh guarded paper lifecycle capture freezes that request. Combo-leg price tag 9 is source-law coverage, not claimed live priced-combo evidence. |
 | out | 4 | CancelOrder | landed | Classic plus exact-sv203 `CancelOrderRequest` protobuf, including compliance metadata. |
 | out | 58 | reqGlobalCancel | landed | Classic plus exact-sv203 `GlobalCancelRequest` protobuf, live-flushed before teardown. |
-| in | 5 | OpenOrder | landed | Live-grounded sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; no fill echo (fills are order_status truth). |
+| in | 5 | OpenOrder | landed | Strict sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; both project the shared complete `OrderDetails` model and carry no fill echo (fills are order_status truth). |
 | in | 3 | OrderStatus | landed | Classic and exact-sv203 protobuf parse; authoritative fill data for all order types. |
 
 OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
@@ -214,16 +214,15 @@ Contract/OrderCombo payload, including decimal pointers. Strict canonical
 numeric conversion errors close those affected routes without closing the
 session.
 
-OpenOrder uses one live-grounded sequential walk: the "None"-sentinel
-delta-neutral block, the no-scale section, grounded combo, algo, and
-condition sections, and the official 32-field adjustedOrderType..imbalanceOnly
-tail. The classic codec marks an order Partial only at its explicit
-unattested order-level delta-neutral/advanced-layout boundaries; it does not
-best-effort canonical Contract or combo numerics. Those conversions return an
-error and close the affected route. The codec's OpenOrder encoder emits the
-same live layout, so replay fixtures exercise the production decode path.
-Public open and completed orders use the same `OrderCombo` shape as placement
-for per-leg prices and smart-routing tags; `ComboDescription` is response-only.
+OpenOrder uses one strict sequential walk: the "None"-sentinel delta-neutral
+block, complete classic scale extensions, grounded combo, algo and condition
+sections, PEG BENCH reference fields, and the official 32-field
+adjustedOrderType..imbalanceOnly tail. It never returns a partial result.
+Malformed canonical Contract/combo numerics or trailing layout drift close the
+affected route. The testhost encoder emits the same layout, so replay fixtures
+exercise the production decode path. Public open and completed orders share
+`OrderDetails`, including `OrderCombo`, advanced scale, short-sale, auction,
+and pegged-benchmark echoes. `ComboDescription` remains response-only.
 
 ## Order and Execution Observation
 

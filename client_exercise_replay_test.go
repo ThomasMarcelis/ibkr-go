@@ -154,11 +154,11 @@ func TestAPIOptionExerciseNotITMReplay(t *testing.T) {
 	if open.Contract.Strike == nil || !open.Contract.Strike.Equal(decimal.RequireFromString("292.5")) || open.Contract.Right != ibkr.RightCall {
 		t.Fatalf("open strike/right = %s/%s, want 292.5/C", open.Contract.Strike, open.Contract.Right)
 	}
-	if open.OrderType != ibkr.OrderTypeMarket {
-		t.Fatalf("open order type = %s, want MKT", open.OrderType)
+	if open.Order.OrderType != ibkr.OrderTypeMarket {
+		t.Fatalf("open order type = %s, want MKT", open.Order.OrderType)
 	}
-	if open.PermID != 900406 {
-		t.Fatalf("perm id = %d, want 900406", open.PermID)
+	if (*open.Order.PermID) != 900406 {
+		t.Fatalf("perm id = %d, want 900406", (*open.Order.PermID))
 	}
 
 	exec, comm, filled := waitOptionFill(t, ctx, handle)
@@ -244,8 +244,8 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	if open.Contract.ConID != 887760542 || open.Contract.Strike == nil || !open.Contract.Strike.Equal(decimal.RequireFromString("282.5")) {
 		t.Fatalf("open contract = %+v, want AAPL OPT 282.5 con 887760542", open.Contract)
 	}
-	if open.PermID != 900407 {
-		t.Fatalf("perm id = %d, want 900407", open.PermID)
+	if (*open.Order.PermID) != 900407 {
+		t.Fatalf("perm id = %d, want 900407", (*open.Order.PermID))
 	}
 
 	exec, comm, filled := waitOptionFill(t, ctx, handle)
@@ -277,10 +277,10 @@ func TestAPIOptionExerciseServerRejectReplay(t *testing.T) {
 	}
 
 	openExercise := nextExerciseEvent(t, ctx, exerciseHandle).OpenOrder
-	if openExercise == nil || openExercise.OrderID != int64(exerciseHandle.RequestID()) ||
-		openExercise.Contract.ConID != 887760542 || openExercise.Action != ibkr.ActionBuy ||
-		openExercise.OrderType != ibkr.OrderTypeLimit || !openExercise.Quantity.Equal(decimal.NewFromInt(1)) ||
-		openExercise.TIF != ibkr.TIFDay || openExercise.PermID != 900005 {
+	if openExercise == nil || *openExercise.Order.OrderID != int64(exerciseHandle.RequestID()) ||
+		openExercise.Contract.ConID != 887760542 || openExercise.Order.Action != ibkr.ActionBuy ||
+		openExercise.Order.OrderType != ibkr.OrderTypeLimit || !openExercise.Order.Quantity.Equal(decimal.NewFromInt(1)) ||
+		openExercise.Order.TIF != ibkr.TIFDay || *openExercise.Order.PermID != 900005 {
 		t.Fatalf("exercise pseudo-order = %+v, want request-bound DAY LMT BUY 1 with perm id 900005", openExercise)
 	}
 	working := nextExerciseEvent(t, ctx, exerciseHandle).Status

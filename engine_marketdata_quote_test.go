@@ -255,13 +255,17 @@ func TestRegulatorySnapshotErrorPreservesDefinitiveRejection(t *testing.T) {
 	t.Parallel()
 
 	apiErr := &APIError{Code: ErrCodeMarketDataNotSubscribed, OpKind: OpQuotes}
-	if got := regulatorySnapshotError(apiErr); got != apiErr {
+	if got := regulatorySnapshotError(7, 9, apiErr); got != apiErr {
 		t.Fatalf("regulatorySnapshotError(APIError) = %v, want unchanged rejection", got)
 	}
 
-	got := regulatorySnapshotError(context.DeadlineExceeded)
+	got := regulatorySnapshotError(7, 9, context.DeadlineExceeded)
 	if !errors.Is(got, ErrRegulatorySnapshotUncertain) || !errors.Is(got, context.DeadlineExceeded) {
 		t.Fatalf("regulatorySnapshotError(deadline) = %v, want uncertainty and deadline", got)
+	}
+	uncertain, ok := errors.AsType[*RegulatorySnapshotUncertainError](got)
+	if !ok || uncertain.RequestID != 7 || uncertain.ConnectionSeq != 9 {
+		t.Fatalf("regulatory uncertainty identity = %#v, %t", uncertain, ok)
 	}
 	if IsRetryable(got) {
 		t.Fatal("uncertain fee-bearing request is retryable")
