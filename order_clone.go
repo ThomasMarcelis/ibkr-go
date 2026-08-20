@@ -139,6 +139,7 @@ func cloneOrderDetails(order OrderDetails) OrderDetails {
 	}
 	for _, field := range []**bool{
 		&order.Transmit,
+		&order.IncludeOvernight,
 		&order.Routing.RouteMarketableToBBO,
 		&order.Scale.AutoReset,
 		&order.Scale.RandomPercent,

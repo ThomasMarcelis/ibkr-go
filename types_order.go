@@ -453,6 +453,7 @@ type Order struct {
 	ParentID              int64                 // parent order ID for a bracket child; 0 = no parent
 	OCA                   OrderOCA              // one-cancels-all behavior; zero value disables it
 	OutsideRTH            bool                  // allow execution outside regular trading hours
+	IncludeOvernight      bool                  // include IBKR overnight trading in a SMART-routed DAY order
 	TriggerMethod         int                   // stop-trigger method; 0 = default
 	DisplaySize           int                   // iceberg display size; 0 = show full size
 	OrderRef              string                // free-form client order reference/tag
@@ -579,24 +580,25 @@ type OrderDetails struct {
 	// OrderID, ClientID, and ParentID are nil for classic completed-order
 	// replies, whose wire shape does not carry those identities. A non-nil
 	// pointer preserves an explicit zero from protobuf replies.
-	OrderID       *int64
-	ClientID      *ClientID
-	ParentID      *int64
-	Action        OrderAction
-	Quantity      decimal.Decimal
-	OrderType     OrderType
-	TIF           TimeInForce
-	Account       string
-	OpenClose     string
-	Origin        int
-	OrderRef      string
-	PermID        *int64
-	OutsideRTH    bool
-	Hidden        bool
-	GoodAfterTime string
-	GoodTillDate  string
-	ModelCode     string
-	Transmit      *bool
+	OrderID          *int64
+	ClientID         *ClientID
+	ParentID         *int64
+	Action           OrderAction
+	Quantity         decimal.Decimal
+	OrderType        OrderType
+	TIF              TimeInForce
+	Account          string
+	OpenClose        string
+	Origin           int
+	OrderRef         string
+	PermID           *int64
+	OutsideRTH       bool
+	IncludeOvernight *bool
+	Hidden           bool
+	GoodAfterTime    string
+	GoodTillDate     string
+	ModelCode        string
+	Transmit         *bool
 
 	Prices                OrderPrices
 	OCA                   OrderOCA
