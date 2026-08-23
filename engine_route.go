@@ -374,9 +374,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		// answers that are never coming.
 		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
 		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
-		// A 1101 can arrive without a preceding 1100. Preserve that explicit
-		// evidence-loss boundary for the passive execution observer.
-		e.gapExecutionEvents(ErrInterrupted)
+		e.emitGap()
 		e.restoreExecutionEvents()
 		e.requireOrderRecovery(e.connectionSeq())
 		e.dropLostRoutes()
