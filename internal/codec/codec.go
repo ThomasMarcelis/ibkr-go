@@ -114,14 +114,6 @@ func Decode(sv int, payload []byte) (Message, error) {
 	return msgs[0], nil
 }
 
-func isWireInt(value string) bool {
-	if value == "" {
-		return false
-	}
-	_, err := strconv.Atoi(value)
-	return err == nil
-}
-
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
 func Encode(sv int, msg Message) ([]byte, error) {
 	fields, err := msg.encodeWire(sv)

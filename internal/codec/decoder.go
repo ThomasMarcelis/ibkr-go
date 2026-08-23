@@ -77,16 +77,6 @@ func (r *fieldReader) field() ([]byte, bool) {
 	return f, true
 }
 
-// peek returns the current field's bytes without advancing. It returns nil
-// once past the end.
-func (r *fieldReader) peek() []byte {
-	if r.off >= len(r.buf) {
-		return nil
-	}
-	rel := bytes.IndexByte(r.buf[r.off:], 0)
-	return r.buf[r.off : r.off+rel]
-}
-
 func (r *fieldReader) setErr(err error) {
 	if err != nil && r.err == nil {
 		r.err = err
@@ -264,6 +254,11 @@ func (r *fieldReader) ReadCount(label string) (int, error) {
 		r.setErr(parseErr)
 		return 0, parseErr
 	}
+	if count > r.Remaining() {
+		parseErr := fmt.Errorf("codec: field %d: %s %d exceeds %d remaining fields", r.pos-1, label, count, r.Remaining())
+		r.setErr(parseErr)
+		return 0, parseErr
+	}
 	return count, nil
 }
 
@@ -283,6 +278,11 @@ func (r *fieldReader) ReadOptionalCount(label string) (int, error) {
 	}
 	if count < 0 {
 		parseErr := fmt.Errorf("codec: field %d: negative %s %d", r.pos-1, label, count)
+		r.setErr(parseErr)
+		return 0, parseErr
+	}
+	if count > r.Remaining() {
+		parseErr := fmt.Errorf("codec: field %d: %s %d exceeds %d remaining fields", r.pos-1, label, count, r.Remaining())
 		r.setErr(parseErr)
 		return 0, parseErr
 	}

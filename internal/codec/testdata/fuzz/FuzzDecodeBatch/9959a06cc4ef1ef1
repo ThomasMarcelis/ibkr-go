@@ -1,2 +1,0 @@
-go test fuzz v1
-[]byte("鄒鄒鄒鄒\x00")

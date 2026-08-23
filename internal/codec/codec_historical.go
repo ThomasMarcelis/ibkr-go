@@ -463,9 +463,12 @@ func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
 	if err != nil {
 		return nil, err
 	}
-	barCount, err := r.ReadCount("historical data update bar count")
+	barCount, err := r.ReadInt()
 	if err != nil {
 		return nil, err
+	}
+	if barCount < 0 {
+		return nil, fmt.Errorf("codec: negative historical data update bar count %d", barCount)
 	}
 	if err := r.RequireFixedEntryFields("historical data update", 1, 7, 0); err != nil {
 		return nil, err

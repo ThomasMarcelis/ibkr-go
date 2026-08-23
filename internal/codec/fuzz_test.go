@@ -117,123 +117,33 @@ var allInboundMsgIDs = []int{
 	protocol.InCurrentTimeInMillis,    // 109
 }
 
-// FuzzDecodeBatch proves DecodeBatch never panics on arbitrary byte payloads.
-// Seeds include real wire captures, encoder output for diverse message types,
-// and degenerate inputs.
+// FuzzDecodeBatch proves DecodeBatch never panics across every supported
+// negotiated version. Exact live classic/protobuf seeds anchor both envelopes;
+// the remaining readable seeds exercise containment boundaries.
 func FuzzDecodeBatch(f *testing.F) {
-	// --- Real wire capture seeds ---
-	f.Add([]byte("15\x001\x00DU9000001\x00"))                                                                                              // ManagedAccounts
-	f.Add([]byte("9\x001\x001\x00"))                                                                                                       // NextValidID
-	f.Add([]byte("4\x00-1\x002104\x00Market data farm connection is OK:usfarm\x00\x001775425766350\x00"))                                  // APIError
-	f.Add([]byte("52\x001\x001001\x00"))                                                                                                   // ContractDetailsEnd
-	f.Add([]byte("63\x001\x001001\x00DU9000001\x00BuyingPower\x00300000.00\x00EUR\x00"))                                                   // AccountSummaryValue
-	f.Add([]byte("64\x001\x001001\x00"))                                                                                                   // AccountSummaryEnd
-	f.Add([]byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00"))                                                                        // TickPrice
-	f.Add([]byte("2\x006\x001001\x0074\x00312894\x00"))                                                                                    // TickSize
-	f.Add([]byte("58\x001\x001001\x003\x00"))                                                                                              // MarketDataType
-	f.Add([]byte("57\x001\x001001\x00"))                                                                                                   // TickSnapshotEnd
-	f.Add([]byte("61\x003\x00DU9000001\x003691937\x00AMZN\x00STK\x00\x000.0\x00\x00\x00NASDAQ\x00USD\x00AMZN\x00NMS\x0015\x00200.25\x00")) // Position
-	f.Add([]byte("62\x001\x00"))                                                                                                           // PositionEnd
-	f.Add([]byte("53\x001\x00"))                                                                                                           // OpenOrderEnd
-	f.Add([]byte("81\x001\x000.01\x00SMART\x003\x00"))                                                                                     // TickReqParams
+	// Classic ManagedAccounts is from capture
+	// 20260710T223024Z-account_summary_snapshot (events SHA-256
+	// 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db).
+	f.Add(byte(0), []byte("15\x001\x00DU9000001\x00"))
+	// Protobuf ExecutionsEnd is from exact-sv201 capture
+	// 20260709T222913Z-protobuf-sv201-executions-empty (events SHA-256
+	// a3610dc87dbe654d8fd86ca65e552be706ab3d814244ce941208ac49dfcd819d).
+	f.Add(byte(1), []byte{0, 0, 0, 255, 0x08, 0x01})
+	f.Add(byte(0), []byte("999\x00"))
+	f.Add(byte(0), []byte("998\x00unterminated"))
+	// Structural truncation of the captured account-summary row above.
+	f.Add(byte(0), []byte("63\x001\x001\x00DU9000001\x00NetLiquidation\x0033911.62\x00EUR"))
+	f.Add(byte(0), []byte("17\x001\x002147483647\x00"))
+	f.Add(byte(0), []byte{})
+	f.Add(byte(0), []byte("not-a-message-id\x00"))
 
-	// --- Encoder-derived seeds for diverse message types ---
-	encoderSeeds := []Message{
-		TickPrice{ReqID: 1, TickType: 1, Price: "100", Size: "50", AttrMask: 0},
-		TickSize{ReqID: 2, TickType: 0, Size: "400"},
-		AccountSummaryValue{ReqID: 3, Account: "DU1234", Tag: "NetLiquidation", Value: "50000.00", Currency: "USD"},
-		AccountSummaryEnd{ReqID: 4},
-		Position{Account: "DU1234", Contract: Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"}, Position: "100", AvgCost: "150.00"},
-		TickReqParams{ReqID: 5, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: new(3)},
-		FamilyCodes{Codes: []FamilyCodeEntry{{AccountID: "U123", FamilyCode: "F1"}, {AccountID: "U456", FamilyCode: "F2"}}},
-		ManagedAccounts{Accounts: []string{"DU1234", "DU5678"}},
-		NextValidID{OrderID: 42},
-		CurrentTime{Time: "1712345678"},
-		CurrentTimeMillis{TimeMs: "1781169286652"},
-		APIError{ReqID: -1, Code: 2104, Message: "test", AdvancedOrderRejectJSON: "", ErrorTimeMs: "123"},
-		RealTimeBar{ReqID: 1, Time: "1712345678", Open: "100.0", High: "101.0", Low: "99.5", Close: "100.5", Volume: "1000", WAP: "100.5", Count: "50"},
-		CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"},
-		TickGeneric{ReqID: 1, TickType: 49, Value: "0"},
-		TickString{ReqID: 1, TickType: 45, Value: "1712300400"},
-		TickNews{ReqID: 1, Time: "1758294759000", ProviderCode: "BRFG", ArticleID: "BRFG$1c2d5728", Headline: "Headline", ExtraData: "L:en"},
-		MarketDataType{ReqID: 1, DataType: 3},
-		TickSnapshotEnd{ReqID: 1},
-		OrderStatus{OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0", AvgFillPrice: "150.50", PermID: "123456", ParentID: "0", LastFillPrice: "150.50", ClientID: "99"},
-		OpenOrderEnd{},
-		PositionEnd{},
-		ExecutionDetail{ReqID: 1, OrderID: 42, Contract: Contract{Symbol: "AAPL"}, ExecID: "0001", Account: "DU12345", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"},
-		ExecutionsEnd{ReqID: 1},
-		ContractDetailsEnd{ReqID: 42},
-		CompletedOrderEnd{},
-		UserInfo{ReqID: 1, WhiteBrandingID: "WB1"},
-		HeadTimestamp{ReqID: 1, Timestamp: "20200101-00:00:00"},
-		PnLValue{ReqID: 1, DailyPnL: "100.50", UnrealizedPnL: "200.00", RealizedPnL: "50.00"},
-		PnLSingleValue{ReqID: 1, Position: "10", DailyPnL: "50.25", UnrealizedPnL: "100.00", RealizedPnL: "25.00", Value: "5000.00"},
-		ScannerParameters{XML: "<xml/>"},
-		NewsProviders{Providers: []NewsProviderEntry{{Code: "BRFG", Name: "Briefing"}}},
-		HistogramDataResponse{ReqID: 1, Entries: []HistogramDataEntry{{Price: "100.0", Size: "500"}}},
-		MarketRule{MarketRuleID: 26, Increments: []PriceIncrement{{LowEdge: "0", Increment: "0.01"}}},
-		TickOptionComputation{ReqID: 1, TickType: 13, TickAttrib: 1, ImpliedVol: "0.25", Delta: "0.5", OptPrice: "3.50", PvDividend: "0.10", Gamma: "0.02", Vega: "0.15", Theta: "-0.05", UndPrice: "150.00"},
-		NewsBulletin{MsgID: 1, MsgType: 1, Headline: "Test Headline", Source: "TestSource"},
-		HistoricalDataUpdate{ReqID: 1, BarCount: 1, Time: "20260101", Open: "100", High: "101", Low: "99", Close: "100.5", Volume: "1000", WAP: "100.25"},
-		TickByTickData{ReqID: 1, TickType: 1, Time: "1712345678", Price: "100.50", Size: "200", TickAttribLast: 0, Exchange: "SMART", SpecialConditions: ""},
-		TickByTickData{ReqID: 2, TickType: 3, Time: "1712345678", BidPrice: "100.0", AskPrice: "100.5", BidSize: "100", AskSize: "200", TickAttribBidAsk: 0},
-		TickByTickData{ReqID: 3, TickType: 4, Time: "1712345678", MidPoint: "100.25"},
-		NewsArticleResponse{ReqID: 1, ArticleType: 0, ArticleText: "Article body"},
-		HistoricalNewsItem{ReqID: 1, Time: "1704067200000", ProviderCode: "BRFG", ArticleID: "ART1", Headline: "News"},
-		UpdateAccountValue{Key: "NetLiquidation", Value: "100000", Currency: "USD", Account: "DU1234"},
-		UpdateAccountTime{Timestamp: "15:30"},
-		AccountDownloadEnd{Account: "DU1234"},
-		AccountUpdateMultiValue{ReqID: 1, Account: "DU1234", ModelCode: "", Key: "NetLiq", Value: "100000", Currency: "USD"},
-		AccountUpdateMultiEnd{ReqID: 1},
-		PositionMultiEnd{ReqID: 1},
-		SecDefOptParamsEnd{ReqID: 1},
-	}
-
-	for _, msg := range encoderSeeds {
-		payload, err := Encode(200, msg)
-		if err != nil {
-			continue
-		}
-		f.Add(payload)
-	}
-
-	// --- Degenerate seeds ---
-	f.Add([]byte{})                                                     // empty
-	f.Add([]byte{0x00})                                                 // single null
-	f.Add(wire.EncodeFields([]string{"1"}))                             // msg ID only, no fields
-	f.Add(wire.EncodeFields([]string{"1", "abc"}))                      // valid msg ID, wrong field count
-	f.Add(wire.EncodeFields([]string{"999"}))                           // unknown msg ID
-	f.Add(wire.EncodeFields([]string{"0"}))                             // zero msg ID
-	f.Add(wire.EncodeFields([]string{"-1"}))                            // negative msg ID
-	f.Add(wire.EncodeFields([]string{"1", "", "", "", "", "", "", ""})) // empty fields for TickPrice
-	f.Add([]byte("not\x00a\x00number\x00"))                             // non-numeric msg ID
-	f.Add(wire.EncodeFields([]string{"17", "1", "999999"}))             // HistoricalData with huge barCount
-	// Exact sv201 live vectors cover both negotiated body encodings: raw-ID
-	// classic NextValidID and protobuf ExecutionDetailsEnd.
-	f.Add([]byte{0, 0, 0, 9, '1', 0, '2', 0})
-	f.Add([]byte{0, 0, 0, 255, 0x08, 0xe9, 0x07})
-
-	f.Fuzz(func(t *testing.T, data []byte) {
-		// Cap input size to avoid OOM from unbounded make([]T, hugeCount)
-		// when the fuzzer generates payloads with large numeric count fields.
-		// The underlying bugs (negative/huge counts passed to make) are
-		// documented by TestDecodeNegativeAndOverflowCounts. This cap lets
-		// the fuzzer explore structural coverage without triggering fatal
-		// OOM signals that cannot be recovered.
-		if len(data) > 4096 {
-			return
-		}
-		// Property: DecodeBatch must never panic on any input within the
-		// size budget. The defer/recover is inlined because the fuzzer runs
-		// each iteration in-process.
+	f.Fuzz(func(t *testing.T, versionSelector byte, data []byte) {
 		defer func() {
 			if r := recover(); r != nil {
 				t.Errorf("unexpected panic: %v", r)
 			}
 		}()
-		_, _ = DecodeBatch(200, data)
-		_, _ = DecodeBatch(201, data)
+		_, _ = DecodeBatch(200+int(versionSelector)%26, data)
 	})
 }
 

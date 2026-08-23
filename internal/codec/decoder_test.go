@@ -218,6 +218,42 @@ func TestFieldReaderReadDecimal(t *testing.T) {
 	}
 }
 
+func TestFieldReaderCountsCannotExceedRemainingFields(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name     string
+		optional bool
+		fields   []string
+		want     int
+		wantErr  bool
+	}{
+		{name: "required equal", fields: []string{"2", "a", "b"}, want: 2},
+		{name: "required exceeds", fields: []string{"2", "a"}, wantErr: true},
+		{name: "required zero", fields: []string{"0"}},
+		{name: "optional equal", optional: true, fields: []string{"1", "a"}, want: 1},
+		{name: "optional exceeds", optional: true, fields: []string{"3", "a", "b"}, wantErr: true},
+		{name: "optional absent", optional: true, fields: nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newFieldReader(tc.fields)
+			var got int
+			var err error
+			if tc.optional {
+				got, err = r.ReadOptionalCount("entry count")
+			} else {
+				got, err = r.ReadCount("entry count")
+			}
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("count error = %v, wantErr %t", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Fatalf("count = %d, want %d", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestFieldReaderSkip(t *testing.T) {
 	t.Parallel()
 	r := newFieldReader([]string{"a", "b", "c", "d"})
