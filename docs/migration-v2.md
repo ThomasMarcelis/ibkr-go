@@ -1,12 +1,14 @@
 # Migrating from v1 to v2
 
-v2 is an intentional clean break and the supported stable line. v1 is
-deprecated; Go semantic import versioning keeps existing v1 applications on v1
-until they explicitly adopt the new module path.
+v2 is the supported release line and an intentional source-breaking release.
+Existing v1 applications stay on v1 until they adopt the `/v2` module path.
+v2 requires Go 1.26.
 
-## Adopt the v2 module
+This guide covers the changes that normally require application edits. The
+[v2.0.0 release notes](https://github.com/ThomasMarcelis/ibkr-go/releases/tag/v2.0.0)
+contain a detailed change inventory and the disclosed evidence gaps.
 
-Update the dependency and every ibkr-go import:
+## 1. Update the module path
 
 ```bash
 go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0
@@ -20,8 +22,7 @@ import "github.com/ThomasMarcelis/ibkr-go"
 import "github.com/ThomasMarcelis/ibkr-go/v2"
 ```
 
-For a local checkout, keep a real v2 requirement; `replace` changes source
-location, not the module's semantic major version:
+A local replacement still needs a real v2 requirement:
 
 ```go
 require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0
@@ -29,62 +30,108 @@ require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
 
-## From rc.2 to v2.0.0
+## 2. Migrate subscriptions
 
-v2.0.0 completes the final breaking broker-echo cleanup.
-`OpenOrder` is now faceted exactly like the wire result: `Contract`, complete
-`OrderDetails`, and `State`. It has no `Partial` mode and no flattened price
-fields:
+`Subscription.Events()` now returns one ordered stream of data, notices, and
+lifecycle boundaries. The separate `Lifecycle()` channel and redundant closed
+event are gone.
 
 ```go
 // Before
-fmt.Println(open.LmtPrice)
+select {
+case value := <-sub.Events():
+    use(value)
+case state := <-sub.Lifecycle():
+    useState(state)
+}
 
 // After
-fmt.Println(open.Order.Prices.LmtPrice)
+for event := range sub.Events() {
+    switch event.Kind {
+    case ibkr.StreamData:
+        use(event.Value)
+    case ibkr.StreamNotice:
+        log.Print(event.Notice)
+    case ibkr.StreamGap, ibkr.StreamRestored, ibkr.StreamResubscribed:
+        useState(event)
+    }
+}
+return sub.Wait()
 ```
 
-Open and completed orders share `OrderDetails`, `OrderPrices`, routing,
-auction, execution, volatility, scale, compliance, adjustment, and allocation
-facets. Placement adds the corresponding classic scale extensions,
-`Order.ShortSale`, `Order.Auction`, and `Order.PeggedBenchmark`. `Order.MinQty`
-is `*int`, preserving omitted versus explicit zero without imposing an
-artificial 32-bit public limit.
+Use `sub.All(ctx)` when only data matters. It consumes and discards notices and
+lifecycle events. `Events()` and `All(ctx)` read the same queue, so choose one
+and have exactly one goroutine drain it.
 
-Tick-by-tick last and bid/ask results now expose their IBKR attribute masks as
-`LastAttributes` and `BidAskAttributes`. Historical tick masks use the same
-`Attributes` naming. `Bar1Sec` now sends IBKR's canonical `"1 secs"` token.
+`Client.Close()`, `Subscription.Close()`, and `OrderHandle.Close()` are now
+commands with no return value. Use `Wait()` or `Err()` for the terminal result.
 
-`RegulatorySnapshot` uncertainty is a typed
-`*RegulatorySnapshotUncertainError`; inspect its `RequestID` and
-`ConnectionSeq` before reconciling a possible fee. It still matches
-`ErrRegulatorySnapshotUncertain` through `errors.Is`.
+v2 never drops business data to keep a slow consumer alive. Subscriptions,
+finite streams, and order handles end with `ErrSlowConsumer` when their queue
+fills. Configure capacities with `WithSubscriptionBuffer`,
+`WithOrderEventBuffer`, or per-subscription `WithQueueSize`.
 
-Protocol identifiers that are signed 32-bit values on the wire now use named
-fixed-width types: `ContractID`, `ClientID`, `RequestID`, `MarketRuleID`,
-`AggregateGroupID`, and `DisplayGroupID`. Convert application-owned integers
-explicitly at the boundary. Order IDs remain `int64` in the public order API,
-but values outside 1..2147483647 are rejected before encoding.
+Transport reconnect and request replay are separate:
 
-`NewsArticle.ArticleType` is now `NewsArticleType`; use
-`NewsArticleTypeText` or `NewsArticleTypeBinary`. `NewsBulletin.MsgID` is `int32`.
+- the client still defaults to `ReconnectAuto`;
+- request-backed subscriptions default to `ResumeNever`;
+- `ResumeAuto` is supported only by streaming quotes and real-time bars;
+- configure it per subscription with `WithResumePolicy(ResumeAuto)`.
 
-Session events remain bounded, but loss is now detectable:
+After a continuity loss, a non-resumed long-lived subscription ends with
+`ErrResumeRequired`; a finite request ends with `ErrInterrupted`. Both are
+retryable. A same-socket data-lost restoration (Gateway code 1101) follows the
+same rule.
+
+## 3. Migrate order handling
+
+`OrderHandle.Modify` is now `OrderHandle.Replace`. Placement owns order-ID
+allocation, replacement reuses the handle's ID, and preview owns the what-if
+operation.
 
 ```go
-for event := range client.SessionEvents() {
-    if previous != 0 && event.TransitionSeq != previous+1 {
-        reconcile(event.Snapshot)
-    }
-    previous = event.TransitionSeq
+// Before
+order.OrderID = handle.OrderID()
+order.WhatIf = new(true)
+
+// After
+if err := handle.Replace(ctx, order); err != nil {
+    return err
 }
+state, err := client.Orders().Preview(ctx, request)
 ```
 
-`Event.Snapshot` is the exact post-transition snapshot. Informational notices
-do not advance `TransitionSeq`.
+An order handle stays open after Filled, Cancelled, APICancelled, or Inactive
+because executions and commission-and-fees reports may arrive later. Drain the
+events your application needs, then close the handle explicitly:
 
-Open-order refresh now belongs to the exact subscription that owns the
-request-ID-less response stream:
+```go
+for event := range handle.Events() {
+    record(event)
+    if observationComplete(event) {
+        handle.Close()
+    }
+}
+return handle.Wait()
+```
+
+After a physical reconnect or data-lost restoration, the handle publishes
+`RecoveryRequired` and permanently rejects `Replace` with
+`ErrOrderRecoveryRequired`. Reconcile open orders, executions, and completed
+orders before deciding what to do. Stable-ID cancellation remains available
+when IBKR's client-ID ownership permits it.
+
+If `PlaceBracket` admits only part of a bracket, it returns
+`*OrderRecoveryError`. The error contains every admitted order ID, retains the
+independent placement and cancellation-admission causes, and matches
+`ErrOrderRecoveryRequired` through `errors.Is`.
+
+v2 deliberately has no restart-time adopt-or-replace operation. Orders
+rediscovered through `Open`, `Executions`, or `Completed` do not create an
+`OrderHandle`.
+
+Open-order refresh now belongs to the subscription that owns the response
+stream:
 
 ```go
 sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll)
@@ -96,354 +143,154 @@ if err := sub.Refresh(ctx); err != nil {
 }
 ```
 
-Replace `Orders().RefreshOpen(ctx)` with `sub.Refresh(ctx)`. The former
-`ErrNoSubscription` sentinel is gone because there is no longer a global
-refresh lookup; overlapping refreshes return `ErrOperationActive`, and auto
-scope returns `ErrNoSnapshot`.
+Replace `Orders().RefreshOpen(ctx)` with `sub.Refresh(ctx)`. Overlapping
+refreshes return `ErrOperationActive`; auto scope returns `ErrNoSnapshot`.
 
-Large finite results have bounded streaming alternatives. They close
-automatically after `SnapshotComplete`:
+## 4. Update result shapes
 
-```go
-sub, err := client.Contracts().StreamDetails(ctx, partial, ibkr.WithQueueSize(256))
-for event := range sub.Events() {
-    if event.Kind == ibkr.StreamData {
-        use(event.Value)
-    }
-}
-return sub.Wait()
-```
+v2 models broker callbacks by domain instead of flattening unrelated fields.
 
-The corresponding `Details`, `SecDefOptParams`, and `Completed` methods remain
-slice-returning convenience collectors. `News().Historical` returns one
-captured Gateway page. Do not infer a safe pagination cursor from `HasMore`;
-v2 exposes no multipage historical-news operation without live evidence for
-that contract.
+| v1 shape | v2 shape |
+|---|---|
+| Flat `OpenOrder` fields | `OpenOrder.Contract`, `OpenOrder.Order`, `OpenOrder.State` |
+| Flat completed order | `CompletedOrderResult.Contract`, `.Order`, `.Completion` |
+| `Orders().Executions` update slice | `ExecutionSnapshot` with `Executions` and `CommissionAndFees` |
+| Historical-news slice | `HistoricalNewsResult.Items` plus broker `HasMore` metadata |
+| Exercise result | `ExerciseHandle` with events and `Wait()` |
+| Wrapped account summary/position events | Direct `AccountValue` and `Position` values |
 
-`Orders().SubscribeExecutionEvents` is a passive, unfiltered observer for
-every execution-detail and commission callback received by the client. It
-sends no request and does no query correlation or deduplication. Keep using
-`SubscribeExecutions` when a filtered executions query is the intended scope.
-
-`WithMaxInboundFrameBytes` can lower the default 64 MiB raw-frame allocation
-ceiling. Oversized handshake and steady-state frames return
-`*InboundFrameTooLargeError`.
-
-The reconnect default remains `ReconnectAuto`; v2.0.0 does not silently change
-that policy. See [operation control](operation-control.md) for the cancellation,
-detach, and connection-retirement behavior of each operation family.
-
-## Subscription events
-
-Subscriptions now expose one ordered stream. Data and reconnect boundaries no
-longer race across `Events()` and `Lifecycle()` channels, and terminal state is
-channel close plus `Err()`/`Wait()` rather than a redundant Closed event.
+Examples:
 
 ```go
-// Before
-select {
-case value := <-sub.Events():
-    use(value)
-case state := <-sub.Lifecycle():
-    useState(state)
-}
+fmt.Println(open.Order.Prices.LmtPrice)
+fmt.Println(open.State.InitMarginBefore)
 
-// After: consume data and lifecycle in order
-for event := range sub.Events() {
-    switch event.Kind {
-    case ibkr.StreamData:
-        use(event.Value)
-    case ibkr.StreamGap, ibkr.StreamRestored, ibkr.StreamResubscribed:
-        useState(event)
-    }
-}
-return sub.Err()
-```
-
-Use `sub.All(ctx)` when only data values matter. It consumes and discards all
-non-data events, including `StreamNotice`; callers that need request-scoped
-warnings must use `Events()`. `Events()` and `All(ctx)` consume the same queue
-and must not be read concurrently. For a request-backed stream, `Restored`
-means the Gateway retained it; for the passive execution observer, it means
-local observation resumed without sending a request. `Resubscribed` means the
-client sent the request again.
-
-v1 could keep a business stream alive by dropping its oldest values when a
-consumer fell behind. v2 removes that data-loss policy: subscriptions, finite
-streams, and order handles close observation with `ErrSlowConsumer` instead.
-Tune the client-wide subscription and order capacities with
-`WithSubscriptionBuffer` and `WithOrderEventBuffer`, or override one
-subscription with `WithQueueSize`.
-
-## Close and order lifecycle
-
-`Client.Close()`, `Subscription.Close()`, and `OrderHandle.Close()` are commands and return no value. Observe terminal results with `Wait()` or `Err()` when needed.
-
-An `OrderHandle` no longer closes automatically on Filled, Cancelled,
-APICancelled, or Inactive because IBKR may deliver executions and
-commission-and-fees reports after those statuses. Keep consuming events until
-the application has the evidence it needs, then close the handle explicitly.
-
-```go
-for event := range handle.Events() {
-	record(event)
-	if observationComplete(event) {
-		handle.Close()
-	}
-}
-if err := handle.Wait(); err != nil {
-	// Observation ended because of an API, transport, or consumer error.
-}
-```
-
-`OrderHandle.Modify` is now `OrderHandle.Replace`.
-
-Order lifecycle transitions are now `OrderEvent.Lifecycle` values in the same
-ordered channel. After a physical reconnect or data-lost restoration (code
-1101), `RecoveryRequired` means fills or status changes may have occurred.
-Reconcile open orders, executions, and completed orders for business decisions;
-that handle remains permanently blocked from `Replace` because reconciliation
-cannot restore its lost event history. A data-maintained 1100-to-1102 gap emits
-`Restored` and leaves replacement available. The recovery-required lifecycle
-event and later replacement calls match non-retryable
-`ErrOrderRecoveryRequired`; `ErrResumeRequired` remains subscription-only.
-Cancellation remains safe by stable order ID.
-
-If `PlaceBracket` admits only part of a bracket, it returns an
-`*OrderRecoveryError` containing every admitted order ID. That typed error also
-matches `ErrOrderRecoveryRequired` through `errors.Is`; use `errors.AsType` to
-read its `OrderIDs`, and reconcile them before placing another bracket. Its
-unwrap chain retains the independent placement and cancellation-admission
-causes.
-
-There is no restart-time adopt or replace-by-ID API in v2. After a process
-restart, reconcile through open orders, executions, and completed orders;
-`Orders().Cancel` remains available by stable order ID. Do not synthesize an
-`OrderHandle` for a pre-existing order.
-
-Cancellation methods accept optional compliance metadata without changing old
-call sites:
-
-```go
-err := handle.Cancel(ctx,
-    ibkr.WithManualCancelTime(time.Now()),
-    ibkr.WithCancelExternalOperator("operator"),
-    ibkr.WithCancelManualOrderIndicator(1),
-)
-```
-
-## Executions and historical news
-
-`Orders().Executions` returns `ExecutionSnapshot`, whose `Executions` and `CommissionAndFees` slices contain everything observed through IBKR's execution-details end marker.
-
-```go
-// Before
-updates, err := client.Orders().Executions(ctx, request)
-for _, update := range updates {
-    // update.Execution or update.Commission
-}
-
-// After
 snapshot, err := client.Orders().Executions(ctx, request)
 fills := snapshot.Executions
 fees := snapshot.CommissionAndFees
+
+fmt.Println(completed.Order.Action)
+fmt.Println(completed.Completion.Status)
 ```
 
-Use `SubscribeExecutions` when late or revised fee reports matter. It remains open after the end marker and must be closed explicitly.
+`SubscribeExecutions` remains open after its initial end marker so it can
+deliver late or revised fees. `SubscribeExecutionEvents` is different: it is a
+passive, unfiltered observer of execution and commission callbacks and sends no
+Gateway query.
 
-`HistoricalNews` returns `HistoricalNewsResult`. Read articles from `Items`;
-`HasMore` is broker metadata only, and v2 exposes no grounded continuation
-contract. `Options().Exercise` now returns an
-`ExerciseHandle`; the returned handle proves local transport admission, not
-IBKR acceptance or settlement. If observation ends involuntarily without a
-definitive request-scoped API rejection, `Wait` returns non-retryable
-`*ExerciseUncertainError` while preserving the underlying cause. Callers must
-reconcile the resulting account or position before deciding what to do next.
+`News().Historical` returns one captured Gateway page. `HistoricalAll` was
+removed because live evidence does not establish a safe pagination cursor;
+do not derive one from `HasMore`.
 
-Completed orders are split into the wire's real facets instead of projecting
-fields the callback does not carry:
+## 5. Handle presence explicitly
+
+Values the Gateway may omit now use pointers. Nil means omitted; a non-nil zero
+means IBKR explicitly sent zero.
+
+- `Contract.Strike` and optional order prices use `*decimal.Decimal`.
+- `Order.MinQty` and combo-leg `ExemptCode` use `*int`.
+- Optional portfolio, PnL, commission, depth, and permission values use
+  pointers.
+- Order echoes preserve presence for IDs, transmit flags, overnight routing,
+  and version-gated attributes.
 
 ```go
-// Before
-fmt.Println(result.Action, result.Quantity, result.Status)
+contract := ibkr.Contract{
+    Symbol: "AAPL",
+    Strike: new(decimal.NewFromInt(150)),
+}
 
-// After
-fmt.Println(result.Order.Action, result.Order.Quantity, result.Completion.Status)
+if update.UnrealizedPnL != nil {
+    fmt.Println(*update.UnrealizedPnL)
+}
 ```
 
-## Order and contract ownership
+Audit direct dereferences and equality checks. `Contract` and several request
+types now contain slices and are no longer comparable, so derive explicit map
+keys from application-owned fields.
 
-Order identity and preview mode no longer live on `Order`. `Place` allocates an ID, `Replace` uses its handle's ID, and `Preview` owns the wire-level what-if flag.
+Protocol identifiers that are signed 32-bit values on the wire now use named
+types such as `ContractID`, `ClientID`, `RequestID`, `MarketRuleID`,
+`AggregateGroupID`, and `DisplayGroupID`. Convert application integers at the
+boundary. Public order IDs remain `int64`, but valid wire values are
+1..2147483647.
 
-```go
-// Before
-order.OrderID = handle.OrderID()
-order.WhatIf = new(true)
+## 6. Update order configuration
 
-// After
-err := handle.Replace(ctx, order)
-state, err := client.Orders().Preview(ctx, request)
-```
-
-Contract selection and composition now live on `Contract`, including combo legs, delta-neutral data, security IDs, and `IncludeExpired`. `Contract.Strike` is a presence-aware decimal.
-
-```go
-// Before
-Contract{Strike: "150"}
-
-// After
-Contract{Strike: new(decimal.NewFromInt(150))}
-```
-
-Placement fields `LmtPrice`, `AuxPrice`, `MinQty`, `PercentOffset`,
-`TrailStopPrice`, `TrailingPercent`, `LmtPriceOffset`, and `CashQty` are
-presence-aware pointers. The decimal-valued fields use `*decimal.Decimal`;
-`MinQty` uses `*int`. Nil means omitted or unset, while a pointer to zero means
-an explicit zero. `LmtPriceOffset` remains directly on placement `Order`; only
-its representation changed. `DepthRow.Size` is also `*decimal.Decimal` because
-protobuf can explicitly omit it. Audit direct dereferences and equality/map-key
-uses during migration.
-
-The margin/commission block formerly flattened onto `OpenOrder` is now the
-`OpenOrder.State` facet, shared with preview semantics:
-
-```go
-// Before
-fmt.Println(open.InitMarginBefore, open.Commission)
-
-// After
-fmt.Println(open.State.InitMarginBefore, open.State.CommissionAndFees)
-```
-
-## Advanced orders and combos
-
-Advanced settings are grouped by behavior instead of adding every protocol
-field to the top-level `Order`:
+Contract identity and composition belong to `Contract`; execution instructions
+belong to `Order`. Advanced order settings are grouped by behavior:
 
 | v1 `Order` fields | v2 field |
 |---|---|
 | `OcaGroup`, `OcaType` | `OCA.Group`, `OCA.Type` |
-| `ScaleInitLevelSize`, `ScaleSubsLevelSize`, `ScalePriceIncrement`, `ScaleTable`, `ActiveStartTime`, `ActiveStopTime` | `Scale` |
+| Scale sizing, increments, table, and active window | `Scale` |
 | `HedgeType`, `HedgeParam`, `DontUseAutoPriceForHedge` | `Hedge` |
 | `AlgoStrategy`, `AlgoParams` | `Algorithm` |
-| `Conditions`, `ConditionsIgnoreRTH`, `ConditionsCancelOrder` | `Conditions.Values`, `Conditions.IgnoreRTH`, `Conditions.CancelOrder` |
-| `AdjustedOrderType`, `TriggerPrice`, `AdjustedStopPrice`, `AdjustedStopLimitPrice`, `AdjustedTrailingAmount`, `AdjustableTrailingUnit` | `Adjustment` |
-| `OrderComboLegPrices`, `SmartComboRoutingParams` | `Combo.LegPrices`, `Combo.SmartRouting` |
+| Conditions and their flags | `Conditions.Values`, `.IgnoreRTH`, `.CancelOrder` |
+| Adjustable-order fields | `Adjustment` |
+| Combo leg prices and smart-routing parameters | `Combo.LegPrices`, `.SmartRouting` |
 
 ```go
-// Before
-order.OcaGroup = "exit"
-order.OcaType = 1
-order.AlgoStrategy = "Adaptive"
-order.AlgoParams = []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Normal"}}
-
-// After
-order.OCA = ibkr.OrderOCA{Group: "exit", Type: ibkr.OCACancelWithBlock}
+order.OCA = ibkr.OrderOCA{
+    Group: "exit",
+    Type:  ibkr.OCACancelWithBlock,
+}
 order.Algorithm = ibkr.OrderAlgorithm{
     Strategy: "Adaptive",
-    Params: []ibkr.TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
+    Params: []ibkr.TagValue{
+        {Tag: "adaptivePriority", Value: "Normal"},
+    },
 }
 ```
 
-Contract leg definitions live in `Contract.ComboLegs`; per-leg prices and smart
-routing remain order instructions under `Order.Combo`. `ComboLeg.Action` is an
-`OrderAction`, `OpenClose` is `ComboLegOpenClose`, and `ExemptCode` is `*int`
-so absence differs from explicit zero.
+Combo definitions live in `Contract.ComboLegs`; per-leg prices and routing
+instructions remain under `Order.Combo`. Conditions, actions, sides, and other
+wire enums use named Go types instead of raw strings or integers.
 
-```go
-leg := ibkr.ComboLeg{
-    ConID: conID, Ratio: 1, Action: ibkr.ActionBuy,
-    Exchange: "SMART", OpenClose: ibkr.ComboLegOpen,
-    ExemptCode: new(-1),
-}
-```
-
-`OrderCondition` similarly uses named `OrderConditionType`,
-`ConditionConjunction`, and `ConditionOperator` values instead of raw ints and
-strings.
-
-## Execution and P&L values
-
-`Execution.Symbol` was redundant with the complete contract and was removed;
-read `Execution.Contract.Symbol`. `Execution.Side` is now `ExecutionSide`
-(`ExecutionSideBought` or `ExecutionSideSold`).
-
-```go
-// Before
-fmt.Println(execution.Symbol, execution.Side == "BOT")
-
-// After
-fmt.Println(execution.Contract.Symbol, execution.Side == ibkr.ExecutionSideBought)
-```
-
-Portfolio and P&L values that IBKR can omit are pointers. The three public P&L
-spellings now consistently use Go's `PnL` casing.
-
-```go
-// Before
-fmt.Println(update.UnrealizedPNL, update.RealizedPNL)
-
-// After
-if update.UnrealizedPnL != nil {
-    fmt.Println(*update.UnrealizedPnL)
-}
-if update.RealizedPnL != nil {
-    fmt.Println(*update.RealizedPnL)
-}
-```
-
-This applies to `PortfolioUpdate` market/average-cost/P&L fields,
-`PnLUpdate`, `PnLSingleUpdate`, and
-`CommissionAndFeesReport.RealizedPnL`. Nil means omitted; non-nil zero means
-IBKR explicitly reported zero.
-
-Account summary and position subscriptions emit their domain values directly:
-
-```go
-// Before
-fmt.Println(summary.Value.Value)
-fmt.Println(position.Position.Position)
-
-// After
-fmt.Println(summary.Value)
-fmt.Println(position.Position)
-```
-
-## Other source migrations
+## 7. Apply the remaining renames
 
 | Before | After |
 |---|---|
 | `Buy`, `Sell` | `ActionBuy`, `ActionSell` |
 | `CommissionReport` | `CommissionAndFeesReport` |
 | `OrderStatusApiCancelled` | `OrderStatusAPICancelled` |
-| Flat completed-order projection | `Contract`, `Order`, and `Completion` facets |
-| `AccountSummaryRequest.Account` | `Group` plus optional `AccountFilter` |
-| Wrapped account-summary and position events | Direct `AccountValue` and `Position` values |
-| `WithDefaultResumePolicy` | `WithResumePolicy(ResumeAuto)` on each supported subscription |
-| `internal/transport.Dialer` in signatures | Public `ibkr.Dialer` |
+| `Execution.Symbol` | `Execution.Contract.Symbol` |
+| raw execution side strings | `ExecutionSideBought`, `ExecutionSideSold` |
+| `UnrealizedPNL`, `RealizedPNL` | `UnrealizedPnL`, `RealizedPnL` |
+| `AccountSummaryRequest.Account` | `Group` and optional `AccountFilter` |
+| `WithDefaultResumePolicy` | per-subscription `WithResumePolicy` |
+| internal transport dialer in signatures | public `ibkr.Dialer` |
 
-`Forex(code) (Contract, error)` is a new v2 constructor, not a renamed v1
-function. `HistoricalTickBidAsk.TickAttrib` and
-`HistoricalTickLast.TickAttrib` now use typed bitmasks with discoverable accessors
-while preserving unknown bits.
+`NewsArticle.ArticleType` is now `NewsArticleType`; use
+`NewsArticleTypeText` or `NewsArticleTypeBinary`. Tick attribute fields use
+typed bitmasks with accessors while preserving unknown bits.
 
-`Contract` now contains slices for combo legs, so it and structs embedding it
-are no longer comparable. `ExecutionsRequest` and `ScannerSubscriptionRequest`
-also contain slice filters. Do not use these request values as map keys; derive
-an explicit stable key from the fields your application owns.
+## 8. Account for removed scope
 
-The repository replay helpers moved from public `testing/testhost` and
-`testing/ibkrlive` packages to `internal/`. External consumers must test through
-the public `Dialer` seam or their own captured fixtures; those repository
-helpers were never intended as a supported compatibility surface.
+v2 removes unsupported or ungrounded surfaces rather than carrying
+compatibility shims:
 
-Use `OrderStatusAPICancelled` in Go code; the wire value remains the IBKR token
-`"ApiCancelled"`.
+- Reuters fundamental data;
+- FA configuration mutation;
+- `ibkr-probe`;
+- pre-`server_version 200` compatibility;
+- multipage historical-news inference;
+- public repository testhost/live-helper packages.
 
-FA configuration mutation, Reuters fundamental data, `ibkr-probe`, and pre-200 Gateway compatibility were removed. FA reads support Groups and Aliases only. WSH inputs and returned documents must contain valid non-empty JSON. Classic protocol fields cannot contain embedded NUL bytes.
+FA reads support Groups and Aliases. External tests should use the public
+`Dialer` seam or application-owned captured fixtures.
 
-## Gateway errors and added operations
+## 9. Verify the migration
 
-Session events produced by Gateway errors now set `Event.APIError`, preserving the request ID, server time, and advanced-order-reject JSON. Existing event code and message fields remain available for simple notification handling.
+Before shipping:
 
-`MarketData().RegulatorySnapshot` is distinct from an ordinary quote snapshot and may incur an IBKR fee. After transport admission, loss of its completion evidence returns non-retryable `ErrRegulatorySnapshotUncertain`; reconcile billing before issuing another request. `OpenOrderUpdate.Binding` is populated by `orderBound` only for the client-0 auto-open-orders subscription that owns that callback's scope.
+1. Search for the old import path and renamed methods or constants.
+2. Audit every pointer-valued field for omitted-versus-zero handling.
+3. Ensure each stream has one consumer and every long-lived handle is closed.
+4. Exercise reconnect, code 1101, slow-consumer, partial-bracket, and uncertain
+   exercise or regulatory-snapshot paths relevant to the application.
+5. Run `go test ./...` and the application's race tests.
+
+For protocol coverage, added operations, internal hardening, removals, and
+additional type changes, see the detailed inventory at the end of the
+[v2.0.0 release notes](https://github.com/ThomasMarcelis/ibkr-go/releases/tag/v2.0.0).
