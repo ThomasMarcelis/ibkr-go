@@ -8,49 +8,56 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## v2.0.0 — 2026-08-23
 
-v2.0.0 is the supported stable release on the
-`github.com/ThomasMarcelis/ibkr-go/v2` module path; v1 is deprecated. See
-[Migrating from v1 to v2](docs/migration-v2.md) for the source migration.
+v2 is now the supported release line; v1 is deprecated. It uses the
+`github.com/ThomasMarcelis/ibkr-go/v2` module path and requires Go 1.26.
 
-The release hardens order ownership and recovery: connectivity code 1101
-publishes gaps before restoration, bracket replacement preserves parent
-identity, request and order ID histories cannot collide, permanent IDs govern
-callback attribution, and unclaimed what-if echoes cannot create phantom
-orders.
+This major version deliberately breaks source compatibility to remove
+callback-shaped APIs and ambiguous lifecycles. Operations return typed Go
+results and surface cancellation, reconnection, and uncertainty, so
+applications can make recovery decisions instead of silently accepting
+partial state.
 
-Protocol and corpus work adds source-grounded classic pegged-order tail slots,
-protobuf order vectors, encoding-specific decoder attestation, structural
-transcript provenance, bounded codec counts, readable fuzz seeds, unsigned
-32-bit frame sizes, direct version-boundary enforcement, nonblocking logging,
-and atomic subscription generation tracking.
+### Highlights
 
-### Added
+- Order handles retain the correct parent and permanent identity across
+  replacement, reconnect, and cross-client callbacks. Request, preview, and
+  order IDs can no longer be recycled into an unrelated operation.
+- Subscriptions publish data and recovery boundaries through one ordered event
+  stream. Connectivity loss, restoration, slow consumers, and terminal errors
+  are visible and typed.
+- Supported Gateway versions now span 200–225. Classic and protobuf decoding
+  preserve substantially more broker data, including the difference between
+  an omitted value and an explicit zero.
+- `Order.IncludeOvernight` supports eligible SMART-routed DAY orders and
+  preserves presence in broker echoes.
 
-- Add `Order.IncludeOvernight` for eligible SMART-routed DAY orders and
-  presence-aware `OrderDetails.IncludeOvernight` echoes for open orders and
-  protobuf completed orders.
+### Migration
 
-### Removed
+Adopting v2 requires changing imports to the `/v2` module path. Subscriptions
+use ordered `StreamEvent` values, `Close` is a command while `Wait`/`Err`
+report outcomes, and order `Modify` is now `Replace`. See
+[Migrating from v1 to v2](docs/migration-v2.md) for focused source changes.
 
-- Remove the unproven `News().HistoricalAll` pagination API and
-  `ErrHistoricalNewsPaginationStalled`. `News().Historical` remains the
-  captured single-page operation; `HasMore` does not establish a safe cursor
-  contract.
+`News().HistoricalAll` was removed because live evidence does not establish a
+safe pagination cursor. `News().Historical` remains the captured single-page
+operation.
 
-### Known evidence gaps
+### Known limitations and follow-up
 
-- Exact sv200 message-90 MIDPOINT/BID/ASK updates are missing. The current
-  classic decoder drops a valid negative-count update as malformed.
-- Registered malformed decoder failures do not yet retire the whole transport
-  generation, so a queued end marker can complete a partial snapshot.
-- The focused sv200/sv203 positive `IncludeOvernight` lifecycle proofs remain
-  uncaptured.
-- Successful fee-bearing regulatory-snapshot and manual paper-TWS `orderBound`
-  proofs remain missing; the planned seven-day unchanged soak was not run.
+- A historical bar update whose signed count is `-1` is currently dropped by
+  the classic decoder.
+- A malformed registered callback followed by a buffered end marker can
+  complete a partial snapshot instead of retiring that connection generation.
 
-These gaps are disclosed in `testdata/release/v2.0.0.json` with impact and
-follow-up. They are not represented as completed evidence. Any
-post-publication correctness fix becomes v2.0.1; v2.0.0 is never retagged.
+Positive live validation is also still pending for `IncludeOvernight`, a
+successful fee-bearing regulatory snapshot, and manual paper-TWS `orderBound`;
+the planned seven-day soak was not run. These gaps are disclosed rather than
+presented as completed evidence.
+
+v2.0.0 gives deprecated v1 users a supported migration target now. Its
+deterministic, replay, race, API, fuzz, and vulnerability gates pass; the
+remaining compatible corrections will ship as v2.0.1. The v2.0.0 tag will not
+be moved or reused after publication.
 
 ## v2.0.0-rc.3 — 2026-07-16
 
