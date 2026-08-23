@@ -41,6 +41,9 @@ func TestOrderLifecycleServer203Replay(t *testing.T) {
 				if event.OpenOrder.Contract.ConID != 265598 || event.OpenOrder.State.Status != ibkr.OrderStatusPreSubmitted {
 					t.Fatalf("OpenOrder = %+v", event.OpenOrder)
 				}
+				if event.OpenOrder.Order.IncludeOvernight != nil {
+					t.Fatalf("OpenOrder IncludeOvernight = %v, want omitted", event.OpenOrder.Order.IncludeOvernight)
+				}
 			}
 			if event.Status != nil {
 				sawStatus = true

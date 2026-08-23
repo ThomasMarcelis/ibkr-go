@@ -383,6 +383,7 @@ type OrderDetails struct {
 	MidOffsetAtHalf          string
 	CustomerAccount          string
 	ProfessionalCustomer     string
+	IncludeOvernight         string
 	Submitter                string
 	CommissionAndFees        string
 	CommissionCurrency       string
@@ -1192,7 +1193,9 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	details.MidOffsetAtHalf = r.ReadString()
 	details.CustomerAccount = r.ReadString()
 	details.ProfessionalCustomer = r.ReadString()
-	r.Skip(4) // bond interest, overnight, external operator, manual indicator
+	r.ReadString() // bond accrued interest
+	details.IncludeOvernight = r.ReadString()
+	r.Skip(2) // external operator, manual indicator
 	details.Submitter = r.ReadString()
 	details.ImbalanceOnly = r.ReadString()
 	details.ComboLegsDescription = comboLegsDescription
@@ -1452,7 +1455,7 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.CustomerAccount)
 	w.WriteString(m.ProfessionalCustomer)
 	w.WriteString("") // BondAccruedInterest
-	w.WriteString("") // IncludeOvernight
+	w.WriteString(m.IncludeOvernight)
 	w.WriteString("") // ExtOperator
 	w.WriteString("") // ManualOrderIndicator
 	w.WriteString(m.Submitter)

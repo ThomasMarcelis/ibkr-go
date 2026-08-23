@@ -442,17 +442,22 @@ type OrderPeggedBenchmark struct {
 // A minimal market order needs only Action, OrderType, and Quantity. A limit
 // order additionally sets LmtPrice.
 type Order struct {
-	Action                OrderAction           // BUY or SELL (required)
-	OrderType             OrderType             // execution instruction (required); selects which price fields apply
-	Quantity              decimal.Decimal       // order size (required); zero is treated as unset
-	LmtPrice              *decimal.Decimal      // limit price for LMT / STP LMT
-	AuxPrice              *decimal.Decimal      // stop trigger for STP / STP LMT, trailing amount for TRAIL
-	TIF                   TimeInForce           // time in force; empty defaults to DAY at the server
-	Account               string                // account to place under; required only for multi-account logins
-	Transmit              *bool                 // nil = transmit (true); false stages an untransmitted order
-	ParentID              int64                 // parent order ID for a bracket child; 0 = no parent
-	OCA                   OrderOCA              // one-cancels-all behavior; zero value disables it
-	OutsideRTH            bool                  // allow execution outside regular trading hours
+	Action     OrderAction      // BUY or SELL (required)
+	OrderType  OrderType        // execution instruction (required); selects which price fields apply
+	Quantity   decimal.Decimal  // order size (required); zero is treated as unset
+	LmtPrice   *decimal.Decimal // limit price for LMT / STP LMT
+	AuxPrice   *decimal.Decimal // stop trigger for STP / STP LMT, trailing amount for TRAIL
+	TIF        TimeInForce      // time in force; empty defaults to DAY at the server
+	Account    string           // account to place under; required only for multi-account logins
+	Transmit   *bool            // nil = transmit (true); false stages an untransmitted order
+	ParentID   int64            // parent order ID for a bracket child; 0 = no parent
+	OCA        OrderOCA         // one-cancels-all behavior; zero value disables it
+	OutsideRTH bool             // allow execution outside regular trading hours
+	// IncludeOvernight controls IBKR Overnight Trading routing. With a SMART
+	// exchange and DAY TIF, true requests Overnight+DAY. With Exchange
+	// "OVERNIGHT", true requests an overnight-only order. It is distinct from
+	// OutsideRTH, which controls execution outside regular trading hours.
+	IncludeOvernight      bool
 	TriggerMethod         int                   // stop-trigger method; 0 = default
 	DisplaySize           int                   // iceberg display size; 0 = show full size
 	OrderRef              string                // free-form client order reference/tag
@@ -579,24 +584,28 @@ type OrderDetails struct {
 	// OrderID, ClientID, and ParentID are nil for classic completed-order
 	// replies, whose wire shape does not carry those identities. A non-nil
 	// pointer preserves an explicit zero from protobuf replies.
-	OrderID       *int64
-	ClientID      *ClientID
-	ParentID      *int64
-	Action        OrderAction
-	Quantity      decimal.Decimal
-	OrderType     OrderType
-	TIF           TimeInForce
-	Account       string
-	OpenClose     string
-	Origin        int
-	OrderRef      string
-	PermID        *int64
-	OutsideRTH    bool
-	Hidden        bool
-	GoodAfterTime string
-	GoodTillDate  string
-	ModelCode     string
-	Transmit      *bool
+	OrderID    *int64
+	ClientID   *ClientID
+	ParentID   *int64
+	Action     OrderAction
+	Quantity   decimal.Decimal
+	OrderType  OrderType
+	TIF        TimeInForce
+	Account    string
+	OpenClose  string
+	Origin     int
+	OrderRef   string
+	PermID     *int64
+	OutsideRTH bool
+	// IncludeOvernight is nil when the broker omitted the echo. Classic and
+	// protobuf OpenOrder replies preserve broker presence, as do protobuf
+	// CompletedOrder replies; classic CompletedOrder always omits this field.
+	IncludeOvernight *bool
+	Hidden           bool
+	GoodAfterTime    string
+	GoodTillDate     string
+	ModelCode        string
+	Transmit         *bool
 
 	Prices                OrderPrices
 	OCA                   OrderOCA

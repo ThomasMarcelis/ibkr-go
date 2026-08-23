@@ -114,7 +114,7 @@ func decodeOrderDetailsProto(body []byte, m *OrderDetails) error {
 		switch number {
 		case 1, 2, 3, 4, 7, 16, 18, 19, 20, 24, 30, 31, 38, 39, 40, 43, 45, 46,
 			48, 49, 52, 54, 55, 56, 57, 66, 69, 70, 72, 83, 85, 86, 87, 88, 90, 98, 101,
-			102, 111, 112, 116, 117, 119, 120, 121, 122, 127, 128, 133, 138, 139,
+			102, 111, 112, 116, 117, 119, 120, 121, 122, 127, 128, 133, 135, 138, 139,
 			140, 141, 142, 143, 144:
 			value, err := consumeProtoVarint(&body, typ)
 			if err != nil {
@@ -221,6 +221,8 @@ func decodeOrderDetailsProto(body []byte, m *OrderDetails) error {
 				m.MinCompeteSize = formattedInt
 			case 133:
 				m.ProfessionalCustomer = formattedBool
+			case 135:
+				m.IncludeOvernight = formattedBool
 			case 138:
 				m.Deactivate = formattedBool
 			case 139:

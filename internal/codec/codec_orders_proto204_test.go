@@ -57,6 +57,9 @@ func TestDecodeServer204CompletedOrders(t *testing.T) {
 		cancelled.Status != "Cancelled" || cancelled.CompletedStatus != "Cancelled by Trader" || cancelled.Submitter != "papertrader01" {
 		t.Fatalf("cancelled completed order = %+v", cancelled)
 	}
+	if cancelled.IncludeOvernight != "" {
+		t.Fatalf("cancelled completed order include overnight = %q, want omitted", cancelled.IncludeOvernight)
+	}
 
 	filledMessage, err := Decode(204, recordedPayload(t, "AAABTAAAAS0KLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TEswBCMkBEAIYgtKTrQMgACoEU0VMTDIBMEIDTE1USexRuB6FH3NAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSUKYAQG5AexRuB6FL3NA8AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwExsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwDKCA1wYXBlcnRyYWRlcjAx8AgAGkYKBkZpbGxlZFldv2A3bBvwP3IDVVNE6gEcMjAyNjA3MDkgMTg6NTU6MDYgVVMvRWFzdGVybvIBDkZpbGxlZCBTaXplOiAx"))
 	if err != nil {
@@ -71,6 +74,9 @@ func TestDecodeServer204CompletedOrders(t *testing.T) {
 		filled.OutsideRTH != "1" || filled.Filled != "1" || filled.Status != "Filled" ||
 		filled.CommissionAndFees != "1.006695" || filled.CommissionCurrency != "USD" || filled.CompletedStatus != "Filled Size: 1" {
 		t.Fatalf("filled completed order = %+v", filled)
+	}
+	if filled.IncludeOvernight != "" {
+		t.Fatalf("filled completed order include overnight = %q, want omitted", filled.IncludeOvernight)
 	}
 
 	end, err := Decode(204, decodeHex(t, "0000012e"))
