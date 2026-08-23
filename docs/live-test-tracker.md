@@ -74,12 +74,14 @@ one-share nonmarketable AAPL limit, received protobuf OpenOrder and
 OrderStatus, observed typed cancellation, detached the handle explicitly,
 flushed global cancel, and fenced with CurrentTime. No order remained working.
 
-The RC.3 provenance audit found ten headerless legacy transcripts and three
-fixtures that depended on one. The debt is now closed: exact captures replaced
-the historical, concurrent-one-shot, and transport-reconnect paths; redundant
-replays were retired; and connectivity fault semantics moved to direct engine
-tests instead of fabricated wire transcripts. The now-empty inventory remains
-enforced by `testdata/transcripts/provenance.json`.
+The provenance audit found ten headerless legacy transcripts and three fixtures
+that depended on one. Exact captures replaced the historical,
+concurrent-one-shot, and transport-reconnect paths; redundant replays were
+retired; and connectivity fault semantics moved to direct engine tests instead
+of fabricated wire transcripts. The structural header parser now enforces the
+capture ID, one server version, a full hash or explicitly labelled legacy
+prefix, and agreement with every recorded handshake. The sole retained legacy
+prefix is frozen as historical evidence and cannot satisfy a stable proof.
 The active private corpus contains 231 verifier-clean captures. Forty-four
 empty capture directories were removed, while three non-empty failures were
 moved to ignored `captures/quarantine/` instead of being represented as

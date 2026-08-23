@@ -18,7 +18,7 @@
     },
     {
       "id": "seven-day-soak",
-      "requirement": "Complete seven consecutive feedback-monitoring days on the unchanged RC3 candidate."
+      "requirement": "Complete seven consecutive feedback-monitoring days on the unchanged RC.4 candidate."
     }
   ]
 }

@@ -3,7 +3,10 @@ package ibkr_test
 import (
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -78,8 +81,13 @@ func TestV2StableReleaseReadiness(t *testing.T) {
 		}
 		validateStableReleaseEvidence(t, readiness.Evidence)
 	}
-	if os.Getenv("IBKR_STABLE_RELEASE") == "1" && readiness.Status != "ready" {
-		t.Fatalf("stable release blocked by %d declared readiness requirements", len(readiness.Blockers))
+	if os.Getenv("IBKR_STABLE_RELEASE") == "1" {
+		if readiness.Status != "ready" {
+			t.Fatalf("stable release blocked by %d declared readiness requirements", len(readiness.Blockers))
+		}
+		if tag := os.Getenv("IBKR_RELEASE_TAG"); tag != readiness.Release {
+			t.Fatalf("IBKR_RELEASE_TAG = %q, want manifest release %q", tag, readiness.Release)
+		}
 	}
 }
 
@@ -147,9 +155,6 @@ func validateStableSoakDays(t *testing.T, days []stableSoakDay) {
 func validateStableLiveProof(t *testing.T, name string, proof *stableLiveProof) {
 	t.Helper()
 
-	if proof == nil {
-		t.Fatalf("%s evidence is absent", name)
-	}
 	if proof.Role != "readonly-live" && proof.Role != "paper-dev" {
 		t.Fatalf("%s role = %q", name, proof.Role)
 	}
@@ -161,6 +166,91 @@ func validateStableLiveProof(t *testing.T, name string, proof *stableLiveProof) 
 	}
 	if !validHex(proof.EventsSHA256, 64) {
 		t.Fatalf("%s events_sha256 = %q, want 64 hexadecimal characters", name, proof.EventsSHA256)
+	}
+	if err := validateStableLiveProofTranscript(proof); err != nil {
+		t.Fatalf("%s transcript evidence: %v", name, err)
+	}
+}
+
+func validateStableLiveProofTranscript(proof *stableLiveProof) error {
+	if filepath.Base(proof.Transcript) != proof.Transcript {
+		return fmt.Errorf("transcript %q must be a basename directly under testdata/transcripts", proof.Transcript)
+	}
+	path := filepath.Join("testdata/transcripts", proof.Transcript)
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s is not a regular file", path)
+	}
+	data, err := os.ReadFile(path) // #nosec G304 -- path is constrained to the transcript directory.
+	if err != nil {
+		return err
+	}
+	provenance, err := parseTranscriptProvenance(data)
+	if err != nil {
+		return err
+	}
+	if provenance.LegacyEventsHashPrefix != "" {
+		return fmt.Errorf("legacy-prefix evidence cannot satisfy a stable proof")
+	}
+	if len(provenance.CaptureIDs) != 1 || len(provenance.EventsSHA256) != 1 {
+		return fmt.Errorf("stable proof transcript must declare exactly one capture ID and one full events hash")
+	}
+	if provenance.CaptureIDs[0] != proof.CaptureID {
+		return fmt.Errorf("capture_id %q does not match %q", proof.CaptureID, provenance.CaptureIDs[0])
+	}
+	if provenance.ServerVersion != proof.ServerVersion {
+		return fmt.Errorf("server_version %d does not match %d", proof.ServerVersion, provenance.ServerVersion)
+	}
+	if provenance.EventsSHA256[0] != proof.EventsSHA256 {
+		return fmt.Errorf("events_sha256 %q does not match %q", proof.EventsSHA256, provenance.EventsSHA256[0])
+	}
+	return nil
+}
+
+func TestStableLiveProofTranscriptMatchesProvenance(t *testing.T) {
+	t.Parallel()
+
+	proof := stableLiveProof{
+		Role:          "paper-dev",
+		ServerVersion: 200,
+		CaptureID:     "20260414T183626Z-api_order_rest_cancel_aapl",
+		EventsSHA256:  "1c0849882d07e2cc08bdf17d5107d113263848ea60f6df9593cd13f50bef1448",
+		Transcript:    "api_order_rest_cancel_aapl.txt",
+	}
+	if err := validateStableLiveProofTranscript(&proof); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		mutate  func(*stableLiveProof)
+		wantErr string
+	}{
+		"nested path":     {func(p *stableLiveProof) { p.Transcript = "nested/" + p.Transcript }, "must be a basename"},
+		"nonregular path": {func(p *stableLiveProof) { p.Transcript = "." }, "is not a regular file"},
+		"ambiguous transcript": {
+			func(p *stableLiveProof) { p.Transcript = "lifecycle_concurrent_oneshots.txt" },
+			"exactly one capture ID and one full events hash",
+		},
+		"capture mismatch": {func(p *stableLiveProof) { p.CaptureID += "-other" }, "capture_id"},
+		"version mismatch": {func(p *stableLiveProof) { p.ServerVersion++ }, "server_version"},
+		"hash mismatch":    {func(p *stableLiveProof) { p.EventsSHA256 = "0" + p.EventsSHA256[1:] }, "events_sha256"},
+		"legacy prefix": {
+			func(p *stableLiveProof) { p.Transcript = "completed_orders_cancelled_system_live.txt" },
+			"legacy-prefix evidence",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			invalid := proof
+			tc.mutate(&invalid)
+			if err := validateStableLiveProofTranscript(&invalid); err == nil {
+				t.Fatal("validation succeeded")
+			} else if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("validation error = %q, want %q", err, tc.wantErr)
+			}
+		})
 	}
 }
 

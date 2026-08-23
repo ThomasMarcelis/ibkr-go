@@ -1,11 +1,11 @@
 # v2 Release Readiness
 
-RC.3 is the final breaking API and protocol candidate. A correctness, public
-API, or supported-wire-layout change after the candidate is cut requires RC.4
-and restarts the stable soak. Documentation-only evidence promotion does not
-change the candidate when it describes already-frozen behavior.
+RC.4 is the candidate this release plan will freeze after the remaining live
+evidence is captured. A correctness, public API, supported-wire-layout,
+fixture, or documentation change after that tag requires a new release
+candidate and restarts the stable soak.
 
-## RC.3 candidate gate
+## RC.4 candidate gate
 
 - the public API baseline is regenerated only after the advanced-order and
   broker-echo model is frozen;
@@ -15,22 +15,28 @@ change the candidate when it describes already-frozen behavior.
   200, 203, and 225, subject to the current Gateway accepting the requested
   lower maximum; run `TestLiveReleaseVersionSmoke` once against each role and
   record any Gateway-side lower-version refusal rather than hiding it;
+- exact sv200 and sv203 `IncludeOvernight` lifecycle captures satisfy the two
+  focused scenarios in the coverage matrix;
+- exact sv200 MIDPOINT, BID, and ASK message-90 updates are captured before
+  signed update counts and registered-malformed generation retirement land;
 - invalid private captures stay outside the active evidence corpus; and
-- every checked-in transcript either has a live provenance header or is named
-  in `testdata/transcripts/provenance.json`.
+- every checked-in transcript passes the structural provenance parser.
 
-RC.3 has no transcript-provenance exceptions. The remaining recovery fault
-tests inject typed engine events directly; no synthetic 1100/1101/1102 wire
-transcript is represented as live evidence.
+The remaining recovery fault tests inject typed engine events directly; no
+synthetic 1100/1101/1102 wire transcript is represented as live evidence.
 
 ## Stable-only blockers
 
 The machine-readable state is `testdata/release/v2.0.0.json`. Stable-tag CI
-sets `IBKR_STABLE_RELEASE=1`; that makes both the readiness manifest and the
-transcript-provenance inventory release gates. Changing the manifest to
-`ready` requires structured role, server-version, capture, event-hash, and
-transcript records for both live proofs, plus seven consecutive dated feedback
-records that name the same 40-character RC candidate revision.
+sets `IBKR_STABLE_RELEASE=1` and `IBKR_RELEASE_TAG=v2.0.0`; the test requires
+exact agreement between that tag and the deliberately v2.0.0-specific
+manifest. Changing the manifest to `ready` requires structured role,
+server-version, capture, event-hash, and transcript records for both live
+proofs, plus seven consecutive dated feedback records that name the same
+40-character RC candidate revision. Each proof transcript must be a regular
+basename directly under `testdata/transcripts`, and its parsed capture ID,
+server version, and full hash must match exactly. A legacy prefix cannot serve
+as a proof.
 
 Transcript replacement and retirement is complete: three redundant replays
 were removed, historical and concurrent-one-shot replays were rebuilt from
@@ -47,8 +53,8 @@ The remaining requirements are:
    callback through the client-0 auto-open-orders path. Gateway-only evidence
    cannot satisfy this requirement.
 3. Complete seven consecutive calendar days of feedback monitoring on the
-   exact unchanged RC.3 candidate. Any correctness, public API, or protocol
-   change resets day one and requires RC.4.
+   exact unchanged RC.4 candidate. Any tracked change outside
+   `testdata/release/v2.0.0.json` resets day one and requires a new candidate.
 
 The latest authorized attempt was made on 2026-07-15 through `readonly-live`
 at `server_version 225`. Exactly one regulatory request was sent, and the
@@ -75,7 +81,7 @@ Record it through the raw proxy:
 ```bash
 go build -o /tmp/ibkr-recorder ./cmd/ibkr-recorder
 /tmp/ibkr-recorder -listen 127.0.0.1:4102 -upstream 127.0.0.1:4002 \
-  -out /tmp/ibkr-v2-rc3 -scenario manual_tws_order_bound -client-id 0 \
+  -out /tmp/ibkr-v2-rc4 -scenario manual_tws_order_bound -client-id 0 \
   -notes 'manual paper-TWS order bound through client 0' -timeout 5m
 ```
 
@@ -96,12 +102,16 @@ passes replay and the capture hash is recorded.
 
 ## Soak record
 
-Day zero is the unchanged RC.3 revision after the full release gate passes.
+Day zero is the exact 40-character RC.4 revision after the full release gate
+passes and the annotated candidate tag is published.
 For each following calendar day, review repository issues/discussions and
 known consumer feedback for correctness, API, and protocol regressions. Put a
 dated record of the surfaces checked in `gate_record`; do not pre-populate or
 backfill it. Re-run the full release gate on day seven before changing the
-manifest to `ready`. Any candidate code change invalidates every recorded day.
+manifest to `ready`. During the soak, only
+`testdata/release/v2.0.0.json` may change. Before stable tagging, verify that
+the candidate is an ancestor and that its diff to the stable commit contains
+only that manifest.
 
 | Day | Date | Candidate | Gate record |
 |---:|---|---|---|
@@ -112,3 +122,29 @@ manifest to `ready`. Any candidate code change invalidates every recorded day.
 | 5 | pending | pending | pending |
 | 6 | pending | pending | pending |
 | 7 | pending | pending | pending |
+
+## Exact stable gate
+
+Run every deterministic check on the exact stable commit:
+
+```bash
+go mod tidy -diff
+go mod verify
+gofmt -l .
+go build ./...
+go vet ./...
+CGO_ENABLED=0 GOOS=linux GOARCH=386 go build ./...
+golangci-lint run
+go test -shuffle=on -count=1 ./...
+go test -race -shuffle=on -count=1 ./...
+./scripts/check-api.sh
+./scripts/fuzz-all.sh --check
+./scripts/fuzz-all.sh 30s
+go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+IBKR_STABLE_RELEASE=1 IBKR_RELEASE_TAG=v2.0.0 \
+  go test -shuffle=on -count=1 ./...
+```
+
+Maintainers must also run `./scripts/verify-captures.sh` against the nonempty
+ignored local capture corpus. This is intentionally local evidence validation,
+not a CI step; the script fails when no capture directories are available.

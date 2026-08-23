@@ -36,8 +36,10 @@ if [[ $# -gt 0 ]]; then
 else
     echo "=== capture verification ==="
     status=0
+    count=0
     for dir in captures/20*; do
         [[ -d "$dir" ]] || continue
+        count=$((count + 1))
         printf '%s: ' "${dir##*/}"
         if verify "$dir"; then
             echo "ok"
@@ -45,5 +47,9 @@ else
             status=1
         fi
     done
+    if [[ "$count" -eq 0 ]]; then
+        echo "!! no local capture directories found under captures/" >&2
+        exit 1
+    fi
     exit "$status"
 fi

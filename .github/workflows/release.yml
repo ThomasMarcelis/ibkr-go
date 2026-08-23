@@ -53,6 +53,7 @@ jobs:
           git merge-base --is-ancestor "$commit" origin/main
           if [[ "$TAG" != *-* ]]; then
             echo 'IBKR_STABLE_RELEASE=1' >> "$GITHUB_ENV"
+            echo "IBKR_RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
           fi
 
       - name: Verify release commit

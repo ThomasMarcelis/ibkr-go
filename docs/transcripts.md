@@ -215,13 +215,16 @@ the codec under test.
 
 ## Provenance gate
 
-Every transcript starts with a provenance header. The temporary exception
-inventory is [`testdata/transcripts/provenance.json`](../testdata/transcripts/provenance.json):
-it names legacy headerless fixtures and any derived fixture that depends on
-one. `TestTranscriptProvenanceInventory` rejects drift in either direction.
+Every transcript starts with an initial contiguous comment block that names at
+least one capture ID, exactly one negotiated server version, and either a full
+64-hex `events.jsonl` SHA-256 or an explicitly labelled 16-hex legacy prefix.
+Every recorded handshake must agree with the declared version. The structural
+parser ignores comments after the first executable line, so later scenario
+notes cannot satisfy provenance.
 
-Release candidates may retain a named exception while replacement evidence is
-being captured. A stable release runs the same test with
-`IBKR_STABLE_RELEASE=1`, which requires both exception lists to be empty. Do
-not add a guessed source or promote an exception by editing the manifest; land
-the sanitized live-derived replacement and its capture hash first.
+`TestTranscriptProvenanceInventory` freezes the measured corpus and its sole
+legacy-prefix transcript. A legacy prefix remains honest historical evidence,
+but it can never satisfy a stable-release proof. Stable proof records must name
+a regular-file basename directly under `testdata/transcripts`; their capture
+ID, server version, and full hash must agree exactly with the parsed header.
+Do not add a guessed source or rewrite captured evidence to satisfy the gate.
