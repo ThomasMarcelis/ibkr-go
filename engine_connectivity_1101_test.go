@@ -28,7 +28,7 @@ func TestConnectivity1101BareGapsOrderBeforeRecovery(t *testing.T) {
 		_ = peer.Close()
 		_ = e.transport.Wait()
 	})
-	handle := e.bindOrderHandle(47, Stock("AAPL"))
+	handle := e.bindOrderHandle(47, Stock("AAPL"), 0)
 	executions := newSubscription[ExecutionEvent](subscriptionConfig{buffer: 2}, nil)
 	e.executionEvents = &executionEventRoute{sub: executions}
 

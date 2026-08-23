@@ -561,7 +561,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 			resp <- placeOrderResult{err: err}
 			return
 		}
-		handle := e.bindOrderHandle(orderID, req.Contract)
+		handle := e.bindOrderHandle(orderID, req.Contract, req.Order.ParentID)
 
 		write, err := e.sendTrackedContext(ctx, toCodecPlaceOrder(orderID, req))
 		if err != nil {
@@ -621,9 +621,9 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 		req.StopLoss.ParentID = parentID
 
 		bracket := BracketOrder{
-			Parent:     e.bindOrderHandle(parentID, req.Contract),
-			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract),
-			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract),
+			Parent:     e.bindOrderHandle(parentID, req.Contract, 0),
+			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract, parentID),
+			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract, parentID),
 		}
 		allIDs := []int64{parentID, takeProfitID, stopLossID}
 		sentIDs := make([]int64, 0, len(allIDs))
@@ -692,9 +692,9 @@ func (e *engine) PlacePresetBracket(ctx context.Context, req PlaceOrderRequest) 
 			return
 		}
 		bracket := BracketOrder{
-			Parent:     e.bindOrderHandle(parentID, req.Contract),
-			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract),
-			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract),
+			Parent:     e.bindOrderHandle(parentID, req.Contract, 0),
+			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract, parentID),
+			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract, parentID),
 		}
 		e.orders[parentID].attachedOrderIDs = []int64{stopLossID, takeProfitID}
 		allIDs := []int64{parentID, stopLossID, takeProfitID}
@@ -740,7 +740,7 @@ func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, placementErr
 
 // bindOrderHandle installs a new order route and its public handle. It must be
 // called on the actor goroutine before the corresponding place_order is sent.
-func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle {
+func (e *engine) bindOrderHandle(orderID int64, contract Contract, parentID int64) *OrderHandle {
 	handle := newOrderHandle(orderID, e.cfg.orderEventBuffer)
 	handle.cancelFn = func(ctx context.Context, cfg cancelConfig) error {
 		return e.CancelOrder(ctx, orderID, cfg)
@@ -764,6 +764,10 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 			if or.recoveryRequired {
 				return ErrOrderRecoveryRequired
 			}
+			if order.ParentID != 0 && order.ParentID != or.parentID {
+				return invalidOrderField("Order.ParentID", order.ParentID, "cannot change the placement-time parent")
+			}
+			order.ParentID = or.parentID
 			return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
 				Contract: contract,
 				Order:    order,
@@ -779,7 +783,7 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract) *OrderHandle 
 			handle.closeWithErr(nil)
 		})
 	}
-	e.orders[orderID] = &orderRoute{orderID: orderID, handle: handle}
+	e.orders[orderID] = &orderRoute{orderID: orderID, parentID: parentID, handle: handle}
 	return handle
 }
 

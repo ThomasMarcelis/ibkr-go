@@ -79,7 +79,7 @@ func TestUnwrittenPlaceOrderClosesItsHandle(t *testing.T) {
 		pendingOrderWrites: make(map[transportWriteKey]int64),
 		execDeliveries:     make(map[string]*execDelivery),
 	}
-	handle := e.bindOrderHandle(47, Contract{ConID: 265598, Exchange: "SMART"})
+	handle := e.bindOrderHandle(47, Contract{ConID: 265598, Exchange: "SMART"}, 0)
 	tr := new(transport.Conn)
 	key := transportWriteKey{transport: tr, id: 3}
 	e.pendingOrderWrites[key] = 47
@@ -111,7 +111,7 @@ func TestReconnectOffClosesAdmittedOrderAsRecoveryRequired(t *testing.T) {
 
 	e, peer := newObservedMarketDataEngine(t)
 	e.cfg.reconnect = ReconnectOff
-	handle := e.bindOrderHandle(47, Contract{ConID: 265598, Exchange: "SMART"})
+	handle := e.bindOrderHandle(47, Contract{ConID: 265598, Exchange: "SMART"}, 0)
 
 	e.handleTransportLoss(transportLoss{transport: e.transport, err: io.EOF})
 
@@ -333,7 +333,7 @@ func newRollbackTestEngine(t *testing.T, orderIDs []int64) (*engine, net.Conn, m
 	}
 	handles := make(map[int64]*OrderHandle, len(orderIDs))
 	for _, orderID := range orderIDs {
-		handles[orderID] = e.bindOrderHandle(orderID, Contract{ConID: 265598, Exchange: "SMART"})
+		handles[orderID] = e.bindOrderHandle(orderID, Contract{ConID: 265598, Exchange: "SMART"}, 0)
 	}
 	t.Cleanup(func() {
 		_ = tr.Close()

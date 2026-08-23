@@ -3290,15 +3290,23 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 		t.Fatalf("child OCA groups = %q and %q, want same non-empty group", takeProfitOpen.Order.OCA.Group, stopLossOpen.Order.OCA.Group)
 	}
 
-	err = takeProfit.Replace(ctx, ibkr.Order{
+	replacement := ibkr.Order{
 		Action:    ibkr.ActionSell,
 		OrderType: ibkr.OrderTypeLimit,
 		Quantity:  decimal.RequireFromString("1"),
 		LmtPrice:  new(decimal.RequireFromString("206.28")),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
-		ParentID:  parent.OrderID(),
-	})
+	}
+	conflicting := replacement
+	conflicting.ParentID = parent.OrderID() + 1
+	err = takeProfit.Replace(ctx, conflicting)
+	validation, ok := errors.AsType[*ibkr.ValidationError](err)
+	if !ok || validation.Field != "Order.ParentID" {
+		t.Fatalf("bracket conflicting-parent Replace error = %#v, want Order.ParentID ValidationError", err)
+	}
+
+	err = takeProfit.Replace(ctx, replacement)
 	if err != nil {
 		t.Fatalf("bracket take-profit Replace: %v", err)
 	}
