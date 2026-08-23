@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## v1.5.2 — 2026-08-23
+
+### Deprecated
+
+- Deprecate the v1 module in favor of
+  [`github.com/ThomasMarcelis/ibkr-go/v2`](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
+  Existing users should follow the
+  [v2 migration guide](https://github.com/ThomasMarcelis/ibkr-go/blob/main/docs/migration-v2.md).
+  This final v1 release contains no functional changes.
+
 ## v1.5.1 — 2026-07-04
 
 ### Added

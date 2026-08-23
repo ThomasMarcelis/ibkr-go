@@ -1,5 +1,10 @@
 # ibkr-go
 
+> [!WARNING]
+> **v1 is deprecated and no longer maintained.** Use
+> [`github.com/ThomasMarcelis/ibkr-go/v2`](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2)
+> and follow the [v2 migration guide](https://github.com/ThomasMarcelis/ibkr-go/blob/main/docs/migration-v2.md).
+
 [![CI](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go)
 [![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go)
@@ -30,8 +35,16 @@ for update := range sub.Events() {
 
 ## Install
 
+New projects should use v2:
+
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go@latest
+go get github.com/ThomasMarcelis/ibkr-go/v2@latest
+```
+
+Existing v1 users can pin this final release while migrating:
+
+```bash
+go get github.com/ThomasMarcelis/ibkr-go@v1.5.2
 ```
 
 Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
