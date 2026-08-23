@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T161858Z-api_pairs_trading_aapl_msft.
-# server_version=200, events.jsonl sha256 prefix: 0dc806f7bb0868e8.
+# server_version=200, events.jsonl sha256: 0dc806f7bb0868e876afae20831fd095bf9619679a01691a43964768afbeaaee.
 # Account, perm, and execution identifiers are sanitized; paired entry, paired
 # flatten, symbols, quantities, statuses, and sides preserve live paper Gateway
 # behavior observed on 2026-04-15.

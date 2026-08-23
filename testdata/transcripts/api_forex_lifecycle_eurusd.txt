@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260414T182627Z-api_forex_lifecycle_eurusd.
-# server_version=200, events.jsonl sha256 prefix: 641eab5c0e6909f7.
+# server_version=200, events.jsonl sha256: 641eab5c0e6909f7aa91be3444adb26b90e2be50ec279fec8ddb5bb71bc63dda.
 # Account, order-ref, and perm identifiers are sanitized; the sequence preserves
 # live paper Gateway behavior observed on 2026-04-14: a far EUR.USD LMT order
 # was accepted as an OpenOrder, went Inactive, then returned a real leverage

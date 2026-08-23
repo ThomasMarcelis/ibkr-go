@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260704T174748Z-api_reconnect_active_order_aapl.
-# server_version=200, events.jsonl sha256 prefix: 57943d05bd0242ca.
+# server_version=200, events.jsonl sha256: 57943d05bd0242ca4a061d10c50291b8d30ef93f1f833e4da66704b400815bf7.
 # Account and perm identifiers are sanitized; the two connection legs preserve
 # the live paper Gateway behavior observed on 2026-07-04 (outside regular
 # trading hours, order rests PreSubmitted): on reconnect with the same client

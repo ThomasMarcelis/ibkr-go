@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260611T133005Z-place_order_mkt_buy_aapl.
-# server_version=200, events.jsonl sha256 prefix: 5d88f759ad8df7ac.
+# server_version=200, events.jsonl sha256: 5d88f759ad8df7ac915cd745ab980949df86dabbeb2e3999a259a6fb1f11eb40.
 # Replays a regular-session MKT BUY 1 AAPL (ORD-001 market fill variant)
 # observed on 2026-06-11 against live paper Gateway during US market hours:
 # the order echoes PreSubmitted, fills in a single execution (1 @ 292.76 on

@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T170243Z-api_completed_orders_variants_aapl.
-# server_version=200, events.jsonl sha256 prefix: 6ac84daaf4084436.
+# server_version=200, events.jsonl sha256: 6ac84daaf40844360d54fd6dc12148b41885909066284cdf337c87ed574ac501.
 # Account, perm (-> 900<order id>), and execution identifiers are sanitized.
 # The capture freezes the
 # public API behavior after the completed-order TRAIL LIMIT decode fix:

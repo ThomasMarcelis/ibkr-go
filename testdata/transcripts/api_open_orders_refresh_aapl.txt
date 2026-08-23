@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260704T181808Z-api_open_orders_refresh_aapl.
-# server_version=200, events.jsonl sha256 prefix: 9d5a9af337237a67.
+# server_version=200, events.jsonl sha256: 9d5a9af337237a67c38ba4ca1f4806d1b4a0c2d883bb2f3dda46c384984c1150.
 # Account and perm identifiers are sanitized; one clientID-0 connection
 # preserves the live paper Gateway behavior observed on 2026-07-04: re-sending
 # req_open_orders on an active open-orders subscription yields a fresh

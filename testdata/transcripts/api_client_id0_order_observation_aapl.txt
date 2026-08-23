@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T162840Z-api_client_id0_order_observation_aapl.
-# server_version=200, events.jsonl sha256 prefix: 5ff9cdc0f6f9b500.
+# server_version=200, events.jsonl sha256: 5ff9cdc0f6f9b5009f2f5eb24517621927f0e61cc6edc06813483f2831b3c957.
 # Account and perm identifiers are sanitized; the two connection legs preserve
 # the live paper Gateway behavior observed on 2026-04-15: client ID 0 can see
 # another client's live GTC order through the all-open-orders scope and cancel it.

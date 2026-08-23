@@ -3,6 +3,7 @@
 # captures/20260414T183626Z-api_order_rest_cancel_aapl. Cancel fix: extOperator
 # and manualOrderIndicator fields added to CancelOrderRequest (CME_TAGGING_FIELDS
 # sv >= 192). Account and perm IDs sanitized.
+# events.jsonl sha256: 1c0849882d07e2cc08bdf17d5107d113263848ea60f6df9593cd13f50bef1448.
 handshake {"server_version":200,"connection_time":"20260414 20:36:26 Central European Standard Time"}
 server managed_accounts {"accounts":["DU9000001"]}
 server next_valid_id {"order_id":1}

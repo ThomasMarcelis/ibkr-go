@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260611T133444Z-api_option_exercise_aapl.
-# server_version=200, events.jsonl sha256 prefix: a5ce9af5fee56269.
+# server_version=200, events.jsonl sha256: a5ce9af5fee562698455936dc635ec46365c5f7c18cac004d7892c3b06fbe3a8.
 # Replays the option-exercise not-in-the-money refusal (OPT-002) observed on
 # 2026-06-11 against live paper Gateway: a MKT BUY 1 of the barely-ITM AAPL
 # Jun-12 292.5 call fills immediately at 2.11 (one execution plus commission

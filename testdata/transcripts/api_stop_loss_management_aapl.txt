@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T153735Z-api_stop_loss_management_aapl.
-# server_version=200, events.jsonl sha256 prefix: a563cafd26e366be.
+# server_version=200, events.jsonl sha256: a563cafd26e366bed5c1b5f20df30765c7fba91f895c443215008ef3e25788d7.
 # Account, perm, and execution identifiers are sanitized; order lifecycle,
 # prices, statuses, and execution timing preserve live paper Gateway behavior
 # observed on 2026-04-15.

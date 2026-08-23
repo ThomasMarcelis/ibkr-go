@@ -2,7 +2,7 @@
 # Scenario: completed_orders, server_version=200.
 # Raw evidence kept local:
 # /tmp/ibkr-go-issue-6-7-captures/20260412T183937Z-completed_orders
-# events.jsonl sha256 prefix: 889d6f7f0ea2308d
+# events.jsonl sha256 legacy prefix: 889d6f7f0ea2308d
 #
 # The msg 101 payload below is the captured AAPL completed-order frame with
 # account/order identifiers sanitized. It preserves the live server layout where

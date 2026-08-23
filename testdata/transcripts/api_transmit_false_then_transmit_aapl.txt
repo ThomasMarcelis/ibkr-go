@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T162717Z-api_transmit_false_then_transmit_aapl.
-# server_version=200, events.jsonl sha256 prefix: 003abb59dfced542.
+# server_version=200, events.jsonl sha256: 003abb59dfced54248d50644ec171c406aefc587141bdd7780fb44c4d59d0a45.
 # Account and perm identifiers are sanitized; the sequence preserves live paper
 # Gateway behavior observed on 2026-04-15: a staged Transmit=false order emits
 # no order lifecycle until the same order ID is modified with Transmit=true.

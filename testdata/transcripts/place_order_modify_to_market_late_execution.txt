@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260413T164549Z-api_delayed_success_modify_aapl.
-# server_version=200, events.jsonl sha256 prefix: 9a33ce0f2b3fd3a6.
+# server_version=200, events.jsonl sha256: 9a33ce0f2b3fd3a6cfe57583b0fed99a66a05af69444c201e6987cbeae08d184.
 # Account, perm (-> 900<order id>), and execution identifiers are sanitized.
 # Live Gateway sent terminal Filled status before the execution and commission
 # callbacks, so OrderHandle keeps a short terminal drain window.

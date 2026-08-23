@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260413T174517Z-api_bracket_trigger_aapl.
-# server_version=200, events.jsonl sha256 prefix: 682a1390b2acf04c.
+# server_version=200, events.jsonl sha256: 682a1390b2acf04c8bc075fa1cf32b4b4b872c7505a2d8bcb1b017e6d552cefd.
 # Account, order-ref, perm, and execution identifiers are sanitized; the sequence
 # preserves live paper Gateway behavior observed on 2026-04-13. The bracket parent
 # filled, both children echoed the same OCA group, and the forced take-profit

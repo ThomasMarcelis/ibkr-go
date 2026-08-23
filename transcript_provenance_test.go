@@ -1,104 +1,174 @@
 package ibkr_test
 
 import (
-	"bufio"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-type transcriptProvenance struct {
-	Schema              int                              `json:"schema"`
-	UnverifiedLegacy    []string                         `json:"unverified_legacy"`
-	DependsOnUnverified []transcriptProvenanceDependency `json:"depends_on_unverified"`
-}
+var (
+	captureIDPattern     = regexp.MustCompile(`\b[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9][A-Za-z0-9_-]*\b`)
+	serverVersionPattern = regexp.MustCompile(`\bserver_version\s*(?:=|:)?\s*([0-9]+)\b`)
+	eventsHashPattern    = regexp.MustCompile(`(?i)\bevents\.jsonl sha256\s*:?\s*([0-9a-f]{64})\b`)
+	legacyHashPattern    = regexp.MustCompile(`(?i)\bevents\.jsonl sha256\s+legacy prefix\s*:?\s*([0-9a-f]{16})\b`)
+)
 
-type transcriptProvenanceDependency struct {
-	File         string   `json:"file"`
-	Dependencies []string `json:"dependencies"`
+type transcriptProvenance struct {
+	CaptureIDs             []string
+	ServerVersion          int
+	EventsSHA256           []string
+	LegacyEventsHashPrefix string
 }
 
 func TestTranscriptProvenanceInventory(t *testing.T) {
 	t.Parallel()
 
-	dir := filepath.Join("testdata", "transcripts")
-	data, err := os.ReadFile("testdata/transcripts/provenance.json")
+	files, err := filepath.Glob("testdata/transcripts/*.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var manifest transcriptProvenance
-	if err := json.Unmarshal(data, &manifest); err != nil {
-		t.Fatalf("decode provenance manifest: %v", err)
+	if len(files) != 134 {
+		t.Fatalf("transcript count = %d, want 134", len(files))
 	}
-	if manifest.Schema != 1 {
-		t.Fatalf("provenance schema = %d, want 1", manifest.Schema)
-	}
-
-	headerless := make([]string, 0, len(manifest.UnverifiedLegacy))
-	files, err := filepath.Glob(filepath.Join(dir, "*.txt"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := 0
+	legacyFiles := make(map[string]string)
 	for _, file := range files {
-		if !transcriptHasHeader(t, file) {
-			headerless = append(headerless, filepath.Base(file))
-		}
-	}
-	slices.Sort(headerless)
-	slices.Sort(manifest.UnverifiedLegacy)
-	if !slices.Equal(headerless, manifest.UnverifiedLegacy) {
-		t.Fatalf("headerless transcripts = %v, manifest unverified_legacy = %v", headerless, manifest.UnverifiedLegacy)
-	}
-
-	unverified := make(map[string]struct{}, len(manifest.UnverifiedLegacy))
-	for _, file := range manifest.UnverifiedLegacy {
-		unverified[file] = struct{}{}
-	}
-	for _, dependent := range manifest.DependsOnUnverified {
-		if dependent.File != filepath.Base(dependent.File) {
-			t.Errorf("dependent transcript %q is not a base name", dependent.File)
-			continue
-		}
-		header, err := os.ReadFile(filepath.Join(dir, dependent.File)) // #nosec G304 -- the manifest is repository-owned and the base name is checked above
+		data, err := os.ReadFile(file) // #nosec G304 -- files come from the fixed transcript-directory glob.
 		if err != nil {
-			t.Errorf("read dependent transcript %q: %v", dependent.File, err)
+			t.Fatal(err)
+		}
+		if strings.Contains(string(data), "raw server ") || strings.Contains(string(data), "raw client ") {
+			raw++
+		}
+		provenance, err := parseTranscriptProvenance(data)
+		if err != nil {
+			t.Errorf("%s: %v", file, err)
 			continue
 		}
-		for _, dependency := range dependent.Dependencies {
-			if _, ok := unverified[dependency]; !ok {
-				t.Errorf("%s dependency %s is not in unverified_legacy", dependent.File, dependency)
-			}
-			if !strings.Contains(string(header), dependency) {
-				t.Errorf("%s header does not name dependency %s", dependent.File, dependency)
-			}
+		if provenance.LegacyEventsHashPrefix != "" {
+			legacyFiles[filepath.Base(file)] = provenance.LegacyEventsHashPrefix
 		}
 	}
-
-	if os.Getenv("IBKR_STABLE_RELEASE") == "1" && (len(manifest.UnverifiedLegacy) != 0 || len(manifest.DependsOnUnverified) != 0) {
-		t.Fatalf("stable release blocked by %d unverified legacy transcripts and %d dependent fixtures", len(manifest.UnverifiedLegacy), len(manifest.DependsOnUnverified))
+	if raw != 101 {
+		t.Fatalf("raw transcript count = %d, want 101", raw)
+	}
+	if len(legacyFiles) != 1 || legacyFiles["completed_orders_cancelled_system_live.txt"] != "889d6f7f0ea2308d" {
+		t.Fatalf("legacy transcript evidence = %v, want only completed_orders_cancelled_system_live.txt at 889d6f7f0ea2308d", legacyFiles)
 	}
 }
 
-func transcriptHasHeader(t *testing.T, path string) bool {
-	t.Helper()
+func TestTranscriptProvenanceParserIgnoresLaterComments(t *testing.T) {
+	t.Parallel()
 
-	file, err := os.Open(path) // #nosec G304 -- paths come only from filepath.Glob over the fixed transcript directory
+	data := []byte("# capture 20260710T223024Z-account_summary_snapshot, server_version 206\n" +
+		"# events.jsonl sha256: 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db\n" +
+		"handshake {\"server_version\":206}\n" +
+		"# capture 19990101T000000Z-not-header, server_version 999\n")
+	provenance, err := parseTranscriptProvenance(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
-			return strings.HasPrefix(line, "#")
+	if len(provenance.CaptureIDs) != 1 || provenance.CaptureIDs[0] != "20260710T223024Z-account_summary_snapshot" {
+		t.Fatalf("capture IDs = %v, want only the initial header capture", provenance.CaptureIDs)
+	}
+}
+
+func TestTranscriptProvenanceParserRejectsIncompleteEvidence(t *testing.T) {
+	t.Parallel()
+
+	const valid = "# capture 20260710T223024Z-account_summary_snapshot, server_version 206\n" +
+		"# events.jsonl sha256: 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db\n" +
+		"handshake {\"server_version\":206}\n"
+	for name, data := range map[string]string{
+		"missing capture":           strings.Replace(valid, "20260710T223024Z-account_summary_snapshot", "account_summary_snapshot", 1),
+		"multiple versions":         strings.Replace(valid, "\n# events", ", server_version 207\n# events", 1),
+		"unlabelled prefix":         strings.Replace(valid, "events.jsonl sha256: 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db", "events.jsonl sha256 prefix: 71f26259c1556157", 1),
+		"handshake mismatch":        strings.Replace(valid, `"server_version":206`, `"server_version":207`, 1),
+		"handshake missing version": strings.Replace(valid, `{"server_version":206}`, `{}`, 1),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := parseTranscriptProvenance([]byte(data)); err == nil {
+				t.Fatal("parseTranscriptProvenance succeeded, want error")
+			}
+		})
+	}
+}
+
+func parseTranscriptProvenance(data []byte) (transcriptProvenance, error) {
+	text := string(data)
+	var headerLines []string
+	for line := range strings.Lines(text) {
+		line = strings.TrimSuffix(line, "\n")
+		if !strings.HasPrefix(line, "#") {
+			break
+		}
+		headerLines = append(headerLines, strings.TrimSpace(strings.TrimPrefix(line, "#")))
+	}
+	header := strings.Join(headerLines, " ")
+	provenance := transcriptProvenance{CaptureIDs: uniqueStrings(captureIDPattern.FindAllString(header, -1))}
+	if len(provenance.CaptureIDs) == 0 {
+		return provenance, fmt.Errorf("initial comment block has no capture ID")
+	}
+	versions := serverVersionPattern.FindAllStringSubmatch(header, -1)
+	if len(versions) != 1 {
+		return provenance, fmt.Errorf("initial comment block declares %d server versions, want exactly one", len(versions))
+	}
+	provenance.ServerVersion, _ = strconv.Atoi(versions[0][1])
+	provenance.EventsSHA256 = uniqueMatches(eventsHashPattern, header)
+	legacy := legacyHashPattern.FindAllStringSubmatch(header, -1)
+	if len(provenance.EventsSHA256) == 0 && len(legacy) != 1 {
+		return provenance, fmt.Errorf("initial comment block must declare a full events hash or one explicitly labelled legacy prefix")
+	}
+	if len(legacy) > 1 || len(provenance.EventsSHA256) != 0 && len(legacy) != 0 {
+		return provenance, fmt.Errorf("initial comment block has ambiguous events hashes")
+	}
+	if len(legacy) == 1 {
+		provenance.LegacyEventsHashPrefix = legacy[0][1]
+	}
+	for line := range strings.Lines(text) {
+		line = strings.TrimSuffix(line, "\n")
+		if !strings.HasPrefix(line, "handshake ") {
+			continue
+		}
+		var handshake struct {
+			ServerVersion *int `json:"server_version"`
+		}
+		if err := json.Unmarshal([]byte(strings.TrimPrefix(line, "handshake ")), &handshake); err != nil {
+			return provenance, fmt.Errorf("decode handshake: %w", err)
+		}
+		if handshake.ServerVersion == nil {
+			return provenance, fmt.Errorf("handshake has no server_version")
+		}
+		if *handshake.ServerVersion != provenance.ServerVersion {
+			return provenance, fmt.Errorf("handshake server_version %d disagrees with declared %d", *handshake.ServerVersion, provenance.ServerVersion)
 		}
 	}
-	if err := scanner.Err(); err != nil {
-		t.Fatal(err)
+	return provenance, nil
+}
+
+func uniqueMatches(pattern *regexp.Regexp, text string) []string {
+	matches := pattern.FindAllStringSubmatch(text, -1)
+	values := make([]string, 0, len(matches))
+	for _, match := range matches {
+		values = append(values, match[1])
 	}
-	return false
+	return uniqueStrings(values)
+}
+
+func uniqueStrings(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
 }

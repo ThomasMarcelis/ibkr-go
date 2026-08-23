@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T150535Z-api_tif_attribute_matrix_aapl.
-# server_version=200, events.jsonl sha256 prefix: e6601dcc2abfd001.
+# server_version=200, events.jsonl sha256: e6601dcc2abfd001d8db06a191a318000a8d1f7106b72385504544f2324bae9d.
 # Account, perm, and execution identifiers are sanitized; the GTC cancel and
 # trailing-percent fill sequence preserves live paper Gateway behavior observed
 # on 2026-04-15.

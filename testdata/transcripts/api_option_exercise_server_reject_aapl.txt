@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260611T133636Z-api_option_exercise_aapl.
-# server_version=200, events.jsonl sha256 prefix: 267e7806669f2d5c.
+# server_version=200, events.jsonl sha256: 267e7806669f2d5cd2ff2391d634acd06510f3cf4520167f78248c64d676c236.
 # Replays the option-exercise server-rejection lifecycle (OPT-002) observed
 # on 2026-06-11 against live paper Gateway: a MKT BUY 1 of the deep-ITM AAPL
 # Jun-12 282.5 call fills at 8.90, then exerciseOptions produces a working

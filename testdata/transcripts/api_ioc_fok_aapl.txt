@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260413T184916Z-api_ioc_fok_aapl.
-# server_version=200, events.jsonl sha256 prefix: d57d0f5befed812d.
+# server_version=200, events.jsonl sha256: d57d0f5befed812d75e111eb6381d9ab99341fc5f38dc1d2379a4bc263b775cc.
 # Account and perm IDs are sanitized; order statuses and price/TIF/order-type
 # sequence are from live paper Gateway behavior on 2026-04-13.
 handshake {"server_version":200,"connection_time":"20260413 20:49:16 Central European Standard Time"}

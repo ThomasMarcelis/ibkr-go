@@ -1,5 +1,5 @@
 # Grounded by live recorder capture captures/20260413T192703Z-place_order_mkt_buy_aapl.
-# server_version=200, events.jsonl sha256 prefix: 301b075b217cbd99.
+# server_version=200, events.jsonl sha256: 301b075b217cbd99c3341da8e85384a95b8974abc9b84c20aad9c20f64c9e4ac.
 # Live Gateway ExecutionDetail msg_id=11 carries native time
 # "20260413 15:27:04 US/Eastern"; account, exec, and perm identifiers are
 # sanitized.

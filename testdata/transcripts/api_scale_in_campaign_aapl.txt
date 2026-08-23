@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260414T172617Z-api_scale_in_campaign_aapl.
-# server_version=200, events.jsonl sha256 prefix: 63db2db7cba21b68.
+# server_version=200, events.jsonl sha256: 63db2db7cba21b68ec95cb21ef225a1cbabb38bda488fd25e1661cfda6450a39.
 # Account, perm, and execution identifiers are sanitized; this replay freezes
 # the successful live portion observed on 2026-04-14: two AAPL market buys
 # filled, then a protective stop entered PreSubmitted trigger state. The later

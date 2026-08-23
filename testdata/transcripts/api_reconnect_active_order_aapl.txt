@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T162822Z-api_reconnect_active_order_aapl.
-# server_version=200, events.jsonl sha256 prefix: 9d72a4711c25c788.
+# server_version=200, events.jsonl sha256: 9d72a4711c25c788ddf10092a9ec24ab4fbfc3f44a885cdb27d08715be2ab7c2.
 # Account and perm identifiers are sanitized; the two connection legs preserve
 # the live paper Gateway behavior observed on 2026-04-15: a GTC order remains
 # visible after reconnect and can be cancelled from the reconnected client.

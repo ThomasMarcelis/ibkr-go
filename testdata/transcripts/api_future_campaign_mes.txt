@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T162047Z-api_future_campaign_mes.
-# server_version=200, events.jsonl sha256 prefix: 77d0b1b6a8c2d760.
+# server_version=200, events.jsonl sha256: 77d0b1b6a8c2d76079329c926fce5df350180286e96000a386f074f3c1c68f89.
 # Account, perm, and execution identifiers are sanitized. The capture qualified
 # MESM6 and completed a paper futures buy/flatten round trip.
 handshake {"server_version":200,"connection_time":"20260415 18:20:48 Central European Standard Time"}

@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260413T174546Z-api_oca_trigger_aapl.
-# server_version=200, events.jsonl sha256 prefix: 2dc16869778bc497.
+# server_version=200, events.jsonl sha256: 2dc16869778bc4977f86cc3154e6e2426f4ed466660171eeef015cc1968108ff.
 # Account, order-ref, and perm identifiers are sanitized; the sequence preserves
 # live paper Gateway behavior observed on 2026-04-13: both AAPL LMT peers echoed
 # the OCA group, and the aggressive peer was cancelled by IBKR's price-band

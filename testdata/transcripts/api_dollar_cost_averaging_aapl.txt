@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T161924Z-api_dollar_cost_averaging_aapl.
-# server_version=200, events.jsonl sha256 prefix: 296bdf662eb84e30.
+# server_version=200, events.jsonl sha256: 296bdf662eb84e30901429bb83b43ad67982351d74bdd1a7ba0b5adb4e706e09.
 # Account, perm, and execution identifiers are sanitized; the order sequence,
 # quantities, prices, statuses, and side transitions preserve live paper
 # Gateway behavior observed on 2026-04-15.

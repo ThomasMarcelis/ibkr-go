@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T162857Z-api_cross_client_cancel_aapl.
-# server_version=200, events.jsonl sha256 prefix: fcb7e811624e4aa9.
+# server_version=200, events.jsonl sha256: fcb7e811624e4aa935e1b50fe55b67caf143383264c29916833190ffe5ac35a4.
 # Account and perm identifiers are sanitized; the two connection legs preserve
 # the live paper Gateway behavior observed on 2026-04-15: client ID 2 can see
 # and cancel a GTC order placed by client ID 1 through the all-open-orders scope.

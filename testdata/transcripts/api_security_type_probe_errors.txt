@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260415T150322Z-api_security_type_probe_matrix.
-# server_version=200, events.jsonl sha256 prefix: 9be83e57ed176a17.
+# server_version=200, events.jsonl sha256: 9be83e57ed176a17ec0c31a87e2c19220685e91b5d817dfebc88d8317cca024e.
 # This replay freezes the BOND/BILL code 200 subset; the full matrix also
 # contains large successful contract-detail payloads and timeout probes.
 handshake {"server_version":200,"connection_time":"20260415 17:03:35 Central European Standard Time"}

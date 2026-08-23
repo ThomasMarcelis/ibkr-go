@@ -1,5 +1,5 @@
 # Grounded by live API capture captures/20260611T133017Z-place_order_lmt_buy_aapl.
-# server_version=200, events.jsonl sha256 prefix: 5d60edfa9536a59a.
+# server_version=200, events.jsonl sha256: 5d60edfa9536a59aad14fe1df180fdaf2988e42d31266bceeb8693705f159eaf.
 # Replays a regular-session far LMT BUY 1 AAPL @ 50 (ORD-001 resting limit
 # variant) observed on 2026-06-11 against live paper Gateway during US
 # market hours with the current 5-field cancel encoder: the order rests at
