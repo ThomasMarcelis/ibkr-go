@@ -246,7 +246,7 @@ and the what-if flag are operation-owned and therefore are not `Order` fields.
 | TrailingPercent | decimal | TRAIL with percent instead of dollar |
 | TriggerMethod | int | explicit trigger method override |
 | OrderRef | string | custom ref string echo in OpenOrder |
-| IncludeOvernight | bool | SMART Overnight+DAY and OVERNIGHT-only placement/open echoes, plus protobuf completed-order presence |
+| IncludeOvernight | bool | eligible SMART-routed DAY placement/open echoes, plus protobuf completed-order presence |
 | Scale.InitialLevelSize | int | scale order: initial level |
 | Scale.SubsequentLevelSize | int | scale order: subsequent levels |
 | Scale.PriceIncrement | decimal | scale order: price steps |

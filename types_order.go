@@ -453,10 +453,9 @@ type Order struct {
 	ParentID   int64            // parent order ID for a bracket child; 0 = no parent
 	OCA        OrderOCA         // one-cancels-all behavior; zero value disables it
 	OutsideRTH bool             // allow execution outside regular trading hours
-	// IncludeOvernight controls IBKR Overnight Trading routing. With a SMART
-	// exchange and DAY TIF, true requests Overnight+DAY. With Exchange
-	// "OVERNIGHT", true requests an overnight-only order. It is distinct from
-	// OutsideRTH, which controls execution outside regular trading hours.
+	// IncludeOvernight requests IBKR Overnight Trading for eligible
+	// SMART-routed DAY orders. It is distinct from OutsideRTH, which controls
+	// execution outside regular trading hours.
 	IncludeOvernight      bool
 	TriggerMethod         int                   // stop-trigger method; 0 = default
 	DisplaySize           int                   // iceberg display size; 0 = show full size
