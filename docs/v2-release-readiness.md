@@ -1,131 +1,47 @@
-# v2 Release Readiness
+# v2.0.0 Release Evidence
 
-RC.4 is the candidate this release plan will freeze after the remaining live
-evidence is captured. A correctness, public API, supported-wire-layout,
-fixture, or documentation change after that tag requires a new release
-candidate and restarts the stable soak.
+v2.0.0 is the supported stable line; v1 is deprecated. The release is not
+presented as having evidence that was never captured. The machine-readable
+disclosure in `testdata/release/v2.0.0.json` must continue to name every known
+evidence gap with its impact and follow-up.
 
-## RC.4 candidate gate
+## Known evidence gaps
 
-- the public API baseline is regenerated only after the advanced-order and
-  broker-echo model is frozen;
-- module, formatting, API, vet, test, race, 386, lint, vulnerability, capture,
-  and exact 17-target fuzz gates pass;
-- both configured Gateway roles complete the supported-version live matrix at
-  200, 203, and 225, subject to the current Gateway accepting the requested
-  lower maximum; run `TestLiveReleaseVersionSmoke` once against each role and
-  record any Gateway-side lower-version refusal rather than hiding it;
-- exact sv200 and sv203 `IncludeOvernight` lifecycle captures satisfy the two
-  focused scenarios in the coverage matrix;
-- exact sv200 MIDPOINT, BID, and ASK message-90 updates are captured before
-  signed update counts and registered-malformed generation retirement land;
-- invalid private captures stay outside the active evidence corpus; and
-- every checked-in transcript passes the structural provenance parser.
+- Exact server-version 200 MIDPOINT, BID, and ASK message-90 updates remain
+  uncaptured. Official source defines a signed bar count, while the current
+  classic decoder rejects a negative count and drops that update as malformed.
+- Registered decoder failures do not yet retire the whole transport
+  generation. A malformed row followed by a buffered end marker can therefore
+  complete a partial snapshot.
+- `IncludeOvernight` is source-grounded, but its focused sv200 true-to-false
+  replacement and sv203 staged-to-transmitted live proofs remain missing.
+- A successful fee-bearing regulatory snapshot remains unattested. The latest
+  authorized attempt returned API code 10213.
+- The client-0 manual-order `orderBound` path lacks a raw paper-TWS capture.
+- The previously planned seven-day unchanged release-candidate soak was not
+  completed. Post-publication defects must become v2.0.1; v2.0.0 is immutable.
 
-The remaining recovery fault tests inject typed engine events directly; no
-synthetic 1100/1101/1102 wire transcript is represented as live evidence.
+These are evidence and hardening gaps, not completed proofs. Exact impact and
+follow-up wording is frozen by `TestV2StableReleaseManifest`.
 
-## Stable-only blockers
+## Follow-up capture pass
 
-The machine-readable state is `testdata/release/v2.0.0.json`. Stable-tag CI
-sets `IBKR_STABLE_RELEASE=1` and `IBKR_RELEASE_TAG=v2.0.0`; the test requires
-exact agreement between that tag and the deliberately v2.0.0-specific
-manifest. Changing the manifest to `ready` requires structured role,
-server-version, capture, event-hash, and transcript records for both live
-proofs, plus seven consecutive dated feedback records that name the same
-40-character RC candidate revision. Each proof transcript must be a regular
-basename directly under `testdata/transcripts`, and its parsed capture ID,
-server version, and full hash must match exactly. A legacy prefix cannot serve
-as a proof.
+At market hours, capture the three classic message-90 variants before changing
+signed-count decoding, then land registered-malformed generation retirement.
+Run the two safely nonmarketable paper `IncludeOvernight` scenarios in the same
+campaign. Preserve negotiated version, capture ID, full event hash,
+cancellation, and a CurrentTime fence.
 
-Transcript replacement and retirement is complete: three redundant replays
-were removed, historical and concurrent-one-shot replays were rebuilt from
-exact captures, transport reconnect was grounded in an exact quote capture,
-and the synthetic connectivity fixtures were replaced by direct engine fault
-tests.
+A regulatory snapshot remains fee-bearing and requires immediate explicit
+authorization after the account restriction is resolved. Manual `orderBound`
+evidence requires paper TWS—not Gateway—with client ID 0 and auto-open orders.
+Every promoted proof must be a sanitized regular transcript under
+`testdata/transcripts` whose initial comment block and handshake pass the
+structural provenance parser.
 
-The remaining requirements are:
+## Stable release gate
 
-1. Obtain immediate explicit authorization, then record one successful
-   fee-bearing regulatory snapshot. Record role, negotiated server version,
-   capture ID, event hash, sanitized transcript, and billing reconciliation.
-2. Run paper TWS, create a manual order, and promote the raw `orderBound`
-   callback through the client-0 auto-open-orders path. Gateway-only evidence
-   cannot satisfy this requirement.
-3. Complete seven consecutive calendar days of feedback monitoring on the
-   exact unchanged RC.4 candidate. Any tracked change outside
-   `testdata/release/v2.0.0.json` resets day one and requires a new candidate.
-
-The latest authorized attempt was made on 2026-07-15 through `readonly-live`
-at `server_version 225`. Exactly one regulatory request was sent, and the
-Gateway definitively rejected request ID 2 with API code 10213. The verified
-private capture is
-`20260715T152010Z-regulatory_snapshot_aapl_authorized`; its events SHA-256 is
-`42e466e6af9ecb65d091579cd4b4546815bc414fd76b6457aa5618621c40dff4`.
-No retry was made. This does not satisfy requirement 1, so the manifest proof
-remains `null`. Resolve the account-access restriction before seeking fresh
-authorization for another fee-bearing attempt.
-
-Consumer upgrades are valuable validation but are independent projects and do
-not gate this library release.
-
-## Manual orderBound capture
-
-This opt-in harness connects as client ID 0, enables auto-open-order binding,
-waits for one manual paper-TWS order, validates the positive binding IDs, then
-disables binding and proves the session remains usable. Start paper TWS on the
-paper API port first; IB Gateway cannot produce this callback.
-
-Record it through the raw proxy:
-
-```bash
-go build -o /tmp/ibkr-recorder ./cmd/ibkr-recorder
-/tmp/ibkr-recorder -listen 127.0.0.1:4102 -upstream 127.0.0.1:4002 \
-  -out /tmp/ibkr-v2-rc4 -scenario manual_tws_order_bound -client-id 0 \
-  -notes 'manual paper-TWS order bound through client 0' -timeout 5m
-```
-
-In another shell, wait until the recorder is listening, then run:
-
-```bash
-IBKR_LIVE=1 IBKR_LIVE_TRADING=1 \
-IBKR_LIVE_PAPER_ADDR=127.0.0.1:4102 IBKR_LIVE_CLIENT_ID=0 \
-IBKR_LIVE_MANUAL_ORDER_BOUND=1 \
-go test . -run '^TestLiveManualTWSOrderBound$' -count=1 -v -timeout=4m
-```
-
-Create one safely non-marketable manual paper order only after the test prints
-`AUTO-OPEN ARMED`, and cancel it in TWS after capture.
-Verify and sanitize the capture before promoting its raw callback; do not add
-`order_bound` evidence to the readiness manifest until the promoted transcript
-passes replay and the capture hash is recorded.
-
-## Soak record
-
-Day zero is the exact 40-character RC.4 revision after the full release gate
-passes and the annotated candidate tag is published.
-For each following calendar day, review repository issues/discussions and
-known consumer feedback for correctness, API, and protocol regressions. Put a
-dated record of the surfaces checked in `gate_record`; do not pre-populate or
-backfill it. Re-run the full release gate on day seven before changing the
-manifest to `ready`. During the soak, only
-`testdata/release/v2.0.0.json` may change. Before stable tagging, verify that
-the candidate is an ancestor and that its diff to the stable commit contains
-only that manifest.
-
-| Day | Date | Candidate | Gate record |
-|---:|---|---|---|
-| 1 | pending | pending | pending |
-| 2 | pending | pending | pending |
-| 3 | pending | pending | pending |
-| 4 | pending | pending | pending |
-| 5 | pending | pending | pending |
-| 6 | pending | pending | pending |
-| 7 | pending | pending | pending |
-
-## Exact stable gate
-
-Run every deterministic check on the exact stable commit:
+Run on the exact tagged commit:
 
 ```bash
 go mod tidy -diff
@@ -145,6 +61,6 @@ IBKR_STABLE_RELEASE=1 IBKR_RELEASE_TAG=v2.0.0 \
   go test -shuffle=on -count=1 ./...
 ```
 
-Maintainers must also run `./scripts/verify-captures.sh` against the nonempty
-ignored local capture corpus. This is intentionally local evidence validation,
-not a CI step; the script fails when no capture directories are available.
+Maintainers also run `./scripts/verify-captures.sh` against the nonempty ignored
+local capture corpus. Release CI verifies that `v2.0.0` is an annotated tag on
+the `/v2` module path and publishes it as a stable GitHub release.

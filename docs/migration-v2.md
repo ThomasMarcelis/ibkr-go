@@ -1,13 +1,15 @@
 # Migrating from v1 to v2
 
-v2 is an intentional clean break. Go semantic import versioning keeps existing v1 applications on v1 until they explicitly adopt the new module path.
+v2 is an intentional clean break and the supported stable line. v1 is
+deprecated; Go semantic import versioning keeps existing v1 applications on v1
+until they explicitly adopt the new module path.
 
 ## Adopt the v2 module
 
 Update the dependency and every ibkr-go import:
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.3
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0
 ```
 
 ```go
@@ -22,14 +24,14 @@ For a local checkout, keep a real v2 requirement; `replace` changes source
 location, not the module's semantic major version:
 
 ```go
-require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.3
+require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0
 
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
 
-## From rc.2 to the pending release candidate
+## From rc.2 to v2.0.0
 
-The pending RC.4 work completes the final breaking broker-echo cleanup.
+v2.0.0 completes the final breaking broker-echo cleanup.
 `OpenOrder` is now faceted exactly like the wire result: `Contract`, complete
 `OrderDetails`, and `State`. It has no `Partial` mode and no flattened price
 fields:
@@ -127,7 +129,7 @@ sends no request and does no query correlation or deduplication. Keep using
 ceiling. Oversized handshake and steady-state frames return
 `*InboundFrameTooLargeError`.
 
-The reconnect default remains `ReconnectAuto`; rc.4 does not silently change
+The reconnect default remains `ReconnectAuto`; v2.0.0 does not silently change
 that policy. See [operation control](operation-control.md) for the cancellation,
 detach, and connection-retirement behavior of each operation family.
 

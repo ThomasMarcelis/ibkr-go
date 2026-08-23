@@ -42,7 +42,7 @@ return sub.Err()
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.3
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0
 ```
 
 Requires Go 1.26+. Direct dependencies are
@@ -51,7 +51,10 @@ arithmetic and the official
 [protobuf runtime](https://pkg.go.dev/google.golang.org/protobuf).
 
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
-v2 uses Go semantic import versioning, so existing v1 applications cannot upgrade accidentally. Adopting v2 requires changing imports to `github.com/ThomasMarcelis/ibkr-go/v2` and following the [v2 migration guide](docs/migration-v2.md).
+v1 is deprecated. Go semantic import versioning prevents accidental upgrades;
+adopting the supported v2 line requires changing imports to
+`github.com/ThomasMarcelis/ibkr-go/v2` and following the
+[v2 migration guide](docs/migration-v2.md).
 
 ## Why ibkr-go
 
@@ -424,6 +427,12 @@ intentional exclusions are documented in the
 [sv208-225 protocol audit](docs/protocol-audit-sv208-225.md). Positive
 entitlement-dependent callbacks and remaining advanced branches stay explicit
 in the coverage matrix rather than being overclaimed.
+
+The stable v2.0.0 release has explicit follow-up evidence gaps for signed
+message-90 updates, malformed-generation retirement, positive
+`IncludeOvernight` lifecycles, a successful regulatory snapshot, manual-TWS
+`orderBound`, and the previously planned soak. Their exact impact and follow-up
+are disclosed in the [v2.0.0 release evidence](docs/v2-release-readiness.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full

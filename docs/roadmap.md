@@ -7,7 +7,7 @@ TWS/Gateway socket protocol. The runtime stays pure Go: no cgo, no C++
 toolchain, no SDK dependency on the production import path. See
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the public development policy and
 [`docs/architecture.md`](architecture.md) for the runtime model.
-The RC.4-to-stable evidence boundary is tracked in
+The stable release's disclosed evidence gaps are tracked in
 [`v2-release-readiness.md`](v2-release-readiness.md).
 
 The goal is end-to-end coverage of the IBKR TWS/Gateway socket surface that

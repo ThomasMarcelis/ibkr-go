@@ -6,19 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
-## v2.0.0
+## v2.0.0 — 2026-08-23
 
-v2.0.0 is the clean-break release on the
-`github.com/ThomasMarcelis/ibkr-go/v2` module path. It publishes the unchanged
-RC.4 code after the required live proofs and seven-day soak complete. See
+v2.0.0 is the supported stable release on the
+`github.com/ThomasMarcelis/ibkr-go/v2` module path; v1 is deprecated. See
 [Migrating from v1 to v2](docs/migration-v2.md) for the source migration.
 
-## v2.0.0-rc.4
-
-RC.4 hardens order ownership and recovery: connectivity code 1101 publishes
-gaps before restoration, bracket replacement preserves parent identity,
-request and order ID histories cannot collide, permanent IDs govern callback
-attribution, and unclaimed what-if echoes cannot create phantom orders.
+The release hardens order ownership and recovery: connectivity code 1101
+publishes gaps before restoration, bracket replacement preserves parent
+identity, request and order ID histories cannot collide, permanent IDs govern
+callback attribution, and unclaimed what-if echoes cannot create phantom
+orders.
 
 Protocol and corpus work adds source-grounded classic pegged-order tail slots,
 protobuf order vectors, encoding-specific decoder attestation, structural
@@ -39,10 +37,20 @@ and atomic subscription generation tracking.
   captured single-page operation; `HasMore` does not establish a safe cursor
   contract.
 
-RC.4 publication remains blocked until exact live message-90 update evidence
-grounds signed counts and registered-malformed generation retirement. The
-stable release additionally requires the successful fee-bearing regulatory
-snapshot, manual paper-TWS `orderBound` proof, and seven unchanged soak days.
+### Known evidence gaps
+
+- Exact sv200 message-90 MIDPOINT/BID/ASK updates are missing. The current
+  classic decoder drops a valid negative-count update as malformed.
+- Registered malformed decoder failures do not yet retire the whole transport
+  generation, so a queued end marker can complete a partial snapshot.
+- The focused sv200/sv203 positive `IncludeOvernight` lifecycle proofs remain
+  uncaptured.
+- Successful fee-bearing regulatory-snapshot and manual paper-TWS `orderBound`
+  proofs remain missing; the planned seven-day unchanged soak was not run.
+
+These gaps are disclosed in `testdata/release/v2.0.0.json` with impact and
+follow-up. They are not represented as completed evidence. Any
+post-publication correctness fix becomes v2.0.1; v2.0.0 is never retagged.
 
 ## v2.0.0-rc.3 — 2026-07-16
 
@@ -57,8 +65,9 @@ configuration, and odd-lot quote data round out the public API.
 
 All legacy transcript exceptions have been replaced or retired, and the full
 build, test, race, lint, vulnerability, capture, and 17-target fuzz gates pass.
-The remaining regulatory-snapshot, manual paper-TWS `orderBound`, and seven-day
-soak requirements apply to the stable v2.0.0 release, not this candidate.
+At RC.3 time, regulatory-snapshot, manual paper-TWS `orderBound`, and seven-day
+soak evidence were planned stable gates. v2.0.0 later disclosed them as
+nonblocking gaps when v1 was deprecated.
 
 ## v2.0.0-rc.2 — 2026-07-11
 
@@ -112,8 +121,8 @@ midpoint ticks, and PnLSingle completed. Real-time bars returned the expected
 two isolated 20-second captures. On 2026-07-15, exactly one explicitly
 authorized fee-bearing regulatory request reached readonly-live at sv225 and
 received definitive restriction code 10213; it was not retried. A successful
-regulatory snapshot and a raw paper-TWS `orderBound` capture therefore remain
-validation targets before v2.0.0 stable.
+regulatory snapshot and a raw paper-TWS `orderBound` capture therefore remained
+planned validation targets. v2.0.0 discloses both as follow-up evidence gaps.
 
 ## v1.5.1 — 2026-07-04
 
