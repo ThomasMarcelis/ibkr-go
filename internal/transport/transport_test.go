@@ -65,7 +65,7 @@ func TestTrackedSendReportsCompleteLocal(t *testing.T) {
 	}
 }
 
-func TestTrackedSendReportsUnwrittenBeforeDone(t *testing.T) {
+func TestTrackedSendFinalizesCompletionsBeforeDone(t *testing.T) {
 	t.Parallel()
 
 	serverConn, clientConn := net.Pipe()
@@ -81,14 +81,36 @@ func TestTrackedSendReportsUnwrittenBeforeDone(t *testing.T) {
 		t.Fatalf("Close() error = %v", err)
 	}
 
-	result := <-conn.Completions()
-	if result.ID != id || result.Outcome != WriteUnwritten {
-		t.Fatalf("completion = %+v, want id=%d outcome=%v", result, id, WriteUnwritten)
-	}
+	// One result cannot fill the completion buffer. Waiting for Done first lets
+	// this test assert the terminal publication state without backpressuring the
+	// writer; production consumers continue draining while shutdown proceeds.
 	select {
 	case <-conn.Done():
+	case <-time.After(time.Second):
+		t.Fatal("Done remained open after Close")
+	}
+
+	var result WriteResult
+	select {
+	case got, ok := <-conn.Completions():
+		if !ok {
+			t.Fatal("Completions closed without the tracked result")
+		}
+		result = got
 	default:
-		t.Fatal("Done remained open after final write completion")
+		t.Fatal("tracked completion unavailable after Done closed")
+	}
+	if result.ID != id || result.Outcome != WriteUnwritten || result.Err != nil {
+		t.Fatalf("completion = %+v, want id=%d outcome=%v err=nil", result, id, WriteUnwritten)
+	}
+
+	select {
+	case _, ok := <-conn.Completions():
+		if ok {
+			t.Fatal("Completions produced more than one result for one tracked send")
+		}
+	default:
+		t.Fatal("Completions remained open after Done closed")
 	}
 }
 

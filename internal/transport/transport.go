@@ -140,8 +140,10 @@ func (c *Conn) Done() <-chan struct{} {
 // closes later, after the writer reports every tracked admission outcome.
 func (c *Conn) Stopping() <-chan struct{} { return c.stopping }
 
-// Completions reports the local write outcome of tracked sends. It closes
-// before Done after every admitted tracked frame has received one result.
+// Completions reports the local write outcome of tracked sends. Every admitted
+// tracked frame yields exactly one result, and the channel closes after all
+// results are published and before Done. Receiving one result is not a writer
+// finalization barrier; consumers must keep draining while shutdown proceeds.
 func (c *Conn) Completions() <-chan WriteResult { return c.completed }
 
 // Writable is signaled whenever the writer removes an item from the bounded
@@ -355,6 +357,8 @@ func (c *Conn) reportUnwritten(items []outboundFrame) {
 }
 
 func (c *Conn) finishWriter() {
+	// Done is the terminal publication barrier: observing it guarantees every
+	// tracked result was published and Completions was closed.
 	close(c.completed)
 	close(c.done)
 }
