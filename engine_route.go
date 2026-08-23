@@ -222,7 +222,7 @@ func (e *engine) handleIncoming(msg any) {
 		}
 	case codec.OrderBound:
 		binding := OrderBinding{PermID: msg.PermID, ClientID: protocolIDFromInt[ClientID](msg.ClientID), OrderID: msg.OrderID}
-		if or, ok := e.orders[msg.OrderID]; ok && !or.closed {
+		if or, ok := e.orders[msg.OrderID]; ok && !or.closed && e.claimOrderCallback(or, msg.ClientID, msg.PermID) {
 			or.working = true
 			if !e.ensureOrderStarted(or) || !or.handle.emitBinding(binding) {
 				e.closeOrderRoute(msg.OrderID, or, ErrSlowConsumer)
@@ -599,13 +599,14 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 
 	orderRoute, orderObserved := e.orders[msg.OrderID]
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
-	if (!orderObserved || orderRoute.closed) && !singletonObserved {
+	orderAttributed := orderObserved && !orderRoute.closed && e.claimOrderCallbackStrings(orderRoute, msg.ClientID, msg.PermID)
+	if !orderAttributed && !singletonObserved {
 		return
 	}
 
 	order, err := fromCodecOpenOrder(msg)
 	if err != nil {
-		if orderObserved && !orderRoute.closed {
+		if orderAttributed {
 			e.closeOrderRoute(msg.OrderID, orderRoute, err)
 		}
 		if singletonObserved {
@@ -614,7 +615,7 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 		return
 	}
 
-	if orderObserved && !orderRoute.closed {
+	if orderAttributed {
 		if !e.ensureOrderStarted(orderRoute) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 			return
@@ -635,13 +636,14 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	e.observeOrderID(msg.OrderID)
 	orderRoute, orderObserved := e.orders[msg.OrderID]
 	singletonRoute, singletonObserved := e.singletons[singletonOpenOrders]
-	if (!orderObserved || orderRoute.closed) && !singletonObserved {
+	orderAttributed := orderObserved && !orderRoute.closed && e.claimOrderCallbackStrings(orderRoute, msg.ClientID, msg.PermID)
+	if !orderAttributed && !singletonObserved {
 		return
 	}
 
 	status, err := fromCodecOrderStatus(msg)
 	if err != nil {
-		if orderObserved && !orderRoute.closed {
+		if orderAttributed {
 			e.closeOrderRoute(msg.OrderID, orderRoute, err)
 		}
 		if singletonObserved {
@@ -650,7 +652,7 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 		return
 	}
 
-	if orderObserved && !orderRoute.closed {
+	if orderAttributed {
 		if !e.ensureOrderStarted(orderRoute) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
 			return
@@ -867,6 +869,9 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	if !ok || or.closed {
 		return
 	}
+	if !e.claimOrderCallbackStrings(or, m.ClientID, m.PermID) {
+		return
+	}
 	or.working = true
 	if !e.ensureOrderStarted(or) {
 		e.closeOrderRoute(m.OrderID, or, ErrSlowConsumer)
@@ -907,4 +912,29 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	for _, buffered := range pending {
 		e.deliverCommissionToOrder(st, buffered)
 	}
+}
+
+func (e *engine) claimOrderCallbackStrings(or *orderRoute, clientID, permID string) bool {
+	client, clientErr := parseOptionalInt(clientID, "order callback client id")
+	permanent, permErr := parseOptionalInt64(permID, "order callback permanent id")
+	if clientErr != nil || permErr != nil {
+		// Preserve the pre-attribution failure path: the public projection will
+		// surface malformed identity fields as a protocol error on this route.
+		return true
+	}
+	return e.claimOrderCallback(or, client, permanent)
+}
+
+func (e *engine) claimOrderCallback(or *orderRoute, clientID int, permID int64) bool {
+	if permID > 0 {
+		if or.permID > 0 {
+			return or.permID == permID
+		}
+		if protocolIDFromInt[ClientID](clientID) != e.cfg.clientID {
+			return false
+		}
+		or.permID = permID
+		return true
+	}
+	return protocolIDFromInt[ClientID](clientID) == e.cfg.clientID
 }

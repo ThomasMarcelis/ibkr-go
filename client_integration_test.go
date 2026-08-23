@@ -1565,7 +1565,7 @@ func TestOrderEventBufferOverflowPreservesOrderCoordinate(t *testing.T) {
 	// OpenOrder(Filled), Filled status, then CommissionAndFees. A four-event
 	// queue must close when the fifth event arrives instead of silently dropping
 	// it and continuing.
-	client, host := newClient(t, "place_order_fill_native_execution_time.txt", ibkr.WithOrderEventBuffer(4))
+	client, host := newClient(t, "place_order_fill_native_execution_time.txt", ibkr.WithClientID(94), ibkr.WithOrderEventBuffer(4))
 	defer client.Close()
 	defer waitHost(t, host)
 
@@ -1625,7 +1625,7 @@ func TestOrderEventBufferOverflowPreservesOrderCoordinate(t *testing.T) {
 func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "place_order_fill_native_execution_time.txt")
+	client, host := newClient(t, "place_order_fill_native_execution_time.txt", ibkr.WithClientID(94))
 	defer client.Close()
 	defer waitHost(t, host)
 

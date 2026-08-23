@@ -34,12 +34,13 @@ func TestDispatchExecutionToOrderDedupesReplayedFill(t *testing.T) {
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	detail := codec.ExecutionDetail{
-		ReqID:   -1,
-		OrderID: 90,
-		ExecID:  "exec-live-1",
-		Shares:  "10",
-		Price:   "150",
-		Time:    "20260610-19:58:22",
+		ReqID:    -1,
+		OrderID:  90,
+		ExecID:   "exec-live-1",
+		Shares:   "10",
+		Price:    "150",
+		Time:     "20260610-19:58:22",
+		ClientID: "1",
 	}
 	// The live fill reaches the handle.
 	e.dispatchExecutionToOrder(detail)
@@ -76,12 +77,13 @@ func TestRouteCommissionReportDedupesReplayedCommission(t *testing.T) {
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	exec := codec.ExecutionDetail{
-		ReqID:   -1,
-		OrderID: 90,
-		ExecID:  "exec-live-1",
-		Shares:  "10",
-		Price:   "150",
-		Time:    "20260610-19:58:22",
+		ReqID:    -1,
+		OrderID:  90,
+		ExecID:   "exec-live-1",
+		Shares:   "10",
+		Price:    "150",
+		Time:     "20260610-19:58:22",
+		ClientID: "1",
 	}
 	comm := codec.CommissionReport{ExecID: "exec-live-1", Commission: "1.25", Currency: "USD", RealizedPNL: "0"}
 
@@ -126,12 +128,13 @@ func TestRouteCommissionBeforeExecutionReachesHandle(t *testing.T) {
 
 	comm := codec.CommissionReport{ExecID: "exec-race-1", Commission: "1.25", Currency: "USD", RealizedPNL: "0"}
 	exec := codec.ExecutionDetail{
-		ReqID:   -1,
-		OrderID: 90,
-		ExecID:  "exec-race-1",
-		Shares:  "10",
-		Price:   "150",
-		Time:    "20260610-19:58:22",
+		ReqID:    -1,
+		OrderID:  90,
+		ExecID:   "exec-race-1",
+		Shares:   "10",
+		Price:    "150",
+		Time:     "20260610-19:58:22",
+		ClientID: "1",
 	}
 
 	// Commission first, then the execution it belongs to.
@@ -169,12 +172,13 @@ func TestRouteCommissionResendWithChangedContentReachesHandle(t *testing.T) {
 	e.orders[90] = &orderRoute{orderID: 90, handle: handle}
 
 	exec := codec.ExecutionDetail{
-		ReqID:   -1,
-		OrderID: 90,
-		ExecID:  "exec-upd-1",
-		Shares:  "10",
-		Price:   "150",
-		Time:    "20260610-19:58:22",
+		ReqID:    -1,
+		OrderID:  90,
+		ExecID:   "exec-upd-1",
+		Shares:   "10",
+		Price:    "150",
+		Time:     "20260610-19:58:22",
+		ClientID: "1",
 	}
 	initial := codec.CommissionReport{ExecID: "exec-upd-1", Commission: "1.25", Currency: "USD"}
 	updated := codec.CommissionReport{ExecID: "exec-upd-1", Commission: "1.25", Currency: "USD", RealizedPNL: "42.10"}

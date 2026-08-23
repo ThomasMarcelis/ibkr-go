@@ -166,6 +166,7 @@ type route struct {
 type orderRoute struct {
 	orderID          int64
 	parentID         int64
+	permID           int64
 	handle           *OrderHandle
 	cleanup          func()
 	attachedOrderIDs []int64

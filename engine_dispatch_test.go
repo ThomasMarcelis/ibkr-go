@@ -110,12 +110,13 @@ func TestDispatchExecutionToOrderClosesObservationOnDecodeError(t *testing.T) {
 
 	// Malformed Time field makes fromCodecExecution fail deterministically.
 	e.dispatchExecutionToOrder(codec.ExecutionDetail{
-		ReqID:   1,
-		OrderID: 77,
-		ExecID:  "exec-bad-time",
-		Shares:  "1",
-		Price:   "150",
-		Time:    "not-a-timestamp",
+		ReqID:    1,
+		OrderID:  77,
+		ExecID:   "exec-bad-time",
+		Shares:   "1",
+		Price:    "150",
+		Time:     "not-a-timestamp",
+		ClientID: "1",
 	})
 
 	err := handle.Wait()
