@@ -240,6 +240,38 @@ func TestSubscriptionEventsPreserveLifecycleAndDataOrder(t *testing.T) {
 	})
 }
 
+func TestSubscriptionConnectionSequenceConcurrentStateAndData(t *testing.T) {
+	t.Parallel()
+
+	const count = 1000
+	sub := newSubscription[int](subscriptionConfig{buffer: 2 * count}, func() {})
+	start := make(chan struct{})
+	done := make(chan struct{}, 2)
+	go func() {
+		defer func() { done <- struct{}{} }()
+		<-start
+		for i := range count {
+			sub.emitState(StreamRestored, uint64(i+1), nil)
+		}
+	}()
+	go func() {
+		defer func() { done <- struct{}{} }()
+		<-start
+		for i := range count {
+			if !sub.emit(i) {
+				return
+			}
+		}
+	}()
+	close(start)
+	<-done
+	<-done
+
+	if got := sub.connectionSeq.Load(); got != count {
+		t.Fatalf("connection sequence = %d, want %d", got, count)
+	}
+}
+
 func TestSubscriptionSnapshotCompleteFlag(t *testing.T) {
 	t.Parallel()
 

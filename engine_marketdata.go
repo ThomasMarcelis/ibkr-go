@@ -46,7 +46,7 @@ func (e *engine) quoteSnapshot(ctx context.Context, req QuoteRequest, regulatory
 		if !regulatory {
 			return latest, err
 		}
-		return latest, regulatorySnapshotError(sub.requestID, sub.connectionSeq, err)
+		return latest, regulatorySnapshotError(sub.requestID, sub.connectionSeq.Load(), err)
 	}
 	for {
 		select {

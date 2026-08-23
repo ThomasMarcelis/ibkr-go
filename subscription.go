@@ -5,6 +5,7 @@ import (
 	"errors"
 	"iter"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -32,7 +33,7 @@ type Subscription[T any] struct {
 	snapshotEvents []T
 	cfg            subscriptionConfig
 	requestID      RequestID
-	connectionSeq  uint64
+	connectionSeq  atomic.Uint64
 }
 
 func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscription[T] {
@@ -233,7 +234,7 @@ func (s *Subscription[T]) emit(value T) bool {
 	}
 
 	select {
-	case s.events <- StreamEvent[T]{At: time.Now().UTC(), Kind: StreamData, Value: value, ConnectionSeq: s.connectionSeq}:
+	case s.events <- StreamEvent[T]{At: time.Now().UTC(), Kind: StreamData, Value: value, ConnectionSeq: s.connectionSeq.Load()}:
 		return true
 	default:
 		s.cancelFromActor(ErrSlowConsumer)
@@ -248,7 +249,7 @@ func (s *Subscription[T]) emitState(kind StreamEventKind, connectionSeq uint64, 
 	default:
 	}
 	if connectionSeq != 0 {
-		s.connectionSeq = connectionSeq
+		s.connectionSeq.Store(connectionSeq)
 	}
 	if kind == StreamSnapshotComplete {
 		s.snapshotMu.Lock()
