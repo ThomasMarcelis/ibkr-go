@@ -366,8 +366,8 @@ var scenarios = map[string]*scenario{
 		run:         runAPITickByTickMidPointAAPL,
 	},
 	"historical_bars_keepup": {
-		metadata:    meta("history", []string{"History().SubscribeBars", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InHistoricalDataUpdate, protocol.OutCancelHistoricalData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty initial one-minute bar snapshot and fenced cancellation; a real streaming update remains a market-hours target"}, 1, "candidate", batchReadOnly),
-		description: "collect the initial AAPL keep-up bar snapshot through the public API and close the stream",
+		metadata:    meta("history", []string{"History().SubscribeBars", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InHistoricalDataUpdate, protocol.OutCancelHistoricalData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_hours", "historical_data"}, []string{"nonempty MIDPOINT, BID, and ASK one-minute snapshots, one real streaming update for each, and explicit protocol-fenced cancellation"}, 1, "candidate", batchReadOnly),
+		description: "capture post-snapshot AAPL MIDPOINT, BID, and ASK historical-bar updates through the public API",
 		run:         runAPIHistoricalBarsKeepUp,
 	},
 	"news_bulletins": {
