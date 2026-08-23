@@ -115,7 +115,7 @@ type Snapshot struct {
 	TransitionSeq   uint64    // incremented exactly once for each actual state change
 	ServerVersion   int       // negotiated TWS API server version
 	ManagedAccounts []string  // account IDs this login controls
-	NextValidID     int64     // next order ID the server has reserved for this client
+	NextValidID     int64     // conservative order-ID floor advanced past allocated and observed order IDs
 	CurrentTime     time.Time // server time captured at connect, in UTC
 }
 
@@ -158,13 +158,15 @@ func (p ReconnectPolicy) valid() bool {
 	return p == ReconnectOff || p == ReconnectAuto
 }
 
-// ResumePolicy controls whether a subscription re-establishes itself after a
-// reconnect. Set it per subscription with [WithResumePolicy].
+// ResumePolicy controls whether a subscription request is reissued after data
+// continuity is lost. This can follow a transport reconnect or a data-lost
+// restoration (Gateway code 1101) on the existing socket. Set it per
+// subscription with [WithResumePolicy].
 type ResumePolicy string
 
 const (
-	ResumeNever ResumePolicy = "never" // close the subscription on connection loss
-	ResumeAuto  ResumePolicy = "auto"  // re-issue the request after reconnect
+	ResumeNever ResumePolicy = "never" // do not reissue a request after continuity is lost
+	ResumeAuto  ResumePolicy = "auto"  // reissue the request after continuity is lost
 )
 
 func (p ResumePolicy) valid() bool {

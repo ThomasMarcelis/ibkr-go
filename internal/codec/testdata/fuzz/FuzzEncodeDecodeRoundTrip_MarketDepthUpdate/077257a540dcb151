@@ -1,7 +1,0 @@
-go test fuzz v1
-int(1)
-int(66)
-int(0)
-int(-61)
-string("\x00")
-string("0")

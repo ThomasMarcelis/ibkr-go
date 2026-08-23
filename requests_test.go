@@ -69,43 +69,31 @@ func TestHistoricalVocabularyValidMethods(t *testing.T) {
 	}
 }
 
-func TestFormatHistoricalDuration(t *testing.T) {
+func TestValidateHistoricalDuration(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatHistoricalDuration(Days(1))
-	if err != nil {
-		t.Fatalf("formatHistoricalDuration() error = %v", err)
-	}
-	if got != "1 D" {
-		t.Fatalf("formatHistoricalDuration() = %q, want %q", got, "1 D")
+	if err := validateHistoricalDuration(Days(1)); err != nil {
+		t.Fatalf("validateHistoricalDuration() error = %v", err)
 	}
 
-	got, err = formatHistoricalDuration(Minutes(90))
-	if err != nil {
-		t.Fatalf("formatHistoricalDuration() error = %v", err)
-	}
-	if got != "5400 S" {
-		t.Fatalf("formatHistoricalDuration() = %q, want %q", got, "5400 S")
+	if err := validateHistoricalDuration(Minutes(90)); err != nil {
+		t.Fatalf("validateHistoricalDuration() error = %v", err)
 	}
 
-	if _, err := formatHistoricalDuration(HistoricalDuration("1 fortnight")); !isValidationField(err, "Duration") {
-		t.Fatalf("formatHistoricalDuration() error = %v, want Duration validation error", err)
+	if err := validateHistoricalDuration(HistoricalDuration("1 fortnight")); !isValidationField(err, "Duration") {
+		t.Fatalf("validateHistoricalDuration() error = %v, want Duration validation error", err)
 	}
 }
 
-func TestFormatHistoricalBarSize(t *testing.T) {
+func TestValidateHistoricalBarSize(t *testing.T) {
 	t.Parallel()
 
-	got, err := formatHistoricalBarSize(Bar1Hour)
-	if err != nil {
-		t.Fatalf("formatHistoricalBarSize() error = %v", err)
-	}
-	if got != "1 hour" {
-		t.Fatalf("formatHistoricalBarSize() = %q, want %q", got, "1 hour")
+	if err := validateHistoricalBarSize(Bar1Hour); err != nil {
+		t.Fatalf("validateHistoricalBarSize() error = %v", err)
 	}
 
-	if _, err := formatHistoricalBarSize(BarSize("90 mins")); !isValidationField(err, "BarSize") {
-		t.Fatalf("formatHistoricalBarSize() error = %v, want BarSize validation error", err)
+	if err := validateHistoricalBarSize(BarSize("90 mins")); !isValidationField(err, "BarSize") {
+		t.Fatalf("validateHistoricalBarSize() error = %v, want BarSize validation error", err)
 	}
 }
 

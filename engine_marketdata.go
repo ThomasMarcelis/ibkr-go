@@ -143,7 +143,11 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, quoteRoute := newKeyedSubscriptionRoute[QuoteUpdate](
 			e, cfg, reqID, OpQuotes, codec.CancelQuote{ReqID: reqID},
 		)
@@ -380,7 +384,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			}
 			// 10167: delayed market data warning — the subscription
 			// stays open and will receive delayed ticks.
-			if m.Code == 10167 {
+			if m.Code == ErrCodeDelayedMarketDataDisplayed {
 				sub.emitNotice(e.apiNotice(OpQuotes, m), e.connectionSeq())
 				return
 			}
@@ -453,7 +457,11 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		resumeContract := cloneContract(req.Contract)
 		sub, ownedRoute := newKeyedSubscriptionRoute[Bar](
 			e, cfg, reqID, OpRealTimeBars, codec.CancelRealTimeBars{ReqID: reqID},
@@ -484,7 +492,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 			if e.keyed[reqID] != ownedRoute {
 				return
 			}
-			if m.Code == 10167 {
+			if m.Code == ErrCodeDelayedMarketDataDisplayed {
 				sub.emitNotice(e.apiNotice(OpRealTimeBars, m), e.connectionSeq())
 				return
 			}
@@ -551,7 +559,11 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		rerouted := false
 		sub, depthRoute := newKeyedSubscriptionRoute[DepthRow](
 			e, cfg, reqID, OpMarketDepth,
@@ -700,7 +712,6 @@ func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error)
 		}
 
 		ownedRoute = &route{
-			opKind: OpMktDepthExchanges,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.MktDepthExchanges:
@@ -762,7 +773,11 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[TickByTickData](
 			e, cfg, reqID, OpTickByTick, codec.CancelTickByTick{ReqID: reqID},
 		)
@@ -774,7 +789,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.TickByTickData); ok {
 				fail := func(err error) { sub.cancelFromActor(err) }
-				ts, err := parseTickByTickTime(m.Time)
+				ts, err := parseEpochSeconds(m.Time)
 				if err != nil {
 					fail(err)
 					return
@@ -831,7 +846,7 @@ func (e *engine) SubscribeTickByTick(ctx context.Context, req TickByTickRequest,
 			if e.keyed[reqID] != ownedRoute {
 				return
 			}
-			if m.Code == 10167 {
+			if m.Code == ErrCodeDelayedMarketDataDisplayed {
 				sub.emitNotice(e.apiNotice(OpTickByTick, m), e.connectionSeq())
 				return
 			}
@@ -875,7 +890,12 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 			resp <- result{err: err}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpCalcImpliedVol,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -932,7 +952,12 @@ func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest
 			resp <- result{err: err}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpCalcOptionPrice,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -1074,15 +1099,6 @@ func fromCodecMarketDepthL2(m codec.MarketDepthL2Update) (DepthRow, error) {
 		Size:         size,
 		IsSmartDepth: m.IsSmartDepth,
 	}, nil
-}
-
-// parseTickByTickTime parses a tick-by-tick timestamp. The wire sends a Unix
-// epoch seconds value as a string. Falls back to RFC3339 for test transcripts.
-func parseTickByTickTime(raw string) (time.Time, error) {
-	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
-		return ts, nil
-	}
-	return parseEpochSeconds(raw)
 }
 
 func applyTickPrice(quote *Quote, field int, value decimal.Decimal) QuoteFields {

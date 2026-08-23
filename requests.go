@@ -9,24 +9,16 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 )
 
-func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) (codec.HistoricalBarsRequest, error) {
-	duration, err := formatHistoricalDuration(req.Duration)
-	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
-	}
-	barSize, err := formatHistoricalBarSize(req.BarSize)
-	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
-	}
+func buildHistoricalBarsRequest(reqID int, req HistoricalBarsRequest) codec.HistoricalBarsRequest {
 	return codec.HistoricalBarsRequest{
 		ReqID:       reqID,
 		Contract:    toCodecContract(req.Contract),
 		EndDateTime: formatHistoricalEndTime(req.EndTime),
-		Duration:    duration,
-		BarSize:     barSize,
+		Duration:    string(req.Duration),
+		BarSize:     string(req.BarSize),
 		WhatToShow:  string(req.WhatToShow),
 		UseRTH:      req.UseRTH,
-	}, nil
+	}
 }
 
 func validateHistoricalBarsRequest(req HistoricalBarsRequest) error {
@@ -51,10 +43,10 @@ func validateHistoricalBarsRequest(req HistoricalBarsRequest) error {
 			Message: "History().Bars does not support schedule data; use History().Schedule instead",
 		}
 	}
-	if _, err := formatHistoricalDuration(req.Duration); err != nil {
+	if err := validateHistoricalDuration(req.Duration); err != nil {
 		return err
 	}
-	if _, err := formatHistoricalBarSize(req.BarSize); err != nil {
+	if err := validateHistoricalBarSize(req.BarSize); err != nil {
 		return err
 	}
 	return nil
@@ -87,34 +79,26 @@ func validateHistoricalBarsStreamRequest(req HistoricalBarsRequest) error {
 // HistoricalSchedule one-shot. It reuses codec.HistoricalBarsRequest under the
 // hood because REQ_HISTORICAL_DATA (msg_id 20) is the same outbound message;
 // the inbound path is a separate InHistoricalSchedule decoder.
-func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) (codec.HistoricalBarsRequest, error) {
-	duration, err := formatHistoricalDuration(req.Duration)
-	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
-	}
-	barSize, err := formatHistoricalBarSize(req.BarSize)
-	if err != nil {
-		return codec.HistoricalBarsRequest{}, err
-	}
+func buildHistoricalScheduleRequest(reqID int, req HistoricalScheduleRequest) codec.HistoricalBarsRequest {
 	return codec.HistoricalBarsRequest{
 		ReqID:       reqID,
 		Contract:    toCodecContract(req.Contract),
 		EndDateTime: formatHistoricalEndTime(req.EndTime),
-		Duration:    duration,
-		BarSize:     barSize,
+		Duration:    string(req.Duration),
+		BarSize:     string(req.BarSize),
 		WhatToShow:  string(ShowSchedule),
 		UseRTH:      req.UseRTH,
-	}, nil
+	}
 }
 
 func validateHistoricalScheduleRequest(req HistoricalScheduleRequest) error {
 	if err := validateContract(req.Contract); err != nil {
 		return err
 	}
-	if _, err := formatHistoricalDuration(req.Duration); err != nil {
+	if err := validateHistoricalDuration(req.Duration); err != nil {
 		return err
 	}
-	if _, err := formatHistoricalBarSize(req.BarSize); err != nil {
+	if err := validateHistoricalBarSize(req.BarSize); err != nil {
 		return err
 	}
 	if req.BarSize != Bar1Day {
@@ -231,40 +215,40 @@ func formatHistoricalEndTime(t time.Time) string {
 	return t.UTC().Format("20060102-15:04:05")
 }
 
-func formatHistoricalDuration(duration HistoricalDuration) (string, error) {
+func validateHistoricalDuration(duration HistoricalDuration) error {
 	if strings.TrimSpace(string(duration)) == "" {
-		return "", &ValidationError{
+		return &ValidationError{
 			Field:   "Duration",
 			Value:   string(duration),
 			Message: "must be positive",
 		}
 	}
 	if !duration.Valid() {
-		return "", &ValidationError{
+		return &ValidationError{
 			Field:   "Duration",
 			Value:   string(duration),
 			Message: "must match N S|D|W|M|Y",
 		}
 	}
-	return string(duration), nil
+	return nil
 }
 
-func formatHistoricalBarSize(barSize BarSize) (string, error) {
+func validateHistoricalBarSize(barSize BarSize) error {
 	if strings.TrimSpace(string(barSize)) == "" {
-		return "", &ValidationError{
+		return &ValidationError{
 			Field:   "BarSize",
 			Value:   string(barSize),
 			Message: "is required",
 		}
 	}
 	if !barSize.Valid() {
-		return "", &ValidationError{
+		return &ValidationError{
 			Field:   "BarSize",
 			Value:   string(barSize),
 			Message: "unsupported historical bar size",
 		}
 	}
-	return string(barSize), nil
+	return nil
 }
 
 func validateQuoteRequest(req QuoteRequest, snapshot bool, resume ResumePolicy) error {

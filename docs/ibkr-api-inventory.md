@@ -84,24 +84,14 @@ evidence; WSH is a separate API, not a replacement.
 | FA/WSH/display | `receiveFA`, `softDollarTiers`, `wshMetaData`, `wshEventData`, `displayGroupList`, `displayGroupUpdated` | Implemented. |
 | Verification/reroute | `verifyMessageAPI`, `verifyCompleted`, `verifyAndAuthMessageAPI`, `verifyAndAuthCompleted`, `connectAck`, `rerouteMktDataReq`, `rerouteMktDepthReq`, `deltaNeutralValidation` | Both reroute callbacks are live-attested at exact sv206 and handled transparently by active quote/depth routes. Delta-neutral validation is decoded and delivered through the requesting quote subscription; positive BAG evidence remains pending. Verification/auth and connectAck remain outside the implemented inventory. |
 
-## Current ibkr-go Public Facade Methods
+## Current ibkr-go Public Surface
 
-| Facade | Public Methods |
-|--------|----------------|
-| `Client` | `Close`, `Done`, `Wait`, `Session`, `SessionEvents`, `CurrentTime`, `Accounts`, `Contracts`, `MarketData`, `History`, `Orders`, `Options`, `News`, `Scanner`, `Advisors`, `WSH`, `TWS` |
-| `Accounts()` | `Summary`, `SubscribeSummary`, `Positions`, `SubscribePositions`, `Updates`, `SubscribeUpdates`, `UpdatesMulti`, `SubscribeUpdatesMulti`, `PositionsMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle`, `FamilyCodes` |
-| `Contracts()` | `Details`, `Qualify`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` |
-| `MarketData()` | `SetType`, `Quote`, `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
-| `History()` | `Bars`, `SubscribeBars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` |
-| `Orders()` | `RefreshOrderID`, `Place`, `PlaceBracket`, `Preview`, `Cancel`, `CancelAll`, `Open`, `SubscribeOpen` -> `OpenOrdersSubscription.Refresh`, `Completed`, `Executions` |
-| `Options()` | `ImpliedVolatility`, `Price`, `Exercise` |
-| `News()` | `Providers`, `Article`, `Historical`, `SubscribeBulletins` |
-| `Scanner()` | `Parameters`, `SubscribeResults` |
-| `Advisors()` | `Config`, `SoftDollarTiers` |
-| `WSH()` | `MetaData`, `EventData` |
-| `TWS()` | `Config`, `UserInfo`, `DisplayGroups`, `SubscribeDisplayGroup` |
+The generated [package reference](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2)
+is authoritative for Go methods and types. The facade overview in the project
+README is the shorter usage guide; this inventory tracks the official IBKR
+request and callback surface rather than duplicating generated API listings.
 
-## Current Classic Message Inventory
+## Current Negotiated Message-ID Inventory
 
 Outbound message IDs:
 
@@ -114,6 +104,7 @@ Outbound message IDs:
 | `OutReqOpenOrders` | 5 | Open orders |
 | `OutReqAccountUpdates` | 6 | Account updates |
 | `OutReqExecutions` | 7 | Executions |
+| `OutReqIds` | 8 | Explicit next-valid-ID refresh |
 | `OutReqContractData` | 9 | Contract details |
 | `OutReqMktDepth` | 10 | Market depth |
 | `OutCancelMktDepth` | 11 | Market depth cancel |
@@ -129,6 +120,7 @@ Outbound message IDs:
 | `OutCancelScannerSubscription` | 23 | Scanner cancel |
 | `OutReqScannerParameters` | 24 | Scanner parameters |
 | `OutCancelHistoricalData` | 25 | Historical bars cancel |
+| `OutReqCurrentTime` | 49 | Server wall-clock time request |
 | `OutReqRealTimeBars` | 50 | Real-time bars |
 | `OutCancelRealTimeBars` | 51 | Real-time bars cancel |
 | `OutReqCalcImpliedVolatility` | 54 | Option calculation |
@@ -177,8 +169,6 @@ Outbound message IDs:
 | `OutReqWSHEventData` | 102 | WSH event data |
 | `OutCancelWSHEventData` | 103 | WSH event data cancel |
 | `OutReqUserInfo` | 104 | User info |
-| `OutReqIds` | 8 | Explicit next-valid-ID refresh |
-| `OutReqCurrentTime` | 49 | Server wall-clock time request |
 | `OutReqCurrentTimeInMillis` | 105 | Server wall-clock time request at millisecond precision |
 | `OutCancelContractData` | 106 | Broker-side contract-details cancellation at sv215+ |
 | `OutCancelHistoricalTicks` | 107 | Broker-side historical-ticks cancellation at sv215+ |
@@ -257,6 +247,7 @@ Inbound message IDs:
 | `InHistoricalTicksBidAsk` | 97 | Historical bid/ask ticks |
 | `InHistoricalTicksLast` | 98 | Historical last ticks |
 | `InTickByTick` | 99 | Tick-by-tick |
+| `InOrderBound` | 100 | Client-0 auto-open-order binding |
 | `InCompletedOrder` | 101 | Completed order |
 | `InCompletedOrderEnd` | 102 | Completed orders end |
 | `InUserInfo` | 107 | User info |

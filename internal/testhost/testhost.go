@@ -222,50 +222,16 @@ func (h *Host) run() {
 				}
 			}
 
-			// Pack consecutive historical_bar steps into a single frame,
-			// matching the real IBKR protocol where msg 17 carries all bars
-			// in one batch: [17, reqID, N, bar1_fields..., bar2_fields...].
-			if cur.name == "historical_bar" {
-				if serverVersion != defaultServerVersion {
-					h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames; DSL historical_bar re-encodes through the codec under test and would mask version-gated layout bugs", defaultServerVersion))
-					return
-				}
-				bars := []step{cur}
-				reqID := asString(resolveBindings(cur.body["req_id"], bindings))
-				for j := i + 1; j < len(h.steps); j++ {
-					next := h.steps[j]
-					if next.kind != "server" || next.name != "historical_bar" {
-						break
-					}
-					nextReqID := asString(resolveBindings(next.body["req_id"], bindings))
-					if nextReqID != reqID {
-						break
-					}
-					bars = append(bars, next)
-				}
-				payload, err := buildPackedHistoricalBars(bars, bindings)
-				if err != nil {
-					h.finish(err)
-					return
-				}
-				if err := wire.WriteFrame(conn, payload); err != nil {
-					h.finish(err)
-					return
-				}
-				i += len(bars) - 1
-				continue
-			}
-
 			if serverVersion != defaultServerVersion {
-				h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames; DSL-form frames re-encode through the codec under test and would mask version-gated layout bugs", defaultServerVersion))
+				h.finish(fmt.Errorf("testhost: transcripts at server_version values other than %d must use raw server frames; DSL-form frames re-encode through the codec under test and would mask version-gated layout bugs", defaultServerVersion))
 				return
 			}
-			msg, err := buildMessage(cur.name, cur.body, bindings)
+			msg, err := buildLegacyServerMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)
 				return
 			}
-			payload, err := codec.Encode(serverVersion, msg)
+			payload, err := codec.EncodeLegacyServer(serverVersion, msg)
 			if err != nil {
 				h.finish(err)
 				return
@@ -283,16 +249,16 @@ func (h *Host) run() {
 					return
 				}
 			}
-			msg, err := buildMessage(cur.name, cur.body, bindings)
+			msg, err := buildLegacyServerMessage(cur.name, cur.body, bindings)
 			if err != nil {
 				h.finish(err)
 				return
 			}
 			if cur.direction == "server" && serverVersion != defaultServerVersion {
-				h.finish(fmt.Errorf("testhost: transcripts below server_version %d must use raw server frames (split step)", defaultServerVersion))
+				h.finish(fmt.Errorf("testhost: transcripts at server_version values other than %d must use raw server frames (split step)", defaultServerVersion))
 				return
 			}
-			payload, err := codec.Encode(serverVersion, msg)
+			payload, err := codec.EncodeLegacyServer(serverVersion, msg)
 			if err != nil {
 				h.finish(err)
 				return

@@ -41,8 +41,12 @@ func (e *engine) StreamContractDetails(ctx context.Context, contract Contract, o
 			return
 		}
 
-		reqID := e.allocReqID()
-		var cancel codec.Message
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		var cancel codec.OutboundMessage
 		if e.serverVersion >= protocol.MinServerVersionBrokerSideOneShotCancel {
 			cancel = codec.CancelContractData{ReqID: reqID}
 		}
@@ -122,7 +126,12 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 	var reqID int
 
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpMatchingSymbols,
 			func(msg any, eng *engine) {
@@ -176,7 +185,6 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID MarketRuleID) (Mar
 		}
 
 		ownedRoute = &route{
-			opKind: OpMarketRule,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.MarketRule:
@@ -188,13 +196,11 @@ func (e *engine) MarketRule(ctx context.Context, marketRuleID MarketRuleID) (Mar
 					for i, inc := range m.Increments {
 						lowEdge, err := parseRequiredDecimal(inc.LowEdge, "market rule low edge")
 						if err != nil {
-							delete(eng.singletons, singletonMarketRule)
 							resp <- result{err: err}
 							return
 						}
 						increment, err := parseRequiredDecimal(inc.Increment, "market rule increment")
 						if err != nil {
-							delete(eng.singletons, singletonMarketRule)
 							resp <- result{err: err}
 							return
 						}
@@ -253,7 +259,11 @@ func (e *engine) StreamSecDefOptParams(ctx context.Context, req SecDefOptParamsR
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[SecDefOptParams](e, cfg, reqID, OpSecDefOptParams, nil)
 		sub.expectSnapshot()
 		ownedRoute.onDisconnect = func(_ *engine, err error) bool {
@@ -321,7 +331,12 @@ func (e *engine) SmartComponents(ctx context.Context, bboExchange string) ([]Sma
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSmartComponents,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {

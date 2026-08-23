@@ -1,7 +1,6 @@
 package codec
 
 import (
-	"math"
 	"testing"
 )
 
@@ -59,21 +58,6 @@ func TestFieldReaderInvalidInt64(t *testing.T) {
 	}
 }
 
-func TestFieldReaderInvalidFloat(t *testing.T) {
-	t.Parallel()
-	cases := []string{"abc", "not-a-float"}
-	for _, input := range cases {
-		r := newFieldReader([]string{input})
-		got, err := r.ReadFloat()
-		if err == nil {
-			t.Errorf("ReadFloat(%q) = (%v, nil), want error", input, got)
-		}
-		if got != 0 {
-			t.Errorf("ReadFloat(%q) value = %v, want 0", input, got)
-		}
-	}
-}
-
 func TestFieldReaderInvalidBool(t *testing.T) {
 	t.Parallel()
 	cases := []string{"2", "yes", "TRUE", "nope", "-1"}
@@ -100,14 +84,6 @@ func TestFieldReaderEmptyStringHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("ReadFloat", func(t *testing.T) {
-		r := newFieldReader([]string{""})
-		got, err := r.ReadFloat()
-		if err != nil || got != 0 {
-			t.Errorf("ReadFloat(\"\") = (%v, %v), want (0, nil)", got, err)
-		}
-	})
-
 	t.Run("ReadBool", func(t *testing.T) {
 		r := newFieldReader([]string{""})
 		got, err := r.ReadBool()
@@ -116,21 +92,6 @@ func TestFieldReaderEmptyStringHandling(t *testing.T) {
 		}
 	})
 
-	t.Run("ReadMaxFloat", func(t *testing.T) {
-		r := newFieldReader([]string{""})
-		got, err := r.ReadMaxFloat()
-		if err != nil || got != math.MaxFloat64 {
-			t.Errorf("ReadMaxFloat(\"\") = (%v, %v), want (%v, nil)", got, err, math.MaxFloat64)
-		}
-	})
-
-	t.Run("ReadMaxInt", func(t *testing.T) {
-		r := newFieldReader([]string{""})
-		got, err := r.ReadMaxInt()
-		if err != nil || got != math.MaxInt32 {
-			t.Errorf("ReadMaxInt(\"\") = (%d, %v), want (%d, nil)", got, err, math.MaxInt32)
-		}
-	})
 }
 
 func TestFieldReaderSkipBeyondEnd(t *testing.T) {

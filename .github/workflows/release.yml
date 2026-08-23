@@ -51,8 +51,7 @@ jobs:
           git fetch origin main
           commit=$(git rev-list -n 1 "$TAG")
           git merge-base --is-ancestor "$commit" origin/main
-          if [[ "$TAG" != *-* ]]; then
-            echo 'IBKR_STABLE_RELEASE=1' >> "$GITHUB_ENV"
+          if [ "$TAG" = 'v2.0.0' ]; then
             echo "IBKR_RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
           fi
 
@@ -60,8 +59,13 @@ jobs:
         run: |
           go mod tidy -diff
           go mod verify
-          test -z "$(gofmt -l .)"
-          ./scripts/check-api.sh
+          unformatted=$(gofmt -l .)
+          test -z "$unformatted"
+          if [ "$GITHUB_REF_NAME" = 'v2.0.0' ]; then
+            ./scripts/check-api.sh --exact
+          else
+            ./scripts/check-api.sh
+          fi
           go vet ./...
           go test -race -shuffle=on -count=1 ./...
           ./scripts/fuzz-all.sh 30s

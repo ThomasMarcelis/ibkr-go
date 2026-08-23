@@ -90,7 +90,7 @@ func TestEncodeMarketDataProto206LiveVectors(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{

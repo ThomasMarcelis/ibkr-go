@@ -23,7 +23,6 @@ func (e *engine) NewsProviders(ctx context.Context) ([]NewsProvider, error) {
 		}
 
 		ownedRoute = &route{
-			opKind: OpNewsProviders,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.NewsProviders:
@@ -82,7 +81,6 @@ func (e *engine) SubscribeNewsBulletins(ctx context.Context, allMessages bool, o
 			e, cfg, singletonNewsBulletins, OpNewsBulletins, codec.CancelNewsBulletins{},
 		)
 
-		ownedRoute.request = codec.NewsBulletinsRequest{AllMessages: allMessages}
 		ownedRoute.handle = func(msg any, e *engine) {
 			if m, ok := msg.(codec.NewsBulletin); ok {
 				sub.emit(NewsBulletin{MsgID: protocolIDFromInt[int32](m.MsgID), MsgType: m.MsgType, Headline: m.Headline, Source: m.Source})
@@ -117,7 +115,12 @@ func (e *engine) NewsArticle(ctx context.Context, req NewsArticleRequest) (NewsA
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpNewsArticle,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -155,7 +158,12 @@ func (e *engine) HistoricalNews(ctx context.Context, req HistoricalNewsRequest) 
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		var collected []HistoricalNewsItem
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalNews,
 			func(msg any, e *engine) {

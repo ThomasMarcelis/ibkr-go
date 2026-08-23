@@ -1,10 +1,125 @@
 package ibkr
 
 import (
+	"fmt"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
+
+func TestOrderClonesOwnAllMutableStorage(t *testing.T) {
+	t.Parallel()
+
+	t.Run("place order", func(t *testing.T) {
+		assertOrderCloneOwnership(t, clonePlaceOrderRequest)
+	})
+	t.Run("place bracket", func(t *testing.T) {
+		assertOrderCloneOwnership(t, clonePlaceBracketRequest)
+	})
+	t.Run("open order", func(t *testing.T) {
+		assertOrderCloneOwnership(t, cloneOpenOrder)
+	})
+}
+
+func assertOrderCloneOwnership[T any](t *testing.T, clone func(T) T) {
+	t.Helper()
+
+	// Generated values exercise the Go ownership graph only; they make no
+	// claims about valid IBKR field combinations or wire values.
+	original := new(T)
+	populateOrderCloneValue(t, reflect.ValueOf(original).Elem(), "original")
+	cloned := clone(*original)
+	if !reflect.DeepEqual(*original, cloned) {
+		t.Fatalf("clone changed value:\noriginal: %#v\nclone:    %#v", *original, cloned)
+	}
+
+	sourceStorage := make(map[uintptr]string)
+	collectOrderCloneStorage(reflect.ValueOf(*original), "original", sourceStorage)
+	cloneStorage := make(map[uintptr]string)
+	collectOrderCloneStorage(reflect.ValueOf(cloned), "clone", cloneStorage)
+	for address, sourcePath := range sourceStorage {
+		if clonePath, shared := cloneStorage[address]; shared {
+			t.Errorf("clone shares mutable storage at %s and %s", sourcePath, clonePath)
+		}
+	}
+}
+
+var (
+	orderCloneDecimalType = reflect.TypeFor[decimal.Decimal]()
+	orderCloneTimeType    = reflect.TypeFor[time.Time]()
+)
+
+func populateOrderCloneValue(t *testing.T, value reflect.Value, path string) {
+	if value.Type() == orderCloneDecimalType {
+		value.Set(reflect.ValueOf(decimal.RequireFromString("1.25")))
+		return
+	}
+	if value.Type() == orderCloneTimeType {
+		value.Set(reflect.ValueOf(time.Unix(1, 0)))
+		return
+	}
+	if !value.CanSet() {
+		t.Fatalf("cannot populate order clone field %s (%s)", path, value.Type())
+	}
+
+	switch value.Kind() {
+	case reflect.Bool:
+		value.SetBool(true)
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		value.SetInt(1)
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		value.SetUint(1)
+	case reflect.Float32, reflect.Float64:
+		value.SetFloat(1)
+	case reflect.String:
+		value.SetString("value")
+	case reflect.Pointer:
+		value.Set(reflect.New(value.Type().Elem()))
+		populateOrderCloneValue(t, value.Elem(), path+"*")
+	case reflect.Slice:
+		value.Set(reflect.MakeSlice(value.Type(), 1, 1))
+		populateOrderCloneValue(t, value.Index(0), path+"[0]")
+	case reflect.Struct:
+		typeOfValue := value.Type()
+		for i := range value.NumField() {
+			populateOrderCloneValue(t, value.Field(i), path+"."+typeOfValue.Field(i).Name)
+		}
+	default:
+		t.Fatalf("unsupported order clone field %s (%s)", path, value.Type())
+	}
+}
+
+func collectOrderCloneStorage(value reflect.Value, path string, storage map[uintptr]string) {
+	if value.Type() == orderCloneDecimalType || value.Type() == orderCloneTimeType {
+		return
+	}
+
+	switch value.Kind() {
+	case reflect.Pointer:
+		if value.IsNil() {
+			return
+		}
+		storage[value.Pointer()] = path
+		collectOrderCloneStorage(value.Elem(), path+"*", storage)
+	case reflect.Slice:
+		if value.IsNil() {
+			return
+		}
+		if value.Len() > 0 {
+			storage[value.Pointer()] = path
+		}
+		for i := range value.Len() {
+			collectOrderCloneStorage(value.Index(i), fmt.Sprintf("%s[%d]", path, i), storage)
+		}
+	case reflect.Struct:
+		typeOfValue := value.Type()
+		for i := range value.NumField() {
+			collectOrderCloneStorage(value.Field(i), path+"."+typeOfValue.Field(i).Name, storage)
+		}
+	}
+}
 
 func TestCloneOrderOwnsMutableInput(t *testing.T) {
 	t.Parallel()

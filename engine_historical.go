@@ -30,13 +30,14 @@ func (e *engine) HistoricalBars(ctx context.Context, req HistoricalBarsRequest) 
 			return
 		}
 
-		reqID = e.allocReqID()
-		values := make([]Bar, 0, 16)
-		request, err := buildHistoricalBarsRequest(reqID, req)
+		allocatedReqID, err := e.allocReqID()
 		if err != nil {
 			resp <- result{err: err}
 			return
 		}
+		reqID = allocatedReqID
+		values := make([]Bar, 0, 16)
+		request := buildHistoricalBarsRequest(reqID, req)
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalBars,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -94,12 +95,13 @@ func (e *engine) HistoricalSchedule(ctx context.Context, req HistoricalScheduleR
 			return
 		}
 
-		reqID = e.allocReqID()
-		request, err := buildHistoricalScheduleRequest(reqID, req)
+		allocatedReqID, err := e.allocReqID()
 		if err != nil {
 			resp <- result{err: err}
 			return
 		}
+		reqID = allocatedReqID
+		request := buildHistoricalScheduleRequest(reqID, req)
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistoricalSchedule,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -160,7 +162,12 @@ func (e *engine) HeadTimestamp(ctx context.Context, req HeadTimestampRequest) (t
 			resp <- result{err: err}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHeadTimestamp,
 			func(msg any, eng *engine) {
@@ -231,12 +238,12 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
-		codecReq, err := buildHistoricalBarsRequest(reqID, req)
+		reqID, err := e.allocReqID()
 		if err != nil {
 			resp <- result{err: err}
 			return
 		}
+		codecReq := buildHistoricalBarsRequest(reqID, req)
 		codecReq.KeepUpToDate = true
 
 		sub, ownedRoute := newKeyedSubscriptionRoute[Bar](
@@ -269,7 +276,7 @@ func (e *engine) SubscribeHistoricalBars(ctx context.Context, req HistoricalBars
 			if e.keyed[reqID] != ownedRoute {
 				return
 			}
-			if m.Code == 10167 {
+			if m.Code == ErrCodeDelayedMarketDataDisplayed {
 				sub.emitNotice(e.apiNotice(OpHistoricalBarsStream, m), e.connectionSeq())
 				return
 			}
@@ -313,7 +320,12 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 			resp <- result{err: err}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpHistogramData,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -323,13 +335,11 @@ func (e *engine) HistogramData(ctx context.Context, req HistogramDataRequest) ([
 					for i, entry := range m.Entries {
 						price, err := parseRequiredDecimal(entry.Price, "histogram price")
 						if err != nil {
-							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
 						size, err := parseRequiredDecimal(entry.Size, "histogram size")
 						if err != nil {
-							e.deleteKeyedRoute(reqID)
 							resp <- result{err: err}
 							return
 						}
@@ -386,7 +396,12 @@ func (e *engine) HistoricalTicks(ctx context.Context, req HistoricalTicksRequest
 			resp <- result{err: err}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		ownedRoute = newKeyedOneShotRoute(reqID, OpHistoricalTicks,
 			func(msg any, e *engine) {
 				if got, ok := historicalTicksResponseKind(msg); ok && got != req.WhatToShow {

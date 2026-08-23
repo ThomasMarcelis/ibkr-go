@@ -1,6 +1,8 @@
 package codec
 
 import (
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"slices"
 	"testing"
@@ -9,90 +11,11 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
-func TestEncodeDecodeRoundTrip(t *testing.T) {
-	t.Parallel()
-
-	// Test messages that have consistent encode/decode via integer msg_id wire format.
-	// Only includes types where Encode → DecodeBatch produces the same message.
-	tests := []struct {
-		msg  Message
-		name string
-	}{
-		{ManagedAccounts{Accounts: []string{"DU12345", "DU67890"}}, "codec.ManagedAccounts"},
-		{NextValidID{OrderID: 1001}, "codec.NextValidID"},
-		{CurrentTime{Time: "1712345678"}, "codec.CurrentTime"},
-		{CurrentTimeMillis{TimeMs: "1781169286652"}, "codec.CurrentTimeMillis"},
-		{APIError{ReqID: -1, Code: 2104, Message: "Market data farm OK", AdvancedOrderRejectJSON: "", ErrorTimeMs: "1712345678000"}, "codec.APIError"},
-		{ContractDetailsEnd{ReqID: 42}, "codec.ContractDetailsEnd"},
-		{AccountSummaryValue{ReqID: 1, Account: "DU12345", Tag: "NetLiquidation", Value: "100000.00", Currency: "USD"}, "codec.AccountSummaryValue"},
-		{AccountSummaryEnd{ReqID: 1}, "codec.AccountSummaryEnd"},
-		{TickPrice{ReqID: 1, TickType: 1, Price: "189.10", Size: "400", AttrMask: 0}, "codec.TickPrice"},
-		{TickSize{ReqID: 1, TickType: 0, Size: "400"}, "codec.TickSize"},
-		{MarketDataType{ReqID: 1, DataType: 3}, "codec.MarketDataType"},
-		{TickSnapshotEnd{ReqID: 1}, "codec.TickSnapshotEnd"},
-		{RealTimeBar{ReqID: 1, Time: "1712345678", Open: "100.0", High: "101.0", Low: "99.5", Close: "100.5", Volume: "1000", WAP: "100.5", Count: "50"}, "codec.RealTimeBar"},
-		{CommissionReport{ExecID: "exec-1", Commission: "1.00", Currency: "USD", RealizedPNL: "50.00"}, "codec.CommissionReport"},
-		{TickGeneric{ReqID: 1, TickType: 49, Value: "0"}, "codec.TickGeneric"},
-		{TickString{ReqID: 1, TickType: 45, Value: "1712300400"}, "codec.TickString"},
-		{TickNews{ReqID: 1, Time: "1758294759000", ProviderCode: "BRFG", ArticleID: "BRFG$1c2d5728", Headline: "Headline", ExtraData: "L:en"}, "codec.TickNews"},
-		{TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "SMART", SnapshotPermissions: new(3)}, "codec.TickReqParams"},
-		{ExecutionDetail{ReqID: 1, OrderID: 42, Contract: Contract{Symbol: "AAPL"}, ExecID: "0001", Account: "DU12345", Side: "BOT", Shares: "100", Price: "150.50", Time: "20260407 10:30:00"}, "codec.ExecutionDetail"},
-		{ExecutionsEnd{ReqID: 1}, "codec.ExecutionsEnd"},
-		{OpenOrder{
-			OrderID: 42,
-			OrderDetails: OrderDetails{
-				Account:  "DU12345",
-				Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
-				Action:   "BUY", Quantity: "10", OrderType: "LMT",
-				LmtPrice: "150.00", AuxPrice: "0.0", TIF: "DAY",
-				OpenClose: "", Origin: "0", OrderRef: "test-ref",
-				ClientID: "99", PermID: "123456", OutsideRTH: "0",
-				Hidden: "0", DiscretionAmt: "0", GoodAfterTime: "",
-				ParentID: "99",
-			},
-			Status:           "Submitted",
-			InitMarginBefore: "1.7976931348623157E308", MaintMarginBefore: "1.7976931348623157E308",
-		}, "codec.OpenOrder"},
-		{OpenOrderEnd{}, "codec.OpenOrderEnd"},
-		{PositionEnd{}, "codec.PositionEnd"},
-		{OrderStatus{
-			OrderID: 42, Status: "Filled", Filled: "100", Remaining: "0",
-			AvgFillPrice: "150.50", PermID: "123456", ParentID: "0",
-			LastFillPrice: "150.50", ClientID: "99", WhyHeld: "", MktCapPrice: "0",
-		}, "codec.OrderStatus"},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			payload, err := Encode(200, tt.msg)
-			if err != nil {
-				t.Fatalf("Encode() error = %v", err)
-			}
-			msgs, err := DecodeBatch(200, payload)
-			if err != nil {
-				t.Fatalf("DecodeBatch() error = %v", err)
-			}
-			if len(msgs) == 0 {
-				t.Fatal("DecodeBatch() returned 0 messages")
-			}
-			if got := fmt.Sprintf("%T", msgs[0]); got != tt.name {
-				t.Fatalf("message type = %q, want %q", got, tt.name)
-			}
-		})
-	}
-}
-
 func TestDecodeOrderBoundClassicAndProtobuf(t *testing.T) {
 	t.Parallel()
 
 	want := OrderBound{PermID: 123456789, ClientID: 0, OrderID: 42}
-	classic, err := Encode(200, want)
-	if err != nil {
-		t.Fatal(err)
-	}
+	classic := wire.EncodeFields([]string{"100", "123456789", "0", "42"})
 	decoded, err := Decode(200, classic)
 	if err != nil {
 		t.Fatal(err)
@@ -287,6 +210,48 @@ func TestDecodeKnownMalformedBodyIsMessageScoped(t *testing.T) {
 	}
 }
 
+func TestDecodeUnknownUnterminatedClassicBodyIsMessageScoped(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		sv      int
+		msgID   int
+		payload []byte
+	}{
+		{name: "text message ID", sv: 200, msgID: 255, payload: wire.EncodeFields([]string{"255", "first", "last"})},
+		{name: "raw message ID", sv: 206, msgID: 199, payload: mustEncodeClassicEnvelope(t, 206, 199, []string{"first", "last"})},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Remove only the final field terminator. The outer frame boundary
+			// and message ID remain trustworthy even though the final field does not.
+			payload := tc.payload[:len(tc.payload)-1]
+			msgs, err := DecodeBatch(tc.sv, payload)
+			malformed := requireMalformedInbound(t, msgs, err)
+			if malformed.MsgID != tc.msgID || malformed.Encoding != protocol.ClassicBody {
+				t.Fatalf("MalformedInbound = %+v, want classic msg_id %d", malformed, tc.msgID)
+			}
+			if want := []string{"first", "last"}; !slices.Equal(malformed.Fields, want) {
+				t.Fatalf("MalformedInbound.Fields = %q, want %q", malformed.Fields, want)
+			}
+			if !errors.Is(malformed.Err, wire.ErrMalformedFrame) {
+				t.Fatalf("MalformedInbound.Err = %v, want %v", malformed.Err, wire.ErrMalformedFrame)
+			}
+		})
+	}
+}
+
+func mustEncodeClassicEnvelope(t *testing.T, sv, msgID int, fields []string) []byte {
+	t.Helper()
+	payload, err := protocol.EncodeClassicEnvelope(sv, msgID, fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return payload
+}
+
 func TestMalformedClassicDepthCarriesMessageSpecificRequestIdentity(t *testing.T) {
 	t.Parallel()
 
@@ -429,44 +394,68 @@ func TestDecodeOpenOrderNonSimple(t *testing.T) {
 	}
 }
 
-func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
+func TestInboundMessagesAreNotOutbound(t *testing.T) {
 	t.Parallel()
 
-	payload, err := Encode(200, OpenOrder{
-		OrderID: 42,
-		OrderDetails: OrderDetails{
-			Contract: Contract{
-				ConID: 265598, Symbol: "AAPL", SecType: "STK",
-				Strike: "0", Exchange: "SMART", Currency: "USD",
-				LocalSymbol: "AAPL", TradingClass: "NMS",
-				ComboLegs: []ComboLeg{{ConID: 1, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}, {ConID: 2, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"}},
-			},
-			Account:             "DU9000001",
-			Action:              "BUY",
-			Quantity:            "1",
-			OrderType:           "LMT",
-			LmtPrice:            "150.00",
-			AuxPrice:            "0",
-			TIF:                 "DAY",
-			Origin:              "0",
-			ClientID:            "1",
-			PermID:              "12345",
-			OutsideRTH:          "0",
-			Hidden:              "0",
-			DiscretionAmt:       "0",
-			Status:              "PreSubmitted",
-			OrderComboLegPrices: []string{"1.25", "2.50"},
-			SmartComboRouting:   []TagValue{{Tag: "NonGuaranteed", Value: "1"}},
-			AlgoStrategy:        "Adaptive",
-			AlgoParams:          []TagValue{{Tag: "adaptivePriority", Value: "Normal"}},
-			Conditions:          []OrderCondition{{Type: 1, Conjunction: "a", Operator: 2, ConID: 265598, Exchange: "SMART", Value: "175.0", TriggerMethod: 4}},
-			ConditionsIgnoreRTH: "1",
-			ParentID:            "0",
-		},
-		Status: "PreSubmitted",
-	})
+	tests := []struct {
+		name   string
+		msg    Message
+		legacy bool
+	}{
+		{"APIError", APIError{}, true},
+		{"NextValidID", NextValidID{}, true},
+		{"ManagedAccounts", ManagedAccounts{}, true},
+		{"OrderStatus", OrderStatus{}, true},
+		{"OpenOrder", OpenOrder{}, true},
+		{"ExecutionDetail", ExecutionDetail{}, true},
+		{"OpenOrderEnd", OpenOrderEnd{}, true},
+		{"ExecutionsEnd", ExecutionsEnd{}, true},
+		{"CommissionReport", CommissionReport{}, true},
+		{"CompletedOrder", CompletedOrder{}, true},
+		{"CompletedOrderEnd", CompletedOrderEnd{}, true},
+		{"UnknownInbound", UnknownInbound{}, false},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, ok := tc.msg.(OutboundMessage); ok {
+				t.Fatalf("%T satisfies OutboundMessage", tc.msg)
+			}
+			if _, ok := tc.msg.(LegacyServerMessage); ok != tc.legacy {
+				t.Fatalf("%T satisfies LegacyServerMessage = %t, want %t", tc.msg, ok, tc.legacy)
+			}
+		})
+	}
+}
+
+func TestCaptureDecodeOpenOrderCombo(t *testing.T) {
+	t.Parallel()
+
+	// captures/20260611T144052Z-api_combo_option_vertical_aapl, Gateway
+	// server_version 200, events.jsonl sha256
+	// 053baca75621b4a22b8c0e64b87371fcd414082a52e9980f327fe405ccb8ed9e.
+	// This preserves the exact field sequence of the 1,034-byte msg_id=5
+	// payload after sanitizing account, permanent/order-reference, and submitter
+	// identifiers; the transformed payload is 1,025 bytes. Source frame sha256:
+	// 349d3929728b1883159ac85c623306fe90903cd2a2682b7baf4fecff4a82bb3f;
+	// transformed payload sha256:
+	// 11869fe90aec21e54bce2d9b06952f9faee7a34368a91ea47fd05bbc27941027.
+	payload, err := base64.StdEncoding.DecodeString(
+		"NQA0NDMAMjg4MTIzODAAQUFQTABCQUcAADAAPwAAU01BUlQAVVNEAEFBUEwAQ09NQgBCVVkANQBMTVQAMC4wNQAwLjAAREFZAABE" +
+			"VTkwMDAwMDEAADAAaWJrcmdvLXNhbml0aXplZC0yMDI2MDYxMVQxNDQwNTJaLTAwMQAxADkwMDQ0MwAwADAAMAAAOTAwNDQzLjAv" +
+			"RFU5MDAwMDAxLzEwMAAAAAAAAAAAADAAAC0xADAAAAAAAAAyMTQ3NDgzNjQ3ADAAMAAwAAAzADAAMAAAMAAwAAAwAE5vbmUAADAA" +
+			"AAAAPwAwADAAADAAMAAAAAAAODc4OTIzMDkyfC0xLDg4NjQ0MTUwMnwxADIAODc4OTIzMDkyADEAU0VMTABTTUFSVAAwADAAAC0x" +
+			"ADg4NjQ0MTUwMgAxAEJVWQBTTUFSVAAwADAAAC0xADAAMQBOb25HdWFyYW50ZWVkADEAMjE0NzQ4MzY0NwAyMTQ3NDgzNjQ3AAAA" +
+			"MAAASUIAMAAwAAAwADAAUHJlU3VibWl0dGVkADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAx" +
+			"Ljc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5" +
+			"MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2" +
+			"MjMxNTdFMzA4AAAAAAAAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYy" +
+			"MzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0Uz" +
+			"MDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0UzMDgALTky" +
+			"MjMzNzIwMzY4NTQ3NzU4MDgAADAAADAAMAAwAE5vbmUAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjA1ADEuNzk3NjkzMTM0ODYy" +
+			"MzE1N0UzMDgAMS43OTc2OTMxMzQ4NjIzMTU3RTMwOAAxLjc5NzY5MzEzNDg2MjMxNTdFMzA4ADEuNzk3NjkzMTM0ODYyMzE1N0Uz" +
+			"MDgAMAAAAAAwADEAMAAwADAAAAAwAAAAAAAAADAAADAAADAAcGFwZXJ0cmFkZXIAMAA=")
 	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
+		t.Fatalf("decode captured payload: %v", err)
 	}
 	msgs, err := DecodeBatch(200, payload)
 	if err != nil {
@@ -476,29 +465,21 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 	if !ok {
 		t.Fatalf("type = %T, want OpenOrder", msgs[0])
 	}
+	if oo.OrderID != 443 || oo.Account != "DU9000001" || oo.PermID != "900443" {
+		t.Fatalf("order identity = %d/%q/%q, want 443/DU9000001/900443", oo.OrderID, oo.Account, oo.PermID)
+	}
+	if oo.Contract.SecType != "BAG" || oo.Action != "BUY" || oo.Quantity != "5" || oo.LmtPrice != "0.05" {
+		t.Fatalf("combo order = %q/%q/%q/%q", oo.Contract.SecType, oo.Action, oo.Quantity, oo.LmtPrice)
+	}
 	if got := len(oo.Contract.ComboLegs); got != 2 {
 		t.Fatalf("ComboLegs len = %d, want 2", got)
 	}
-	if oo.Contract.ComboLegs[0].ConID != 1 || oo.Contract.ComboLegs[1].Action != "SELL" {
+	if oo.Contract.ComboLegs[0].ConID != 878923092 || oo.Contract.ComboLegs[0].Action != "SELL" ||
+		oo.Contract.ComboLegs[1].ConID != 886441502 || oo.Contract.ComboLegs[1].Action != "BUY" {
 		t.Fatalf("decoded combo legs = %#v", oo.Contract.ComboLegs)
 	}
-	if !slices.Equal(oo.OrderComboLegPrices, []string{"1.25", "2.50"}) {
-		t.Fatalf("OrderComboLegPrices = %#v", oo.OrderComboLegPrices)
-	}
-	if len(oo.SmartComboRouting) != 1 || oo.SmartComboRouting[0].Tag != "NonGuaranteed" {
+	if len(oo.SmartComboRouting) != 1 || oo.SmartComboRouting[0] != (TagValue{Tag: "NonGuaranteed", Value: "1"}) {
 		t.Fatalf("SmartComboRouting = %#v", oo.SmartComboRouting)
-	}
-	if oo.AlgoStrategy != "Adaptive" || len(oo.AlgoParams) != 1 || oo.AlgoParams[0].Value != "Normal" {
-		t.Fatalf("algo decode = strategy %q params %#v", oo.AlgoStrategy, oo.AlgoParams)
-	}
-	if len(oo.Conditions) != 1 {
-		t.Fatalf("Conditions len = %d, want 1", len(oo.Conditions))
-	}
-	if cond := oo.Conditions[0]; cond.Type != 1 || cond.Operator != 2 || cond.ConID != 265598 || cond.TriggerMethod != 4 {
-		t.Fatalf("Condition = %#v", cond)
-	}
-	if oo.ConditionsIgnoreRTH != "1" {
-		t.Fatalf("ConditionsIgnoreRTH = %q, want 1", oo.ConditionsIgnoreRTH)
 	}
 	if oo.Status != "PreSubmitted" {
 		t.Fatalf("Status = %q, want PreSubmitted", oo.Status)
@@ -695,7 +676,7 @@ func TestHistoricalClassicContractFieldsStayRequestSpecific(t *testing.T) {
 	}
 	requests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 	}{
 		{"bars", HistoricalBarsRequest{ReqID: 1, Contract: expired, Duration: "1 D", BarSize: "1 day", WhatToShow: "TRADES"}},
 		{"head timestamp", HeadTimestampRequest{ReqID: 1, Contract: expired, WhatToShow: "TRADES"}},

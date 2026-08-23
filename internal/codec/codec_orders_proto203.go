@@ -6,20 +6,21 @@ import (
 	"sort"
 	"strconv"
 
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
 func (m PlaceOrderRequest) encodeProto(sv int) ([]byte, error) {
-	if sv < 216 && (m.Deactivate != "" || m.PostOnly != "" || m.AllowPreOpen != "" || m.IgnoreOpenAuction != "") {
+	if sv < protocol.MinServerVersionAdditionalOrderParams1 && (m.Deactivate != "" || m.PostOnly != "" || m.AllowPreOpen != "" || m.IgnoreOpenAuction != "") {
 		return nil, fmt.Errorf("codec: additional order parameters require server_version 216")
 	}
-	if sv < 217 && (m.RouteMarketableToBBO != "" || m.SeekPriceImprovement != "" || m.WhatIfType != "") {
+	if sv < protocol.MinServerVersionAdditionalOrderParams2 && (m.RouteMarketableToBBO != "" || m.SeekPriceImprovement != "" || m.WhatIfType != "") {
 		return nil, fmt.Errorf("codec: additional order parameters require server_version 217")
 	}
-	if sv < 218 && (m.AttachedStopLossOrderID != 0 || m.AttachedStopLossOrderType != "" || m.AttachedTakeProfitOrderID != 0 || m.AttachedTakeProfitOrderType != "") {
+	if sv < protocol.MinServerVersionAttachedOrders && (m.AttachedStopLossOrderID != 0 || m.AttachedStopLossOrderType != "" || m.AttachedTakeProfitOrderID != 0 || m.AttachedTakeProfitOrderType != "") {
 		return nil, fmt.Errorf("codec: attached orders require server_version 218")
 	}
-	if sv < 223 && m.HedgeMaxSize != "" {
+	if sv < protocol.MinServerVersionHedgeMaxSize && m.HedgeMaxSize != "" {
 		return nil, fmt.Errorf("codec: hedge maximum size requires server_version 223")
 	}
 	orderID, err := protoInt32FromInt64(m.OrderID, "place order id")

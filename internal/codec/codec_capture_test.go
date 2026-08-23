@@ -75,13 +75,6 @@ func TestCaptureDecode_BondContractDetails(t *testing.T) {
 			if m.MarketRuleIDs != tc.marketRule || m.MinSize != tc.minSize || m.SizeIncrement != "1" || m.SuggestedSizeIncrement != "1" {
 				t.Errorf("size rules = market %q min %q increment %q suggested %q", m.MarketRuleIDs, m.MinSize, m.SizeIncrement, m.SuggestedSizeIncrement)
 			}
-			encoded, err := Encode(200, m)
-			if err != nil {
-				t.Fatalf("Encode: %v", err)
-			}
-			if !bytes.Equal(encoded, payload) {
-				t.Error("decoded bond details do not round-trip the captured fields exactly")
-			}
 		})
 	}
 }

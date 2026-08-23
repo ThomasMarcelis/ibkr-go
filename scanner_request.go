@@ -1,11 +1,9 @@
 package ibkr
 
 import (
-	"strconv"
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
-	"github.com/shopspring/decimal"
 )
 
 func validateScannerSubscriptionRequest(req ScannerSubscriptionRequest) error {
@@ -86,38 +84,24 @@ func toCodecScannerSubscriptionRequest(reqID int, req ScannerSubscriptionRequest
 		Instrument:               string(req.Instrument),
 		LocationCode:             string(req.LocationCode),
 		ScanCode:                 string(req.ScanCode),
-		AbovePrice:               formatScannerDecimal(req.AbovePrice),
-		BelowPrice:               formatScannerDecimal(req.BelowPrice),
-		AboveVolume:              formatScannerInt(req.AboveVolume),
-		MarketCapAbove:           formatScannerDecimal(req.MarketCapAbove),
-		MarketCapBelow:           formatScannerDecimal(req.MarketCapBelow),
+		AbovePrice:               decimalPointerOrEmpty(req.AbovePrice),
+		BelowPrice:               decimalPointerOrEmpty(req.BelowPrice),
+		AboveVolume:              intPointerOrEmpty(req.AboveVolume),
+		MarketCapAbove:           decimalPointerOrEmpty(req.MarketCapAbove),
+		MarketCapBelow:           decimalPointerOrEmpty(req.MarketCapBelow),
 		MoodyRatingAbove:         req.MoodyRatingAbove,
 		MoodyRatingBelow:         req.MoodyRatingBelow,
 		SPRatingAbove:            req.SPRatingAbove,
 		SPRatingBelow:            req.SPRatingBelow,
 		MaturityDateAbove:        req.MaturityDateAbove,
 		MaturityDateBelow:        req.MaturityDateBelow,
-		CouponRateAbove:          formatScannerDecimal(req.CouponRateAbove),
-		CouponRateBelow:          formatScannerDecimal(req.CouponRateBelow),
+		CouponRateAbove:          decimalPointerOrEmpty(req.CouponRateAbove),
+		CouponRateBelow:          decimalPointerOrEmpty(req.CouponRateBelow),
 		ExcludeConvertible:       optBoolToString(req.ExcludeConvertible, ""),
-		AverageOptionVolumeAbove: formatScannerInt(req.AverageOptionVolumeAbove),
+		AverageOptionVolumeAbove: intPointerOrEmpty(req.AverageOptionVolumeAbove),
 		ScannerSettingPairs:      req.ScannerSettingPairs,
 		StockTypeFilter:          req.StockTypeFilter,
 		FilterOptions:            tagValuesToCodec(req.FilterOptions),
 		SubscriptionOptions:      tagValuesToCodec(req.SubscriptionOptions),
 	}
-}
-
-func formatScannerDecimal(value *decimal.Decimal) string {
-	if value == nil {
-		return ""
-	}
-	return value.String()
-}
-
-func formatScannerInt(value *int) string {
-	if value == nil {
-		return ""
-	}
-	return strconv.Itoa(*value)
 }

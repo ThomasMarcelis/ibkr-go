@@ -9,10 +9,36 @@ readonly approved_breaks="$root/testdata/api/approved-breaks-after-v2.0.0.txt"
 current="$(mktemp)"
 trap 'rm -f "$current"' EXIT
 
+case "${1:-}" in
+"") exact=false ;;
+--exact) exact=true ;;
+*)
+	printf 'usage: %s [--exact]\n' "${0##*/}" >&2
+	exit 2
+	;;
+esac
+if (( $# > 1 )); then
+	printf 'usage: %s [--exact]\n' "${0##*/}" >&2
+	exit 2
+fi
+
 cd "$root"
 go run "$apidiff" -w "$current" "$module"
-changes="$(go run "$apidiff" -incompatible "$baseline" "$current" | grep -Fvx -f "$approved_breaks" || true)"
+if "$exact"; then
+	changes="$(go run "$apidiff" "$baseline" "$current")"
+	message='public API differs from the v2.0.0 release manifest'
+else
+	incompatible="$(go run "$apidiff" -incompatible "$baseline" "$current")"
+	set +e
+	changes="$(printf '%s\n' "$incompatible" | grep -Fvx -f "$approved_breaks")"
+	grep_status=$?
+	set -e
+	if (( grep_status > 1 )); then
+		exit "$grep_status"
+	fi
+	message='incompatible public API changes since v2.0.0'
+fi
 if [[ -n "$changes" ]]; then
-	printf 'incompatible public API changes since v2.0.0:\n%s\n' "$changes" >&2
+	printf '%s:\n%s\n' "$message" "$changes" >&2
 	exit 1
 fi

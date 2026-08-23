@@ -93,8 +93,8 @@ func TestRequestIDSkipsPendingPreview(t *testing.T) {
 		},
 	}
 
-	if got := e.allocReqID(); got != 42 {
-		t.Fatalf("allocReqID() = %d, want 42 after pending preview 41", got)
+	if got, err := e.allocReqID(); err != nil || got != 42 {
+		t.Fatalf("allocReqID() = %d, %v; want 42 after pending preview 41", got, err)
 	}
 }
 
@@ -108,8 +108,45 @@ func TestRequestIDWrapsWithinProtocolRangeWithoutColliding(t *testing.T) {
 		previews:  map[int64]*previewRoute{2: {}},
 	}
 
-	if got := e.allocReqID(); got != 3 {
-		t.Fatalf("allocReqID() = %d, want 3 after wrapping past live IDs", got)
+	if got, err := e.allocReqID(); err != nil || got != 3 {
+		t.Fatalf("allocReqID() = %d, %v; want 3 after wrapping past live IDs", got, err)
+	}
+}
+
+func TestRequestIDAllocationReportsExhaustedWireRange(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name            string
+		snapshot        Snapshot
+		orderIDLowWater int64
+		nextReqID       int
+		keyed           map[int]*route
+	}{
+		{
+			name:            "only candidate is active",
+			snapshot:        Snapshot{NextValidID: maxWireOrderID},
+			orderIDLowWater: 1,
+			nextReqID:       math.MaxInt32,
+			keyed:           map[int]*route{math.MaxInt32: {}},
+		},
+		{
+			name:            "orders cover the wire range",
+			snapshot:        Snapshot{NextValidID: maxWireOrderID + 1},
+			orderIDLowWater: 1,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			e := &engine{
+				snapshot: tc.snapshot, orderIDLowWater: tc.orderIDLowWater,
+				nextReqID: tc.nextReqID, keyed: tc.keyed,
+			}
+			got, err := e.allocReqID()
+			if got != 0 || !errors.Is(err, errRequestIDExhausted) || err == errRequestIDExhausted {
+				t.Fatalf("allocReqID() = %d, %#v; want zero and wrapped exhaustion error", got, err)
+			}
+		})
 	}
 }
 
@@ -174,40 +211,61 @@ func TestOrderIDAllocationStopsAtSignedWireBoundary(t *testing.T) {
 	}
 }
 
-func TestIdentifierHistoriesDoNotCrossReuse(t *testing.T) {
+// The values below are the second-client leg of
+// api_cross_client_cancel_aapl (server_version 200, events SHA-256
+// fcb7e811624e4aa935e1b50fe55b67caf143383264c29916833190ffe5ac35a4):
+// NextValidID regressed to 18 before the client received OpenOrder for another
+// client's order 296. The independent low request sequence must remain intact
+// while a bounded conservative interval prevents it from ever reaching order
+// 296.
+func TestObservedCrossClientOrderBoundsIdentifierInterval(t *testing.T) {
 	t.Parallel()
 
 	e := &engine{
-		nextReqID:    47,
-		keyed:        make(map[int]*route),
-		orders:       make(map[int64]*orderRoute),
-		previews:     make(map[int64]*previewRoute),
-		orderIDsEver: map[int64]struct{}{47: {}},
-		snapshot:     Snapshot{NextValidID: 1},
+		nextReqID: 18,
+		keyed:     make(map[int]*route),
+		orders:    make(map[int64]*orderRoute),
+		previews:  make(map[int64]*previewRoute),
+		snapshot:  Snapshot{NextValidID: 18},
 	}
-	if got := e.allocReqID(); got != 48 {
-		t.Fatalf("request ID after historical order 47 = %d, want 48", got)
+	// Only the identifier-bearing fields are needed here; both values are the
+	// exact projection of the second-leg OpenOrder callback.
+	e.dispatchObservedOpenOrder(codec.OpenOrder{
+		OrderID: 296,
+		OrderDetails: codec.OrderDetails{
+			ClientID: "1",
+		},
+	})
+	if got := e.snapshot.NextValidID; got != 297 {
+		t.Fatalf("NextValidID after observed order 296 = %d, want 297", got)
 	}
-	if got, err := e.allocOrderID(); err != nil || got != 49 {
-		t.Fatalf("order ID after request 48 = %d, %v; want 49", got, err)
+	if e.orderIDLowWater != 296 {
+		t.Fatalf("order ID low-water = %d, want 296", e.orderIDLowWater)
 	}
-	delete(e.orders, 49)
-	e.nextReqID = 49
-	if got := e.allocReqID(); got != 50 {
-		t.Fatalf("request ID after retired order 49 = %d, want 50", got)
+	if got, err := e.allocReqID(); err != nil || got != 18 {
+		t.Fatalf("independent request ID after observed order 296 = %d, %v; want 18", got, err)
+	}
+	if got, err := e.allocOrderID(); err != nil || got != 297 {
+		t.Fatalf("order ID after request 18 = %d, %v; want 297", got, err)
+	}
+	e.nextReqID = 295
+	if got, err := e.allocReqID(); err != nil || got != 295 {
+		t.Fatalf("request ID below historical order interval = %d, %v; want 295", got, err)
+	}
+	if got, err := e.allocReqID(); err != nil || got != 298 {
+		t.Fatalf("request ID entering historical order interval = %d, %v; want 298", got, err)
 	}
 }
 
-func TestIdentifierHistoriesSurviveReconnect(t *testing.T) {
+func TestIdentifierFloorsSurviveReconnect(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
 	e.nextReqID = 71
 	e.requestIDHighWater = 70
-	e.orderIDHighWater = 69
-	e.orderIDsEver = map[int64]struct{}{69: {}}
+	e.orderIDLowWater = 69
 	e.previews = make(map[int64]*previewRoute)
-	e.snapshot = Snapshot{NextValidID: 1}
+	e.snapshot = Snapshot{NextValidID: 70}
 	e.cmds = make(chan func(), 1)
 	e.incoming = make(chan any, 1)
 	e.transportErr = make(chan transportLoss, 1)
@@ -221,20 +279,20 @@ func TestIdentifierHistoriesSurviveReconnect(t *testing.T) {
 		_ = e.transport.Wait()
 		close(e.done)
 	})
-	if _, ok := e.orderIDsEver[69]; !ok || e.requestIDHighWater != 70 {
-		t.Fatalf("reconnect reset identifier history: orders=%v request=%d", ok, e.requestIDHighWater)
+	if e.orderIDLowWater != 69 || e.snapshot.NextValidID != 70 || e.requestIDHighWater != 70 {
+		t.Fatalf("reconnect reset identifier bounds: low=%d order=%d request=%d", e.orderIDLowWater, e.snapshot.NextValidID, e.requestIDHighWater)
 	}
 	e.observeNextValidID(1)
 	if got, err := e.allocOrderID(); err != nil || got != 71 {
 		t.Fatalf("post-reconnect order ID = %d, %v; want 71", got, err)
 	}
 	e.nextReqID = 69
-	if got := e.allocReqID(); got != 70 {
-		t.Fatalf("post-reconnect request ID = %d, want 70 after historical orders 69/71", got)
+	if got, err := e.allocReqID(); err != nil || got != 72 {
+		t.Fatalf("post-reconnect request ID = %d, %v; want 72 above shared floor", got, err)
 	}
 }
 
-func TestExerciseIDEntersBothIdentifierHistories(t *testing.T) {
+func TestExerciseIDAdvancesBothIdentifierFloors(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
@@ -242,12 +300,12 @@ func TestExerciseIDEntersBothIdentifierHistories(t *testing.T) {
 	e.installExerciseRoute(77)
 	e.closeOrderRoute(77, e.orders[77], nil)
 
-	if _, ok := e.orderIDsEver[77]; !ok || e.requestIDHighWater != 77 {
-		t.Fatalf("exercise ID ownership = orders %v request high-water %d", ok, e.requestIDHighWater)
+	if e.snapshot.NextValidID != 78 || e.requestIDHighWater != 77 {
+		t.Fatalf("exercise ID floors = order %d request %d, want 78/77", e.snapshot.NextValidID, e.requestIDHighWater)
 	}
 	e.nextReqID = 77
-	if got := e.allocReqID(); got != 78 {
-		t.Fatalf("request ID after exercise 77 = %d, want 78", got)
+	if got, err := e.allocReqID(); err != nil || got != 78 {
+		t.Fatalf("request ID after exercise 77 = %d, %v; want 78", got, err)
 	}
 	if got, err := e.allocOrderID(); err != nil || got != 79 {
 		t.Fatalf("order ID after exercise/request = %d, %v; want 79", got, err)
@@ -260,10 +318,9 @@ func TestLateRequestErrorCannotReachLaterOrder(t *testing.T) {
 	e := newEngineForErrorTest()
 	e.nextReqID = 47
 	e.previews = make(map[int64]*previewRoute)
-	e.orderIDsEver = make(map[int64]struct{})
-	reqID := e.allocReqID()
-	if reqID != 47 {
-		t.Fatalf("request ID = %d, want 47", reqID)
+	reqID, err := e.allocReqID()
+	if err != nil || reqID != 47 {
+		t.Fatalf("request ID = %d, %v; want 47", reqID, err)
 	}
 	orderID, err := e.allocOrderID()
 	if err != nil || orderID != 48 {

@@ -47,11 +47,13 @@ var validWhatToShowValues = map[WhatToShow]struct{}{
 	ShowAggTrades:               {},
 }
 
+// Valid reports whether w is a supported historical-data value.
 func (w WhatToShow) Valid() bool {
 	_, ok := validWhatToShowValues[w]
 	return ok
 }
 
+// Valid reports whether d has a positive count and a supported duration unit.
 func (d HistoricalDuration) Valid() bool {
 	parts := strings.Fields(string(d))
 	if len(parts) != 2 {
@@ -69,6 +71,7 @@ func (d HistoricalDuration) Valid() bool {
 	}
 }
 
+// Valid reports whether b is a supported historical bar size.
 func (b BarSize) Valid() bool {
 	_, ok := validHistoricalBarSizes[b]
 	return ok

@@ -143,63 +143,35 @@ func BenchmarkDecodeContractDetails(b *testing.B) {
 	}
 }
 
-// benchHistoricalBars returns the seven live AAPL hourly bars (2026-04-02)
-// from captures/20260405T215056Z-historical_bars_1d_1h — the values frozen in
-// TestCaptureDecode_HistoricalData and testdata/transcripts/grounded_historical_bars.txt.
-// The grounded transcript is the benchmark's value source.
-func benchHistoricalBars() []HistoricalBar {
-	return []HistoricalBar{
-		{ReqID: 1001, Time: "20260402 09:30:00 US/Eastern", Open: "254.20", High: "254.80", Low: "250.65", Close: "252.53", Volume: "2829736", WAP: "252.266", Count: "13633"},
-		{ReqID: 1001, Time: "20260402 10:00:00 US/Eastern", Open: "252.52", High: "255.40", Low: "251.19", Close: "255.38", Volume: "2797972", WAP: "252.971", Count: "16541"},
-		{ReqID: 1001, Time: "20260402 11:00:00 US/Eastern", Open: "255.40", High: "255.73", Low: "254.36", Close: "254.57", Volume: "1400669", WAP: "255.002", Count: "7744"},
-		{ReqID: 1001, Time: "20260402 12:00:00 US/Eastern", Open: "254.57", High: "255.00", Low: "254.00", Close: "254.42", Volume: "983738", WAP: "254.453", Count: "5662"},
-		{ReqID: 1001, Time: "20260402 13:00:00 US/Eastern", Open: "254.42", High: "255.49", Low: "254.17", Close: "254.61", Volume: "1024324", WAP: "254.878", Count: "5832"},
-		{ReqID: 1001, Time: "20260402 14:00:00 US/Eastern", Open: "254.58", High: "255.46", Low: "254.58", Close: "255.28", Volume: "1399189", WAP: "255.101", Count: "7342"},
-		{ReqID: 1001, Time: "20260402 15:00:00 US/Eastern", Open: "255.29", High: "256.13", Low: "254.80", Close: "255.89", Volume: "2938382", WAP: "255.576", Count: "17376"},
-	}
-}
+// benchHistoricalBarsPayload is the exact seven-bar frame from
+// captures/20260405T215056Z-historical_bars_1d_1h, server_version 200.
+var benchHistoricalBarsPayload = []byte(
+	"17\x001001\x007\x00" +
+		"20260402 09:30:00 US/Eastern\x00254.20\x00254.80\x00250.65\x00252.53\x002829736\x00252.266\x0013633\x00" +
+		"20260402 10:00:00 US/Eastern\x00252.52\x00255.40\x00251.19\x00255.38\x002797972\x00252.971\x0016541\x00" +
+		"20260402 11:00:00 US/Eastern\x00255.40\x00255.73\x00254.36\x00254.57\x001400669\x00255.002\x007744\x00" +
+		"20260402 12:00:00 US/Eastern\x00254.57\x00255.00\x00254.00\x00254.42\x00983738\x00254.453\x005662\x00" +
+		"20260402 13:00:00 US/Eastern\x00254.42\x00255.49\x00254.17\x00254.61\x001024324\x00254.878\x005832\x00" +
+		"20260402 14:00:00 US/Eastern\x00254.58\x00255.46\x00254.58\x00255.28\x001399189\x00255.101\x007342\x00" +
+		"20260402 15:00:00 US/Eastern\x00255.29\x00256.13\x00254.80\x00255.89\x002938382\x00255.576\x0017376\x00")
 
 func BenchmarkDecodeHistoricalBars(b *testing.B) {
-	// Pack 49 bars — the live 7-bar capture tiled 7x to the ~50-bar shape of a
-	// multi-day request — into one msg-17 frame, built once outside the loop.
-	// Each bar tuple comes from the codec's own HistoricalBar encoder (the
-	// same path testhost uses to pack transcript bars).
-	bars := benchHistoricalBars()
-	const repeats = 7
-	fields := []string{strconv.Itoa(protocol.InHistoricalData), "1001", strconv.Itoa(len(bars) * repeats)}
-	for range repeats {
-		for _, bar := range bars {
-			barFields, err := bar.encodeWire(200)
-			if err != nil {
-				b.Fatalf("encodeWire(HistoricalBar) error = %v", err)
-			}
-			if len(barFields) != 11 || barFields[2] != "1" {
-				b.Fatalf("unexpected HistoricalBar encode shape: %q", barFields)
-			}
-			fields = append(fields, barFields[3:]...) // strip the [msgID, reqID, barCount] header
-		}
-	}
-	payload := wire.EncodeFields(fields)
-
-	msgs, err := DecodeBatch(200, payload)
+	msgs, err := DecodeBatch(200, benchHistoricalBarsPayload)
 	if err != nil {
 		b.Fatalf("DecodeBatch() error = %v", err)
 	}
-	if want := len(bars) * repeats; len(msgs) != want {
-		b.Fatalf("got %d messages, want %d bars", len(msgs), want)
+	if len(msgs) != 7 {
+		b.Fatalf("got %d messages, want 7 bars", len(msgs))
 	}
 	first, ok := msgs[0].(HistoricalBar)
 	if !ok || first.ReqID != 1001 || first.Open != "254.20" || first.Count != "13633" {
 		b.Fatalf("msgs[0] = %#v, want first live bar", msgs[0])
 	}
-	if _, ok := msgs[len(msgs)-1].(HistoricalBar); !ok {
-		b.Fatalf("msgs[%d] = %T, want HistoricalBar", len(msgs)-1, msgs[len(msgs)-1])
-	}
 
 	b.ReportAllocs()
-	b.SetBytes(int64(len(payload)))
+	b.SetBytes(int64(len(benchHistoricalBarsPayload)))
 	for b.Loop() {
-		if _, err := DecodeBatch(200, payload); err != nil {
+		if _, err := DecodeBatch(200, benchHistoricalBarsPayload); err != nil {
 			b.Fatal(err)
 		}
 	}

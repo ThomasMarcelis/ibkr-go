@@ -37,7 +37,11 @@ large. `WithQueueSize` controls that bound. Finite streams do not support
 
 ## Subscription matrix
 
-| Public operations | Broker ownership | Close behavior | Reconnect behavior |
+`ResumeAuto` reissues a supported request after an automatic transport
+reconnect or a data-lost restoration (code 1101) on the existing socket. Only
+streaming quotes and real-time bars support it.
+
+| Public operations | Broker ownership | Close behavior | Continuity-loss behavior |
 |---|---|---|---|
 | quotes and real-time bars | request-ID keyed; explicit cancel | cancel; failed admission retires the owning generation | optional `ResumeAuto` |
 | account summary, account/position multi, PnL, tick-by-tick, depth, scanner results, display-group events, live historical bars | request-ID keyed; explicit cancel | cancel; failed admission retires the owning generation | `ResumeNever` |
@@ -55,7 +59,8 @@ admitted or detach was safe; it is not a broker acknowledgement.
 
 `Subscription.All(ctx)` is deliberately data-only. It consumes and discards
 `StreamNotice` as well as lifecycle events. Safety-conscious consumers that
-need warnings or gap evidence must read `Subscription.Events()`.
+need warnings or gap evidence must read `Subscription.Events()`. Both consume
+the same single-consumer queue; exactly one goroutine should drain one of them.
 
 ## Orders and exercises
 

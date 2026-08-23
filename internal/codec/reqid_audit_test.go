@@ -22,14 +22,11 @@ import (
 // list of message names:
 //
 //  1. Find every struct with a `ReqID int` field.
-//  2. Classify each such struct's direction by reading the msg_id constant
-//     its own encodeWire method writes onto the wire: constants are named
-//     protocol.InXxx for messages the Gateway/testhost sends downstream,
-//     protocol.OutXxx for requests the client sends upstream. Outbound
-//     Request/Cancel structs are writer-only: they are never returned by an
-//     inboundDecoders entry, so they can never reach handleIncoming's keyed
-//     dispatch and are correctly exempt -- exempt because of what their own
-//     code says about them, not because of a name pattern like "Request".
+//  2. Exempt structs whose encodeWire method identifies them as client-to-
+//     Gateway messages through a protocol.OutXxx constant. Decode-only
+//     structs deliberately have no encoder; the retained structured-testhost
+//     encoders identify themselves through protocol.InXxx constants and are
+//     treated as inbound too.
 //  3. Every inbound-direction struct must implement RequestID(), except the
 //     documented exception below.
 //
@@ -58,7 +55,7 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 
 	reqIDStructs := map[string]bool{}     // struct name -> has a `ReqID int` field
 	requestIDMethods := map[string]bool{} // struct name -> implements RequestID() int
-	direction := map[string]string{}      // struct name -> "In" or "Out", from its own encodeWire
+	direction := map[string]string{}      // encoded struct name -> "In" or "Out"
 
 	dirConst := regexp.MustCompile(`^(In|Out)[A-Z]`)
 
@@ -147,17 +144,8 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 	}
 
 	var violations []string
-	var unclassified []string
 	for typeName := range reqIDStructs {
-		dir, ok := direction[typeName]
-		if !ok {
-			// A struct with a ReqID field but no discoverable direction: the
-			// scan itself is incomplete for this type, which is worth
-			// failing loudly on rather than silently skipping.
-			unclassified = append(unclassified, typeName)
-			continue
-		}
-		if dir != "In" {
+		if direction[typeName] == "Out" {
 			continue // outbound request/cancel: never routed back by ReqID
 		}
 		if requestIDMethods[typeName] {
@@ -169,12 +157,7 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 		violations = append(violations, typeName)
 	}
 
-	sort.Strings(unclassified)
 	sort.Strings(violations)
-
-	if len(unclassified) > 0 {
-		t.Fatalf("could not determine wire direction for types with a ReqID field (encodeWire not found or msg_id constant not recognized): %v", unclassified)
-	}
 
 	if len(violations) > 0 {
 		t.Fatalf("inbound message struct(s) with a ReqID field but no RequestID() method, so handleIncoming's keyed dispatch cannot route them: %v\n"+

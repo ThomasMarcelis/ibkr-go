@@ -12,7 +12,7 @@ var (
 	ErrNotReady                     = errors.New("ibkr: session not ready")                      // request issued before the session reached Ready
 	ErrInterrupted                  = errors.New("ibkr: request interrupted")                    // in-flight request cut short by a connection loss; retryable
 	ErrResumeRequired               = errors.New("ibkr: subscription resume required")           // subscription needs re-establishment after a gap; retryable
-	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")                // order observation crossed a gap; replacement is permanently unavailable on this handle
+	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")                // live order state is uncertain; reconcile before a new retry, but the affected handle cannot replace again
 	ErrRegulatorySnapshotUncertain  = errors.New("ibkr: regulatory snapshot outcome uncertain")  // admitted fee-bearing request lost its completion evidence; do not retry blindly
 	ErrNoSnapshot                   = errors.New("ibkr: subscription has no snapshot boundary")  // AwaitSnapshot on a stream with no snapshot phase
 	ErrSlowConsumer                 = errors.New("ibkr: slow consumer")                          // consumer fell behind and a bounded event queue overflowed
@@ -97,7 +97,9 @@ func (e *APIError) Error() string {
 // place request entered the transport queue. OrderIDs contains every admitted
 // order ID; their live state remains uncertain until reconciled with the
 // Gateway. A nil CancelErr means every compensating cancellation also entered
-// the queue, not that the Gateway acknowledged any cancellation.
+// the queue, not that the Gateway acknowledged any cancellation. It matches
+// [ErrOrderRecoveryRequired]; unwrap it to inspect the independent placement
+// and cancellation-admission causes.
 type OrderRecoveryError struct {
 	OrderIDs     []int64
 	PlacementErr error
@@ -202,6 +204,11 @@ func (e *OrderRecoveryError) Unwrap() []error {
 	return errs
 }
 
+// Is reports whether target is [ErrOrderRecoveryRequired].
+func (e *OrderRecoveryError) Is(target error) bool {
+	return target == ErrOrderRecoveryRequired
+}
+
 // ValidationError is a client-side input validation failure caught before
 // the request is sent to the Gateway.
 type ValidationError struct {
@@ -225,36 +232,25 @@ func interrupted(cause error) error {
 	if cause == nil {
 		return ErrInterrupted
 	}
-	return errors.Join(ErrInterrupted, cause)
+	return fmt.Errorf("%w: %w", ErrInterrupted, cause)
 }
 
 func resumeRequired(cause error) error {
 	if cause == nil {
 		return ErrResumeRequired
 	}
-	return errors.Join(ErrResumeRequired, cause)
+	return fmt.Errorf("%w: %w", ErrResumeRequired, cause)
 }
 
 // IsRetryable reports whether retrying with backoff is safe and useful.
-// It returns true for [ErrNotReady], [ErrInterrupted], [ErrResumeRequired],
-// transient [ConnectError] values, and [APIError.IsPacingViolation]. It returns
-// false for caller context cancellation, protocol and validation failures,
-// ordinary API rejections, [ErrOrderRecoveryRequired], [ErrSlowConsumer],
-// [ErrExecutionCorrelationOverflow], [ErrClosed], [OrderRecoveryError], [ExerciseUncertainError], and
-// [SubscriptionCancelError], and [ErrRegulatorySnapshotUncertain]. Recovery errors remain non-retryable even when
-// they wrap a transient error because a blind retry could duplicate a live
-// order, exercise instruction, or subscription.
+// Recovery and uncertainty errors, caller cancellation, local data loss, and
+// non-pacing API errors are terminal. Otherwise [ErrNotReady], [ErrInterrupted],
+// [ErrResumeRequired], pacing violations, and [ConnectError] values not caused
+// by [ErrUnsupportedServerVersion] are retryable. Terminal conditions take
+// precedence over retryable causes when errors are joined. All other errors
+// return false.
 func IsRetryable(err error) bool {
-	return isRetryableError(err)
-}
-
-func isRetryableError(err error) bool {
 	if err == nil {
-		return false
-	}
-	// Retrying an uncertain bracket can duplicate orders that are still live
-	// at the Gateway, even when the underlying transport error is retryable.
-	if _, ok := errors.AsType[*OrderRecoveryError](err); ok {
 		return false
 	}
 	// An admitted exercise or lapse may already be working at IBKR. A transport
@@ -273,8 +269,8 @@ func isRetryableError(err error) bool {
 	if errors.Is(err, ErrExecutionCorrelationOverflow) {
 		return false
 	}
-	// A gap permanently removes replacement from that handle. Joining a
-	// transient connection cause must not turn recovery into a blind retry.
+	// Uncertain order state must be reconciled. Joining a transient connection
+	// cause must not turn recovery into a blind retry.
 	if errors.Is(err, ErrOrderRecoveryRequired) {
 		return false
 	}
@@ -284,14 +280,19 @@ func isRetryableError(err error) bool {
 	if errors.Is(err, ErrInboundFrameTooLarge) {
 		return false
 	}
-	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+	// These errors describe a permanent session state, an invalid operation, or
+	// a result that cannot become valid by repeating the same request.
+	if errors.Is(err, ErrNoSnapshot) ||
+		errors.Is(err, ErrSlowConsumer) ||
+		errors.Is(err, ErrUnsupportedServerVersion) ||
+		errors.Is(err, ErrClosed) ||
+		errors.Is(err, ErrNoMatch) ||
+		errors.Is(err, ErrAmbiguousContract) ||
+		errors.Is(err, ErrOperationActive) {
 		return false
 	}
-	if apiErr, ok := errors.AsType[*APIError](err); ok {
-		return apiErr.IsPacingViolation()
-	}
-	if errors.Is(err, ErrNotReady) || errors.Is(err, ErrInterrupted) || errors.Is(err, ErrResumeRequired) {
-		return true
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
 	}
 	if _, ok := errors.AsType[*ValidationError](err); ok {
 		return false
@@ -299,8 +300,36 @@ func isRetryableError(err error) bool {
 	if _, ok := errors.AsType[*ProtocolError](err); ok {
 		return false
 	}
+	// Every API failure in a joined tree must be a pacing violation. Otherwise a
+	// pacing sibling could incorrectly make a request rejection retryable.
+	if containsNonPacingAPIError(err) {
+		return false
+	}
 	if _, ok := errors.AsType[*ConnectError](err); ok {
-		return !errors.Is(err, ErrUnsupportedServerVersion)
+		return true
+	}
+	if _, ok := errors.AsType[*APIError](err); ok {
+		return true
+	}
+	if errors.Is(err, ErrNotReady) || errors.Is(err, ErrInterrupted) || errors.Is(err, ErrResumeRequired) {
+		return true
+	}
+	return false
+}
+
+func containsNonPacingAPIError(err error) bool {
+	if apiErr, ok := err.(*APIError); ok {
+		return apiErr == nil || !apiErr.IsPacingViolation()
+	}
+	switch err := err.(type) {
+	case interface{ Unwrap() []error }:
+		for _, cause := range err.Unwrap() {
+			if containsNonPacingAPIError(cause) {
+				return true
+			}
+		}
+	case interface{ Unwrap() error }:
+		return containsNonPacingAPIError(err.Unwrap())
 	}
 	return false
 }

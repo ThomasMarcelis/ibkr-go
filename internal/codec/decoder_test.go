@@ -64,89 +64,6 @@ func TestFieldReaderReadInt64(t *testing.T) {
 	}
 }
 
-func TestFieldReaderReadFloat(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		input   string
-		want    float64
-		wantErr bool
-	}{
-		{"pi", "3.14", 3.14, false},
-		{"zero", "0", 0.0, false},
-		{"negative", "-1.5", -1.5, false},
-		{"empty", "", 0.0, false},
-		{"invalid", "not_a_float", 0, true},
-		{"max_float_string", "1.7976931348623157E308", math.MaxFloat64, false},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newFieldReader([]string{tt.input})
-			got, err := r.ReadFloat()
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ReadFloat() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if got != tt.want {
-				t.Errorf("ReadFloat() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFieldReaderReadMaxFloat(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		input   string
-		want    float64
-		wantErr bool
-	}{
-		{"empty_sentinel", "", math.MaxFloat64, false},
-		{"pi", "3.14", 3.14, false},
-		{"zero", "0", 0.0, false},
-		{"invalid", "bad", 0, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newFieldReader([]string{tt.input})
-			got, err := r.ReadMaxFloat()
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ReadMaxFloat() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if got != tt.want {
-				t.Errorf("ReadMaxFloat() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFieldReaderReadMaxInt(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name    string
-		input   string
-		want    int
-		wantErr bool
-	}{
-		{"empty_sentinel", "", math.MaxInt32, false},
-		{"positive", "42", 42, false},
-		{"zero", "0", 0, false},
-		{"invalid", "bad", 0, true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			r := newFieldReader([]string{tt.input})
-			got, err := r.ReadMaxInt()
-			if (err != nil) != tt.wantErr {
-				t.Fatalf("ReadMaxInt() error = %v, wantErr %v", err, tt.wantErr)
-			}
-			if got != tt.want {
-				t.Errorf("ReadMaxInt() = %d, want %d", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFieldReaderReadString(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -314,9 +231,6 @@ func TestFieldReaderReadPastEnd(t *testing.T) {
 	if got, err := r.ReadInt(); err == nil || got != 0 {
 		t.Errorf("ReadInt() past end = (%d, %v), want (0, error)", got, err)
 	}
-	if got, err := r.ReadFloat(); err == nil || got != 0 {
-		t.Errorf("ReadFloat() past end = (%v, %v), want (0, error)", got, err)
-	}
 	if got, err := r.ReadBool(); err == nil || got {
 		t.Errorf("ReadBool() past end = (%v, %v), want (false, error)", got, err)
 	}
@@ -338,13 +252,13 @@ func TestFieldReaderMultiFieldSequence(t *testing.T) {
 	if err != nil || v3 != true {
 		t.Fatalf("ReadBool() = (%v, %v), want (true, nil)", v3, err)
 	}
-	v4, err := r.ReadFloat()
-	if err != nil || v4 != 123.45 {
-		t.Fatalf("ReadFloat() = (%v, %v), want (123.45, nil)", v4, err)
+	v4 := r.ReadDecimal()
+	if v4 != "123.45" {
+		t.Fatalf("ReadDecimal() = %q, want %q", v4, "123.45")
 	}
-	v5, err := r.ReadMaxInt()
-	if err != nil || v5 != math.MaxInt32 {
-		t.Fatalf("ReadMaxInt() = (%d, %v), want (%d, nil)", v5, err, math.MaxInt32)
+	v5, err := r.ReadInt()
+	if err != nil || v5 != 0 {
+		t.Fatalf("ReadInt() = (%d, %v), want (0, nil)", v5, err)
 	}
 	if rem := r.Remaining(); rem != 0 {
 		t.Errorf("Remaining() = %d, want 0", rem)

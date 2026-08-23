@@ -257,3 +257,125 @@ func TestReconnectReadyWaitsForEveryResumeBeforeAdmittingNewWork(t *testing.T) {
 	default:
 	}
 }
+
+func TestResumeRoutesKeepsLiveCapacityWaiter(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	fillTransportQueue(t, e.transport, peer)
+	// fillTransportQueue primes the writer before saturating its bounded queue.
+	// Drain that prime dequeue's edge so every wake below has one controlled
+	// source.
+	select {
+	case <-e.transport.Writable():
+	default:
+		t.Fatal("transport prime did not publish its writable edge")
+	}
+
+	route := &route{
+		opKind:       OpQuotes,
+		subscription: true,
+		resume:       ResumeAuto,
+		request: codec.QuoteRequest{
+			ReqID: 1,
+			Contract: codec.Contract{
+				Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
+			},
+		},
+		close:  func(error) {},
+		gapped: true,
+	}
+	e.keyed[1] = route
+	e.resumeRoutes()
+	if !e.resumeWaiting {
+		t.Fatal("full resume queue did not install a capacity waiter")
+	}
+
+	// Code 1101 performs another resume pass on the same physical connection.
+	// It must reuse the live waiter rather than parking a second goroutine.
+	e.handleAPIError(codec.APIError{Code: 1101, Message: "Connectivity restored - data lost."})
+	if !e.resumeWaiting {
+		t.Fatal("same-transport 1101 discarded the live capacity waiter")
+	}
+
+	prime, err := codec.Encode(200, codec.CancelOrderRequest{OrderID: 47})
+	if err != nil {
+		t.Fatalf("encode transport prime: %v", err)
+	}
+	if _, err := io.ReadFull(peer, make([]byte, len(prime))); err != nil {
+		t.Fatalf("release first controlled dequeue: %v", err)
+	}
+
+	var wake func()
+	select {
+	case wake = <-e.cmds:
+	case <-time.After(time.Second):
+		t.Fatal("capacity waiter did not publish its callback")
+	}
+	wake()
+	if e.resumeWaiting || len(e.resumePending) != 0 || route.gapped {
+		t.Fatalf("first callback waiting=%t pending=%d gapped=%t, want drained resume", e.resumeWaiting, len(e.resumePending), route.gapped)
+	}
+
+	if _, err := transport.ReadOneFrame(peer, time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("release second controlled dequeue: %v", err)
+	}
+	select {
+	case duplicate := <-e.cmds:
+		_ = duplicate
+		t.Fatal("same-transport 1101 installed a second capacity waiter")
+	case <-time.After(250 * time.Millisecond):
+	}
+}
+
+func TestResumeCapacityWaiterIsClearedOnlyByOwningTransport(t *testing.T) {
+	t.Parallel()
+
+	e, oldPeer := newObservedMarketDataEngine(t)
+	oldTransport := e.transport
+	if err := oldTransport.Send(context.Background(), []byte("old waiter")); err != nil {
+		t.Fatalf("prime old transport: %v", err)
+	}
+	e.waitForResumeCapacity(oldTransport)
+	if got, err := transport.ReadOneFrame(oldPeer, time.Now().Add(time.Second)); err != nil {
+		t.Fatalf("read old transport frame: %v", err)
+	} else if string(got) != "old waiter" {
+		t.Fatalf("old transport frame = %q, want %q", got, "old waiter")
+	}
+
+	var staleWritable func()
+	select {
+	case staleWritable = <-e.cmds:
+	case <-time.After(time.Second):
+		t.Fatal("old transport did not publish its writable callback")
+	}
+	if err := oldTransport.Close(); err != nil {
+		t.Fatalf("close old transport: %v", err)
+	}
+	if err := oldTransport.Wait(); err != nil {
+		t.Fatalf("wait for old transport: %v", err)
+	}
+	e.handleTransportLoss(transportLoss{transport: oldTransport})
+	if e.resumeWaiting {
+		t.Fatal("validated transport loss retained its capacity waiter")
+	}
+
+	replacementPeer, replacementClient := net.Pipe()
+	replacement := transport.New(replacementClient, nil, 0)
+	t.Cleanup(func() {
+		_ = replacement.Close()
+		_ = replacementPeer.Close()
+		_ = replacement.Wait()
+	})
+	e.transport = replacement
+	e.snapshot.State = StateReady
+	e.waitForResumeCapacity(replacement)
+	if !e.resumeWaiting {
+		t.Fatal("replacement capacity waiter was not recorded")
+	}
+
+	staleWritable()
+	if !e.resumeWaiting {
+		t.Fatal("stale writable callback cleared the replacement transport's waiter")
+	}
+}

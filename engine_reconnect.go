@@ -20,33 +20,43 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 	if loss.transport != nil && e.transport != loss.transport {
 		return
 	}
+	routeLoss := loss.err
 	if e.retiringTransport == e.transport {
 		loss.err = errors.Join(loss.err, e.transportRetireErr)
+		routeLoss = errors.Join(routeLoss, e.transportRouteErr)
 		e.retiringTransport = nil
 		e.transportRetireErr = nil
+		e.transportRouteErr = nil
 	}
 	err := normalizeTransportErr(loss.err)
+	routeErr := normalizeTransportErr(routeLoss)
 	e.invalidateReconnectStability()
 	if !e.bootstrap.readyReported {
 		e.rememberConnectionError(&ConnectError{Op: "bootstrap", Err: err})
 	}
+	// A capacity waiter belongs to this validated transport generation. Its
+	// Done arm cannot safely touch actor state, so transport loss owns reset.
+	e.resumeWaiting = false
 	e.transport = nil
 	if e.cfg.reconnect == ReconnectOff {
-		if err == nil {
-			err = ErrClosed
+		if routeErr == nil {
+			routeErr = ErrClosed
 		}
-		e.disconnectRoutes(err, false)
+		if err == nil {
+			err = routeErr
+		}
+		e.disconnectRoutes(routeErr, false)
 		for id, order := range e.orders {
 			if !order.closed {
-				e.closeOrderRoute(id, order, errors.Join(ErrOrderRecoveryRequired, err))
+				e.closeOrderRoute(id, order, errors.Join(ErrOrderRecoveryRequired, routeErr))
 			}
 		}
-		e.closeEngine(err, err)
+		e.closeEngine(routeErr, err, err)
 		return
 	}
 	e.setState(StateReconnecting, 0, "transport lost", err)
-	e.gapExecutionEvents(err)
-	e.disconnectRoutes(err, true)
+	e.gapExecutionEvents(routeErr)
+	e.disconnectRoutes(routeErr, true)
 	e.scheduleReconnect()
 }
 
@@ -167,9 +177,6 @@ func (e *engine) dropLostRoutes() {
 		}
 	}
 	for key, route := range e.singletons {
-		if route.subscription && route.resume == ResumeAuto {
-			continue
-		}
 		if route.onDisconnect == nil {
 			route.close(ErrInterrupted)
 			delete(e.singletons, key)
@@ -187,7 +194,6 @@ func (e *engine) dropLostRoutes() {
 
 func (e *engine) resumeRoutes() {
 	e.resumePending = e.resumePending[:0]
-	e.resumeWaiting = false
 	reqIDs := make([]int, 0, len(e.keyed))
 	for reqID, route := range e.keyed {
 		if route.subscription && route.resume == ResumeAuto {
@@ -198,28 +204,13 @@ func (e *engine) resumeRoutes() {
 	for _, reqID := range reqIDs {
 		e.resumePending = append(e.resumePending, resumeRoute{reqID: reqID, route: e.keyed[reqID]})
 	}
-	keys := make([]string, 0, len(e.singletons))
-	for key, route := range e.singletons {
-		if route.subscription && route.resume == ResumeAuto {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		e.resumePending = append(e.resumePending, resumeRoute{key: key, route: e.singletons[key]})
-	}
 	e.continueResumeRoutes()
 }
 
 func (e *engine) continueResumeRoutes() {
 	for len(e.resumePending) > 0 {
 		pending := e.resumePending[0]
-		if pending.reqID != 0 {
-			if e.keyed[pending.reqID] != pending.route {
-				e.resumePending = e.resumePending[1:]
-				continue
-			}
-		} else if e.singletons[pending.key] != pending.route {
+		if e.keyed[pending.reqID] != pending.route {
 			e.resumePending = e.resumePending[1:]
 			continue
 		}
@@ -278,10 +269,10 @@ func (e *engine) waitForResumeCapacity(tr *transport.Conn) {
 		select {
 		case <-tr.Writable():
 			e.enqueue(func() {
-				e.resumeWaiting = false
 				if e.transport != tr {
 					return
 				}
+				e.resumeWaiting = false
 				e.continueResumeRoutes()
 			})
 		case <-tr.Done():
@@ -291,17 +282,15 @@ func (e *engine) waitForResumeCapacity(tr *transport.Conn) {
 
 func (e *engine) dropResumeRoute(pending resumeRoute, err error) {
 	pending.route.close(err)
-	if pending.reqID != 0 {
-		e.deleteKeyedRoute(pending.reqID)
-		return
-	}
-	delete(e.singletons, pending.key)
+	e.deleteKeyedRoute(pending.reqID)
 }
 
-// closeEngine terminates active work with err and records waitErr as the
-// client's terminal result. An intentional Client.Close uses ErrClosed for
-// active work but nil for Client.Wait; failures use the same error for both.
-func (e *engine) closeEngine(err, waitErr error) {
+// closeEngine terminates active work with workErr, reports sessionErr on the
+// final state transition, and records waitErr as the client's terminal result.
+// Intentional Client.Close uses ErrClosed for work and session state but nil
+// for Client.Wait; a forced retirement may need distinct work and session
+// causes so one route's uncertainty does not contaminate its siblings.
+func (e *engine) closeEngine(workErr, sessionErr, waitErr error) {
 	if e.closed {
 		return
 	}
@@ -319,18 +308,18 @@ func (e *engine) closeEngine(err, waitErr error) {
 		_ = e.transport.Close()
 	}
 	for reqID, route := range e.keyed {
-		route.close(err)
+		route.close(workErr)
 		e.deleteKeyedRoute(reqID)
 	}
 	for key, route := range e.singletons {
-		route.close(err)
+		route.close(workErr)
 		delete(e.singletons, key)
 	}
 	if e.executionEvents != nil {
-		e.executionEvents.sub.closeWithErr(err)
+		e.executionEvents.sub.closeWithErr(workErr)
 		e.executionEvents = nil
 	}
-	previewErr := err
+	previewErr := workErr
 	if previewErr == nil {
 		previewErr = ErrInterrupted
 	}
@@ -341,13 +330,13 @@ func (e *engine) closeEngine(err, waitErr error) {
 	for id, or := range e.orders {
 		if !or.closed {
 			or.closed = true
-			or.handle.closeWithErr(err)
+			or.handle.closeWithErr(workErr)
 		}
 		delete(e.orders, id)
 	}
 	e.execDeliveries = make(map[string]*execDelivery)
-	e.setState(StateClosed, 0, "", err)
-	e.reportReady(err)
+	e.setState(StateClosed, 0, "", sessionErr)
+	e.reportReady(sessionErr)
 	e.waitMu.Lock()
 	e.waitErr = waitErr
 	e.waitMu.Unlock()
@@ -374,9 +363,7 @@ func (e *engine) scheduleReconnectStability(tr *transport.Conn) {
 			if e.closed || e.transport != tr || e.stabilityEpoch != epoch {
 				return
 			}
-			e.snapshotMu.RLock()
 			state := e.snapshot.State
-			e.snapshotMu.RUnlock()
 			if state == StateReady {
 				e.reconnectAttempt = 0
 			}
@@ -387,12 +374,6 @@ func (e *engine) scheduleReconnectStability(tr *transport.Conn) {
 func (e *engine) emitGap() {
 	e.gapExecutionEvents(ErrInterrupted)
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
-			route.gapped = true
-			route.emitGap(e)
-		}
-	}
-	for _, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto && route.emitGap != nil && !route.gapped {
 			route.gapped = true
 			route.emitGap(e)
@@ -411,12 +392,6 @@ func (e *engine) emitGap() {
 func (e *engine) emitResumed() {
 	e.restoreExecutionEvents()
 	for _, route := range e.keyed {
-		if route.subscription && route.resume == ResumeAuto && route.emitRestored != nil && route.gapped {
-			route.gapped = false
-			route.emitRestored(e)
-		}
-	}
-	for _, route := range e.singletons {
 		if route.subscription && route.resume == ResumeAuto && route.emitRestored != nil && route.gapped {
 			route.gapped = false
 			route.emitRestored(e)

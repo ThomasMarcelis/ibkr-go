@@ -16,7 +16,7 @@ func TestEncodeReferenceProto212LiveVectors(t *testing.T) {
 
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{"security-definition options", SecDefOptParamsRequest{ReqID: 7301, UnderlyingSymbol: "AAPL", UnderlyingSecType: "STK", UnderlyingConID: 265598}, "0000011608853912044141504c220353544b28fe9a10"},

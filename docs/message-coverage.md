@@ -12,6 +12,8 @@ through server_version 225.
 |-----------|--------|------|--------|
 | out | 71 | StartAPI | landed |
 | out | 17 | ManagedAccountsRequest | landed; classic through sv206 plus exact-sv207 protobuf |
+| out | 8 | ReqIds | landed |
+| out | 49 | ReqCurrentTime | landed |
 | in | — | server hello ack | landed |
 | in | 15 | ManagedAccounts | landed; classic through sv206 plus exact-sv207 protobuf bootstrap/refresh |
 | in | 9 | NextValidID | landed |
@@ -236,6 +238,7 @@ field. `ComboDescription` remains response-only.
 | in | 5 | OpenOrder | landed | See Order Management notes |
 | in | 53 | OpenOrderEnd | landed | Classic plus exact-sv203 empty protobuf terminator after a still-classic `ReqAllOpenOrders`; live empty snapshot replay prevents request timeouts. |
 | in | 3 | OrderStatus | landed | |
+| in | 100 | OrderBound | landed | Classic and protobuf binding callback for client-0 auto-open orders; positive raw paper-TWS capture remains pending. |
 | out | 7 | ExecutionsRequest | landed | Complete classic filter plus sv200 day/date tail; exact-sv201 protobuf empty-filter request is live-frozen and unchanged at the zero-strike-only sv202 boundary. Nondefault day filters await live attestation. |
 | in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. Exact sv202 adds a live vector with both Contract.conId and explicitly present strike=0. |
 | in | 55 | ExecutionsEnd | landed | Raw sv200 freeze, exact-sv201 protobuf live vector/public empty-query replay, and exact-sv202 nonempty replay. |
@@ -357,7 +360,7 @@ Snapshot and one-shot flows rely on explicit end markers:
 | 64 | AccountSummaryEnd | landed |
 | 62 | PositionEnd | landed |
 | 57 | TickSnapshotEnd | landed |
-| 17 | HistoricalBarsEnd | landed |
+| 108 | HistoricalDataEnd | landed |
 | 53 | OpenOrderEnd | landed |
 | 55 | ExecutionsEnd | landed |
 | 54 | AccountDownloadEnd | landed |

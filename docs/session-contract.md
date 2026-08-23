@@ -40,6 +40,8 @@ func (c *Client) Wait() error
 func (c *Client) Session() Snapshot
 func (c *Client) SessionEvents() <-chan Event
 func (c *Client) CurrentTime(ctx context.Context) (time.Time, error)
+func (c *Client) CurrentTimeMillis(ctx context.Context) (time.Time, error)
+func (c *Client) ManagedAccounts(ctx context.Context) ([]string, error)
 ```
 
 Session states are `Disconnected`, `Connecting`, `Handshaking`, `Ready`,
@@ -49,11 +51,13 @@ if unread, older queued events may be dropped in favor of the latest transition.
 `TransitionSeq` increments once per actual state change, so consumers can detect
 an evicted transition. Every `Event` carries the exact post-transition
 `Snapshot`, including that same sequence number; informational notices do not
-increment it.
+increment it. Repeated `SessionEvents()` calls return the same channel; multiple
+readers divide events rather than each receiving a copy.
 
 The default reconnect policy is `ReconnectAuto`. Applications that require a
 connection loss to terminate the client set `WithReconnectPolicy(ReconnectOff)`
-explicitly.
+explicitly. Reconnection controls the transport only; it does not implicitly
+replay requests or subscriptions.
 
 Inbound raw frames are bounded before body allocation by
 `WithMaxInboundFrameBytes`. The default and hard maximum are 64 MiB, and the
@@ -73,6 +77,9 @@ The root `Client` owns one shared session engine and exposes concrete domain
 facades: `Accounts`, `Contracts`, `MarketData`, `History`, `Orders`, `Options`,
 `News`, `Scanner`, `Advisors`, `WSH`, and `TWS`. These facades are namespaces
 only; they do not create independent connections.
+
+Contract qualification and option-chain metadata belong to `Contracts`;
+`Options` owns option calculations and exercise or lapse instructions.
 
 Managed accounts are loaded into `Snapshot` during bootstrap and can be
 refreshed explicitly with `Client.ManagedAccounts`.
@@ -99,21 +106,27 @@ type Subscription[T any] struct {
 }
 ```
 
-`Events()` is the single ordered queue for data and lifecycle boundaries. Its
-event kinds are `Started`, `Data`, `SnapshotComplete`, `Gap`, `Restored`, and
-`Resubscribed`. `Restored` means the Gateway retained the remote stream (1102);
-`Resubscribed` means the client physically sent the request again. Channel
-close is terminal; inspect `Err()` or `Wait()` for its cause. There is no
-redundant `Closed` event. Every event's `At` is the UTC time the client enqueued
-it; this is local observation time, not Gateway event time.
+`Events()` is the single ordered queue for data, request-scoped notices, and
+lifecycle boundaries. Its event kinds are `Started`, `Data`,
+`SnapshotComplete`, `Notice`, `Gap`, `Restored`, and `Resubscribed`. For a
+request-backed stream, `Restored` means the Gateway retained it; for the passive
+execution observer, it means local observation resumed without sending a
+request. `Resubscribed` means the client physically sent the request again.
+Channel close is terminal; inspect `Err()` or `Wait()` for its cause. There is
+no redundant `Closed` event. Every event's `At` is the UTC time the client
+enqueued it; this is local observation time, not Gateway event time.
 
 `All(ctx)` yields only `Data` values from that same queue. It consumes and
 discards every non-data event, including `StreamNotice`; callers that need
 request-scoped warnings or lifecycle evidence must use `Events()` directly.
-Ranging it to exhaustion drains every buffered event, so `Err()`/`Wait()` are final when the loop exits.
-`Events()` and `All()` are alternative consumers and must not be read
-concurrently. `Err()` does not wait for `Done()` and returns nil until a
-terminal close reason is known.
+If `All` observes the event channel closing, it has drained every buffered
+event and `Err()`/`Wait()` are final. Context cancellation or an early break can
+end iteration sooner, leaving buffered events unread and `Err()` still nil;
+also inspect the context cause in that case.
+Repeated `Events()` calls return the same channel. Multiple readers divide
+events, so `Events()` and `All()` are alternatives and exactly one goroutine
+must drain one of them. `Err()` does not wait for `Done()` and returns nil until
+a terminal close reason is known.
 
 `Events()` closes before `Done()`. Consumers that need every buffered business
 event must drain `Events()` until it closes, then call `Wait()`. `Done()` is for
@@ -157,6 +170,7 @@ Ordered event kinds:
 - `Started`
 - `Data`
 - `SnapshotComplete`
+- `Notice`
 - `Gap`
 - `Restored`
 - `Resubscribed`
@@ -164,7 +178,8 @@ Ordered event kinds:
 Retryability:
 
 - `ErrNotReady`, `ErrInterrupted`, and `ErrResumeRequired` are retryable
-- transient `*ConnectError` values are retryable
+- absent another terminal cause, a `*ConnectError` is retryable unless it
+  contains `ErrUnsupportedServerVersion`
 - API pacing violations are retryable with backoff; other `*APIError` values
   are terminal by default
 - caller context cancellation, protocol/validation failures,
@@ -182,7 +197,11 @@ Default subscription behavior:
 - bounded event queue
 - close on slow consumer
 - no implicit replay
-- `ResumeAuto` is currently supported only for quote streams and real-time bars
+- `ResumeNever` is the default for request-backed subscriptions; the passive
+  execution observer follows automatic reconnects without replaying a request
+- `ResumeAuto` is accepted only for streaming quotes and real-time bars; it
+  reissues those requests after an automatic transport reconnect or a
+  data-lost restoration (code 1101) on the existing socket
 - account summary, positions, open orders, account updates, multi-account
   snapshots, and live historical bars expose explicit snapshot boundaries
 
@@ -195,6 +214,9 @@ drop-oldest policy is reserved for session-scoped observation.
 method requests another snapshot only after the prior `SnapshotComplete` and
 only while that exact subscription still owns the request-ID-less response
 route. Overlap returns `ErrOperationActive`; auto scope returns `ErrNoSnapshot`.
+Orders observed without a handle may be cancelled by ID only when IBKR's
+client-ID ownership permits it; only an `OrderHandle` returned by `Place` or
+`PlaceBracket` can replace an order.
 
 Finite result families with potentially large cardinality also expose bounded
 stream forms: `Contracts().StreamDetails`,
@@ -283,20 +305,21 @@ IBKR stopped or cancelled the live order. `OrderID()` remains available as the
 stable coordinate for open-order reconciliation and direct cancellation.
 
 `OrderEvent.Lifecycle` carries `Started`, `Gap`, `Restored`, and
-`RecoveryRequired` in order with business events. `RecoveryRequired` means the
-connection gap may have hidden order changes; reconcile open orders,
-executions, and completed orders for business decisions. `Replace` remains
-permanently disabled on that handle because reconciliation cannot restore its
-lost event history. Its `ConnectionSeq` names the prospective replacement
-generation so it agrees with a later `Ready`; the marker is emitted before
-replacement callbacks and does not itself prove that handshake reached
-`Ready`. Its lifecycle error and subsequent valid replacement calls
-match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the handle
-without cancelling the server-side order. `Cancel(ctx)` sends a cancel
-request; compliance workflows
-can attach the manual cancel time, external operator, and manual-order
-indicator through `CancelOption`. `Replace(ctx, order)` sends a modified order
-with the same OrderID.
+`RecoveryRequired` in order with business events. A physical reconnect or
+data-lost restoration (code 1101) emits `RecoveryRequired` because the gap may
+have hidden order changes; reconcile open orders, executions, and completed
+orders for business decisions. `Replace` remains permanently disabled on that
+handle because reconciliation cannot restore its lost event history. A
+data-maintained 1100-to-1102 gap instead emits `Restored` and preserves
+replacement. `ConnectionSeq` on the recovery-required lifecycle event names the
+prospective replacement generation so it agrees with a later `Ready`; the
+marker is emitted before replacement callbacks and does not itself prove that
+handshake reached `Ready`. Its lifecycle error and subsequent valid replacement
+calls match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the
+handle without cancelling the server-side order. `Cancel(ctx)` sends a cancel
+request; compliance workflows can attach the manual cancel time, external
+operator, and manual-order indicator through `CancelOption`.
+`Replace(ctx, order)` sends a modified order with the same OrderID.
 
 `Options().Exercise` returns an `ExerciseHandle` once the request enters the
 client transport queue. The handle correlates request warnings, errors, and any
@@ -312,18 +335,21 @@ independently instead of blindly resubmitting.
 v2 deliberately exposes no adopt-or-replace-by-ID operation for orders found
 after a process restart. A fresh process can reconcile open orders, executions,
 and completed orders and can cancel by stable order ID through
-`Orders().Cancel`, but it must not synthesize an `OrderHandle` to replace a
-pre-existing order. Binding, ownership, `PermID`, partial projections, and the
-need to resend the complete contract and order make that unsafe without a
-separately live-attested adoption protocol.
+`Orders().Cancel` when IBKR's client-ID ownership permits it, but it must not
+synthesize an `OrderHandle` to replace a pre-existing order. Binding,
+ownership, `PermID`, partial projections, and the need to resend the complete
+contract and order make that unsafe without a separately live-attested adoption
+protocol.
 
 `Events()` closes before `Done()`. A Filled, Cancelled, APICancelled, or
 Inactive status is an order-state event, not the end of local observation.
 Execution and commission-and-fees callbacks may follow it. The caller owns the
 observation window and must call `Close()` after collecting the evidence it
-needs; `Close()` then drains already-buffered events before `Done()` closes.
-`Wait()` reports the explicit local close, a request error, slow-consumer
-failure, or disconnect.
+needs. `Close()` stops publication and closes `Events()` before `Done()`;
+already-buffered events remain available from `Events()`, so drain that channel
+to closure before calling `Wait()`. `Done()` means publication stopped, not that
+another goroutine drained the queue. `Wait()` reports the explicit local close,
+a request error, slow-consumer failure, or disconnect.
 
 An order-targeted api_error closes the handle only when
 `APIError.IsOrderRejection()` identifies a live-attested outright placement
@@ -377,16 +403,22 @@ observation window or an error ends it.
   client-wide mutex for bursty request sequences.
 - One-shots are interrupted by connection loss and are not replayed
   automatically.
-- A data-lost restoration (code 1101) is a connection loss for everything the
-  Gateway cannot replay: auto-resumed subscriptions are re-sent; every other
-  route applies its transport-loss teardown — non-resumable subscriptions
-  close with `ErrResumeRequired`, in-flight one-shots and pending what-if
-  previews resolve with `ErrInterrupted` (both retryable). A data-maintained
-  restoration (code 1102) interrupts nothing. Live order handles survive both,
-  but a reconnect that cannot prove the missing order state emits
-  `RecoveryRequired`; callers reconcile for business decisions, while Replace
-  stays disabled on that handle. Orders rest at IB, not on the Gateway's data
-  connection.
+- A data-lost restoration (code 1101) is a continuity loss even when the socket
+  remains open. Auto-resumed subscriptions are re-sent on that same socket;
+  other long-lived request-backed subscriptions close with
+  `ErrResumeRequired`, and finite streams close with `ErrInterrupted`.
+  Snapshot collectors backed by long-lived subscription routes, including the
+  account snapshots, `Orders().Open`, and `Orders().Executions`, report
+  `ErrResumeRequired`. Bounded finite streams such as
+  `Orders().StreamCompleted`, ordinary keyed one-shots, and pending what-if
+  previews report `ErrInterrupted`. Both errors are retryable. The
+  passive execution observer instead stays open and publishes `Gap` followed
+  by `Restored`, meaning local observation resumed without sending a request.
+  A data-maintained restoration (code 1102) interrupts nothing.
+  Live order handles survive both, but a gap that cannot prove the missing
+  order state emits `RecoveryRequired`; callers reconcile for business
+  decisions, while Replace stays disabled on that handle. Orders rest at IB,
+  not on the Gateway's data connection.
 - Historical bars and schedules use internal endpoint admission so rapid
   repeated requests respect Gateway pacing before they are written to the
   socket.

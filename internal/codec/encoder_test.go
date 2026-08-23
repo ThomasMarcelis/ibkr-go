@@ -52,51 +52,6 @@ func TestFieldWriterWriteInt64(t *testing.T) {
 	}
 }
 
-func TestFieldWriterWriteFloat(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name  string
-		input float64
-		want  string
-	}{
-		{"zero", 0.0, "0"},
-		{"pi", 3.14, "3.14"},
-		{"negative", -1.5, "-1.5"},
-		{"integer_value", 100.0, "100"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var w fieldWriter
-			w.WriteFloat(tt.input)
-			if got := w.fields[0]; got != tt.want {
-				t.Errorf("WriteFloat(%v) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
-func TestFieldWriterWriteMaxFloat(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name  string
-		input float64
-		want  string
-	}{
-		{"sentinel", math.MaxFloat64, ""},
-		{"pi", 3.14, "3.14"},
-		{"zero", 0.0, "0"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var w fieldWriter
-			w.WriteMaxFloat(tt.input)
-			if got := w.fields[0]; got != tt.want {
-				t.Errorf("WriteMaxFloat(%v) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFieldWriterWriteMaxInt(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -193,7 +148,7 @@ func TestFieldWriterFieldSequence(t *testing.T) {
 	w.WriteInt(1)
 	w.WriteString("AAPL")
 	w.WriteBool(true)
-	w.WriteFloat(123.45)
+	w.WriteDecimal("123.45")
 	w.WriteMaxInt(math.MaxInt32)
 
 	got := w.Fields()

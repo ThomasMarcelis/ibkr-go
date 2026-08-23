@@ -20,7 +20,7 @@ func newEngineSubscription[T any](cfg subscriptionConfig, e *engine, actorCancel
 // by non-resumable request-ID subscriptions. The caller supplies the request,
 // message handler, and any operation-specific API-error or reconnect behavior
 // before installing the returned route in e.keyed.
-func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID int, opKind OpKind, cancel codec.Message) (*Subscription[T], *route) {
+func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID int, opKind OpKind, cancel codec.OutboundMessage) (*Subscription[T], *route) {
 	var ownedRoute *route
 	var sub *Subscription[T]
 	actorCancel := func() {
@@ -63,7 +63,7 @@ func newKeyedSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, reqID i
 // newKeyedSubscriptionRoute. Unkeyed API errors remain operation-specific and
 // are intentionally installed by callers when the Gateway provides a stable
 // attribution signal.
-func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key string, opKind OpKind, cancel codec.Message) (*Subscription[T], *route) {
+func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key string, opKind OpKind, cancel codec.OutboundMessage) (*Subscription[T], *route) {
 	var ownedRoute *route
 	var sub *Subscription[T]
 	actorCancel := func() {
@@ -89,10 +89,7 @@ func newSingletonSubscriptionRoute[T any](e *engine, cfg subscriptionConfig, key
 	}
 	sub = newEngineSubscription[T](cfg, e, actorCancel)
 	ownedRoute = &route{
-		opKind:       opKind,
-		subscription: true,
-		resume:       cfg.resume,
-		generation:   e.transportGeneration,
+		generation: e.transportGeneration,
 		onDisconnect: func(_ *engine, err error) bool {
 			sub.closeWithErr(resumeRequired(err))
 			return false

@@ -10,7 +10,7 @@ func TestEncodeServer204OrderQueryVectors(t *testing.T) {
 
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		want string
 	}{
 		{name: "client open orders", msg: OpenOrdersRequest{Scope: "client"}, want: "000000cd"},

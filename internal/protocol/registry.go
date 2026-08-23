@@ -52,7 +52,6 @@ const (
 	OutCancelMktDepth              = 11
 	OutReqNewsBulletins            = 12
 	OutCancelNewsBulletins         = 13
-	OutSetServerLogLevel           = 14
 	OutReqAutoOpenOrders           = 15
 	OutReqAllOpenOrders            = 16
 	OutReqManagedAccounts          = 17
@@ -76,8 +75,6 @@ const (
 	OutReqAccountSummary           = 62
 	OutCancelAccountSummary        = 63
 	OutCancelPositions             = 64
-	OutVerifyRequest               = 65
-	OutVerifyMessage               = 66
 	OutQueryDisplayGroups          = 67
 	OutSubscribeToGroupEvents      = 68
 	OutUpdateDisplayGroup          = 69
@@ -118,7 +115,6 @@ const (
 	OutCancelContractData          = 106
 	OutCancelHistoricalTicks       = 107
 	OutReqConfig                   = 108
-	OutUpdateConfig                = 109
 )
 
 // Inbound message IDs (server to client).
@@ -202,7 +198,6 @@ const (
 	InHistoricalDataEnd      = 108
 	InCurrentTimeInMillis    = 109
 	InConfig                 = 110
-	InUpdateConfig           = 111
 )
 
 var messages = [...]Message{

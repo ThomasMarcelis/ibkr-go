@@ -27,6 +27,8 @@ type Subscription[T any] struct {
 	cancelCause    error
 	snapshotMu     sync.Mutex
 	snapshotClosed bool
+	// snapshotWant is set once during actor setup before publication;
+	// snapshotMu guards only AwaitSnapshot's off-actor read.
 	snapshotWant   bool
 	snapshotDone   chan struct{}
 	snapshotOnce   sync.Once
@@ -49,30 +51,32 @@ func newSubscription[T any](cfg subscriptionConfig, cancelFn func()) *Subscripti
 	}
 }
 
-// Events returns the single ordered stream of data and lifecycle events. It
-// closes when the subscription terminates; after ranging it to exhaustion,
-// call [Subscription.Err] for the terminal error.
+// Events returns the subscription's single ordered stream of data, notices,
+// and lifecycle events. Repeated calls return the same channel; multiple
+// readers divide the events rather than each receiving a copy. It closes when
+// the subscription terminates. After ranging it to exhaustion, call
+// [Subscription.Err] for the terminal error.
 func (s *Subscription[T]) Events() <-chan StreamEvent[T] { return s.events }
 
 // All returns an iterator over the subscription's data values for use with a
 // range statement. It yields until the subscription closes or ctx is
-// canceled. Iterating to exhaustion drains every buffered event, so after
-// the loop [Subscription.Err] reports the terminal error: nil for a clean
-// close, or e.g. [ErrSlowConsumer] / [ErrInterrupted] otherwise. Callers
-// that break early or rely on ctx cancellation should also check ctx.Err.
+// canceled. If the iterator observes the event channel closing, it has drained
+// every buffered event and [Subscription.Err] reports the terminal error.
+// Context cancellation or an early break may leave buffered events unread and
+// Err may still be nil, so callers must also check the context cause.
 //
 //	for q := range sub.All(ctx) {
 //		fmt.Println(q.Last)
 //	}
-//	if err := sub.Err(); err != nil {
+//	if err := errors.Join(sub.Err(), context.Cause(ctx)); err != nil {
 //		log.Fatal(err)
 //	}
 //
 // Every non-data event is consumed and filtered out, including lifecycle
 // transitions and StreamNotice warnings. Callers that need reconciliation
 // boundaries or request-scoped warnings must read Events directly. Events and
-// All consume the same queue, so use one or the other rather than reading them
-// concurrently.
+// All consume the same single-consumer queue, so use one or the other and have
+// exactly one goroutine drain it.
 func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
 	return func(yield func(T) bool) {
 		for {

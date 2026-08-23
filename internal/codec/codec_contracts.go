@@ -376,95 +376,6 @@ func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
 	}}, nil
 }
 
-func (m ContractDetails) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InContractData)
-	w.WriteInt(m.ReqID)
-	w.WriteString(m.Contract.Symbol)
-	w.WriteString(m.Contract.SecType)
-	lastTradeDate := m.Contract.Expiry
-	if m.LastTradeTime != "" && !strings.ContainsAny(lastTradeDate, " -") {
-		lastTradeDate += " " + m.LastTradeTime
-		if m.TimeZoneID != "" {
-			lastTradeDate += " " + m.TimeZoneID
-		}
-	}
-	w.WriteString(lastTradeDate)
-	explicitLastTradeDate := m.LastTradeDate
-	if explicitLastTradeDate == "" {
-		explicitLastTradeDate, _ = splitLastTradeDate(m.Contract.Expiry)
-	}
-	w.WriteString(explicitLastTradeDate)
-	w.WriteString(m.Contract.Strike)
-	w.WriteString(m.Contract.Right)
-	w.WriteString(m.Contract.Exchange)
-	w.WriteString(m.Contract.Currency)
-	w.WriteString(m.Contract.LocalSymbol)
-	w.WriteString(m.MarketName)
-	w.WriteString(m.Contract.TradingClass)
-	w.WriteInt(m.Contract.ConID)
-	w.WriteString(m.MinTick)
-	w.WriteString(m.Contract.Multiplier)
-	w.WriteString(m.OrderTypes)
-	w.WriteString(m.ValidExchanges)
-	w.WriteInt(m.PriceMagnifier)
-	w.WriteInt(m.UnderConID)
-	w.WriteString(m.LongName)
-	w.WriteString(m.Contract.PrimaryExchange)
-	w.WriteString(m.ContractMonth)
-	w.WriteString(m.Industry)
-	w.WriteString(m.Category)
-	w.WriteString(m.Subcategory)
-	w.WriteString(m.TimeZoneID)
-	w.WriteString(m.TradingHours)
-	w.WriteString(m.LiquidHours)
-	w.WriteString(m.EconomicValueRule)
-	w.WriteString(m.EconomicValueMultiplier)
-	w.WriteInt(len(m.SecurityIDs))
-	for _, id := range m.SecurityIDs {
-		w.WriteString(id.Tag)
-		w.WriteString(id.Value)
-	}
-	w.WriteInt(m.AggGroup)
-	w.WriteString(m.UnderSymbol)
-	w.WriteString(m.UnderSecType)
-	w.WriteString(m.MarketRuleIDs)
-	w.WriteString(m.RealExpirationDate)
-	w.WriteString(m.StockType)
-	w.WriteDecimal(m.MinSize)
-	w.WriteDecimal(m.SizeIncrement)
-	w.WriteDecimal(m.SuggestedSizeIncrement)
-	if m.Contract.SecType == "FUND" {
-		fund := m.Fund
-		if fund == nil {
-			fund = &FundDetails{}
-		}
-		w.WriteString(fund.Name)
-		w.WriteString(fund.Family)
-		w.WriteString(fund.Type)
-		w.WriteString(fund.FrontLoad)
-		w.WriteString(fund.BackLoad)
-		w.WriteString(fund.BackLoadTimeInterval)
-		w.WriteString(fund.ManagementFee)
-		w.WriteBool(fund.Closed)
-		w.WriteBool(fund.ClosedForNewInvestors)
-		w.WriteBool(fund.ClosedForNewMoney)
-		w.WriteString(fund.NotifyAmount)
-		w.WriteString(fund.MinimumInitialPurchase)
-		w.WriteString(fund.MinimumSubsequentPurchase)
-		w.WriteString(fund.BlueSkyStates)
-		w.WriteString(fund.BlueSkyTerritories)
-		w.WriteString(fund.DistributionPolicy)
-		w.WriteString(fund.AssetType)
-	}
-	w.WriteInt(len(m.IneligibilityReasons))
-	for _, reason := range m.IneligibilityReasons {
-		w.WriteString(reason.ID)
-		w.WriteString(reason.Description)
-	}
-	return w.Fields(), nil
-}
-
 // Server-version 200 classic bond layout. Live frames are frozen
 // in codec_capture_test.go; API 10.48.01 processBondContractDataMsg is the
 // source reference for field order and version gates.
@@ -551,61 +462,6 @@ func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
 	}}, nil
 }
 
-func (m BondContractDetails) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InBondContractData)
-	w.WriteInt(m.ReqID)
-	w.WriteString(m.Contract.Symbol)
-	w.WriteString(m.Contract.SecType)
-	w.WriteString(m.CUSIP)
-	w.WriteDecimal(m.Coupon)
-	maturity := m.Maturity
-	if m.LastTradeTime != "" && !strings.ContainsAny(maturity, " -") {
-		maturity += " " + m.LastTradeTime
-		if m.TimeZoneID != "" {
-			maturity += " " + m.TimeZoneID
-		}
-	}
-	w.WriteString(maturity)
-	w.WriteString(m.IssueDate)
-	w.WriteString(m.Ratings)
-	w.WriteString(m.BondType)
-	w.WriteString(m.CouponType)
-	w.WriteBool(m.Convertible)
-	w.WriteBool(m.Callable)
-	w.WriteBool(m.Putable)
-	w.WriteString(m.DescriptionAppend)
-	w.WriteString(m.Contract.Exchange)
-	w.WriteString(m.Contract.Currency)
-	w.WriteString(m.MarketName)
-	w.WriteString(m.Contract.TradingClass)
-	w.WriteInt(m.Contract.ConID)
-	w.WriteDecimal(m.MinTick)
-	w.WriteString(m.OrderTypes)
-	w.WriteString(m.ValidExchanges)
-	w.WriteString(m.NextOptionDate)
-	w.WriteString(m.NextOptionType)
-	w.WriteBool(m.NextOptionPartial)
-	w.WriteString(m.Notes)
-	w.WriteString(m.LongName)
-	w.WriteString(m.TimeZoneID)
-	w.WriteString(m.TradingHours)
-	w.WriteString(m.LiquidHours)
-	w.WriteString(m.EconomicValueRule)
-	w.WriteDecimal(m.EconomicValueMultiplier)
-	w.WriteInt(len(m.SecurityIDs))
-	for _, id := range m.SecurityIDs {
-		w.WriteString(id.Tag)
-		w.WriteString(id.Value)
-	}
-	w.WriteInt(m.AggGroup)
-	w.WriteString(m.MarketRuleIDs)
-	w.WriteDecimal(m.MinSize)
-	w.WriteDecimal(m.SizeIncrement)
-	w.WriteDecimal(m.SuggestedSizeIncrement)
-	return w.Fields(), nil
-}
-
 func splitLastTradeDate(value string) (date, tradeTime string) {
 	var fields []string
 	if strings.Contains(value, "-") {
@@ -688,10 +544,6 @@ func decodeContractDataEnd(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{ContractDetailsEnd{ReqID: reqID}}, nil
 }
 
-func (m ContractDetailsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InContractDataEnd), "1", itoa(m.ReqID)}, nil
-}
-
 // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, expirationsCount, expirations..., strikesCount, strikes...] — no version
 func decodeSecDefOptParams(r *fieldReader, sv int) ([]Message, error) {
 	// Live server_version 200 frames carry the expiration count directly
@@ -732,33 +584,10 @@ func decodeSecDefOptParams(r *fieldReader, sv int) ([]Message, error) {
 	}}, nil
 }
 
-func (m SecDefOptParamsResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InSecDefOptParams)
-	w.WriteInt(m.ReqID)
-	w.WriteString(m.Exchange)
-	w.WriteInt(m.UnderlyingConID)
-	w.WriteString(m.TradingClass)
-	w.WriteString(m.Multiplier)
-	w.WriteInt(len(m.Expirations))
-	for _, exp := range m.Expirations {
-		w.WriteString(exp)
-	}
-	w.WriteInt(len(m.Strikes))
-	for _, strike := range m.Strikes {
-		w.WriteString(strike)
-	}
-	return w.Fields(), nil
-}
-
 // [76, reqID] — no version
 func decodeSecDefOptParamsEnd(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	return []Message{SecDefOptParamsEnd{ReqID: reqID}}, nil
-}
-
-func (m SecDefOptParamsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InSecDefOptParamsEnd), itoa(m.ReqID)}, nil
 }
 
 // [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes..., description, issuerID)]
@@ -801,27 +630,6 @@ func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{MatchingSymbols{ReqID: reqID, Symbols: symbols}}, nil
 }
 
-func (m MatchingSymbols) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InSymbolSamples)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Symbols))
-	for _, s := range m.Symbols {
-		w.WriteInt(s.ConID)
-		w.WriteString(s.Symbol)
-		w.WriteString(s.SecType)
-		w.WriteString(s.PrimaryExchange)
-		w.WriteString(s.Currency)
-		w.WriteInt(len(s.DerivativeSecTypes))
-		for _, dt := range s.DerivativeSecTypes {
-			w.WriteString(dt)
-		}
-		w.WriteString(s.Description)
-		w.WriteString(s.IssuerID)
-	}
-	return w.Fields(), nil
-}
-
 // [82, reqID, count, repeated(bitNumber, exchangeName, exchangeLetter)]
 func decodeSmartComponents(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -842,19 +650,6 @@ func decodeSmartComponents(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{SmartComponentsResponse{ReqID: reqID, Components: components}}, nil
 }
 
-func (m SmartComponentsResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InSmartComponents)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Components))
-	for _, c := range m.Components {
-		w.WriteInt(c.BitNumber)
-		w.WriteString(c.ExchangeName)
-		w.WriteString(c.ExchangeLetter)
-	}
-	return w.Fields(), nil
-}
-
 // [92, marketRuleId, count, repeated(lowEdge, increment)] — no version
 func decodeMarketRule(r *fieldReader, sv int) ([]Message, error) {
 	marketRuleID, _ := r.ReadInt()
@@ -870,16 +665,4 @@ func decodeMarketRule(r *fieldReader, sv int) ([]Message, error) {
 		increments[i] = PriceIncrement{LowEdge: r.ReadString(), Increment: r.ReadString()}
 	}
 	return []Message{MarketRule{MarketRuleID: marketRuleID, Increments: increments}}, nil
-}
-
-func (m MarketRule) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InMarketRule)
-	w.WriteInt(m.MarketRuleID)
-	w.WriteInt(len(m.Increments))
-	for _, inc := range m.Increments {
-		w.WriteString(inc.LowEdge)
-		w.WriteString(inc.Increment)
-	}
-	return w.Fields(), nil
 }

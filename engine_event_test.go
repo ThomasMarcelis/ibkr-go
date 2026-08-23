@@ -28,7 +28,7 @@ func TestSessionEventsCloseEvenWhenUnread(t *testing.T) {
 
 		done := make(chan struct{})
 		go func() {
-			e.closeEngine(nil, nil)
+			e.closeEngine(nil, nil, nil)
 			close(done)
 		}()
 

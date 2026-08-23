@@ -3,7 +3,6 @@ package codec
 import (
 	"bytes"
 	"fmt"
-	"math"
 	"strconv"
 	"unsafe"
 )
@@ -119,59 +118,6 @@ func (r *fieldReader) ReadInt64() (int64, error) {
 		return 0, parseErr
 	}
 	return v, nil
-}
-
-func (r *fieldReader) ReadFloat() (float64, error) {
-	f, ok := r.field()
-	if !ok {
-		return 0, r.err
-	}
-	if len(f) == 0 {
-		return 0, nil
-	}
-	v, err := strconv.ParseFloat(asString(f), 64)
-	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, f, err)
-		r.setErr(parseErr)
-		return 0, parseErr
-	}
-	return v, nil
-}
-
-// ReadMaxFloat reads a float, returning math.MaxFloat64 for empty string (TWS sentinel).
-func (r *fieldReader) ReadMaxFloat() (float64, error) {
-	f, ok := r.field()
-	if !ok {
-		return 0, r.err
-	}
-	if len(f) == 0 {
-		return math.MaxFloat64, nil
-	}
-	v, err := strconv.ParseFloat(asString(f), 64)
-	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse float %q: %w", r.pos-1, f, err)
-		r.setErr(parseErr)
-		return 0, parseErr
-	}
-	return v, nil
-}
-
-// ReadMaxInt reads an int, returning math.MaxInt32 for empty string (TWS sentinel).
-func (r *fieldReader) ReadMaxInt() (int, error) {
-	f, ok := r.field()
-	if !ok {
-		return 0, r.err
-	}
-	if len(f) == 0 {
-		return math.MaxInt32, nil
-	}
-	v, err := strconv.ParseInt(asString(f), 10, 32)
-	if err != nil {
-		parseErr := fmt.Errorf("codec: field %d: parse int %q: %w", r.pos-1, f, err)
-		r.setErr(parseErr)
-		return 0, parseErr
-	}
-	return int(v), nil
 }
 
 // ReadString returns the next field as a string. A missing field records a

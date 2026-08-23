@@ -28,14 +28,14 @@ func TestDialContextWithClientID(t *testing.T) {
 	}
 }
 
-func TestPersistentClientSequentialHistoricalBarsWith108End(t *testing.T) {
+func TestHistoricalDataEndCompletesWithoutRetiringSession(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "historical_bars_sequential_108_end.txt")
+	client, host := newClient(t, "historical_bars_108_end.txt")
 	defer client.Close()
 	defer waitHost(t, host)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	req := ibkr.HistoricalBarsRequest{
@@ -52,23 +52,21 @@ func TestPersistentClientSequentialHistoricalBarsWith108End(t *testing.T) {
 		UseRTH:     true,
 	}
 
-	first, err := client.History().Bars(ctx, req)
+	bars, err := client.History().Bars(ctx, req)
 	if err != nil {
-		t.Fatalf("first HistoricalBars() error = %v", err)
+		t.Fatalf("HistoricalBars() error = %v", err)
 	}
-	if len(first) != 7 {
-		t.Fatalf("first bars len = %d, want 7", len(first))
+	if len(bars) != 7 {
+		t.Fatalf("bars len = %d, want 7", len(bars))
 	}
 
-	second, err := client.History().Bars(ctx, req)
-	if err != nil {
-		t.Fatalf("second HistoricalBars() error = %v", err)
-	}
-	if len(second) != 7 {
-		t.Fatalf("second bars len = %d, want 7", len(second))
-	}
 	if got := client.Session().State; got != ibkr.StateReady && got != ibkr.StateDegraded {
-		t.Fatalf("session state after sequential historical bars = %s, want usable session", got)
+		t.Fatalf("session state after HistoricalDataEnd = %s, want usable session", got)
+	}
+	select {
+	case <-client.Done():
+		t.Fatal("client closed after HistoricalDataEnd")
+	default:
 	}
 }
 

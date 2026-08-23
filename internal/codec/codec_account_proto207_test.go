@@ -13,7 +13,7 @@ func TestEncodeAccountProto207LiveVectors(t *testing.T) {
 
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{"subscribe account updates", AccountUpdatesRequest{Subscribe: true, Account: "DU9000001"}, "000000ce08011209445539303030303031"},

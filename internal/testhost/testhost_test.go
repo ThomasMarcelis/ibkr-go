@@ -108,7 +108,9 @@ func TestRawClientMismatchClosesConnection(t *testing.T) {
 func TestSplitClientDirection(t *testing.T) {
 	t.Parallel()
 
-	host, err := New(`split client 2,2 managed_accounts {"accounts":["DU12345"]}`)
+	payload := wire.EncodeFields([]string{"15", "1", "DU12345"})
+	frame := appendLengthPrefix(payload)
+	host, err := New("splitraw client 2,2 " + base64.StdEncoding.EncodeToString(frame))
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
 	}
@@ -119,8 +121,6 @@ func TestSplitClientDirection(t *testing.T) {
 	}
 	defer conn.Close()
 
-	payload := wire.EncodeFields([]string{"15", "1", "DU12345"})
-	frame := appendLengthPrefix(payload)
 	if _, err := conn.Write(frame); err != nil {
 		t.Fatalf("Write() error = %v", err)
 	}

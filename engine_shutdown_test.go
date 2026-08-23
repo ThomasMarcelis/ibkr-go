@@ -74,16 +74,15 @@ func TestAttachTransportPumpUnblocksOnEngineShutdown(t *testing.T) {
 			incoming:      make(chan any),           // unbuffered: no run loop, so one decode wedges the pump
 			transportErr:  make(chan transportLoss), // unbuffered: same for the error forwarder
 			done:          make(chan struct{}),
-			serverVersion: 200,
+			serverVersion: 206,
 		}
 		e.attachTransport(tr)
 
 		// Deliver one decodable frame. The pump decodes it and blocks on the
-		// unconsumed e.incoming, standing in for a hot feed at shutdown.
-		payload, err := codec.Encode(200, codec.CurrentTime{Time: "1700000000"})
-		if err != nil {
-			t.Fatalf("encode CurrentTime: %v", err)
-		}
+		// unconsumed e.incoming, standing in for a hot feed at shutdown. This
+		// exact CurrentTime payload is from capture 20260710T215126Z-current_time,
+		// events SHA-256 c4ad2ec73d6d2a92a645fefeeb2d4d74335262dec23813e9645732c878ff826d.
+		payload := []byte{0, 0, 0, 49, '1', 0, '1', '7', '8', '3', '7', '2', '0', '2', '8', '5', 0}
 		go func() { _ = wire.WriteFrame(serverConn, payload) }()
 
 		synctest.Wait() // pump is now durably blocked on e.incoming <- msg
@@ -143,7 +142,7 @@ func TestCloseDrainsTrackedCompletionsWithoutActorDeadlock(t *testing.T) {
 
 	closed := make(chan struct{})
 	go func() {
-		e.closeEngine(ErrClosed, nil)
+		e.closeEngine(ErrClosed, ErrClosed, nil)
 		close(closed)
 	}()
 	select {
@@ -173,7 +172,7 @@ func TestClosedStateIsAbsorbing(t *testing.T) {
 		execDeliveries: make(map[string]*execDelivery),
 		snapshot:       Snapshot{State: StateReady},
 	}
-	e.closeEngine(ErrClosed, nil)
+	e.closeEngine(ErrClosed, ErrClosed, nil)
 	e.incoming <- codec.APIError{Code: 1102, Message: "Connectivity restored"}
 	runReturned := make(chan struct{})
 	go func() {

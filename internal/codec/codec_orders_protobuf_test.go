@@ -241,13 +241,6 @@ func TestDecodeUnknownProtobufPreservesBinaryBody(t *testing.T) {
 	if !reflect.DeepEqual(msg, want) {
 		t.Fatalf("Decode() = %#v, want %#v", msg, want)
 	}
-	reencoded, err := Encode(201, msg)
-	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
-	}
-	if !bytes.Equal(reencoded, payload) {
-		t.Fatalf("Encode() = %x, want %x", reencoded, payload)
-	}
 }
 
 func TestDecodeMalformedProtobuf(t *testing.T) {

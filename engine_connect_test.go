@@ -198,6 +198,64 @@ func TestInboundFrameErrorPreservesFullUint32Header(t *testing.T) {
 	}
 }
 
+func TestAttachTransportTranslatesFrameLimitWithoutLosingDecodeFailure(t *testing.T) {
+	t.Parallel()
+
+	server, client := net.Pipe()
+	defer server.Close()
+
+	const frameLimit = 8
+	tr := transport.NewWithInboundFrameLimit(client, nil, 0, frameLimit)
+	malformed, err := wire.EncodeFrame([]byte("bad\x00"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The first frame has an invalid classic message ID. The following header
+	// exceeds the configured limit and is rejected before its body is read.
+	// Starting the decoder only after Stopping deterministically exercises both
+	// independent failures without relying on goroutine scheduling.
+	input := append(malformed, 0, 0, 0, frameLimit+1)
+	writeErr := make(chan error, 1)
+	go func() {
+		_, err := server.Write(input)
+		writeErr <- err
+	}()
+	select {
+	case <-tr.Stopping():
+	case <-time.After(time.Second):
+		t.Fatal("transport did not reject oversized header")
+	}
+
+	e := &engine{
+		serverVersion: 200,
+		incoming:      make(chan any, 1),
+		transportErr:  make(chan transportLoss, 1),
+		done:          make(chan struct{}),
+	}
+	e.attachTransport(tr)
+
+	var loss transportLoss
+	select {
+	case loss = <-e.transportErr:
+	case <-time.After(time.Second):
+		t.Fatal("attachTransport did not publish terminal causes")
+	}
+	frameErr, ok := errors.AsType[*InboundFrameTooLargeError](loss.err)
+	if !ok || frameErr.Size != frameLimit+1 || frameErr.Limit != frameLimit {
+		t.Fatalf("transport loss = %v, want public frame-limit error", loss.err)
+	}
+	if _, leaked := errors.AsType[*wire.FrameTooLargeError](loss.err); leaked {
+		t.Fatalf("transport loss leaked internal wire error: %v", loss.err)
+	}
+	protocolErr, ok := errors.AsType[*ProtocolError](loss.err)
+	if !ok || !errors.Is(protocolErr, wire.ErrMalformedFrame) {
+		t.Fatalf("transport loss = %v, want independent decode ProtocolError", loss.err)
+	}
+	if err := <-writeErr; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestReconnectBackoffResetsAfterStableReadySession(t *testing.T) {
 	t.Parallel()
 

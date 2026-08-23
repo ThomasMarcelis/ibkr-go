@@ -92,7 +92,7 @@ func TestHistoricalProto208RequestFamily(t *testing.T) {
 	tests := []struct {
 		name string
 		id   int
-		msg  Message
+		msg  OutboundMessage
 	}{
 		{"cancel historical", protocol.OutCancelHistoricalData, CancelHistoricalData{ReqID: 1}},
 		{"real-time bars", protocol.OutReqRealTimeBars, RealTimeBarsRequest{ReqID: 1, Contract: contract, WhatToShow: "TRADES"}},

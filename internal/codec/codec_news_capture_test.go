@@ -1,7 +1,6 @@
 package codec
 
 import (
-	"bytes"
 	"testing"
 )
 
@@ -38,11 +37,4 @@ func TestCaptureDecode_TickNewsLive(t *testing.T) {
 		t.Fatalf("TickNews = %#v, want %#v", got, want)
 	}
 
-	roundTrip, err := Encode(201, got)
-	if err != nil {
-		t.Fatalf("Encode() error = %v", err)
-	}
-	if !bytes.Equal(roundTrip, payload) {
-		t.Fatalf("Encode() = %q, want %q", roundTrip, payload)
-	}
 }

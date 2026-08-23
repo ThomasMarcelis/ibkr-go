@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -27,7 +26,6 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 			return
 		}
 		ownedRoute = &route{
-			opKind: OpOrderID,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.NextValidID)
 				if !ok {
@@ -103,7 +101,7 @@ func (e *engine) SubscribeOpenOrders(ctx context.Context, scope OpenOrdersScope,
 			resp <- result{err: err}
 			return
 		}
-		var cancel codec.Message
+		var cancel codec.OutboundMessage
 		if scope == OpenOrdersScopeAuto {
 			cancel = codec.CancelOpenOrders{}
 		}
@@ -297,7 +295,11 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		wireReq.ReqID = reqID
 		sub, ownedRoute := newKeyedSubscriptionRoute[ExecutionUpdate](e, cfg, reqID, OpExecutions, nil)
 		sub.expectSnapshot()
@@ -650,66 +652,6 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 	return awaitBracketOrderResponse(ctx, e, resp)
 }
 
-// PlacePresetBracket submits one parent request whose attached-order metadata
-// asks TWS to create stop-loss and profit-taker children from its configured
-// order presets. Unlike PlaceBracket, the child instructions are owned by the
-// TWS configuration and no separate child place frames are sent.
-func (e *engine) PlacePresetBracket(ctx context.Context, req PlaceOrderRequest) (BracketOrder, error) {
-	if err := validateOrderRequest(req); err != nil {
-		return BracketOrder{}, err
-	}
-	req = clonePlaceOrderRequest(req)
-	resp := make(chan bracketOrderResult, 1)
-	enqueueReadySetup(ctx, e, func() {
-		resp <- bracketOrderResult{err: context.Cause(ctx)}
-	}, func() {
-		if e.serverVersion < protocol.MinServerVersionAttachedOrders {
-			resp <- bracketOrderResult{err: fmt.Errorf("ibkr: preset brackets require server_version %d, negotiated %d: %w", protocol.MinServerVersionAttachedOrders, e.serverVersion, ErrUnsupportedServerVersion)}
-			return
-		}
-		if err := validateContractFieldSupport(req.Contract, "place preset bracket", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
-			resp <- bracketOrderResult{err: err}
-			return
-		}
-		if err := validateOrderServerVersion(req.Order, e.serverVersion); err != nil {
-			resp <- bracketOrderResult{err: err}
-			return
-		}
-
-		parentID, err := e.allocOrderID()
-		if err != nil {
-			resp <- bracketOrderResult{err: err}
-			return
-		}
-		stopLossID, err := e.allocOrderID()
-		if err != nil {
-			resp <- bracketOrderResult{err: err}
-			return
-		}
-		takeProfitID, err := e.allocOrderID()
-		if err != nil {
-			resp <- bracketOrderResult{err: err}
-			return
-		}
-		bracket := BracketOrder{
-			Parent:     e.bindOrderHandle(parentID, req.Contract, 0),
-			TakeProfit: e.bindOrderHandle(takeProfitID, req.Contract, parentID),
-			StopLoss:   e.bindOrderHandle(stopLossID, req.Contract, parentID),
-		}
-		e.orders[parentID].attachedOrderIDs = []int64{stopLossID, takeProfitID}
-		allIDs := []int64{parentID, stopLossID, takeProfitID}
-		write, err := e.sendTrackedContext(ctx, toCodecPresetBracketOrder(parentID, stopLossID, takeProfitID, req))
-		if err != nil {
-			resp <- bracketOrderResult{err: e.cancelAndCloseOrderRoutes(nil, allIDs, err)}
-			return
-		}
-		e.trackOrderWrite(parentID, write)
-		resp <- bracketOrderResult{bracket: bracket}
-	})
-
-	return awaitBracketOrderResponse(ctx, e, resp)
-}
-
 // cancelAndCloseOrderRoutes rolls back a bracket placement on the actor
 // goroutine. It sends cancellation only for admitted place frames. Any partial
 // bracket returns an OrderRecoveryError naming every admitted ID because queue
@@ -921,7 +863,7 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 		opKind: OpExerciseOptions,
 		handle: func(any, *engine) {},
 		handleAPIErr: func(m codec.APIError, e *engine) {
-			apiErr, _ := errors.AsType[*APIError](e.apiErr(OpExerciseOptions, m))
+			apiErr := e.apiErr(OpExerciseOptions, m)
 			if m.Code == ErrCodeOrderTIFSetFromPreset {
 				if !orderHandle.emitWarning(apiErr) {
 					closeExercise(nil)
@@ -931,7 +873,7 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 			closeExercise(apiErr)
 		},
 		onDisconnect: func(e *engine, err error) bool {
-			closeExercise(errors.Join(ErrInterrupted, err))
+			closeExercise(interrupted(err))
 			return false
 		},
 		close: func(err error) {
@@ -939,7 +881,7 @@ func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
 				closeExercise(nil)
 				return
 			}
-			closeExercise(errors.Join(ErrInterrupted, err))
+			closeExercise(interrupted(err))
 		},
 	}
 	exerciseOrderRoute = &orderRoute{
@@ -978,7 +920,11 @@ func (e *engine) ExerciseOptions(ctx context.Context, req ExerciseOptionsRequest
 		if req.Override {
 			override = 1
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		handle := e.installExerciseRoute(reqID)
 		if err := e.sendContext(ctx, codec.ExerciseOptionsRequest{
 			ReqID:            reqID,
@@ -1010,7 +956,7 @@ func fromCodecOpenOrder(m codec.OpenOrder) (OpenOrder, error) {
 }
 
 func decodeCodecOpenOrder(m codec.OpenOrder) (OpenOrder, OrderState, error) {
-	details, err := fromCodecCompletedOrder(codec.CompletedOrder{OrderDetails: m.OrderDetails})
+	details, err := fromCodecOrderDetails(m.OrderDetails, "open order")
 	if err != nil {
 		return OpenOrder{}, OrderState{}, err
 	}
@@ -1284,12 +1230,8 @@ func fromCodecExecution(m codec.ExecutionDetail) (Execution, error) {
 // parseExecutionTime handles the Gateway's execution time forms: the UTC
 // dash notation ("20260610-19:58:22", observed live 2026-06-10), its
 // server_version 214 UTC suffix form ("20260610-19:58:22Z"), the
-// space-and-zone form ("20260413 13:35:50 US/Eastern"), and RFC3339 (from
-// test transcripts).
+// space-and-zone form ("20260413 13:35:50 US/Eastern").
 func parseExecutionTime(raw string) (time.Time, error) {
-	if ts, err := time.Parse(time.RFC3339, raw); err == nil {
-		return ts, nil
-	}
 	if ts, err := time.Parse("20060102-15:04:05Z07:00", raw); err == nil {
 		return ts.UTC(), nil
 	}

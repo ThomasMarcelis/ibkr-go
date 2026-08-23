@@ -16,7 +16,7 @@ func TestEncodeNewsProto209LiveVectors(t *testing.T) {
 	providerCodes := "BRFG+BRFUPDN+DJ-N+DJ-RT+DJ-RTA+DJ-RTE+DJ-RTG+DJNL"
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{"providers", NewsProvidersRequest{}, "0000011d"},

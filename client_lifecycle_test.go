@@ -12,6 +12,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
@@ -81,6 +82,22 @@ func newProtocolErrorGateway(t *testing.T) *protocolErrorGateway {
 
 	go func() {
 		gateway.errCh <- serveProtocolErrorGateway(serverConn)
+	}()
+
+	return gateway
+}
+
+func newUnknownMalformedGateway(t *testing.T) *protocolErrorGateway {
+	t.Helper()
+
+	serverConn, clientConn := net.Pipe()
+	gateway := &protocolErrorGateway{
+		dialer: &pipeDialer{conn: clientConn},
+		errCh:  make(chan error, 1),
+	}
+
+	go func() {
+		gateway.errCh <- serveUnknownMalformedGateway(serverConn)
 	}()
 
 	return gateway
@@ -176,6 +193,87 @@ func serveProtocolErrorGateway(conn net.Conn) error {
 	}
 	if ne, ok := err.(net.Error); ok && ne.Timeout() {
 		return fmt.Errorf("client did not close transport after malformed-frame test")
+	}
+	return nil
+}
+
+func serveUnknownMalformedGateway(conn net.Conn) error {
+	defer conn.Close()
+
+	prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+	if _, err := io.ReadFull(conn, prefix); err != nil {
+		return fmt.Errorf("read handshake prefix: %w", err)
+	}
+	if string(prefix) != string(codec.EncodeHandshakePrefix()) {
+		return fmt.Errorf("handshake prefix = %q, want %q", string(prefix), string(codec.EncodeHandshakePrefix()))
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read version range: %w", err)
+	}
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"206", "20260710 23:51:25 Central European Standard Time"})); err != nil {
+		return fmt.Errorf("write server info: %w", err)
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read START_API: %w", err)
+	}
+	managed, err := protocol.EncodeClassicEnvelope(206, protocol.InManagedAccounts, []string{"1", "DU9000001"})
+	if err != nil {
+		return fmt.Errorf("encode managed accounts: %w", err)
+	}
+	if err := wire.WriteFrame(conn, managed); err != nil {
+		return fmt.Errorf("write managed accounts: %w", err)
+	}
+	nextID, err := protocol.EncodeClassicEnvelope(206, protocol.InNextValidID, []string{"1", "1"})
+	if err != nil {
+		return fmt.Errorf("encode next valid id: %w", err)
+	}
+	if err := wire.WriteFrame(conn, nextID); err != nil {
+		return fmt.Errorf("write next valid id: %w", err)
+	}
+
+	// Remove only the last field terminator from an otherwise valid unknown-ID
+	// classic envelope. This is structural framing fault injection, not a claim
+	// that the Gateway emits msg_id 199.
+	malformed, err := protocol.EncodeClassicEnvelope(206, 199, []string{"preserve me"})
+	if err != nil {
+		return fmt.Errorf("encode malformed unknown frame: %w", err)
+	}
+	if err := wire.WriteFrame(conn, malformed[:len(malformed)-1]); err != nil {
+		return fmt.Errorf("write malformed unknown frame: %w", err)
+	}
+
+	request, err := wire.ReadFrame(conn)
+	if err != nil {
+		return fmt.Errorf("read current time request: %w", err)
+	}
+	want, err := protocol.EncodeClassicEnvelope(206, protocol.OutReqCurrentTime, []string{"1"})
+	if err != nil {
+		return fmt.Errorf("encode current time request: %w", err)
+	}
+	if string(request) != string(want) {
+		return fmt.Errorf("current time request = %q, want %q", request, want)
+	}
+	// Exact request/response from capture 20260710T215126Z-current_time,
+	// events.jsonl sha256 c4ad2ec73d6d2a92a645fefeeb2d4d74335262dec23813e9645732c878ff826d.
+	response, err := protocol.EncodeClassicEnvelope(206, protocol.InCurrentTime, []string{"1", "1783720285"})
+	if err != nil {
+		return fmt.Errorf("encode current time response: %w", err)
+	}
+	if err := wire.WriteFrame(conn, response); err != nil {
+		return fmt.Errorf("write current time response: %w", err)
+	}
+
+	buf := make([]byte, 1)
+	if err := conn.SetReadDeadline(time.Now().Add(time.Second)); err != nil {
+		if errors.Is(err, io.ErrClosedPipe) || errors.Is(err, net.ErrClosed) {
+			return nil
+		}
+		return fmt.Errorf("set read deadline: %w", err)
+	}
+	if _, err := conn.Read(buf); err == nil {
+		return fmt.Errorf("server read succeeded after lifecycle probe; want client-side close")
+	} else if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
+		return fmt.Errorf("client did not close transport after lifecycle probe")
 	}
 	return nil
 }
@@ -488,6 +586,51 @@ func TestKnownMalformedInboundDoesNotCloseTransport(t *testing.T) {
 		t.Fatalf("client closed after malformed inbound event: %v", client.Wait())
 	default:
 	}
+	client.Close()
+	if err := client.Wait(); err != nil {
+		t.Fatalf("client.Wait() error = %v, want nil after Close", err)
+	}
+	gateway.Wait(t)
+}
+
+func TestUnknownUnterminatedClassicInboundDoesNotCloseTransport(t *testing.T) {
+	t.Parallel()
+
+	gateway := newUnknownMalformedGateway(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithDialer(gateway.dialer),
+		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
+	)
+	if err != nil {
+		t.Fatalf("DialContext() error = %v", err)
+	}
+
+	var protocolErr *ibkr.ProtocolError
+	for protocolErr == nil {
+		select {
+		case event := <-client.SessionEvents():
+			protocolErr, _ = errors.AsType[*ibkr.ProtocolError](event.Err)
+		case <-client.Done():
+			t.Fatalf("client closed after unknown malformed inbound: %v", client.Wait())
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for unknown malformed inbound session event")
+		}
+	}
+	if protocolErr.Direction != "inbound" {
+		t.Fatalf("ProtocolError.Direction = %q, want inbound", protocolErr.Direction)
+	}
+
+	ts, err := client.CurrentTime(ctx)
+	if err != nil {
+		t.Fatalf("CurrentTime() after unknown malformed inbound = %v", err)
+	}
+	if want := time.Unix(1783720285, 0).UTC(); !ts.Equal(want) {
+		t.Fatalf("CurrentTime() = %v, want %v", ts, want)
+	}
+
 	client.Close()
 	if err := client.Wait(); err != nil {
 		t.Fatalf("client.Wait() error = %v, want nil after Close", err)

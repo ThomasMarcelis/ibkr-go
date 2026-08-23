@@ -113,6 +113,13 @@ func run() (err error) {
 					evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
 			case evt.Warning != nil:
 				fmt.Println("warning:", evt.Warning)
+			case evt.Binding != nil:
+				fmt.Printf("binding: order=%d perm=%d client=%d\n",
+					evt.Binding.OrderID, evt.Binding.PermID, evt.Binding.ClientID)
+			case evt.Lifecycle != nil:
+				fmt.Printf("lifecycle: %s err=%v\n", evt.Lifecycle.Kind, evt.Lifecycle.Err)
+			default:
+				return errors.New("received order event without a payload")
 			}
 		case <-ctx.Done():
 			return context.Cause(ctx)

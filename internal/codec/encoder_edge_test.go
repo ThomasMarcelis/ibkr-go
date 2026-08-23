@@ -5,28 +5,6 @@ import (
 	"testing"
 )
 
-func TestFieldWriterMaxFloatSentinel(t *testing.T) {
-	t.Parallel()
-	tests := []struct {
-		name  string
-		input float64
-		want  string
-	}{
-		{"sentinel", math.MaxFloat64, ""},
-		{"zero", 0, "0"},
-		{"fractional", 1.5, "1.5"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var w fieldWriter
-			w.WriteMaxFloat(tt.input)
-			if got := w.fields[0]; got != tt.want {
-				t.Errorf("WriteMaxFloat(%v) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestFieldWriterMaxIntSentinel(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

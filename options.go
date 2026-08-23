@@ -265,7 +265,14 @@ func WithOrderEventBuffer(size int) Option {
 	}
 }
 
-// WithResumePolicy overrides the [ResumePolicy] for a single subscription.
+// WithResumePolicy overrides the [ResumePolicy] for a single subscription. The
+// default is [ResumeNever]. [ResumeAuto] is accepted only by streaming
+// [MarketDataClient.SubscribeQuotes] and
+// [MarketDataClient.SubscribeRealTimeBars]; every other operation returns a
+// [*ValidationError]. It reissues the request after an automatic transport
+// reconnect and after a data-lost restoration (Gateway code 1101), including
+// when 1101 arrives on the existing socket. It does not make one-shots or other
+// subscription families replayable.
 func WithResumePolicy(policy ResumePolicy) SubscriptionOption {
 	return func(cfg *subscriptionConfig) {
 		cfg.resume = policy

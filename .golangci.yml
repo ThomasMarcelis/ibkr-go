@@ -35,7 +35,7 @@ linters:
         path: _test\.go
       - linters: [errcheck, unparam, unused]
         path: cmd/
-      # encodeWire's error result is fixed by the codec.Message interface;
+      # encodeWire's error result is fixed by codec.OutboundMessage;
       # most messages encode infallibly.
       - linters: [unparam]
         path: internal/codec/

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"sync"
 	"time"
 
@@ -30,12 +29,16 @@ type engine struct {
 	connectErrMu   sync.Mutex
 	lastConnectErr error
 
+	// snapshot is actor-owned; all writes and unguarded reads run on the actor
+	// goroutine. snapshotMu exists solely so Session can read a consistent copy
+	// off-actor; setState and updateSnapshot take its write lock for that reader.
 	snapshotMu sync.RWMutex
 	snapshot   Snapshot
 
 	transport           *transport.Conn
 	retiringTransport   *transport.Conn
 	transportRetireErr  error
+	transportRouteErr   error
 	transportGeneration uint64
 	serverVersion       int
 
@@ -69,10 +72,14 @@ type engine struct {
 	dirtySingletons      map[string]uint64
 	readySetups          []*readySetup
 
-	nextReqID                int
-	requestIDHighWater       int64
-	orderIDHighWater         int64
-	orderIDsEver             map[int64]struct{}
+	// Request IDs keep their independent low sequence but never enter the
+	// historical order interval conservatively bounded by orderIDLowWater and
+	// snapshot.NextValidID. The low-water mark includes order IDs allocated or
+	// observed by this engine, including orders owned by another client ID.
+	nextReqID          int
+	requestIDHighWater int64
+	orderIDLowWater    int64
+
 	nextClockRequest         time.Time
 	nextHistoricalRequest    time.Time
 	recentHistoricalRequests map[string]time.Time
@@ -92,7 +99,6 @@ type engine struct {
 
 type resumeRoute struct {
 	reqID int
-	key   string
 	route *route
 }
 
@@ -143,11 +149,13 @@ const (
 // maxServerVersion.
 var advertisedServerVersionMax = maxServerVersion
 
+var errRequestIDExhausted = errors.New("request ID space exhausted")
+
 type route struct {
-	opKind           OpKind
+	opKind           OpKind // keyed routes only; singleton dispatch never reads it
 	subscription     bool
 	resume           ResumePolicy
-	request          codec.Message
+	request          codec.OutboundMessage
 	handle           func(any, *engine)
 	handleCommission func(codec.CommissionReport, *engine)
 	handleAPIErr     func(codec.APIError, *engine)
@@ -170,7 +178,6 @@ type orderRoute struct {
 	permID           int64
 	handle           *OrderHandle
 	cleanup          func()
-	attachedOrderIDs []int64
 	closed           bool
 	gapped           bool // true after Gap emitted; prevents duplicate gap events
 	recoveryRequired bool
@@ -227,7 +234,6 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		dirtySingletons:          make(map[string]uint64),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
-		orderIDsEver:             make(map[int64]struct{}),
 		snapshot: Snapshot{
 			State: StateDisconnected,
 		},
@@ -265,7 +271,7 @@ func (e *engine) Close() {
 	default:
 	}
 	e.enqueue(func() {
-		e.closeEngine(ErrClosed, nil)
+		e.closeEngine(ErrClosed, ErrClosed, nil)
 	})
 	<-e.done
 }
@@ -376,10 +382,8 @@ func (e *engine) emitEvent(code int, message string) {
 }
 
 func (e *engine) emitAPIEvent(msg codec.APIError) {
-	apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
-	e.snapshotMu.RLock()
+	apiErr := e.apiErr("", msg)
 	snapshot := cloneSnapshot(e.snapshot)
-	e.snapshotMu.RUnlock()
 	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
 		State:         snapshot.State,
@@ -394,14 +398,11 @@ func (e *engine) emitAPIEvent(msg codec.APIError) {
 }
 
 func (e *engine) apiNotice(op OpKind, msg codec.APIError) *APIError {
-	notice, _ := errors.AsType[*APIError](e.apiErr(op, msg))
-	return notice
+	return e.apiErr(op, msg)
 }
 
 func (e *engine) emitSessionEvent(code int, message string, err error) {
-	e.snapshotMu.RLock()
 	snapshot := cloneSnapshot(e.snapshot)
-	e.snapshotMu.RUnlock()
 	e.events.EmitLatest(Event{
 		At:            time.Now().UTC(),
 		State:         snapshot.State,
@@ -421,13 +422,13 @@ func (e *engine) updateSnapshot(update func(*Snapshot)) {
 	update(&e.snapshot)
 }
 
-func (e *engine) send(msg codec.Message) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	return e.sendContext(ctx, msg)
+func (e *engine) send(msg codec.OutboundMessage) error {
+	// Transport queue-capacity admission never waits for space: a full queue
+	// returns transport.ErrSendQueueFull.
+	return e.sendContext(context.Background(), msg)
 }
 
-func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
+func (e *engine) sendContext(ctx context.Context, msg codec.OutboundMessage) error {
 	if e.transport == nil {
 		return ErrNotReady
 	}
@@ -440,7 +441,7 @@ func (e *engine) sendContext(ctx context.Context, msg codec.Message) error {
 	return normalizeSendErr(ctx, tr, err)
 }
 
-func (e *engine) sendTrackedContext(ctx context.Context, msg codec.Message) (transportWriteKey, error) {
+func (e *engine) sendTrackedContext(ctx context.Context, msg codec.OutboundMessage) (transportWriteKey, error) {
 	if e.transport == nil {
 		return transportWriteKey{}, ErrNotReady
 	}
@@ -468,7 +469,7 @@ func normalizeSendErr(ctx context.Context, tr *transport.Conn, err error) error 
 	}
 	select {
 	case <-tr.Stopping():
-		return errors.Join(ErrInterrupted, err)
+		return interrupted(err)
 	default:
 		return err
 	}
@@ -481,36 +482,53 @@ func normalizeTransportErr(err error) error {
 	return err
 }
 
-func (e *engine) allocReqID() int {
+func (e *engine) allocReqID() (int, error) {
+	normalize := func(id int64) (int64, bool) {
+		for range 2 {
+			if id < 1 || id > maxWireOrderID {
+				id = 1
+			}
+			if e.orderIDLowWater > 0 && id >= e.orderIDLowWater && id < e.snapshot.NextValidID {
+				id = e.snapshot.NextValidID
+				continue
+			}
+			return id, true
+		}
+		return 0, false
+	}
+
+	id, ok := normalize(int64(e.nextReqID))
+	if !ok {
+		return 0, fmt.Errorf("ibkr: allocate request ID: %w", errRequestIDExhausted)
+	}
+	start := id
 	for {
-		if e.nextReqID < 1 || e.nextReqID > math.MaxInt32 {
-			e.nextReqID = 1
+		_, keyed := e.keyed[int(id)]
+		_, order := e.orders[id]
+		_, preview := e.previews[id]
+		if !keyed && !order && !preview {
+			next := id + 1
+			if next > maxWireOrderID {
+				next = 1
+			}
+			e.nextReqID = int(next)
+			e.observeRequestID(int(id))
+			return int(id), nil
 		}
-		id := e.nextReqID
-		if id == math.MaxInt32 {
-			e.nextReqID = 1
-		} else {
-			e.nextReqID++
+
+		id, ok = normalize(id + 1)
+		if !ok {
+			return 0, fmt.Errorf("ibkr: allocate request ID: %w", errRequestIDExhausted)
 		}
-		if _, conflict := e.keyed[id]; conflict {
-			continue
-		}
-		if _, conflict := e.orders[int64(id)]; conflict {
-			continue
-		}
-		if _, conflict := e.orderIDsEver[int64(id)]; conflict {
-			continue
-		}
-		if _, conflict := e.previews[int64(id)]; !conflict {
-			e.observeRequestID(id)
-			return id
+		if id == start {
+			return 0, fmt.Errorf("ibkr: allocate request ID: %w", errRequestIDExhausted)
 		}
 	}
 }
 
 func (e *engine) allocOrderID() (int64, error) {
 	for {
-		id := max(e.snapshot.NextValidID, e.orderIDHighWater+1, e.requestIDHighWater+1)
+		id := max(e.snapshot.NextValidID, e.requestIDHighWater+1)
 		if err := validateOrderID("OrderID", id, false); err != nil {
 			return 0, err
 		}
@@ -526,33 +544,24 @@ func (e *engine) allocOrderID() (int64, error) {
 		if _, conflict := e.previews[id]; conflict {
 			continue
 		}
-		e.orderIDHighWater = id
-		e.recordOrderID(id)
+		e.observeOrderID(id)
 		return id, nil
 	}
 }
 
 func (e *engine) observeOrderID(id int64) {
-	e.recordOrderID(id)
-	if id <= e.orderIDHighWater {
-		return
-	}
-	e.orderIDHighWater = id
-	e.updateSnapshot(func(s *Snapshot) {
-		if s.NextValidID <= id {
-			s.NextValidID = id + 1
-		}
-	})
-}
-
-func (e *engine) recordOrderID(id int64) {
 	if id <= 0 {
 		return
 	}
-	if e.orderIDsEver == nil {
-		e.orderIDsEver = make(map[int64]struct{})
+	if e.orderIDLowWater == 0 || id < e.orderIDLowWater {
+		e.orderIDLowWater = id
 	}
-	e.orderIDsEver[id] = struct{}{}
+	if id < e.snapshot.NextValidID {
+		return
+	}
+	e.updateSnapshot(func(s *Snapshot) {
+		s.NextValidID = id + 1
+	})
 }
 
 func (e *engine) observeRequestID(id int) {
@@ -562,15 +571,13 @@ func (e *engine) observeRequestID(id int) {
 }
 
 func (e *engine) observeNextValidID(id int64) {
-	next := max(id, e.orderIDHighWater+1, e.snapshot.NextValidID)
+	next := max(id, e.snapshot.NextValidID)
 	e.updateSnapshot(func(s *Snapshot) {
 		s.NextValidID = next
 	})
 }
 
 func (e *engine) connectionSeq() uint64 {
-	e.snapshotMu.RLock()
-	defer e.snapshotMu.RUnlock()
 	return e.snapshot.ConnectionSeq
 }
 
@@ -596,8 +603,6 @@ func (e *engine) hasReadyTransport() bool {
 		return false
 	default:
 	}
-	e.snapshotMu.RLock()
 	state := e.snapshot.State
-	e.snapshotMu.RUnlock()
 	return state == StateReady || state == StateDegraded
 }

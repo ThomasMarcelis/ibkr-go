@@ -1,5 +1,0 @@
-go test fuzz v1
-string("ex\xe8\x03-1")
-string("0")
-string("0")
-string("0")

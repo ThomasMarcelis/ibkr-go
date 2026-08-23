@@ -222,6 +222,10 @@ func TestSubscriptionCancellationAdmissionFailureTerminatesReconnectOffClient(t 
 		Contract: Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
 	})
 	_ = readObservedFrame(t, peer)
+	sibling := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+	}, WithResumePolicy(ResumeNever))
+	_ = readObservedFrame(t, peer)
 	fillTransportQueue(t, e.transport, peer)
 
 	sub.Close()
@@ -231,6 +235,17 @@ func TestSubscriptionCancellationAdmissionFailureTerminatesReconnectOffClient(t 
 	if _, ok := errors.AsType[*SubscriptionCancelError](sub.Wait()); !ok {
 		t.Fatalf("Wait() error = %T %v, want *SubscriptionCancelError", sub.Err(), sub.Err())
 	}
+	siblingErr := sibling.Wait()
+	if !errors.Is(siblingErr, ErrResumeRequired) || !IsRetryable(siblingErr) {
+		t.Fatalf("sibling Wait() error = %v, want retryable ErrResumeRequired", siblingErr)
+	}
+	if _, ok := errors.AsType[*SubscriptionCancelError](siblingErr); ok {
+		t.Fatalf("sibling Wait() error = %v, must not contain another route's cancellation failure", siblingErr)
+	}
+	waitErr := e.Wait()
+	if _, ok := errors.AsType[*SubscriptionCancelError](waitErr); !ok {
+		t.Fatalf("client Wait() error = %T %v, want *SubscriptionCancelError", waitErr, waitErr)
+	}
 	if !e.closed || e.transport != nil || e.snapshot.State != StateClosed {
 		t.Fatalf("failed cancellation client closed/transport/state = %t/%v/%s, want true/nil/Closed", e.closed, e.transport, e.snapshot.State)
 	}
@@ -238,6 +253,15 @@ func TestSubscriptionCancellationAdmissionFailureTerminatesReconnectOffClient(t 
 	case <-e.done:
 	default:
 		t.Fatal("ReconnectOff client remained running after its connection was retired")
+	}
+	var closedEvent Event
+	for event := range e.SessionEvents() {
+		if event.State == StateClosed {
+			closedEvent = event
+		}
+	}
+	if _, ok := errors.AsType[*SubscriptionCancelError](closedEvent.Err); !ok {
+		t.Fatalf("StateClosed event error = %T %v, want *SubscriptionCancelError", closedEvent.Err, closedEvent.Err)
 	}
 }
 
@@ -281,6 +305,45 @@ func TestSubscriptionCancellationAdmissionFailurePreservesResumeAutoSibling(t *t
 
 	route.close(ErrClosed)
 	e.deleteKeyedRoute(20622)
+}
+
+func TestSubscriptionCancellationAdmissionFailureDoesNotContaminateSibling(t *testing.T) {
+	t.Parallel()
+
+	e, peer := newObservedMarketDataEngine(t)
+	e.nextReqID = 20621
+	canceled := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
+	})
+	_ = readObservedFrame(t, peer)
+	sibling := installObservedQuoteRoute(t, e, QuoteRequest{
+		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
+	}, WithResumePolicy(ResumeNever))
+	_ = readObservedFrame(t, peer)
+	fillTransportQueue(t, e.transport, peer)
+
+	canceled.Close()
+	(<-e.cmds)()
+	finishObservedRetirement(t, e)
+
+	if _, ok := errors.AsType[*SubscriptionCancelError](canceled.Wait()); !ok {
+		t.Fatalf("canceled Wait() error = %T %v, want *SubscriptionCancelError", canceled.Err(), canceled.Err())
+	}
+	siblingErr := sibling.Wait()
+	if !errors.Is(siblingErr, ErrResumeRequired) || !IsRetryable(siblingErr) {
+		t.Fatalf("sibling Wait() error = %v, want retryable ErrResumeRequired", siblingErr)
+	}
+	if _, ok := errors.AsType[*SubscriptionCancelError](siblingErr); ok {
+		t.Fatalf("sibling Wait() error = %v, must not contain another route's cancellation failure", siblingErr)
+	}
+	if _, ok := e.keyed[20622]; ok {
+		t.Fatal("ResumeNever sibling survived connection retirement")
+	}
+
+	event := <-e.SessionEvents()
+	if _, ok := errors.AsType[*SubscriptionCancelError](event.Err); !ok {
+		t.Fatalf("session retirement error = %T %v, want *SubscriptionCancelError", event.Err, event.Err)
+	}
 }
 
 func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
@@ -335,6 +398,29 @@ func finishObservedRetirement(t *testing.T, e *engine) {
 	}
 	err := tr.Wait()
 	e.handleTransportLoss(transportLoss{transport: tr, err: err})
+}
+
+func TestSubscriptionCancelRouteErrPreservesEveryBatchCause(t *testing.T) {
+	t.Parallel()
+
+	first := errors.New("first cancellation interruption")
+	second := errors.New("second cancellation interruption")
+	direct := &SubscriptionCancelError{OpKind: OpQuotes, Err: first}
+	if got, ok := subscriptionCancelRouteErr(direct); !ok || got != first {
+		t.Fatalf("direct route cause = %T %v, %t; want exact first cause", got, got, ok)
+	}
+
+	batch := errors.Join(
+		direct,
+		&SubscriptionCancelError{OpKind: OpMarketDepth, Err: second},
+	)
+	got, ok := subscriptionCancelRouteErr(batch)
+	if !ok || !errors.Is(got, first) || !errors.Is(got, second) {
+		t.Fatalf("batch route cause = %v, %t; want both underlying causes", got, ok)
+	}
+	if _, ok := errors.AsType[*SubscriptionCancelError](got); ok {
+		t.Fatalf("batch route cause = %v, must not retain cancellation wrappers", got)
+	}
 }
 
 func TestActorSlowConsumerCancelsWhilePublicCloseWaitsOnFullCommandQueue(t *testing.T) {

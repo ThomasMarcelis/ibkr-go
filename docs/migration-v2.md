@@ -163,9 +163,10 @@ return sub.Err()
 Use `sub.All(ctx)` when only data values matter. It consumes and discards all
 non-data events, including `StreamNotice`; callers that need request-scoped
 warnings must use `Events()`. `Events()` and `All(ctx)` consume the same queue
-and must not be read concurrently. `Restored` means the
-Gateway retained the stream; `Resubscribed` means the client sent the request
-again.
+and must not be read concurrently. For a request-backed stream, `Restored`
+means the Gateway retained it; for the passive execution observer, it means
+local observation resumed without sending a request. `Resubscribed` means the
+client sent the request again.
 
 v1 could keep a business stream alive by dropping its oldest values when a
 consumer fell behind. v2 removes that data-loss policy: subscriptions, finite
@@ -198,13 +199,22 @@ if err := handle.Wait(); err != nil {
 `OrderHandle.Modify` is now `OrderHandle.Replace`.
 
 Order lifecycle transitions are now `OrderEvent.Lifecycle` values in the same
-ordered channel. After a physical connection gap, `RecoveryRequired` means
-fills or status changes may have occurred. Reconcile open orders, executions,
-and completed orders for business decisions; that handle remains permanently
-blocked from `Replace` because reconciliation cannot restore its lost event
-history. The lifecycle event and later replacement calls match non-retryable
+ordered channel. After a physical reconnect or data-lost restoration (code
+1101), `RecoveryRequired` means fills or status changes may have occurred.
+Reconcile open orders, executions, and completed orders for business decisions;
+that handle remains permanently blocked from `Replace` because reconciliation
+cannot restore its lost event history. A data-maintained 1100-to-1102 gap emits
+`Restored` and leaves replacement available. The recovery-required lifecycle
+event and later replacement calls match non-retryable
 `ErrOrderRecoveryRequired`; `ErrResumeRequired` remains subscription-only.
 Cancellation remains safe by stable order ID.
+
+If `PlaceBracket` admits only part of a bracket, it returns an
+`*OrderRecoveryError` containing every admitted order ID. That typed error also
+matches `ErrOrderRecoveryRequired` through `errors.Is`; use `errors.AsType` to
+read its `OrderIDs`, and reconcile them before placing another bracket. Its
+unwrap chain retains the independent placement and cancellation-admission
+causes.
 
 There is no restart-time adopt or replace-by-ID API in v2. After a process
 restart, reconcile through open orders, executions, and completed orders;

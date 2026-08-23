@@ -344,7 +344,7 @@ func validateOrderShortSale(order Order) error {
 		return nil
 	}
 	if order.Action != ActionSellShort && order.Action != ActionSellLong {
-		return invalidOrderField("Order.ShortSale", shortSale, "requires action SSHORT or SLONG")
+		return &ValidationError{Field: "Order.ShortSale", Message: "requires Order.Action SSHORT or SLONG"}
 	}
 	if shortSale.Slot < 0 || shortSale.Slot > 2 {
 		return invalidOrderField("Order.ShortSale.Slot", shortSale.Slot, "must be 0, 1, or 2")
@@ -403,7 +403,7 @@ func validateOrderAlgorithm(algorithm OrderAlgorithm) error {
 func validateOrderConditions(conditions OrderConditions) error {
 	if len(conditions.Values) == 0 {
 		if conditions.IgnoreRTH || conditions.CancelOrder {
-			return invalidOrderField("Order.Conditions.Values", 0, "is required when condition flags are set")
+			return &ValidationError{Field: "Order.Conditions.Values", Message: "is required when condition flags are set"}
 		}
 		return nil
 	}
@@ -477,12 +477,12 @@ func validateOrderPeggedBenchmark(order Order) error {
 	pegged := order.PeggedBenchmark
 	if order.OrderType != OrderTypePeggedBenchmark {
 		if pegged != nil {
-			return invalidOrderField("Order.PeggedBenchmark", pegged, "requires OrderType PEG BENCH")
+			return &ValidationError{Field: "Order.PeggedBenchmark", Message: "requires Order.OrderType PEG BENCH"}
 		}
 		return nil
 	}
 	if pegged == nil {
-		return invalidOrderField("Order.PeggedBenchmark", pegged, "is required for OrderType PEG BENCH")
+		return &ValidationError{Field: "Order.PeggedBenchmark", Message: "is required for Order.OrderType PEG BENCH"}
 	}
 	if pegged.ReferenceContractID <= 0 {
 		return invalidOrderField("Order.PeggedBenchmark.ReferenceContractID", pegged.ReferenceContractID, "must be positive")

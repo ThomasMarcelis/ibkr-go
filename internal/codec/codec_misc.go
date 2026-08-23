@@ -6,10 +6,43 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
-// Message is a wire message that knows its own field encoding.
-type Message interface {
+// Message is a decoded wire message.
+type Message any
+
+// OutboundMessage is a client-to-Gateway message accepted by Encode. Its
+// unexported method keeps wire encoding owned by this package.
+type OutboundMessage interface {
 	encodeWire(sv int) ([]string, error)
 }
+
+// LegacyServerMessage is a Gateway-to-client message retained only for the
+// testhost's legacy symbolic server fixtures. New replay coverage uses raw,
+// captured server frames instead.
+type LegacyServerMessage interface {
+	isLegacyServerMessage()
+}
+
+type infallibleLegacyServerEncoder interface {
+	LegacyServerMessage
+	encodeLegacyServerWire() []string
+}
+
+type fallibleLegacyServerEncoder interface {
+	LegacyServerMessage
+	encodeLegacyServerWire() ([]string, error)
+}
+
+func (APIError) isLegacyServerMessage()          {}
+func (NextValidID) isLegacyServerMessage()       {}
+func (ManagedAccounts) isLegacyServerMessage()   {}
+func (OrderStatus) isLegacyServerMessage()       {}
+func (OpenOrder) isLegacyServerMessage()         {}
+func (ExecutionDetail) isLegacyServerMessage()   {}
+func (OpenOrderEnd) isLegacyServerMessage()      {}
+func (ExecutionsEnd) isLegacyServerMessage()     {}
+func (CommissionReport) isLegacyServerMessage()  {}
+func (CompletedOrder) isLegacyServerMessage()    {}
+func (CompletedOrderEnd) isLegacyServerMessage() {}
 
 type ScannerParametersRequest struct{}
 
@@ -246,10 +279,6 @@ func decodeScannerParameters(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{ScannerParameters{XML: xml}}, nil
 }
 
-func (m ScannerParameters) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InScannerParameters), "1", m.XML}, nil
-}
-
 // [20, version=3, reqID, numberOfElements, entries(rank, contract(10), marketName, distance, benchmark, projection, legsStr)]
 func decodeScannerData(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
@@ -276,39 +305,6 @@ func decodeScannerData(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{ScannerDataResponse{ReqID: reqID, Entries: entries}}, nil
 }
 
-func (m ScannerDataResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InScannerData)
-	w.WriteInt(3) // version
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Entries))
-	for _, e := range m.Entries {
-		w.WriteInt(e.Rank)
-		// Scanner data has its own contract-details block. Unlike the common
-		// server contract block, it omits multiplier and includes marketName.
-		w.WriteInt(e.Contract.ConID)
-		w.WriteString(e.Contract.Symbol)
-		w.WriteString(e.Contract.SecType)
-		w.WriteString(e.Contract.Expiry)
-		if e.Contract.Strike == "" {
-			w.WriteString("0")
-		} else {
-			w.WriteString(e.Contract.Strike)
-		}
-		w.WriteString(e.Contract.Right)
-		w.WriteString(e.Contract.Exchange)
-		w.WriteString(e.Contract.Currency)
-		w.WriteString(e.Contract.LocalSymbol)
-		w.WriteString(e.MarketName)
-		w.WriteString(e.Contract.TradingClass)
-		w.WriteString(e.Distance)
-		w.WriteString(e.Benchmark)
-		w.WriteString(e.Projection)
-		w.WriteString(e.LegsStr)
-	}
-	return w.Fields(), nil
-}
-
 func readScannerContract(r *fieldReader) Contract {
 	conID, _ := r.ReadInt()
 	return Contract{
@@ -332,10 +328,6 @@ func decodeReceiveFA(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{ReceiveFA{FADataType: faDataType, XML: xml}}, nil
 }
 
-func (m ReceiveFA) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InReceiveFA), "1", itoa(m.FADataType), m.XML}, nil
-}
-
 // [104, reqId, dataJson]
 func decodeWSHMetaData(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -343,19 +335,11 @@ func decodeWSHMetaData(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{WSHMetaDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
 }
 
-func (m WSHMetaDataResponse) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InWSHMetaData), itoa(m.ReqID), m.DataJSON}, nil
-}
-
 // [105, reqId, dataJson]
 func decodeWSHEventData(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	dataJSON := r.ReadString()
 	return []Message{WSHEventDataResponse{ReqID: reqID, DataJSON: dataJSON}}, nil
-}
-
-func (m WSHEventDataResponse) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InWSHEventData), itoa(m.ReqID), m.DataJSON}, nil
 }
 
 // [67, version, reqId, groups]
@@ -366,18 +350,10 @@ func decodeDisplayGroupList(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{DisplayGroupList{ReqID: reqID, Groups: groups}}, nil
 }
 
-func (m DisplayGroupList) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InDisplayGroupList), "1", itoa(m.ReqID), m.Groups}, nil
-}
-
 // [68, version, reqId, contractInfo]
 func decodeDisplayGroupUpdated(r *fieldReader, sv int) ([]Message, error) {
 	r.Skip(1) // version
 	reqID, _ := r.ReadInt()
 	contractInfo := r.ReadString()
 	return []Message{DisplayGroupUpdated{ReqID: reqID, ContractInfo: contractInfo}}, nil
-}
-
-func (m DisplayGroupUpdated) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InDisplayGroupUpdated), "1", itoa(m.ReqID), m.ContractInfo}, nil
 }

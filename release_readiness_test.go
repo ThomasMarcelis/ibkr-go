@@ -66,9 +66,7 @@ func TestV2StableReleaseManifest(t *testing.T) {
 		delete(want, gap.ID)
 	}
 
-	if os.Getenv("IBKR_STABLE_RELEASE") == "1" {
-		if tag := os.Getenv("IBKR_RELEASE_TAG"); tag != manifest.Release {
-			t.Fatalf("IBKR_RELEASE_TAG = %q, want manifest release %q", tag, manifest.Release)
-		}
+	if tag := os.Getenv("IBKR_RELEASE_TAG"); tag != "" && tag != manifest.Release {
+		t.Fatalf("IBKR_RELEASE_TAG = %q, want manifest release %q", tag, manifest.Release)
 	}
 }

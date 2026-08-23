@@ -28,7 +28,6 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 		// cannot route an APIError to this singleton. ctx cancellation and
 		// onDisconnect are the only failure paths.
 		ownedRoute = &route{
-			opKind: OpCurrentTime,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.CurrentTime)
 				if !ok {
@@ -81,7 +80,6 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 		// cannot route here; ctx cancellation and onDisconnect are the only
 		// failure paths.
 		ownedRoute = &route{
-			opKind: OpCurrentTime,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.CurrentTimeMillis)
 				if !ok {
@@ -134,7 +132,6 @@ func (e *engine) ScannerParameters(ctx context.Context) (string, error) {
 		}
 
 		ownedRoute = &route{
-			opKind: OpScannerParameters,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.ScannerParameters:
@@ -175,7 +172,12 @@ func (e *engine) UserInfo(ctx context.Context) (string, error) {
 	var reqID int
 
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpUserInfo,
 			func(msg any, eng *engine) {
@@ -216,7 +218,12 @@ func (e *engine) Config(ctx context.Context) (TWSConfig, error) {
 			resp <- result{err: fmt.Errorf("ibkr: config requires server_version %d, negotiated %d: %w", protocol.MinServerVersionConfig, e.serverVersion, ErrUnsupportedServerVersion)}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		ownedRoute = newKeyedOneShotRoute(reqID, OpConfig,
 			func(msg any, eng *engine) {
 				if config, ok := msg.(codec.ConfigResponse); ok {
@@ -264,7 +271,11 @@ func (e *engine) SubscribeScannerResults(ctx context.Context, req ScannerSubscri
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[[]ScannerResult](
 			e, cfg, reqID, OpScannerSubscription, codec.CancelScannerSubscription{ReqID: reqID},
 		)
@@ -346,7 +357,6 @@ func (e *engine) RequestFA(ctx context.Context, faDataType FADataType) (string, 
 		}
 
 		ownedRoute = &route{
-			opKind: OpFAConfig,
 			handleAPIErr: func(msg codec.APIError, eng *engine) {
 				delete(eng.singletons, singletonFA)
 				resp <- result{err: eng.apiErr(OpFAConfig, msg)}
@@ -403,7 +413,12 @@ func (e *engine) SoftDollarTiers(ctx context.Context) ([]SoftDollarTier, error) 
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpSoftDollarTiers,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -443,7 +458,12 @@ func (e *engine) WSHMetaData(ctx context.Context) (string, error) {
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpWSHMetaData,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -491,7 +511,12 @@ func (e *engine) WSHEventData(ctx context.Context, req WSHEventDataRequest) (str
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpWSHEventData,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -547,7 +572,12 @@ func (e *engine) QueryDisplayGroups(ctx context.Context) (string, error) {
 	resp := make(chan result, 1)
 	var reqID int
 	enqueueOneShotSetup(ctx, e, func() {
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		e.keyed[reqID] = newKeyedOneShotRoute(reqID, OpDisplayGroups,
 			func(msg any, e *engine) {
 				switch m := msg.(type) {
@@ -587,7 +617,12 @@ func (e *engine) SubscribeDisplayGroup(ctx context.Context, groupID DisplayGroup
 			resp <- result{err: err}
 			return
 		}
-		reqID = e.allocReqID()
+		allocatedReqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
+		reqID = allocatedReqID
 		sub, ownedRoute := newKeyedSubscriptionRoute[DisplayGroupUpdate](
 			e, cfg, reqID, OpDisplayGroupEvents, codec.UnsubscribeFromGroupEventsRequest{ReqID: reqID},
 		)

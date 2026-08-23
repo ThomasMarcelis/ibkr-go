@@ -25,6 +25,7 @@ func TestValidateOrderRequest(t *testing.T) {
 		name   string
 		mutate func(*PlaceOrderRequest)
 		field  string
+		want   string
 	}{
 		{
 			name: "missing contract identity",
@@ -119,6 +120,7 @@ func TestValidateOrderRequest(t *testing.T) {
 				req.Order.Conditions.IgnoreRTH = true
 			},
 			field: "Order.Conditions.Values",
+			want:  "ibkr: invalid Order.Conditions.Values: is required when condition flags are set",
 		},
 		{
 			name: "adjustment without type",
@@ -152,9 +154,18 @@ func TestValidateOrderRequest(t *testing.T) {
 		{
 			name: "short sale metadata on buy",
 			mutate: func(req *PlaceOrderRequest) {
-				req.Order.ShortSale = OrderShortSale{Slot: 2, DesignatedLocation: "LOCATE"}
+				req.Order.ShortSale = OrderShortSale{Slot: 2, DesignatedLocation: "LOCATE", ExemptCode: new(0)}
 			},
 			field: "Order.ShortSale",
+			want:  "ibkr: invalid Order.ShortSale: requires Order.Action SSHORT or SLONG",
+		},
+		{
+			name: "peg benchmark on another order type",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Order.PeggedBenchmark = &OrderPeggedBenchmark{}
+			},
+			field: "Order.PeggedBenchmark",
+			want:  "ibkr: invalid Order.PeggedBenchmark: requires Order.OrderType PEG BENCH",
 		},
 		{
 			name: "peg benchmark without parameters",
@@ -162,6 +173,7 @@ func TestValidateOrderRequest(t *testing.T) {
 				req.Order.OrderType = OrderTypePeggedBenchmark
 			},
 			field: "Order.PeggedBenchmark",
+			want:  "ibkr: invalid Order.PeggedBenchmark: is required for Order.OrderType PEG BENCH",
 		},
 		{
 			name: "duplicate algorithm parameter",
@@ -187,6 +199,9 @@ func TestValidateOrderRequest(t *testing.T) {
 			}
 			if validation.Field != tc.field {
 				t.Fatalf("ValidationError.Field = %q, want %q", validation.Field, tc.field)
+			}
+			if tc.want != "" && validation.Error() != tc.want {
+				t.Fatalf("ValidationError = %q, want %q", validation, tc.want)
 			}
 		})
 	}

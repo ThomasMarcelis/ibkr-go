@@ -29,10 +29,6 @@ type ConfigResponse struct {
 	Orders      *OrdersConfig
 }
 
-func (m ConfigResponse) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InConfig)}, nil
-}
-
 type LockAndExitConfig struct {
 	AutoLogoffTime   *string
 	AutoLogoffPeriod *string

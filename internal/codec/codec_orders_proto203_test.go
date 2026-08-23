@@ -15,7 +15,7 @@ func TestEncodeServer203OrderRequestVectors(t *testing.T) {
 
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		want string
 	}{
 		{
@@ -334,7 +334,7 @@ func TestDecodeServer203OrderCallbacks(t *testing.T) {
 func TestEncodeServer203OrdersFailClosed(t *testing.T) {
 	t.Parallel()
 
-	for _, msg := range []Message{
+	for _, msg := range []OutboundMessage{
 		PlaceOrderRequest{OrderID: math.MaxInt32 + 1},
 		PlaceOrderRequest{OrderID: 1, LmtPrice: "not-a-number"},
 		PlaceOrderRequest{OrderID: 1, Conditions: []OrderCondition{{Type: 2}}},

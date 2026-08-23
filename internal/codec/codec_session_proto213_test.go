@@ -15,7 +15,7 @@ func TestEncodeSessionProto213LiveVectors(t *testing.T) {
 
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{"start API", StartAPI{ClientID: 9701}, "0000010f08e54b"},

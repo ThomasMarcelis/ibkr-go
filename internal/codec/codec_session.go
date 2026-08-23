@@ -1,7 +1,6 @@
 package codec
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
@@ -19,10 +18,6 @@ func (m StartAPI) encodeWire(sv int) ([]string, error) {
 type ServerInfo struct {
 	ServerVersion  int
 	ConnectionTime string
-}
-
-func (m ServerInfo) encodeWire(sv int) ([]string, error) {
-	return nil, fmt.Errorf("codec: unsupported message type %T", m)
 }
 
 type ManagedAccounts struct {
@@ -115,17 +110,13 @@ func decodeErrMsg(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
 }
 
-func (m APIError) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}, nil
+func (m APIError) encodeLegacyServerWire() []string {
+	return []string{itoa(protocol.InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}
 }
 
 // [109, timeMs] — no version
 func decodeCurrentTimeInMillis(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{CurrentTimeMillis{TimeMs: r.ReadString()}}, nil
-}
-
-func (m CurrentTimeMillis) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InCurrentTimeInMillis), m.TimeMs}, nil
 }
 
 // [9, version, orderID]
@@ -138,8 +129,8 @@ func decodeNextValidID(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{NextValidID{OrderID: orderID}}, nil
 }
 
-func (m NextValidID) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InNextValidID), "1", i64toa(m.OrderID)}, nil
+func (m NextValidID) encodeLegacyServerWire() []string {
+	return []string{itoa(protocol.InNextValidID), "1", i64toa(m.OrderID)}
 }
 
 // [15, version, accountsList]
@@ -153,8 +144,8 @@ func decodeManagedAccounts(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{ManagedAccounts{Accounts: accounts}}, nil
 }
 
-func (m ManagedAccounts) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InManagedAccounts), "1", strings.Join(m.Accounts, ",")}, nil
+func (m ManagedAccounts) encodeLegacyServerWire() []string {
+	return []string{itoa(protocol.InManagedAccounts), "1", strings.Join(m.Accounts, ",")}
 }
 
 // [49, version, time]
@@ -163,17 +154,9 @@ func decodeCurrentTime(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{CurrentTime{Time: r.ReadString()}}, nil
 }
 
-func (m CurrentTime) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InCurrentTime), "1", m.Time}, nil
-}
-
 // Wire fields after the message ID: [reqId, whiteBrandingId] — no version.
 func decodeUserInfo(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	whiteBrandingID := r.ReadString()
 	return []Message{UserInfo{ReqID: reqID, WhiteBrandingID: whiteBrandingID}}, nil
-}
-
-func (m UserInfo) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InUserInfo), itoa(m.ReqID), m.WhiteBrandingID}, nil
 }

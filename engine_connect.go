@@ -146,7 +146,7 @@ func (e *engine) handleConnectResult(result connectResult) {
 	e.connectCancel = nil
 	if result.unsupported {
 		e.reportReady(ErrUnsupportedServerVersion)
-		e.closeEngine(ErrUnsupportedServerVersion, ErrUnsupportedServerVersion)
+		e.closeEngine(ErrUnsupportedServerVersion, ErrUnsupportedServerVersion, ErrUnsupportedServerVersion)
 		return
 	}
 	if result.err != nil {
@@ -175,7 +175,7 @@ func (e *engine) connectFailed(op string, err error, reconnect bool) {
 	e.rememberConnectionError(connectErr)
 	if !reconnect {
 		e.reportReady(connectErr)
-		e.closeEngine(connectErr, connectErr)
+		e.closeEngine(connectErr, connectErr, connectErr)
 		return
 	}
 	e.setState(StateReconnecting, 0, "reconnect failed", connectErr)
@@ -249,10 +249,11 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 		// The ordering guarantee (all of this connection's decoded messages
 		// and tracked write outcomes reach e.incoming before transportErr) is
 		// preserved by waiting for both pumps.
-		lossErr := errors.Join(tr.Wait(), decodeErr)
-		if publicErr, ok := inboundFrameError(lossErr); ok {
-			lossErr = errors.Join(lossErr, publicErr)
+		transportErr := tr.Wait()
+		if publicErr, ok := inboundFrameError(transportErr); ok {
+			transportErr = publicErr
 		}
+		lossErr := errors.Join(transportErr, decodeErr)
 		select {
 		case e.transportErr <- transportLoss{transport: tr, err: lossErr}:
 		case <-e.done:
@@ -274,9 +275,7 @@ func (e *engine) scheduleBootstrapTimeout(tr *transport.Conn) {
 			if e.closed || e.transport != tr {
 				return
 			}
-			e.snapshotMu.RLock()
 			state := e.snapshot.State
-			e.snapshotMu.RUnlock()
 			if state != StateHandshaking {
 				return
 			}

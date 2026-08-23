@@ -67,17 +67,14 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 	}
 
 	if len(envelope.Body) > 0 && envelope.Body[len(envelope.Body)-1] != 0 {
-		if _, known := inboundDecoders[envelope.MsgID]; known {
-			fields := copyClassicFields(envelope.Body)
-			return []Message{MalformedInbound{
-				MsgID:       envelope.MsgID,
-				Encoding:    protocol.ClassicBody,
-				Fields:      fields,
-				Correlation: classicMalformedCorrelation(envelope.MsgID, fields),
-				Err:         wire.ErrMalformedFrame,
-			}}, nil
-		}
-		return nil, wire.ErrMalformedFrame
+		fields := copyClassicFields(envelope.Body)
+		return []Message{MalformedInbound{
+			MsgID:       envelope.MsgID,
+			Encoding:    protocol.ClassicBody,
+			Fields:      fields,
+			Correlation: classicMalformedCorrelation(envelope.MsgID, fields),
+			Err:         wire.ErrMalformedFrame,
+		}}, nil
 	}
 	r := newFieldReaderBytes(envelope.Body)
 	// Decoder field positions include the message ID. The negotiated envelope
@@ -115,7 +112,7 @@ func Decode(sv int, payload []byte) (Message, error) {
 }
 
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
-func Encode(sv int, msg Message) ([]byte, error) {
+func Encode(sv int, msg OutboundMessage) ([]byte, error) {
 	fields, err := msg.encodeWire(sv)
 	if err != nil {
 		return nil, err
@@ -127,9 +124,6 @@ func Encode(sv int, msg Message) ([]byte, error) {
 	if err != nil || msgID < 0 {
 		return nil, fmt.Errorf("codec: invalid outbound msg_id %q", fields[0])
 	}
-	if unknown, ok := msg.(UnknownInbound); ok && unknown.Encoding == protocol.ProtobufBody {
-		return protocol.EncodeProtobufEnvelope(sv, msgID, unknown.Payload)
-	}
 	if version, ok := protocol.OutboundProtobufVersion(msgID); ok && sv >= version {
 		if proto, ok := msg.(protobufEncoder); ok {
 			body, err := proto.encodeProto(sv)
@@ -139,6 +133,32 @@ func Encode(sv int, msg Message) ([]byte, error) {
 			return protocol.EncodeProtobufEnvelope(sv, msgID, body)
 		}
 		return nil, fmt.Errorf("codec: msg_id %d protobuf encoding is not implemented for server_version %d", msgID, sv)
+	}
+	return protocol.EncodeClassicEnvelope(sv, msgID, fields[1:])
+}
+
+// EncodeLegacyServer encodes one of the testhost's retained symbolic server
+// fixtures in the classic wire format. Production client traffic uses Encode.
+func EncodeLegacyServer(sv int, msg LegacyServerMessage) ([]byte, error) {
+	var fields []string
+	var err error
+	switch encoder := msg.(type) {
+	case infallibleLegacyServerEncoder:
+		fields = encoder.encodeLegacyServerWire()
+	case fallibleLegacyServerEncoder:
+		fields, err = encoder.encodeLegacyServerWire()
+	default:
+		return nil, fmt.Errorf("codec: legacy server message %T has no encoder", msg)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if len(fields) == 0 {
+		return nil, fmt.Errorf("codec: legacy server message encoded no fields")
+	}
+	msgID, err := strconv.Atoi(fields[0])
+	if err != nil || msgID < 0 {
+		return nil, fmt.Errorf("codec: invalid legacy server msg_id %q", fields[0])
 	}
 	return protocol.EncodeClassicEnvelope(sv, msgID, fields[1:])
 }
@@ -238,7 +258,7 @@ var inboundDecoders = map[int]decodeFunc{
 // over time, and killing the session over one (the pre-fix failure mode) tears
 // down every subscription and order handle. The engine surfaces these as
 // session events so drift stays observable; the raw fields are preserved for
-// diagnosis and re-encode verbatim.
+// diagnosis.
 type UnknownInbound struct {
 	MsgID    int
 	Encoding protocol.BodyEncoding
@@ -246,14 +266,10 @@ type UnknownInbound struct {
 	Payload  []byte
 }
 
-func (m UnknownInbound) encodeWire(sv int) ([]string, error) {
-	return append([]string{itoa(m.MsgID)}, m.Fields...), nil
-}
-
-// MalformedInbound carries a self-contained frame with a known message ID
-// whose body did not match the registered decoder. The frame boundary remains
-// trustworthy, so callers can report and skip this message without tearing
-// down unrelated routes on the connection.
+// MalformedInbound carries a self-contained frame with a trustworthy message
+// ID whose body violates classic framing or did not match its registered
+// decoder. The frame boundary remains trustworthy, so callers can report and
+// skip this message without tearing down unrelated routes on the connection.
 type MalformedInbound struct {
 	MsgID       int
 	Encoding    protocol.BodyEncoding
@@ -269,10 +285,6 @@ type MalformedInbound struct {
 // last-one-wins singular-field identity.
 type MalformedCorrelation struct {
 	RequestID int
-}
-
-func (m MalformedInbound) encodeWire(sv int) ([]string, error) {
-	return nil, fmt.Errorf("codec: cannot encode malformed inbound msg_id %d", m.MsgID)
 }
 
 func copyClassicFields(body []byte) []string {

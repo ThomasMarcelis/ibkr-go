@@ -33,7 +33,7 @@ func TestEncodeOptionsProto211OfficialVectors(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{"exercise", ExerciseOptionsRequest{ReqID: 7301, Contract: contract, ExerciseAction: 1, ExerciseQuantity: 1, Account: "DU9000001"}, "000000dd088539124208eef98ca70312044141504c1a034f5054220832303236303731372900000000000074403201433900000000000059404205534d415254520355534462044141504c180120012a09445539303030303031"},

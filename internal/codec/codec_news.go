@@ -105,10 +105,6 @@ func decodeNewsArticle(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{NewsArticleResponse{ReqID: reqID, ArticleType: articleType, ArticleText: articleText}}, nil
 }
 
-func (m NewsArticleResponse) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InNewsArticle), itoa(m.ReqID), itoa(m.ArticleType), m.ArticleText}, nil
-}
-
 // [84, reqID, time, providerCode, articleId, headline, extraData] — no version
 func decodeTickNews(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -120,10 +116,6 @@ func decodeTickNews(r *fieldReader, sv int) ([]Message, error) {
 		Headline:     r.ReadString(),
 		ExtraData:    r.ReadString(),
 	}}, nil
-}
-
-func (m TickNews) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InTickNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline, m.ExtraData}, nil
 }
 
 // [85, count, repeated(code, name)] — no version
@@ -142,17 +134,6 @@ func decodeNewsProviders(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{NewsProviders{Providers: entries}}, nil
 }
 
-func (m NewsProviders) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InNewsProviders)
-	w.WriteInt(len(m.Providers))
-	for _, p := range m.Providers {
-		w.WriteString(p.Code)
-		w.WriteString(p.Name)
-	}
-	return w.Fields(), nil
-}
-
 // [86, reqID, time, providerCode, articleId, headline] — no version
 func decodeHistoricalNews(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -163,23 +144,11 @@ func decodeHistoricalNews(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{HistoricalNewsItem{ReqID: reqID, Time: timeStr, ProviderCode: providerCode, ArticleID: articleID, Headline: headline}}, nil
 }
 
-func (m HistoricalNewsItem) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InHistoricalNews), itoa(m.ReqID), m.Time, m.ProviderCode, m.ArticleID, m.Headline}, nil
-}
-
 // [87, reqID, hasMore]
 func decodeHistoricalNewsEnd(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	hasMore, _ := r.ReadBool()
 	return []Message{HistoricalNewsEnd{ReqID: reqID, HasMore: hasMore}}, nil
-}
-
-func (m HistoricalNewsEnd) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistoricalNewsEnd)
-	w.WriteInt(m.ReqID)
-	w.WriteBool(m.HasMore)
-	return w.Fields(), nil
 }
 
 // [14, version=1, msgId, msgType, headline, source]
@@ -190,8 +159,4 @@ func decodeNewsBulletins(r *fieldReader, sv int) ([]Message, error) {
 	headline := r.ReadString()
 	source := r.ReadString()
 	return []Message{NewsBulletin{MsgID: msgId, MsgType: msgType, Headline: headline, Source: source}}, nil
-}
-
-func (m NewsBulletin) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InNewsBulletins), "1", itoa(m.MsgID), itoa(m.MsgType), m.Headline, m.Source}, nil
 }

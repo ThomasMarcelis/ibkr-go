@@ -15,7 +15,7 @@ sleep 100ms
 server open_order {"order_id":13,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","status":"Submitted","quantity":"1","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900013","client_id":"1","origin":"0"}
 server order_status {"order_id":13,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"257.90","perm_id":"900013","parent_id":"0","last_fill_price":"257.90","client_id":"1","why_held":"","mkt_cap_price":"0"}
 sleep 100ms
-server execution_detail {"req_id":-1,"order_id":13,"exec_id":"late-exec-13","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"257.90","time":"2026-04-13T16:46:00Z","perm_id":"900013","client_id":"1"}
+server execution_detail {"req_id":-1,"order_id":13,"exec_id":"late-exec-13","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"257.90","time":"20260413 12:46:00 US/Eastern","perm_id":"900013","client_id":"1"}
 server commission_report {"exec_id":"late-exec-13","commission":"1.00","currency":"USD","realized_pnl":"0"}
 sleep 1s
 disconnect

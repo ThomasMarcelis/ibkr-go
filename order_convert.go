@@ -99,15 +99,6 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 	}
 }
 
-func toCodecPresetBracketOrder(parentID, stopLossID, takeProfitID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
-	order := toCodecPlaceOrder(parentID, req)
-	order.AttachedStopLossOrderID = stopLossID
-	order.AttachedStopLossOrderType = "PRESET"
-	order.AttachedTakeProfitOrderID = takeProfitID
-	order.AttachedTakeProfitOrderType = "PRESET"
-	return order
-}
-
 func toCodecPreviewOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderRequest {
 	order := toCodecPlaceOrder(orderID, req)
 	order.WhatIf = "1"
@@ -359,11 +350,17 @@ func orderConditionsFromCodec(values []codec.OrderCondition) []OrderCondition {
 }
 
 func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, error) {
-	quantity, err := parseRequiredDecimal(m.Quantity, "completed order quantity")
+	return fromCodecOrderDetails(m.OrderDetails, "completed order")
+}
+
+// OpenOrder and CompletedOrder carry the same OrderDetails schema. The label
+// keeps malformed-field diagnostics tied to the callback the user received.
+func fromCodecOrderDetails(m codec.OrderDetails, label string) (CompletedOrderResult, error) {
+	quantity, err := parseRequiredDecimal(m.Quantity, label+" quantity")
 	if err != nil {
 		return CompletedOrderResult{}, err
 	}
-	filled, err := parseOptionalDecimal(m.Filled, "completed order filled")
+	filled, err := parseOptionalDecimal(m.Filled, label+" filled")
 	if err != nil {
 		return CompletedOrderResult{}, err
 	}
@@ -373,7 +370,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return nil
 		}
-		value, err := parseOptionalDecimalPointer(raw, "completed order "+field)
+		value, err := parseOptionalDecimalPointer(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -383,7 +380,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return decimal.Decimal{}
 		}
-		value, err := parseOptionalDecimal(raw, "completed order "+field)
+		value, err := parseOptionalDecimal(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -393,7 +390,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return nil
 		}
-		value, err := parseOptionalMaxIntPointer(raw, "completed order "+field)
+		value, err := parseOptionalMaxIntPointer(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -403,7 +400,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return 0
 		}
-		value, err := parseOptionalInt(raw, "completed order "+field)
+		value, err := parseOptionalInt(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -413,7 +410,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return 0
 		}
-		value, err := parseOptionalInt32(raw, "completed order "+field)
+		value, err := parseOptionalInt32(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -423,7 +420,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return 0
 		}
-		value, err := parseOptionalInt64(raw, "completed order "+field)
+		value, err := parseOptionalInt64(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -433,7 +430,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return nil
 		}
-		value, err := parseOptionalMaxInt64Pointer(raw, "completed order "+field)
+		value, err := parseOptionalMaxInt64Pointer(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -443,7 +440,7 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return false
 		}
-		value, err := parseOptionalBoolString(raw, "completed order "+field)
+		value, err := parseOptionalBoolString(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
@@ -453,14 +450,14 @@ func fromCodecCompletedOrder(m codec.CompletedOrder) (CompletedOrderResult, erro
 		if parseErr != nil {
 			return nil
 		}
-		value, err := parseOptionalBoolPointer(raw, "completed order "+field)
+		value, err := parseOptionalBoolPointer(raw, label+" "+field)
 		if err != nil {
 			parseErr = err
 		}
 		return value
 	}
 
-	legPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, "completed order combo leg price")
+	legPrices, err := comboLegPricesFromCodec(m.OrderComboLegPrices, label+" combo leg price")
 	if err != nil {
 		return CompletedOrderResult{}, err
 	}

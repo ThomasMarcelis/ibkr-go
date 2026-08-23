@@ -1,7 +1,6 @@
 package ibkr
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -148,7 +147,7 @@ func (e *engine) handleIncoming(msg any) {
 		// row cannot be attributed to a trustworthy request ID, and dropping it
 		// would silently corrupt every matching local book. Terminate all depth
 		// routes while keeping unrelated routes and the session alive. Reporting
-		// remains once per known msg_id, independently of route teardown, so a
+		// remains once per distinct msg_id, independently of route teardown, so a
 		// repeated bad frame still terminates depth routes created in the interim.
 		protocolErr := &ProtocolError{
 			Direction: "inbound",
@@ -360,19 +359,19 @@ func (e *engine) keyedRouteIDs(opKind OpKind) []int {
 func (e *engine) handleAPIError(msg codec.APIError) {
 	// Connectivity codes drive session state transitions.
 	switch msg.Code {
-	case 1100:
+	case ErrCodeConnectivityLost:
 		e.invalidateReconnectStability()
-		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+		apiErr := e.apiErr("", msg)
 		e.setState(StateDegraded, msg.Code, msg.Message, nil, apiErr)
 		e.emitGap()
 		return
-	case 1101:
+	case ErrCodeConnectivityRestoredDataLost:
 		// Data lost: every subscription and in-flight request died with the
 		// Gateway's IB connection. Auto-resumed subscriptions are re-sent by
 		// resumeRoutes; everything else is interrupted, mirroring the
 		// transport-loss teardown, so callers are not left waiting on
 		// answers that are never coming.
-		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+		apiErr := e.apiErr("", msg)
 		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
 		e.emitGap()
 		e.restoreExecutionEvents()
@@ -380,13 +379,14 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		e.dropLostRoutes()
 		e.resumeRoutes()
 		return
-	case 1102:
-		apiErr, _ := errors.AsType[*APIError](e.apiErr("", msg))
+	case ErrCodeConnectivityRestoredDataMaintained:
+		apiErr := e.apiErr("", msg)
 		e.setState(StateReady, msg.Code, msg.Message, nil, apiErr)
 		e.emitResumed()
 		e.scheduleReconnectStability(e.transport)
 		return
 	case 1300:
+		// Official code 1300 is a socket-port reset; transport teardown owns it.
 		if e.transport != nil {
 			_ = e.transport.Close()
 		}
@@ -440,38 +440,6 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		return
 	}
 
-	// 10xxx: market-data warnings such as 10167 "displaying delayed data".
-	// Route to keyed handler when one exists (the handler decides whether
-	// the code is terminal); otherwise emit as a session-level event.
-	if msg.Code >= 10000 && msg.Code < 20000 {
-		if msg.ReqID > 0 {
-			if route, ok := e.keyed[msg.ReqID]; ok && route.handleAPIErr != nil {
-				route.handleAPIErr(msg, e)
-				return
-			}
-			if e.handlePreviewAPIError(msg) {
-				return
-			}
-			if or, ok := e.orders[int64(msg.ReqID)]; ok && !or.closed {
-				if !e.ensureOrderStarted(or) {
-					e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
-					return
-				}
-				if !or.working && isInitialOrderRejection(msg.Code) {
-					e.closeOrderRoute(int64(msg.ReqID), or, e.apiErr(OpPlaceOrder, msg))
-					return
-				}
-				apiErr, _ := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
-				if !or.handle.emitWarning(apiErr) {
-					e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
-				}
-				return
-			}
-		}
-		e.emitAPIEvent(msg)
-		return
-	}
-
 	// Request-specific errors (200, 420, etc.) are routed to the keyed
 	// subscription that owns the reqID.
 	if msg.ReqID > 0 {
@@ -489,16 +457,16 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 				e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
 				return
 			}
-			orderErr, isAPIErr := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
-			if or.working || !isInitialOrderRejection(msg.Code) {
+			orderErr := e.apiErr(OpPlaceOrder, msg)
+			// Once the Gateway has exposed working evidence, retaining the live
+			// handle and surfacing an unknown error is safer than detaching it.
+			if or.working || !isOrderRejectionCode(msg.Code) {
 				if !or.handle.emitWarning(orderErr) {
 					e.closeOrderRoute(int64(msg.ReqID), or, ErrSlowConsumer)
 				}
 				return
 			}
-			if isAPIErr {
-				e.closeOrderRoute(int64(msg.ReqID), or, orderErr)
-			}
+			e.closeOrderRoute(int64(msg.ReqID), or, orderErr)
 			return
 		}
 		// A reqID-targeted error that matches no keyed route and no order
@@ -516,7 +484,7 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 }
 
 func unkeyedAPIErrorSingleton(msg codec.APIError) string {
-	if msg.ReqID > 0 || msg.Code != 321 {
+	if msg.ReqID > 0 || msg.Code != ErrCodeServerErrorValidatingRequest {
 		return ""
 	}
 	switch {
@@ -536,7 +504,7 @@ func unkeyedAPIErrorSingleton(msg codec.APIError) string {
 	}
 }
 
-func (e *engine) apiErr(opKind OpKind, msg codec.APIError) error {
+func (e *engine) apiErr(opKind OpKind, msg codec.APIError) *APIError {
 	apiErr := &APIError{
 		RequestID:               protocolIDFromInt[RequestID](msg.ReqID),
 		Code:                    msg.Code,
@@ -564,7 +532,7 @@ func (e *engine) handlePreviewAPIError(msg codec.APIError) bool {
 	if !ok {
 		return false
 	}
-	apiErr, _ := errors.AsType[*APIError](e.apiErr(OpPlaceOrder, msg))
+	apiErr := e.apiErr(OpPlaceOrder, msg)
 	if apiErr.IsWarning() {
 		e.emitAPIEvent(msg)
 		return true
@@ -575,14 +543,6 @@ func (e *engine) handlePreviewAPIError(msg codec.APIError) bool {
 	preview.resolve(previewResult{err: apiErr})
 	delete(e.previews, int64(msg.ReqID))
 	return true
-}
-
-// isInitialOrderRejection is the attested set of errors that prove a placement
-// failed before the Gateway exposed any working-order evidence. Unknown codes
-// and every error after working evidence remain warnings: detaching a live
-// order is the dangerous failure direction.
-func isInitialOrderRejection(code int) bool {
-	return isOrderRejectionCode(code)
 }
 
 func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
@@ -680,8 +640,6 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 // same way filled ones once did. Frames that straggle in after the deletion
 // drop at the missing-route check, identical to the closed-route behavior.
 func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
-	attachedOrderIDs := or.attachedOrderIDs
-	or.attachedOrderIDs = nil
 	or.closed = true
 	if or.pendingWrite.id != 0 {
 		delete(e.pendingOrderWrites, or.pendingWrite)
@@ -697,26 +655,6 @@ func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 		or.cleanup = nil
 		cleanup()
 	}
-	if shouldCloseAttachedOrderRoutes(err) {
-		for _, attachedOrderID := range attachedOrderIDs {
-			if attached, ok := e.orders[attachedOrderID]; ok && !attached.closed {
-				e.closeOrderRoute(attachedOrderID, attached, err)
-			}
-		}
-	}
-}
-
-// A preset bracket is admitted as one parent frame. If that frame was never
-// written, or TWS definitively rejects the parent before working evidence, the
-// attached child IDs cannot independently become live. Other parent teardown
-// paths detach only the parent observer because accepted children are owned by
-// TWS and remain independently observable.
-func shouldCloseAttachedOrderRoutes(err error) bool {
-	if errors.Is(err, ErrInterrupted) {
-		return true
-	}
-	apiErr, ok := errors.AsType[*APIError](err)
-	return ok && apiErr.IsOrderRejection()
 }
 
 func (e *engine) handleTransportWrite(write transportWrite) {

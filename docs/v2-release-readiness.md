@@ -21,8 +21,9 @@ evidence gap with its impact and follow-up.
 - The previously planned seven-day unchanged release-candidate soak was not
   completed. Post-publication defects must become v2.0.1; v2.0.0 is immutable.
 
-These are evidence and hardening gaps, not completed proofs. Exact impact and
-follow-up wording is frozen by `TestV2StableReleaseManifest`.
+These are evidence and hardening gaps, not completed proofs. The six-gap set
+and completeness of its nonempty `Gap`, `Impact`, and `FollowUp` fields are
+frozen by `TestV2StableReleaseManifest`; the exact prose is not.
 
 ## Follow-up capture pass
 
@@ -53,14 +54,16 @@ CGO_ENABLED=0 GOOS=linux GOARCH=386 go build ./...
 golangci-lint run
 go test -shuffle=on -count=1 ./...
 go test -race -shuffle=on -count=1 ./...
-./scripts/check-api.sh
+./scripts/check-api.sh --exact
 ./scripts/fuzz-all.sh --check
 ./scripts/fuzz-all.sh 30s
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
-IBKR_STABLE_RELEASE=1 IBKR_RELEASE_TAG=v2.0.0 \
+IBKR_RELEASE_TAG=v2.0.0 \
   go test -shuffle=on -count=1 ./...
 ```
 
 Maintainers also run `./scripts/verify-captures.sh` against the nonempty ignored
 local capture corpus. Release CI verifies that `v2.0.0` is an annotated tag on
-the `/v2` module path and publishes it as a stable GitHub release.
+the `/v2` module path and publishes it as a stable GitHub release. Every test
+run validates the frozen manifest; `IBKR_RELEASE_TAG` additionally binds it to
+the initial `v2.0.0` tag and is not used for later compatible v2 releases.

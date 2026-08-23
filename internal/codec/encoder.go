@@ -17,20 +17,6 @@ func (w *fieldWriter) WriteInt64(v int64) {
 	w.fields = append(w.fields, strconv.FormatInt(v, 10))
 }
 
-func (w *fieldWriter) WriteFloat(v float64) {
-	w.fields = append(w.fields, strconv.FormatFloat(v, 'f', -1, 64))
-}
-
-// WriteMaxFloat writes an empty string for math.MaxFloat64 (the TWS sentinel
-// for "no value"), otherwise formats the float normally.
-func (w *fieldWriter) WriteMaxFloat(v float64) {
-	if v >= math.MaxFloat64 {
-		w.fields = append(w.fields, "")
-		return
-	}
-	w.WriteFloat(v)
-}
-
 // WriteMaxInt writes an empty string for math.MaxInt32 (the TWS sentinel),
 // otherwise formats the int normally.
 func (w *fieldWriter) WriteMaxInt(v int) {

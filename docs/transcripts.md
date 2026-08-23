@@ -32,16 +32,25 @@ Current state:
 Each non-empty non-comment line is one step:
 
 ```text
+handshake <json-object>
 client <message> <json-object>
 server <message> <json-object>
 sleep <duration>
 disconnect
 split <direction> <sizes> <message> <json-object>
 raw <direction> <base64>
+splitraw <direction> <sizes> <base64>
 ```
 
 The JSON object is part of the line DSL. It provides typed values without
 turning the scenario into a machine-first document format.
+
+`handshake` supplies `server_version` and the wire-format `connection_time`;
+an optional `client_id` value such as `"$client"` binds the client ID decoded
+from `START_API`. Directions are `server` or `client`. Split sizes are
+comma-separated byte counts. A `raw` base64 argument is a complete
+length-prefixed frame; `splitraw` applies the listed chunk boundaries to that
+frame.
 
 ## Bindings
 
@@ -53,27 +62,37 @@ String values that start with `$` are symbolic bindings.
 
 ## Example
 
-```text
-client hello {"min_version":1,"max_version":1,"client_id":7}
-server hello_ack {"server_version":1,"connection_time":"2026-04-05T12:00:00Z"}
-server managed_accounts {"accounts":["DU12345"]}
-server next_valid_id {"order_id":1001}
+These executable lines are verbatim from
+[`current_time_live.txt`](../testdata/transcripts/current_time_live.txt),
+derived from live capture `20260710T215126Z-current_time` at `server_version 206`
+(`events.jsonl` SHA-256
+`c4ad2ec73d6d2a92a645fefeeb2d4d74335262dec23813e9645732c878ff826d`):
 
-client req_contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"}}
-server contract_details {"req_id":"$req1","contract":{"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"market_name":"NMS","min_tick":"0.01","time_zone_id":"US/Eastern"}
-server contract_details_end {"req_id":"$req1"}
+```text
+handshake {"server_version":206,"connection_time":"20260710 23:51:25 Central European Standard Time"}
+raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+raw server AAAACAAAAAkxADEA
+raw client AAAABgAAADExAA==
+raw server AAAAEQAAADExADE3ODM3MjAyODUA
+disconnect
 ```
 
 ## Testhost Contract
 
-`internal/testhost` currently uses the production codec in both directions, but
-it should be treated as replay tooling rather than as a place to define IBKR
-protocol semantics.
+`internal/testhost` uses the production codec to encode remaining symbolic
+server steps; symbolic client steps use the testhost's request decoder. It is
+replay tooling, not a place to define IBKR protocol semantics.
 
 - Raw client traffic is matched byte-for-byte. Remaining symbolic client
   traffic is decoded and matched against the script.
 - Raw server traffic is written byte-for-byte. Remaining symbolic server
   traffic is encoded from the script through the production codec.
+- Symbolic server encoding is frozen to the legacy `server_version 200` set:
+  `api_error`, `commission_report`, `completed_order`, `completed_order_end`,
+  `execution_detail`, `executions_end`, `managed_accounts`, `next_valid_id`,
+  `open_order`, `open_order_end`, and `order_status`.
+- New server-message coverage must use sanitized, captured `raw server` frames
+  (or `splitraw server` for transport chunking), not new symbolic builders.
 - Partial writes, malformed frames, delays, and disconnects are driven by the
   script rather than by ad hoc per-test logic.
 
@@ -178,6 +197,11 @@ account-specific identifiers before checking in fixtures. If a transcript
 header cites raw Gateway evidence and contains account-scoped fields, the
 header should say that account-specific identifiers are sanitized.
 
+Preserve every non-sensitive wire value exactly, including timestamp syntax
+and timezone suffixes. `driver_events.jsonl` records normalized public API
+output, not wire syntax; never copy its timestamps into symbolic wire fields
+or derive a protocol timestamp from a recorder event time.
+
 ## Next Transcript Work
 
 - use [`live-coverage-matrix.md`](live-coverage-matrix.md) as the target matrix
@@ -205,7 +229,9 @@ live — the symmetric-codec-bug class. New captures land raw by default (the
 capture pipeline already produces the raw bytes); the JSON message form is a
 human-readable view, kept where a consistency check against the decoded raw
 frame exists or where the flow is low-risk and sv200-only. Existing sv200
-transcripts migrate opportunistically, orders and executions first.
+transcripts migrate opportunistically, orders and executions first. The
+legacy symbolic server set is closed; a new message shape requires a captured
+raw frame even at sv200.
 
 Raw transcript files record the source capture hash and negotiated server
 version. Use `splitraw <server|client> <sizes> <base64-frame>` when a transport

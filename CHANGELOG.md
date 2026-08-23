@@ -22,6 +22,9 @@ partial state.
 - Order handles retain the correct parent and permanent identity across
   replacement, reconnect, and cross-client callbacks. Request, preview, and
   order IDs can no longer be recycled into an unrelated operation.
+- Partial bracket admission returns `*OrderRecoveryError`, preserving every
+  admitted order ID and independent placement/cancellation causes while also
+  matching `ErrOrderRecoveryRequired` through `errors.Is`.
 - Subscriptions publish data and recovery boundaries through one ordered event
   stream. Connectivity loss, restoration, slow consumers, and terminal errors
   are visible and typed.

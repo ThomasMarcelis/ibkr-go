@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -24,6 +25,10 @@ func TestFromCodecOpenOrderRejectsMalformedNonEmptyNumericField(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("fromCodecOpenOrder() error = nil, want malformed client id rejection")
+	}
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Message != "open order client id" {
+		t.Fatalf("fromCodecOpenOrder() error = %v, want open-order client-id diagnostic", err)
 	}
 }
 
@@ -264,6 +269,10 @@ func TestFromCodecCompletedOrderRejectsMalformedTypedField(t *testing.T) {
 	if err == nil {
 		t.Fatal("fromCodecCompletedOrder() error = nil, want malformed display size rejection")
 	}
+	protocolErr, ok := errors.AsType[*ProtocolError](err)
+	if !ok || protocolErr.Message != "completed order display size" {
+		t.Fatalf("fromCodecCompletedOrder() error = %v, want completed-order display-size diagnostic", err)
+	}
 }
 
 // TestFromCodecExecutionAcceptsNativeGatewayTime freezes the live Gateway
@@ -329,28 +338,6 @@ func TestFromCodecExecutionProjectsCompleteClassicResult(t *testing.T) {
 	}
 }
 
-func TestFromCodecExecutionKeepsRFC3339TranscriptCompatibility(t *testing.T) {
-	t.Parallel()
-
-	execution, err := fromCodecExecution(codec.ExecutionDetail{
-		OrderID:  42,
-		Contract: codec.Contract{Symbol: "AAPL"},
-		ExecID:   "exec-1",
-		Account:  "DU12345",
-		Side:     "BOT",
-		Shares:   "10",
-		Price:    "189.11",
-		Time:     "2026-04-05T12:01:00Z",
-	})
-	if err != nil {
-		t.Fatalf("fromCodecExecution() error = %v, want nil", err)
-	}
-	want := time.Date(2026, 4, 5, 12, 1, 0, 0, time.UTC)
-	if !execution.Time.Equal(want) {
-		t.Fatalf("Execution.Time = %s, want %s", execution.Time.Format(time.RFC3339), want.Format(time.RFC3339))
-	}
-}
-
 func TestFromCodecExecutionOptionExerciseType(t *testing.T) {
 	t.Parallel()
 
@@ -377,25 +364,23 @@ func TestFromCodecExecutionOptionExerciseType(t *testing.T) {
 	}
 }
 
-func TestFromCodecExecutionRejectsMalformedTime(t *testing.T) {
+func TestFromCodecExecutionRejectsUnsupportedTime(t *testing.T) {
 	t.Parallel()
 
-	_, err := fromCodecExecution(codec.ExecutionDetail{
-		OrderID:  42,
-		Contract: codec.Contract{Symbol: "AAPL"},
-		ExecID:   "exec-bad-time",
-		Account:  "DU12345",
-		Side:     "BOT",
-		Shares:   "1",
-		Price:    "150",
-		Time:     "not-a-timestamp",
-	})
-	if err == nil {
-		t.Fatal("fromCodecExecution() error = nil, want malformed execution time rejection")
-	}
-	_, err = parseExecutionTime("20260413 13:35:50 Not/AZone")
-	if err == nil {
-		t.Fatal("parseExecutionTime() accepted an unknown zone")
+	for _, raw := range []string{
+		"not-a-timestamp",
+		"20260413 13:35:50 Not/AZone",
+		"2026-04-05T12:01:00Z",
+	} {
+		t.Run(raw, func(t *testing.T) {
+			t.Parallel()
+			_, err := fromCodecExecution(codec.ExecutionDetail{
+				OrderID: 42, Shares: "1", Price: "150", Time: raw,
+			})
+			if err == nil {
+				t.Fatalf("fromCodecExecution() accepted unsupported execution time %q", raw)
+			}
+		})
 	}
 }
 
@@ -637,15 +622,13 @@ func TestParseExecutionTimeForms(t *testing.T) {
 	// The dash form is the Gateway's UTC notation, observed live on
 	// 2026-06-10 execution_data frames (capture
 	// 20260610T195819Z-api_order_trailing_cancel_aapl, events.jsonl sha256
-	// 0d3098f03fd68839); the space-and-zone form and RFC3339 were already
-	// accepted.
+	// 0d3098f03fd68839); the space-and-zone form was already accepted.
 	cases := []struct {
 		raw  string
 		want time.Time
 	}{
 		{"20260610-19:58:22", time.Date(2026, 6, 10, 19, 58, 22, 0, time.UTC)},
 		{"20260413 13:35:50 US/Eastern", time.Date(2026, 4, 13, 17, 35, 50, 0, time.UTC)},
-		{"2026-06-10T19:58:22Z", time.Date(2026, 6, 10, 19, 58, 22, 0, time.UTC)},
 	}
 	for _, tc := range cases {
 		got, err := parseExecutionTime(tc.raw)

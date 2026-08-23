@@ -40,10 +40,11 @@ func newOrderHandle(orderID int64, eventCapacity int) *OrderHandle {
 // OrderID returns the order ID bound to this handle.
 func (h *OrderHandle) OrderID() int64 { return h.orderID }
 
-// Events returns the channel of order events (open-order echoes, status
-// updates, executions, commissions). It closes when the handle closes. Events
-// are never silently dropped; queue overflow closes the handle with
-// [ErrSlowConsumer] without changing the live order.
+// Events returns the channel of order events: open-order echoes, status
+// updates, executions, commission-and-fees reports, warnings, bindings, and
+// lifecycle changes. It closes when the handle closes. Events are never
+// silently dropped; queue overflow closes the handle with [ErrSlowConsumer]
+// without changing the live order.
 func (h *OrderHandle) Events() <-chan OrderEvent { return h.events }
 
 // Done returns a channel closed when the handle has terminated. After it is
@@ -90,9 +91,10 @@ func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 // contract and parent are fixed at placement time; a conflicting nonzero
 // ParentID is rejected, while omission preserves the placement-time parent.
 // Other omitted order fields reset to defaults.
-// After a physical connection gap it permanently returns [ErrOrderRecoveryRequired]
-// because account reconciliation cannot restore the handle's lost event
-// history. Cancellation remains available by stable OrderID.
+// After a physical reconnect or data-lost restoration (code 1101), it
+// permanently returns [ErrOrderRecoveryRequired] because account reconciliation
+// cannot restore the handle's lost event history. A data-maintained 1100-to-1102
+// gap preserves replacement. Cancellation remains available by stable OrderID.
 func (h *OrderHandle) Replace(ctx context.Context, order Order) error {
 	if h.replaceFn == nil {
 		return fmt.Errorf("ibkr: order handle not connected")

@@ -36,7 +36,7 @@ sets an explicit override.
 Every outbound and inbound message ID must have at least one live-grounded
 scenario.
 
-### 1.1 Outbound (client → server): 74 message IDs
+### 1.1 Outbound (client → server): 76 message IDs
 
 | ID | Name | Live | Capture | Transcript | Gap |
 |----|------|------|---------|------------|-----|
@@ -163,14 +163,16 @@ legs remain valid for contract lookup.
 
 These are known official EWrapper callbacks with no ibkr-go message ID:
 
-- `tickEFP` — EFP tick pricing (no live data observed)
-- `orderBound` — order-bound notification
 - `connectAck` — TWS-specific connection ack
-- `deltaNeutralValidation` — delta-neutral validation callback
 - `verifyMessageAPI` / `verifyCompleted` / `verifyAndAuthMessageAPI` / `verifyAndAuthCompleted` — internal auth
 
-**Action:** Probe the live gateway for each. If the gateway never sends them,
-mark out_of_scope. If it does, implement and freeze.
+`tickEFP` (47), `deltaNeutralValidation` (56), and `orderBound` (100) have
+implemented typed paths. Their remaining positive live-evidence gaps are tracked
+in the coverage matrix rather than classified as missing messages here.
+
+These callbacks are intentionally `out_of_scope` in the live coverage matrix.
+Revisit that classification only if the project charter changes and live
+evidence establishes a useful external protocol behavior.
 
 ## 2. Order Type Matrix
 

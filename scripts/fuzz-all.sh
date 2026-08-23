@@ -9,18 +9,6 @@ targets=(
     './internal/wire:FuzzReadFrame'
     './internal/wire:FuzzWriteFrameRoundTrip'
     './internal/codec:FuzzDecodeBatch'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_TickPrice'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_AccountSummaryValue'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_PnLValue'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_TickReqParams'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_HeadTimestamp'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_OrderStatus'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_ExecutionDetail'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_CommissionReport'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_MarketDepthUpdate'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_MarketDepthL2Update'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_DisplayGroupList'
-    './internal/codec:FuzzEncodeDecodeRoundTrip_HistoricalDataUpdate'
 )
 
 actual=()

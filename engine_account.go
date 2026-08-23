@@ -45,7 +45,11 @@ func (e *engine) SubscribeAccountSummary(ctx context.Context, req AccountSummary
 			return
 		}
 
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		plan := newAccountSummaryPlan(reqID, req)
 		sub, ownedRoute := newKeyedSubscriptionRoute[AccountValue](
 			e, cfg, reqID, OpAccountSummary, codec.CancelAccountSummary{ReqID: reqID},
@@ -113,7 +117,6 @@ func (e *engine) ManagedAccounts(ctx context.Context) ([]string, error) {
 		}
 
 		ownedRoute = &route{
-			opKind: OpManagedAccounts,
 			handle: func(msg any, eng *engine) {
 				m, ok := msg.(codec.ManagedAccounts)
 				if !ok {
@@ -169,7 +172,6 @@ func (e *engine) SubscribePositions(ctx context.Context, opts ...SubscriptionOpt
 		)
 		sub.expectSnapshot()
 
-		ownedRoute.request = codec.PositionsRequest{}
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.Position:
@@ -219,7 +221,6 @@ func (e *engine) FamilyCodes(ctx context.Context) ([]FamilyCode, error) {
 		}
 
 		ownedRoute = &route{
-			opKind: OpFamilyCodes,
 			handle: func(msg any, eng *engine) {
 				switch m := msg.(type) {
 				case codec.FamilyCodes:
@@ -289,7 +290,6 @@ func (e *engine) SubscribeAccountUpdates(ctx context.Context, account string, op
 		)
 		sub.expectSnapshot()
 
-		ownedRoute.request = codec.AccountUpdatesRequest{Subscribe: true, Account: account}
 		ownedRoute.handle = func(msg any, e *engine) {
 			switch m := msg.(type) {
 			case codec.UpdateAccountValue:
@@ -394,7 +394,11 @@ func (e *engine) SubscribeAccountUpdatesMulti(ctx context.Context, req AccountUp
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[AccountUpdateMultiValue](
 			e, cfg, reqID, OpAccountUpdatesMulti, codec.CancelAccountUpdatesMulti{ReqID: reqID},
 		)
@@ -457,7 +461,11 @@ func (e *engine) SubscribePositionsMulti(ctx context.Context, req PositionsMulti
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[PositionMulti](
 			e, cfg, reqID, OpPositionsMulti, codec.CancelPositionsMulti{ReqID: reqID},
 		)
@@ -526,7 +534,11 @@ func (e *engine) SubscribePnL(ctx context.Context, req PnLRequest, opts ...Subsc
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[PnLUpdate](
 			e, cfg, reqID, OpPnL, codec.CancelPnL{ReqID: reqID},
 		)
@@ -587,7 +599,11 @@ func (e *engine) SubscribePnLSingle(ctx context.Context, req PnLSingleRequest, o
 			resp <- result{err: err}
 			return
 		}
-		reqID := e.allocReqID()
+		reqID, err := e.allocReqID()
+		if err != nil {
+			resp <- result{err: err}
+			return
+		}
 		sub, ownedRoute := newKeyedSubscriptionRoute[PnLSingleUpdate](
 			e, cfg, reqID, OpPnLSingle, codec.CancelPnLSingle{ReqID: reqID},
 		)

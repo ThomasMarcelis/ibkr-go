@@ -198,10 +198,10 @@ func (e *APIError) IsFarmStatus() bool {
 // still cancellable after the warning), and [ErrCodeOrderTIFSetFromPreset]
 // (the Gateway supplies a missing TIF and continues processing the request).
 //
-// The engine consults this predicate for order-targeted sub-10000 codes to
-// deliver [OrderEvent].Warning without closing the handle; the 10xxx band's
-// order handling is attestation-gated separately, so a newly attested
-// order-targeted 10xxx warning needs its own wiring there.
+// A placement error that reaches an active order route closes its handle only
+// before working evidence and when [APIError.IsOrderRejection] reports a
+// live-attested rejection. Other placement errors on that route are delivered
+// as [OrderEvent].Warning.
 func (e *APIError) IsWarning() bool {
 	return e.IsFarmStatus() || e.Code == ErrCodeDelayedMarketDataDisplayed ||
 		e.Code == ErrCodeSmartDepthExchanges || e.Code == ErrCodeOrderMessage ||

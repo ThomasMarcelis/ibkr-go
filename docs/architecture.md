@@ -28,9 +28,9 @@ configuration, volume/precision, and odd-lot gates. See
   subscription management
 - `internal/transport/`: socket dial, buffered frame read loop, write loop,
   pacing
-- `internal/protocol/`: dependency-free message identity, direction,
-  negotiated classic/protobuf envelope, migration gates, and supported-version
-  bounds
+- `internal/protocol/`: message identity, direction, negotiated
+  classic/protobuf envelope, migration gates, and supported-version bounds; the
+  envelope reuses `internal/wire` frame sentinels
 - `internal/codec/`: typed message encode/decode, split into per-domain files
   (`codec_orders.go`, `codec_marketdata.go`, etc.), the inbound decode
   registry, and protocol-owned version-gate aliases
@@ -72,13 +72,15 @@ configuration, volume/precision, and odd-lot gates. See
   explicit `inboundProtobufDecoders`. Unknown classic messages preserve their
   fields, while unknown protobuf messages preserve their binary body without
   interpreting embedded NUL bytes.
-- **Encode.** Every message struct implements `encodeWire(sv int) ([]string,
-  error)` directly; the `Message` interface is that encode capability, so a
-  struct without `encodeWire` does not compile as a `Message` and encode
-  coverage is checked at compile time. Migrated requests additionally
-  implement the local protobuf encoder capability. The protocol migration
-  table rejects a request once its protobuf gate is reached unless that
-  encoder exists; it never falls back to an invalid classic body.
+- **Encode.** `Message` is the decode-result type and has no encoding
+  capability. Client-to-Gateway structs implement the sealed `OutboundMessage`
+  capability accepted by production `Encode`. The 11 retained server fixture
+  types instead implement sealed `LegacyServerMessage` and are accepted only
+  by `EncodeLegacyServer` for retained legacy symbolic replays;
+  `UnknownInbound` is decode-only. Migrated requests additionally implement the
+  local protobuf encoder capability. The protocol migration table rejects a
+  request once its protobuf gate is reached unless that encoder exists; it
+  never falls back to an invalid classic body.
 - **Field parsing.** `fieldReader` is a lazy cursor over the frame's backing
   byte slice, not a pre-split `[]string`. Numeric and boolean fields parse in
   place through transient `unsafe.String` views handed to `strconv`; only
@@ -111,8 +113,8 @@ configuration, volume/precision, and odd-lot gates. See
 
 ## Routing Tables
 
-The engine maintains three routing tables, each serving a different dispatch
-pattern:
+The engine maintains four route maps, each serving a different dispatch
+pattern, plus one passive execution observer:
 
 - **Keyed (`map[int]*route`)** — request-ID-correlated flows. One-shots and
   keyed subscriptions (account summary, quotes, historical bars, market depth,
@@ -127,6 +129,10 @@ pattern:
 - **Orders (`map[int64]*orderRoute`)** — per-order lifecycle tracking. Each
   placed order registers a route keyed by `orderID`. OpenOrder, OrderStatus,
   Execution, and commission-and-fees messages dispatch to the matching order route.
+
+- **Previews (`map[int64]*previewRoute`)** — isolated what-if requests keyed by
+  their engine-owned order ID. The matching OpenOrder echo resolves the preview
+  without creating or dispatching to a live order handle.
 
 - **Passive execution observer** — at most one client-wide
   `SubscribeExecutionEvents` route owns no request ID and sends no wire
@@ -205,11 +211,13 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
   callbacks may follow them, so the caller closes the handle when its evidence
   requirements are satisfied. Cancellation replies 161 and 202 remain session
   notices and do not close the handle.
-- **Disconnect.** On session disconnect, active order handles receive `Gap`.
-  A data-maintained restoration yields `Restored`; a socket reconnect yields
-  `RecoveryRequired` because fills or status changes may have occurred during
-  the gap. Handles stay open, but replacement is permanently unavailable on
-  that handle and reports non-retryable `ErrOrderRecoveryRequired`.
+- **Disconnect.** Code 1100 or a socket disconnect gives active order handles
+  `Gap`. A data-maintained 1100-to-1102 restoration yields `Restored` and
+  preserves replacement. A socket reconnect or data-lost restoration (code
+  1101) yields `RecoveryRequired` because fills or status changes may have
+  occurred during the gap. Handles stay open, but replacement is permanently
+  unavailable on that handle and reports non-retryable
+  `ErrOrderRecoveryRequired`.
 - **Close()** detaches the handle from the engine. The order continues
   executing on the server; the caller simply stops receiving events.
 - **Cancel(ctx)** sends a CancelOrder request for this order.
@@ -246,10 +254,14 @@ These public contracts are intended to survive the remaining protocol work.
 ## Reconnect
 
 - Reconnect policy is a client policy; the default remains `ReconnectAuto`.
-- Resume policy is a per-subscription policy.
+- Resume policy is separate and defaults to `ResumeNever` for request-backed
+  subscriptions. `ResumeAuto` is accepted only for streaming quotes and
+  real-time bars; it reissues them after an automatic transport reconnect or a
+  data-lost restoration (1101) on the existing socket.
 - One-shots are never replayed automatically.
-- Order handles survive disconnects and require explicit reconciliation after
-  an observation gap.
+- Order handles survive disconnects. Physical reconnects and code 1101 require
+  explicit reconciliation; a data-maintained 1100-to-1102 gap does not disable
+  replacement.
 - Session reconnect boundaries are surfaced via `ConnectionSeq`.
 - `SessionEvents` is bounded and drop-oldest, but each actual state transition
   increments `TransitionSeq`; gaps are therefore detectable, and every event

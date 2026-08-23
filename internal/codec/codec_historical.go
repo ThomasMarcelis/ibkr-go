@@ -283,26 +283,11 @@ func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
 	return msgs, nil
 }
 
-func (m HistoricalBar) encodeWire(sv int) ([]string, error) {
-	return []string{
-		itoa(protocol.InHistoricalData), itoa(m.ReqID), "1",
-		m.Time, m.Open, m.High, m.Low, m.Close, m.Volume, m.WAP, m.Count,
-	}, nil
-}
-
-func (m HistoricalBarsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InHistoricalDataEnd), itoa(m.ReqID), m.StartDate, m.EndDate}, nil
-}
-
 // [88, reqId, headTimestamp] — no version
 func decodeHeadTimestamp(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	timestamp := r.ReadString()
 	return []Message{HeadTimestamp{ReqID: reqID, Timestamp: timestamp}}, nil
-}
-
-func (m HeadTimestamp) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InHeadTimestamp), itoa(m.ReqID), m.Timestamp}, nil
 }
 
 // [89, reqID, count, entries(price, size)] — no version
@@ -320,18 +305,6 @@ func decodeHistogramData(r *fieldReader, sv int) ([]Message, error) {
 		entries[i] = HistogramDataEntry{Price: r.ReadString(), Size: r.ReadString()}
 	}
 	return []Message{HistogramDataResponse{ReqID: reqID, Entries: entries}}, nil
-}
-
-func (m HistogramDataResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistogramData)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Entries))
-	for _, e := range m.Entries {
-		w.WriteString(e.Price)
-		w.WriteString(e.Size)
-	}
-	return w.Fields(), nil
 }
 
 // [96, reqID, count, entries(time, unused, price, size), done] — MIDPOINT
@@ -354,21 +327,6 @@ func decodeHistoricalTicks(r *fieldReader, sv int) ([]Message, error) {
 	}
 	done, _ := r.ReadBool()
 	return []Message{HistoricalTicksResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
-}
-
-func (m HistoricalTicksResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistoricalTicks)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Ticks))
-	for _, t := range m.Ticks {
-		w.WriteString(t.Time)
-		w.WriteString("") // unused
-		w.WriteString(t.Price)
-		w.WriteString(t.Size)
-	}
-	w.WriteBool(m.Done)
-	return w.Fields(), nil
 }
 
 // [97, reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done] — BID_ASK
@@ -395,23 +353,6 @@ func decodeHistoricalTicksBidAsk(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{HistoricalTicksBidAskResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
 }
 
-func (m HistoricalTicksBidAskResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistoricalTicksBidAsk)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Ticks))
-	for _, t := range m.Ticks {
-		w.WriteString(t.Time)
-		w.WriteInt(t.TickAttrib)
-		w.WriteString(t.BidPrice)
-		w.WriteString(t.AskPrice)
-		w.WriteString(t.BidSize)
-		w.WriteString(t.AskSize)
-	}
-	w.WriteBool(m.Done)
-	return w.Fields(), nil
-}
-
 // [98, reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done] — TRADES
 func decodeHistoricalTicksLast(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
@@ -434,23 +375,6 @@ func decodeHistoricalTicksLast(r *fieldReader, sv int) ([]Message, error) {
 	}
 	done, _ := r.ReadBool()
 	return []Message{HistoricalTicksLastResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
-}
-
-func (m HistoricalTicksLastResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistoricalTicksLast)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Ticks))
-	for _, t := range m.Ticks {
-		w.WriteString(t.Time)
-		w.WriteInt(t.TickAttrib)
-		w.WriteString(t.Price)
-		w.WriteString(t.Size)
-		w.WriteString(t.Exchange)
-		w.WriteString(t.SpecialConditions)
-	}
-	w.WriteBool(m.Done)
-	return w.Fields(), nil
 }
 
 // [90, reqID, barCount, time, open, close, high, low, WAP, volume]
@@ -481,24 +405,6 @@ func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
 	update.WAP = r.ReadString()
 	update.Volume = r.ReadString()
 	return []Message{update}, nil
-}
-
-func (m HistoricalDataUpdate) encodeWire(sv int) ([]string, error) {
-	if m.BarCount < 0 {
-		return nil, fmt.Errorf("codec: historical data update bar count %d must be non-negative", m.BarCount)
-	}
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistoricalDataUpdate)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.BarCount)
-	w.WriteString(m.Time)
-	w.WriteString(m.Open)
-	w.WriteString(m.Close)
-	w.WriteString(m.High)
-	w.WriteString(m.Low)
-	w.WriteString(m.WAP)
-	w.WriteString(m.Volume)
-	return w.Fields(), nil
 }
 
 // [108, reqID, startDateTime, endDateTime]
@@ -549,20 +455,4 @@ func decodeHistoricalSchedule(r *fieldReader, sv int) ([]Message, error) {
 		TimeZone:      timeZone,
 		Sessions:      sessions,
 	}}, nil
-}
-
-func (m HistoricalScheduleResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InHistoricalSchedule)
-	w.WriteInt(m.ReqID)
-	w.WriteString(m.StartDateTime)
-	w.WriteString(m.EndDateTime)
-	w.WriteString(m.TimeZone)
-	w.WriteInt(len(m.Sessions))
-	for _, s := range m.Sessions {
-		w.WriteString(s.StartDateTime)
-		w.WriteString(s.EndDateTime)
-		w.WriteString(s.RefDate)
-	}
-	return w.Fields(), nil
 }

@@ -25,7 +25,12 @@ if err != nil {
 }
 fmt.Println("positions:", len(positions))
 
-// streaming — one ordered stream, or data-only iteration with All
+// Use delayed data unless this login has real-time market-data entitlements.
+if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+    return err
+}
+
+// streaming — data, notices, and lifecycle boundaries stay ordered
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Stock("AAPL"),
 })
@@ -33,8 +38,13 @@ if err != nil {
     return err
 }
 defer sub.Close()
-for update := range sub.All(ctx) {
-    fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
+for event := range sub.Events() {
+    switch event.Kind {
+    case ibkr.StreamData:
+        fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
+    case ibkr.StreamNotice:
+        fmt.Println("quote notice:", event.Notice)
+    }
 }
 return sub.Err()
 ```
@@ -64,9 +74,10 @@ adopting the supported v2 line requires changing imports to
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
   configuration, WSH, display groups, and more. The client negotiates
-  `server_version` 200..225: 200 is the classic-wire live baseline, with exact
-  post-200 protocol migrations and version-gated semantics through 225. Remaining official branches are
-  tracked explicitly in the roadmap and coverage matrix.
+  `server_version` 200..225: 200 is the classic-wire live baseline, with
+  implemented post-200 protocol migrations and semantics gated through 225.
+  Remaining official branches are tracked explicitly in the roadmap and
+  coverage matrix.
 - **Reconnects are explicit.** Subscription events preserve `Gap`, `Restored`,
   `Resubscribed`, and `SnapshotComplete` in order with data. Channel close plus
   `Err()` is the terminal signal.
@@ -115,29 +126,12 @@ if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
 }
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Stock("AAPL"),
-})
+}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
 if err != nil {
     return err
 }
 defer sub.Close()
 
-for update := range sub.All(ctx) {
-    fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
-}
-if err := sub.Err(); err != nil {
-    return err
-}
-```
-
-`sub.All(ctx)` ranges over business data until the subscription closes or ctx
-is canceled, then `sub.Err()` reports why: nil for a clean close, or e.g.
-`ibkr.ErrSlowConsumer` / `ibkr.ErrInterrupted` otherwise — check
-`ibkr.IsRetryable(err)` to distinguish retry-with-backoff conditions from
-terminal failures. `All` consumes and filters lifecycle transitions and
-request-scoped notices from the subscription's single queue. To observe either,
-consume `Events()` instead:
-
-```go
 for event := range sub.Events() {
     switch event.Kind {
     case ibkr.StreamData:
@@ -150,12 +144,41 @@ for event := range sub.Events() {
         log.Printf("quote stream recovered on connection %d", event.ConnectionSeq)
     }
 }
-return sub.Err()
+if err := sub.Err(); err != nil {
+    return err
+}
 ```
 
-`Events()` and `All(ctx)` consume the same ordered queue; choose one rather
-than reading both concurrently. `All` filters lifecycle and notice events.
-`AwaitSnapshot(ctx)` remains a durable initial snapshot boundary.
+`Events()` is the subscription's single ordered queue. Repeated calls return the
+same channel, so multiple readers divide events rather than each receiving a
+copy. After the channel closes, `sub.Err()` reports why: nil for a clean close,
+or e.g. `ibkr.ErrSlowConsumer` / `ibkr.ErrInterrupted` otherwise. Check
+`ibkr.IsRetryable(err)` to distinguish retry-with-backoff conditions from
+terminal failures.
+
+If only business data matters, replace the `Events()` loop with the data-only
+iterator:
+
+```go
+for update := range sub.All(ctx) {
+    fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
+}
+return errors.Join(sub.Err(), context.Cause(ctx))
+```
+
+`All(ctx)` consumes and filters lifecycle and notice events. `Events()` and
+`All(ctx)` consume the same queue: choose one and have exactly one goroutine
+drain it. `AwaitSnapshot(ctx)` remains a durable initial snapshot boundary.
+
+Transport reconnection and request replay are separate policies. The client
+defaults to `ReconnectAuto`, which redials and handshakes after a dropped
+socket, while request-backed subscriptions default to `ResumeNever`.
+`ResumeAuto` is accepted only by streaming quotes and real-time bars. It
+reissues those requests after an automatic reconnect and after a data-lost
+restoration (code 1101), including when 1101 arrives on the existing socket.
+Other long-lived request-backed subscriptions end with `ErrResumeRequired`;
+finite streams end with `ErrInterrupted`. Create a replacement with a live
+context, which waits for the next `Ready` session when necessary.
 
 ### Fetch historical bars
 
@@ -215,6 +238,16 @@ for {
             fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
         case evt.CommissionAndFees != nil:
             fmt.Println("commission and fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
+        case evt.OpenOrder != nil:
+            fmt.Println("open order:", evt.OpenOrder.Order.OrderType)
+        case evt.Warning != nil:
+            fmt.Println("order warning:", evt.Warning)
+        case evt.Binding != nil:
+            fmt.Println("order binding:", evt.Binding.OrderID, evt.Binding.PermID)
+        case evt.Lifecycle != nil:
+            fmt.Println("order lifecycle:", evt.Lifecycle.Kind, evt.Lifecycle.Err)
+        default:
+            return errors.New("received order event without a payload")
         }
     case <-ctx.Done():
         orderID := handle.OrderID()
@@ -255,6 +288,12 @@ stable `OrderID` and cancel through `handle.Cancel` or
 
 The handle remains open after a terminal status so trailing executions and fees
 can arrive. Call `Close` when the application's observation window is complete.
+
+`Orders().Open` and `Orders().SubscribeOpen` can rediscover orders after a
+process restart, but neither creates an `OrderHandle` for an observed order.
+Cancellation by ID remains subject to IBKR client-ID ownership, and replacement
+is available only through an existing handle returned by this process's `Place`
+or `PlaceBracket` call.
 
 Place a bracket without managing IDs or transmit flags yourself:
 
@@ -328,14 +367,14 @@ defer pnl.Close()
 
 Every domain is accessed through a facade on the client:
 
-| Facade | Snapshots | Subscriptions |
-|--------|-----------|---------------|
-| `client.Accounts()` | `Summary`, `Positions`, `Updates`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribePnL`, `SubscribePnLSingle` |
+| Facade | One-shots and controls | Streams and handles |
+|--------|------------------------|---------------------|
+| `client.Accounts()` | `Summary`, `Positions`, `Updates`, `UpdatesMulti`, `PositionsMulti`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribeUpdates`, `SubscribeUpdatesMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle` |
 | `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | `StreamDetails`, `StreamSecDefOptParams` |
-| `client.MarketData()` | `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
+| `client.MarketData()` | `SetType`, `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
 | `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
-| `client.Orders()` | `Open`, `Completed`, `Executions`, `Preview` | `Place` -> `OrderHandle`, `PlaceBracket`, `StreamCompleted`, `SubscribeOpen`, `SubscribeExecutions`, `SubscribeExecutionEvents` |
-| `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` -> `ExerciseHandle` |
+| `client.Orders()` | `RefreshOrderID`, `Preview`, `Cancel`, `CancelAll`, `Open`, `Completed`, `Executions` | `Place` → `OrderHandle`, `PlaceBracket`, `StreamCompleted`, `SubscribeOpen`, `SubscribeExecutions`, `SubscribeExecutionEvents` |
+| `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` → `ExerciseHandle` |
 | `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
 | `client.Scanner()` | `Parameters` | `SubscribeResults` |
 | `client.Advisors()` | `Config`, `SoftDollarTiers` | — |
@@ -357,9 +396,13 @@ Errors are typed so callers can make a policy decision without parsing text:
 `*SubscriptionCancelError` mean remote state is uncertain and deliberately
 override any retryable wrapped cause. A
 `*RegulatorySnapshotUncertainError` identifies a fee-bearing snapshot whose
-completion evidence was lost. `ErrOrderRecoveryRequired` means an
-order handle crossed an observation gap and can no longer be used for
-replacement; it is distinct from retryable subscription resumption.
+completion evidence was lost. `ErrOrderRecoveryRequired` matches both a
+partially admitted bracket's `*OrderRecoveryError` and an order handle that
+crossed an unrecoverable observation gap: a physical reconnect or data-lost
+restoration (code 1101). Reconcile before taking another order action; that
+handle can no longer be used for replacement. A data-maintained 1100-to-1102
+gap instead emits `Restored` and preserves replacement. This is distinct from
+retryable subscription resumption.
 
 `ibkr.IsRetryable(err)` is the single retry-with-backoff decision. It returns
 true for not-ready/session interruption, transient connection failures, and

@@ -555,14 +555,20 @@ type HistoricalTick struct {
 // tick. Unknown bits remain preserved in the value.
 type TickBidAskAttributes int
 
-func (a TickBidAskAttributes) BidPastLow() bool  { return a&1 != 0 }
+// BidPastLow reports whether the bid-past-low bit is set.
+func (a TickBidAskAttributes) BidPastLow() bool { return a&1 != 0 }
+
+// AskPastHigh reports whether the ask-past-high bit is set.
 func (a TickBidAskAttributes) AskPastHigh() bool { return a&2 != 0 }
 
 // TickLastAttributes is the exact attribute bitmask attached to a trade tick.
 // Unknown bits remain preserved in the value.
 type TickLastAttributes int
 
-func (a TickLastAttributes) PastLimit() bool  { return a&1 != 0 }
+// PastLimit reports whether the past-limit bit is set.
+func (a TickLastAttributes) PastLimit() bool { return a&1 != 0 }
+
+// Unreported reports whether the unreported-trade bit is set.
 func (a TickLastAttributes) Unreported() bool { return a&2 != 0 }
 
 // HistoricalTickBidAsk is a single bid/ask historical tick.

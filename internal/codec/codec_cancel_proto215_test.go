@@ -13,7 +13,7 @@ func TestEncodeCancelProto215LiveVectors(t *testing.T) {
 
 	for _, tc := range []struct {
 		name string
-		msg  Message
+		msg  OutboundMessage
 		hex  string
 	}{
 		{"contract details", CancelContractData{ReqID: 7601}, "0000013208b13b"},
@@ -35,7 +35,7 @@ func TestEncodeCancelProto215LiveVectors(t *testing.T) {
 func TestEncodeCancelProto215RejectsEarlierVersions(t *testing.T) {
 	t.Parallel()
 
-	for _, msg := range []Message{
+	for _, msg := range []OutboundMessage{
 		CancelContractData{ReqID: 7601},
 		CancelHistoricalTicks{ReqID: 7602},
 	} {

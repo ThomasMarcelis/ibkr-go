@@ -44,7 +44,9 @@ func (c *Client) Session() Snapshot { return c.engine.Session() }
 
 // SessionEvents returns the bounded stream of connection lifecycle [Event]
 // values. Compare TransitionSeq values to detect evicted state transitions;
-// each event carries its exact post-transition Snapshot.
+// each event carries its exact post-transition Snapshot. Repeated calls return
+// the same channel; multiple readers divide events rather than each receiving
+// a copy.
 func (c *Client) SessionEvents() <-chan Event { return c.engine.SessionEvents() }
 
 // CurrentTime asks the Gateway for the server's current wall-clock time. It
@@ -87,7 +89,8 @@ func (c *Client) History() HistoryClient { return HistoryClient{engine: c.engine
 func (c *Client) Orders() OrdersClient { return OrdersClient{engine: c.engine} }
 
 // Options returns the sub-client for option calculations and exercise.
-// Contract option-chain metadata is available through [Client.Contracts].
+// Contract qualification and option-chain metadata are available through
+// [Client.Contracts].
 func (c *Client) Options() OptionsClient { return OptionsClient{engine: c.engine} }
 
 // News returns the sub-client for news providers, articles, and headlines.
@@ -250,12 +253,16 @@ func (c MarketDataClient) RegulatorySnapshot(ctx context.Context, contract Contr
 	return c.engine.RegulatorySnapshot(ctx, contract)
 }
 
-// SubscribeQuotes streams quote updates for a contract.
+// SubscribeQuotes streams quote updates for a contract. The default
+// [ResumeNever] policy does not replay the request after data loss; opt into
+// reissuing it with [WithResumePolicy] and [ResumeAuto].
 func (c MarketDataClient) SubscribeQuotes(ctx context.Context, req QuoteRequest, opts ...SubscriptionOption) (*Subscription[QuoteUpdate], error) {
 	return c.engine.SubscribeQuotes(ctx, req, opts...)
 }
 
-// SubscribeRealTimeBars streams 5-second real-time bars for a contract.
+// SubscribeRealTimeBars streams 5-second real-time bars for a contract. The
+// default [ResumeNever] policy does not replay the request after data loss; opt
+// into reissuing it with [WithResumePolicy] and [ResumeAuto].
 func (c MarketDataClient) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequest, opts ...SubscriptionOption) (*Subscription[Bar], error) {
 	return c.engine.SubscribeRealTimeBars(ctx, req, opts...)
 }
@@ -315,9 +322,10 @@ func (c HistoryClient) Schedule(ctx context.Context, req HistoricalScheduleReque
 // observation. Obtain one from [Client.Orders].
 type OrdersClient struct{ engine *engine }
 
-// RefreshOrderID asks the Gateway to refresh the engine's next order-ID seed.
-// The returned ID remains engine-owned and is consumed by the next placement;
-// callers do not pass it back to Place.
+// RefreshOrderID asks the Gateway to refresh the engine's conservative
+// order-ID floor. The returned ID remains engine-owned; later allocation may
+// advance past it to avoid request or order collisions, and callers do not
+// pass it back to Place.
 func (c OrdersClient) RefreshOrderID(ctx context.Context) (int64, error) {
 	return c.engine.RefreshOrderID(ctx)
 }
@@ -347,8 +355,9 @@ func (c OrdersClient) Preview(ctx context.Context, req PlaceOrderRequest) (Order
 	return c.engine.PreviewOrder(ctx, req)
 }
 
-// Cancel requests cancellation of a single order by ID. Options are only
-// needed for operator-entered compliance metadata.
+// Cancel requests cancellation of a single order by ID when IBKR's client-ID
+// ownership rules permit it. Options are only needed for operator-entered
+// compliance metadata.
 func (c OrdersClient) Cancel(ctx context.Context, orderID int64, opts ...CancelOption) error {
 	cfg, err := applyCancelOptions(opts)
 	if err != nil {
@@ -370,7 +379,10 @@ func (c OrdersClient) CancelAll(ctx context.Context, opts ...CancelOption) error
 // Open returns a one-shot snapshot of open orders in the client or all scope.
 // It returns [ErrNoSnapshot] for [OpenOrdersScopeAuto], which binds future
 // manual orders but has no snapshot boundary; use [OrdersClient.SubscribeOpen]
-// for that scope.
+// for that scope. Open never creates an [OrderHandle] for an observed order.
+// Cancellation by ID remains subject to IBKR client-ID ownership, and
+// replacement is available only through an existing handle returned by
+// [OrdersClient.Place] or [OrdersClient.PlaceBracket].
 func (c OrdersClient) Open(ctx context.Context, scope OpenOrdersScope) ([]OpenOrder, error) {
 	return c.engine.OpenOrdersSnapshot(ctx, scope)
 }
@@ -379,6 +391,10 @@ func (c OrdersClient) Open(ctx context.Context, scope OpenOrdersScope) ([]OpenOr
 // scope. An [OpenOrdersScopeAuto] subscription is persistent and has no
 // snapshot phase, so [Subscription.AwaitSnapshot] returns [ErrNoSnapshot];
 // closing it disables the automatic binding of future manual orders.
+// SubscribeOpen never creates an [OrderHandle] for an observed order.
+// Cancellation by ID remains subject to IBKR client-ID ownership, and
+// replacement is available only through an existing handle returned by
+// [OrdersClient.Place] or [OrdersClient.PlaceBracket].
 func (c OrdersClient) SubscribeOpen(ctx context.Context, scope OpenOrdersScope, opts ...SubscriptionOption) (*OpenOrdersSubscription, error) {
 	return c.engine.SubscribeOpenOrders(ctx, scope, opts...)
 }
@@ -433,7 +449,8 @@ func (c OrdersClient) SubscribeExecutionEvents(ctx context.Context, opts ...Subs
 }
 
 // OptionsClient groups option pricing, implied-volatility, and exercise
-// requests. Obtain one from [Client.Options].
+// requests. Obtain one from [Client.Options]. Contract qualification and
+// option-chain metadata belong to [ContractsClient].
 type OptionsClient struct{ engine *engine }
 
 // ImpliedVolatility computes an option's implied volatility from a given option

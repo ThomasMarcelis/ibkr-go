@@ -135,10 +135,6 @@ func decodeOrderBound(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{OrderBound{PermID: permID, ClientID: clientID, OrderID: orderID}}, nil
 }
 
-func (m OrderBound) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InOrderBound), i64toa(m.PermID), itoa(m.ClientID), i64toa(m.OrderID)}, nil
-}
-
 type OrderStatus struct {
 	OrderID       int64
 	Status        string
@@ -886,7 +882,7 @@ func decodeOrderStatus(r *fieldReader, sv int) ([]Message, error) {
 	}}, nil
 }
 
-func (m OrderStatus) encodeWire(sv int) ([]string, error) {
+func (m OrderStatus) encodeLegacyServerWire() []string {
 	w := fieldWriter{}
 	w.WriteInt(protocol.InOrderStatus)
 	w.WriteInt64(m.OrderID)
@@ -900,7 +896,7 @@ func (m OrderStatus) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.ClientID)
 	w.WriteString(m.WhyHeld)
 	w.WriteString(m.MktCapPrice)
-	return w.Fields(), nil
+	return w.Fields()
 }
 
 func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
@@ -1251,7 +1247,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 	}}, nil
 }
 
-func (m OpenOrder) encodeWire(sv int) ([]string, error) {
+func (m OpenOrder) encodeLegacyServerWire() ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(protocol.InOpenOrder)
 	w.WriteInt64(m.OrderID)
@@ -1509,7 +1505,7 @@ func decodeExecutionData(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{m}, nil
 }
 
-func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
+func (m ExecutionDetail) encodeLegacyServerWire() []string {
 	w := fieldWriter{}
 	w.WriteInt(protocol.InExecutionData)
 	w.WriteInt(m.ReqID)
@@ -1544,15 +1540,15 @@ func (m ExecutionDetail) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.LastLiquidity)
 	w.WriteString(m.PendingPriceRevision)
 	w.WriteString(m.Submitter)
-	return w.Fields(), nil
+	return w.Fields()
 }
 
 func decodeOpenOrderEnd(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{OpenOrderEnd{}}, nil
 }
 
-func (m OpenOrderEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InOpenOrderEnd), "1"}, nil
+func (m OpenOrderEnd) encodeLegacyServerWire() []string {
+	return []string{itoa(protocol.InOpenOrderEnd), "1"}
 }
 
 // [55, version, reqID]
@@ -1562,8 +1558,8 @@ func decodeExecutionDataEnd(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{ExecutionsEnd{ReqID: reqID}}, nil
 }
 
-func (m ExecutionsEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InExecutionDataEnd), "1", itoa(m.ReqID)}, nil
+func (m ExecutionsEnd) encodeLegacyServerWire() []string {
+	return []string{itoa(protocol.InExecutionDataEnd), "1", itoa(m.ReqID)}
 }
 
 // [59, version, execID, commission, currency, realizedPNL, yield, redemptionDate]
@@ -1584,11 +1580,11 @@ func decodeCommissionReport(r *fieldReader, sv int) ([]Message, error) {
 	}}, nil
 }
 
-func (m CommissionReport) encodeWire(sv int) ([]string, error) {
+func (m CommissionReport) encodeLegacyServerWire() []string {
 	return []string{
 		itoa(protocol.InCommissionReport), "1", m.ExecID, m.Commission, m.Currency,
 		m.RealizedPNL, m.Yield, m.YieldRedemptionDate,
-	}, nil
+	}
 }
 
 // [101, contract(11-field), action, totalQty, orderType, ...]
@@ -1800,7 +1796,7 @@ func decodeCompletedOrder(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{m}, nil
 }
 
-func (m CompletedOrder) encodeWire(sv int) ([]string, error) {
+func (m CompletedOrder) encodeLegacyServerWire() ([]string, error) {
 	w := fieldWriter{}
 	w.WriteInt(protocol.InCompletedOrder)
 	w.WriteInt(m.Contract.ConID)
@@ -1968,8 +1964,8 @@ func decodeCompletedOrderEnd(r *fieldReader, sv int) ([]Message, error) {
 	return []Message{CompletedOrderEnd{}}, nil
 }
 
-func (m CompletedOrderEnd) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.InCompletedOrderEnd)}, nil
+func (m CompletedOrderEnd) encodeLegacyServerWire() []string {
+	return []string{itoa(protocol.InCompletedOrderEnd)}
 }
 
 // [77, reqId, count, (name, value, displayName) * count]
@@ -1987,17 +1983,4 @@ func decodeSoftDollarTiers(r *fieldReader, sv int) ([]Message, error) {
 		tiers[i] = SoftDollarTier{Name: r.ReadString(), Value: r.ReadString(), DisplayName: r.ReadString()}
 	}
 	return []Message{SoftDollarTiersResponse{ReqID: reqID, Tiers: tiers}}, nil
-}
-
-func (m SoftDollarTiersResponse) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.InSoftDollarTiers)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(len(m.Tiers))
-	for _, t := range m.Tiers {
-		w.WriteString(t.Name)
-		w.WriteString(t.Value)
-		w.WriteString(t.DisplayName)
-	}
-	return w.Fields(), nil
 }
