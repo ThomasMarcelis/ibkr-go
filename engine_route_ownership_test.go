@@ -19,7 +19,8 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 	// legs 887307502/887307536 came from the exact-200 BAG quote capture (events
 	// SHA-256 1f8354ee5d9ea0570472caa35d905127f5a8c5bab694ba1f9a74532178842c69).
 	// The 0.05 per-leg decimal is the official ComboLeg.proto tag-9 source-law
-	// vector frozen in codec_orders_proto203_test.go, not a live priced-combo
+	// vector frozen in codec_orders_proto203_test.go; IncludeOvernight=true is
+	// likewise an official Order.proto source-law value, not a positive live
 	// attestation. Combining them here exercises ownership, not Gateway meaning.
 	openOrders := make(chan OpenOrder, 1)
 	handle := newOrderHandle(443, 64)
@@ -40,7 +41,7 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 				{ConID: 887307536, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
 			},
 		},
-			Action: "BUY", OrderType: "LMT", Quantity: "5", LmtPrice: "0.05", OrderComboLegPrices: []string{"0.05", ""},
+			Action: "BUY", OrderType: "LMT", Quantity: "5", LmtPrice: "0.05", IncludeOvernight: "1", OrderComboLegPrices: []string{"0.05", ""},
 			SmartComboRouting: []codec.TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		},
 	})
@@ -50,6 +51,9 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 	if handleOrder == nil {
 		t.Fatal("order handle did not receive open order")
 	}
+	if handleOrder.Order.IncludeOvernight == nil || openOrdersOrder.Order.IncludeOvernight == nil {
+		t.Fatalf("include overnight pointers = %v/%v, want explicit true", handleOrder.Order.IncludeOvernight, openOrdersOrder.Order.IncludeOvernight)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -58,18 +62,21 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 		handleOrder.Contract.ComboLegs[0].ConID = 887307502
 		*handleOrder.Order.Combo.LegPrices[0] = decimal.RequireFromString("0.05")
 		handleOrder.Order.Combo.SmartRouting[0].Value = "0"
+		*handleOrder.Order.IncludeOvernight = false
 	}()
 	go func() {
 		defer wg.Done()
 		openOrdersOrder.Contract.ComboLegs[0].ConID = 887307536
 		*openOrdersOrder.Order.Combo.LegPrices[0] = decimal.RequireFromString("291.09")
 		openOrdersOrder.Order.Combo.SmartRouting[0].Value = "1"
+		*openOrdersOrder.Order.IncludeOvernight = true
 	}()
 	wg.Wait()
 
 	if handleOrder.Contract.ComboLegs[0].ConID != 887307502 || openOrdersOrder.Contract.ComboLegs[0].ConID != 887307536 ||
 		!handleOrder.Order.Combo.LegPrices[0].Equal(decimal.RequireFromString("0.05")) || !openOrdersOrder.Order.Combo.LegPrices[0].Equal(decimal.RequireFromString("291.09")) ||
-		handleOrder.Order.Combo.SmartRouting[0].Value != "0" || openOrdersOrder.Order.Combo.SmartRouting[0].Value != "1" {
+		handleOrder.Order.Combo.SmartRouting[0].Value != "0" || openOrdersOrder.Order.Combo.SmartRouting[0].Value != "1" ||
+		*handleOrder.Order.IncludeOvernight || !*openOrdersOrder.Order.IncludeOvernight {
 		t.Fatalf("dual dispatch shares mutable storage: handle=%+v subscription=%+v", *handleOrder, openOrdersOrder)
 	}
 }

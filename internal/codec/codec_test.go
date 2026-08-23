@@ -508,6 +508,8 @@ func TestEncodeDecodeOpenOrderAdvancedSections(t *testing.T) {
 func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 	t.Parallel()
 
+	// IncludeOvernight below freezes the API 10.48.01 classic client field
+	// order. It is an official-source/test-encoder law, not live acceptance.
 	payload, err := Encode(200, PlaceOrderRequest{
 		OrderID: 77,
 		Contract: Contract{
@@ -534,6 +536,7 @@ func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 		Conditions:              []OrderCondition{{Type: 3, Conjunction: "a", Operator: 2, Value: "20260409 10:00:00 US/Eastern"}},
 		ConditionsIgnoreRTH:     "1",
 		ConditionsCancelOrder:   "0",
+		IncludeOvernight:        "1",
 	})
 	if err != nil {
 		t.Fatalf("Encode() error = %v", err)
@@ -545,6 +548,9 @@ func TestEncodePlaceOrderAdvancedSections(t *testing.T) {
 	assertSubsequence(t, fields, []string{"2", "101", "1", "BUY", "SMART", "0", "0", "", "-1", "102", "1", "SELL", "SMART", "0", "0", "", "-1", "2", "1.10", "2.40", "1", "NonGuaranteed", "1"})
 	assertSubsequence(t, fields, []string{"Adaptive", "1", "adaptivePriority", "Patient"})
 	assertSubsequence(t, fields, []string{"0", "0", "1", "3", "a", "1", "20260409 10:00:00 US/Eastern", "1", "0"})
+	if got := fields[len(fields)-3]; got != "1" {
+		t.Fatalf("include overnight = %q, want 1 as third field from end", got)
+	}
 }
 
 func TestEncodePlaceOrderScaleAndPeggedBenchmarkSections(t *testing.T) {

@@ -576,6 +576,9 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 	if (*open.Order.PermID) != 9000000371 || open.Order.OrderRef != ref(1) {
 		t.Fatalf("371 open perm/ref = %d/%q", (*open.Order.PermID), open.Order.OrderRef)
 	}
+	if open.Order.IncludeOvernight == nil || *open.Order.IncludeOvernight {
+		t.Fatalf("371 open include overnight = %v, want explicit false", open.Order.IncludeOvernight)
+	}
 	if first := mktBuyLog.nextStatusAny(t, ctx); first.Status != ibkr.OrderStatusPreSubmitted {
 		t.Fatalf("371 first status = %s, want PreSubmitted", first.Status)
 	}

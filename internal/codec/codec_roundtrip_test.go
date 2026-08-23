@@ -153,6 +153,8 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 			// prices, smart routing, algo params, conditions) are populated
 			// so the count-prefixed walks are exercised end to end. The scale
 			// extension values are the official API 10.48.01 Testbed sample.
+			// IncludeOvernight exercises the testhost encoder's classic field
+			// position; it is encoder coverage, not positive live evidence.
 			name: "OpenOrder",
 			msg: OpenOrder{
 				OrderID: 42,
@@ -171,7 +173,7 @@ func TestEncodeDecodeFieldEquality(t *testing.T) {
 					OrderType: "LMT", LmtPrice: "150.00", AuxPrice: "0.0",
 					TIF: "DAY", OcaGroup: "", OpenClose: "", Origin: "0",
 					OrderRef: "test-ref", ClientID: "99", PermID: "123456",
-					OutsideRTH: "0", Hidden: "0", DiscretionAmt: "0",
+					OutsideRTH: "0", IncludeOvernight: "1", Hidden: "0", DiscretionAmt: "0",
 					GoodAfterTime:       "",
 					AuctionStrategy:     "1",
 					OrderComboLegPrices: []string{"1.25"},

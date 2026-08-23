@@ -1212,6 +1212,9 @@ func TestCompletedOrdersCancelledSystemLive(t *testing.T) {
 	if order.Order.PermID == nil || *order.Order.PermID != 1002 || order.Order.Account != "DU12345" {
 		t.Fatalf("identity = account %q perm %v, want DU12345/1002", order.Order.Account, order.Order.PermID)
 	}
+	if order.Order.IncludeOvernight != nil {
+		t.Fatalf("classic completed-order include overnight = %v, want omitted", order.Order.IncludeOvernight)
+	}
 	if order.Order.Execution.DisplaySize != nil || order.Order.Scale.InitialLevelSize != nil ||
 		order.Order.Scale.SubsequentLevelSize != nil || order.Order.Execution.RefFuturesConID != nil {
 		t.Fatalf("integer sentinels were exposed as values: execution=%+v scale=%+v", order.Order.Execution, order.Order.Scale)

@@ -1349,6 +1349,9 @@ func TestCaptureDecode_OpenOrder(t *testing.T) {
 	if m.PermID != "9000" {
 		t.Errorf("PermID = %q, want 9000", m.PermID)
 	}
+	if m.IncludeOvernight != "0" {
+		t.Errorf("IncludeOvernight = %q, want 0", m.IncludeOvernight)
+	}
 	if m.Status != "PreSubmitted" {
 		t.Errorf("Status = %q, want PreSubmitted", m.Status)
 	}

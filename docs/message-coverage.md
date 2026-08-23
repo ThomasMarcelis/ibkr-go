@@ -202,10 +202,10 @@ as IBKR's unavailable sentinels.
 
 | Direction | Msg ID | Name | Status | Notes |
 |-----------|--------|------|--------|-------|
-| out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf. `Contract.conId` is proto3 optional; official EClientUtils nevertheless emits zero because `Utils::isValidValue(0)` is true, and a fresh guarded paper lifecycle capture freezes that request. Combo-leg price tag 9 is source-law coverage, not claimed live priced-combo evidence. |
+| out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf. `IncludeOvernight=true` is encoded in the classic tail and as protobuf field 135; classic false retains the existing empty encoding and protobuf false is omitted. Existing live-derived classic placements establish that the empty value is accepted, but a positive true capture remains pending. `Contract.conId` is proto3 optional; official EClientUtils nevertheless emits zero because `Utils::isValidValue(0)` is true, and a fresh guarded paper lifecycle capture freezes that request. Combo-leg price tag 9 is source-law coverage, not claimed live priced-combo evidence. |
 | out | 4 | CancelOrder | landed | Classic plus exact-sv203 `CancelOrderRequest` protobuf, including compliance metadata. |
 | out | 58 | reqGlobalCancel | landed | Classic plus exact-sv203 `GlobalCancelRequest` protobuf, live-flushed before teardown. |
-| in | 5 | OpenOrder | landed | Strict sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; both project the shared complete `OrderDetails` model and carry no fill echo (fills are order_status truth). |
+| in | 5 | OpenOrder | landed | Strict sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; both project the shared complete `OrderDetails` model, including classic and protobuf `IncludeOvernight` echoes, and carry no fill echo (fills are order_status truth). Existing live frames cover classic explicit false and protobuf omission; a positive true echo remains pending. |
 | in | 3 | OrderStatus | landed | Classic and exact-sv203 protobuf parse; authoritative fill data for all order types. |
 
 OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
@@ -222,7 +222,9 @@ Malformed canonical Contract/combo numerics or trailing layout drift close the
 affected route. The testhost encoder emits the same layout, so replay fixtures
 exercise the production decode path. Public open and completed orders share
 `OrderDetails`, including `OrderCombo`, advanced scale, short-sale, auction,
-and pegged-benchmark echoes. `ComboDescription` remains response-only.
+and pegged-benchmark echoes. `IncludeOvernight` preserves response presence:
+nil means the broker omitted it, and classic `CompletedOrder` always omits the
+field. `ComboDescription` remains response-only.
 
 ## Order and Execution Observation
 
@@ -239,7 +241,7 @@ and pegged-benchmark echoes. `ComboDescription` remains response-only.
 | in | 55 | ExecutionsEnd | landed | Raw sv200 freeze, exact-sv201 protobuf live vector/public empty-query replay, and exact-sv202 nonempty replay. |
 | in | 59 | CommissionAndFeesReport | landed | Complete classic and sv201 protobuf decoders; the live sv201 round trip sent classic fee reports. Meaningful bond yield/redemption and a protobuf-encoded fee report remain unattested. |
 | out | 99 | reqCompletedOrders | landed | Classic plus exact-sv204 protobuf request; absent false and present true are exact-vector frozen. |
-| in | 101 | CompletedOrder | landed | Exact sequential classic decoder plus exact-sv204 protobuf Contract/Order/OrderState decode. The public projection preserves presence-aware order/client/parent identities and observed completion commission/currency. Advanced branches without a nondefault live frame remain unattested. |
+| in | 101 | CompletedOrder | landed | Exact sequential classic decoder plus exact-sv204 protobuf Contract/Order/OrderState decode. Protobuf field 135 projects presence-aware `IncludeOvernight`; the classic message shape omits it. The public projection preserves presence-aware order/client/parent identities and observed completion commission/currency. A nondefault overnight completion remains unattested, as do other advanced branches without a nondefault live frame. |
 | in | 102 | CompletedOrdersEnd | landed | Classic plus exact-sv204 empty protobuf terminator. |
 
 ## News

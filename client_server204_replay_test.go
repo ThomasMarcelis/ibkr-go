@@ -35,6 +35,7 @@ func TestCompletedOrdersServer204Replay(t *testing.T) {
 		cancelled.Order.ClientID == nil || *cancelled.Order.ClientID != 901 ||
 		cancelled.Order.ParentID == nil || *cancelled.Order.ParentID != 0 ||
 		cancelled.Order.PermID == nil || *cancelled.Order.PermID != 900000001 ||
+		cancelled.Order.IncludeOvernight != nil ||
 		cancelled.Completion.Status != ibkr.OrderStatusCancelled || !cancelled.Completion.Filled.IsZero() ||
 		cancelled.Completion.CommissionAndFees != nil {
 		t.Fatalf("cancelled completed order = %+v", cancelled)
@@ -45,6 +46,7 @@ func TestCompletedOrdersServer204Replay(t *testing.T) {
 		filled.Order.ClientID == nil || *filled.Order.ClientID != 201 ||
 		filled.Order.ParentID == nil || *filled.Order.ParentID != 0 ||
 		filled.Order.PermID == nil || *filled.Order.PermID != 900000002 ||
+		filled.Order.IncludeOvernight != nil ||
 		filled.Completion.Status != ibkr.OrderStatusFilled || !filled.Completion.Filled.Equal(decimal.NewFromInt(1)) ||
 		filled.Completion.CommissionAndFees == nil || !filled.Completion.CommissionAndFees.Equal(decimal.RequireFromString("1.006695")) ||
 		filled.Completion.CommissionAndFeesCurrency != "USD" {

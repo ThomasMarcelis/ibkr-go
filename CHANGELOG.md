@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Added
+
+- Add `Order.IncludeOvernight` for IBKR Overnight Trading orders and
+  presence-aware `OrderDetails.IncludeOvernight` echoes for open orders and
+  protobuf completed orders.
+
 ## v2.0.0-rc.3 — 2026-07-16
 
 RC.3 continues the RC.2 hardening work. It extends the supported Gateway range

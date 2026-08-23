@@ -82,6 +82,57 @@ func TestEncodePlaceOrderContractSourceLaws(t *testing.T) {
 	}
 }
 
+func TestIncludeOvernightOrderProtoSourceLaw(t *testing.T) {
+	t.Parallel()
+
+	// API 10.48.01 Order.proto SHA-256
+	// 3a963d252987b4a1450d6ded1901f46fdbad16039b6f717dc8beb597e78695c8
+	// defines optional bool includeOvernight as field 135. The official
+	// encoder omits false and emits the field only for true. Every Order also
+	// contains the official empty SoftDollarTier message at field 105.
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "false omitted", want: "ca0600"},
+		{name: "true field 135", value: "1", want: "ca0600b80801"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := encodeOrderProto(PlaceOrderRequest{IncludeOvernight: tc.value})
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := decodeHex(t, tc.want)
+			if !bytes.Equal(got, want) {
+				t.Fatalf("include overnight order = %x, want official source-law vector %x", got, want)
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "absent"},
+		{name: "explicit false", body: "b80800", want: "0"},
+		{name: "explicit true", body: "b80801", want: "1"},
+	} {
+		t.Run("decode "+tc.name, func(t *testing.T) {
+			t.Parallel()
+			var got OrderDetails
+			if err := decodeOrderDetailsProto(decodeHex(t, tc.body), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.IncludeOvernight != tc.want {
+				t.Fatalf("decoded include overnight = %q, want %q", got.IncludeOvernight, tc.want)
+			}
+		})
+	}
+}
+
 func TestEncodeAdditionalOrderParametersFromLiveSDKCaptures(t *testing.T) {
 	t.Parallel()
 
@@ -211,6 +262,9 @@ func TestDecodeServer203OrderCallbacks(t *testing.T) {
 		openOrder.OrderType != "LMT" || openOrder.LmtPrice != "50" || openOrder.Account != "DU9000001" ||
 		openOrder.ClientID != "1" || openOrder.PermID != "900000001" || openOrder.Status != "PreSubmitted" {
 		t.Fatalf("open order = %+v", openOrder)
+	}
+	if openOrder.IncludeOvernight != "" {
+		t.Fatalf("open order include overnight = %q, want omitted", openOrder.IncludeOvernight)
 	}
 
 	statusMessage, err := Decode(203, recordedPayload(t, "AAAAQAAAAMsIwAMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCB0pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA="))
