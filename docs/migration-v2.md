@@ -112,8 +112,10 @@ return sub.Wait()
 ```
 
 The corresponding `Details`, `SecDefOptParams`, and `Completed` methods remain
-slice-returning convenience collectors. `News().HistoricalAll` is the lazy
-overlap-and-deduplicate iterator for second-resolution historical-news pages.
+slice-returning convenience collectors. `News().Historical` returns one
+captured Gateway page. Do not infer a safe pagination cursor from `HasMore`;
+v2 exposes no multipage historical-news operation without live evidence for
+that contract.
 
 `Orders().SubscribeExecutionEvents` is a passive, unfiltered observer for
 every execution-detail and commission callback received by the client. It

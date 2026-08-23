@@ -12,6 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   presence-aware `OrderDetails.IncludeOvernight` echoes for open orders and
   protobuf completed orders.
 
+### Removed
+
+- Remove the unproven `News().HistoricalAll` pagination API and
+  `ErrHistoricalNewsPaginationStalled`. `News().Historical` remains the
+  captured single-page operation; `HasMore` does not establish a safe cursor
+  contract.
+
 ## v2.0.0-rc.3 — 2026-07-16
 
 RC.3 continues the RC.2 hardening work. It extends the supported Gateway range
@@ -20,8 +27,8 @@ wire-layout migrations, and freezes the advanced order and broker-echo model.
 
 The candidate also tightens ownership and terminal-error behavior across
 disconnects, reconnects, cancellation, order placement, option exercise, and
-regulatory snapshots. Finite streams, passive execution events, historical-news
-iteration, TWS configuration, and odd-lot quote data round out the public API.
+regulatory snapshots. Finite streams, passive execution events, TWS
+configuration, and odd-lot quote data round out the public API.
 
 All legacy transcript exceptions have been replaced or retired, and the full
 build, test, race, lint, vulnerability, capture, and 17-target fuzz gates pass.
@@ -38,7 +45,7 @@ v2 is a clean-break release on the `github.com/ThomasMarcelis/ibkr-go/v2` module
 
 **Orders and executions.** Order handles preserve late executions and revised fee reports instead of closing at the first terminal-looking status. Execution snapshots include commission-and-fees reports, and `SubscribeExecutions` remains open for late corrections. What-if previews, completed orders, contract details, scanners, quotes, depth, and account callbacks retain substantially more of the Gateway payload.
 
-**New operations.** The release adds regulatory snapshots and client-0 `orderBound` routing. WSH requests validate JSON and cancel cleanly. Historical-news pagination is preserved.
+**New operations.** The release adds regulatory snapshots and client-0 `orderBound` routing. WSH requests validate JSON and cancel cleanly. Historical-news results remain single-page; v2 does not infer a safe pagination contract from `HasMore`.
 
 **Correctness.** Typed Gateway errors retain request IDs and advanced rejection details. Reconnects, slow consumers, cancellation uncertainty, bracket admission, warning events, malformed frames, unset decimals, and classic/protobuf version boundaries now fail or recover explicitly instead of silently losing state.
 
