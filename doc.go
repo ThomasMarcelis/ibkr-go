@@ -159,7 +159,7 @@
 //
 // # Errors
 //
-// Eight structured error types cover the main failure modes:
+// Nine structured error types cover the main failure modes:
 //
 //   - [*ConnectError] — connection or handshake failure
 //   - [*ProtocolError] — wire protocol violation
@@ -167,6 +167,7 @@
 //   - [*ValidationError] — caller-side request validation failure
 //   - [*OrderRecoveryError] — uncertain live IDs after partial bracket rollback
 //   - [*ExerciseUncertainError] — unresolved exercise or lapse after involuntary observation loss
+//   - [*RegulatorySnapshotUncertainError] — fee-bearing snapshot with unresolved completion evidence
 //   - [*SubscriptionCancelError] — uncertain remote stream after cancellation admission failure
 //   - [*InboundFrameTooLargeError] — raw frame rejected before body allocation
 //

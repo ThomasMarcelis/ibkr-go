@@ -20,10 +20,13 @@ go test ./...
 ```
 
 All six must pass locally before opening a pull request. The API check rejects
-incompatible changes from the v2 release-candidate baseline while allowing
+incompatible changes from the v2.0.0 baseline while allowing
 additive APIs. Deliberately approved clean breaks are enumerated separately
-under `testdata/api`; the baseline itself remains an exact record of rc.3. CI
-runs the same checks on every push and pull request against `main`.
+under `testdata/api`; the baseline itself is the frozen v2.0.0 public surface.
+CI also checks module tidiness and verification, fuzz-target inventory, a
+pure-Go 386 build, vulnerabilities, shuffled tests across supported host
+platforms, and the race detector. See `.github/workflows/ci.yml` for the exact
+commands.
 
 ## Testing discipline
 
@@ -53,6 +56,16 @@ Protocol-adjacent work should be grounded in the local live TWS or IB Gateway wh
 - Protocol-adjacent commits should mention the live environment, captures, or source/docs references that justified the change when that context matters.
 - No WIP commits and no "fix typo" follow-ups in main history; squash before landing.
 - No emoji, no marketing voice.
+
+## Version control
+
+Jujutsu (`jj`) is the default workflow for this repository; Git remains the
+GitHub/interoperability layer and `origin` is canonical. Prefer `jj st`,
+`jj diff --git`, `jj log`, `jj commit`, `jj split`, `jj squash`,
+`jj git fetch`, `jj rebase`, and `jj git push --dry-run` / `jj git push`.
+Raw Git is appropriate for read-only checks or explicit interoperability and
+repair. Jujutsu does not run Git hooks automatically, so run the normal checks
+before publishing.
 
 ## Pull requests
 

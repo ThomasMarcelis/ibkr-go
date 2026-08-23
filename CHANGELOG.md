@@ -6,9 +6,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+## v2.0.0
+
+v2.0.0 is the clean-break release on the
+`github.com/ThomasMarcelis/ibkr-go/v2` module path. It publishes the unchanged
+RC.4 code after the required live proofs and seven-day soak complete. See
+[Migrating from v1 to v2](docs/migration-v2.md) for the source migration.
+
+## v2.0.0-rc.4
+
+RC.4 hardens order ownership and recovery: connectivity code 1101 publishes
+gaps before restoration, bracket replacement preserves parent identity,
+request and order ID histories cannot collide, permanent IDs govern callback
+attribution, and unclaimed what-if echoes cannot create phantom orders.
+
+Protocol and corpus work adds source-grounded classic pegged-order tail slots,
+protobuf order vectors, encoding-specific decoder attestation, structural
+transcript provenance, bounded codec counts, readable fuzz seeds, unsigned
+32-bit frame sizes, direct version-boundary enforcement, nonblocking logging,
+and atomic subscription generation tracking.
+
 ### Added
 
-- Add `Order.IncludeOvernight` for IBKR Overnight Trading orders and
+- Add `Order.IncludeOvernight` for eligible SMART-routed DAY orders and
   presence-aware `OrderDetails.IncludeOvernight` echoes for open orders and
   protobuf completed orders.
 
@@ -18,6 +38,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `ErrHistoricalNewsPaginationStalled`. `News().Historical` remains the
   captured single-page operation; `HasMore` does not establish a safe cursor
   contract.
+
+RC.4 publication remains blocked until exact live message-90 update evidence
+grounds signed counts and registered-malformed generation retirement. The
+stable release additionally requires the successful fee-bearing regulatory
+snapshot, manual paper-TWS `orderBound` proof, and seven unchanged soak days.
 
 ## v2.0.0-rc.3 — 2026-07-16
 
@@ -70,7 +95,7 @@ Subscription data and lifecycle boundaries now share one ordered event stream.
 | Names | `Buy`/`Sell` became `ActionBuy`/`ActionSell`; commission types use commission-and-fees terminology; P&L fields use `PnL`; `OrderStatusAPICancelled` follows Go initialism casing |
 | Accounts | Summary and position subscriptions emit direct values; account group and exact-account filtering are separate |
 | Resume | Remove `WithDefaultResumePolicy`; configure `ResumeAuto` per supported subscription |
-| Removed | Reuters fundamental data, FA mutation, `ibkr-probe`, and pre-200 compatibility |
+| Removed in v2 | Reuters fundamental data, FA mutation, `ibkr-probe`, and pre-200 compatibility |
 | Test infrastructure | Repository replay/live helpers moved under `internal/`; external tests use the public `Dialer` seam or their own fixtures |
 
 See [Migrating from v1 to v2](docs/migration-v2.md) for before-and-after examples and the complete source migration checklist.

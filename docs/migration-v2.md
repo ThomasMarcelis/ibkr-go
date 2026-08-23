@@ -27,11 +27,12 @@ require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0-rc.3
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
 
-## From rc.2 to the current release candidate
+## From rc.2 to the pending release candidate
 
-RC.3 completes the final breaking broker-echo cleanup. `OpenOrder` is now
-faceted exactly like the wire result: `Contract`, complete `OrderDetails`, and
-`State`. It has no `Partial` mode and no flattened price fields:
+The pending RC.4 work completes the final breaking broker-echo cleanup.
+`OpenOrder` is now faceted exactly like the wire result: `Contract`, complete
+`OrderDetails`, and `State`. It has no `Partial` mode and no flattened price
+fields:
 
 ```go
 // Before
@@ -126,7 +127,7 @@ sends no request and does no query correlation or deduplication. Keep using
 ceiling. Oversized handshake and steady-state frames return
 `*InboundFrameTooLargeError`.
 
-The reconnect default remains `ReconnectAuto`; rc.3 does not silently change
+The reconnect default remains `ReconnectAuto`; rc.4 does not silently change
 that policy. See [operation control](operation-control.md) for the cancellation,
 detach, and connection-retirement behavior of each operation family.
 
@@ -163,6 +164,13 @@ warnings must use `Events()`. `Events()` and `All(ctx)` consume the same queue
 and must not be read concurrently. `Restored` means the
 Gateway retained the stream; `Resubscribed` means the client sent the request
 again.
+
+v1 could keep a business stream alive by dropping its oldest values when a
+consumer fell behind. v2 removes that data-loss policy: subscriptions, finite
+streams, and order handles close observation with `ErrSlowConsumer` instead.
+Tune the client-wide subscription and order capacities with
+`WithSubscriptionBuffer` and `WithOrderEventBuffer`, or override one
+subscription with `WithQueueSize`.
 
 ## Close and order lifecycle
 
@@ -231,8 +239,9 @@ fees := snapshot.CommissionAndFees
 
 Use `SubscribeExecutions` when late or revised fee reports matter. It remains open after the end marker and must be closed explicitly.
 
-`HistoricalNews` returns `HistoricalNewsResult`. Read articles from `Items` and
-continue pagination when `HasMore` is true. `Options().Exercise` now returns an
+`HistoricalNews` returns `HistoricalNewsResult`. Read articles from `Items`;
+`HasMore` is broker metadata only, and v2 exposes no grounded continuation
+contract. `Options().Exercise` now returns an
 `ExerciseHandle`; the returned handle proves local transport admission, not
 IBKR acceptance or settlement. If observation ends involuntarily without a
 definitive request-scoped API rejection, `Wait` returns non-retryable
@@ -274,11 +283,14 @@ Contract{Strike: "150"}
 Contract{Strike: new(decimal.NewFromInt(150))}
 ```
 
-`OpenOrder.Order.Prices.LmtPrice`, `OpenOrder.Order.Prices.AuxPrice`, and
-optional placement `Order` decimals such as `LmtPriceOffset` are
-`*decimal.Decimal`. Nil means omitted or unset; a pointer to zero means an
-explicit zero. `LmtPriceOffset` remains directly on placement `Order`; only
-its representation changed.
+Placement fields `LmtPrice`, `AuxPrice`, `MinQty`, `PercentOffset`,
+`TrailStopPrice`, `TrailingPercent`, `LmtPriceOffset`, and `CashQty` are
+presence-aware pointers. The decimal-valued fields use `*decimal.Decimal`;
+`MinQty` uses `*int`. Nil means omitted or unset, while a pointer to zero means
+an explicit zero. `LmtPriceOffset` remains directly on placement `Order`; only
+its representation changed. `DepthRow.Size` is also `*decimal.Decimal` because
+protobuf can explicitly omit it. Audit direct dereferences and equality/map-key
+uses during migration.
 
 The margin/commission block formerly flattened onto `OpenOrder` is now the
 `OpenOrder.State` facet, shared with preview semantics:

@@ -45,7 +45,10 @@ return sub.Err()
 go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0-rc.3
 ```
 
-Requires Go 1.26+. One dependency: [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial arithmetic.
+Requires Go 1.26+. Direct dependencies are
+[shopspring/decimal](https://github.com/shopspring/decimal) for exact financial
+arithmetic and the official
+[protobuf runtime](https://pkg.go.dev/google.golang.org/protobuf).
 
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
 v2 uses Go semantic import versioning, so existing v1 applications cannot upgrade accidentally. Adopting v2 requires changing imports to `github.com/ThomasMarcelis/ibkr-go/v2` and following the [v2 migration guide](docs/migration-v2.md).
@@ -239,6 +242,10 @@ if err := handle.Replace(ctx, revisedOrder); err != nil { // amend price, quanti
 }
 ```
 
+A nil `Cancel` result means the cancellation request entered the client
+transport queue, not that IBKR acknowledged it. Keep draining order events
+until a terminal status or handle error establishes the observed outcome.
+
 After `ErrSlowConsumer`, `Replace` returns `ErrClosed`; reconcile with the
 stable `OrderID` and cancel through `handle.Cancel` or
 `client.Orders().Cancel(ctx, handle.OrderID())` if the order is still working.
@@ -345,7 +352,9 @@ Errors are typed so callers can make a policy decision without parsing text:
 `*InboundFrameTooLargeError` reports a raw frame rejected before body allocation.
 `*OrderRecoveryError`, `*ExerciseUncertainError`, and
 `*SubscriptionCancelError` mean remote state is uncertain and deliberately
-override any retryable wrapped cause. `ErrOrderRecoveryRequired` means an
+override any retryable wrapped cause. A
+`*RegulatorySnapshotUncertainError` identifies a fee-bearing snapshot whose
+completion evidence was lost. `ErrOrderRecoveryRequired` means an
 order handle crossed an observation gap and can no longer be used for
 replacement; it is distinct from retryable subscription resumption.
 
@@ -408,10 +417,13 @@ stressed, and extended without guessing. For more on that approach, see
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
 domains through an idiomatic Go facade. It negotiates `server_version`
 200..225. Version 200 is the live-attested classic-wire baseline; exact
-raw-ID/protobuf migrations from 201 through 213 and the version-gated 214..225
-features are implemented. Positive entitlement-dependent callbacks and
-remaining advanced branches stay explicit in the coverage matrix rather than
-being overclaimed. See the [sv208-225 protocol audit](docs/protocol-audit-sv208-225.md).
+raw-ID/protobuf migrations from 201 through 213 are implemented. Inbound sv214
+`Z` timestamps are accepted, but outbound sv214 suffix behavior remains
+unresolved and retains the existing format. Supported sv215..225 behavior and
+intentional exclusions are documented in the
+[sv208-225 protocol audit](docs/protocol-audit-sv208-225.md). Positive
+entitlement-dependent callbacks and remaining advanced branches stay explicit
+in the coverage matrix rather than being overclaimed.
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full
@@ -423,12 +435,16 @@ charter.
 go build ./...
 go vet ./...
 gofmt -l .           # must produce no output
+./scripts/check-api.sh
 golangci-lint run
 go test ./...
 ```
 
-All five must pass before opening a pull request. CI runs the same checks on
-every push.
+These six checks are the local baseline before opening a pull request. CI also
+checks module tidiness and verification, fuzz-target inventory, a pure-Go 386
+build, vulnerabilities, shuffled tests across Linux/macOS/Windows, and the
+race detector; see [the workflow](.github/workflows/ci.yml) for the exact
+commands.
 
 Local live verification is opt-in:
 

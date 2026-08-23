@@ -107,12 +107,13 @@ behavior, not an empty snapshot and not evidence of an ibkr-go routing defect.
 
 ### 2026-07-13
 
-The API 10.48 protocol train was implemented from exact server version 208
-through 225. Historical, news, scanner/PnL, option/FA, reference, and session
+The API 10.48 protocol train was audited from exact server version 208 through
+225. Historical, news, scanner/PnL, option/FA, reference, and session
 protobuf families now complete the staged migration through sv213. The
-sv214..225 semantic boundaries are frozen through exact SDK/live vectors and
-focused public behavior tests. The evidence ledger, hashes, and limitations
-are in [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
+sv215..225 semantic boundaries are frozen through exact SDK/live vectors and
+focused public behavior tests. Inbound sv214 `Z` forms are supported, but its
+outbound suffix remains unresolved. The evidence ledger, hashes, and
+limitations are in [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 
 The native public `TWS().Config` scenario negotiated exact sv219 and returned
 22 configured messages plus API/order settings and trusted IPs (events SHA-256

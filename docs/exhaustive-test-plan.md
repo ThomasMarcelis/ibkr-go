@@ -200,7 +200,7 @@ Every order type × applicable TIF × applicable action × applicable security.
 | PEG BEST | legacy malformed | — | — | — | — | no | no | no |
 | PEG BENCH | rest | — | — | — | — | yes | no | no |
 
-**Gap:** 11 order types have no transcript. All FUT/CASH/OPT columns except
+**Gap:** Rows marked `no` have no transcript. All FUT/CASH/OPT columns except
 basics are untested. MOO/LOO need pre-market timing.
 
 ### 2.2 Time-in-force (7 TIF values)

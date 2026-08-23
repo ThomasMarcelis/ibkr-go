@@ -15,7 +15,7 @@ request/callback evidence against the local Gateway.
 | 211 | Remaining request family 1 | FA reads, option exercise, and option calculations migrate without changing the public operations. |
 | 212 | Remaining request family 2 | Option-definition, soft-dollar, family-code, symbol, smart-component, market-rule, and user-info messages migrate. |
 | 213 | Remaining request family 3 | Bootstrap/control, ID/time, display-group, and depth-exchange messages migrate. |
-| 214 | UTC date-time format | UTC request values use the required `Z` suffix. |
+| 214 | UTC date-time format | Inbound `Z` timestamps are accepted. Outbound suffix behavior remains unresolved, so requests retain the existing format. |
 | 215 | Broker-side one-shot cancellation | Context cancellation sends the new contract-details or historical-ticks cancellation request when the request still owns its route. |
 | 216 | Additional order parameters 1 | `Deactivate`, `PostOnly`, `AllowPreOpen`, and `IgnoreOpenAuction`. |
 | 217 | Additional order parameters 2 | Presence-aware `RouteMarketableToBBO`, `SeekPriceImprovement`, and `WhatIfType`. |
@@ -28,8 +28,10 @@ request/callback evidence against the local Gateway.
 | 224 | Security-definition precision | Contract details and quote parameters preserve optional last-price and last-size precision. |
 | 225 | Odd-lot bid/ask | Generic tick 787 exposes typed odd-lot prices, sizes, and exchanges on `Quote` and `QuoteUpdate`. |
 
-Every gated field fails before send on an older negotiated version. The
-lifecycle test accepts exactly 200..225 and rejects both neighboring values.
+Source-defined outbound fields with an implemented minimum fail before send on
+an older negotiated version. The sv214 outbound formatting boundary is the
+explicit unresolved exception. The lifecycle test accepts exactly 200..225
+and rejects both neighboring values.
 
 ## Evidence ledger
 
@@ -64,9 +66,9 @@ capture hashes in those tests where a byte-exact request or callback exists.
 - Attached preset-order metadata has exact SDK wire evidence and remains
   internal. A public facade requires a native paper-order lifecycle capture;
   `IBKR_PAPER_ACCOUNT` was not configured and the safety guard was not bypassed.
-- The sv214 `Z` suffix is official-source and boundary-test grounded. The
-  retained native request omitted `endDateTime`; positive live wire evidence
-  remains pending.
+- Inbound sv214 `Z` forms are parser-tested. The retained native request omitted
+  `endDateTime`, so it does not establish outbound formatting; the client does
+  not append `Z` until exact source/live evidence resolves that behavior.
 - The sv225 CFD capture proves the protobuf market-data reroute callback and
   grounds the decoder regression. The Gateway became unavailable before the
   post-fix end-to-end reroute could be recaptured; protobuf depth reroute also

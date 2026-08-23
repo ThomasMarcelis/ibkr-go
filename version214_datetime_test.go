@@ -5,12 +5,14 @@ import (
 	"time"
 )
 
-// The official 10.48 protocol declares server_version 214 as the boundary
-// where UTC date-time values gain a trailing Z. Exact SDK differential
+// The official 10.48 protocol names server_version 214 as a UTC date-time
+// boundary, but the outbound suffix behavior remains unresolved. Exact SDK
+// differential
 // captures 6ee54aa08c7dadc0168ae97c67a7e01ef418e8b434f916489f39edab9fef1cee
 // (213) and 7c3dcccd016e3ebe2a74b7318f8ae49a56808158f10e574925fb3b7bf92b2245
-// (214) prove that non-UTC US/Eastern execution values remain unchanged.
-func TestServerVersion214UTCDateTimeSuffixes(t *testing.T) {
+// (214) prove only that non-UTC US/Eastern execution values remain unchanged.
+// This test freezes inbound parsing tolerance; it does not attest outbound Z.
+func TestInboundUTCDateTimeSuffixForms(t *testing.T) {
 	t.Parallel()
 
 	want := time.Date(2026, 7, 9, 22, 55, 5, 0, time.UTC)

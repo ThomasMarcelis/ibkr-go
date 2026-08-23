@@ -14,7 +14,8 @@ migrates contract-details requests and replies. Exact 206 migrates quote,
 market-depth, and market-data-type requests plus their L1/depth callbacks.
 Exact 207 migrates the accounts and positions request/callback family. The
 session handshake accepts 200..225. Exact 208..213 complete the staged
-protobuf migrations; 214..225 add the current date-time, cancellation, order,
+protobuf migrations; inbound sv214 `Z` parsing is supported while outbound
+formatting remains unresolved, and 215..225 add cancellation, order,
 configuration, volume/precision, and odd-lot gates. See
 [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 
@@ -152,7 +153,7 @@ both owners, while execution and commission messages are routed through
   differently on redial.
 - The supported range is exactly 200..225. Version 200 owns one fixed classic
   layout; versions 201..213 progressively switch the message families named in
-  `internal/protocol/version.go` to protobuf, and 214..225 gate later semantics.
+  `internal/protocol/version.go` to protobuf, and 215..225 gate later semantics.
   Handshake rejects versions outside that range instead of carrying dead
   classic-layout compatibility branches.
 - Classic OpenOrder decoding is strict: every supported field is consumed in

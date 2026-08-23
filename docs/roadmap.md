@@ -5,9 +5,9 @@
 `ibkr-go` is a pure-Go, idiomatic client for the Interactive Brokers
 TWS/Gateway socket protocol. The runtime stays pure Go: no cgo, no C++
 toolchain, no SDK dependency on the production import path. See
-[`AGENTS.md`](../AGENTS.md) for the full policy and
+[`CONTRIBUTING.md`](../CONTRIBUTING.md) for the public development policy and
 [`docs/architecture.md`](architecture.md) for the runtime model.
-The RC.3-to-stable evidence boundary is tracked in
+The RC.4-to-stable evidence boundary is tracked in
 [`v2-release-readiness.md`](v2-release-readiness.md).
 
 The goal is end-to-end coverage of the IBKR TWS/Gateway socket surface that
@@ -55,9 +55,10 @@ Current IBKR baseline and drift to check first:
   [IBKR API Software](https://interactivebrokers.github.io/) page lists API
   Latest 10.48, released 2026-07-07, and Stable 10.45, released 2026-03-30,
   and recommends TWS or IB Gateway 1045+ for comprehensive feature support.
-  `server_version 200` remains the classic-wire evidence baseline. Exact
-  version negotiation, protobuf migrations, and gated semantics are now
-  implemented through 225; see
+  `server_version 200` remains the classic-wire evidence baseline. Version
+  negotiation is implemented through 225 and protobuf migrations through 213.
+  Inbound sv214 `Z` values are accepted, while its outbound suffix remains an
+  explicit evidence gap; see
   [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 - API 10.47 removed `reqFundamentalData`, its cancellation and callback, and
   fundamental-ratios tick type 47. The corresponding ibkr-go surface and
@@ -87,7 +88,7 @@ promoted, or records a real entitlement/account blocker that prevents it.
 
 Maintainers should choose work in this order:
 
-1. **Preserve safety and truth.** Read `AGENTS.md`, check `jj st`, and verify
+1. **Preserve safety and truth.** Read `CONTRIBUTING.md`, check `jj st`, and verify
    whether the task is read-only or paper-trading. Never place orders outside
    `paper-dev`.
 2. **Prefer replay promotion over new surface area.** If a verified live
@@ -277,8 +278,8 @@ against the local paper Gateway when applicable.
 - ~~Server-version coverage through exactly `server_version 225`~~ **Done.**
   The client negotiates `server_version` 200..225. Exact 201..207 retain their
   individual protocol audits below. Exact 208..213 complete the protobuf
-  migration table, and 214..225 implement every version gate in API 10.48,
-  including one-shot cancels and order fields, read-only TWS configuration,
+  migration table, and 215..225 implement the source-grounded version gates in
+  API 10.48, including one-shot cancels and order fields, read-only TWS configuration,
   share/fractional size semantics, precision metadata, and
   odd-lot quote projection. Byte-exact SDK/live vectors and the remaining
   positive-live entitlement boundaries are recorded in
@@ -348,7 +349,7 @@ account updates, account summary, positions, and their multi-account variants
 move to protobuf together. Public routing and lifecycle semantics remain
 unchanged. See [`protocol-audit-sv207.md`](protocol-audit-sv207.md).
 
-Exact `server_version 208` through 225 are implemented and audited together in
+Exact `server_version 208` through 225 are audited together in
 [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md). The production
 ceiling is 225. Each later migration gate must add its encoder/decoder, live or
 official-SDK evidence, and deterministic coverage before the advertised

@@ -22,8 +22,9 @@ Exact `sv206` migrates market-data, market-depth, and market-data-type requests
 and their quote/depth callbacks. Exact `sv207` migrates managed accounts,
 account updates and summaries, positions, and their multi-account variants to
 protobuf without changing the public operations. Exact `sv208` through `sv213`
-complete the official protobuf migration train. Versions 214..225 add UTC
-formatting, one-shot cancellation, and order parameters,
+complete the official protobuf migration train. Inbound sv214 `Z` timestamps
+are accepted, while outbound suffix behavior remains unresolved. Versions
+215..225 add one-shot cancellation and order parameters,
 read-only TWS configuration, volume/fractional-size semantics, security-
 definition precision, and odd-lot quotes. See
 [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
@@ -400,7 +401,9 @@ Public error taxonomy:
 - `*ValidationError`
 - `*SubscriptionCancelError`
 - `*ExerciseUncertainError`
+- `*RegulatorySnapshotUncertainError`
 - `*OrderRecoveryError`
+- `*InboundFrameTooLargeError`
 - `IsRetryable(err)`
 - `ErrNotReady`
 - `ErrInterrupted`
@@ -414,6 +417,8 @@ Public error taxonomy:
 - `ErrNoMatch`
 - `ErrAmbiguousContract`
 - `ErrOperationActive`
+- `ErrExecutionCorrelationOverflow`
+- `ErrInboundFrameTooLarge`
 
 `*APIError` exposes `IsEntitlement`, `IsPacingViolation`,
 `IsOrderRejection`, `IsConnectivityTransition`, `IsFarmStatus`, and
