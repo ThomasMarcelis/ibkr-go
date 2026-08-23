@@ -133,6 +133,32 @@ func TestIncludeOvernightOrderProtoSourceLaw(t *testing.T) {
 	}
 }
 
+func TestOpenOrderProtoPreservesWhatIfPresence(t *testing.T) {
+	t.Parallel()
+
+	// API 10.48.01 Order.proto defines optional bool whatIf as field 65.
+	for _, tc := range []struct {
+		name string
+		body string
+		want string
+	}{
+		{name: "absent"},
+		{name: "explicit false", body: "880400", want: "0"},
+		{name: "explicit true", body: "880401", want: "1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			var got OrderDetails
+			if err := decodeOrderDetailsProto(decodeHex(t, tc.body), &got); err != nil {
+				t.Fatal(err)
+			}
+			if got.WhatIf != tc.want {
+				t.Fatalf("decoded what-if = %q, want %q", got.WhatIf, tc.want)
+			}
+		})
+	}
+}
+
 func TestEncodeAdditionalOrderParametersFromLiveSDKCaptures(t *testing.T) {
 	t.Parallel()
 

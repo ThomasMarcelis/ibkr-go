@@ -590,10 +590,13 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	// A what-if preview route resolves on its single open_order echo: decode,
 	// tear the route down, and hand the result (OpenOrder or decode error) to
 	// the blocked PreviewOrder caller. No OrderHandle is ever involved.
-	if preview, ok := e.previews[msg.OrderID]; ok {
+	if preview, ok := e.previews[msg.OrderID]; ok && msg.WhatIf == "1" {
 		delete(e.previews, msg.OrderID)
 		_, state, err := decodeCodecOpenOrder(msg)
 		preview.resolve(previewResult{state: state, err: err})
+		return
+	}
+	if msg.WhatIf == "1" {
 		return
 	}
 

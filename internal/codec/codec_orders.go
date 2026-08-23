@@ -333,6 +333,7 @@ type OrderDetails struct {
 	AlgoStrategy   string
 	AlgoParams     []TagValue
 	Solicited      string
+	WhatIf         string
 	Status         string
 	RandomizeSize  string
 	RandomizePrice string
@@ -1087,7 +1088,7 @@ func decodeOpenOrder(r *fieldReader, sv int) ([]Message, error) {
 		}
 	}
 	details.Solicited = r.ReadString()
-	r.ReadString() // WhatIf
+	details.WhatIf = r.ReadString()
 
 	status := r.ReadString()
 	initMarginBefore := r.ReadString()
@@ -1378,7 +1379,7 @@ func (m OpenOrder) encodeWire(sv int) ([]string, error) {
 		writeTagValuePairs(&w, m.AlgoParams)
 	}
 	w.WriteString(m.Solicited)
-	w.WriteString("") // WhatIf
+	w.WriteString(m.WhatIf)
 	w.WriteString(m.Status)
 	w.WriteString(m.InitMarginBefore)
 	w.WriteString(m.MaintMarginBefore)
