@@ -134,9 +134,9 @@ const (
 	// requested (WSH) news feed.
 	ErrCodeNewsFeedNotAllowed = 10276
 	// ErrCodeImbalanceOnlyNotAllowed: the 'ImbalanceOnly' order attribute may
-	// not be specified for this order. Live-attested replying to the cancel
-	// of a silently accepted PEG MID / PEG BEST order, which the Gateway
-	// later discarded on a global cancel.
+	// not be specified for this order. The retained PEG MID / PEG BEST
+	// capture received this code after malformed, tail-shifted requests and
+	// therefore does not attest correctly framed pegged-order behavior.
 	ErrCodeImbalanceOnlyNotAllowed = 10342
 	// ErrCodeOrderTIFSetFromPreset: notice that the Gateway set the
 	// instruction's TIF from an order preset ("Order TIF was set to DAY

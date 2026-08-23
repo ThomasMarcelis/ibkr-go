@@ -768,7 +768,17 @@ func (m PlaceOrderRequest) encodeWire(sv int) ([]string, error) {
 	w.WriteString(m.AutoCancelParent)
 	w.WriteString(m.AdvancedErrorOverride)
 	w.WriteString(m.ManualOrderTime)
-	// [Exchange != IBKRATS, OrderType != PEG BEST/MID => skip peg offsets]
+	if m.Contract.Exchange == "IBKRATS" {
+		w.WriteString("")
+	}
+	if m.OrderType == "PEG BEST" {
+		w.WriteString("")
+		w.WriteString("")
+	}
+	if m.OrderType == "PEG MID" {
+		w.WriteString("")
+		w.WriteString("")
+	}
 	w.WriteString(m.CustomerAccount)
 	w.WriteString(m.ProfessionalCustomer)
 	w.WriteString(m.IncludeOvernight)

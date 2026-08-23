@@ -196,8 +196,8 @@ Every order type × applicable TIF × applicable action × applicable security.
 | LOO | timeout | — | — | — | — | no | no | no |
 | PEG MKT | rest | — | — | — | — | yes | no | no |
 | PEG PRI | rest | — | — | — | — | yes | no | no |
-| PEG MID | rest | — | — | — | — | yes | no | no |
-| PEG BEST | rest | — | — | — | — | yes | no | no |
+| PEG MID | legacy malformed | — | — | — | — | no | no | no |
+| PEG BEST | legacy malformed | — | — | — | — | no | no | no |
 | PEG BENCH | rest | — | — | — | — | yes | no | no |
 
 **Gap:** 11 order types have no transcript. All FUT/CASH/OPT columns except

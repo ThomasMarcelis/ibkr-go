@@ -677,7 +677,7 @@ against the role-aware `paper-dev` Gateway.
 | place_order_lmt_buy_aapl.txt | 20260611T133017Z | promoted; far LMT rest and cancel on the current 5-field cancel encoder, closing the April recapture debt |
 | api_order_fill_aapl.txt | 20260611T133024Z | promoted; six fill lifecycles with running-average partials, the 41-update executions query with dual dispatch, and the six-161 global-cancel tail |
 | api_delayed_success_modify_aapl.txt | 20260611T133046Z | promoted; rest, modify to market, fill, flatten, 161 tail |
-| api_order_type_matrix_aapl.txt | 20260611T133103Z | promoted; 22-case order-type matrix incl. silent MOC/LOC/PEG MID/PEG BEST acceptances, PEG BENCH accepted-then-321-on-cancel, and terminal 321/387 rejections |
+| api_order_type_matrix_aapl.txt | 20260611T133103Z | promoted through PEG PRI; exact fill/rest/reject lifecycles plus local PEG BENCH validation. The retained tail-shifted PEG MID/BEST frames are provenance-only and require a correctly framed recapture. |
 | api_option_exercise_not_itm_aapl.txt | 20260611T133444Z | promoted; option fill then the request-scoped 322 not-in-the-money refusal returned by `ExerciseHandle` |
 | api_option_exercise_server_reject_aapl.txt | 20260611T133636Z | promoted; deep-ITM fill, request-scoped 10349 warning and working pseudo-order lifecycle, then the paper clearing 322 rejection |
 | api_hedge_order_aapl.txt | 20260611T134021Z | promoted; five hedge rules: zero-size beta/pair acceptances with Gateway-computed quantities, two delta 320 rejections, the FX 10063 currency-pair rule |

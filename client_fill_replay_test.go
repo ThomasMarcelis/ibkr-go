@@ -753,11 +753,12 @@ func TestAPIOrderFillCampaignReplay(t *testing.T) {
 // TestAPIOrderTypeMatrixReplay freezes the order-type breadth matrix captured
 // live on 2026-06-11 (captures/20260611T133103Z-api_order_type_matrix_aapl,
 // events.jsonl sha256 prefix 4e0eb7d61bf5a743). Each subtest drives one
-// type's lifecycle exactly as the capture's client frames show and asserts
-// its real outcome: fill (with executions and commissions), rest+cancel,
-// Gateway-side price-band cancel, outright rejection (terminal handle
-// error), or silent acceptance. The terminal-outcome sweep at the end drains
-// every handle and pins its full execution/commission tally and close error.
+// type's lifecycle through PEG PRI exactly as the capture's client frames
+// show and asserts its real outcome: fill (with executions and commissions),
+// rest+cancel, Gateway-side price-band cancel, or outright rejection
+// (terminal handle error). The capture's malformed PEG MID/BEST tail remains
+// provenance-only. The terminal-outcome sweep drains every executable handle
+// and pins its full execution/commission tally and close error.
 func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 	t.Parallel()
 
@@ -1115,33 +1116,6 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 			ibkr.ErrCodeUnsupportedOrderType, "Unsupported order type for this exchange and security type.")
 	})
 
-	t.Run("peg_pri_reject", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToPrimary, LmtPrice: new(decimal.RequireFromString("14.61"))}, 19, 403)
-		register("403", handle, log, nil, nil,
-			ibkr.ErrCodeServerErrorValidatingRequest, "Invalid order type was entered")
-	})
-
-	t.Run("peg_mid_silent_accept_discard", func(t *testing.T) {
-		// Accepted silently; the cancel draws the 10342 attribute notice as a
-		// session event. The order only dies at the final global cancel.
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToMid, LmtPrice: new(decimal.RequireFromString("14.61"))}, 20, 404)
-		cancelOrder(t, handle)
-		notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeImbalanceOnlyNotAllowed)
-		if notice.Message != "The 'ImbalanceOnly' order attribute may not be specified for this order." {
-			t.Fatalf("10342 message = %q", notice.Message)
-		}
-		register("404", handle, log, nil, nil,
-			0, "")
-	})
-
-	t.Run("peg_best_silent_accept_discard", func(t *testing.T) {
-		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToBest, LmtPrice: new(decimal.RequireFromString("14.61"))}, 21, 405)
-		cancelOrder(t, handle)
-		waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeImbalanceOnlyNotAllowed)
-		register("405", handle, log, nil, nil,
-			0, "")
-	})
-
 	t.Run("peg_bench_missing_reference_rejected_locally", func(t *testing.T) {
 		order := ibkr.Order{
 			Action:    ibkr.ActionBuy,
@@ -1162,33 +1136,26 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 		}
 	})
 
-	t.Run("global_cancel_discards_peg_orders", func(t *testing.T) {
-		if err := client.Orders().CancelAll(ctx); err != nil {
-			t.Fatalf("CancelAll: %v", err)
-		}
-		// The Gateway discards the silently accepted PEG orders. All three 202
-		// replies surface as session notices: 402 through the unmatched-order
-		// fallback, then 405 and 404 through their live routes.
-		for range 3 {
-			notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-			if notice.Message != "Order Canceled - reason:Order was discarded." {
-				t.Fatalf("discard 202 message = %q", notice.Message)
-			}
-		}
+	t.Run("peg_pri_reject", func(t *testing.T) {
+		handle, log := place(t, ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypePeggedToPrimary, LmtPrice: new(decimal.RequireFromString("14.61"))}, 19, 403)
+		register("403", handle, log, nil, nil,
+			ibkr.ErrCodeServerErrorValidatingRequest, "Invalid order type was entered")
 	})
 
 	t.Run("terminal_outcomes", func(t *testing.T) {
 		for _, tc := range terminals {
+			if tc.errCode != 0 {
+				requireOrderAPIError(t, tc.name, tc.handle, tc.errCode, tc.errFrag)
+			}
 			tc.log.finish(t, ctx, len(tc.wantExecs), len(tc.wantComms))
 			requireExecutions(t, tc.name, tc.log.executions(), tc.wantExecs)
 			requireCommissions(t, tc.name, tc.log.commissions(), tc.wantComms)
-			if tc.errCode == 0 {
-				if err := tc.handle.Wait(); err != nil {
-					t.Fatalf("%s Wait() = %v, want nil terminal close", tc.name, err)
-				}
+			if tc.errCode != 0 {
 				continue
 			}
-			requireOrderAPIError(t, tc.name, tc.handle, tc.errCode, tc.errFrag)
+			if err := tc.handle.Wait(); err != nil {
+				t.Fatalf("%s Wait() = %v, want nil terminal close", tc.name, err)
+			}
 		}
 	})
 }
