@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"sync"
 	"testing"
@@ -180,6 +181,20 @@ func TestDialConnectionRejectsOversizedHandshakeFrame(t *testing.T) {
 	}
 	if err := <-serverErr; err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.ErrClosedPipe) {
 		t.Fatal(err)
+	}
+}
+
+func TestInboundFrameErrorPreservesFullUint32Header(t *testing.T) {
+	t.Parallel()
+
+	_, err := wire.ReadFrameWithLimit(bytes.NewReader([]byte{0xff, 0xff, 0xff, 0xff}), 8)
+	frameErr, ok := inboundFrameError(err)
+	if !ok {
+		t.Fatalf("inboundFrameError() = %v, %t, want InboundFrameTooLargeError", frameErr, ok)
+	}
+	const wantSize uint32 = math.MaxUint32
+	if frameErr.Size != wantSize || frameErr.Limit != 8 {
+		t.Fatalf("inboundFrameError() = %v, %t, want size %d limit 8", frameErr, ok, uint64(math.MaxUint32))
 	}
 }
 

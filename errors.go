@@ -28,7 +28,7 @@ var (
 // InboundFrameTooLargeError reports a raw inbound frame rejected from its
 // four-byte header, before its body was allocated or read.
 type InboundFrameTooLargeError struct {
-	Size  int
+	Size  uint32
 	Limit int
 }
 

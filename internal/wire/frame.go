@@ -18,7 +18,7 @@ var (
 // FrameTooLargeError reports the rejected payload length and configured
 // ceiling. The body has not been allocated or read when this is returned.
 type FrameTooLargeError struct {
-	Size  int
+	Size  uint32
 	Limit int
 }
 
@@ -46,7 +46,7 @@ func ReadFrameWithLimit(r io.Reader, limit int) ([]byte, error) {
 		return nil, ErrEmptyMessage
 	}
 	if limit < 1 || uint64(size) > uint64(limit) {
-		return nil, &FrameTooLargeError{Size: int(size), Limit: limit}
+		return nil, &FrameTooLargeError{Size: size, Limit: limit}
 	}
 
 	payload := make([]byte, size)

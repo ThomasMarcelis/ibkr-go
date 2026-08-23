@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io"
+	"math"
 	"testing"
 )
 
@@ -170,5 +171,19 @@ func TestReadFrameWithLimitRejectsBeforeBodyRead(t *testing.T) {
 	}
 	if buf.String() != "abcde" {
 		t.Fatalf("oversized body was consumed: %q", buf.String())
+	}
+}
+
+func TestReadFrameReportsFullUint32Header(t *testing.T) {
+	t.Parallel()
+
+	_, err := ReadFrameWithLimit(bytes.NewReader([]byte{0xff, 0xff, 0xff, 0xff}), 1)
+	frameErr, ok := errors.AsType[*FrameTooLargeError](err)
+	if !ok {
+		t.Fatalf("ReadFrameWithLimit() error = %v, want FrameTooLargeError", err)
+	}
+	const wantSize uint32 = math.MaxUint32
+	if frameErr.Size != wantSize {
+		t.Fatalf("ReadFrameWithLimit() error = %v, want size %d", err, uint64(math.MaxUint32))
 	}
 }
