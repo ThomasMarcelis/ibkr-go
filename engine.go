@@ -26,6 +26,7 @@ type engine struct {
 
 	waitMu         sync.Mutex
 	waitErr        error
+	stopLogger     func()
 	connectErrMu   sync.Mutex
 	lastConnectErr error
 
@@ -202,9 +203,12 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	logger, stopLogger := newAsyncLogger(cfg.logger)
+	cfg.logger = logger
 
 	e := &engine{
 		cfg:                      cfg,
+		stopLogger:               stopLogger,
 		cmds:                     make(chan func(), 256),
 		incoming:                 make(chan any, 256),
 		transportErr:             make(chan transportLoss, 8),

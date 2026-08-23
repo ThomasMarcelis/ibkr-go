@@ -351,6 +351,10 @@ func (e *engine) closeEngine(err, waitErr error) {
 	e.waitMu.Lock()
 	e.waitErr = waitErr
 	e.waitMu.Unlock()
+	if e.stopLogger != nil {
+		e.stopLogger()
+		e.stopLogger = nil
+	}
 	close(e.done)
 	e.events.Close()
 }
