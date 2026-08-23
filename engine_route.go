@@ -422,10 +422,10 @@ func (e *engine) handleAPIError(msg codec.APIError) {
 		return
 	}
 
-	// Other 2xxx: bootstrap/farm-status informational codes (reqID -1).
-	// Emitted as session events for observability; they never target a
-	// request or subscription and must not interfere with bootstrap.
-	if msg.Code >= 2000 && msg.Code < 3000 {
+	// Unkeyed 2xxx bootstrap/farm-status informational codes are session
+	// events. A positive request ID remains authoritative and follows the
+	// ordinary keyed/preview/order routing below.
+	if msg.Code >= 2000 && msg.Code < 3000 && msg.ReqID <= 0 {
 		e.emitAPIEvent(msg)
 		return
 	}
