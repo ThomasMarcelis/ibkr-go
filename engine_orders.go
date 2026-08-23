@@ -742,6 +742,7 @@ func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, placementErr
 // called on the actor goroutine before the corresponding place_order is sent.
 func (e *engine) bindOrderHandle(orderID int64, contract Contract, parentID int64) *OrderHandle {
 	handle := newOrderHandle(orderID, e.cfg.orderEventBuffer)
+	or := &orderRoute{orderID: orderID, parentID: parentID, handle: handle}
 	handle.cancelFn = func(ctx context.Context, cfg cancelConfig) error {
 		return e.CancelOrder(ctx, orderID, cfg)
 	}
@@ -776,14 +777,14 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract, parentID int6
 	}
 	handle.detachFn = func() {
 		e.enqueue(func() {
-			if or, ok := e.orders[orderID]; ok {
+			if e.orders[orderID] == or {
 				e.closeOrderRoute(orderID, or, nil)
 				return
 			}
 			handle.closeWithErr(nil)
 		})
 	}
-	e.orders[orderID] = &orderRoute{orderID: orderID, parentID: parentID, handle: handle}
+	e.orders[orderID] = or
 	return handle
 }
 
@@ -902,6 +903,8 @@ func (e *engine) GlobalCancel(ctx context.Context, cfg cancelConfig) error {
 }
 
 func (e *engine) installExerciseRoute(reqID int) *ExerciseHandle {
+	e.observeRequestID(reqID)
+	e.observeOrderID(int64(reqID))
 	orderHandle := newOrderHandle(int64(reqID), e.cfg.orderEventBuffer)
 	handle := &ExerciseHandle{requestID: protocolIDFromInt[RequestID](reqID), order: orderHandle}
 	var exerciseRoute *route

@@ -69,7 +69,9 @@ type engine struct {
 	readySetups          []*readySetup
 
 	nextReqID                int
+	requestIDHighWater       int64
 	orderIDHighWater         int64
+	orderIDsEver             map[int64]struct{}
 	nextClockRequest         time.Time
 	nextHistoricalRequest    time.Time
 	recentHistoricalRequests map[string]time.Time
@@ -220,6 +222,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		dirtySingletons:          make(map[string]uint64),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
+		orderIDsEver:             make(map[int64]struct{}),
 		snapshot: Snapshot{
 			State: StateDisconnected,
 		},
@@ -490,7 +493,11 @@ func (e *engine) allocReqID() int {
 		if _, conflict := e.orders[int64(id)]; conflict {
 			continue
 		}
+		if _, conflict := e.orderIDsEver[int64(id)]; conflict {
+			continue
+		}
 		if _, conflict := e.previews[int64(id)]; !conflict {
+			e.observeRequestID(id)
 			return id
 		}
 	}
@@ -498,7 +505,7 @@ func (e *engine) allocReqID() int {
 
 func (e *engine) allocOrderID() (int64, error) {
 	for {
-		id := max(e.snapshot.NextValidID, e.orderIDHighWater+1)
+		id := max(e.snapshot.NextValidID, e.orderIDHighWater+1, e.requestIDHighWater+1)
 		if err := validateOrderID("OrderID", id, false); err != nil {
 			return 0, err
 		}
@@ -515,11 +522,13 @@ func (e *engine) allocOrderID() (int64, error) {
 			continue
 		}
 		e.orderIDHighWater = id
+		e.recordOrderID(id)
 		return id, nil
 	}
 }
 
 func (e *engine) observeOrderID(id int64) {
+	e.recordOrderID(id)
 	if id <= e.orderIDHighWater {
 		return
 	}
@@ -529,6 +538,22 @@ func (e *engine) observeOrderID(id int64) {
 			s.NextValidID = id + 1
 		}
 	})
+}
+
+func (e *engine) recordOrderID(id int64) {
+	if id <= 0 {
+		return
+	}
+	if e.orderIDsEver == nil {
+		e.orderIDsEver = make(map[int64]struct{})
+	}
+	e.orderIDsEver[id] = struct{}{}
+}
+
+func (e *engine) observeRequestID(id int) {
+	if int64(id) > e.requestIDHighWater {
+		e.requestIDHighWater = int64(id)
+	}
 }
 
 func (e *engine) observeNextValidID(id int64) {
