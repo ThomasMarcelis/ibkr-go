@@ -500,7 +500,7 @@ func TestDecodeShortFields(t *testing.T) {
 		{"FamilyCodes", protocol.InFamilyCodes, 5},                      // count, then pairs
 		{"MktDepthExchanges", protocol.InMktDepthExchanges, 10},         // count + entries(5 each)
 		{"TickReqParams", protocol.InTickReqParams, 4},                  // reqID, minTick, bboExchange, snapshotPermissions
-		{"SymbolSamples", protocol.InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)
+		{"SymbolSamples", protocol.InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes..., description, issuerID)
 		{"SmartComponents", protocol.InSmartComponents, 5},              // reqID, count, entries(bitNumber, exchangeName, exchangeLetter)
 		{"NewsArticle", protocol.InNewsArticle, 3},                      // reqID, articleType, articleText
 		{"TickNews", protocol.InTickNews, 6},                            // reqID, time, providerCode, articleId, headline, extraData
@@ -1146,7 +1146,9 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 		{"SmartComponents/1entry", []string{"82", "1", "1", "0", "ARCA", "P"}, "codec.SmartComponentsResponse"},
 		{"SmartComponents/empty", []string{"82", "1", "0"}, "codec.SmartComponentsResponse"},
 
-		{"SymbolSamples/1entry", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0"}, "codec.MatchingSymbols"},
+		// API 10.48.01 EDecoder.processSymbolSamplesMsg reads description and
+		// issuer ID unconditionally at this library's supported version floor.
+		{"SymbolSamples/1entry", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0", "123", "issuer-1"}, "codec.MatchingSymbols"},
 		{"SymbolSamples/empty", []string{"79", "1", "0"}, "codec.MatchingSymbols"},
 
 		// Degenerate
@@ -1172,5 +1174,20 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 				t.Errorf("message type = %q, want %q", got, tc.wantName)
 			}
 		})
+	}
+}
+
+func TestDecodeSymbolSamplesUnconditionalMetadata(t *testing.T) {
+	t.Parallel()
+
+	msgs, err := DecodeBatch(200, wire.EncodeFields([]string{
+		"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0", "123", "issuer-1",
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := msgs[0].(MatchingSymbols).Symbols[0]
+	if got.Description != "123" || got.IssuerID != "issuer-1" {
+		t.Fatalf("symbol metadata = description %q, issuer %q", got.Description, got.IssuerID)
 	}
 }

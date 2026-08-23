@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
@@ -150,6 +151,58 @@ func TestQuoteResumeRejectsContractFieldsAfterVersionDowngrade(t *testing.T) {
 		if event.Kind == StreamResubscribed {
 			t.Fatal("unsupported quote resume emitted Resubscribed")
 		}
+	}
+}
+
+func TestQuoteOddLotGenericTickServerVersionBoundary(t *testing.T) {
+	// API 10.48.01 EClient.MIN_SERVER_VER_ODD_LOT_BID_ASK_QUOTES is 225;
+	// MarketDataSamplesProto requests the corresponding tick family with 787.
+	tests := []struct {
+		serverVersion int
+		wantErr       bool
+	}{
+		{serverVersion: 224, wantErr: true},
+		{serverVersion: 225},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprint(tt.serverVersion), func(t *testing.T) {
+			e, peer := newObservedMarketDataEngine(t)
+			e.serverVersion = tt.serverVersion
+			e.nextReqID = 7871
+			result := make(chan struct {
+				sub *Subscription[QuoteUpdate]
+				err error
+			}, 1)
+			go func() {
+				sub, err := e.SubscribeQuotes(context.Background(), QuoteRequest{
+					Contract:     Stock("AAPL"),
+					GenericTicks: []GenericTick{GenericTickOddLotBidAsk},
+				})
+				result <- struct {
+					sub *Subscription[QuoteUpdate]
+					err error
+				}{sub: sub, err: err}
+			}()
+			(<-e.cmds)()
+			got := <-result
+			if tt.wantErr {
+				if !errors.Is(got.err, ErrUnsupportedServerVersion) {
+					t.Fatalf("SubscribeQuotes() error = %v, want ErrUnsupportedServerVersion", got.err)
+				}
+				if e.nextReqID != 7871 {
+					t.Fatalf("next request ID = %d, want no allocation", e.nextReqID)
+				}
+				return
+			}
+			if got.err != nil {
+				t.Fatal(got.err)
+			}
+			if payload := readObservedFrame(t, peer); !bytes.Contains(payload, []byte("787")) {
+				t.Fatalf("market data request = %x, want generic tick 787", payload)
+			}
+			got.sub.Close()
+			(<-e.cmds)()
+		})
 	}
 }
 

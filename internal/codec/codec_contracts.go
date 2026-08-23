@@ -761,7 +761,7 @@ func (m SecDefOptParamsEnd) encodeWire(sv int) ([]string, error) {
 	return []string{itoa(protocol.InSecDefOptParamsEnd), itoa(m.ReqID)}, nil
 }
 
-// [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes...)]
+// [79, reqID, count, repeated(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes..., description, issuerID)]
 func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 	reqID, _ := r.ReadInt()
 	count, err := r.ReadCount("sample count")
@@ -789,12 +789,8 @@ func decodeSymbolSamples(r *fieldReader, sv int) ([]Message, error) {
 		for j := range derivTypes {
 			derivTypes[j] = r.ReadString()
 		}
-		description := ""
-		issuerID := ""
-		if r.Remaining() >= 2 && !isWireInt(string(r.peek())) {
-			description = r.ReadString()
-			issuerID = r.ReadString()
-		}
+		description := r.ReadString()
+		issuerID := r.ReadString()
 		symbols[i] = SymbolSample{
 			ConID: conID, Symbol: symbol, SecType: secType,
 			PrimaryExchange: primaryExch, Currency: currency,

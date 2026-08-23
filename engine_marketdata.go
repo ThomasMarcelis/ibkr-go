@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -106,6 +107,17 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 	}
 	req.Contract = cloneContract(req.Contract)
 	genericTicks := formatGenericTicks(req.GenericTicks)
+	validateVersion := func(serverVersion int) error {
+		if serverVersion >= protocol.MinServerVersionOddLotBidAskQuotes {
+			return nil
+		}
+		for _, tick := range genericTicks {
+			if tick == string(GenericTickOddLotBidAsk) {
+				return fmt.Errorf("ibkr: generic tick %s requires server_version %d, negotiated %d: %w", tick, protocol.MinServerVersionOddLotBidAskQuotes, serverVersion, ErrUnsupportedServerVersion)
+			}
+		}
+		return nil
+	}
 	type result struct {
 		sub *Subscription[QuoteUpdate]
 		err error
@@ -114,6 +126,10 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
 		if err := validateContractFieldSupport(req.Contract, "market data quote", e.serverVersion, quoteContractFields(e.serverVersion)); err != nil {
+			resp <- result{err: err}
+			return
+		}
+		if err := validateVersion(e.serverVersion); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -146,7 +162,10 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			GenericTicks:       genericTicks,
 		}
 		quoteRoute.validateResume = func(e *engine) error {
-			return validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion))
+			if err := validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion)); err != nil {
+				return err
+			}
+			return validateVersion(e.serverVersion)
 		}
 		quoteRoute.handle = func(msg any, e *engine) {
 			fail := func(err error) { sub.cancelFromActor(err) }
