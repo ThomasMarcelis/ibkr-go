@@ -116,6 +116,9 @@ func writeBatchList(w io.Writer, batch string) error {
 		return err
 	}
 	for _, entry := range entries {
+		if entry.PromotionStatus == "blocked" {
+			continue
+		}
 		if !entry.inBatch(batch) && !entry.inReplayDefaultBatch(batch) {
 			continue
 		}

@@ -2,89 +2,52 @@ package wire
 
 import (
 	"bytes"
+	"encoding/base64"
 	"testing"
 )
 
-// Hot-path framing benchmarks. Every input below is a live IB Gateway frame
-// (server_version 200) re-embedded verbatim from the capture-decode fixtures
-// in internal/codec/codec_capture_test.go, with the 4-byte length prefix
-// stripped. Real wire bytes keep ns/op and B/op representative of production
-// framing work; keep these literals in sync with the capture suite.
+// Hot-path framing benchmarks use exact server_version 208 or 225 Gateway
+// frames. The sv208 classic CurrentTime body keeps ParseFields and EncodeFields
+// representative of the classic bodies still reachable at the supported
+// floor. The protobuf mix comes from current sv225 public replay captures.
 
-// benchOpenOrderPayload is the live openOrder frame from
-// captures/20260405T215248Z-open_orders_all, line 10 (OBDC PUT option,
-// PreSubmitted): the genuine 928-byte frame, 156 NUL-delimited fields. Same bytes as
-// TestCaptureDecode_OpenOrder in internal/codec/codec_capture_test.go. It is
-// the largest single frame in the capture suite's order flows, so it anchors
-// the ParseFields/EncodeFields benchmarks.
-var benchOpenOrderPayload = []byte(
-	"5\x000\x00853200900\x00OBDC\x00OPT\x0020261120\x0010\x00P\x00100\x00" +
-		"SMART\x00USD\x00OBDC  261120P00010000\x00OBDC\x00SELL\x001\x00LMT\x00" +
-		"1.2\x000.0\x00GTC\x00\x00DU9000001\x00\x000\x00\x000\x009000\x00" +
-		"0\x000\x000\x00\x009000.1/DU9000001/100\x00\x00\x00\x00\x00\x00" +
-		"0\x00\x00\x000\x00\x00-1\x000\x00\x00\x00\x00\x00\x002147483647\x00" +
-		"0\x000\x000\x00\x003\x000\x000\x00\x000\x000\x00\x000\x00None\x00\x00" +
-		"0\x00\x00\x00\x00?\x000\x000\x00\x000\x000\x00\x00\x00\x00\x00\x00" +
-		"0\x000\x000\x002147483647\x002147483647\x00\x00\x000\x00\x00IB\x00" +
-		"0\x000\x00\x000\x000\x00PreSubmitted\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00\x00\x00\x00\x00" +
-		"\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x00-9223372036854775808\x00\x000\x00\x000\x00" +
-		"0\x000\x00None\x001.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x00" +
-		"1.7976931348623157E308\x001.7976931348623157E308\x000\x00\x00\x00\x00" +
-		"0\x001\x000\x000\x000\x00\x00\x000\x00\x00\x00\x00\x00\x00\x000\x00" +
-		"\x000\x00\x002147483647\x00\x000\x00")
+// Capture 20260824T213929Z-supported_version_matrix_paper, events SHA-256
+// 64ee4350f0bde347a9da914a82865e88e0a68d06924cb13335fd2084595a7727.
+var benchClassicPayload = []byte("1\x001787607569\x00")
 
-// benchSessionPayloads is a realistic bootstrap -> quote snapshot -> account
-// summary -> open order frame mix: many small frames plus one fat-tail order
-// frame, the shape a live session actually pushes through ReadFrame. Sources
-// (all in internal/codec/codec_capture_test.go):
-//   - managed_accounts, next_valid_id, api_error 2104:
-//     captures/20260405T214926Z-bootstrap, lines 6-7
-//   - market_data_type, tick_price (tickType 68), tick_size (tickType 74),
-//     tick_snapshot_end: captures/20260405T215734Z-quote_snapshot_aapl,
-//     lines 11-18
-//   - account summary value + end:
-//     captures/20260405T215025Z-account_summary_snapshot, lines 10-11
-//   - the openOrder frame above.
+// The mix includes bootstrap, farm status, quote price/size, account summary,
+// and an open order. The source captures and hashes are retained in the
+// corresponding tracked transcripts.
 var benchSessionPayloads = [][]byte{
-	[]byte("15\x001\x00DU9000001\x00"),
-	[]byte("9\x001\x001\x00"),
-	[]byte("4\x00-1\x002104\x00Market data farm connection is OK:usfarm\x00\x001775425766350\x00"),
-	[]byte("58\x001\x001001\x003\x00"),
-	[]byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00"),
-	[]byte("2\x006\x001001\x0074\x00312894\x00"),
-	[]byte("57\x001\x001001\x00"),
-	[]byte("63\x001\x001001\x00DU9000001\x00BuyingPower\x00300000.00\x00EUR\x00"),
-	[]byte("64\x001\x001001\x00"),
-	benchOpenOrderPayload,
+	mustBenchPayload("AAAADwAAANcKCURVOTAwMDAwMQ=="),
+	mustBenchPayload("AAAABgAAANEIAQ=="),
+	mustBenchPayload("AAAAQwAAAMwI////////////ARC2+sWrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0="),
+	mustBenchPayload("AAAAGAAAAMkIARBEGc3MzMzMaHNAIgMxNDEoAA=="),
+	mustBenchPayload("AAAAEAAAAMoIARBKGgY4MTIyNTQ="),
+	mustBenchPayload("AAABOgAAAM0I5gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ5gMY5tWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBXI/C9Sh8c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDbwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk"),
+}
+
+func mustBenchPayload(encoded string) []byte {
+	framed, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		panic("wire benchmark: decode captured frame: " + err.Error())
+	}
+	payload, err := ReadFrame(bytes.NewReader(framed))
+	if err != nil {
+		panic("wire benchmark: parse captured frame: " + err.Error())
+	}
+	return payload
 }
 
 func BenchmarkReadFrame(b *testing.B) {
-	// Build the length-prefixed stream once, from EncodeFields of the real
-	// field slices; each iteration replays the whole stream from a reset
-	// bytes.Reader.
 	var streamBuf bytes.Buffer
 	for i, payload := range benchSessionPayloads {
-		fields, err := ParseFields(payload)
-		if err != nil {
-			b.Fatalf("ParseFields() frame %d error = %v", i, err)
-		}
-		if err := WriteFrame(&streamBuf, EncodeFields(fields)); err != nil {
+		if err := WriteFrame(&streamBuf, payload); err != nil {
 			b.Fatalf("WriteFrame() frame %d error = %v", i, err)
 		}
 	}
 	stream := streamBuf.Bytes()
 
-	// Verify once that the stream replays every source frame intact, so a
-	// broken input fails loudly instead of benchmarking garbage.
 	r := bytes.NewReader(stream)
 	for i, want := range benchSessionPayloads {
 		got, err := ReadFrame(r)
@@ -92,7 +55,7 @@ func BenchmarkReadFrame(b *testing.B) {
 			b.Fatalf("ReadFrame() frame %d error = %v", i, err)
 		}
 		if !bytes.Equal(got, want) {
-			b.Fatalf("ReadFrame() frame %d = %q, want %q", i, got, want)
+			b.Fatalf("ReadFrame() frame %d differs from captured payload", i)
 		}
 	}
 	if r.Len() != 0 {
@@ -112,34 +75,34 @@ func BenchmarkReadFrame(b *testing.B) {
 }
 
 func BenchmarkParseFields(b *testing.B) {
-	fields, err := ParseFields(benchOpenOrderPayload)
+	fields, err := ParseFields(benchClassicPayload)
 	if err != nil {
 		b.Fatalf("ParseFields() error = %v", err)
 	}
-	if len(fields) != 156 || fields[0] != "5" {
-		b.Fatalf("ParseFields() = %d fields starting %q, want 170 starting %q", len(fields), fields[0], "5")
+	if len(fields) != 2 || fields[0] != "1" || fields[1] != "1787607569" {
+		b.Fatalf("ParseFields() = %q, want captured sv208 CurrentTime body", fields)
 	}
 
 	b.ReportAllocs()
-	b.SetBytes(int64(len(benchOpenOrderPayload)))
+	b.SetBytes(int64(len(benchClassicPayload)))
 	for b.Loop() {
-		if _, err := ParseFields(benchOpenOrderPayload); err != nil {
+		if _, err := ParseFields(benchClassicPayload); err != nil {
 			b.Fatal(err)
 		}
 	}
 }
 
 func BenchmarkEncodeFields(b *testing.B) {
-	fields, err := ParseFields(benchOpenOrderPayload)
+	fields, err := ParseFields(benchClassicPayload)
 	if err != nil {
 		b.Fatalf("ParseFields() error = %v", err)
 	}
-	if got := EncodeFields(fields); !bytes.Equal(got, benchOpenOrderPayload) {
-		b.Fatalf("EncodeFields() does not round-trip the live frame: %d bytes, want %d", len(got), len(benchOpenOrderPayload))
+	if got := EncodeFields(fields); !bytes.Equal(got, benchClassicPayload) {
+		b.Fatalf("EncodeFields() does not round-trip the captured classic body")
 	}
 
 	b.ReportAllocs()
-	b.SetBytes(int64(len(benchOpenOrderPayload)))
+	b.SetBytes(int64(len(benchClassicPayload)))
 	for b.Loop() {
 		EncodeFields(fields)
 	}

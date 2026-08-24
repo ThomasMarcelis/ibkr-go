@@ -60,8 +60,8 @@ var scenarios = map[string]*scenario{
 		run:         runAPIContractDetailsAAPLOptions,
 	},
 	"contract_details_apple_bonds": {
-		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InBondContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"bond contract details by live-derived issuer ID"}, 1, "promoted", batchReadOnly),
-		description: "request and decode Apple bonds by live-derived issuer ID through the public API",
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InErrMsg}, "read_only", nil, []string{"bond contract details or exact issuer-ambiguity blocker"}, 1, "blocked", batchReadOnly),
+		description: "request Apple bonds by live-derived issuer ID and record the exact Gateway result",
 		run:         runAPIContractDetailsAppleBonds,
 	},
 	"contract_details_eurusd_cash": {
@@ -78,6 +78,11 @@ var scenarios = map[string]*scenario{
 		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InErrMsg}, "read_only", nil, []string{"typed code 200 contract-not-found error"}, 1, "promoted", batchReadOnly),
 		description: "request a nonexistent stock and require the live contract-not-found error through the public API",
 		run:         runAPIContractDetailsNotFound,
+	},
+	"contract_details_concurrent": {
+		metadata:    meta("contracts", []string{"Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd}, "read_only", nil, []string{"simultaneous AAPL and EUR.USD contract-detail requests complete on distinct request IDs"}, 1, "promoted", batchReadOnly),
+		description: "request AAPL and EUR.USD contract details concurrently through the public API",
+		run:         runAPIContractDetailsConcurrent,
 	},
 
 	// --- Account summary ---
@@ -105,6 +110,11 @@ var scenarios = map[string]*scenario{
 		description: "collect and close the positions snapshot through the public API",
 		run:         runAPIPositionsSnapshot,
 	},
+	"positions_subscription": {
+		metadata:    meta("accounts", []string{"Accounts().SubscribePositions", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqPositions, protocol.InPositionData, protocol.InPositionEnd, protocol.OutCancelPositions, protocol.OutReqCurrentTime}, "read_only", nil, []string{"nonempty positions stream reaches SnapshotComplete before protocol-fenced cancellation"}, 1, "promoted", batchNewV2, batchReadOnly),
+		description: "observe the positions subscription snapshot boundary through the public API",
+		run:         runAPIPositionsSubscription,
+	},
 
 	// --- Historical bars ---
 
@@ -129,7 +139,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHistoricalBarsError,
 	},
 	"historical_schedule_aapl": {
-		metadata:    meta("history", []string{"History().Schedule"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalSchedule}, "read_only", []string{"historical_data"}, []string{"nonempty historical session schedule with timezone"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("history", []string{"History().Schedule"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalSchedule}, "read_only", []string{"historical_data"}, []string{"nonempty historical session schedule with timezone"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "request and decode one month of AAPL trading sessions through the public API",
 		run:         runAPIHistoricalScheduleAAPL,
 	},
@@ -213,6 +223,11 @@ var scenarios = map[string]*scenario{
 		description: "request an unfiltered execution snapshot through the public API",
 		run:         runAPIExecutionsSnapshot,
 	},
+	"executions_concurrent_aapl": {
+		metadata:    meta("orders", []string{"Orders().Executions"}, []int{protocol.OutReqExecutions, protocol.InExecutionData, protocol.InExecutionDataEnd, protocol.InCommissionReport}, "read_only", nil, []string{"concurrent all-side, buy, and sell AAPL execution queries remain request-ID isolated"}, 1, "promoted", batchReadOnly),
+		description: "query all-side, buy, and sell AAPL executions concurrently through the public API",
+		run:         runAPIExecutionsConcurrentAAPL,
+	},
 
 	// --- v1 expanded scope: Batch C1 — singleton one-shots (no reqID) ---
 
@@ -245,7 +260,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIUserInfo,
 	},
 	"tws_config": {
-		metadata:    meta("tws", []string{"TWS().Config"}, []int{protocol.OutReqConfig, protocol.InConfig}, "read_only", nil, []string{"presence-preserving TWS or Gateway configuration snapshot"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("tws", []string{"TWS().Config"}, []int{protocol.OutReqConfig, protocol.InConfig}, "read_only", nil, []string{"presence-preserving TWS or Gateway configuration snapshot"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "request the current TWS or Gateway configuration through the public API",
 		run:         runAPITWSConfig,
 	},
@@ -270,22 +285,22 @@ var scenarios = map[string]*scenario{
 		run:         runAPISecDefOptParamsAAPL,
 	},
 	"histogram_data_aapl": {
-		metadata:    meta("history", []string{"History().Histogram"}, []int{protocol.OutReqHistogramData, protocol.InHistogramData}, "read_only", []string{"historical_data"}, []string{"nonempty one-week AAPL histogram"}, 1, "promoted", batchReadOnly),
+		metadata:    meta("history", []string{"History().Histogram"}, []int{protocol.OutReqHistogramData, protocol.InHistogramData}, "read_only", []string{"historical_data"}, []string{"nonempty one-week AAPL histogram"}, 1, "blocked", batchReadOnly),
 		description: "request and decode a one-week AAPL price histogram through the public API",
 		run:         runAPIHistogramAAPL,
 	},
 	"historical_ticks_aapl_trades": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical trades or exact permission error"}, 1, "promoted", batchReadOnly),
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical trades or exact permission error"}, 1, "blocked", batchReadOnly),
 		description: "request recent AAPL trade ticks or the typed live permission error through the public API",
 		run:         runAPIHistoricalTicksTrades,
 	},
 	"historical_ticks_aapl_bidask": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical bid/ask ticks or exact permission error"}, 1, "promoted", batchReadOnly),
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical bid/ask ticks or exact permission error"}, 1, "blocked", batchReadOnly),
 		description: "request recent AAPL bid/ask ticks or the typed live permission error through the public API",
 		run:         runAPIHistoricalTicksBidAsk,
 	},
 	"historical_ticks_aapl_midpoint": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical midpoint ticks or exact permission error"}, 1, "promoted", batchReadOnly),
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty historical midpoint ticks or exact permission error"}, 1, "blocked", batchReadOnly),
 		description: "request recent AAPL midpoint ticks or the typed live permission error through the public API",
 		run:         runAPIHistoricalTicksMidpoint,
 	},
@@ -295,7 +310,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHistoricalNewsAAPL,
 	},
 	"historical_ticks_aapl_timezone_start": {
-		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"explicit UTC start-bound ticks for all kinds or exact permission errors"}, 1, "promoted", batchNewV2, batchReadOnly),
+		metadata:    meta("history", []string{"History().Ticks"}, []int{protocol.OutReqHistoricalTicks, protocol.InHistoricalTicksBidAsk, protocol.InHistoricalTicksLast, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"explicit UTC start-bound ticks for all kinds or exact permission errors"}, 1, "blocked", batchNewV2, batchReadOnly),
 		description: "request AAPL trade, bid/ask, and midpoint ticks from an explicit UTC start bound through the public API",
 		run:         runAPIHistoricalTicksStartBound,
 	},
@@ -371,7 +386,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHistoricalBarsKeepUp,
 	},
 	"news_bulletins": {
-		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"bounded typed bulletin observation, including a valid empty window, followed by fenced cancellation"}, 1, "promoted", batchReadOnly),
+		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"bounded typed bulletin observation, including a valid empty window, followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
 		description: "observe the live bulletin stream through the public API and close it cleanly",
 		run:         runAPINewsBulletins,
 	},
@@ -389,7 +404,7 @@ var scenarios = map[string]*scenario{
 	},
 
 	"market_depth_aapl": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMktDepth, protocol.OutCancelMktDepth, protocol.OutReqCurrentTime, protocol.InMarketDepth, protocol.InMarketDepthL2, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"typed regular depth row with fenced cancellation, or an exact live refusal"}, 1, "promoted", batchNewV2, batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMktDepth, protocol.OutCancelMktDepth, protocol.OutReqCurrentTime, protocol.InMarketDepth, protocol.InMarketDepthL2, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"typed regular depth row with fenced cancellation, or an exact live refusal"}, 1, "blocked", batchNewV2, batchReadOnly),
 		description: "observe an AAPL regular depth row or an exact live refusal through the public API",
 		run:         runAPIMarketDepthAAPL,
 	},
@@ -412,7 +427,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIDisplayGroups,
 	},
 	"display_group_subscribe": {
-		metadata:    meta("tws", []string{"TWS().DisplayGroups", "TWS().SubscribeDisplayGroup", "DisplayGroupHandle.Update", "Client.CurrentTime"}, []int{protocol.OutQueryDisplayGroups, protocol.InDisplayGroupList, protocol.OutSubscribeToGroupEvents, protocol.InDisplayGroupUpdated, protocol.OutUpdateDisplayGroup, protocol.OutUnsubscribeFromGroupEvents, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"tws_display_groups"}, []string{"typed display group query, subscribe, state-preserving update when possible, unsubscribe"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("tws", []string{"TWS().DisplayGroups", "TWS().SubscribeDisplayGroup", "DisplayGroupHandle.Update", "Client.CurrentTime"}, []int{protocol.OutQueryDisplayGroups, protocol.InDisplayGroupList, protocol.OutSubscribeToGroupEvents, protocol.InDisplayGroupUpdated, protocol.OutUpdateDisplayGroup, protocol.OutUnsubscribeFromGroupEvents, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"tws_display_groups"}, []string{"typed display group query, subscribe, state-preserving update when possible, unsubscribe"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "query real display group IDs and exercise the public subscription lifecycle",
 		run:         runAPIDisplayGroupSubscription,
 	},
@@ -442,13 +457,19 @@ var scenarios = map[string]*scenario{
 		run:         runAPIQualifyContractAmbiguous,
 	},
 	"api_order_type_matrix_aapl": {
-		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families accepted, rejected, filled, modified, or cancelled with real order lifecycle"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchExhaustivePremarket, batchReplayDefault, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{1, 2, 3, 4, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT/LMT/STP/STP LMT/TRAIL/TRAIL LIMIT/MIT/LIT/MTL/REL/MOC/LOC/MOO/LOO/PEG families reach a real order lifecycle; incomplete PEG BENCH input reaches exact local validation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchExhaustivePremarket, batchReplayDefault, batchReplayAll),
 		description: "public API campaign for AAPL order type breadth: fills, rests, rejects, modifies, and cancels",
 		run:         runAPIOrderTypeMatrixAAPL,
 	},
 	"api_order_fill_aapl": {
-		metadata:    metaWithAssets("orders", []string{"MarketData().SetType", "MarketData().Quote", "Orders().Place", "OrderHandle.Replace", "Orders().Executions"}, []int{1, 2, 3, 5, 11, 57, 58, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"MKT, MTL, and delayed modify-to-market fill paths with flattening"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
-		description: "public API campaign for AAPL fill paths: MKT, MTL, and delayed modify-to-market",
+		metadata: metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "Client.CurrentTime"}, []int{
+			protocol.OutPlaceOrder, protocol.InOrderStatus, protocol.InOpenOrder, protocol.OutReqExecutions,
+			protocol.InExecutionData, protocol.OutReqAllOpenOrders, protocol.OutReqCurrentTime,
+			protocol.InCurrentTime, protocol.InOpenOrderEnd, protocol.InExecutionDataEnd,
+			protocol.InCommissionReport, protocol.OutReqPositions, protocol.OutReqAccountSummary,
+			protocol.InPositionData, protocol.InPositionEnd, protocol.InAccountSummary, protocol.InAccountSummaryEnd,
+		}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"one-share SMART AAPL market buy fills with execution and fee; cleanup sells exactly the campaign delta and verifies a second execution/fee, zero working orders, and the unchanged position inventory"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+		description: "guarded one-share AAPL fill with execution/fee proof and baseline reconciliation",
 		run:         runAPIOrderFillAAPL,
 	},
 	"api_order_rest_cancel_aapl": {
@@ -457,7 +478,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIOrderRestCancelAAPL,
 	},
 	"api_order_direct_cancel_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Cancel", "Client.CurrentTime"}, []int{protocol.OutPlaceOrder, protocol.InOpenOrder, protocol.InOrderStatus, protocol.OutCancelOrder, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "paper_order", []string{"paper_trading"}, []string{"same-client top-level direct cancel reaches typed terminal cancellation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "Orders().Cancel", "Client.CurrentTime"}, []int{protocol.OutPlaceOrder, protocol.InOpenOrder, protocol.InOrderStatus, protocol.OutCancelOrder, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "paper_order", []string{"paper_trading"}, []string{"same-client top-level direct cancel reaches typed terminal cancellation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingBasic, batchTradingAll, batchReplayDefault, batchReplayAll),
 		description: "place a resting AAPL limit order and cancel it through Orders().Cancel",
 		run:         runAPIOrderDirectCancelAAPL,
 	},
@@ -542,7 +563,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHistoricalMatrixAAPL,
 	},
 	"api_news_article_aapl": {
-		metadata:    metaWithAssets("news", []string{"News().Historical", "News().Article"}, []int{84, 83, 86, 87, 80, 4}, "entitlement_probe", []string{"news_or_historical_news"}, []string{"article ID sourced from historical news is requested through reqNewsArticle or real entitlement/no-result is frozen"}, 1, "candidate", []string{"STK"}, batchNewV2, batchReplayAll),
+		metadata:    metaWithAssets("news", []string{"News().Historical", "News().Article"}, []int{84, 83, 86, 87, 80, 4}, "entitlement_probe", []string{"news_or_historical_news"}, []string{"article ID sourced from historical news is requested through reqNewsArticle or real entitlement/no-result is frozen"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReplayAll),
 		description: "public API campaign that requests a real news article ID from historical news, then fetches the article",
 		run:         runAPINewsArticleAAPL,
 	},
@@ -567,7 +588,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIDollarCostAveragingAAPL,
 	},
 	"api_stop_loss_management_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"market entry, protective stop placement, stop modification, cancellation, flatten, and execution reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"market entry, protective stop placement, stop modification, cancellation, flatten, and execution reconciliation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for placing, moving, cancelling, and flattening a protective stop",
 		run:         runAPIStopLossManagementAAPL,
 	},
@@ -577,8 +598,8 @@ var scenarios = map[string]*scenario{
 		run:         runAPIBracketTrailingStopAAPL,
 	},
 	"api_option_exercise_aapl": {
-		metadata:    meta("options", []string{"Orders().Place", "Options().Exercise"}, []int{3, 5, 21}, "paper_marketable_order", []string{"paper_trading", "market_hours", "option_permissions"}, []string{"option fill then real exercise acknowledgement or no-position error"}, 1, "promoted", batchTrading),
-		description: "public API campaign buying one AAPL call then exercising it, freezing the real exercise or no-position response",
+		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Details", "MarketData().Quote", "Orders().Place", "Options().Exercise", "Accounts().Positions", "Orders().Executions"}, []int{1, 2, 3, 5, 10, 11, 21, 52, 55, 57, 59, 61, 62, 75, 76}, "paper_marketable_order", []string{"paper_trading", "options_market_hours", "option_permissions", "safe_option_and_stock_reconciliation"}, []string{"one live-qualified ITM AAPL call fills, exercise reaches a terminal pseudo-order state, the option or stock position changes, and campaign deltas are reconciled; the current after-hours run is blocked by exact warning 399 before any fill and reconciles without mutation"}, 1, "blocked", []string{"OPT", "STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll),
+		description: "buy and exercise one live-qualified ITM AAPL call with terminal option and stock reconciliation",
 		run:         runAPIOptionExerciseAAPL,
 	},
 	"api_hedge_order_aapl": {
@@ -587,8 +608,8 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHedgeOrderAAPL,
 	},
 	"api_option_campaign_aapl": {
-		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "MarketData().Quote", "Options().Price", "Options().Exercise", "Orders().Place", "Orders().Executions", "Orders().Completed"}, []int{1, 2, 3, 5, 11, 21, 55, 59, 75, 76, 99, 101, 102}, "paper_trigger", []string{"paper_trading", "market_hours", "option_permissions"}, []string{"live-qualified AAPL option quote/calculation/order/exercise-or-real-reject campaign"}, 1, "candidate", []string{"OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
-		description: "public API campaign for live-qualified AAPL option data, order, execution, and exercise/lapse responses",
+		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "MarketData().Quote", "Options().Price", "Options().Exercise", "Orders().Place", "Orders().Executions", "Orders().Completed"}, []int{1, 2, 3, 5, 11, 21, 55, 59, 75, 76, 99, 101, 102}, "paper_trigger", []string{"paper_trading", "market_hours", "option_permissions", "safe_option_and_stock_reconciliation"}, []string{"blocked until option orders, lapse/exercise requests, and every resulting option or stock delta can be terminally restored"}, 1, "blocked", []string{"OPT"}),
+		description: "blocked option campaign pending terminal option and stock reconciliation",
 		run:         runAPIOptionCampaignAAPL,
 	},
 	"api_option_calculations_aapl": {
@@ -620,6 +641,11 @@ var scenarios = map[string]*scenario{
 		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"Transmit=false staged order is modified to transmit, then cancelled or rejected by the real Gateway"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "public API campaign for staging Transmit=false then modifying to transmit and cancel",
 		run:         runAPITransmitFalseThenTransmitAAPL,
+	},
+	"api_include_overnight_lifecycle_aapl": {
+		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Client.CurrentTime"}, []int{3, 4, 5, 7, 11, 16, 49, 53, 55, 59, 61, 62, 63, 64}, "paper_order", []string{"paper_trading", "client_id_0", "overnight_session", "multi_leg_recorder"}, []string{"nonmarketable SMART AAPL DAY order echoes IncludeOvernight=true; explicit-false replacement records exact code 462 while the working order retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absent with TIF DAY; both orders cancel terminally and paper state reconciles to baseline"}, 0, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
+		description: "guarded true-to-false IncludeOvernight placement, replacement, cancellation, and reconciliation",
+		run:         runAPIIncludeOvernightLifecycleAAPL,
 	},
 	"api_duplicate_quote_subscriptions_aapl": {
 		metadata:    metaWithAssets("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{1, 2, 58, 59}, "entitlement_probe", []string{"market_data_or_delayed_data"}, []string{"SetType(Delayed), then two same-contract quote subscriptions start independently and both receive delayed bid/ask ticks"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchExhaustiveReadOnly, batchReplayAll),
@@ -657,7 +683,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIStressRapidFireAAPL,
 	},
 	"api_scale_in_campaign_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"scale-in 2x MKT buy plus protective stop-loss PreSubmitted trigger; source capture tail timed out during cancel/flatten/execution query"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"scale-in 2x MKT buy plus protective stop-loss PreSubmitted trigger; source capture tail timed out during cancel/flatten/execution query"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for scale-in buy strategy with protective stop-loss and flatten",
 		run:         runAPIScaleInCampaignAAPL,
 	},

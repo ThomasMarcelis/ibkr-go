@@ -22,6 +22,7 @@ const (
 	envReadOnlyLiveAddr = "IBKR_LIVE_READONLY_ADDR"
 	envPaperDevAddr     = "IBKR_LIVE_PAPER_ADDR"
 	envClientID         = "IBKR_LIVE_CLIENT_ID"
+	envPaperAccount     = "IBKR_PAPER_ACCOUNT"
 
 	defaultReadOnlyLiveAddr = "127.0.0.1:4001"
 	defaultPaperDevAddr     = "127.0.0.1:4002"
@@ -53,19 +54,11 @@ func TradingEnabled() bool {
 	return envFlag(envLiveTrading)
 }
 
-// envFlag reads a boolean-ish gate variable. Empty is off; a value
-// strconv.ParseBool reads as false ("0", "false", "f", …) is off; any other
-// non-empty value (including "1", "true", and legacy "yes") is on. This keeps
-// IBKR_LIVE=0 from accidentally turning live mode on.
+// envFlag accepts only values recognized by strconv.ParseBool. A typo must not
+// authorize a live or trading campaign.
 func envFlag(name string) bool {
-	raw := os.Getenv(name)
-	if raw == "" {
-		return false
-	}
-	if b, err := strconv.ParseBool(raw); err == nil {
-		return b
-	}
-	return true
+	enabled, err := strconv.ParseBool(os.Getenv(name))
+	return err == nil && enabled
 }
 
 func Load() (Config, error) {
@@ -191,17 +184,16 @@ func DialTradingContext(t testing.TB, timeout time.Duration, extra ...ibkr.Optio
 		cancel()
 		t.Fatalf("ManagedAccounts() paper-account guard error = %v", err)
 	}
-	for _, account := range accounts {
-		if !strings.HasPrefix(account, "DU") {
-			client.Close()
-			cancel()
-			t.Fatalf("paper-trading session reported non-paper account %q", account)
-		}
-	}
-	if len(accounts) == 0 {
+	expectedAccount := strings.TrimSpace(os.Getenv(envPaperAccount))
+	if !strings.HasPrefix(expectedAccount, "DU") {
 		client.Close()
 		cancel()
-		t.Fatal("paper-trading session reported no managed accounts")
+		t.Fatalf("set %s to the exact DU account authorized for paper trading", envPaperAccount)
+	}
+	if len(accounts) != 1 || accounts[0] != expectedAccount {
+		client.Close()
+		cancel()
+		t.Fatalf("paper-trading session accounts do not exactly match %s", envPaperAccount)
 	}
 	return client, ctx, cancel
 }

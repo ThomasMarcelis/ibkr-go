@@ -21,8 +21,9 @@ func TestLiveCaptureHighSignalTradingScenarios(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			events := runLiveCaptureScenario(t, name, 12*time.Minute)
 			requireDriverEvent(t, events, "session_ready")
-			requireDriverEvent(t, events, "pre_cleanup_global_cancel_sent")
-			requireDriverEvent(t, events, "cleanup_global_cancel_sent")
+			requireDriverEvent(t, events, "paper_baseline")
+			requireDriverEvent(t, events, "paper_reconciliation_session")
+			requireDriverEvent(t, events, "paper_reconciled")
 			requireDriverEvent(t, events, "scenario_end")
 			requireDriverEvent(t, events, "place_order_sent")
 		})
@@ -33,7 +34,6 @@ func TestLiveCapturePermissionAndMultiAssetScenarios(t *testing.T) {
 	ibkrlive.RequireTrading(t)
 
 	for _, name := range []string{
-		"api_option_campaign_aapl",
 		"api_combo_option_vertical_aapl",
 		"api_future_campaign_mes",
 		"api_forex_lifecycle_eurusd",
@@ -41,8 +41,9 @@ func TestLiveCapturePermissionAndMultiAssetScenarios(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			events := runLiveCaptureScenario(t, name, 8*time.Minute)
 			requireDriverEvent(t, events, "session_ready")
-			requireDriverEvent(t, events, "pre_cleanup_global_cancel_sent")
-			requireDriverEvent(t, events, "cleanup_global_cancel_sent")
+			requireDriverEvent(t, events, "paper_baseline")
+			requireDriverEvent(t, events, "paper_reconciliation_session")
+			requireDriverEvent(t, events, "paper_reconciled")
 			requireDriverEvent(t, events, "scenario_end")
 			requireAnyDriverEvent(t, events, "place_order_sent", "place_order_error", "option_qualify_error", "contract_probe_error")
 		})

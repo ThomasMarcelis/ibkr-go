@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -122,7 +123,12 @@ func writeVerification(out io.Writer, captureDir string, meta capturelog.Meta, e
 		if err != nil {
 			return fmt.Errorf("verify leg %d server msg_id %d: %w", event.Leg, msgID, err)
 		}
-		stats.observeDecoded(msgID, messages)
+		for _, message := range messages {
+			if malformed, ok := message.(codec.MalformedInbound); ok {
+				return fmt.Errorf("verify leg %d server msg_id %d decoded malformed body: %w", event.Leg, msgID, malformed.Err)
+			}
+		}
+		stats.observeDecoded(messages)
 	}
 
 	if stats.clientBytes == 0 || stats.serverBytes == 0 || stats.clientFrames == 0 || stats.serverFrames == 0 {
@@ -172,7 +178,22 @@ func writeVerification(out io.Writer, captureDir string, meta capturelog.Meta, e
 			return err
 		}
 	}
-	driver, err := verifyDriverEvents(filepath.Join(captureDir, "driver_events.jsonl"), meta)
+	driverLogPath := filepath.Join(captureDir, "driver.log")
+	driverEventsPath := filepath.Join(captureDir, "driver_events.jsonl")
+	_, driverLogErr := os.Stat(driverLogPath)
+	_, driverEventsErr := os.Stat(driverEventsPath)
+	driverLogExists := driverLogErr == nil
+	driverEventsExist := driverEventsErr == nil
+	if driverLogErr != nil && !errors.Is(driverLogErr, os.ErrNotExist) {
+		return fmt.Errorf("stat driver log: %w", driverLogErr)
+	}
+	if driverEventsErr != nil && !errors.Is(driverEventsErr, os.ErrNotExist) {
+		return fmt.Errorf("stat driver events: %w", driverEventsErr)
+	}
+	if driverLogExists != driverEventsExist {
+		return fmt.Errorf("incomplete driver evidence: driver.log=%t driver_events.jsonl=%t", driverLogExists, driverEventsExist)
+	}
+	driver, err := verifyDriverEvents(driverEventsPath, meta, stats.apiErrors)
 	if err != nil {
 		return err
 	}
@@ -183,15 +204,10 @@ func writeVerification(out io.Writer, captureDir string, meta capturelog.Meta, e
 	return nil
 }
 
-func (s *verificationStats) observeDecoded(msgID int, messages []codec.Message) {
+func (s *verificationStats) observeDecoded(messages []codec.Message) {
 	for _, message := range messages {
 		if apiErr, ok := message.(codec.APIError); ok {
 			s.apiErrors = append(s.apiErrors, apiErr)
-		}
-		// Before server_version 196, historical-data completion is carried
-		// inside IN 17 rather than a standalone IN 108 envelope.
-		if _, ok := message.(codec.HistoricalBarsEnd); ok && msgID == protocol.InHistoricalData {
-			s.endMarkers["InHistoricalDataEnd"]++
 		}
 	}
 }
@@ -213,22 +229,27 @@ func fileSHA256(path string) ([sha256.Size]byte, error) {
 }
 
 type driverEvidence struct {
-	At       time.Time `json:"at"`
-	Scenario string    `json:"scenario"`
-	RunID    string    `json:"run_id"`
-	Kind     string    `json:"kind"`
-	Server   string    `json:"server"`
-	ClientID int       `json:"client_id"`
-	Error    string    `json:"error"`
+	At       time.Time         `json:"at"`
+	Scenario string            `json:"scenario"`
+	RunID    string            `json:"run_id"`
+	Kind     string            `json:"kind"`
+	Label    string            `json:"label"`
+	Server   string            `json:"server"`
+	ClientID int               `json:"client_id"`
+	Count    int               `json:"count"`
+	Values   map[string]string `json:"values"`
+	Error    string            `json:"error"`
 }
 
 type driverEvidenceStats struct {
 	count    int
 	runID    string
 	outcomes int
+	kinds    map[string]int
+	events   []driverEvidence
 }
 
-func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats, error) {
+func verifyDriverEvents(path string, meta capturelog.Meta, apiErrors []codec.APIError) (driverEvidenceStats, error) {
 	// #nosec G304 -- the operator explicitly selects the capture directory.
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -238,7 +259,7 @@ func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats,
 		return driverEvidenceStats{}, fmt.Errorf("open driver events: %w", err)
 	}
 	defer file.Close()
-	stats := driverEvidenceStats{}
+	stats := driverEvidenceStats{kinds: make(map[string]int)}
 	var previous time.Time
 	var starts, ready, ends int
 	var lastKind string
@@ -254,6 +275,8 @@ func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats,
 			return driverEvidenceStats{}, fmt.Errorf("decode driver event line %d: %w", stats.count+1, err)
 		}
 		stats.count++
+		stats.kinds[event.Kind]++
+		stats.events = append(stats.events, event)
 		if event.Scenario != meta.Scenario {
 			return driverEvidenceStats{}, fmt.Errorf("driver event line %d scenario %q does not match capture %q", stats.count, event.Scenario, meta.Scenario)
 		}
@@ -270,6 +293,9 @@ func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats,
 		}
 		previous = event.At
 		lastKind = event.Kind
+		if event.Kind == "paper_reconciliation_failed" {
+			return driverEvidenceStats{}, fmt.Errorf("driver event line %d reports failed paper reconciliation: %s", stats.count, event.Error)
+		}
 		switch event.Kind {
 		case "scenario_start":
 			starts++
@@ -286,8 +312,11 @@ func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats,
 			ready++
 		case "scenario_end":
 			ends++
-			if event.Error != "" {
+			if event.Error != "" && !isAttestedScenarioBlocker(meta.Scenario, event.Error, apiErrors) {
 				return driverEvidenceStats{}, fmt.Errorf("scenario_end reports failure: %s", event.Error)
+			}
+			if event.Error != "" {
+				stats.outcomes++
 			}
 		default:
 			stats.outcomes++
@@ -305,7 +334,121 @@ func verifyDriverEvents(path string, meta capturelog.Meta) (driverEvidenceStats,
 	if lastKind != "scenario_end" {
 		return driverEvidenceStats{}, fmt.Errorf("last driver event is %q, want scenario_end", lastKind)
 	}
+	if stats.kinds["paper_baseline"] > 0 && stats.kinds["paper_reconciled"] != 1 {
+		return driverEvidenceStats{}, fmt.Errorf("paper campaign baseline=%d reconciliation=%d, want 1/1", stats.kinds["paper_baseline"], stats.kinds["paper_reconciled"])
+	}
+	if stats.kinds["paper_reconciled"] > 0 && stats.kinds["paper_baseline"] != 1 {
+		return driverEvidenceStats{}, fmt.Errorf("paper reconciliation has no unique baseline")
+	}
+	if stats.outcomes == 0 && scenarioNeedsDriverOutcome(meta.Scenario) {
+		return driverEvidenceStats{}, fmt.Errorf("scenario %s has no result or attested blocker driver evidence", meta.Scenario)
+	}
+	if err := validateDriverScenarioEvidence(meta.Scenario, stats); err != nil {
+		return driverEvidenceStats{}, err
+	}
 	return stats, nil
+}
+
+func scenarioNeedsDriverOutcome(scenario string) bool {
+	return scenario != "bootstrap" && scenario != "bootstrap_client_id_0"
+}
+
+func validateDriverScenarioEvidence(scenario string, stats driverEvidenceStats) error {
+	requireKinds := func(kinds ...string) error {
+		for _, kind := range kinds {
+			if stats.kinds[kind] == 0 {
+				return fmt.Errorf("scenario %s has no %s driver evidence", scenario, kind)
+			}
+		}
+		return nil
+	}
+	switch scenario {
+	case "api_order_fill_aapl":
+		return requireKinds("paper_baseline", "execution", "execution_and_fee_reconciled", "paper_reconciled")
+	case "api_include_overnight_lifecycle_aapl":
+		if err := requireKinds("paper_baseline", "paper_reconciled"); err != nil {
+			return err
+		}
+		var truePlacement, falsePlacement, replacementDisposition bool
+		for _, event := range stats.events {
+			if event.Kind == "include_overnight_echo" && event.Label == "placement" && event.Values["include_overnight"] == "true" {
+				truePlacement = true
+			}
+			if event.Kind == "include_overnight_echo" && event.Label == "fresh placement" &&
+				event.Values["requested"] == "false" && event.Values["tif"] == "DAY" &&
+				(event.Values["include_overnight"] == "false" || event.Values["include_overnight"] == "absent") {
+				falsePlacement = true
+			}
+			if event.Kind == "include_overnight_echo" && event.Label == "replacement" && event.Values["include_overnight"] == "false" ||
+				event.Kind == "include_overnight_blocked" && event.Label == "replacement" && event.Values["code"] == "462" {
+				replacementDisposition = true
+			}
+		}
+		if !truePlacement || !falsePlacement || !replacementDisposition {
+			return fmt.Errorf("scenario %s lifecycle evidence true=%t fresh_false=%t replacement=%t", scenario, truePlacement, falsePlacement, replacementDisposition)
+		}
+	case "api_option_exercise_aapl":
+		if err := requireKinds("paper_baseline", "paper_reconciled"); err != nil {
+			return err
+		}
+		for _, event := range stats.events {
+			if event.Kind == "option_exercise_completed" {
+				return nil
+			}
+			if event.Kind == "order_warning" && event.Label == "option exercise seed" &&
+				event.Values["code"] == "399" &&
+				strings.Contains(event.Values["message"], "will not be placed at the exchange until") {
+				return nil
+			}
+		}
+		return fmt.Errorf("scenario %s has neither a completed exercise nor exact market-hours blocker", scenario)
+	}
+	return nil
+}
+
+func isAttestedScenarioBlocker(scenario, scenarioErr string, apiErrors []codec.APIError) bool {
+	for _, apiErr := range apiErrors {
+		switch {
+		case scenario == "api_include_overnight_lifecycle_aapl" &&
+			strings.Contains(scenarioErr, "include overnight replacement echo") &&
+			strings.Contains(scenarioErr, "want explicit false") &&
+			apiErr.Code == 462 &&
+			strings.Contains(apiErr.Message, "Cannot change to the new Time in Force.DAY"):
+			return true
+		case scenario == "contract_details_apple_bonds" &&
+			attestedDriverAPIError(scenarioErr, apiErr, 2130, "products are trading on the basis of currency price with factor"):
+			return true
+		case slices.Contains([]string{
+			"histogram_data_aapl",
+			"historical_bars_1d_1h",
+			"historical_bars_30d_1day",
+			"historical_ticks_aapl_timezone_start",
+			"historical_ticks_aapl_trades",
+		}, scenario) && attestedDriverAPIError(scenarioErr, apiErr, 2188, "Up-to-the-second historical data requires additional subscription for the API."):
+			return true
+		case scenario == "historical_bars_keepup" &&
+			attestedDriverAPIError(scenarioErr, apiErr, 162, "No market data permissions for ISLAND STK"):
+			return true
+		case scenario == "market_depth_aapl_smart" &&
+			strings.Contains(scenarioErr, "required market-depth evidence not observed within 15s") &&
+			apiErr.Code == 2152 &&
+			strings.Contains(apiErr.Message, "Need additional market data permissions"):
+			return true
+		case scenario == "api_option_exercise_aapl" &&
+			strings.Contains(scenarioErr, "option exercise seed status=Cancelled filled=0 execution=false") &&
+			apiErr.Code == 399 &&
+			strings.Contains(apiErr.Message, "will not be placed at the exchange until"):
+			return true
+		}
+	}
+	return false
+}
+
+func attestedDriverAPIError(scenarioErr string, apiErr codec.APIError, code int, message string) bool {
+	return apiErr.Code == code &&
+		strings.Contains(apiErr.Message, message) &&
+		strings.Contains(scenarioErr, "code="+strconv.Itoa(code)) &&
+		strings.Contains(scenarioErr, apiErr.Message)
 }
 
 func formatServerVersions(versions map[int]bool) string {

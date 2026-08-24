@@ -136,9 +136,9 @@ func TestGateFlagParsing(t *testing.T) {
 		{"1", true},
 		{"true", true},
 		{"t", true},
-		{"yes", true}, // legacy truthy value, not ParseBool-recognized
-		{"on", true},  // any other non-empty value enables
-		{"enable", true},
+		{"yes", false},
+		{"on", false},
+		{"enable", false},
 	}
 	for _, tc := range cases {
 		t.Run("IBKR_LIVE="+tc.value, func(t *testing.T) {

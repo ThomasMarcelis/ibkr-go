@@ -47,8 +47,10 @@ func TestScenarioCatalogCoversEveryScenario(t *testing.T) {
 		if entry.DefaultClientID < 0 {
 			t.Errorf("%s default client ID = %d, want >= 0", entry.Name, entry.DefaultClientID)
 		}
-		if entry.PromotionStatus == "" {
-			t.Errorf("%s missing promotion status", entry.Name)
+		switch entry.PromotionStatus {
+		case "candidate", "blocked", "promoted":
+		default:
+			t.Errorf("%s has invalid promotion status %q", entry.Name, entry.PromotionStatus)
 		}
 	}
 }
@@ -187,8 +189,14 @@ func TestReplayBatches(t *testing.T) {
 		t.Fatalf("writeBatchList(replay-all) error = %v", err)
 	}
 	allLines := strings.Split(strings.TrimSpace(all.String()), "\n")
-	if len(allLines) != len(entries) {
-		t.Fatalf("replay-all entries = %d, want every scenario %d", len(allLines), len(entries))
+	wantExecutable := 0
+	for _, entry := range entries {
+		if entry.PromotionStatus != "blocked" {
+			wantExecutable++
+		}
+	}
+	if len(allLines) != wantExecutable {
+		t.Fatalf("replay-all entries = %d, want every non-blocked scenario %d", len(allLines), wantExecutable)
 	}
 
 	var defaults bytes.Buffer

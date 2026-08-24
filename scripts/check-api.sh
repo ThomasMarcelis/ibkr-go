@@ -4,7 +4,8 @@ set -euo pipefail
 readonly module=github.com/ThomasMarcelis/ibkr-go/v2
 readonly apidiff=golang.org/x/exp/cmd/apidiff@v0.0.0-20260709172345-9ea1abe57597
 readonly root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly baseline="$root/testdata/api/v2.0.0.api"
+readonly stable_baseline="$root/testdata/api/v2.0.0.api"
+readonly candidate_baseline="$root/testdata/api/v2.0.1.api"
 readonly approved_breaks="$root/testdata/api/approved-breaks-after-v2.0.0.txt"
 current="$(mktemp)"
 trap 'rm -f "$current"' EXIT
@@ -25,9 +26,11 @@ fi
 cd "$root"
 go run "$apidiff" -w "$current" "$module"
 if "$exact"; then
+	baseline="$candidate_baseline"
 	changes="$(go run "$apidiff" "$baseline" "$current")"
-	message='public API differs from the v2.0.0 release manifest'
+	message='public API differs from the v2.0.1 candidate manifest'
 else
+	baseline="$stable_baseline"
 	incompatible="$(go run "$apidiff" -incompatible "$baseline" "$current")"
 	set +e
 	changes="$(printf '%s\n' "$incompatible" | grep -Fvx -f "$approved_breaks")"

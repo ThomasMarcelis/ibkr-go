@@ -319,9 +319,8 @@ func TestNormalizeEventsRejectsTruncatedFrameOnDisconnect(t *testing.T) {
 func TestNormalizeEventsRejectsDeclaredChunkLengthMismatch(t *testing.T) {
 	t.Parallel()
 
-	// First client chunk from live sv203 capture
-	// 20260710T160907Z-protobuf_sv203_required_conid_order_cancel_aapl,
-	// events sha256 8efd714c3885da232215b0f4f4bb661ac7f4364126d4c97f4200dfa71320c55d.
+	// Handshake chunk from a live capture; only its declared-length mismatch is
+	// injected here.
 	events := []Event{
 		{Kind: EventConnect, Leg: 1},
 		{

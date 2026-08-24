@@ -12,7 +12,8 @@ RECORDER="${IBKR_RECORDER:-/tmp/ibkr-recorder}"
 CAPTURE="${IBKR_CAPTURE:-/tmp/ibkr-capture}"
 NORMALIZE="${IBKR_NORMALIZE:-/tmp/ibkr-normalize}"
 BATCH="${IBKR_CAPTURE_BATCH:-exhaustive-read-only}"
-RECORDER_MAX_LEGS="${IBKR_RECORDER_MAX_LEGS:-1}"
+RECORDER_MAX_LEGS="${IBKR_RECORDER_MAX_LEGS:-8}"
+RECORDER_IDLE_TIMEOUT="${IBKR_RECORDER_IDLE_TIMEOUT:-30s}"
 ROLE="${IBKR_CAPTURE_ROLE:-}"
 FAIL_FAST="${IBKR_CAPTURE_FAIL_FAST:-0}"
 START_TIMEOUT="${IBKR_RECORDER_START_TIMEOUT:-5}"
@@ -23,6 +24,9 @@ case "$FAIL_FAST" in
 esac
 case "$START_TIMEOUT" in
     ''|*[!0-9]*) echo "unsupported IBKR_RECORDER_START_TIMEOUT=$START_TIMEOUT (want whole seconds)" >&2; exit 1 ;;
+esac
+case "$RECORDER_MAX_LEGS" in
+    ''|*[!0-9]*|0) echo "unsupported IBKR_RECORDER_MAX_LEGS=$RECORDER_MAX_LEGS (want a positive whole number)" >&2; exit 1 ;;
 esac
 
 WORKDIR=$(mktemp -d)
@@ -51,9 +55,11 @@ terminate_child() {
 cleanup() {
     local status=$?
     trap - EXIT INT TERM HUP
+    # The driver performs paper reconciliation while unwinding. Keep its
+    # recorder proxy alive until that cleanup has completed.
     signal_child "$capture_pid"
-    signal_child "$recorder_pid"
     wait_child "$capture_pid"
+    signal_child "$recorder_pid"
     wait_child "$recorder_pid"
     rm -rf "$WORKDIR"
     exit "$status"
@@ -99,6 +105,22 @@ if [ ${#SCENARIOS[@]} -eq 0 ]; then
     echo "no scenarios found for batch $BATCH"
     exit 1
 fi
+
+declare -A scenario_entries=()
+deduplicated=()
+for entry in "${SCENARIOS[@]}"; do
+    scenario_name="${entry%|*}"
+    if [ -n "${scenario_entries[$scenario_name]+set}" ]; then
+        if [ "${scenario_entries[$scenario_name]}" != "$entry" ]; then
+            echo "conflicting entries for scenario $scenario_name: ${scenario_entries[$scenario_name]} and $entry" >&2
+            exit 1
+        fi
+        continue
+    fi
+    scenario_entries[$scenario_name]="$entry"
+    deduplicated+=("$entry")
+done
+SCENARIOS=("${deduplicated[@]}")
 
 role_for_scenario() {
     local scenario="$1"
@@ -191,6 +213,7 @@ for entry in "${SCENARIOS[@]}"; do
         -scenario "$scenario" \
         -client-id "$client_id" \
         -max-legs "$RECORDER_MAX_LEGS" \
+		-idle-timeout "$RECORDER_IDLE_TIMEOUT" \
         -ready-file "$ready_file" \
         -notes "batch=$BATCH role=$scenario_role client_id=$client_id" \
         >"$recorder_log" 2>&1 &
@@ -223,14 +246,11 @@ for entry in "${SCENARIOS[@]}"; do
     capture_rc=${capture_rc:-0}
     capture_pid=""
 
-    if [ "$capture_rc" -eq 0 ]; then
-        wait "$recorder_pid" 2>/dev/null || recorder_rc=$?
-        recorder_rc=${recorder_rc:-0}
-        recorder_pid=""
-    else
-        stop_recorder || recorder_rc=$?
-        recorder_rc=${recorder_rc:-0}
-    fi
+	# The driver owns scenario lifetime, including deferred paper cleanup. Once
+	# it exits, stop the recorder explicitly so reconnect gaps never determine
+	# whether a capture is complete.
+	stop_recorder || recorder_rc=$?
+	recorder_rc=${recorder_rc:-0}
 
     evidence_rc=0
     if [ -d "$capture_dir" ]; then

@@ -43,7 +43,7 @@ type proxyResult struct {
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, os.Args[1:]); err != nil {
+	if err := run(ctx, os.Args[1:]); err != nil && !errors.Is(err, ctx.Err()) {
 		log.Printf("ibkr-recorder: %v", err)
 		os.Exit(1)
 	}

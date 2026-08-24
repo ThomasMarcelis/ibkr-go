@@ -27,8 +27,8 @@ func TestRecordScenariosWaitsForRecorderAndCopiesDriverEvidence(t *testing.T) {
 	if result.err != nil {
 		t.Fatalf("record-scenarios error = %v\n%s", result.err, result.output)
 	}
-	if got := env.read("recorder.term"); got != "" {
-		t.Fatalf("recorder termination log = %q, want natural exit", got)
+	if got := env.read("recorder.term"); got != "success\n" {
+		t.Fatalf("recorder termination log = %q, want driver-owned stop", got)
 	}
 	captureDir := filepath.Join(env.captures, "20000101T000000Z-1-success")
 	if got := env.readPath(filepath.Join(captureDir, "driver.log")); !strings.Contains(got, "scenario success complete") {
@@ -45,6 +45,9 @@ func TestRecordScenariosWaitsForRecorderAndCopiesDriverEvidence(t *testing.T) {
 	}
 	if got := env.read("normalize.started"); got != "success\n" {
 		t.Fatalf("capture verification log = %q, want success", got)
+	}
+	if got := env.read("recorder.max_legs"); got != "8\n" {
+		t.Fatalf("recorder max legs = %q, want safe multi-leg default", got)
 	}
 	if strings.Contains(result.output, oldDir) {
 		t.Fatalf("output lists historical capture directory:\n%s", result.output)
@@ -158,16 +161,38 @@ func TestRecordScenariosContinuesOrFailsFastAsConfigured(t *testing.T) {
 	}
 }
 
-func TestRecordScenariosRepeatingNameWaitsForEachRecorder(t *testing.T) {
+func TestRecordScenariosDeduplicatesRepeatingNames(t *testing.T) {
 	env := newScriptEnvironment(t, "repeat|1\nrepeat|1")
-	env.vars["DELAY_SECOND_READY"] = "repeat"
 	result := env.run()
 	if result.err != nil {
 		t.Fatalf("record-scenarios error = %v\n%s", result.err, result.output)
 	}
-	want := "ready repeat 1\ncapture repeat\nready repeat 2\ncapture repeat\n"
+	want := "ready repeat 1\ncapture repeat\n"
 	if got := env.read("timeline"); got != want {
 		t.Fatalf("workflow timeline = %q, want %q", got, want)
+	}
+}
+
+func TestRecordScenariosRejectsConflictingDuplicateClientIDs(t *testing.T) {
+	env := newScriptEnvironment(t, "repeat|1\nrepeat|2")
+	result := env.run()
+	if result.err == nil {
+		t.Fatalf("record-scenarios error = nil, want conflicting-entry refusal\n%s", result.output)
+	}
+	if !strings.Contains(result.output, "conflicting entries for scenario repeat") {
+		t.Fatalf("output = %q, want conflicting-entry diagnostic", result.output)
+	}
+	if got := env.read("recorder.started"); got != "" {
+		t.Fatalf("recorder started for conflicting entries: %q", got)
+	}
+}
+
+func TestRecordScenariosRejectsInvalidMaxLegs(t *testing.T) {
+	env := newScriptEnvironment(t, "unused|1")
+	env.vars["IBKR_RECORDER_MAX_LEGS"] = "0"
+	result := env.run()
+	if result.err == nil || !strings.Contains(result.output, "unsupported IBKR_RECORDER_MAX_LEGS=0") {
+		t.Fatalf("record-scenarios result = %v, %q; want max-legs refusal", result.err, result.output)
 	}
 }
 
@@ -194,10 +219,13 @@ func TestRecordScenariosInterruptionReapsBothChildren(t *testing.T) {
 		t.Fatalf("recorder termination log = %q, want blocked scenario", got)
 	}
 	if got := env.read("capture.closed"); got != "blocked\n" {
-		t.Fatalf("capture close log = %q, want recorder-driven close", got)
+		t.Fatalf("capture close log = %q, want completed deferred cleanup", got)
 	}
 	if got := env.read("capture.timeout"); got != "" {
-		t.Fatalf("capture timeout log = %q, want prompt recorder signal", got)
+		t.Fatalf("capture timeout log = %q, want prompt deferred cleanup", got)
+	}
+	if got := env.read("interrupt.timeline"); got != "capture term\ncapture closed\nrecorder term\n" {
+		t.Fatalf("interrupt timeline = %q, want recorder alive through capture cleanup", got)
 	}
 }
 
@@ -311,15 +339,18 @@ set -u
 scenario=""
 ready_file=""
 out=""
+max_legs=""
 while [ $# -gt 0 ]; do
     case "$1" in
         -scenario) scenario="$2"; shift 2 ;;
         -ready-file) ready_file="$2"; shift 2 ;;
         -out) out="$2"; shift 2 ;;
+        -max-legs) max_legs="$2"; shift 2 ;;
         *) shift 2 ;;
     esac
 done
 echo "$scenario" >> "$STATE/recorder.started"
+echo "$max_legs" >> "$STATE/recorder.max_legs"
 if [ "${RECORDER_FAIL:-}" = "$scenario" ]; then
     echo "bind failed" >&2
     exit 7
@@ -331,16 +362,12 @@ count=$((count + 1))
 echo "$count" > "$counter_file"
 capture_dir="$out/20000101T000000Z-$count-$scenario"
 mkdir -p "$capture_dir"
-trap 'echo "$scenario" >> "$STATE/recorder.term"; echo "$scenario" >> "$STATE/recorder.flushed"; exit 0' TERM INT HUP
+trap 'echo "$scenario" >> "$STATE/recorder.term"; echo "recorder term" >> "$STATE/interrupt.timeline"; echo "$scenario" >> "$STATE/recorder.flushed"; exit 0' TERM INT HUP
 if [ "${DELAY_SECOND_READY:-}" = "$scenario" ] && [ "$count" -eq 2 ]; then sleep 0.2; fi
 printf '%s\n' "$capture_dir" > "$ready_file"
 echo "recorder $scenario ready"
 echo "ready $scenario $count" >> "$STATE/timeline"
-while [ ! -e "$STATE/release-$scenario" ]; do
-    sleep 0.01
-done
-echo "$scenario" >> "$STATE/recorder.natural"
-echo "$scenario" >> "$STATE/recorder.flushed"
+while true; do sleep 0.01; done
 `
 
 const captureStub = `#!/usr/bin/env bash
@@ -368,17 +395,8 @@ done
 echo "$scenario" >> "$STATE/capture.started"
 echo "capture $scenario" >> "$STATE/timeline"
 if [ "${CAPTURE_BLOCK:-}" = "$scenario" ]; then
-    trap 'echo "$scenario" >> "$STATE/capture.term"' TERM INT HUP
-    deadline=$((SECONDS + 2))
-    while [ ! -e "$STATE/recorder.term" ]; do
-        if [ "$SECONDS" -ge "$deadline" ]; then
-            echo "$scenario" >> "$STATE/capture.timeout"
-            exit 0
-        fi
-        sleep 0.01
-    done
-    echo "$scenario" >> "$STATE/capture.closed"
-    exit 0
+	trap 'echo "$scenario" >> "$STATE/capture.term"; echo "capture term" >> "$STATE/interrupt.timeline"; sleep 0.05; echo "$scenario" >> "$STATE/capture.closed"; echo "capture closed" >> "$STATE/interrupt.timeline"; exit 0' TERM INT HUP
+	while true; do sleep 0.01; done
 fi
 if [ "${CAPTURE_FAIL:-}" = "$scenario" ]; then
     echo "scenario $scenario failed"

@@ -35,6 +35,8 @@ func TestHistoricalDataUnavailableRequiresExactTypedError(t *testing.T) {
 		want bool
 	}{
 		{name: "permissions", err: &ibkr.APIError{Code: 10187, OpKind: ibkr.OpHistoricalTicks, Message: "No market data permissions for NASDAQ STK"}, op: ibkr.OpHistoricalTicks, want: true},
+		{name: "subscription required", err: &ibkr.APIError{Code: ibkr.ErrCodeHistoricalDataSubscriptionRequired, OpKind: ibkr.OpHistoricalBars, Message: "Up-to-the-second historical data requires additional subscription for the API."}, op: ibkr.OpHistoricalBars, want: true},
+		{name: "stream permissions", err: &ibkr.APIError{Code: 162, OpKind: ibkr.OpHistoricalBarsStream, Message: "Historical Market Data Service error message:No market data permissions for ISLAND STK."}, op: ibkr.OpHistoricalBarsStream, want: true},
 		{name: "different IP", err: &ibkr.APIError{Code: 162, OpKind: ibkr.OpHistoricalBars, Message: "Trading TWS session is connected from a different IP address"}, op: ibkr.OpHistoricalBars, want: true},
 		{name: "wrong operation", err: &ibkr.APIError{Code: 10187, OpKind: ibkr.OpHistoricalBars, Message: "No market data permissions"}, op: ibkr.OpHistoricalTicks},
 		{name: "wrong code", err: &ibkr.APIError{Code: 200, OpKind: ibkr.OpHistoricalTicks, Message: "No market data permissions"}, op: ibkr.OpHistoricalTicks},
@@ -47,6 +49,55 @@ func TestHistoricalDataUnavailableRequiresExactTypedError(t *testing.T) {
 				t.Fatalf("isHistoricalDataUnavailable() = %t, want %t", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestOddLotEntitlementRefusalRequiresExactTypedError(t *testing.T) {
+	t.Parallel()
+
+	for _, tt := range []struct {
+		name string
+		err  *ibkr.APIError
+		want bool
+	}{
+		{name: "exact", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpQuotes, Message: "Requested market data requires additional subscription for API. See link"}, want: true},
+		{name: "wrong operation", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpHistoricalBars, Message: "Requested market data requires additional subscription for API."}},
+		{name: "wrong code", err: &ibkr.APIError{Code: ibkr.ErrCodeDelayedMarketDataDisplayed, OpKind: ibkr.OpQuotes, Message: "Requested market data requires additional subscription for API."}},
+		{name: "wrong message", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpQuotes, Message: "unrelated"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isExactOddLotEntitlementRefusal(tt.err); got != tt.want {
+				t.Fatalf("isExactOddLotEntitlementRefusal() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCaptureWSHResultRequiresValidDataOrExactBlocker(t *testing.T) {
+	t.Parallel()
+
+	if err := captureWSHResult("metadata", ibkr.OpWSHMetaData, ibkr.JSONDocument(`{"sources":[]}`), nil); err != nil {
+		t.Fatalf("captureWSHResult(valid JSON) = %v, want nil", err)
+	}
+	for _, data := range []ibkr.JSONDocument{nil, ibkr.JSONDocument(`not-json`)} {
+		if err := captureWSHResult("metadata", ibkr.OpWSHMetaData, data, nil); err == nil {
+			t.Fatalf("captureWSHResult(%q) = nil, want invalid-JSON error", data)
+		}
+	}
+
+	exact := &ibkr.APIError{Code: 10276, OpKind: ibkr.OpWSHMetaData, Message: "News feed is not allowed."}
+	if err := captureWSHResult("metadata", ibkr.OpWSHMetaData, nil, exact); err != nil {
+		t.Fatalf("captureWSHResult(exact blocker) = %v, want nil", err)
+	}
+	for _, err := range []error{
+		&ibkr.APIError{Code: 10276, OpKind: ibkr.OpWSHEventData, Message: "News feed is not allowed."},
+		&ibkr.APIError{Code: 10089, OpKind: ibkr.OpWSHMetaData, Message: "News feed is not allowed."},
+		&ibkr.APIError{Code: 10276, OpKind: ibkr.OpWSHMetaData, Message: "unrelated"},
+		errors.New("News feed is not allowed"),
+	} {
+		if got := captureWSHResult("metadata", ibkr.OpWSHMetaData, nil, err); !errors.Is(got, err) {
+			t.Fatalf("captureWSHResult(%v) = %v, want original unexpected error", err, got)
+		}
 	}
 }
 
@@ -134,6 +185,15 @@ func TestGuardedCancelAllRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 	}
 }
 
+// TestCancelOrderRefusesNonPaperAccountBeforeMutating passes a nil handle: if
+// the session guard did not short-circuit, reading or cancelling it would
+// panic.
+func TestCancelOrderRefusesNonPaperAccountBeforeMutating(t *testing.T) {
+	t.Setenv("IBKR_PAPER_ACCOUNT", "DU9000001")
+
+	cancelOrder(context.Background(), nil, "U123456", nil, "targeted cleanup")
+}
+
 func TestGuardedCancelAllRequiresPurposeSpecificGate(t *testing.T) {
 	t.Setenv("IBKR_PAPER_ACCOUNT", "DU9000001")
 	t.Setenv("IBKR_CAPTURE_GLOBAL_CANCEL", "0")
@@ -141,6 +201,65 @@ func TestGuardedCancelAllRequiresPurposeSpecificGate(t *testing.T) {
 	err := guardedCancelAll(context.Background(), nil, "DU9000001", "global cancel proof")
 	if err == nil || !strings.Contains(err.Error(), "IBKR_CAPTURE_GLOBAL_CANCEL") {
 		t.Fatalf("guardedCancelAll() error = %v, want purpose-specific gate refusal", err)
+	}
+}
+
+func TestRequireGlobalCancelGateFailsClosed(t *testing.T) {
+	for _, value := range []string{"", "0", "false", "yes", "tru"} {
+		t.Run(value, func(t *testing.T) {
+			t.Setenv("IBKR_CAPTURE_GLOBAL_CANCEL", value)
+			if err := requireGlobalCancelGate("paper campaign admission"); err == nil {
+				t.Fatal("requireGlobalCancelGate() = nil, want refusal")
+			}
+		})
+	}
+	t.Run("enabled", func(t *testing.T) {
+		t.Setenv("IBKR_CAPTURE_GLOBAL_CANCEL", "1")
+		if err := requireGlobalCancelGate("paper campaign admission"); err != nil {
+			t.Fatalf("requireGlobalCancelGate() = %v, want nil", err)
+		}
+	})
+}
+
+func TestEnvFlagFailsClosed(t *testing.T) {
+	for _, test := range []struct {
+		value string
+		want  bool
+	}{
+		{value: "1", want: true},
+		{value: "true", want: true},
+		{value: "TRUE", want: true},
+		{value: "0", want: false},
+		{value: "false", want: false},
+		{value: "", want: false},
+		{value: "tru", want: false},
+		{value: "yes", want: false},
+	} {
+		t.Run(test.value, func(t *testing.T) {
+			t.Setenv("IBKR_CAPTURE_TEST_FLAG", test.value)
+			if got := envFlag("IBKR_CAPTURE_TEST_FLAG"); got != test.want {
+				t.Fatalf("envFlag(%q) = %t, want %t", test.value, got, test.want)
+			}
+		})
+	}
+}
+
+func TestVerifyNewExecutionFees(t *testing.T) {
+	t.Parallel()
+
+	baseline := ibkr.ExecutionSnapshot{Executions: []ibkr.Execution{{ExecID: "old"}}}
+	complete := ibkr.ExecutionSnapshot{
+		Executions: []ibkr.Execution{{ExecID: "old"}, {ExecID: "new"}},
+		CommissionAndFees: []ibkr.CommissionAndFeesReport{
+			{ExecID: "new"},
+		},
+	}
+	if err := verifyNewExecutionFees(baseline, complete); err != nil {
+		t.Fatalf("verifyNewExecutionFees(complete) = %v", err)
+	}
+	complete.CommissionAndFees = nil
+	if err := verifyNewExecutionFees(baseline, complete); err == nil {
+		t.Fatal("verifyNewExecutionFees(missing fee) = nil, want error")
 	}
 }
 
@@ -153,6 +272,18 @@ func TestGuardedCancelOrderRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "direct cancel") || !strings.Contains(err.Error(), "U123456") {
 		t.Fatalf("guardedCancelOrder error %q does not name operation and account", err)
+	}
+}
+
+func TestOrderMutationHelpersRefuseNonPaperAccountBeforeMutating(t *testing.T) {
+	t.Parallel()
+
+	order := ibkr.Order{Account: "U123456"}
+	if _, err := placeAPIOrder(context.Background(), nil, "unsafe place", ibkr.Contract{}, order); err == nil {
+		t.Fatal("placeAPIOrder on a non-paper account returned nil, want refusal")
+	}
+	if err := modifyAPIOrder(context.Background(), nil, nil, "unsafe replace", order); err == nil {
+		t.Fatal("modifyAPIOrder on a non-paper account returned nil, want refusal")
 	}
 }
 
