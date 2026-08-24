@@ -21,9 +21,13 @@ func TestToCodecPlaceOrderMapsIncludeOvernight(t *testing.T) {
 	if got := toCodecPlaceOrder(78, request).IncludeOvernight; got != "" {
 		t.Fatalf("default include overnight = %q, want empty", got)
 	}
-	request.Order.IncludeOvernight = true
+	request.Order.IncludeOvernight = new(true)
 	if got := toCodecPlaceOrder(78, request).IncludeOvernight; got != "1" {
 		t.Fatalf("enabled include overnight = %q, want 1", got)
+	}
+	request.Order.IncludeOvernight = new(false)
+	if got := toCodecPlaceOrder(78, request).IncludeOvernight; got != "0" {
+		t.Fatalf("disabled include overnight = %q, want 0", got)
 	}
 }
 

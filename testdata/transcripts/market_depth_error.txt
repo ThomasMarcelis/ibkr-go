@@ -1,12 +1,25 @@
-# Live-derived from /tmp/ibkr-go-depth-strict-final-20260711/
-# 20260711T000616Z-market_depth_aapl at server_version 206; events.jsonl sha256:
-# c45b90e97854b1cba584fa5d00b5882f1e16600328efe3bc18732741e6c72e54.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted.
-# The request and current live unsupported-depth refusal are exact; the later current-time fence is omitted.
-handshake {"server_version":206,"connection_time":"20260711 02:06:15 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
+# Exact capture 20260824T202754Z-market_depth_aapl for market_depth_aapl at server_version 225.
+# events.jsonl sha256: ce1aedf8bc1ba0382a81964d245de61f958c9cd701733d589562647fb71bc69d.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:27:53 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDKj9WrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDKj9WrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARDKj9WrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDKj9WrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=10 encoding=protobuf payload_len=37
 raw client AAAAJQAAANIIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEGAU=
-raw server AAAAYgAAAMwIARCEkvzz9DMY7E4iUERlZXAgbWFya2V0IGRhdGEgaXMgbm90IHN1cHBvcnRlZCBmb3IgdGhpcyBjb21iaW5hdGlvbiBvZiBzZWN1cml0eSB0eXBlL2V4Y2hhbmdl
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=98
+raw server AAAAYgAAAMwIARCFkdWrgzQY7E4iUERlZXAgbWFya2V0IGRhdGEgaXMgbm90IHN1cHBvcnRlZCBmb3IgdGhpcyBjb21iaW5hdGlvbiBvZiBzZWN1cml0eSB0eXBlL2V4Y2hhbmdl
+# leg=1 direction=client msg_id=49 encoding=protobuf payload_len=4
+raw client AAAABAAAAPk=
+# leg=1 direction=server msg_id=49 encoding=protobuf payload_len=10
+raw server AAAACgAAAPkIydKy1AY=
 disconnect

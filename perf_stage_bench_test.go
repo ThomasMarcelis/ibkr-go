@@ -15,20 +15,16 @@ package ibkr
 //     It is the only bench that observes syscall-level read cost, so it is the
 //     one that moves when the transport read seam changes.
 //
-// Inputs are live IB Gateway server_version 200 frames captured
-// 2026-04-05 from captures/20260405T215738Z-quote_stream_aapl, account field
-// redacted to the DU paper-account token (matching testdata/transcripts). The
-// tick frames are stored length-prefixed in
-// testdata/bench/quote_stream_frames.bin and loaded from there so the bench
-// runs from a checked-in fixture, never the gitignored captures/ tree. The
-// market-depth L2 row is packed with the codec's own round-trip-validated
-// encoder (no live L2 capture exists in-repo; the account lacks depth
-// entitlement, see captures/20260407T200336Z-market_depth_aapl).
+// Inputs are live IB Gateway server_version 225 frames captured in
+// 20260824T202345Z-api_duplicate_quote_subscriptions_aapl, events SHA-256
+// 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
+// Exact length-prefixed frames are decoded from the transcript literals below
+// so the benchmark runs independently of the ignored raw-capture tree.
 
 import (
 	"bytes"
 	"context"
-	_ "embed"
+	"encoding/base64"
 	"io"
 	"log/slog"
 	"net"
@@ -40,34 +36,31 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
-//go:embed testdata/bench/quote_stream_frames.bin
-var quoteStreamFramesBin []byte
-
-// benchTickFrames holds the live sv200 tick frames decoded from the fixture:
+// benchTickFrames holds exact live sv225 protobuf tick frames:
 //
-//	[0] tick_price field 68 (delayed last)   price 255.45
-//	[1] tick_price field 66 (delayed bid)    price -1.00
-//	[2] tick_size  field 74 (delayed volume) size  312894
+//	[0] tick_price field 68 (delayed last)
+//	[1] tick_price field 66 (delayed bid)
+//	[2] tick_size  field 74 (delayed volume)
 //
 // A tiny distinct set replayed in a loop stands in for a long stream: the
 // pipeline cost is per-frame, so looping three frames measures the same thing
 // as storing thousands.
-var benchTickFrames = mustParseBenchFrames(quoteStreamFramesBin)
+var benchTickFrames = [][]byte{
+	mustDecodeBenchFrame("AAAAGAAAAMkIARBEGc3MzMzMaHNAIgMxNDEoAA=="),
+	mustDecodeBenchFrame("AAAAGAAAAMkIARBCGWZmZmZmZnNAIgM4NDAoAA=="),
+	mustDecodeBenchFrame("AAAAEAAAAMoIARBKGgY4MTIyNTQ="),
+}
 
-func mustParseBenchFrames(blob []byte) [][]byte {
-	var frames [][]byte
-	r := bytes.NewReader(blob)
-	for r.Len() > 0 {
-		f, err := wire.ReadFrame(r)
-		if err != nil {
-			panic("perf bench: malformed testdata/bench/quote_stream_frames.bin: " + err.Error())
-		}
-		frames = append(frames, f)
+func mustDecodeBenchFrame(encoded string) []byte {
+	framed, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil {
+		panic("perf bench: decode captured frame: " + err.Error())
 	}
-	if len(frames) != 3 {
-		panic("perf bench: expected 3 tick frames in fixture")
+	payload, err := wire.ReadFrame(bytes.NewReader(framed))
+	if err != nil {
+		panic("perf bench: parse captured frame: " + err.Error())
 	}
-	return frames
+	return payload
 }
 
 var (
@@ -123,9 +116,11 @@ func newBenchEngine(tb testing.TB) *engine {
 		singletons:               make(map[string]*route),
 		orders:                   make(map[int64]*orderRoute),
 		execDeliveries:           make(map[string]*execDelivery),
+		malformedInboundSeen:     make(map[int]struct{}),
+		unknownInboundSeen:       make(map[int]struct{}),
 		recentHistoricalRequests: make(map[string]time.Time),
 		nextReqID:                1,
-		serverVersion:            200,
+		serverVersion:            225,
 		snapshot:                 Snapshot{State: StateReady},
 	}
 	e.transport = transport.New(clientConn, cfg.logger, 0)
@@ -157,7 +152,7 @@ func installQuoteRoute(tb testing.TB, e *engine) *Subscription[QuoteUpdate] {
 
 func decodeOne(tb testing.TB, payload []byte) codec.Message {
 	tb.Helper()
-	msgs, err := codec.DecodeBatch(200, payload)
+	msgs, err := codec.DecodeBatch(225, payload)
 	if err != nil {
 		tb.Fatalf("DecodeBatch: %v", err)
 	}
@@ -200,12 +195,12 @@ func BenchmarkActorHandleTickQuote_Drained(b *testing.B) { benchActorTick(b) }
 
 // --- full pipeline over real TCP loopback ---
 
-// handshakeFrames are the live sv200 bootstrap frames
-// (captures/20260405T215738Z-quote_stream_aapl), account redacted.
+// handshakeFrames are the sanitized sv225 bootstrap frames from the same
+// capture as benchTickFrames.
 var (
-	frameServerInfo      = []byte("200\x0020260405 23:57:38 Central European Standard Time\x00")
-	frameManagedAccounts = []byte("15\x001\x00DU9000001\x00")
-	frameNextValidID     = []byte("9\x001\x001\x00")
+	frameServerInfo      = []byte("225\x0020260824 22:23:45 CET\x00")
+	frameManagedAccounts = mustDecodeBenchFrame("AAAADwAAANcKCURVOTAwMDAwMQ==")
+	frameNextValidID     = mustDecodeBenchFrame("AAAABgAAANEIAQ==")
 )
 
 // benchTCPServer speaks the minimal real handshake, then blasts pre-encoded
@@ -230,7 +225,7 @@ func benchTCPServer(tb testing.TB, stream []byte, nConns int) string {
 				if _, err := io.ReadFull(conn, prefix); err != nil {
 					return
 				}
-				if _, err := wire.ReadFrame(conn); err != nil { // v100..200
+				if _, err := wire.ReadFrame(conn); err != nil { // v208..225
 					return
 				}
 				if err := wire.WriteFrame(conn, frameServerInfo); err != nil {

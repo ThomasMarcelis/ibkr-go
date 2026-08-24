@@ -1,15 +1,16 @@
-# Exact client-ID-zero session bootstrap from paper IB Gateway server_version 200.
-# Source: captures/20260405T214932Z-bootstrap_client_id_0
-# events.jsonl sha256: dc233cba023dca4308898701f3a1e5eff8e02eddb5ae371318b57b92430d568b
-#
-# The account is length-preserving redacted to DU9000001. The managed account,
-# next order ID, and farm-status frames are exact. Testhost holds the transport
-# open briefly after the captured frames so the caller can inspect the session.
-handshake {"server_version":200,"connection_time":"20260405 23:49:32 Central European Standard Time"}
-raw server AAAADzE1ADEARFU5MDAwMDAxAA==
-raw server AAAABjkAMQAxAA==
-raw server AAAAQjQALTEAMjEwNABNYXJrZXQgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNmYXJtAAAxNzc1NDI1NzcyMzk3AA==
-raw server AAAAQDQALTEAMjEwNgBITURTIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnVzaG1kcwAAMTc3NTQyNTc3MjM5OAA=
-raw server AAAARTQALTEAMjE1OABTZWMtZGVmIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnNlY2RlZm5qAAAxNzc1NDI1NzcyMzk4AA==
+# Exact capture 20260824T202742Z-bootstrap_client_id_0 for bootstrap_client_id_0 at server_version 225.
+# events.jsonl sha256: ef4640351b841550a003609c2009e7919f02f0c71f483eab1ec99e033fbe737d.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:27:41 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARD4rtSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARD4rtSrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARD4rtSrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
 sleep 500ms
 disconnect

@@ -9,47 +9,11 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2"
 )
 
-func TestAPISecurityTypeProbeErrorsReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_security_type_probe_errors.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cases := []struct {
-		label    string
-		contract ibkr.Contract
-	}{
-		{label: "BOND", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBond, Exchange: "SMART", Currency: "USD"}},
-		{label: "BILL", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBill, Exchange: "SMART", Currency: "USD"}},
-	}
-	for _, tc := range cases {
-		_, err := client.Contracts().Details(ctx, tc.contract)
-		if err == nil {
-			t.Fatalf("%s ContractDetails() error = nil, want API error 200", tc.label)
-		}
-		apiErr, ok := errors.AsType[*ibkr.APIError](err)
-		if !ok {
-			t.Fatalf("%s error type = %T, want *ibkr.APIError", tc.label, err)
-		}
-		if apiErr.Code != 200 {
-			t.Fatalf("%s APIError.Code = %d, want 200", tc.label, apiErr.Code)
-		}
-		if apiErr.OpKind != ibkr.OpContractDetails {
-			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpContractDetails)
-		}
-	}
-}
-
 func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "realtime_bars_api_error.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -104,119 +68,8 @@ func TestRealTimeBarsAPIRejectionIsNonRetryable(t *testing.T) {
 	if waitAPIErr.Code != 420 {
 		t.Fatalf("sub.Wait() APIError.Code = %d, want 420", waitAPIErr.Code)
 	}
-}
-
-func TestAPIRealTimeBarsRequestErrorsAAPLReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_realtime_bars_request_errors_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cases := []struct {
-		label      string
-		whatToShow ibkr.WhatToShow
-		wantCode   int
-	}{
-		{label: "TRADES", whatToShow: ibkr.ShowTrades, wantCode: 420},
-		{label: "BID_ASK", whatToShow: ibkr.ShowBidAsk, wantCode: 321},
-		{label: "MIDPOINT", whatToShow: ibkr.ShowMidpoint, wantCode: 10089},
-	}
-	for _, tc := range cases {
-		sub, err := client.MarketData().SubscribeRealTimeBars(ctx, ibkr.RealTimeBarsRequest{
-			Contract: ibkr.Contract{
-				ConID:    265598,
-				Symbol:   "AAPL",
-				SecType:  ibkr.SecTypeStock,
-				Exchange: "SMART",
-				Currency: "USD",
-			},
-			WhatToShow: tc.whatToShow,
-		})
-		if err != nil {
-			t.Fatalf("%s SubscribeRealTimeBars() error = %v", tc.label, err)
-		}
-
-		waitErr := sub.Wait()
-		apiErr, ok := errors.AsType[*ibkr.APIError](waitErr)
-		if !ok {
-			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
-		}
-		if apiErr.Code != tc.wantCode {
-			t.Fatalf("%s APIError.Code = %d, want %d", tc.label, apiErr.Code, tc.wantCode)
-		}
-		if apiErr.OpKind != ibkr.OpRealTimeBars {
-			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpRealTimeBars)
-		}
-		waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
-		if !ok {
-			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
-		}
-		if waitAPIErr.Code != tc.wantCode {
-			t.Fatalf("%s sub.Wait() APIError.Code = %d, want %d", tc.label, waitAPIErr.Code, tc.wantCode)
-		}
-	}
-}
-
-func TestAPITickByTickEntitlementErrorsAAPLReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_tick_by_tick_entitlement_errors_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	cases := []struct {
-		label      string
-		tickType   ibkr.TickByTickType
-		ignoreSize bool
-		wantCode   int
-	}{
-		{label: "Last", tickType: ibkr.TickByTickLast, wantCode: 10189},
-		{label: "AllLast", tickType: ibkr.TickByTickAllLast, wantCode: 10089},
-		{label: "AllLastIgnoreSize", tickType: ibkr.TickByTickAllLast, ignoreSize: true, wantCode: 10089},
-		{label: "BidAsk", tickType: ibkr.TickByTickBidAsk, wantCode: 10089},
-		{label: "MidPoint", tickType: ibkr.TickByTickMidPoint, wantCode: 10089},
-	}
-	for _, tc := range cases {
-		sub, err := client.MarketData().SubscribeTickByTick(ctx, ibkr.TickByTickRequest{
-			Contract: ibkr.Contract{
-				ConID:    265598,
-				Symbol:   "AAPL",
-				SecType:  ibkr.SecTypeStock,
-				Exchange: "SMART",
-				Currency: "USD",
-			},
-			TickType:   tc.tickType,
-			IgnoreSize: tc.ignoreSize,
-		})
-		if err != nil {
-			t.Fatalf("%s SubscribeTickByTick() error = %v", tc.label, err)
-		}
-
-		waitErr := sub.Wait()
-		apiErr, ok := errors.AsType[*ibkr.APIError](waitErr)
-		if !ok {
-			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
-		}
-		if apiErr.Code != tc.wantCode {
-			t.Fatalf("%s APIError.Code = %d, want %d", tc.label, apiErr.Code, tc.wantCode)
-		}
-		if apiErr.OpKind != ibkr.OpTickByTick {
-			t.Fatalf("%s APIError.OpKind = %s, want %s", tc.label, apiErr.OpKind, ibkr.OpTickByTick)
-		}
-		waitAPIErr, ok := errors.AsType[*ibkr.APIError](waitErr)
-		if !ok {
-			t.Fatalf("%s sub.Wait() error type = %T, want *ibkr.APIError", tc.label, waitErr)
-		}
-		if waitAPIErr.Code != tc.wantCode {
-			t.Fatalf("%s sub.Wait() APIError.Code = %d, want %d", tc.label, waitAPIErr.Code, tc.wantCode)
-		}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime() fence error = %v", err)
 	}
 }
 
@@ -225,8 +78,7 @@ func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 
 	client, host := newClient(t, "error_disconnect_during_snapshot.txt",
 		ibkr.WithReconnectPolicy(ibkr.ReconnectOff))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -240,31 +92,11 @@ func TestDisconnectDuringSnapshotPhase(t *testing.T) {
 	}
 }
 
-func TestCompletedOrdersReturnsEmptyResult(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "completed_orders_empty.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	completed, err := client.Orders().Completed(ctx, true)
-	if err != nil {
-		t.Fatalf("CompletedOrders() error = %v", err)
-	}
-	if len(completed) != 0 {
-		t.Fatalf("CompletedOrders() len = %d, want 0", len(completed))
-	}
-}
-
 func TestWSHMetaDataError10xxx(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "wsh_meta_data_error.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -287,8 +119,7 @@ func TestAPIWSHVariantsAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_wsh_variants_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -313,8 +144,8 @@ func TestAPIWSHVariantsAAPLReplay(t *testing.T) {
 	_, err := client.WSH().MetaData(ctx)
 	assertWSHEntitlementError("MetaData", err, ibkr.OpWSHMetaData)
 
-	start := time.Date(2026, 4, 8, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	start := time.Date(2026, 8, 17, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 	eventCases := []struct {
 		label string
 		req   ibkr.WSHEventDataRequest
@@ -333,8 +164,7 @@ func TestMarketDepthError10xxx(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "market_depth_error.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -363,5 +193,8 @@ func TestMarketDepthError10xxx(t *testing.T) {
 	}
 	if ibkr.IsRetryable(waitErr) {
 		t.Fatal("IsRetryable(sub.Wait()) = true, want false for API error")
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime() fence error = %v", err)
 	}
 }

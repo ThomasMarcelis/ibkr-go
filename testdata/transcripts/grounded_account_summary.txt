@@ -1,20 +1,29 @@
-# Grounded account summary from captures/20260405T215025Z-account_summary_snapshot
-# at server_version 200; events.jsonl sha256:
-# 1ab2c3494dfe8b37b7b6ba626766e2f1f415de9a5838b85d9d6d2624a70912ca.
-# The account, financial values, and request ID are deterministic sanitized
-# substitutions; framing, message layout, tags, currencies, and farm notices
-# remain capture-derived.
-handshake {"server_version":200,"connection_time":"20260405 23:50:23 Central European Standard Time"}
-raw server AAAADzE1ADEARFU5MDAwMDAxAA==
-raw server AAAABjkAMQAxAA==
-raw server AAAAQjQALTEAMjEwNABNYXJrZXQgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNmYXJtAAAxNzc1NDI1ODIzOTM5AA==
-raw server AAAAQDQALTEAMjEwNgBITURTIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnVzaG1kcwAAMTc3NTQyNTgyMzkzOQA=
-raw server AAAARTQALTEAMjE1OABTZWMtZGVmIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnNlY2RlZm5qAAAxNzc1NDI1ODIzOTM5AA==
-raw client AAAARTYyADEAMQBBbGwATmV0TGlxdWlkYXRpb24sVG90YWxDYXNoVmFsdWUsQnV5aW5nUG93ZXIsRXhjZXNzTGlxdWlkaXR5AA==
-raw server AAAAKzYzADEAMQBEVTkwMDAwMDEAQnV5aW5nUG93ZXIAMzAwMDAwLjAwAEVVUgA=
-raw server AAAALjYzADEAMQBEVTkwMDAwMDEARXhjZXNzTGlxdWlkaXR5ADUwMDAwLjAwAEVVUgA=
-raw server AAAALTYzADEAMQBEVTkwMDAwMDEATmV0TGlxdWlkYXRpb24ANjgwMDAuMDAARVVSAA==
-raw server AAAALTYzADEAMQBEVTkwMDAwMDEAVG90YWxDYXNoVmFsdWUAMTIwMDAuMDAARVVSAA==
-raw server AAAABzY0ADEAMQA=
-raw client AAAABzYzADEAMQA=
+# Exact capture 20260824T202344Z-account_summary_snapshot for account_summary_snapshot at server_version 225.
+# events.jsonl sha256: 6f8ede19db82acc23de6bd988381d40b339af0270133fdcabceba33082f6c181.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:23:43 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCe8MWrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARCe8MWrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCe8MWrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=62 encoding=protobuf payload_len=70
+raw client AAAARgAAAQYIARIDQWxsGjlOZXRMaXF1aWRhdGlvbixUb3RhbENhc2hWYWx1ZSxCdXlpbmdQb3dlcixFeGNlc3NMaXF1aWRpdHk=
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=46
+raw server AAAALgAAAQcIARIJRFU5MDAwMDAxGgtCdXlpbmdQb3dlciIJMTgzODc1LjIyKgNFVVI=
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=49
+raw server AAAAMQAAAQcIARIJRFU5MDAwMDAxGg9FeGNlc3NMaXF1aWRpdHkiCDI4NTkxLjY5KgNFVVI=
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=48
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5OZXRMaXF1aWRhdGlvbiIIMzY5OTIuNDkqA0VVUg==
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=48
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5Ub3RhbENhc2hWYWx1ZSIILTE0NDEuNjcqA0VVUg==
+# leg=1 direction=server msg_id=64 encoding=protobuf payload_len=6
+raw server AAAABgAAAQgIAQ==
+# leg=1 direction=client msg_id=63 encoding=protobuf payload_len=6
+raw client AAAABgAAAQcIAQ==
 disconnect

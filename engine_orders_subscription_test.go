@@ -1,15 +1,14 @@
 package ibkr
 
 import (
+	"bytes"
 	"context"
 	"net"
-	"slices"
 	"testing"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 // TestAutoOpenOrdersCloseDisablesBinding freezes the request lifecycle already
@@ -32,7 +31,7 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 		done:           make(chan struct{}),
 		events:         newObserver[Event](8),
 		transport:      tr,
-		serverVersion:  200,
+		serverVersion:  225,
 		keyed:          make(map[int]*route),
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
@@ -53,8 +52,12 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 		t.Fatalf("SubscribeOpenOrders(auto): %v", err)
 	}
 
-	if got := readWireFields(t, serverConn); !slices.Equal(got, []string{"15", "1", "1"}) {
-		t.Fatalf("auto-open bind fields = %q, want [15 1 1]", got)
+	wantBind, err := codec.Encode(225, codec.OpenOrdersRequest{Scope: "auto"})
+	if err != nil {
+		t.Fatalf("encode auto-open bind: %v", err)
+	}
+	if got := readWirePayload(t, serverConn); !bytes.Equal(got, wantBind) {
+		t.Fatalf("auto-open bind = %x, want %x", got, wantBind)
 	}
 
 	// This is an official-schema routing law, not a claim of raw live evidence:
@@ -76,23 +79,23 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 	}
 
 	sub.Close()
-	if got := readWireFields(t, serverConn); !slices.Equal(got, []string{"15", "1", "0"}) {
-		t.Fatalf("auto-open unbind fields = %q, want [15 1 0]", got)
+	wantUnbind, err := codec.Encode(225, codec.CancelOpenOrders{})
+	if err != nil {
+		t.Fatalf("encode auto-open unbind: %v", err)
+	}
+	if got := readWirePayload(t, serverConn); !bytes.Equal(got, wantUnbind) {
+		t.Fatalf("auto-open unbind = %x, want %x", got, wantUnbind)
 	}
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("Wait(): %v", err)
 	}
 }
 
-func readWireFields(t *testing.T, conn net.Conn) []string {
+func readWirePayload(t *testing.T, conn net.Conn) []byte {
 	t.Helper()
 	payload, err := transport.ReadOneFrame(conn, time.Now().Add(time.Second))
 	if err != nil {
 		t.Fatalf("ReadOneFrame(): %v", err)
 	}
-	fields, err := wire.ParseFields(payload)
-	if err != nil {
-		t.Fatalf("ParseFields(): %v", err)
-	}
-	return fields
+	return payload
 }

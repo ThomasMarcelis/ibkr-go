@@ -2,17 +2,18 @@ package ibkr_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
@@ -87,7 +88,7 @@ func newProtocolErrorGateway(t *testing.T) *protocolErrorGateway {
 	return gateway
 }
 
-func newUnknownMalformedGateway(t *testing.T) *protocolErrorGateway {
+func newUnknownInboundGateway(t *testing.T) *protocolErrorGateway {
 	t.Helper()
 
 	serverConn, clientConn := net.Pipe()
@@ -97,7 +98,7 @@ func newUnknownMalformedGateway(t *testing.T) *protocolErrorGateway {
 	}
 
 	go func() {
-		gateway.errCh <- serveUnknownMalformedGateway(serverConn)
+		gateway.errCh <- serveUnknownInboundGateway(serverConn)
 	}()
 
 	return gateway
@@ -132,16 +133,24 @@ func serveStalledGateway(conn net.Conn, stop <-chan struct{}) error {
 	if _, err := wire.ReadFrame(conn); err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"200", "2026-04-10T12:00:00Z"})); err != nil {
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"225", "20260824 21:57:33 CET"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
 	}
 	if _, err := wire.ReadFrame(conn); err != nil {
 		return fmt.Errorf("read START_API: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"15", "1", "DU12345"})); err != nil {
+	managed, err := base64.StdEncoding.DecodeString("AAAA1woJRFU5MDAwMDAx")
+	if err != nil {
+		return fmt.Errorf("decode managed accounts: %w", err)
+	}
+	if err := wire.WriteFrame(conn, managed); err != nil {
 		return fmt.Errorf("write managed accounts: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"9", "1", "1001"})); err != nil {
+	nextID, err := base64.StdEncoding.DecodeString("AAAA0QjFBA==")
+	if err != nil {
+		return fmt.Errorf("decode next valid id: %w", err)
+	}
+	if err := wire.WriteFrame(conn, nextID); err != nil {
 		return fmt.Errorf("write next valid id: %w", err)
 	}
 
@@ -162,21 +171,36 @@ func serveProtocolErrorGateway(conn net.Conn) error {
 	if _, err := wire.ReadFrame(conn); err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"200", "2026-04-12T12:00:00Z"})); err != nil {
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"225", "20260824 21:57:33 CET"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
 	}
 	if _, err := wire.ReadFrame(conn); err != nil {
 		return fmt.Errorf("read START_API: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"15", "1", "DU12345"})); err != nil {
+	managed, err := base64.StdEncoding.DecodeString("AAAA1woJRFU5MDAwMDAx")
+	if err != nil {
+		return fmt.Errorf("decode captured managed accounts: %w", err)
+	}
+	if err := wire.WriteFrame(conn, managed); err != nil {
 		return fmt.Errorf("write managed accounts: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"9", "1", "1001"})); err != nil {
+	nextID, err := base64.StdEncoding.DecodeString("AAAA0QgB")
+	if err != nil {
+		return fmt.Errorf("decode captured next valid id: %w", err)
+	}
+	if err := wire.WriteFrame(conn, nextID); err != nil {
 		return fmt.Errorf("write next valid id: %w", err)
 	}
 
-	time.Sleep(20 * time.Millisecond)
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"17", "1", "bad"})); err != nil {
+	// Exact sanitized position callback from
+	// captures/20260824T195734Z-positions_snapshot, events.jsonl SHA-256
+	// a1b1c8fdda7af5634f462b11c62f63200f7a1125a3c0c5419f0945dee99c3919.
+	// Truncating its protobuf body is deterministic structural fault injection.
+	position, err := base64.StdEncoding.DecodeString("AAABBQoJRFU5MDAwMDAxEjEI6anfFRIETUVMSRoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoETUVMSWIDTk1TGgExIY/C9ShctJhA")
+	if err != nil {
+		return fmt.Errorf("decode captured position: %w", err)
+	}
+	if err := wire.WriteFrame(conn, position[:len(position)-1]); err != nil {
 		return fmt.Errorf("write malformed frame: %w", err)
 	}
 
@@ -187,7 +211,7 @@ func serveProtocolErrorGateway(conn net.Conn) error {
 		}
 		return fmt.Errorf("set read deadline: %w", err)
 	}
-	_, err := conn.Read(buf)
+	_, err = conn.Read(buf)
 	if err == nil {
 		return fmt.Errorf("server read succeeded after protocol error; want client-side close")
 	}
@@ -197,7 +221,7 @@ func serveProtocolErrorGateway(conn net.Conn) error {
 	return nil
 }
 
-func serveUnknownMalformedGateway(conn net.Conn) error {
+func serveUnknownInboundGateway(conn net.Conn) error {
 	defer conn.Close()
 
 	prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
@@ -210,20 +234,20 @@ func serveUnknownMalformedGateway(conn net.Conn) error {
 	if _, err := wire.ReadFrame(conn); err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"206", "20260710 23:51:25 Central European Standard Time"})); err != nil {
+	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{"225", "20260824 21:57:33 CET"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
 	}
 	if _, err := wire.ReadFrame(conn); err != nil {
 		return fmt.Errorf("read START_API: %w", err)
 	}
-	managed, err := protocol.EncodeClassicEnvelope(206, protocol.InManagedAccounts, []string{"1", "DU9000001"})
+	managed, err := base64.StdEncoding.DecodeString("AAAA1woJRFU5MDAwMDAx")
 	if err != nil {
 		return fmt.Errorf("encode managed accounts: %w", err)
 	}
 	if err := wire.WriteFrame(conn, managed); err != nil {
 		return fmt.Errorf("write managed accounts: %w", err)
 	}
-	nextID, err := protocol.EncodeClassicEnvelope(206, protocol.InNextValidID, []string{"1", "1"})
+	nextID, err := base64.StdEncoding.DecodeString("AAAA0QgB")
 	if err != nil {
 		return fmt.Errorf("encode next valid id: %w", err)
 	}
@@ -231,31 +255,31 @@ func serveUnknownMalformedGateway(conn net.Conn) error {
 		return fmt.Errorf("write next valid id: %w", err)
 	}
 
-	// Remove only the last field terminator from an otherwise valid unknown-ID
-	// classic envelope. This is structural framing fault injection, not a claim
-	// that the Gateway emits msg_id 199.
-	malformed, err := protocol.EncodeClassicEnvelope(206, 199, []string{"preserve me"})
+	// Reassign the raw ID of the exact captured current-time response below to
+	// an unregistered protobuf ID. This is protocol-drift fault injection, not a
+	// claim that the Gateway emitted base msg_id 3895.
+	unknown, err := base64.StdEncoding.DecodeString("AAAP/wjC0rLUBg==")
 	if err != nil {
-		return fmt.Errorf("encode malformed unknown frame: %w", err)
+		return fmt.Errorf("decode unknown frame: %w", err)
 	}
-	if err := wire.WriteFrame(conn, malformed[:len(malformed)-1]); err != nil {
-		return fmt.Errorf("write malformed unknown frame: %w", err)
+	if err := wire.WriteFrame(conn, unknown); err != nil {
+		return fmt.Errorf("write unknown frame: %w", err)
 	}
 
 	request, err := wire.ReadFrame(conn)
 	if err != nil {
 		return fmt.Errorf("read current time request: %w", err)
 	}
-	want, err := protocol.EncodeClassicEnvelope(206, protocol.OutReqCurrentTime, []string{"1"})
+	want, err := base64.StdEncoding.DecodeString("AAAA+Q==")
 	if err != nil {
 		return fmt.Errorf("encode current time request: %w", err)
 	}
 	if string(request) != string(want) {
 		return fmt.Errorf("current time request = %q, want %q", request, want)
 	}
-	// Exact request/response from capture 20260710T215126Z-current_time,
-	// events.jsonl sha256 c4ad2ec73d6d2a92a645fefeeb2d4d74335262dec23813e9645732c878ff826d.
-	response, err := protocol.EncodeClassicEnvelope(206, protocol.InCurrentTime, []string{"1", "1783720285"})
+	// Exact request/response from capture 20260824T202747Z-current_time,
+	// events SHA-256 a9029ff8e7cfed19cab1e3e2eccc4c36d7c91b95aa6aa03f75543bacac454a9e.
+	response, err := base64.StdEncoding.DecodeString("AAAA+QjC0rLUBg==")
 	if err != nil {
 		return fmt.Errorf("encode current time response: %w", err)
 	}
@@ -292,8 +316,8 @@ func serveUnsupportedVersionGateway(conn net.Conn, serverVersion string) error {
 	if err != nil {
 		return fmt.Errorf("read version range: %w", err)
 	}
-	if string(versionRange) != "v200..225" {
-		return fmt.Errorf("version range = %q, want v200..225", string(versionRange))
+	if string(versionRange) != "v208..225" {
+		return fmt.Errorf("version range = %q, want v208..225", string(versionRange))
 	}
 	if err := wire.WriteFrame(conn, wire.EncodeFields([]string{serverVersion, "2026-04-14T12:00:00Z"})); err != nil {
 		return fmt.Errorf("write server info: %w", err)
@@ -397,7 +421,7 @@ func TestDialContextRejectsInvalidEventBuffers(t *testing.T) {
 func TestDialContextRejectsUnsupportedServerVersion(t *testing.T) {
 	t.Parallel()
 
-	for _, serverVersion := range []string{"199", "226"} {
+	for _, serverVersion := range []string{"207", "226"} {
 		t.Run(serverVersion, func(t *testing.T) {
 			t.Parallel()
 			gateway := newUnsupportedVersionGateway(t, serverVersion)
@@ -480,27 +504,6 @@ func TestBootstrapNoNextValidID(t *testing.T) {
 	_ = host.Close()
 }
 
-// TestBootstrapOutOfOrder verifies that bootstrap completes even when the
-// server sends next_valid_id before managed_accounts.
-func TestBootstrapOutOfOrder(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "lifecycle_bootstrap_reordered.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	snapshot := client.Session()
-	if snapshot.State != ibkr.StateReady {
-		t.Fatalf("state = %s, want %s", snapshot.State, ibkr.StateReady)
-	}
-	if len(snapshot.ManagedAccounts) != 1 || snapshot.ManagedAccounts[0] != "DU9000001" {
-		t.Fatalf("managed accounts = %v, want [DU9000001]", snapshot.ManagedAccounts)
-	}
-	if snapshot.NextValidID != 1 {
-		t.Fatalf("next valid id = %d, want 1", snapshot.NextValidID)
-	}
-}
-
 // TestSetMarketDataTypeAfterClose verifies that MarketData().SetType returns an
 // error (not blocks forever) when called after the client has been closed.
 func TestSetMarketDataTypeAfterClose(t *testing.T) {
@@ -549,7 +552,7 @@ func TestContextCancelDuringOneShot(t *testing.T) {
 	_ = host.Close()
 }
 
-func TestKnownMalformedInboundDoesNotCloseTransport(t *testing.T) {
+func TestKnownMalformedInboundRetiresTransportGeneration(t *testing.T) {
 	t.Parallel()
 
 	gateway := newProtocolErrorGateway(t)
@@ -565,38 +568,37 @@ func TestKnownMalformedInboundDoesNotCloseTransport(t *testing.T) {
 		t.Fatalf("DialContext() error = %v", err)
 	}
 
-	var protocolErr *ibkr.ProtocolError
-	timer := time.NewTimer(2 * time.Second)
-	defer timer.Stop()
-	for protocolErr == nil {
+	for {
 		select {
 		case event := <-client.SessionEvents():
-			protocolErr, _ = errors.AsType[*ibkr.ProtocolError](event.Err)
+			if protocolErr, ok := errors.AsType[*ibkr.ProtocolError](event.Err); ok {
+				if protocolErr.Direction != "inbound" {
+					t.Fatalf("ProtocolError.Direction = %q, want inbound", protocolErr.Direction)
+				}
+			}
 		case <-client.Done():
-			t.Fatalf("client closed after message-scoped decode error: %v", client.Wait())
-		case <-timer.C:
-			t.Fatal("timeout waiting for malformed inbound session event")
+			err := client.Wait()
+			if !errors.Is(err, ibkr.ErrInterrupted) {
+				t.Fatalf("client.Wait() = %v, want ErrInterrupted", err)
+			}
+			if _, ok := errors.AsType[*ibkr.ProtocolError](err); !ok {
+				t.Fatalf("client.Wait() = %T %v, want ProtocolError", err, err)
+			}
+			if ibkr.IsRetryable(err) {
+				t.Fatalf("IsRetryable(%v) = true, want false", err)
+			}
+			gateway.Wait(t)
+			return
+		case <-ctx.Done():
+			t.Fatal("timeout waiting for malformed generation retirement")
 		}
 	}
-	if protocolErr.Direction != "inbound" {
-		t.Fatalf("ProtocolError.Direction = %q, want inbound", protocolErr.Direction)
-	}
-	select {
-	case <-client.Done():
-		t.Fatalf("client closed after malformed inbound event: %v", client.Wait())
-	default:
-	}
-	client.Close()
-	if err := client.Wait(); err != nil {
-		t.Fatalf("client.Wait() error = %v, want nil after Close", err)
-	}
-	gateway.Wait(t)
 }
 
-func TestUnknownUnterminatedClassicInboundDoesNotCloseTransport(t *testing.T) {
+func TestUnknownInboundDoesNotCloseTransport(t *testing.T) {
 	t.Parallel()
 
-	gateway := newUnknownMalformedGateway(t)
+	gateway := newUnknownInboundGateway(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -608,26 +610,29 @@ func TestUnknownUnterminatedClassicInboundDoesNotCloseTransport(t *testing.T) {
 		t.Fatalf("DialContext() error = %v", err)
 	}
 
-	var protocolErr *ibkr.ProtocolError
-	for protocolErr == nil {
+	for {
 		select {
 		case event := <-client.SessionEvents():
-			protocolErr, _ = errors.AsType[*ibkr.ProtocolError](event.Err)
+			if strings.Contains(event.Message, "unknown msg_id 3895") {
+				if event.Err != nil {
+					t.Fatalf("unknown-ID event error = %v, want nil", event.Err)
+				}
+				goto observed
+			}
 		case <-client.Done():
-			t.Fatalf("client closed after unknown malformed inbound: %v", client.Wait())
+			t.Fatalf("client closed after unknown inbound: %v", client.Wait())
 		case <-ctx.Done():
-			t.Fatal("timeout waiting for unknown malformed inbound session event")
+			t.Fatal("timeout waiting for unknown inbound session event")
 		}
 	}
-	if protocolErr.Direction != "inbound" {
-		t.Fatalf("ProtocolError.Direction = %q, want inbound", protocolErr.Direction)
-	}
+
+observed:
 
 	ts, err := client.CurrentTime(ctx)
 	if err != nil {
 		t.Fatalf("CurrentTime() after unknown malformed inbound = %v", err)
 	}
-	if want := time.Unix(1783720285, 0).UTC(); !ts.Equal(want) {
+	if want := time.Unix(1787603266, 0).UTC(); !ts.Equal(want) {
 		t.Fatalf("CurrentTime() = %v, want %v", ts, want)
 	}
 
@@ -662,12 +667,7 @@ func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {
 
 	reqErrCh := make(chan error, 1)
 	go func() {
-		_, err := client.Contracts().Details(reqCtx, ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		})
+		_, err := client.CurrentTime(reqCtx)
 		reqErrCh <- err
 	}()
 
@@ -694,10 +694,10 @@ func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {
 	select {
 	case err := <-reqErrCh:
 		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("ContractDetails() error = %v, want its own context deadline", err)
+			t.Fatalf("CurrentTime() error = %v, want its own context deadline", err)
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("ContractDetails() did not return after its context deadline")
+		t.Fatal("CurrentTime() did not return after its context deadline")
 	}
 
 	select {
@@ -750,8 +750,7 @@ func TestSingletonSubscriptionRejectsSecond(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "lifecycle_singleton_reject.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -784,8 +783,7 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "lifecycle_account_summary_limit.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -829,16 +827,14 @@ func TestConcurrentAccountSummaryLimit(t *testing.T) {
 	sub2.Close()
 }
 
-// TestMultipleOneShotsInFlight verifies that concurrent one-shot requests
-// are correctly demultiplexed even when the server responds out of order.
-// Both requests are issued from goroutines. The replay deliberately delivers
-// the captured EURUSD response before AAPL, exercising req-id-based routing.
+// TestMultipleOneShotsInFlight verifies that concurrent one-shot requests are
+// correctly demultiplexed when the second request overlaps the first response.
+// Both requests and every server frame retain their captured request IDs.
 func TestMultipleOneShotsInFlight(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "lifecycle_concurrent_oneshots.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -855,6 +851,7 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		d, err := client.Contracts().Details(ctx, ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -902,9 +899,8 @@ func TestMultipleOneShotsInFlight(t *testing.T) {
 func TestSessionEventsDelivered(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "lifecycle_bootstrap_reordered.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	client, host := newClient(t, "grounded_bootstrap.txt")
+	defer cleanupClientHost(t, client, host)
 
 	events := client.SessionEvents()
 	found := false

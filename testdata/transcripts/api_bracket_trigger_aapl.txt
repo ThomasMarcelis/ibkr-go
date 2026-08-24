@@ -1,41 +1,105 @@
-# Grounded by live API capture captures/20260413T174517Z-api_bracket_trigger_aapl.
-# server_version=200, events.jsonl sha256: 682a1390b2acf04c8bc075fa1cf32b4b4b872c7505a2d8bcb1b017e6d552cefd.
-# Account, order-ref, perm, and execution identifiers are sanitized; the sequence
-# preserves live paper Gateway behavior observed on 2026-04-13. The bracket parent
-# filled, both children echoed the same OCA group, and the forced take-profit
-# modify was cancelled/rejected by IBKR's price-band checks instead of proving
-# sibling auto-cancel.
-handshake {"server_version":200,"connection_time":"20260413 19:45:17 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":47}
-
-client place_order {"order_id":"47","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"MKT","tif":"DAY","account":"DU9000001","transmit":false}
-client place_order {"order_id":"48","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"1","order_type":"LMT","lmt_price":"2578.5","tif":"DAY","account":"DU9000001","transmit":false,"parent_id":"47"}
-client place_order {"order_id":"49","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"1","order_type":"STP","aux_price":"12.89","tif":"DAY","account":"DU9000001","parent_id":"47"}
-
-server open_order {"order_id":47,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"1","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900047","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260413T174517Z-001"}
-server order_status {"order_id":47,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900047","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server open_order {"order_id":48,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"1","lmt_price":"2578.5","aux_price":"0","tif":"DAY","oca_group":"900047","parent_id":"47","perm_id":"900048","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260413T174517Z-002"}
-server order_status {"order_id":48,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900048","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"child","mkt_cap_price":"0"}
-server open_order {"order_id":49,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"STP","quantity":"1","lmt_price":"0","aux_price":"12.89","tif":"DAY","oca_group":"900047","parent_id":"47","perm_id":"900049","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260413T174517Z-003"}
-server order_status {"order_id":49,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900049","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"trigger","mkt_cap_price":"0"}
-server execution_detail {"req_id":-1,"order_id":47,"exec_id":"0000dc8f.6a2ee2f6.01.01","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"1","price":"257.58","time":"20260413 13:45:18 US/Eastern","perm_id":"900047","client_id":"1"}
-server open_order {"order_id":47,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","status":"Filled","quantity":"1","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900047","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260413T174517Z-001"}
-server order_status {"order_id":47,"status":"Filled","filled":"1","remaining":"0","avg_fill_price":"257.58","perm_id":"900047","parent_id":"0","last_fill_price":"257.58","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server commission_report {"exec_id":"0000dc8f.6a2ee2f6.01.01","commission":"1","currency":"USD","realized_pnl":"0"}
-
-client place_order {"order_id":"48","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"1","order_type":"LMT","lmt_price":"206.28","tif":"DAY","account":"DU9000001","parent_id":"47"}
-server open_order {"order_id":48,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"1","lmt_price":"206.28","aux_price":"0","tif":"DAY","oca_group":"900047","parent_id":"47","perm_id":"900048","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260413T174517Z-004"}
-server order_status {"order_id":48,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900048","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server order_status {"order_id":48,"status":"PendingCancel","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900048","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server order_status {"order_id":48,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900048","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server open_order {"order_id":48,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"LMT","quantity":"1","lmt_price":"2578.5","aux_price":"0","tif":"DAY","oca_group":"900047","parent_id":"47","perm_id":"900048","client_id":"1","origin":"0","order_ref":"ibkrgo-sanitized-20260413T174517Z-002"}
-server order_status {"order_id":48,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900048","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server order_status {"order_id":48,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900048","parent_id":"47","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":48,"code":202,"message":"Order Canceled - reason:We cannot accept an order at a limit price at or more aggressive than 250.104208. Please submit your order using a limit price that is closer to the current market price of 257.68.","advanced_order_reject_json":"","error_time_ms":"1776102328000"}
-server api_error {"req_id":48,"code":201,"message":"Order rejected - reason:Order has been cancelled already, too late to replace","advanced_order_reject_json":"","error_time_ms":"1776102328000"}
-
-client global_cancel {"field_count":"3","ext_operator":"","manual_order_indicator":""}
-
-sleep 100ms
+# Exact capture 20260824T204308Z-api_bracket_trigger_aapl for api_bracket_trigger_aapl at server_version 225.
+# events.jsonl sha256: a87923848e96b5fe17b9d6bf7941f7a4db8ce0c8787a926345ec51c8aa527fd3.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:43:07 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEI3QM=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARD/9IysgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpldWZhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARD/9IysgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARD/9IysgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARD/9IysgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAQ==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=109
+raw server AAAAbQAAAMwI////////////ARC89YysgzQYvBAiUk1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBpbmFjdGl2ZSBidXQgc2hvdWxkIGJlIGF2YWlsYWJsZSB1cG9uIGRlbWFuZC5ldWZhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=109
+raw server AAAAbQAAAMwI////////////ARC89YysgzQYvBAiUk1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBpbmFjdGl2ZSBidXQgc2hvdWxkIGJlIGF2YWlsYWJsZSB1cG9uIGRlbWFuZC5ldWZhcm0=
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=201
+raw server AAAAyQAAAMwIARDT94ysgzQY6U4itgFSZXF1ZXN0ZWQgbWFya2V0IGRhdGEgcmVxdWlyZXMgYWRkaXRpb25hbCBzdWJzY3JpcHRpb24gZm9yIEFQSS4gU2VlIGxpbmsgaW4gJ01hcmtldCBEYXRhIENvbm5lY3Rpb25zJyBkaWFsb2cgZm9yIG1vcmUgZGV0YWlscy5EZWxheWVkIG1hcmtldCBkYXRhIGlzIGF2YWlsYWJsZS5BQVBMIE5BU0RBUS5OTVMvVE9QL0FMTA==
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAw==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIAhIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=1 direction=server msg_id=58 encoding=protobuf payload_len=8
+raw server AAAACAAAAQIIAhAD
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIAhIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBCGc3MzMzMaHNAIgEyKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBDGdejcD0Ka3NAIgE2KAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=23
+raw server AAAAFwAAAMkIAhBEGZqZmZmZaXNAIgI2NygA
+# leg=1 direction=server msg_id=46 encoding=protobuf payload_len=20
+raw server AAAAFAAAAPYIAhBYGgoxNzg3NjAzMjg3
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBIGfYoXI/ClXNAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBJGexRuB6FX3NAIgEwKAA=
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=16
+raw server AAAAEAAAAMoIAhBKGgY4MTI4NjU=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBLGZqZmZmZVXNAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBMGexRuB6Fc3NAIgEwKAA=
+# leg=1 direction=server msg_id=57 encoding=protobuf payload_len=6
+raw server AAAABgAAAQEIAg==
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=139
+raw client AAAAiwAAAMsI3QMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpjIAAqA0JVWTIBMTgAQgNNS1RaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAqAQAwAT///////////8BkAYAygYAIgA=
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=150
+raw client AAAAlgAAAMsI3gMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpuIN0DKgRTRUxMMgExOABCA0xNVEkAAAAAAESoQFoDREFZYglEVTkwMDAwMDHiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDPwAQD4AQCoBADABP///////////wGQBgDKBgAiAA==
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=153
+raw client AAAAmQAAAMsI3wMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpxIN0DKgRTRUxMMgExOABCA1NUUFGPwvUoXA8vQFoDREFZYglEVTkwMDAwMDHiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDXwAQD4AQCQBAGoBADABP///////////wGQBgDKBgAiAA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=149
+raw server AAAAlQAAAMwI3QMQyP6MrIM0GI8DIoEBT3JkZXIgTWVzc2FnZToKQlVZIDEgQUFQTCBOQVNEQVEuTk1TCldhcm5pbmc6IFlvdXIgb3JkZXIgd2lsbCBub3QgYmUgcGxhY2VkIGF0IHRoZSBleGNoYW5nZSB1bnRpbCAyMDI2LTA4LTI1IDA5OjMwOjAwIFVTL0Vhc3Rlcm4u
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=304
+raw server AAABMAAAAM0I3QMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuUBCAEQ3QMY3dWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI3QMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDd1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3gMY3tWTrQMg3QMqBFNFTEwyATFCA0xNVEkAAAAAAESoQFEAAAAAAAAAAFoDREFZYglEVTkwMDAwMDF6AklCuQEAAAAAAEaoQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwM/ABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=72
+raw server AAAASAAAAMsI3gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDe1ZOtAzjdA0EAAAAAAAAAAEgBUgVjaGlsZFkAAAAAAAAAAA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=150
+raw server AAAAlgAAAMwI3gMQyP6MrIM0GI8DIoIBT3JkZXIgTWVzc2FnZToKU0VMTCAxIEFBUEwgTkFTREFRLk5NUwpXYXJuaW5nOiBZb3VyIG9yZGVyIHdpbGwgbm90IGJlIHBsYWNlZCBhdCB0aGUgZXhjaGFuZ2UgdW50aWwgMjAyNi0wOC0yNSAwOTozMDowMCBVUy9FYXN0ZXJuLg==
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3gMY3tWTrQMg3QMqBFNFTEwyATFCA0xNVEkAAAAAAESoQFEAAAAAAAAAAFoDREFZYglEVTkwMDAwMDF6AklCuQEAAAAAAEaoQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwM/ABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=72
+raw server AAAASAAAAMsI3gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDe1ZOtAzjdA0EAAAAAAAAAAEgBUgVjaGlsZFkAAAAAAAAAAA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=150
+raw server AAAAlgAAAMwI3wMQyP6MrIM0GI8DIoIBT3JkZXIgTWVzc2FnZToKU0VMTCAxIEFBUEwgTkFTREFRLk5NUwpXYXJuaW5nOiBZb3VyIG9yZGVyIHdpbGwgbm90IGJlIHBsYWNlZCBhdCB0aGUgZXhjaGFuZ2UgdW50aWwgMjAyNi0wOC0yNSAwOTozMDowMCBVUy9FYXN0ZXJuLg==
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3wMY39WTrQMg3QMqBFNFTEwyATFCA1NUUEkAAAAAAAAAAFGPwvUoXA8vQFoDREFZYglEVTkwMDAwMDF6AklCuQGPwvUoXA8vQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwNfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=80
+raw server AAAAUAAAAMsI3wMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDf1ZOtAzjdA0EAAAAAAAAAAEgBUg1jaGlsZCx0cmlnZ2VyWQAAAAAAAAAA
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3gMY3tWTrQMg3QMqBFNFTEwyATFCA0xNVEkAAAAAAESoQFEAAAAAAAAAAFoDREFZYglEVTkwMDAwMDF6AklCuQEAAAAAAEaoQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwM/ABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=72
+raw server AAAASAAAAMsI3gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDe1ZOtAzjdA0EAAAAAAAAAAEgBUgVjaGlsZFkAAAAAAAAAAA==
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3wMY39WTrQMg3QMqBFNFTEwyATFCA1NUUEkAAAAAAAAAAFGPwvUoXA8vQFoDREFZYglEVTkwMDAwMDF6AklCuQGPwvUoXA8vQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwNfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=80
+raw server AAAAUAAAAMsI3wMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDf1ZOtAzjdA0EAAAAAAAAAAEgBUg1jaGlsZCx0cmlnZ2VyWQAAAAAAAAAA
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=304
+raw server AAABMAAAAM0I3QMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuUBCAEQ3QMY3dWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI3QMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDd1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3gMY3tWTrQMg3QMqBFNFTEwyATFCA0xNVEkAAAAAAESoQFEAAAAAAAAAAFoDREFZYglEVTkwMDAwMDF6AklCuQEAAAAAAEaoQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwM/ABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=72
+raw server AAAASAAAAMsI3gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDe1ZOtAzjdA0EAAAAAAAAAAEgBUgVjaGlsZFkAAAAAAAAAAA==
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=335
+raw server AAABTwAAAM0I3wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoQCCAEQ3wMY39WTrQMg3QMqBFNFTEwyATFCA1NUUEkAAAAAAAAAAFGPwvUoXA8vQFoDREFZYglEVTkwMDAwMDF6AklCuQGPwvUoXA8vQNoBCTkwMDAwMDQ3N+IBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwNfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcAyAfd1ZOtA9AHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=80
+raw server AAAAUAAAAMsI3wMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDf1ZOtAzjdA0EAAAAAAAAAAEgBUg1jaGlsZCx0cmlnZ2VyWQAAAAAAAAAA
 disconnect

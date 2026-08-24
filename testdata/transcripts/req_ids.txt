@@ -1,12 +1,13 @@
-# Exact public API capture from paper IB Gateway server_version 207.
-# Source: /tmp/ibkr-go-reqids-paper-20260711/20260711T031214Z-req_ids
-# events.jsonl sha256: d1cb92f21918758c1bdc8e02106c355b872237b27d029a5ea495912f39308023
-#
-# The paper account is length-preserving redacted to DU9000001. Ambient farm
-# statuses are omitted. The reqIds request and returned order ID are exact.
-handshake {"server_version":207,"connection_time":"20260711 05:12:13 Central European Standard Time"}
+# Exact paper-dev capture 20260824T212004Z-req_ids at server_version 225.
+# events.jsonl sha256: f7c62fda7f754e0baa6a95d040ae3e57e1e12e8df59265ef3fb4f0a9fe837e53.
+# The paper account is deterministically sanitized. The request and positive
+# next-valid-ID reply are exact; ambient farm notices are retained.
+handshake {"server_version":225,"connection_time":"20260824 23:20:04 CET"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
-raw server AAAACAAAAAkxADEA
-raw client AAAACAAAAAgxADEA
-raw server AAAACAAAAAkxADEA
+raw server AAAABwAAANEIxQQ=
+raw server AAAAQwAAAMwI////////////ARDSnZStgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAawAAAMwI////////////ARDSnZStgzQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgaW5hY3RpdmUgYnV0IHNob3VsZCBiZSBhdmFpbGFibGUgdXBvbiBkZW1hbmQudXNobWRz
+raw server AAAARgAAAMwI////////////ARDSnZStgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAABgAAANAIAQ==
+raw server AAAABwAAANEIxQQ=
 disconnect

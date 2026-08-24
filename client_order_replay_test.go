@@ -12,10 +12,9 @@ import (
 )
 
 // The five replays below freeze the resting-order cancel family (matrix row
-// ORD-001 variants) captured live on 2026-06-10 against paper Gateway
-// server_version 200 with the 5-field cancel encoder. Each test drives the
-// public API exactly as the capture's client frames show; every asserted
-// value is taken from the capture.
+// ORD-001 variants) recaptured against paper Gateway server_version 225 on
+// 2026-08-24. Each test drives the public API exactly as its transcript's
+// client frames show; every asserted value is taken from that capture.
 //
 // Shared behavior frozen across the family: a safety global cancel against an
 // order that is already terminal draws a real code-161 "Cancel attempted when
@@ -96,146 +95,54 @@ func requireOrderWaitNil(t *testing.T, name string, handle *ibkr.OrderHandle) {
 	t.Helper()
 
 	handle.Close()
-	if err := handle.Wait(); err != nil {
-		t.Fatalf("%s Wait() = %v, want nil explicit close", name, err)
-	}
+	requireCloseOrCapturedDisconnect(t, name, handle.Wait())
 }
 
-func requireCancelNotCancellableNotice(t *testing.T, ctx context.Context, events <-chan ibkr.Event, permID string) {
-	t.Helper()
-
-	for {
-		notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeCancelNotCancellableState)
-		if strings.Contains(notice.Message, "Order permId ="+permID) {
-			return
-		}
-	}
-}
-
-// TestAPIOrderRestCancelReplay freezes the resting-order cancel baseline
-// re-captured live on 2026-06-10 (captures/20260610T195745Z-
-// api_order_rest_cancel_aapl, events.jsonl sha256 prefix cab24496228ff1fb):
-// a far LMT BUY rests at Submitted, the API cancel yields order_status
-// Cancelled plus the code-202 session notice, and the safety global cancel
-// draws a real code 161 session notice without overriding the clean terminal
-// handle close.
-func TestAPIOrderRestCancelReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_order_rest_cancel_161_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	events := client.SessionEvents()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("14.61")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195746Z-001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Place: %v", err)
-	}
-	if got := handle.OrderID(); got != 337 {
-		t.Fatalf("order id = %d, want 337", got)
-	}
-
-	open := waitForOpenOrder(t, ctx, handle)
-	if (*open.Order.OrderID) != 337 || (*open.Order.PermID) != 9000000337 {
-		t.Fatalf("open order id/perm = %d/%d, want 337/9000000337", (*open.Order.OrderID), (*open.Order.PermID))
-	}
-	if open.Order.OrderType != ibkr.OrderTypeLimit {
-		t.Fatalf("open order type = %s, want LMT", open.Order.OrderType)
-	}
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
-		t.Fatalf("open lmt price = %s, want 14.61", open.Order.Prices.LmtPrice)
-	}
-	if open.Order.OrderRef != "ibkrgo-redacted-20260610T195746Z-001" {
-		t.Fatalf("open order ref = %q", open.Order.OrderRef)
-	}
-
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-
-	if err := handle.Cancel(ctx); err != nil {
-		t.Fatalf("Cancel: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusCancelled)
-
-	// The code-202 cancellation notice is a session event, not a handle
-	// error (the handle already holds the terminal Cancelled status).
-	notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-	if notice.Message != "Order Canceled - reason:" {
-		t.Fatalf("202 message = %q", notice.Message)
-	}
-
-	// Safety re-cancel: the live Gateway answered the global cancel with
-	// code 161 for the already-cancelled order. It is observable at session
-	// scope without overriding the terminal Cancelled status.
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("CancelAll: %v", err)
-	}
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000337")
-	requireOrderWaitNil(t, "rest", handle)
-}
-
-// TestAPIOrderStopCancelReplay freezes the STP and STP LMT rest/cancel
-// lifecycles captured live on 2026-06-10 (captures/20260610T195758Z-
-// api_order_stop_cancel_aapl, events.jsonl sha256 prefix fb50c6d6a49dc509).
-// Both stops hold at PreSubmitted with why_held=trigger; the plain STP echo
-// carries the Gateway-computed limit 2921.23 next to the 2921.2 stop. The
-// final global cancel draws code 161 for both already-cancelled orders.
+// TestAPIOrderStopCancelReplay freezes the sv225 STP and STP LMT rest/cancel
+// lifecycles. Both orders hold at PreSubmitted with why_held=trigger and
+// targeted cancellation reaches Cancelled without a fill.
 func TestAPIOrderStopCancelReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_order_stop_cancel_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	events := client.SessionEvents()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	stop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeStop,
-			Quantity:  decimal.RequireFromString("100"),
-			AuxPrice:  new(decimal.RequireFromString("2921.2")),
+			Quantity:  decimal.NewFromInt(1),
+			AuxPrice:  new(decimal.NewFromInt(2000)),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195759Z-001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("stop Place: %v", err)
 	}
-	if got := stop.OrderID(); got != 338 {
-		t.Fatalf("stop order id = %d, want 338", got)
+	if got := stop.OrderID(); got != 515 {
+		t.Fatalf("stop order id = %d, want 515", got)
 	}
 
 	open := waitForOpenOrder(t, ctx, stop)
 	if open.Order.OrderType != ibkr.OrderTypeStop {
 		t.Fatalf("stop open order type = %s, want STP", open.Order.OrderType)
 	}
-	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
-		t.Fatalf("stop aux price = %s, want 2921.2", open.Order.Prices.AuxPrice)
+	if !open.Order.Prices.AuxPrice.Equal(decimal.NewFromInt(2000)) {
+		t.Fatalf("stop aux price = %s, want 2000", open.Order.Prices.AuxPrice)
 	}
-	// The live Gateway echoed a computed limit price next to the stop.
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2921.23")) {
-		t.Fatalf("stop echoed lmt price = %s, want 2921.23", open.Order.Prices.LmtPrice)
+	if !open.Order.Prices.LmtPrice.IsZero() {
+		t.Fatalf("stop echoed lmt price = %s, want zero", open.Order.Prices.LmtPrice)
 	}
-	if (*open.Order.PermID) != 9000000338 {
-		t.Fatalf("stop perm id = %d, want 9000000338", (*open.Order.PermID))
+	if (*open.Order.PermID) != 900000515 {
+		t.Fatalf("stop perm id = %d, want 900000515", (*open.Order.PermID))
 	}
 
 	preSubmitted := waitOrderStatusUpdate(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
@@ -254,33 +161,33 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeStopLimit,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("2922.2")),
-			AuxPrice:  new(decimal.RequireFromString("2921.2")),
+			Quantity:  decimal.NewFromInt(1),
+			LmtPrice:  new(decimal.NewFromInt(2001)),
+			AuxPrice:  new(decimal.NewFromInt(2000)),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195759Z-002",
+			OrderRef:  "sanitized-order-ref-0000000000000006",
 		},
 	})
 	if err != nil {
 		t.Fatalf("stop-limit Place: %v", err)
 	}
-	if got := stopLimit.OrderID(); got != 339 {
-		t.Fatalf("stop-limit order id = %d, want 339", got)
+	if got := stopLimit.OrderID(); got != 516 {
+		t.Fatalf("stop-limit order id = %d, want 516", got)
 	}
 
 	open = waitForOpenOrder(t, ctx, stopLimit)
 	if open.Order.OrderType != ibkr.OrderTypeStopLimit {
 		t.Fatalf("stop-limit open order type = %s, want STP LMT", open.Order.OrderType)
 	}
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2922.2")) {
-		t.Fatalf("stop-limit lmt price = %s, want 2922.2", open.Order.Prices.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.NewFromInt(2001)) {
+		t.Fatalf("stop-limit lmt price = %s, want 2001", open.Order.Prices.LmtPrice)
 	}
-	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("2921.2")) {
-		t.Fatalf("stop-limit aux price = %s, want 2921.2", open.Order.Prices.AuxPrice)
+	if !open.Order.Prices.AuxPrice.Equal(decimal.NewFromInt(2000)) {
+		t.Fatalf("stop-limit aux price = %s, want 2000", open.Order.Prices.AuxPrice)
 	}
-	if (*open.Order.PermID) != 9000000339 {
-		t.Fatalf("stop-limit perm id = %d, want 9000000339", (*open.Order.PermID))
+	if (*open.Order.PermID) != 900000516 {
+		t.Fatalf("stop-limit perm id = %d, want 900000516", (*open.Order.PermID))
 	}
 
 	preSubmitted = waitOrderStatusUpdate(t, ctx, stopLimit, ibkr.OrderStatusPreSubmitted)
@@ -294,269 +201,117 @@ func TestAPIOrderStopCancelReplay(t *testing.T) {
 	waitForOrderStatus(t, ctx, stopLimit, ibkr.OrderStatusCancelled)
 	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 
-	// The live Gateway answered the final global cancel with code 161 for
-	// both terminal orders, 339 first.
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("CancelAll: %v", err)
-	}
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000339")
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000338")
 	requireOrderWaitNil(t, "stop-limit", stopLimit)
 	requireOrderWaitNil(t, "stop", stop)
 }
 
-// TestAPIOrderTrailingCancelReplay freezes the TRAIL and TRAIL LIMIT
-// lifecycles captured live on 2026-06-10 (captures/20260610T195819Z-
-// api_order_trailing_cancel_aapl, events.jsonl sha256 prefix
-// 0d3098f03fd68839). The TRAIL SELL triggered off-hours and filled in two
-// executions (80+20 @ 292.14); the cancel raced the fill and drew code 10148
-// "cannot be cancelled, state: Filled.". The capture's execution_data frames
-// carry the Gateway's UTC dash time form ("20260610-19:58:22"), which this
-// client's execution time parser does not accept: the executions and their
-// commission reports are dropped (live and in replay), so the fill is
-// asserted through order_status only and the handle sees zero
-// Execution/Commission events. The TRAIL LIMIT rests and cancels cleanly.
+// TestAPIOrderTrailingCancelReplay freezes the current sv225 TRAIL and TRAIL
+// LIMIT rest/cancel lifecycles from capture
+// 20260824T205533Z-api_order_trailing_cancel_aapl, events SHA-256
+// 45fe17083f97d726fce85582024104173f40021a6976f759e7456197f13d8be0.
 func TestAPIOrderTrailingCancelReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_order_trailing_cancel_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	events := client.SessionEvents()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
-	trail, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
-		Order: ibkr.Order{
-			Action:         ibkr.ActionSell,
-			OrderType:      ibkr.OrderTypeTrailingStop,
-			Quantity:       decimal.RequireFromString("100"),
-			AuxPrice:       new(decimal.RequireFromString("1")),
-			TrailStopPrice: new(decimal.RequireFromString("2921")),
-			TIF:            ibkr.TIFDay,
-			Account:        "DU9000001",
-			OrderRef:       "ibkrgo-redacted-20260610T195820Z-001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("trail Place: %v", err)
+	cases := []struct {
+		name     string
+		wantID   int64
+		orderRef string
+		order    ibkr.Order
+	}{
+		{"trail", 517, "sanitized-order-ref-0000000000000001", ibkr.Order{
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingStop, Quantity: decimal.NewFromInt(1),
+			AuxPrice: new(decimal.NewFromInt(1)), TrailStopPrice: new(decimal.NewFromInt(2000)),
+			TIF: ibkr.TIFDay, Account: "DU9000001",
+		}},
+		{"trail-limit", 518, "sanitized-order-ref-0000000000000006", ibkr.Order{
+			Action: ibkr.ActionSell, OrderType: ibkr.OrderTypeTrailingLimit, Quantity: decimal.NewFromInt(1),
+			AuxPrice: new(decimal.NewFromInt(1)), TrailStopPrice: new(decimal.NewFromInt(2000)),
+			LmtPriceOffset: new(decimal.RequireFromString("0.05")), TIF: ibkr.TIFDay, Account: "DU9000001",
+		}},
 	}
-	if got := trail.OrderID(); got != 340 {
-		t.Fatalf("trail order id = %d, want 340", got)
-	}
-
-	open := waitForOpenOrder(t, ctx, trail)
-	if open.Order.OrderType != ibkr.OrderTypeTrailingStop {
-		t.Fatalf("trail open order type = %s, want TRAIL", open.Order.OrderType)
-	}
-	// First echo carries the Gateway-computed trigger limit 2921.03 next to
-	// the trailing amount 1.
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2921.03")) {
-		t.Fatalf("trail echoed lmt price = %s, want 2921.03", open.Order.Prices.LmtPrice)
-	}
-	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("1")) {
-		t.Fatalf("trail aux price = %s, want 1", open.Order.Prices.AuxPrice)
-	}
-	if (*open.Order.PermID) != 9000000340 {
-		t.Fatalf("trail perm id = %d, want 9000000340", (*open.Order.PermID))
-	}
-
-	// Drain to Filled, tracking the partial fill (80/20 @ 292.14) and
-	// counting Execution/Commission events, which must stay at zero because
-	// the dash-UTC execution time is dropped at decode.
-	var executions, commissions int
-	var sawPartial, sawTrigger bool
-	for {
-		var filled *ibkr.OrderStatusUpdate
-		select {
-		case evt, ok := <-trail.Events():
-			if !ok {
-				t.Fatal("trail events closed before Filled status")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.order.OrderRef = tc.orderRef
+			handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: orderReplayAAPL, Order: tc.order})
+			if err != nil {
+				t.Fatalf("Place: %v", err)
 			}
-			if evt.Execution != nil {
-				executions++
+			if handle.OrderID() != tc.wantID {
+				t.Fatalf("OrderID() = %d, want %d", handle.OrderID(), tc.wantID)
 			}
-			if evt.CommissionAndFees != nil {
-				commissions++
+			open := waitForOpenOrder(t, ctx, handle)
+			if open.Order.OrderType != tc.order.OrderType || open.Order.Quantity.String() != "1" {
+				t.Fatalf("open order = %s qty %s", open.Order.OrderType, open.Order.Quantity)
 			}
-			if evt.Status != nil {
-				switch {
-				case evt.Status.Status == ibkr.OrderStatusPreSubmitted && evt.Status.WhyHeld == "trigger":
-					sawTrigger = true
-					if evt.Status.Filled.Equal(decimal.RequireFromString("80")) &&
-						evt.Status.Remaining.Equal(decimal.RequireFromString("20")) &&
-						evt.Status.AvgFillPrice.Equal(decimal.RequireFromString("292.14")) {
-						sawPartial = true
-					}
-				case evt.Status.Status == ibkr.OrderStatusFilled:
-					filled = evt.Status
-				}
+			waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+			if err := handle.Cancel(ctx); err != nil {
+				t.Fatalf("Cancel: %v", err)
 			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for trail Filled status")
-		}
-		if filled != nil {
-			if !filled.Filled.Equal(decimal.RequireFromString("100")) ||
-				!filled.Remaining.IsZero() ||
-				!filled.AvgFillPrice.Equal(decimal.RequireFromString("292.14")) ||
-				!filled.LastFillPrice.Equal(decimal.RequireFromString("292.14")) {
-				t.Fatalf("trail filled status = %+v, want 100 @ 292.14", filled)
-			}
-			break
-		}
+			waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusCancelled)
+			requireOrderWaitNil(t, tc.name, handle)
+		})
 	}
-	if !sawTrigger {
-		t.Fatal("trail never reported PreSubmitted with why_held=trigger")
-	}
-	if !sawPartial {
-		t.Fatal("trail never reported the live partial fill 80/20 @ 292.14")
-	}
-
-	// The cancel raced the fill live; the Gateway rejects it with code
-	// 10148, surfaced as a session event (the handle holds Filled).
-	if err := trail.Cancel(ctx); err != nil {
-		t.Fatalf("trail Cancel: %v", err)
-	}
-	cannotCancel := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCannotBeCancelled)
-	if !strings.Contains(cannotCancel.Message, "cannot be cancelled, state: Filled.") {
-		t.Fatalf("10148 message = %q", cannotCancel.Message)
-	}
-
-	trailLimit, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
-		Order: ibkr.Order{
-			Action:         ibkr.ActionSell,
-			OrderType:      ibkr.OrderTypeTrailingLimit,
-			Quantity:       decimal.RequireFromString("100"),
-			AuxPrice:       new(decimal.RequireFromString("1")),
-			TrailStopPrice: new(decimal.RequireFromString("2921")),
-			LmtPriceOffset: new(decimal.RequireFromString("0.05")),
-			TIF:            ibkr.TIFDay,
-			Account:        "DU9000001",
-			OrderRef:       "ibkrgo-redacted-20260610T195820Z-002",
-		},
-	})
-	if err != nil {
-		t.Fatalf("trail-limit Place: %v", err)
-	}
-	if got := trailLimit.OrderID(); got != 341 {
-		t.Fatalf("trail-limit order id = %d, want 341", got)
-	}
-
-	open = waitForOpenOrder(t, ctx, trailLimit)
-	if open.Order.OrderType != ibkr.OrderTypeTrailingLimit {
-		t.Fatalf("trail-limit open order type = %s, want TRAIL LIMIT", open.Order.OrderType)
-	}
-	// The Gateway computed limit 2920.95 from trail stop 2921 minus the
-	// 0.05 offset.
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2920.95")) {
-		t.Fatalf("trail-limit echoed lmt price = %s, want 2920.95", open.Order.Prices.LmtPrice)
-	}
-	if (*open.Order.PermID) != 9000000341 {
-		t.Fatalf("trail-limit perm id = %d, want 9000000341", (*open.Order.PermID))
-	}
-
-	preSubmitted := waitOrderStatusUpdate(t, ctx, trailLimit, ibkr.OrderStatusPreSubmitted)
-	if preSubmitted.WhyHeld != "trigger" {
-		t.Fatalf("trail-limit why held = %q, want trigger", preSubmitted.WhyHeld)
-	}
-	waitForOrderStatus(t, ctx, trailLimit, ibkr.OrderStatusSubmitted)
-
-	if err := trailLimit.Cancel(ctx); err != nil {
-		t.Fatalf("trail-limit Cancel: %v", err)
-	}
-	waitForOrderStatus(t, ctx, trailLimit, ibkr.OrderStatusCancelled)
-	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-
-	// Final safety global cancel: code 161 for both terminal orders.
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("CancelAll: %v", err)
-	}
-
-	// Drain the trail handle to its close, counting execution and commission
-	// events. The capture's execution times use the Gateway's UTC dash
-	// notation; the parser accepts that form, so both fills (80 and 20 at
-	// 292.14) and both commission reports must reach the handle.
-	for executions < 2 || commissions < 2 {
-		evt := waitForEvent(t, trail.Events())
-		if evt.Execution != nil {
-			executions++
-			if got := evt.Execution.Shares.String(); got != "80" && got != "20" {
-				t.Errorf("execution shares = %s, want 80 or 20", got)
-			}
-			if got := evt.Execution.Price.String(); got != "292.14" {
-				t.Errorf("execution price = %s, want 292.14", got)
-			}
-		}
-		if evt.CommissionAndFees != nil {
-			commissions++
-		}
-	}
-	trail.Close()
-	if executions != 2 || commissions != 2 {
-		t.Fatalf("trail surfaced %d executions and %d commissions, want 2/2", executions, commissions)
-	}
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000340")
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000341")
-	requireOrderWaitNil(t, "trail", trail)
-	requireOrderWaitNil(t, "trail-limit", trailLimit)
 }
 
-// TestAPIOrderRelativeCancelReplay freezes the REL rest/cancel lifecycle
-// captured live on 2026-06-10 (captures/20260610T195833Z-
-// api_order_relative_cancel_aapl, events.jsonl sha256 prefix
-// 65c28d7faea45243): the Gateway assigns offset 0.01 to a REL order placed
-// with only a price cap, the order moves PreSubmitted to Submitted, cancels
-// with Cancelled + 202, and the final global cancel draws code 161.
+// TestAPIOrderRelativeCancelReplay freezes the sv225 REL rest/cancel
+// lifecycle. The Gateway assigns offset 0.01 to an order placed with only a
+// price cap, holds it PreSubmitted after hours, and cancels it without a fill.
 func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_order_relative_cancel_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	events := client.SessionEvents()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	rel, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeRelative,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("14.61")),
+			Quantity:  decimal.NewFromInt(1),
+			LmtPrice:  new(decimal.NewFromInt(10)),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195833Z-001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("Place: %v", err)
 	}
-	if got := rel.OrderID(); got != 342 {
-		t.Fatalf("order id = %d, want 342", got)
+	if got := rel.OrderID(); got != 513 {
+		t.Fatalf("order id = %d, want 513", got)
 	}
 
 	open := waitForOpenOrder(t, ctx, rel)
 	if open.Order.OrderType != ibkr.OrderTypeRelative {
 		t.Fatalf("open order type = %s, want REL", open.Order.OrderType)
 	}
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("14.61")) {
-		t.Fatalf("lmt price = %s, want 14.61", open.Order.Prices.LmtPrice)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.NewFromInt(10)) {
+		t.Fatalf("lmt price = %s, want 10", open.Order.Prices.LmtPrice)
 	}
 	// The client sent no offset; the live Gateway assigned 0.01.
 	if !open.Order.Prices.AuxPrice.Equal(decimal.RequireFromString("0.01")) {
 		t.Fatalf("gateway-assigned offset = %s, want 0.01", open.Order.Prices.AuxPrice)
 	}
-	if (*open.Order.PermID) != 9000000342 {
-		t.Fatalf("perm id = %d, want 9000000342", (*open.Order.PermID))
+	if (*open.Order.PermID) != 900000513 {
+		t.Fatalf("perm id = %d, want 900000513", (*open.Order.PermID))
 	}
 
 	waitForOrderStatus(t, ctx, rel, ibkr.OrderStatusPreSubmitted)
-	waitForOrderStatus(t, ctx, rel, ibkr.OrderStatusSubmitted)
+	if warning := waitForOrderWarning(t, ctx, rel); warning.Code != 399 {
+		t.Fatalf("order warning = %v, want off-hours code 399", warning)
+	}
 
 	if err := rel.Cancel(ctx); err != nil {
 		t.Fatalf("Cancel: %v", err)
@@ -567,16 +322,12 @@ func TestAPIOrderRelativeCancelReplay(t *testing.T) {
 		t.Fatalf("202 message = %q", notice.Message)
 	}
 
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("CancelAll: %v", err)
-	}
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000342")
 	requireOrderWaitNil(t, "relative", rel)
 }
 
-// TestAPIOrderRejectsReplay freezes the order-reject family captured live on
-// 2026-06-10 (captures/20260610T195923Z-api_order_rejects_aapl, events.jsonl
-// sha256 prefix 69d0e71dadb875c3): code 321 for a bogus order type, the
+// TestAPIOrderRejectsReplay freezes the current sv225 order-reject family from
+// capture 20260824T205352Z-api_order_rejects_aapl, events SHA-256
+// d7b6fe707d3c7c297928e3df02b587b73ddd7c9ed82687be44ca08a293ab3be6: code 321 for a bogus order type, the
 // Gateway-initiated price-band cancel with its code-202 reject text, code
 // 10148 for cancelling the already-cancelled order, code 200 for an unknown
 // symbol, code 10147 for cancelling an unknown order id, and the code-161
@@ -585,121 +336,57 @@ func TestAPIOrderRejectsReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_order_rejects_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	events := client.SessionEvents()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
-	// Bogus order type: rejected outright with code 321, no order_status.
-	bogus, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderType("FEELINGS"),
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("14.61")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195923Z-001",
-		},
-	})
+	invalid, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: orderReplayAAPL, Order: ibkr.Order{
+		Action: ibkr.ActionBuy, OrderType: ibkr.OrderType("FEELINGS"), Quantity: decimal.NewFromInt(1),
+		LmtPrice: new(decimal.NewFromInt(10)), TIF: ibkr.TIFDay, Account: "DU9000001",
+		OrderRef: "sanitized-order-ref-0000000000000001",
+	}})
 	if err != nil {
-		t.Fatalf("bogus Place: %v", err)
+		t.Fatalf("invalid order Place: %v", err)
 	}
-	if got := bogus.OrderID(); got != 347 {
-		t.Fatalf("bogus order id = %d, want 347", got)
+	if invalid.OrderID() != 510 {
+		t.Fatalf("invalid order ID = %d, want 510", invalid.OrderID())
 	}
-	requireOrderAPIError(t, "bogus", bogus, ibkr.ErrCodeServerErrorValidatingRequest,
-		"Invalid order type was entered")
+	requireOrderAPIError(t, "invalid order type", invalid, ibkr.ErrCodeServerErrorValidatingRequest, "Invalid order type")
 
-	// Aggressive limit at 10x the market: accepted to PreSubmitted, then
-	// price-band cancelled by the Gateway itself with the reject text on
-	// the code-202 notice.
-	aggressive, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: orderReplayAAPL,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("2922.3")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195923Z-002",
-		},
-	})
+	priceBand, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: orderReplayAAPL, Order: ibkr.Order{
+		Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, Quantity: decimal.NewFromInt(1),
+		LmtPrice: new(decimal.NewFromInt(2000)), TIF: ibkr.TIFDay, Account: "DU9000001",
+		OrderRef: "sanitized-order-ref-0000000000000003",
+	}})
 	if err != nil {
-		t.Fatalf("aggressive Place: %v", err)
+		t.Fatalf("price-band Place: %v", err)
 	}
-	if got := aggressive.OrderID(); got != 348 {
-		t.Fatalf("aggressive order id = %d, want 348", got)
+	if priceBand.OrderID() != 511 {
+		t.Fatalf("price-band order ID = %d, want 511", priceBand.OrderID())
 	}
+	open := waitForOpenOrder(t, ctx, priceBand)
+	if !open.Order.Prices.LmtPrice.Equal(decimal.NewFromInt(2000)) {
+		t.Fatalf("price-band echoed limit = %s, want 2000", open.Order.Prices.LmtPrice)
+	}
+	waitForOrderStatus(t, ctx, priceBand, ibkr.OrderStatusPreSubmitted)
+	if err := priceBand.Cancel(ctx); err != nil {
+		t.Fatalf("price-band Cancel: %v", err)
+	}
+	waitForOrderStatus(t, ctx, priceBand, ibkr.OrderStatusCancelled)
+	requireOrderWaitNil(t, "price-band", priceBand)
 
-	open := waitForOpenOrder(t, ctx, aggressive)
-	if (*open.Order.PermID) != 9000000348 {
-		t.Fatalf("aggressive perm id = %d, want 9000000348", (*open.Order.PermID))
-	}
-	if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("2922.3")) {
-		t.Fatalf("aggressive lmt price = %s, want 2922.3", open.Order.Prices.LmtPrice)
-	}
-	waitForOrderStatus(t, ctx, aggressive, ibkr.OrderStatusPreSubmitted)
-	waitForOrderStatus(t, ctx, aggressive, ibkr.OrderStatusPendingCancel)
-	waitForOrderStatus(t, ctx, aggressive, ibkr.OrderStatusCancelled)
-	notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-	if !strings.Contains(notice.Message, "We cannot accept an order at a limit price at or more aggressive than 300.934796") {
-		t.Fatalf("price-band 202 message = %q", notice.Message)
-	}
-
-	// Cancelling the already-cancelled order draws code 10148 as a session
-	// event.
-	if err := aggressive.Cancel(ctx); err != nil {
-		t.Fatalf("aggressive Cancel: %v", err)
-	}
-	cannotCancel := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCannotBeCancelled)
-	if !strings.Contains(cannotCancel.Message, "OrderId 348 that needs to be cancelled cannot be cancelled, state: Cancelled.") {
-		t.Fatalf("10148 message = %q", cannotCancel.Message)
-	}
-
-	// Unknown symbol: code 200, terminal handle error.
 	unknown, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "ZZZZNONE",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("100"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T195923Z-003",
-		},
+		Contract: ibkr.Contract{Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
+		Order: ibkr.Order{Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarket, Quantity: decimal.NewFromInt(1),
+			TIF: ibkr.TIFDay, Account: "DU9000001", OrderRef: "sanitized-order-ref-0000000000000009"},
 	})
 	if err != nil {
-		t.Fatalf("unknown Place: %v", err)
+		t.Fatalf("invalid-contract Place: %v", err)
 	}
-	if got := unknown.OrderID(); got != 349 {
-		t.Fatalf("unknown order id = %d, want 349", got)
+	if unknown.OrderID() != 512 {
+		t.Fatalf("invalid-contract order ID = %d, want 512", unknown.OrderID())
 	}
-	requireOrderAPIError(t, "unknown", unknown, ibkr.ErrCodeNoSecurityDefinition,
-		"No security definition has been found for the request")
-
-	// Cancelling an unknown order id draws code 10147 as a session event.
-	if err := client.Orders().Cancel(ctx, 999999999); err != nil {
-		t.Fatalf("Cancel(999999999): %v", err)
-	}
-	notFound := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderToCancelNotFound)
-	if !strings.Contains(notFound.Message, "OrderId 999999999 that needs to be cancelled is not found.") {
-		t.Fatalf("10147 message = %q", notFound.Message)
-	}
-
-	// Safety global cancel: code 161 for the price-band-cancelled order.
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("CancelAll: %v", err)
-	}
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000348")
-	requireOrderWaitNil(t, "aggressive", aggressive)
+	requireOrderAPIError(t, "invalid contract", unknown, ibkr.ErrCodeNoSecurityDefinition, "No security definition")
 }

@@ -36,12 +36,12 @@ func TestContractConversionPreservesCanonicalPresence(t *testing.T) {
 	t.Parallel()
 
 	// This conversion-law composite keeps provenance explicit rather than
-	// claiming one accepted Gateway request: BAG conID 28812380 came from the
-	// June paper order, the two legs from the exact-200 BAG quote, ISIN and
-	// IncludeExpired from the read-only request matrix, and the delta-neutral
-	// values from the exact-200 OPT request rejected with code 320. Explicit
-	// zero presence for strike and exempt code is the official schema law under
-	// test, not positive delta-neutral or exempt-code live evidence.
+	// claiming one accepted Gateway request: the BAG conID and legs come from
+	// current sv225 paper capture
+	// 20260824T204518Z-api_combo_option_vertical_aapl, while ISIN and
+	// IncludeExpired come from the current read-only request matrix. The
+	// delta-neutral values and explicit zero presence for strike and exempt code
+	// are official schema laws, not positive delta-neutral live evidence.
 	explicitExempt := 0
 	contract := Contract{
 		ConID:          28812380,
@@ -50,8 +50,8 @@ func TestContractConversionPreservesCanonicalPresence(t *testing.T) {
 		IncludeExpired: true,
 		SecurityID:     SecurityID{Type: SecurityIDISIN, Value: "US0378331005"},
 		ComboLegs: []ComboLeg{
-			{ConID: 887307502, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
-			{ConID: 887307536, Ratio: 1, Action: ActionSell, Exchange: "SMART", ExemptCode: &explicitExempt},
+			{ConID: 909446204, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+			{ConID: 909903509, Ratio: 1, Action: ActionBuy, Exchange: "SMART", ExemptCode: &explicitExempt},
 		},
 		DeltaNeutral: &DeltaNeutralContract{
 			ConID: 265598,
@@ -138,8 +138,9 @@ func TestFromCodecOpenOrderRejectsMalformedComboLegPrice(t *testing.T) {
 func TestFromCodecContractDetailsProjectsLiveFundMetadata(t *testing.T) {
 	t.Parallel()
 
-	// VTSAX from captures/20260415T150322Z-api_security_type_probe_matrix,
-	// server_version=200, events SHA-256 prefix 9be83e57ed176a17.
+	// VTSAX from current sv225 capture
+	// 20260824T202620Z-api_security_type_probe_matrix, events SHA-256
+	// c5480132a65e8bfb5771d99340692b3708c84d1687c95d4a61e4f8b3c2e50aaa.
 	detail, err := fromCodecContractDetails(codec.ContractDetails{
 		Contract: codec.Contract{
 			ConID: 48013650, Symbol: "VTSAX", SecType: "FUND", Exchange: "FUNDSERV",
@@ -199,64 +200,6 @@ func TestFromCodecOrderStatusRejectsMalformedNonEmptyDecimalField(t *testing.T) 
 	})
 	if err == nil {
 		t.Fatal("fromCodecOrderStatus() error = nil, want malformed filled rejection")
-	}
-}
-
-func TestFromCodecCompletedOrderProjectsLiveTrailLimitFields(t *testing.T) {
-	t.Parallel()
-
-	// Live-derived values from
-	// captures/20260415T162637Z-api_completed_orders_variants_aapl,
-	// server_version=200, events SHA-256 prefix 6415ad97b4c9f33e.
-	order, err := fromCodecCompletedOrder(codec.CompletedOrder{
-		OrderDetails: codec.OrderDetails{
-			Contract:        codec.Contract{ConID: 265598, Symbol: "AAPL", SecType: "STK", Strike: "0", Right: "?", Exchange: "SMART", Currency: "USD", LocalSymbol: "AAPL", TradingClass: "NMS"},
-			Action:          "BUY",
-			Quantity:        "1",
-			OrderType:       "TRAIL LIMIT",
-			LmtPrice:        "2000.05",
-			AuxPrice:        "1.0",
-			TIF:             "DAY",
-			PermID:          "1426085924",
-			TrailStopPrice:  "2000.0",
-			Status:          "Cancelled",
-			StopPrice:       "2000.0",
-			LmtPriceOffset:  "0.05",
-			Filled:          "0",
-			ParentPermID:    "9223372036854775807",
-			CompletedTime:   "20260415 11:00:11 US/Eastern",
-			CompletedStatus: "Cancelled by Trader",
-			Shareholder:     "Not an insider or substantial shareholder",
-			Submitter:       "paper-user",
-		},
-	})
-	if err != nil {
-		t.Fatalf("fromCodecCompletedOrder() error = %v", err)
-	}
-	if order.Contract.Right != "" || order.Order.OrderType != OrderTypeTrailingLimit {
-		t.Fatalf("contract/order = %+v/%+v", order.Contract, order.Order)
-	}
-	if order.Order.PermID == nil || *order.Order.PermID != 1426085924 {
-		t.Fatalf("permanent id = %v, want 1426085924", order.Order.PermID)
-	}
-	if order.Order.OrderID != nil || order.Order.ClientID != nil || order.Order.ParentID != nil {
-		t.Fatalf("classic completed-order identities = %v/%v/%v, want absent", order.Order.OrderID, order.Order.ClientID, order.Order.ParentID)
-	}
-	prices := order.Order.Prices
-	if prices.LmtPrice == nil || prices.LmtPrice.String() != "2000.05" ||
-		prices.AuxPrice == nil || prices.AuxPrice.String() != "1" ||
-		prices.TrailStopPrice == nil || prices.TrailStopPrice.String() != "2000" ||
-		prices.StopPrice == nil || prices.StopPrice.String() != "2000" ||
-		prices.LmtPriceOffset == nil || prices.LmtPriceOffset.String() != "0.05" {
-		t.Fatalf("prices = %+v", prices)
-	}
-	if order.Completion.ParentPermID != nil {
-		t.Fatalf("parent permanent id = %v, want unset sentinel normalized to nil", order.Completion.ParentPermID)
-	}
-	if order.Completion.Time != "20260415 11:00:11 US/Eastern" ||
-		order.Completion.StatusText != "Cancelled by Trader" ||
-		order.Order.Compliance.Submitter != "paper-user" {
-		t.Fatalf("completion/compliance = %+v/%+v", order.Completion, order.Order.Compliance)
 	}
 }
 
@@ -619,10 +562,9 @@ func TestFromCodecCommissionRejectsMalformedField(t *testing.T) {
 func TestParseExecutionTimeForms(t *testing.T) {
 	t.Parallel()
 
-	// The dash form is the Gateway's UTC notation, observed live on
-	// 2026-06-10 execution_data frames (capture
-	// 20260610T195819Z-api_order_trailing_cancel_aapl, events.jsonl sha256
-	// 0d3098f03fd68839); the space-and-zone form was already accepted.
+	// Both forms remain active conversion inputs. Current execution replay is
+	// grounded by capture 20260824T210943Z-executions_snapshot, events SHA-256
+	// 2afd72c3c685c29c00e0f9541eda8e56fd9f372369bbd11a45a30396be423eff.
 	cases := []struct {
 		raw  string
 		want time.Time

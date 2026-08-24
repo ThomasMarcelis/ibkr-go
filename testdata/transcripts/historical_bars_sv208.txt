@@ -1,0 +1,21 @@
+# Exact capture 20260713T155348Z-native_sv208_historical for native_sv208_historical at server_version 208.
+# events.jsonl sha256: fe2fa8c99197756bb7f3753a3c49ab51191efff2230c386c5ca9b8a9ca838849.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":208,"connection_time":"20260713 17:53:51 Central European Standard Time"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=classic payload_len=8
+raw server AAAACAAAAAkxADEA
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDQlb3h9TMYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARDQlb3h9TMYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDRlb3h9TMY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=20 encoding=protobuf payload_len=60
+raw client AAAAPAAAANwIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIgYxIGhvdXIqAzEgRDABOgZUUkFERVNAAQ==
+# leg=1 direction=server msg_id=17 encoding=protobuf payload_len=276
+raw server AAABFAAAANkIARJYChwyMDI2MDcxMyAwOTozMDowMCBVUy9FYXN0ZXJuEXE9Ctej0HNAGTMzMzMzN3RAITMzMzMzx3NAKexRuB6FE3RAMgc3NDkyMjAwOgczMjAuODU3QMaoAxJYChwyMDI2MDcxMyAxMDowMDowMCBVUy9FYXN0ZXJuEexRuB6FE3RAGc3MzMzMHHRAIVK4HoXr5XNAKYXrUbge8XNAMgc0MjU1MDQzOgczMjAuMDk4QP+yAhJYChwyMDI2MDcxMyAxMTowMDowMCBVUy9FYXN0ZXJuEa5H4XoU8nNAGUjhehSu83NAIT0K16NwwXNAKVK4HoXryXNAMgcyMTMyNTA5OgczMTcuNjIzQNmXAQ==
+# leg=1 direction=server msg_id=108 encoding=protobuf payload_len=66
+raw server AAAAQgAAATQIARIcMjAyNjA3MTIgMTE6NTM6NTEgVVMvRWFzdGVybhocMjAyNjA3MTMgMTE6NTM6NTEgVVMvRWFzdGVybg==
+disconnect

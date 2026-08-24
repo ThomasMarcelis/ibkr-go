@@ -2,6 +2,7 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -40,20 +41,19 @@ func (c *fragmentingConn) Read(p []byte) (int, error) {
 }
 
 // TestFrameReassemblyOneByteReads freezes the public receive path against the
-// exact sv206 historical-bars capture in grounded_historical_bars.txt while
+// exact sv225 historical entitlement capture while
 // forcing every handshake, frame prefix, and payload read through one-byte
 // fragments. The read counters make the fragmentation assertion non-vacuous.
 func TestFrameReassemblyOneByteReads(t *testing.T) {
 	t.Parallel()
 
 	dialer := &fragmentingDialer{maxRead: 1}
-	client, host := newClient(t, "grounded_historical_bars.txt", ibkr.WithDialer(dialer))
-	defer client.Close()
-	defer waitHost(t, host)
+	client, host := newClient(t, "historical_bars_subscription_required.txt", ibkr.WithDialer(dialer))
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+	_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock,
 			Exchange: "SMART", Currency: "USD",
@@ -61,14 +61,9 @@ func TestFrameReassemblyOneByteReads(t *testing.T) {
 		Duration: ibkr.Days(1), BarSize: ibkr.Bar1Hour,
 		WhatToShow: ibkr.ShowTrades, UseRTH: true,
 	})
-	if err != nil {
-		t.Fatalf("History().Bars() error = %v", err)
-	}
-	if len(bars) != 7 {
-		t.Fatalf("fragmented bars len = %d, want 7", len(bars))
-	}
-	if bars[0].Open.String() != "314.66" || bars[6].Close.String() != "315.33" {
-		t.Fatalf("fragmented bars lost data: first=%+v last=%+v len=%d", bars[0], bars[len(bars)-1], len(bars))
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.Code != ibkr.ErrCodeHistoricalDataSubscriptionRequired {
+		t.Fatalf("History().Bars() error = %v, want code 2188", err)
 	}
 	if calls, bytes := dialer.readCalls.Load(), dialer.readBytes.Load(); bytes < 100 || calls < bytes {
 		t.Fatalf("fragmentation was not exercised: read calls=%d bytes=%d", calls, bytes)

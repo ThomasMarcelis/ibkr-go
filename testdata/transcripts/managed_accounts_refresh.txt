@@ -1,13 +1,13 @@
-# Live-derived through Client.ManagedAccounts against the readonly Gateway at
-# server_version 206. The official API 10.48.01 SDK independently produced the
-# same request and response bytes.
-# Private capture: 20260711T011427Z-managed_accounts_refresh.
-# events.jsonl sha256: dc7a53d00e621d95e1f55ce518f225e0c1fa26e8806d5b7acf9bcbbaa252a095
-# The account is a deterministic length-preserving substitution. Farm-status
-# messages are omitted because they are unrelated to the singleton route.
-handshake {"server_version":206,"connection_time":"20260711 03:11:05 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-raw client AAAABgAAABExAA==
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
+# Exact readonly-live capture 20260824T200201Z-managed_accounts_refresh at
+# server_version 225. events.jsonl sha256:
+# 603b13efc714f4abfc15c0747f5fa66f05ed17e1ef3bf6f8c47938d7e1555773.
+# The account identifier is deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:02:00 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABwAAANEIxwM=
+raw server AAAAQwAAAMwI////////////ARCzqfaqgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAQQAAAMwI////////////ARCzqfaqgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+raw server AAAARgAAAMwI////////////ARCzqfaqgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAABAAAANk=
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
 disconnect

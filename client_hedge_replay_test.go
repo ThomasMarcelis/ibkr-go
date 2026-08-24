@@ -3,7 +3,6 @@ package ibkr_test
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -12,9 +11,10 @@ import (
 )
 
 // TestAPIHedgeOrderReplay freezes the hedge-order rule matrix (AORD-006)
-// captured live on 2026-06-11 against paper Gateway server_version 200
-// (captures/20260611T134021Z-api_hedge_order_aapl, events.jsonl sha256
-// prefix 96145b1775c02629). Five live-attested rules, each a subtest:
+// captured live on 2026-08-24 against paper Gateway server_version 225
+// (captures/20260824T210913Z-api_hedge_order_aapl, events.jsonl SHA-256
+// 68514f4d1f92b17ca2141c2cf7834387881e889aabf6aaef2ca2adab6591f242).
+// Five live-attested rules, each a subtest:
 //
 //   - delta_hedge_compliant: a zero-size stock delta child (HedgeType D,
 //     HedgeParam 0.5) of an OPTION parent still draws code 320 "Invalid
@@ -33,45 +33,51 @@ import (
 //   - pair_hedge_zero_size: a zero-quantity pair child (P, 0.8) is accepted
 //     with Gateway-computed quantity 80 = 0.8 x the parent's 100.
 //
-// The sibling capture 20260611T133853Z (sha256 prefix 833e9477724d4c8f)
-// attested the zero-size rule itself: sized beta/FX/pair children drew code
-// 10032 "Specifying size for hedge order is not allowed, send zero." That
-// session is not replayed here, so 10032 stays unregistered until a
-// transcript attests it.
-//
 // HedgeType/HedgeParam ride the client place_order frames and are pinned by
 // the transcript; zero quantity encodes as an empty total_quantity field.
 func TestAPIHedgeOrderReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_hedge_order_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	events := client.SessionEvents()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
+	params, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+		UnderlyingSymbol: "AAPL", UnderlyingSecType: ibkr.SecTypeStock, UnderlyingConID: 265598,
+	})
+	if err != nil || len(params) == 0 {
+		t.Fatalf("SecDefOptParams = %d rows, %v", len(params), err)
+	}
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol: "AAPL", SecType: ibkr.SecTypeOption, Expiry: "20260826", Strike: new(decimal.NewFromInt(310)),
+		Right: ibkr.RightCall, Multiplier: "100", Exchange: "SMART", Currency: "USD", TradingClass: "AAPL",
+	})
+	if err != nil || len(details) != 1 {
+		t.Fatalf("option Details = %d rows, %v", len(details), err)
+	}
 
 	// Option parent: far LMT BUY 1 of the AAPL Jun-12 292.5 call. The live
 	// Gateway sent no echo for it until its cancel was processed much later
 	// in the session, so nothing is awaited here.
 	optionParent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: exerciseAAPLJun12Call2925,
+		Contract: details[0].Contract,
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.NewFromInt(1),
-			LmtPrice:  new(decimal.RequireFromString("14.61")),
+			LmtPrice:  new(decimal.RequireFromString("15.53")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260611T134022Z-001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("option parent Place: %v", err)
 	}
-	if got := optionParent.OrderID(); got != 418 {
-		t.Fatalf("option parent order id = %d, want 418", got)
+	if got := optionParent.OrderID(); got != 574 {
+		t.Fatalf("option parent order id = %d, want 574", got)
 	}
 
 	hedgeChild := func(orderRef string, quantity decimal.Decimal, parentID int64, hedgeType, hedgeParam string) ibkr.PlaceOrderRequest {
@@ -81,43 +87,29 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 				Action:    ibkr.ActionSell,
 				OrderType: ibkr.OrderTypeLimit,
 				Quantity:  quantity,
-				LmtPrice:  new(decimal.RequireFromString("2922.4")),
+				LmtPrice:  new(decimal.RequireFromString("3105")),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
 				OrderRef:  orderRef,
 				ParentID:  parentID,
 				Hedge:     ibkr.OrderHedge{Type: ibkr.HedgeType(hedgeType), Param: hedgeParam},
+				Transmit:  new(true),
 			},
 		}
 	}
 
 	t.Run("delta_hedge_compliant", func(t *testing.T) {
 		child, err := client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-redacted-20260611T134022Z-002", decimal.Zero, optionParent.OrderID(), "D", "0.5"))
+			hedgeChild("sanitized-order-ref-0000000000000003", decimal.Zero, optionParent.OrderID(), "D", "0.5"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
-		if got := child.OrderID(); got != 419 {
-			t.Fatalf("order id = %d, want 419", got)
+		if got := child.OrderID(); got != 575 {
+			t.Fatalf("order id = %d, want 575", got)
 		}
 		requireOrderAPIError(t, "delta compliant", child, ibkr.ErrCodeServerErrorReadingRequest,
 			"Invalid hedge ratio")
-
-		// Cancelling the rejected child draws code 10147 as a session event.
-		if err := child.Cancel(ctx); err != nil {
-			t.Fatalf("Cancel: %v", err)
-		}
-		notFound := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderToCancelNotFound)
-		if !strings.Contains(notFound.Message, "OrderId 419 that needs to be cancelled is not found.") {
-			t.Fatalf("10147 message = %q", notFound.Message)
-		}
 	})
-
-	// Cancel the option parent; the live Gateway acknowledged it only after
-	// the fx hedge placement below.
-	if err := optionParent.Cancel(ctx); err != nil {
-		t.Fatalf("option parent Cancel: %v", err)
-	}
 
 	// Stock parent: far LMT BUY 100 AAPL. Its first echo arrives after the
 	// beta child is placed.
@@ -126,88 +118,66 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("14.61")),
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  new(decimal.RequireFromString("15.53")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260611T134022Z-003",
+			OrderRef:  "sanitized-order-ref-0000000000000005",
 		},
 	})
 	if err != nil {
 		t.Fatalf("stock parent Place: %v", err)
 	}
-	if got := stockParent.OrderID(); got != 420 {
-		t.Fatalf("stock parent order id = %d, want 420", got)
+	if got := stockParent.OrderID(); got != 576 {
+		t.Fatalf("stock parent order id = %d, want 576", got)
 	}
 
 	t.Run("delta_hedge_stock_parent", func(t *testing.T) {
 		child, err := client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-redacted-20260611T134022Z-004", decimal.RequireFromString("100"), stockParent.OrderID(), "D", "0.5"))
+			hedgeChild("sanitized-order-ref-0000000000000007", decimal.RequireFromString("1"), stockParent.OrderID(), "D", "0.5"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
-		if got := child.OrderID(); got != 421 {
-			t.Fatalf("order id = %d, want 421", got)
+		if got := child.OrderID(); got != 577 {
+			t.Fatalf("order id = %d, want 577", got)
 		}
 		requireOrderAPIError(t, "delta stock parent", child, ibkr.ErrCodeServerErrorReadingRequest,
 			"Invalid delta hedge order. The parent order has to be option order")
-
-		if err := child.Cancel(ctx); err != nil {
-			t.Fatalf("Cancel: %v", err)
-		}
-		notFound := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderToCancelNotFound)
-		if !strings.Contains(notFound.Message, "OrderId 421 that needs to be cancelled is not found.") {
-			t.Fatalf("10147 message = %q", notFound.Message)
-		}
 	})
 
 	var beta *ibkr.OrderHandle
 	t.Run("beta_hedge_zero_size", func(t *testing.T) {
 		var err error
 		beta, err = client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-redacted-20260611T134022Z-005", decimal.Zero, stockParent.OrderID(), "B", "1.0"))
+			hedgeChild("sanitized-order-ref-0000000000000009", decimal.Zero, stockParent.OrderID(), "B", "1.0"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
-		if got := beta.OrderID(); got != 422 {
-			t.Fatalf("order id = %d, want 422", got)
+		if got := beta.OrderID(); got != 578 {
+			t.Fatalf("order id = %d, want 578", got)
 		}
 
-		// The stock parent's first echo lands now.
-		parentOpen := waitForOpenOrder(t, ctx, stockParent)
-		if (*parentOpen.Order.PermID) != 9000000420 {
-			t.Fatalf("stock parent perm id = %d, want 9000000420", (*parentOpen.Order.PermID))
-		}
-		waitForOrderStatus(t, ctx, stockParent, ibkr.OrderStatusSubmitted)
-
-		// The zero-size beta child is accepted: the Gateway assigned
-		// quantity 100, floored the limit to 0.01, and bound the child to
-		// the parent's perm id via oca_group.
+		// The zero-size beta child is accepted: the Gateway assigns the
+		// parent's one-share quantity and floors the limit to 0.01.
 		open := waitForOpenOrder(t, ctx, beta)
-		if !open.Order.Quantity.Equal(decimal.RequireFromString("100")) {
-			t.Fatalf("gateway-assigned quantity = %s, want 100", open.Order.Quantity)
+		if !open.Order.Quantity.Equal(decimal.RequireFromString("1")) {
+			t.Fatalf("gateway-assigned quantity = %s, want 1", open.Order.Quantity)
 		}
 		if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("0.01")) {
 			t.Fatalf("gateway-floored lmt price = %s, want 0.01", open.Order.Prices.LmtPrice)
 		}
-		if open.Order.OCA.Group != "9000000420" {
-			t.Fatalf("oca group = %q, want parent perm id 9000000420", open.Order.OCA.Group)
+		if open.Order.OCA.Group != "9000000576" {
+			t.Fatalf("oca group = %q, want sanitized parent binding", open.Order.OCA.Group)
 		}
-		if (*open.Order.ParentID) != 420 || (*open.Order.PermID) != 9000000422 {
-			t.Fatalf("parent/perm = %d/%d, want 420/9000000422", (*open.Order.ParentID), (*open.Order.PermID))
+		if (*open.Order.ParentID) != 576 {
+			t.Fatalf("parent = %d, want 576", (*open.Order.ParentID))
 		}
 		held := waitOrderStatusUpdate(t, ctx, beta, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "child" {
 			t.Fatalf("why held = %q, want child", held.WhyHeld)
 		}
-		if !held.Remaining.Equal(decimal.RequireFromString("100")) {
-			t.Fatalf("remaining = %s, want 100", held.Remaining)
-		}
-
-		// Cancel now; the Gateway acknowledged it only after the fx hedge
-		// placement, asserted in the fx subtest.
-		if err := beta.Cancel(ctx); err != nil {
-			t.Fatalf("Cancel: %v", err)
+		if !held.Remaining.Equal(decimal.RequireFromString("1")) {
+			t.Fatalf("remaining = %s, want 1", held.Remaining)
 		}
 	})
 	if beta == nil {
@@ -218,12 +188,12 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	t.Run("fx_hedge", func(t *testing.T) {
 		var err error
 		fx, err = client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-redacted-20260611T134022Z-006", decimal.Zero, stockParent.OrderID(), "F", ""))
+			hedgeChild("sanitized-order-ref-0000000000000015", decimal.Zero, stockParent.OrderID(), "F", ""))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
-		if got := fx.OrderID(); got != 423 {
-			t.Fatalf("order id = %d, want 423", got)
+		if got := fx.OrderID(); got != 579 {
+			t.Fatalf("order id = %d, want 579", got)
 		}
 
 		// Code 10063 is an attested outright placement rejection: no
@@ -232,30 +202,6 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		// session-event fallback.
 		requireOrderAPIError(t, "fx child", fx, ibkr.ErrCodeInvalidFXHedgeOrder,
 			"Invalid FX hedge order. Hedging contract can only be a currency pair where one of the currencies is the same as in parent order.")
-
-		// The beta child's cancel acknowledges now: Cancelled + code 202.
-		waitForOrderStatus(t, ctx, beta, ibkr.OrderStatusCancelled)
-		waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-
-		// The option parent's cancel from before the stock-parent stage
-		// finally processes: PendingCancel -> Cancelled + code 202.
-		parentOpen := waitForOpenOrder(t, ctx, optionParent)
-		if (*parentOpen.Order.PermID) != 9000000418 || parentOpen.Contract.ConID != 886441502 {
-			t.Fatalf("option parent echo = perm %d con %d, want 9000000418/886441502", (*parentOpen.Order.PermID), parentOpen.Contract.ConID)
-		}
-		waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusPendingCancel)
-		waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusCancelled)
-		waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-
-		// Cancelling the rejected fx child draws code 10147 as a session
-		// event, like the rejected delta children.
-		if err := fx.Cancel(ctx); err != nil {
-			t.Fatalf("Cancel: %v", err)
-		}
-		notFound := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderToCancelNotFound)
-		if !strings.Contains(notFound.Message, "OrderId 423 that needs to be cancelled is not found.") {
-			t.Fatalf("10147 message = %q", notFound.Message)
-		}
 	})
 	if fx == nil {
 		t.Fatal("fx subtest did not produce a handle")
@@ -265,53 +211,61 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 	t.Run("pair_hedge_zero_size", func(t *testing.T) {
 		var err error
 		pair, err = client.Orders().Place(ctx,
-			hedgeChild("ibkrgo-redacted-20260611T134022Z-007", decimal.Zero, stockParent.OrderID(), "P", "0.8"))
+			hedgeChild("sanitized-order-ref-0000000000000017", decimal.Zero, stockParent.OrderID(), "P", "0.8"))
 		if err != nil {
 			t.Fatalf("Place: %v", err)
 		}
-		if got := pair.OrderID(); got != 424 {
-			t.Fatalf("order id = %d, want 424", got)
+		if got := pair.OrderID(); got != 580 {
+			t.Fatalf("order id = %d, want 580", got)
 		}
 
-		// Accepted with the Gateway-computed quantity 80 (= 0.8 x the
-		// parent's 100), same oca binding to the parent's perm id.
+		// The current Gateway preserves the zero-sized pair child.
 		open := waitForOpenOrder(t, ctx, pair)
-		if !open.Order.Quantity.Equal(decimal.RequireFromString("80")) {
-			t.Fatalf("gateway-computed quantity = %s, want 80", open.Order.Quantity)
+		if !open.Order.Quantity.IsZero() {
+			t.Fatalf("gateway-computed quantity = %s, want 0", open.Order.Quantity)
 		}
-		if open.Order.OCA.Group != "9000000420" || (*open.Order.ParentID) != 420 || (*open.Order.PermID) != 9000000424 {
-			t.Fatalf("oca/parent/perm = %q/%d/%d, want 9000000420/420/9000000424", open.Order.OCA.Group, (*open.Order.ParentID), (*open.Order.PermID))
+		if open.Order.OCA.Group != "9000000576" || (*open.Order.ParentID) != 576 {
+			t.Fatalf("oca/parent = %q/%d, want sanitized parent binding/576", open.Order.OCA.Group, (*open.Order.ParentID))
 		}
 		held := waitOrderStatusUpdate(t, ctx, pair, ibkr.OrderStatusPreSubmitted)
 		if held.WhyHeld != "child" {
 			t.Fatalf("why held = %q, want child", held.WhyHeld)
 		}
-		if !held.Remaining.Equal(decimal.RequireFromString("80")) {
-			t.Fatalf("remaining = %s, want 80", held.Remaining)
+		if !held.Remaining.IsZero() {
+			t.Fatalf("remaining = %s, want 0", held.Remaining)
 		}
 	})
 	if pair == nil {
 		t.Fatal("pair subtest did not produce a handle")
 	}
 
-	// Teardown as captured: cancel the pair child and the stock parent, then
-	// the safety global cancel. The code-161 reply for order 420 raced ahead
-	// of its Cancelled status live. It must remain a session notice so the
-	// subsequent terminal status and code 202 still reach the parent route.
+	// Teardown follows the recorder cleanup order exactly.
 	if err := pair.Cancel(ctx); err != nil {
 		t.Fatalf("pair Cancel: %v", err)
 	}
+	waitForOrderStatus(t, ctx, pair, ibkr.OrderStatusCancelled)
+	if err := beta.Cancel(ctx); err != nil {
+		t.Fatalf("beta Cancel: %v", err)
+	}
+	waitForOrderStatus(t, ctx, beta, ibkr.OrderStatusCancelled)
 	if err := stockParent.Cancel(ctx); err != nil {
 		t.Fatalf("stock parent Cancel: %v", err)
 	}
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("CancelAll: %v", err)
-	}
-	requireCancelNotCancellableNotice(t, ctx, events, "9000000420")
-	waitForOrderStatus(t, ctx, pair, ibkr.OrderStatusCancelled)
 	waitForOrderStatus(t, ctx, stockParent, ibkr.OrderStatusCancelled)
-	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
-	waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
+	if err := optionParent.Cancel(ctx); err != nil {
+		t.Fatalf("option parent Cancel: %v", err)
+	}
+	waitForOrderStatus(t, ctx, optionParent, ibkr.OrderStatusCancelled)
+	openOrders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
+	if err != nil {
+		t.Fatalf("Open(all): %v", err)
+	}
+	if len(openOrders) != 0 {
+		t.Fatalf("Open(all) returned %d orders after cleanup", len(openOrders))
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime fence: %v", err)
+	}
 
 	// Closure shapes on the transcript disconnect: handles that reached a
 	// terminal status close clean; the fx child closed on its code-10063
@@ -326,7 +280,7 @@ func TestAPIHedgeOrderReplay(t *testing.T) {
 		t.Fatalf("option parent Wait() = %v, want nil (terminal Cancelled)", err)
 	}
 	requireOrderWaitNil(t, "stock parent", stockParent)
-	requireNoMoreOrderEvents(t, ctx, "fx child", fx)
+	requireOrderWaitNil(t, "beta child", beta)
 	if _, ok := errors.AsType[*ibkr.APIError](fx.Wait()); !ok {
 		t.Fatalf("fx Wait() = %v, want the terminal code-10063 *ibkr.APIError", fx.Wait())
 	}

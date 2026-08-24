@@ -1,0 +1,15 @@
+# Exact capture 20260825T192551Z-api_tick_news_aapl_probe at server_version 225.
+# events.jsonl sha256: 1051f51ac8dd20cd3b7e22b404c678bed805673851eb72f90dd451987715d6b8.
+# The managed-account callback is deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260825 21:25:51 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABgAAANEIAQ==
+raw client AAAABgAAAQMIAw==
+raw client AAAAMwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEGg5tZG9mZiwyOTI6QlJGRw==
+raw server AAAACAAAAQIIARAD
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw server AAAAnAAAARwIARC44cbVozMaBEJSRkciDUJSRkckMWM5MjFmN2MqTkFwcGxlJ3MgU3Ryb25nIFE0IFNldHMgU3RhZ2UgZm9yIFJlY29yZCBRMSwgQnV0IEludmVzdG9ycyBXYW50IE1vcmUgQUkgQ2xhcml0eTIoQTo4MDAwMTU6TDplbjpLOjAuOTA6QzowLjg5NzI2ODUzMzcwNjY2NQ==
+raw client AAAABgAAAMoIAQ==
+raw client AAAABAAAAPk=
+raw server AAAACgAAAPkIwNi31AY=
+disconnect

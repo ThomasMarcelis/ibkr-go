@@ -1,12 +1,19 @@
-# Live-derived from /tmp/ibkr-history-final-captures/
-# 20260710T224442Z-head_timestamp_aapl at server_version 206; events.jsonl sha256:
-# 9bbb8f8f025db049af0917c0a4412dfdeeca92be674ab4651f0129a0cd1de206.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted.
-# The AAPL request and timestamp response are exact.
-handshake {"server_version":206,"connection_time":"20260711 00:44:41 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-raw client AAAANAAAAFcxADI2NTU5OABBQVBMAFNUSwAAAAAAU01BUlQAAFVTRAAAADAAMQBUUkFERVMAMQA=
-raw server AAAAGAAAAFgxADE5ODAxMjEyLTE0OjMwOjAwAA==
+# Exact capture 20260824T212308Z-head_timestamp_aapl for head_timestamp_aapl at server_version 225.
+# events.jsonl sha256: 5e4b310b147d9e702788422c77893807730f518a7c73375ec165d5e2343eb441.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 23:23:08 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEIxQQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDBtZ+tgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARDBtZ+tgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDBtZ+tgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=87 encoding=protobuf payload_len=47
+raw client AAAALwAAAR8IARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEGAEiBlRSQURFUygB
+# leg=1 direction=server msg_id=88 encoding=protobuf payload_len=25
+raw server AAAAGQAAASAIARIRMTk4MDEyMTItMTQ6MzA6MDA=
 disconnect

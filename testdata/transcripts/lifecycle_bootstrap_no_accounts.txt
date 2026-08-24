@@ -1,8 +1,8 @@
-# The next-valid-id frame comes from captures/20260405T214926Z-bootstrap at
-# server_version 200; events.jsonl sha256:
-# 8ea1dff420928fb3cc5a128072eae1672d83997f24bf66c69248b2205ee9b16c.
+# The next-valid-id frame comes from capture 20260824T202739Z-bootstrap at
+# server_version 225; events.jsonl sha256:
+# 8cb6162fc19602ffa58deaa44df1f9fd220444e2a4e11f1beac05b6a03106643.
 # This fault scenario deliberately omits the captured managed-accounts frame.
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-raw server AAAABjkAMQAxAA==
+handshake {"server_version":225,"connection_time":"20260824 22:27:38 CET"}
+raw server AAAABgAAANEIAQ==
 sleep 6s
 disconnect

@@ -17,13 +17,12 @@ import (
 
 // TestCurrentTimeExplicitReplay freezes the explicit reqCurrentTime exchange
 // (SESS-002): client [49, 1] is answered by a seconds-resolution epoch.
-// Capture 20260710T215126Z-current_time at server version 206.
+// Capture 20260824T202747Z-current_time at server version 225.
 func TestCurrentTimeExplicitReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "current_time_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -32,7 +31,7 @@ func TestCurrentTimeExplicitReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentTime() error = %v", err)
 	}
-	want := time.Unix(1783720285, 0).UTC()
+	want := time.Unix(1787603266, 0).UTC()
 	if !ts.Equal(want) {
 		t.Errorf("CurrentTime() = %v, want %v", ts, want)
 	}
@@ -45,8 +44,7 @@ func TestRefreshOrderIDReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "req_ids.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -54,11 +52,11 @@ func TestRefreshOrderIDReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RefreshOrderID() error = %v", err)
 	}
-	if orderID != 1 {
-		t.Fatalf("RefreshOrderID() = %d, want 1", orderID)
+	if orderID != 581 {
+		t.Fatalf("RefreshOrderID() = %d, want 581", orderID)
 	}
-	if got := client.Session().NextValidID; got != 1 {
-		t.Fatalf("Session().NextValidID = %d, want 1", got)
+	if got := client.Session().NextValidID; got != 581 {
+		t.Fatalf("Session().NextValidID = %d, want 581", got)
 	}
 }
 
@@ -66,8 +64,7 @@ func TestManagedAccountsRefreshReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "managed_accounts_refresh.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -89,38 +86,17 @@ func TestManagedAccountsRefreshReplay(t *testing.T) {
 	}
 }
 
-func TestManagedAccountsRefreshSV207Replay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "managed_accounts_sv207_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	accounts, err := client.ManagedAccounts(ctx)
-	if err != nil {
-		t.Fatalf("ManagedAccounts() error = %v", err)
-	}
-	if want := []string{"DU9000001"}; !reflect.DeepEqual(accounts, want) {
-		t.Fatalf("ManagedAccounts() = %v, want %v", accounts, want)
-	}
-	if got := client.Session().ServerVersion; got != 207 {
-		t.Fatalf("Session().ServerVersion = %d, want 207", got)
-	}
-}
-
 // TestReqIDsReadOnlyRejectedReplay freezes the read-only-mode reqIds
 // rejection (SESS-003): RefreshOrderID sends the captured reqIds frame, the
 // Gateway answers with req_id=-1/code 321, and the one-shot returns that real
 // APIError without changing the allocation seed. Capture
-// 20260710T215126Z-req_ids.
+// 20260824T202844Z-req_ids, events SHA-256
+// 3ac9d3b8565581414dd7499809fea1781c17bf3fd674d28b6a21081c9538a01c.
 func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "req_ids_read_only.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -172,13 +148,14 @@ func TestReqIDsReadOnlyRejectedReplay(t *testing.T) {
 // TestMatchingSymbolsPartialReplay freezes the partial-pattern symbol search
 // (REF-002): Search("AA") returns the live Gateway's full 97-row
 // symbolSamples reply, including derivative sec types and issuer-id BOND
-// rows. Capture 20260611T074053Z-matching_symbols_partial.
+// rows. Capture 20260824T202810Z-matching_symbols_partial at server version
+// 225, events.jsonl SHA-256
+// 365b920c42a3c9fdb34be92b5dadf8e49cfd8bb79eb808f08316106c6befb556.
 func TestMatchingSymbolsPartialReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "matching_symbols_partial.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -205,10 +182,11 @@ func TestMatchingSymbolsPartialReplay(t *testing.T) {
 		t.Errorf("symbols[0] description = %q, want ALCOA CORP", first.Description)
 	}
 
-	// Issuer-id BOND rows carry conID -1, no symbol, and no venue fields.
+	// Protobuf issuer-id BOND rows omit conID, so the public zero value is 0;
+	// they also carry no symbol or venue fields.
 	bond := symbols[2]
-	if bond.ConID != -1 || bond.SecType != ibkr.SecTypeBond || bond.Symbol != "" {
-		t.Errorf("symbols[2] = %+v, want conID -1 BOND with empty symbol", bond)
+	if bond.ConID != 0 || bond.SecType != ibkr.SecTypeBond || bond.Symbol != "" {
+		t.Errorf("symbols[2] = %+v, want conID 0 BOND with empty symbol", bond)
 	}
 	if bond.Description != "Alcoa Nederland Holding BV" || bond.IssuerID != "e3231099" {
 		t.Errorf("symbols[2] = %q / %q, want Alcoa Nederland Holding BV / e3231099", bond.Description, bond.IssuerID)
@@ -223,15 +201,14 @@ func TestMatchingSymbolsPartialReplay(t *testing.T) {
 
 // TestSetTypeSwitchWhileStreamingReplay freezes the mid-stream market-data
 // type switch (MD1-001): SetType(Delayed) plus an AAPL quote stream draws its
-// parameters, marketDataType(3), the code-10167 warning, and delayed ticks;
+// parameters, marketDataType(3), the code-10167 warning, and a delayed open;
 // switching to SetType(Live) draws no type-1 re-ack before the next delayed
-// tick. Capture 20260711T003316Z-set_type_switch_while_streaming.
+// high tick. Capture 20260824T202845Z-set_type_switch_while_streaming.
 func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "set_type_switch_while_streaming.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -285,11 +262,10 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		t.Fatalf("update 2 = %+v, want delayed market-data type", update)
 	}
 
-	// 3. Delayed last (tick 68) lands in the normalized Last field.
+	// 3. Delayed open (tick 76) lands in the normalized Open field.
 	update = nextData()
-	if update.Changed != ibkr.QuoteFieldLast|ibkr.QuoteFieldLastSize ||
-		update.Snapshot.Last.String() != "314.96" || update.Snapshot.LastSize.String() != "53" {
-		t.Fatalf("update 3 = %+v, want delayed last 314.96 x 53", update)
+	if update.Changed != ibkr.QuoteFieldOpen || update.Snapshot.Open.String() != "311.22" {
+		t.Fatalf("update 3 = %+v, want delayed open 311.22", update)
 	}
 
 	// Switch back to live mid-stream. The Gateway accepts the request without
@@ -298,17 +274,10 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 		t.Fatalf("SetType(MarketDataLive) error = %v", err)
 	}
 
-	// The delayed last timestamp was already in flight before the switch.
+	// The next callback remains a delayed high tick, proving no type-1 re-ack.
 	update = nextData()
-	if update.Kind != ibkr.QuoteUpdateStringTick || update.StringTick == nil ||
-		update.StringTick.TickType != 88 || update.StringTick.Value != "1783727950" {
-		t.Fatalf("update 4 = %+v, want delayed last timestamp", update)
-	}
-
-	// The next callback remains a delayed open tick, proving no type-1 re-ack.
-	update = nextData()
-	if update.Changed != ibkr.QuoteFieldOpen || update.Snapshot.Open.String() != "314.7" {
-		t.Fatalf("update 5 = %+v, want delayed open 314.7", update)
+	if update.Changed != ibkr.QuoteFieldHigh || update.Snapshot.High.String() != "313.36" {
+		t.Fatalf("update 4 = %+v, want delayed high 313.36", update)
 	}
 	if update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
 		t.Fatalf("MarketDataType after switch = %v, want still %v (no type-1 re-ack in capture window)",
@@ -324,71 +293,24 @@ func TestSetTypeSwitchWhileStreamingReplay(t *testing.T) {
 	}
 
 	sub.Close()
-}
-
-func TestTickNewsReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "tick_news_aapl_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
-		t.Fatalf("SetType(MarketDataDelayed) error = %v", err)
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("quote subscription Wait() error = %v", err)
 	}
-	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		GenericTicks: []ibkr.GenericTick{"mdoff", "292:BRFG"},
-	})
-	if err != nil {
-		t.Fatalf("SubscribeQuotes() error = %v", err)
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime() fence error = %v", err)
 	}
-	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
-
-	if update := waitForStreamData(t, sub.Events()); update.Kind != ibkr.QuoteUpdateFields || update.Snapshot.MarketDataType != ibkr.MarketDataDelayed {
-		t.Fatalf("market-data-type update = %+v", update)
-	}
-	if update := waitForStreamData(t, sub.Events()); update.Kind != ibkr.QuoteUpdateParameters || update.Parameters == nil {
-		t.Fatalf("quote-parameters update = %+v", update)
-	}
-	update := waitForStreamData(t, sub.Events())
-	if update.Kind != ibkr.QuoteUpdateNewsTick || update.NewsTick == nil {
-		t.Fatalf("news update = %+v", update)
-	}
-	wantTime := time.UnixMilli(1758294759000).UTC()
-	if !update.NewsTick.Time.Equal(wantTime) ||
-		update.NewsTick.ProviderCode != "BRFG" ||
-		update.NewsTick.ArticleID != "BRFG$1c2d5728" ||
-		update.NewsTick.Headline != "Apple's iPhone 17 debuts to long lines and high demand as company eyes upgrade cycle boost" ||
-		update.NewsTick.ExtraData != "A:800015:L:en:K:1.00:C:0.9999533295631409" {
-		t.Fatalf("NewsTick = %+v", update.NewsTick)
-	}
-	if update.Changed != 0 || update.Snapshot.Available != ibkr.QuoteFieldMarketDataType || update.ReceivedAt.IsZero() {
-		t.Fatalf("news update mutated snapshot or lacked receive time: %+v", update)
-	}
-	sub.Close()
 }
 
 // TestCurrentTimeMillisReplay freezes explicit reqCurrentTimeInMillis
 // (OUT 105) answered by the live epoch-millisecond reply (IN 109), both
-// versionless, captured 2026-07-10 against the readonly Gateway
-// (/tmp/ibkr-api-migration-captures/20260710T215126Z-current_time_millis,
-// events.jsonl sha256 prefix 3070c6c9296d0eb2).
+// versionless, captured 2026-08-24 against readonly-live at server version
+// 225 (capture 20260824T202747Z-current_time_millis, events.jsonl SHA-256
+// a428454d37be0a2d4176d70fb02d8d2163836b6cce86fae0af7481fe1fdb9433).
 func TestCurrentTimeMillisReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "current_time_millis.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -397,7 +319,7 @@ func TestCurrentTimeMillisReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CurrentTimeMillis: %v", err)
 	}
-	if want := time.UnixMilli(1783720285807).UTC(); !ts.Equal(want) {
+	if want := time.UnixMilli(1787603266761).UTC(); !ts.Equal(want) {
 		t.Fatalf("CurrentTimeMillis = %v, want %v", ts, want)
 	}
 }

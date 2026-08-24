@@ -8,8 +8,8 @@ import (
 )
 
 // The callback vectors come from executions.txt (paper Gateway,
-// server_version 200, SHA-256
-// 91b7b157002bef352b1bae8eb79d3aca1057a43cf3ffcf9497c8f1369b816ddc).
+// server_version 225, events.jsonl SHA-256
+// 2afd72c3c685c29c00e0f9541eda8e56fd9f372369bbd11a45a30396be423eff).
 func TestExecutionEventObserverSeesEveryCapturedCallback(t *testing.T) {
 	t.Parallel()
 

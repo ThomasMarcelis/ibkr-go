@@ -108,3 +108,13 @@ func TestPrimarySentinelErrorsRenderOnOneLine(t *testing.T) {
 		})
 	}
 }
+
+func TestInterruptedDoesNotWrapItsSentinelTwice(t *testing.T) {
+	t.Parallel()
+
+	protocolErr := &ProtocolError{Direction: "inbound", Err: io.ErrUnexpectedEOF}
+	once := interrupted(protocolErr)
+	if got := interrupted(once); got != once {
+		t.Fatalf("interrupted(interrupted(cause)) = %v, want original error", got)
+	}
+}

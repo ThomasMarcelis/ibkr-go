@@ -1,20 +1,31 @@
-# Two concurrent summaries captured in
-# captures/20260405T215043Z-account_summary_two_subs at server_version 200;
-# events.jsonl sha256:
-# 421b46939011e596ac8877e7d2e59ecb2cee31a968fb236820b424bb1e66dd99.
-# Account, values, and request IDs are deterministic sanitized substitutions.
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-raw server AAAADzE1ADEARFU5MDAwMDAxAA==
-raw server AAAABjkAMQAxAA==
-raw server AAAAQjQALTEAMjEwNABNYXJrZXQgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNmYXJtAAAxNzc1NDI1ODQyMjAwAA==
-raw server AAAAQDQALTEAMjEwNgBITURTIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnVzaG1kcwAAMTc3NTQyNTg0MjIwMAA=
-raw server AAAARTQALTEAMjE1OABTZWMtZGVmIGRhdGEgZmFybSBjb25uZWN0aW9uIGlzIE9LOnNlY2RlZm5qAAAxNzc1NDI1ODQyMjAwAA==
-raw client AAAAGjYyADEAMQBBbGwATmV0TGlxdWlkYXRpb24A
-raw client AAAAGjYyADEAMgBBbGwAVG90YWxDYXNoVmFsdWUA
-raw server AAAALTYzADEAMQBEVTkwMDAwMDEATmV0TGlxdWlkYXRpb24ANjgwMDAuMDAARVVSAA==
-raw server AAAABzY0ADEAMQA=
-raw server AAAALTYzADEAMgBEVTkwMDAwMDEAVG90YWxDYXNoVmFsdWUAMTIwMDAuMDAARVVSAA==
-raw server AAAABzY0ADEAMgA=
-raw client AAAABzYzADEAMQA=
-raw client AAAABzYzADEAMgA=
+# Exact capture 20260824T202345Z-account_summary_two_subs for account_summary_two_subs at server_version 225.
+# events.jsonl sha256: df4da95f70fb236c4839abc0fbbfcb5dc3de264b701b040eae994537b305c81e.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:23:44 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDq9MWrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARDq9MWrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDq9MWrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=62 encoding=protobuf payload_len=27
+raw client AAAAGwAAAQYIARIDQWxsGg5OZXRMaXF1aWRhdGlvbg==
+# leg=1 direction=client msg_id=62 encoding=protobuf payload_len=27
+raw client AAAAGwAAAQYIAhIDQWxsGg5Ub3RhbENhc2hWYWx1ZQ==
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=48
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5OZXRMaXF1aWRhdGlvbiIIMzY5OTIuNDkqA0VVUg==
+# leg=1 direction=server msg_id=64 encoding=protobuf payload_len=6
+raw server AAAABgAAAQgIAQ==
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=48
+raw server AAAAMAAAAQcIAhIJRFU5MDAwMDAxGg5Ub3RhbENhc2hWYWx1ZSIILTE0NDEuNjcqA0VVUg==
+# leg=1 direction=server msg_id=64 encoding=protobuf payload_len=6
+raw server AAAABgAAAQgIAg==
+# leg=1 direction=client msg_id=63 encoding=protobuf payload_len=6
+raw client AAAABgAAAQcIAQ==
+# leg=1 direction=client msg_id=63 encoding=protobuf payload_len=6
+raw client AAAABgAAAQcIAg==
 disconnect

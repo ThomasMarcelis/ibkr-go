@@ -1,14 +1,16 @@
-# Fault-injection replay using the exact what-if order request from paper IB
-# Gateway server_version 207 capture 20260711T040155Z-api_whatif_margin_aapl.
-# events.jsonl sha256:
-# c03cddc62e4694577a62b6c679487f30a0c243565d3cc1bd508fbbf1a8283548
-#
-# Account and order-reference values are length-preserving redactions. Ambient
-# farm-status and startup-cleanup frames are omitted. The transport closes after
-# the captured request and before its captured open-order preview response.
-handshake {"server_version":207,"connection_time":"20260711 06:01:54 Central European Standard Time"}
+# Disconnect fault injection over exact paper IB Gateway server_version 225
+# frames from capture 20260824T210426Z-api_whatif_margin_aapl; events.jsonl
+# sha256: 686932b92e69fcf4030a9637d82117682be8c76d1039819d048ee58272ae81ee.
+# The two captured rejected previews advance the engine to the exact captured
+# third request. The transport then closes before that request's captured
+# open-order response. No broker or client frame is edited or synthesized.
+handshake {"server_version":225,"connection_time":"20260824 23:04:25 CET"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
-raw server AAAACgAAAAkxADQ1NAA=
-raw client AAAAkwAAAMsIxgMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBprIAAqA0JVWTIDMTAwOABCA01LVFoDREFZYglEVTkwMDAwMDHiASRpYmtyZ28tcmVkYWN0ZWQtMjAyNjA3MTFUMDQwMTU1Wi0wMDHwAQD4AQCIBAGQBAGoBADABP///////////wGQBgDKBgAiAA==
+raw server AAAABwAAANEIrgQ=
+raw client AAAAkwAAAMsIrgQSHQgAEghaWlpaTk9ORRoDU1RLQgVTTUFSVFIDVVNEGmkgACoDQlVZMgExOABCA01LVFoDREFZYglEVTkwMDAwMDHiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQD4AQCIBAGQBAGoBADABP///////////wGQBgDKBgAiAA==
+raw server AAAASAAAAMwIrgQQ+PXarIM0GMgBIjVObyBzZWN1cml0eSBkZWZpbml0aW9uIGhhcyBiZWVuIGZvdW5kIGZvciB0aGUgcmVxdWVzdA==
+raw client AAABGAAAAMsIrwQSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBrvASAAKgNCVVkyATE4AUIDTE1USQAAAAAAwGJAWgNEQVliCURVOTAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMvABAPgBAOoDB0RhcmtJY2XyAxUKEGFsbG93UGFzdEVuZFRpbWUSATHyAxAKC2Rpc3BsYXlTaXplEgEx8gMgCgdlbmRUaW1lEhUyMDI2MDgyNCAyMToyNDoyNiBVVEPyAyIKCXN0YXJ0VGltZRIVMjAyNjA4MjQgMjE6MDc6MjYgVVRDiAQBkAQBqAQAwAT///////////8BkAYAygYAIgA=
+raw server AAAAWgAAAMwIrwQQ9ffarIM0GI9QIkdUaGUgJ0Rpc3BsYXkgU2l6ZScgb3JkZXIgYXR0cmlidXRlIG1heSBub3QgYmUgc3BlY2lmaWVkIGZvciB0aGlzIG9yZGVyLg==
+raw client AAAAkwAAAMsIsAQSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBprIAAqA0JVWTIDMTAwOABCA01LVFoDREFZYglEVTkwMDAwMDHiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDPwAQD4AQCIBAGQBAGoBADABP///////////wGQBgDKBgAiAA==
 sleep 50ms
 disconnect

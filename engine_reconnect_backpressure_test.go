@@ -6,7 +6,6 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"strconv"
 	"testing"
 	"time"
 
@@ -27,7 +26,7 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 		done:           make(chan struct{}),
 		events:         newObserver[Event](1),
 		transport:      transport.New(client, logger, 0),
-		serverVersion:  200,
+		serverVersion:  225,
 		keyed:          make(map[int]*route),
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
@@ -85,23 +84,23 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 	frames := make(chan []int, 1)
 	go func() {
 		ids := make([]int, 0, routeCount)
-		for range routeCount {
+		for reqID := 1; reqID <= routeCount; reqID++ {
 			payload, err := transport.ReadOneFrame(peer, time.Now().Add(5*time.Second))
 			if err != nil {
 				frames <- nil
 				return
 			}
-			fields := bytes.Split(payload, []byte{0})
-			if len(fields) < 3 {
+			want, err := codec.Encode(225, codec.QuoteRequest{
+				ReqID: reqID,
+				Contract: codec.Contract{
+					Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD",
+				},
+			})
+			if err != nil || !bytes.Equal(payload, want) {
 				frames <- nil
 				return
 			}
-			id, err := strconv.Atoi(string(fields[2]))
-			if err != nil {
-				frames <- nil
-				return
-			}
-			ids = append(ids, id)
+			ids = append(ids, reqID)
 		}
 		frames <- ids
 	}()
@@ -165,7 +164,7 @@ func TestResumeTransportFailureRetainsRouteForNextReconnect(t *testing.T) {
 	}
 	e := &engine{
 		transport:     tr,
-		serverVersion: 200,
+		serverVersion: 225,
 		keyed:         map[int]*route{1: r},
 		singletons:    make(map[string]*route),
 		orders:        make(map[int64]*orderRoute),
@@ -202,7 +201,7 @@ func TestReconnectReadyWaitsForEveryResumeBeforeAdmittingNewWork(t *testing.T) {
 	e := &engine{
 		cfg:            defaultConfig(),
 		transport:      tr,
-		serverVersion:  200,
+		serverVersion:  225,
 		ready:          make(chan error, 1),
 		done:           make(chan struct{}),
 		events:         newObserver[Event](1),
@@ -298,7 +297,7 @@ func TestResumeRoutesKeepsLiveCapacityWaiter(t *testing.T) {
 		t.Fatal("same-transport 1101 discarded the live capacity waiter")
 	}
 
-	prime, err := codec.Encode(200, codec.CancelOrderRequest{OrderID: 47})
+	prime, err := codec.Encode(225, codec.CancelOrderRequest{OrderID: 477})
 	if err != nil {
 		t.Fatalf("encode transport prime: %v", err)
 	}

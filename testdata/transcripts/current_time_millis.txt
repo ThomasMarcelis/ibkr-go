@@ -1,12 +1,14 @@
-# Live-derived from /tmp/ibkr-api-migration-captures/
-# 20260710T215126Z-current_time_millis at server_version 206; events.jsonl sha256:
-# 3070c6c9296d0eb2a50bcb59bbf77b64b6135ad8a0cd22c135cf3f8cf9d38dfe.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted.
-# The bare request and millisecond reply are exact.
-handshake {"server_version":206,"connection_time":"20260710 23:51:25 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-raw client AAAABAAAAGk=
-raw server AAAAEgAAAG0xNzgzNzIwMjg1ODA3AA==
+# Exact capture 20260824T202747Z-current_time_millis at server_version 225.
+# events.jsonl sha256: a428454d37be0a2d4176d70fb02d8d2163836b6cce86fae0af7481fe1fdb9433.
+# The account identifier is deterministically sanitized. The request and
+# millisecond-resolution response are exact captured frames.
+handshake {"server_version":225,"connection_time":"20260824 22:27:46 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABgAAANEIAQ==
+raw server AAAAQwAAAMwI////////////ARCf2dSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+raw server AAAAQwAAAMwI////////////ARCf2dSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAQQAAAMwI////////////ARCf2dSrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+raw server AAAARgAAAMwI////////////ARCf2dSrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAABAAAATE=
+raw server AAAACwAAATUIydnUq4M0
 disconnect

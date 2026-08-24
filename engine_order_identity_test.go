@@ -8,10 +8,11 @@ import (
 func TestOrderRouteIdentityPreventsStaleHandleClose(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newRunningEngineForOrderHandleTest(t)
-		// ID 47 and the AAPL contract come from capture
-		// 20260413T174517Z-api_bracket_trigger_aapl (sv200, hash prefix
-		// 682a1390b2acf04c). This test rotates actor state only.
-		const orderID = int64(47)
+		// ID 477 and the AAPL contract come from the sv225 capture
+		// 20260824T204308Z-api_bracket_trigger_aapl (events SHA-256
+		// a87923848e96b5fe17b9d6bf7941f7a4db8ce0c8787a926345ec51c8aa527fd3).
+		// This test rotates actor state only.
+		const orderID = int64(477)
 
 		bound := make(chan *OrderHandle, 1)
 		e.enqueue(func() {

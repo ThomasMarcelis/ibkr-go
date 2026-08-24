@@ -1,12 +1,13 @@
-# Live-derived from captures/20260711T021018Z-user_info at
-# server_version 207; events.jsonl sha256:
-# 239f07e9f9ee0773b0d09dafd683a2a9bbbe2db6e62b2bd4e79692f5434f740c.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted. The request and empty white-branding
-# response are exact captured frames.
-handshake {"server_version":207,"connection_time":"20260711 04:10:18 Central European Standard Time"}
+# Exact capture 20260825T194619Z-sv208_user_info at server_version 208.
+# events.jsonl sha256: 672370162ad17e46cf045647775d1d6bc4480353b2f044392c43431a88717bd5.
+# The managed-account callback is deterministically sanitized. The request and
+# response are the exact corrected classic frames captured from Gateway sv208.
+handshake {"server_version":208,"connection_time":"20260825 21:46:19 CET"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
 raw server AAAACAAAAAkxADEA
-raw client AAAACAAAAGgxADEA
+raw server AAAAQwAAAMwI////////////ARDiq9bTgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAQQAAAMwI////////////ARDiq9bTgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+raw server AAAARgAAAMwI////////////ARDiq9bTgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAABgAAAGgxAA==
 raw server AAAABwAAAGsxAAA=
 disconnect

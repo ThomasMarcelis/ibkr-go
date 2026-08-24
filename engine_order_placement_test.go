@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
@@ -197,23 +198,24 @@ func TestBracketAdmissionWinsCallerBoundaries(t *testing.T) {
 	}
 }
 
-// TestBracketRollbackCancelsOnlyAdmittedOrders uses the IDs from the live
-// server_version 200 api_bracket_trigger_aapl capture (sha256 prefix
-// 682a1390b2acf04c). The pipe observes outbound cancel_order frames only; no
-// Gateway callback is invented.
+// TestBracketRollbackCancelsOnlyAdmittedOrders uses the IDs from
+// captures/20260824T204308Z-api_bracket_trigger_aapl, server_version 225,
+// events.jsonl SHA-256
+// a87923848e96b5fe17b9d6bf7941f7a4db8ce0c8787a926345ec51c8aa527fd3.
+// The pipe observes outbound cancel_order frames only.
 func TestBracketRollbackCancelsOnlyAdmittedOrders(t *testing.T) {
 	t.Parallel()
 
-	e, peer, handles := newRollbackTestEngine(t, []int64{47, 48, 49})
+	e, peer, handles := newRollbackTestEngine(t, []int64{477, 478, 479})
 	placementErr := errors.New("stop-loss placement not admitted")
 
-	gotErr := e.cancelAndCloseOrderRoutes([]int64{47, 48}, []int64{47, 48, 49}, placementErr)
+	gotErr := e.cancelAndCloseOrderRoutes([]int64{477, 478}, []int64{477, 478, 479}, placementErr)
 	recovery, ok := errors.AsType[*OrderRecoveryError](gotErr)
 	if !ok {
 		t.Fatalf("rollback error type = %T, want *OrderRecoveryError", gotErr)
 	}
-	if !slices.Equal(recovery.OrderIDs, []int64{47, 48}) {
-		t.Fatalf("recovery order IDs = %v, want [47 48]", recovery.OrderIDs)
+	if !slices.Equal(recovery.OrderIDs, []int64{477, 478}) {
+		t.Fatalf("recovery order IDs = %v, want [477 478]", recovery.OrderIDs)
 	}
 	if recovery.CancelErr != nil {
 		t.Fatalf("cancel error = %v, want nil after every cancel entered the queue", recovery.CancelErr)
@@ -230,17 +232,17 @@ func TestBracketRollbackCancelsOnlyAdmittedOrders(t *testing.T) {
 	assertBracketPlacementFailure(t, gotErr, gotErr)
 	// A known valid cancel after rollback fences the transport queue. Seeing it
 	// immediately after 47/48 proves rollback did not enqueue unsent ID 49.
-	if err := e.sendContext(context.Background(), codec.CancelOrderRequest{OrderID: 47}); err != nil {
+	if err := e.sendContext(context.Background(), codec.CancelOrderRequest{OrderID: 477}); err != nil {
 		t.Fatalf("enqueue transport fence: %v", err)
 	}
 
-	for _, want := range [][]string{
-		{"4", "47", "", "", ""},
-		{"4", "48", "", "", ""},
-		{"4", "47", "", "", ""},
-	} {
-		if got := readWireFields(t, peer); !slices.Equal(got, want) {
-			t.Fatalf("cancel_order fields = %q, want %q", got, want)
+	for _, orderID := range []int64{477, 478, 477} {
+		want, err := codec.Encode(225, codec.CancelOrderRequest{OrderID: orderID})
+		if err != nil {
+			t.Fatalf("encode cancel_order %d: %v", orderID, err)
+		}
+		if got := readWirePayload(t, peer); !bytes.Equal(got, want) {
+			t.Fatalf("cancel_order %d = %x, want %x", orderID, got, want)
 		}
 	}
 
@@ -327,7 +329,7 @@ func newRollbackTestEngine(t *testing.T, orderIDs []int64) (*engine, net.Conn, m
 		cfg:            defaultConfig(),
 		done:           make(chan struct{}),
 		transport:      tr,
-		serverVersion:  200,
+		serverVersion:  225,
 		orders:         make(map[int64]*orderRoute),
 		execDeliveries: make(map[string]*execDelivery),
 	}
@@ -346,7 +348,7 @@ func newRollbackTestEngine(t *testing.T, orderIDs []int64) (*engine, net.Conn, m
 func fillTransportQueue(t *testing.T, tr *transport.Conn, peer net.Conn) {
 	t.Helper()
 
-	payload, err := codec.Encode(200, codec.CancelOrderRequest{OrderID: 47})
+	payload, err := codec.Encode(225, codec.CancelOrderRequest{OrderID: 477})
 	if err != nil {
 		t.Fatalf("encode live-derived cancel frame: %v", err)
 	}

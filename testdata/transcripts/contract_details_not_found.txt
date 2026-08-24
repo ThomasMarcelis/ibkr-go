@@ -1,13 +1,21 @@
-# Live-derived from /tmp/ibkr-contract-migration-captures/
-# 20260710T220551Z-contract_details_not_found at server_version 206;
-# events.jsonl sha256:
-# dbd36400f9fe65b9d60d58af3f7da94ec6d7f4bb9bfc138a3dafb372189075d8.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted. The exact code-200 error follows the
-# exact request; the Gateway emitted no contract result or end marker.
-handshake {"server_version":206,"connection_time":"20260711 00:05:51 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
+# Exact capture 20260824T202747Z-contract_details_not_found for contract_details_not_found at server_version 225.
+# events.jsonl sha256: e08c3e68347a7e5688d251c750892d2df0a326629fd08914c3b85332b55fb803.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:27:46 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=71
+raw server AAAARwAAAMwI////////////ARC51tSrgzQYtxAiLE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBicm9rZW46dXNib25k
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC51tSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARC51tSrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARC51tSrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=9 encoding=protobuf payload_len=37
 raw client AAAAJQAAANEIARIdCAASCFpaWlpOT05FGgNTVEtCBVNNQVJUUgNVU0Q=
-raw server AAAARwAAAMwIARDnmMPw9DMYyAEiNU5vIHNlY3VyaXR5IGRlZmluaXRpb24gaGFzIGJlZW4gZm91bmQgZm9yIHRoZSByZXF1ZXN0
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=71
+raw server AAAARwAAAMwIARDy19SrgzQYyAEiNU5vIHNlY3VyaXR5IGRlZmluaXRpb24gaGFzIGJlZW4gZm91bmQgZm9yIHRoZSByZXF1ZXN0
 disconnect

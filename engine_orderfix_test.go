@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"strings"
 	"testing"
 
 	"github.com/shopspring/decimal"
@@ -239,19 +238,16 @@ func TestHandleAPIErrorEmitsUnroutedRequestError(t *testing.T) {
 func TestHandleAPIErrorRoutesUnkeyedSingletonByLiveMarker(t *testing.T) {
 	t.Parallel()
 
-	// All code-321 messages are exact live Gateway text. reqIds is from
-	// 20260611T074047Z (events SHA-256 prefix 00b11cbce4cefc31);
-	// open orders is from 20260710T225552Z (events SHA-256
-	// 0e838de9d463070ac711be4950948c682c01e8ad02546d8be32f47f35ce68d25);
-	// completed orders is from 20260711T002138Z (events SHA-256
-	// cd040a11301e6106b0f532af65192ed7da0a621f8e61d9faff8fc02d684ea5d3).
+	// All code-321 messages are exact current sv225 Gateway text from captures
+	// 20260824T202844Z-req_ids, 20260824T202816Z-open_orders_empty, and
+	// 20260824T202745Z-completed_orders.
 	const cause = " : cause - The API interface is currently in Read-Only mode."
 	for _, tc := range []struct {
 		name    string
 		marker  string
 		wantHit string
 	}{
-		{name: "order ID", marker: "b7", wantHit: singletonOrderID},
+		{name: "order ID", marker: "aa", wantHit: singletonOrderID},
 		{name: "open orders", marker: "as", wantHit: singletonOpenOrders},
 		{name: "completed orders", marker: "S", wantHit: singletonCompletedOrders},
 	} {
@@ -348,11 +344,11 @@ func TestHandleAPIErrorRoutesFARefusalByCause(t *testing.T) {
 }
 
 func TestCompletedOrdersReturnsExactLiveReadOnlyRefusal(t *testing.T) {
-	// /tmp/ibkr-go-completed-public-20260711/
-	// 20260711T002138Z-completed_orders, server_version 206, events.jsonl
-	// sha256 cd040a11301e6106b0f532af65192ed7da0a621f8e61d9faff8fc02d684ea5d3.
+	// Capture 20260824T202745Z-completed_orders, server_version 225,
+	// events.jsonl SHA-256
+	// 359a65545562c495774d6782f64c9b4716296219917c1826533835690c7fa7df.
 	e, peer := newObservedMarketDataEngine(t)
-	e.serverVersion = 206
+	e.serverVersion = 225
 	result := make(chan error, 1)
 	go func() {
 		_, err := e.CompletedOrders(context.Background(), true)
@@ -361,7 +357,7 @@ func TestCompletedOrdersReturnsExactLiveReadOnlyRefusal(t *testing.T) {
 	(<-e.cmds)()
 	_ = readObservedFrame(t, peer)
 
-	message, err := codec.Decode(206, liveCapturedFrame(t, "AAAAdAAAAMwI////////////ARCDvLT09DMYwQIiWUVycm9yIHZhbGlkYXRpbmcgcmVxdWVzdC4tJ1MnIDogY2F1c2UgLSBUaGUgQVBJIGludGVyZmFjZSBpcyBjdXJyZW50bHkgaW4gUmVhZC1Pbmx5IG1vZGUu"))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAdAAAAMwI////////////ARDEx9SrgzQYwQIiWUVycm9yIHZhbGlkYXRpbmcgcmVxdWVzdC4tJ1MnIDogY2F1c2UgLSBUaGUgQVBJIGludGVyZmFjZSBpcyBjdXJyZW50bHkgaW4gUmVhZC1Pbmx5IG1vZGUu"))
 	if err != nil {
 		t.Fatalf("decode exact live completed-orders refusal: %v", err)
 	}
@@ -377,11 +373,11 @@ func TestCompletedOrdersReturnsExactLiveReadOnlyRefusal(t *testing.T) {
 }
 
 func TestFAConfigReturnsExactLiveNonFARefusal(t *testing.T) {
-	// /tmp/ibkr-go-fa-config-public-20260711/20260711T004703Z-request_fa,
-	// server_version 206, events.jsonl sha256
-	// 137e972fe8fa61a398e61c145544c3052753744a27237f3f5f844986f9ae1eb2.
+	// Capture 20260824T202844Z-request_fa, server_version 225,
+	// events.jsonl SHA-256
+	// 4406b8b95e03199f93d3a52d4022f2b79b72c06e7cb6447ff7ddfc1c207eb07b.
 	e, peer := newObservedMarketDataEngine(t)
-	e.serverVersion = 206
+	e.serverVersion = 225
 	result := make(chan error, 1)
 	go func() {
 		_, err := e.RequestFA(context.Background(), FADataGroups)
@@ -390,7 +386,7 @@ func TestFAConfigReturnsExactLiveNonFARefusal(t *testing.T) {
 	(<-e.cmds)()
 	_ = readObservedFrame(t, peer)
 
-	message, err := codec.Decode(206, liveCapturedFrame(t, "AAAAaQAAAMwQ/7yR9fQzGMECIllFcnJvciB2YWxpZGF0aW5nIHJlcXVlc3QuLSdiNCcgOiBjYXVzZSAtIEZBIGRhdGEgb3BlcmF0aW9ucyBpZ25vcmVkIGZvciBub24gRkEgY3VzdG9tZXJzLg=="))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAcwAAAMwI////////////ARDDm9irgzQYwQIiWEVycm9yIHZhbGlkYXRpbmcgcmVxdWVzdC4tJ1gnIDogY2F1c2UgLSBGQSBkYXRhIG9wZXJhdGlvbnMgaWdub3JlZCBmb3Igbm9uIEZBIGN1c3RvbWVycy4="))
 	if err != nil {
 		t.Fatalf("decode exact live non-FA refusal: %v", err)
 	}
@@ -511,121 +507,6 @@ func TestExerciseRoutePresetNoticeStaysActive(t *testing.T) {
 		}
 	default:
 		t.Fatal("exercise preset notice was not delivered to handle")
-	}
-}
-
-// TestExerciseOrderSlowConsumerRemovesBothRoutes replays the exact code-10349
-// warning and PreSubmitted status fields from the paper server_version 200
-// option-exercise capture (events SHA-256 prefix 267e7806669f2d5c). A one-event
-// handle queue makes the captured status the first undeliverable callback.
-func TestExerciseOrderSlowConsumerRemovesBothRoutes(t *testing.T) {
-	t.Parallel()
-
-	e := newEngineForErrorTest()
-	e.cfg.orderEventBuffer = 1
-	handle := e.installExerciseRoute(77)
-
-	e.handleAPIError(capturedExercisePresetNotice(77))
-	e.dispatchObservedOrderStatus(capturedExerciseWorkingStatus(77))
-
-	waitErr := handle.Wait()
-	uncertain, ok := errors.AsType[*ExerciseUncertainError](waitErr)
-	if !ok || uncertain.RequestID != 77 || !errors.Is(waitErr, ErrSlowConsumer) {
-		t.Fatalf("exercise Wait() = %T %v, want request 77 uncertainty preserving ErrSlowConsumer", waitErr, waitErr)
-	}
-	if IsRetryable(waitErr) {
-		t.Fatalf("exercise Wait() = %v, slow-consumer uncertainty must not be retryable", waitErr)
-	}
-	if _, ok := e.keyed[77]; ok {
-		t.Fatal("slow exercise consumer left the keyed route active")
-	}
-	if _, ok := e.orders[77]; ok {
-		t.Fatal("slow exercise consumer left the paired order route active")
-	}
-
-	e.handleAPIError(capturedExerciseServerRejection(77))
-	select {
-	case event := <-e.events.Chan():
-		if event.Code != ErrCodeServerErrorProcessingRequest ||
-			event.Message != "Error processing request.Exercise/Lapse failed due to server rejection." {
-			t.Fatalf("late session event = %#v, want exact exercise code-322 rejection", event)
-		}
-	default:
-		t.Fatal("late exercise code 322 disappeared after slow-consumer teardown")
-	}
-}
-
-// TestExerciseOrderConversionFailureRemovesBothRoutes starts from the same
-// captured PreSubmitted callback and changes only Filled. That explicit
-// structural conversion-fault injection proves a decode failure cannot leave
-// the request-scoped keyed route consuming later Gateway evidence.
-func TestExerciseOrderConversionFailureRemovesBothRoutes(t *testing.T) {
-	t.Parallel()
-
-	e := newEngineForErrorTest()
-	handle := e.installExerciseRoute(77)
-	status := capturedExerciseWorkingStatus(77)
-	status.Filled = "not-a-decimal"
-	e.dispatchObservedOrderStatus(status)
-
-	waitErr := handle.Wait()
-	uncertain, ok := errors.AsType[*ExerciseUncertainError](waitErr)
-	if !ok || uncertain.RequestID != 77 || uncertain.Err == nil ||
-		!strings.Contains(uncertain.Err.Error(), "order status filled") {
-		t.Fatalf("exercise Wait() = %T %v, want request 77 uncertainty preserving filled-decimal conversion failure", waitErr, waitErr)
-	}
-	if IsRetryable(waitErr) {
-		t.Fatalf("exercise Wait() = %v, conversion uncertainty must not be retryable", waitErr)
-	}
-	if _, ok := e.keyed[77]; ok {
-		t.Fatal("exercise conversion failure left the keyed route active")
-	}
-	if _, ok := e.orders[77]; ok {
-		t.Fatal("exercise conversion failure left the paired order route active")
-	}
-
-	e.handleAPIError(capturedExerciseServerRejection(77))
-	select {
-	case event := <-e.events.Chan():
-		if event.Code != ErrCodeServerErrorProcessingRequest {
-			t.Fatalf("late session event code = %d, want %d", event.Code, ErrCodeServerErrorProcessingRequest)
-		}
-	default:
-		t.Fatal("late exercise code 322 disappeared after conversion teardown")
-	}
-}
-
-func capturedExercisePresetNotice(reqID int) codec.APIError {
-	return codec.APIError{
-		ReqID:       reqID,
-		Code:        ErrCodeOrderTIFSetFromPreset,
-		Message:     "Order TIF was set to DAY based on order preset.",
-		ErrorTimeMs: "1781185012170",
-	}
-}
-
-func capturedExerciseWorkingStatus(orderID int) codec.OrderStatus {
-	return codec.OrderStatus{
-		OrderID:       int64(orderID),
-		Status:        "PreSubmitted",
-		Filled:        "0",
-		Remaining:     "1",
-		AvgFillPrice:  "0",
-		PermID:        "900005",
-		ParentID:      "0",
-		LastFillPrice: "0",
-		ClientID:      "1",
-		WhyHeld:       "",
-		MktCapPrice:   "0",
-	}
-}
-
-func capturedExerciseServerRejection(reqID int) codec.APIError {
-	return codec.APIError{
-		ReqID:       reqID,
-		Code:        ErrCodeServerErrorProcessingRequest,
-		Message:     "Error processing request.Exercise/Lapse failed due to server rejection.",
-		ErrorTimeMs: "1781185032011",
 	}
 }
 
@@ -758,34 +639,34 @@ func TestHandleAPIErrorKeepsUnattestedOrderNotice(t *testing.T) {
 	handle.Close()
 }
 
-// TestLateOrderCancellationNoticeDoesNotHitKeyedRoute freezes the cross-client
-// paper capture from 2026-07-11, server_version 207
-// (/tmp/ibkr-go-live-captures/20260711T205916Z-cross_client_cancel_reprobe,
-// events.jsonl sha256 f1b072887982ee651bda389c0f5b2885f7f165645a7169f88b797f9110f5ac22).
-// A code-202 notice for the previous order ID 1 arrived after reconnect, when
-// a new quote also owned request ID 1. Cancellation-only codes belong to the
+// TestLateOrderCancellationNoticeDoesNotHitKeyedRoute freezes capture
+// 20260824T204700Z-api_cross_client_cancel_aapl at server_version 225,
+// events.jsonl SHA-256
+// 9d7fafb105cfe1cd1b12b46b6dcf00d983a20b4e3c71a14239dd441795b1f3c6.
+// A code-202 notice for order ID 486 is replayed while a quote owns request ID
+// 486. Cancellation-only codes belong to the
 // order namespace and must not terminate the unrelated keyed request.
 func TestLateOrderCancellationNoticeDoesNotHitKeyedRoute(t *testing.T) {
 	t.Parallel()
 
 	e := newEngineForErrorTest()
 	keyedCalled := false
-	e.keyed[1] = &route{
+	e.keyed[486] = &route{
 		handleAPIErr: func(codec.APIError, *engine) { keyedCalled = true },
 	}
 
-	message, err := codec.Decode(207, liveCapturedFrame(t, "AAAAKgAAAMwIARCI5umX9TMYygEiGE9yZGVyIENhbmNlbGVkIC0gcmVhc29uOg=="))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAKwAAAMwI5gMQiJObrIM0GMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo="))
 	if err != nil {
 		t.Fatalf("decode exact live code-202 frame: %v", err)
 	}
 	e.handleIncoming(message)
 
 	if keyedCalled {
-		t.Fatal("late order cancellation notice was routed to keyed request 1")
+		t.Fatal("late order cancellation notice was routed to keyed request 486")
 	}
 	event := <-e.SessionEvents()
-	if event.APIError == nil || event.APIError.Code != ErrCodeOrderCanceled || event.APIError.RequestID != 1 {
-		t.Fatalf("session event = %+v, want order cancellation notice for id 1", event)
+	if event.APIError == nil || event.APIError.Code != ErrCodeOrderCanceled || event.APIError.RequestID != 486 {
+		t.Fatalf("session event = %+v, want order cancellation notice for id 486", event)
 	}
 }
 

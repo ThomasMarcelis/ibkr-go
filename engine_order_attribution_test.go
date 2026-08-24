@@ -14,11 +14,11 @@ const (
 )
 
 // These identity values and transitions are retained exactly in
-// api_cross_client_cancel_aapl.txt (paper Gateway sv200, capture
-// 20260415T162857Z-api_cross_client_cancel_aapl, events SHA-256 prefix
-// fcb7e811624e4aa9): client 1 placed order 296 with PermID 900296, then client
-// 2 observed and cancelled it. Typed callbacks below vary only those identity
-// slots to specify route ownership; they do not claim new wire frames.
+// api_cross_client_cancel_aapl.txt (paper Gateway sv225, capture
+// 20260824T204700Z-api_cross_client_cancel_aapl, events SHA-256
+// 9d7fafb105cfe1cd1b12b46b6dcf00d983a20b4e3c71a14239dd441795b1f3c6).
+// Typed callbacks below use compact local identities while varying only those
+// slots needed to specify route ownership; they do not claim new wire frames.
 func TestOrderAttributionBindsPermanentIdentityAcrossCallbacks(t *testing.T) {
 	for _, family := range []string{"open_order", "order_status", "execution", "order_bound"} {
 		t.Run(family, func(t *testing.T) {

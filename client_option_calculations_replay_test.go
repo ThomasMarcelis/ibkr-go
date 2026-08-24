@@ -2,6 +2,7 @@ package ibkr_test
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -9,84 +10,106 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestOptionCalculationsLiveReplay(t *testing.T) {
-	restore := ibkr.SetAdvertisedServerVersionMaxForTest(204)
+func TestOptionCalculationsSV211Replay(t *testing.T) {
+	restore := ibkr.SetAdvertisedServerVersionMaxForTest(211)
 	defer restore()
 
-	client, host := newClient(t, "option_calculations_aapl_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	client, host := newClient(t, "option_calculations_aapl.txt")
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	contract := ibkr.Contract{
-		ConID:        887307502,
+	quote := replayDelayedAAPLQuoteAnchor(t, ctx, client)
+	anchor := decimal.Zero
+	for _, candidate := range []decimal.Decimal{quote.Last, quote.Ask, quote.Bid, quote.Close} {
+		if candidate.IsPositive() {
+			anchor = candidate
+			break
+		}
+	}
+	if !anchor.Equal(decimal.RequireFromString("316.89")) {
+		t.Fatalf("quote anchor = %s, want captured 316.89", anchor)
+	}
+
+	parameters, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+		UnderlyingSymbol:  "AAPL",
+		UnderlyingSecType: ibkr.SecTypeStock,
+		UnderlyingConID:   265598,
+	})
+	if err != nil {
+		t.Fatalf("SecDefOptParams(): %v", err)
+	}
+	if len(parameters) != 1 {
+		t.Fatalf("SecDefOptParams() len = %d, want projected SMART row", len(parameters))
+	}
+	parameter := parameters[0]
+	strike := decimal.RequireFromString("317.5")
+	if parameter.Exchange != "SMART" || parameter.TradingClass != "AAPL" || parameter.Multiplier != "100" ||
+		!slices.Contains(parameter.Expirations, "20260713") || !slices.ContainsFunc(parameter.Strikes, strike.Equal) {
+		t.Fatalf("SMART parameters = %+v, want captured AAPL 20260713 C317.5 inputs", parameter)
+	}
+
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
 		Symbol:       "AAPL",
 		SecType:      ibkr.SecTypeOption,
-		Expiry:       "20260710",
-		Strike:       new(decimal.NewFromInt(315)),
+		Expiry:       "20260713",
+		Strike:       new(strike),
 		Right:        ibkr.RightCall,
-		Multiplier:   "100",
+		Multiplier:   parameter.Multiplier,
 		Exchange:     "SMART",
 		Currency:     "USD",
-		LocalSymbol:  "AAPL  260710C00315000",
-		TradingClass: "AAPL",
+		TradingClass: parameter.TradingClass,
+	})
+	if err != nil {
+		t.Fatalf("ContractDetails(): %v", err)
 	}
+	if len(details) != 1 {
+		t.Fatalf("ContractDetails() len = %d, want 1", len(details))
+	}
+	contract := details[0].Contract
+	if contract.ConID != 897862208 || contract.LocalSymbol != "AAPL  260713C00317500" {
+		t.Fatalf("qualified option = %+v, want captured AAPL call", contract)
+	}
+
 	price, err := client.Options().Price(ctx, ibkr.CalcOptionPriceRequest{
 		Contract:   contract,
 		Volatility: decimal.RequireFromString("0.3"),
-		UnderPrice: decimal.RequireFromString("314.5"),
+		UnderPrice: anchor,
 	})
 	if err != nil {
-		t.Fatalf("Price() error = %v", err)
+		t.Fatalf("Price(): %v", err)
 	}
-	wantPriceFields := ibkr.OptionComputationImpliedVol |
-		ibkr.OptionComputationDelta |
-		ibkr.OptionComputationPrice |
-		ibkr.OptionComputationGamma |
-		ibkr.OptionComputationVega |
-		ibkr.OptionComputationTheta |
-		ibkr.OptionComputationUnderlyingPrice
-	if price.Available != wantPriceFields {
-		t.Fatalf("Price().Available = %d, want %d", price.Available, wantPriceFields)
+	if price.Available != 247 {
+		t.Fatalf("Price().Available = %d, want 247", price.Available)
 	}
-	assertDecimal := func(name string, got decimal.Decimal, want string) {
-		t.Helper()
-		if !got.Equal(decimal.RequireFromString(want)) {
-			t.Errorf("%s = %s, want %s", name, got, want)
-		}
-	}
-	assertDecimal("Price().ImpliedVol", price.ImpliedVol, "0.3")
-	assertDecimal("Price().Delta", price.Delta, "0.4248045691043341")
-	assertDecimal("Price().OptPrice", price.OptPrice, "0.7871894567385895")
-	assertDecimal("Price().Gamma", price.Gamma, "0.15506144675853706")
-	assertDecimal("Price().Vega", price.Vega, "0.033808051635485614")
-	assertDecimal("Price().Theta", price.Theta, "-0.7871894567385895")
-	assertDecimal("Price().UndPrice", price.UndPrice, "314.5")
-	if !price.PvDividend.IsZero() {
-		t.Errorf("Price().PvDividend = %s, want unavailable zero", price.PvDividend)
-	}
+	assertOptionDecimal(t, "Price().ImpliedVol", price.ImpliedVol, "0.3")
+	assertOptionDecimal(t, "Price().Delta", price.Delta, "0.37990541015940876")
+	assertOptionDecimal(t, "Price().OptPrice", price.OptPrice, "0.5172515148628609")
+	assertOptionDecimal(t, "Price().Gamma", price.Gamma, "0.19516303062548224")
+	assertOptionDecimal(t, "Price().Vega", price.Vega, "0.02496717315373298")
+	assertOptionDecimal(t, "Price().Theta", price.Theta, "-0.5172515148628609")
+	assertOptionDecimal(t, "Price().UndPrice", price.UndPrice, "316.89")
 
 	implied, err := client.Options().ImpliedVolatility(ctx, ibkr.CalcImpliedVolatilityRequest{
 		Contract:    contract,
 		OptionPrice: price.OptPrice,
-		UnderPrice:  decimal.RequireFromString("314.5"),
+		UnderPrice:  anchor,
 	})
 	if err != nil {
-		t.Fatalf("ImpliedVolatility() error = %v", err)
+		t.Fatalf("ImpliedVolatility(): %v", err)
 	}
-	wantImpliedFields := ibkr.OptionComputationImpliedVol |
-		ibkr.OptionComputationPrice |
-		ibkr.OptionComputationUnderlyingPrice
-	if implied.Available != wantImpliedFields {
-		t.Fatalf("ImpliedVolatility().Available = %d, want %d", implied.Available, wantImpliedFields)
+	if implied.Available != 133 {
+		t.Fatalf("ImpliedVolatility().Available = %d, want 133", implied.Available)
 	}
-	assertDecimal("ImpliedVolatility().ImpliedVol", implied.ImpliedVol, "0.30000000111488545")
-	assertDecimal("ImpliedVolatility().OptPrice", implied.OptPrice, "0.7871894567385895")
-	assertDecimal("ImpliedVolatility().UndPrice", implied.UndPrice, "314.5")
-	if !implied.Delta.IsZero() || !implied.PvDividend.IsZero() || !implied.Gamma.IsZero() ||
-		!implied.Vega.IsZero() || !implied.Theta.IsZero() {
-		t.Errorf("ImpliedVolatility() unavailable fields = %+v, want zero", implied)
+	assertOptionDecimal(t, "ImpliedVolatility().ImpliedVol", implied.ImpliedVol, "0.3000000156250214")
+	assertOptionDecimal(t, "ImpliedVolatility().OptPrice", implied.OptPrice, "0.5172515148628609")
+	assertOptionDecimal(t, "ImpliedVolatility().UndPrice", implied.UndPrice, "316.89")
+}
+
+func assertOptionDecimal(t *testing.T, name string, got decimal.Decimal, want string) {
+	t.Helper()
+	if !got.Equal(decimal.RequireFromString(want)) {
+		t.Errorf("%s = %s, want %s", name, got, want)
 	}
 }

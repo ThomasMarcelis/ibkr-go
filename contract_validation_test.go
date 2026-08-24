@@ -22,45 +22,24 @@ func TestContractFieldSupportMatchesRequestLayouts(t *testing.T) {
 	}
 	tests := []struct {
 		name      string
-		sv        int
 		supported contractFields
 	}{
-		{name: "quote classic", sv: 200, supported: contractFieldPrimaryExchange | contractFieldComboLegs | contractFieldDeltaNeutral},
-		{name: "quote protobuf", sv: 206, supported: contractFieldsAll},
-		{name: "depth classic", sv: 200, supported: contractFieldPrimaryExchange},
-		{name: "depth protobuf", sv: 206, supported: contractFieldsAll},
-		{name: "contract details classic", sv: 200, supported: contractFieldPrimaryExchange | contractFieldIncludeExpired | contractFieldSecurityID | contractFieldIssuerID},
-		{name: "contract details protobuf", sv: 205, supported: contractFieldsAll},
-		{name: "place classic", sv: 200, supported: contractFieldPrimaryExchange | contractFieldSecurityID | contractFieldComboLegs | contractFieldComboLegDetails | contractFieldDeltaNeutral},
-		{name: "place protobuf", sv: 203, supported: contractFieldsAll},
-		{name: "historical bars schedule stream", sv: 206, supported: contractFieldPrimaryExchange | contractFieldIncludeExpired | contractFieldComboLegs},
-		{name: "head histogram historical ticks", sv: 206, supported: contractFieldPrimaryExchange | contractFieldIncludeExpired},
-		{name: "realtime tick calculation", sv: 206, supported: contractFieldPrimaryExchange},
-		{name: "exercise", sv: 206, supported: 0},
+		{name: "quote depth contract details and order", supported: contractFieldsAll},
+		{name: "historical bars schedule stream", supported: contractFieldPrimaryExchange | contractFieldIncludeExpired | contractFieldComboLegs},
+		{name: "head histogram historical ticks", supported: contractFieldPrimaryExchange | contractFieldIncludeExpired},
+		{name: "realtime tick calculation", supported: contractFieldPrimaryExchange},
+		{name: "exercise", supported: 0},
 	}
 	for _, tc := range tests {
 		for _, field := range fields {
 			t.Run(tc.name+"/"+field.name, func(t *testing.T) {
 				t.Parallel()
-				err := validateContractFieldSupport(field.contract, tc.name, tc.sv, tc.supported)
+				err := validateContractFieldSupport(field.contract, tc.name, 208, tc.supported)
 				if wantErr := tc.supported&field.bit == 0; (err != nil) != wantErr {
 					t.Fatalf("validateContractFieldSupport() error = %v, wantErr %t", err, wantErr)
 				}
 			})
 		}
-	}
-
-	if got := quoteContractFields(205); got != contractFieldPrimaryExchange|contractFieldComboLegs|contractFieldDeltaNeutral {
-		t.Fatalf("quoteContractFields(205) = %04b", got)
-	}
-	if got := depthContractFields(205); got != contractFieldPrimaryExchange {
-		t.Fatalf("depthContractFields(205) = %04b", got)
-	}
-	if got := contractDetailsContractFields(204); got != contractFieldPrimaryExchange|contractFieldIncludeExpired|contractFieldSecurityID|contractFieldIssuerID {
-		t.Fatalf("contractDetailsContractFields(204) = %04b", got)
-	}
-	if got := placeOrderContractFields(202); got != contractFieldPrimaryExchange|contractFieldSecurityID|contractFieldComboLegs|contractFieldComboLegDetails|contractFieldDeltaNeutral {
-		t.Fatalf("placeOrderContractFields(202) = %04b", got)
 	}
 }
 
@@ -82,12 +61,12 @@ func TestReducedComboLegLayoutsRejectUnrepresentedFields(t *testing.T) {
 			t.Parallel()
 			contract := validComboContract()
 			tc.mutate(&contract.ComboLegs[0])
-			err := validateContractFieldSupport(contract, "classic quote", 200, contractFieldPrimaryExchange|contractFieldComboLegs)
+			err := validateContractFieldSupport(contract, "reduced combo layout", 208, contractFieldPrimaryExchange|contractFieldComboLegs)
 			validation, ok := errors.AsType[*ValidationError](err)
 			if !ok || validation.Field != tc.field {
 				t.Fatalf("validateContractFieldSupport() = %v, want field %q", err, tc.field)
 			}
-			if err := validateContractFieldSupport(contract, "protobuf quote", 206, contractFieldsAll); err != nil {
+			if err := validateContractFieldSupport(contract, "shared contract", 208, contractFieldsAll); err != nil {
 				t.Fatalf("full shared Contract rejected %s: %v", tc.name, err)
 			}
 		})
@@ -125,11 +104,12 @@ func TestValidateContractStructuralBoundaries(t *testing.T) {
 }
 
 func validComboContract() Contract {
-	// Exact live option vertical from the exact-200 BAG quote capture, events
-	// SHA-256 1f8354ee5d9ea0570472caa35d905127f5a8c5bab694ba1f9a74532178842c69.
+	// Two adjacent live AAPL option contracts from the current sv225 details
+	// replay, events SHA-256
+	// 8a4e11ce19b17af162a660ee615aa3499e183d79164a19a7b325a6802d6afe47.
 	return Contract{SecType: SecTypeCombo, ComboLegs: []ComboLeg{
-		{ConID: 887307502, Ratio: 1, Action: ActionBuy, Exchange: "SMART", OpenClose: ComboLegSame},
-		{ConID: 887307536, Ratio: 1, Action: ActionSell, Exchange: "SMART", OpenClose: ComboLegSame},
+		{ConID: 909446159, Ratio: 1, Action: ActionBuy, Exchange: "SMART", OpenClose: ComboLegSame},
+		{ConID: 909446204, Ratio: 1, Action: ActionSell, Exchange: "SMART", OpenClose: ComboLegSame},
 	}}
 }
 

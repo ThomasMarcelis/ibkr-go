@@ -1,34 +1,121 @@
-# Grounded by live API capture captures/20260415T161858Z-api_pairs_trading_aapl_msft.
-# server_version=200, events.jsonl sha256: 0dc806f7bb0868e876afae20831fd095bf9619679a01691a43964768afbeaaee.
-# Account, perm, and execution identifiers are sanitized; paired entry, paired
-# flatten, symbols, quantities, statuses, and sides preserve live paper Gateway
-# behavior observed on 2026-04-15.
-handshake {"server_version":200,"connection_time":"20260415 18:18:59 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":278}
-
-client place_order {"order_id":"278","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
-client place_order {"order_id":"279","contract":{"con_id":"272093","symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
-server open_order {"order_id":278,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"5","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900278","client_id":"1","origin":"0"}
-server order_status {"order_id":278,"status":"PreSubmitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"900278","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server execution_detail {"req_id":-1,"order_id":278,"exec_id":"sanitized-pairs-aapl-entry-001","account":"DU9000001","symbol":"AAPL","side":"BOT","shares":"5","price":"265.46","time":"20260415 12:19:00 US/Eastern","perm_id":"900278","client_id":"1"}
-server order_status {"order_id":278,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"265.46","perm_id":"900278","parent_id":"0","last_fill_price":"265.46","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server commission_report {"exec_id":"sanitized-pairs-aapl-entry-001","commission":"1","currency":"USD","realized_pnl":"0"}
-server open_order {"order_id":279,"account":"DU9000001","contract":{"con_id":272093,"symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"MSFT","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"5","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900279","client_id":"1","origin":"0"}
-server order_status {"order_id":279,"status":"Submitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"900279","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server execution_detail {"req_id":-1,"order_id":279,"exec_id":"sanitized-pairs-msft-entry-001","account":"DU9000001","symbol":"MSFT","side":"SLD","shares":"5","price":"408.55","time":"20260415 12:19:00 US/Eastern","perm_id":"900279","client_id":"1"}
-server order_status {"order_id":279,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"408.55","perm_id":"900279","parent_id":"0","last_fill_price":"408.55","client_id":"1","why_held":"","mkt_cap_price":"0"}
-
-client place_order {"order_id":"280","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
-server open_order {"order_id":280,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"SELL","order_type":"MKT","quantity":"5","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900280","client_id":"1","origin":"0"}
-server order_status {"order_id":280,"status":"Submitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"900280","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server execution_detail {"req_id":-1,"order_id":280,"exec_id":"sanitized-pairs-aapl-flatten-001","account":"DU9000001","symbol":"AAPL","side":"SLD","shares":"5","price":"265.46","time":"20260415 12:19:01 US/Eastern","perm_id":"900280","client_id":"1"}
-server order_status {"order_id":280,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"265.46","perm_id":"900280","parent_id":"0","last_fill_price":"265.46","client_id":"1","why_held":"","mkt_cap_price":"0"}
-
-client place_order {"order_id":"281","contract":{"con_id":"272093","symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"5","order_type":"MKT","tif":"DAY","account":"DU9000001"}
-server open_order {"order_id":281,"account":"DU9000001","contract":{"con_id":272093,"symbol":"MSFT","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"MSFT","trading_class":"NMS"},"action":"BUY","order_type":"MKT","quantity":"5","lmt_price":"0","aux_price":"0","tif":"DAY","perm_id":"900281","client_id":"1","origin":"0"}
-server order_status {"order_id":281,"status":"PreSubmitted","filled":"0","remaining":"5","avg_fill_price":"0","perm_id":"900281","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server execution_detail {"req_id":-1,"order_id":281,"exec_id":"sanitized-pairs-msft-flatten-001","account":"DU9000001","symbol":"MSFT","side":"BOT","shares":"5","price":"408.58","time":"20260415 12:19:01 US/Eastern","perm_id":"900281","client_id":"1"}
-server order_status {"order_id":281,"status":"Filled","filled":"5","remaining":"0","avg_fill_price":"408.58","perm_id":"900281","parent_id":"0","last_fill_price":"408.58","client_id":"1","why_held":"","mkt_cap_price":"0"}
-
+# Exact capture 20260824T205839Z-api_pairs_trading_aapl_msft for api_pairs_trading_aapl_msft at server_version 225.
+# events.jsonl sha256: 90ce22b0d6763419dbc36b21ba9bbcac939ca299b4e8d6fe3fbbdc0720de1ca2.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:58:39 CET"}
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0IhwQSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQhwQYh9aTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBH4XrUbh6c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsIhwQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCH1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0IiAQSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQiAQYiNaTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAbkBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAgbkDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTLwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsIiAQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCI1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=304
+raw server AAABMAAAAM0I/QMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuUBCAEQ/QMY/dWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxM/ABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI/QMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD91ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=343
+raw server AAABVwAAAM0I+QMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGowCCAEQ+QMY+dWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAbkBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAgbkDaARpvY2EtMDAwMDAwMDAwMDAwMDAwMDAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxNPABAfgBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI+QMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD51ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0I+wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ+wMY+9WTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBH4XrUbh6c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTXwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI+wMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD71ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0I/AMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ/AMY/NWTrQMgACoDQlVZMgExQgNNVExJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBH4XrUbh6c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTbwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI/AMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD81ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=343
+raw server AAABVwAAAM0I+AMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGowCCAEQ+AMY+NWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAJEBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAAJkDaARpvY2EtMDAwMDAwMDAwMDAwMDAwMDAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxN/ABAfgBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI+AMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD41ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0I8QMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ8QMY8dWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBH4XrUbh6c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTjwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI8QMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDx1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=338
+raw server AAABUgAAAM0I7QMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGocCCAEQ7QMY7dWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAJEBRAAAAAAAAAABaA0dUQ2IJRFU5MDAwMDAxegJJQrkBAAAAAAAAJkDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTnwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZIHFTIwMjYxMjMxIDIyOjAwOjAwIENFVJoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI7QMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDt1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=304
+raw server AAABMAAAAM0I7gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuUBCAEQ7gMY7tWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAyMPABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI7gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDu1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0I7wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ7wMY79WTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBrkfhehR6c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMjHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI7wMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDv1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0I8AMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ8AMY8NWTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBH4XrUbh6c0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMjLwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsI8AMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDw1ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=304
+raw server AAABMAAAAM0IkgQSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuUBCAEQkgQYktaTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAyM/ABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAyggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsIkgQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCS1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=53 encoding=protobuf payload_len=4
+raw server AAAABAAAAP0=
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEInAQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=66
+raw server AAAAQgAAAMwI////////////ARD048WsgzQYuBAiJ01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c29wdA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARD048WsgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARD048WsgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARD048WsgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=201
+raw server AAAAyQAAAMwIARCb5MWsgzQY6U4itgFSZXF1ZXN0ZWQgbWFya2V0IGRhdGEgcmVxdWlyZXMgYWRkaXRpb25hbCBzdWJzY3JpcHRpb24gZm9yIEFQSS4gU2VlIGxpbmsgaW4gJ01hcmtldCBEYXRhIENvbm5lY3Rpb25zJyBkaWFsb2cgZm9yIG1vcmUgZGV0YWlscy5EZWxheWVkIG1hcmtldCBkYXRhIGlzIGF2YWlsYWJsZS5BQVBMIE5BU0RBUS5OTVMvVE9QL0FMTA==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIAhIbCN3NEBIETVNGVBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=201
+raw server AAAAyQAAAMwIAhCx58WsgzQY6U4itgFSZXF1ZXN0ZWQgbWFya2V0IGRhdGEgcmVxdWlyZXMgYWRkaXRpb25hbCBzdWJzY3JpcHRpb24gZm9yIEFQSS4gU2VlIGxpbmsgaW4gJ01hcmtldCBEYXRhIENvbm5lY3Rpb25zJyBkaWFsb2cgZm9yIG1vcmUgZGV0YWlscy5EZWxheWVkIG1hcmtldCBkYXRhIGlzIGF2YWlsYWJsZS5NU0ZUIE5BU0RBUS5OTVMvVE9QL0FMTA==
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=142
+raw client AAAAjgAAAMsInAQSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpmIAAqA0JVWTIBMTgAQgNNS1RaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAkAQBqAQAwAT///////////8BkAYAygYAIgA=
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=143
+raw client AAAAjwAAAMsInQQSGwjdzRASBE1TRlQaA1NUS0IFU01BUlRSA1VTRBpnIAAqBFNFTEwyATE4AEIDTUtUWgNEQVliCURVOTAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwM/ABAPgBAJAEAagEAMAE////////////AZAGAMoGACIA
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=149
+raw server AAAAlQAAAMwInAQQgOjFrIM0GI8DIoEBT3JkZXIgTWVzc2FnZToKQlVZIDEgQUFQTCBOQVNEQVEuTk1TCldhcm5pbmc6IFlvdXIgb3JkZXIgd2lsbCBub3QgYmUgcGxhY2VkIGF0IHRoZSBleGNoYW5nZSB1bnRpbCAyMDI2LTA4LTI1IDA5OjMwOjAwIFVTL0Vhc3Rlcm4u
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0InAQSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQnAQYnNaTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAACAc0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsInAQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCc1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0InAQSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQnAQYnNaTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAACAc0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsInAQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCc1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0InAQSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQnAQYnNaTrQMgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAACAc0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsInAQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCc1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=150
+raw server AAAAlgAAAMwInQQQgOjFrIM0GI8DIoIBT3JkZXIgTWVzc2FnZToKU0VMTCAxIE1TRlQgTkFTREFRLk5NUwpXYXJuaW5nOiBZb3VyIG9yZGVyIHdpbGwgbm90IGJlIHBsYWNlZCBhdCB0aGUgZXhjaGFuZ2UgdW50aWwgMjAyNi0wOC0yNSAwOTozMDowMCBVUy9FYXN0ZXJuLg==
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=305
+raw server AAABMQAAAM0InQQSLwjdzRASBE1TRlQaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoETVNGVGIDTk1TGuYBCAEQnQQYndaTrQMgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDPwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsInQQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCd1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=305
+raw server AAABMQAAAM0InQQSLwjdzRASBE1TRlQaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoETVNGVGIDTk1TGuYBCAEQnQQYndaTrQMgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDPwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsInQQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCd1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=5 encoding=protobuf payload_len=305
+raw server AAABMQAAAM0InQQSLwjdzRASBE1TRlQaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoETVNGVGIDTk1TGuYBCAEQnQQYndaTrQMgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDPwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsInQQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCd1pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=client msg_id=7 encoding=protobuf payload_len=25
+raw client AAAAGQAAAM8IAxIREglEVTkwMDAwMDEiBEFBUEw=
+# leg=1 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IAw==
+# leg=1 direction=client msg_id=7 encoding=protobuf payload_len=25
+raw client AAAAGQAAAM8IBBIREglEVTkwMDAwMDEiBE1TRlQ=
+# leg=1 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IBA==
 disconnect

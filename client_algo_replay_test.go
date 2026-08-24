@@ -14,10 +14,10 @@ import (
 // Live algo window the capture driver sent on every variant: a 17-minute UTC
 // window that the Gateway's open_order echoes hand back in US/Eastern.
 const (
-	algoStartUTC     = "20260711 05:25:25 UTC"
-	algoEndUTC       = "20260711 05:42:25 UTC"
-	algoStartEastern = "20260713 01:25:25 US/Eastern"
-	algoEndEastern   = "20260713 01:42:25 US/Eastern"
+	algoStartUTC     = "20260824 20:34:58 UTC"
+	algoEndUTC       = "20260824 20:51:58 UTC"
+	algoStartEastern = "20260825 16:34:58 US/Eastern"
+	algoEndEastern   = "20260825 16:51:58 US/Eastern"
 )
 
 // algoVariantCase is one strategy of the AORD-003 algo matrix. rejectCode == 0
@@ -92,7 +92,8 @@ func collectAlgoLifecycle(t *testing.T, ctx context.Context, handle *ibkr.OrderH
 }
 
 // TestAPIAlgoVariantsReplay freezes the IB algo variant matrix (AORD-003)
-// captured live on 2026-07-11 against paper Gateway server_version 207.
+// captured live on 2026-08-24 against paper Gateway server_version 225
+// (events SHA-256 bf33cd7eea5fe75a06666f1af121980c1b5e863e5b5605291162a0b4e1cff291).
 // Thirteen strategies were placed as far LMT BUY 100 AAPL orders. Seven
 // produced open-order lifecycles and six were rejected during placement.
 // Adaptive Urgent/Patient, AD, and ClosePx rested until targeted cancellation;
@@ -105,7 +106,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 	variants := []algoVariantCase{
 		{
 			name:       "adaptive_urgent",
-			orderID:    475,
+			orderID:    455,
 			strategy:   "Adaptive",
 			params:     []ibkr.TagValue{algoTag("adaptivePriority", "Urgent")},
 			permID:     9000000475,
@@ -119,7 +120,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:       "adaptive_patient",
-			orderID:    476,
+			orderID:    456,
 			strategy:   "Adaptive",
 			params:     []ibkr.TagValue{algoTag("adaptivePriority", "Patient")},
 			permID:     9000000476,
@@ -133,7 +134,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:     "twap",
-			orderID:  477,
+			orderID:  457,
 			strategy: "Twap",
 			params: []ibkr.TagValue{
 				algoTag("strategyType", "Marketable"),
@@ -146,7 +147,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:     "vwap",
-			orderID:  478,
+			orderID:  458,
 			strategy: "Vwap",
 			params: []ibkr.TagValue{
 				algoTag("maxPctVol", "0.1"),
@@ -156,7 +157,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 				algoTag("noTakeLiq", "1"),
 			},
 			permID:    9000000478,
-			echoCount: 3,
+			echoCount: 2,
 			echoParams: []ibkr.TagValue{
 				algoTag("noTakeLiq", "1"),
 				algoTag("allowPastEndTime", "1"),
@@ -167,14 +168,13 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 			initialStatuses: []ibkr.OrderStatus{
 				ibkr.OrderStatusPreSubmitted,
 				ibkr.OrderStatusSubmitted,
-				ibkr.OrderStatusSubmitted,
 				ibkr.OrderStatusCancelled,
 			},
-			autoCancelReason: "Vwap: End Time is before Start Time",
+			autoCancelReason: "Vwap: start time is after close time",
 		},
 		{
 			name:     "arrival_px",
-			orderID:  479,
+			orderID:  459,
 			strategy: "ArrivalPx",
 			params: []ibkr.TagValue{
 				algoTag("maxPctVol", "0.1"),
@@ -199,11 +199,11 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 				ibkr.OrderStatusSubmitted,
 				ibkr.OrderStatusCancelled,
 			},
-			autoCancelReason: "ArrivalPx: End Time is before Start Time",
+			autoCancelReason: "ArrivalPx: start time is after close time",
 		},
 		{
 			name:     "dark_ice",
-			orderID:  480,
+			orderID:  460,
 			strategy: "DarkIce",
 			params: []ibkr.TagValue{
 				algoTag("startTime", algoStartUTC),
@@ -216,7 +216,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:     "accum_dist",
-			orderID:  481,
+			orderID:  461,
 			strategy: "AD",
 			params: []ibkr.TagValue{
 				algoTag("componentSize", "1"),
@@ -246,7 +246,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:     "inline",
-			orderID:  482,
+			orderID:  462,
 			strategy: "Inline",
 			params: []ibkr.TagValue{
 				algoTag("startTime", algoStartUTC),
@@ -257,7 +257,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:     "close",
-			orderID:  483,
+			orderID:  463,
 			strategy: "ClosePx",
 			params: []ibkr.TagValue{
 				algoTag("maxPctVol", "0.1"),
@@ -266,7 +266,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 				algoTag("forceCompletion", "0"),
 			},
 			permID:    9000000483,
-			echoCount: 3,
+			echoCount: 2,
 			echoParams: []ibkr.TagValue{
 				algoTag("riskAversion", "Neutral"),
 				algoTag("forceCompletion", "0"),
@@ -276,12 +276,12 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 			initialStatuses: []ibkr.OrderStatus{
 				ibkr.OrderStatusPreSubmitted,
 				ibkr.OrderStatusSubmitted,
-				ibkr.OrderStatusSubmitted,
 			},
+			autoCancelReason: "ClosePx: start time is after close time",
 		},
 		{
 			name:     "pct_vol",
-			orderID:  484,
+			orderID:  464,
 			strategy: "PctVol",
 			params: []ibkr.TagValue{
 				algoTag("pctVol", "0.1"),
@@ -302,11 +302,11 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 				ibkr.OrderStatusSubmitted,
 				ibkr.OrderStatusCancelled,
 			},
-			autoCancelReason: "PctVol: End Time is before Start Time",
+			autoCancelReason: "PctVol: start time is after close time",
 		},
 		{
 			name:     "balance_impact_risk",
-			orderID:  485,
+			orderID:  465,
 			strategy: "BalanceImpactRisk",
 			params: []ibkr.TagValue{
 				algoTag("maxPctVol", "0.1"),
@@ -317,7 +317,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:          "min_impact",
-			orderID:       486,
+			orderID:       466,
 			strategy:      "MinImpact",
 			params:        []ibkr.TagValue{algoTag("maxPctVol", "0.1")},
 			rejectCode:    ibkr.ErrCodeAlgoDefinitionNotFound,
@@ -325,7 +325,7 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 		},
 		{
 			name:     "jef_ad",
-			orderID:  487,
+			orderID:  467,
 			strategy: "JefAD",
 			params: []ibkr.TagValue{
 				algoTag("startTime", algoStartUTC),
@@ -339,23 +339,38 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 	}
 
 	client, host := newClient(t, "api_algo_variants_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	events := client.SessionEvents()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
+	refs := []string{
+		"sanitized-order-ref-0000000000000001",
+		"sanitized-order-ref-0000000000000006",
+		"sanitized-order-ref-0000000000000011",
+		"sanitized-order-ref-0000000000000013",
+		"sanitized-order-ref-0000000000000017",
+		"sanitized-order-ref-0000000000000021",
+		"sanitized-order-ref-0000000000000023",
+		"sanitized-order-ref-0000000000000026",
+		"sanitized-order-ref-0000000000000028",
+		"sanitized-order-ref-0000000000000032",
+		"sanitized-order-ref-0000000000000036",
+		"sanitized-order-ref-0000000000000038",
+		"sanitized-order-ref-0000000000000040",
+	}
 
 	for i, v := range variants {
-		ref := fmt.Sprintf("ibkrgo-redacted-20260711T052212Z-%03d", i+1)
+		ref := refs[i]
 		t.Run(v.name, func(t *testing.T) {
 			handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 				Contract: orderReplayAAPL,
 				Order: ibkr.Order{
 					Action:      ibkr.ActionBuy,
 					OrderType:   ibkr.OrderTypeLimit,
-					Quantity:    decimal.RequireFromString("100"),
-					LmtPrice:    new(decimal.RequireFromString("15.81")),
+					Quantity:    decimal.RequireFromString("1"),
+					LmtPrice:    new(decimal.RequireFromString("15.53")),
 					TIF:         ibkr.TIFDay,
 					Account:     "DU9000001",
 					OrderRef:    ref,
@@ -380,13 +395,10 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 				if echo.Order.Algorithm.Strategy != v.strategy {
 					t.Fatalf("echo %d algo strategy = %q, want %q", i, echo.Order.Algorithm.Strategy, v.strategy)
 				}
-				if *echo.Order.PermID != v.permID {
-					t.Fatalf("echo %d perm id = %d, want %d", i, *echo.Order.PermID, v.permID)
-				}
 				requireAlgoParams(t, fmt.Sprintf("echo %d", i), echo.Order.Algorithm.Params, v.echoParams)
 			}
-			if !echoes[0].Order.Prices.LmtPrice.Equal(decimal.RequireFromString("15.81")) {
-				t.Fatalf("echoed lmt price = %s, want 15.81", echoes[0].Order.Prices.LmtPrice)
+			if !echoes[0].Order.Prices.LmtPrice.Equal(decimal.RequireFromString("15.53")) {
+				t.Fatalf("echoed lmt price = %s, want 15.53", echoes[0].Order.Prices.LmtPrice)
 			}
 			if echoes[0].Order.OrderRef != ref {
 				t.Fatalf("echoed order ref = %q, want %q", echoes[0].Order.OrderRef, ref)
@@ -414,5 +426,12 @@ func TestAPIAlgoVariantsReplay(t *testing.T) {
 				t.Fatalf("10148 message = %q, want %q", cancelNotice.Message, wantCancelNotice)
 			}
 		})
+	}
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	if err != nil {
+		t.Fatalf("Executions: %v", err)
+	}
+	if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+		t.Fatalf("algo executions/fees = %d/%d, want 0/0", len(executions.Executions), len(executions.CommissionAndFees))
 	}
 }

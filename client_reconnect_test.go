@@ -14,8 +14,7 @@ func TestReconnectOneShotInterrupted(t *testing.T) {
 
 	client, host := newClient(t, "reconnect_oneshot_interrupted.txt",
 		ibkr.WithReconnectPolicy(ibkr.ReconnectOff))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -43,8 +42,7 @@ func TestReconnectPolicyOff(t *testing.T) {
 
 	client, host := newClient(t, "quote_stream_disconnect.txt",
 		ibkr.WithReconnectPolicy(ibkr.ReconnectOff))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

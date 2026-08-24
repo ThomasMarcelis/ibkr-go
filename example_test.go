@@ -2,6 +2,7 @@ package ibkr_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"time"
@@ -44,13 +45,13 @@ func Example_contractDetails() {
 }
 
 func Example_historicalBars() {
-	client, cleanup := exampleClient("grounded_historical_bars.txt")
+	client, cleanup := exampleClient("historical_bars_subscription_required.txt")
 	defer cleanup()
 
 	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
 	defer stop()
 
-	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+	_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
 		Contract: ibkr.Contract{
 			ConID:    265598,
 			Symbol:   "AAPL",
@@ -63,13 +64,10 @@ func Example_historicalBars() {
 		WhatToShow: ibkr.ShowTrades,
 		UseRTH:     true,
 	})
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println(len(bars), bars[0].Close, bars[len(bars)-1].Close)
+	apiErr, _ := errors.AsType[*ibkr.APIError](err)
+	fmt.Println(apiErr.Code, apiErr.IsEntitlement())
 	// Output:
-	// 7 314.3 315.33
+	// 2188 true
 }
 
 func Example_accountSummary() {
@@ -96,10 +94,10 @@ func Example_accountSummary() {
 		fmt.Println(value.Tag, value.Value, value.Currency)
 	}
 	// Output:
-	// BuyingPower 300000.00 EUR
-	// ExcessLiquidity 50000.00 EUR
-	// NetLiquidation 68000.00 EUR
-	// TotalCashValue 12000.00 EUR
+	// BuyingPower 183875.22 EUR
+	// ExcessLiquidity 28591.69 EUR
+	// NetLiquidation 36992.49 EUR
+	// TotalCashValue -1441.67 EUR
 }
 
 func Example_positionsSnapshot() {
@@ -118,14 +116,18 @@ func Example_positionsSnapshot() {
 		fmt.Println(position.Contract.Symbol, position.Position)
 	}
 	// Output:
-	// AMZN 15
-	// QQQ -3
-	// YW 1
-	// AAPL 10
+	// ASML 40
+	// ADYEN 100
+	// MES 0
+	// ASML 30
+	// NXE 8188
+	// CRDO 753
+	// DHER 1568
+	// HAG 1556
 }
 
 func Example_placeOrder() {
-	client, cleanup := exampleClient("place_order_lmt_buy_aapl.txt")
+	client, cleanup := exampleClient("direct_cancel_order.txt")
 	defer cleanup()
 
 	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
@@ -133,6 +135,7 @@ func Example_placeOrder() {
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -142,9 +145,10 @@ func Example_placeOrder() {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
+			LmtPrice:  new(decimal.RequireFromString("10")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
@@ -152,7 +156,7 @@ func Example_placeOrder() {
 	}
 
 	for event := range handle.Events() {
-		if event.Status != nil && event.Status.Status == ibkr.OrderStatusSubmitted {
+		if event.Status != nil && event.Status.Status == ibkr.OrderStatusPreSubmitted {
 			break
 		}
 	}
@@ -170,7 +174,7 @@ func Example_placeOrder() {
 	}
 	fmt.Println("order", handle.OrderID(), "cancelled")
 	// Output:
-	// order 370 cancelled
+	// order 506 cancelled
 }
 
 func Example_qualifyContract() {
@@ -223,8 +227,8 @@ func Example_historicalSchedule() {
 	fmt.Println(schedule.TimeZone, len(schedule.Sessions), "sessions")
 	fmt.Println(first.RefDate, "through", last.RefDate)
 	// Output:
-	// US/Eastern 20 sessions
-	// 20260611 through 20260710
+	// US/Eastern 21 sessions
+	// 20260727 through 20260824
 }
 
 func Example_awaitSnapshot() {

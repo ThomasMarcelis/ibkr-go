@@ -1,0 +1,29 @@
+# Exact capture 20260824T202618Z-api_scanner_subscription for api_scanner_subscription at server_version 225.
+# events.jsonl sha256: fcf02a594c900dd73089d4da12f7e8509b37ecd13bf92c652496515470d40775.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:26:18 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=66
+raw server AAAAQgAAAMwI////////////ARCMp8+rgzQYuBAiJ01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c29wdA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCMp8+rgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARCMp8+rgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCMp8+rgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=22 encoding=protobuf payload_len=44
+raw client AAAALAAAAN4IARIkCAoSA1NUSxoMU1RLLlVTLk1BSk9SIg1IT1RfQllfVk9MVU1F
+# leg=1 direction=server msg_id=20 encoding=protobuf payload_len=680
+raw server AAACqAAAANwIARI+CAASNQi/voGzAxIDSFhBGgNTVEspAAAAAAAAAABCBVNNQVJUSgRBUkNBUgNVU0RaA0hYQWIDSFhBGgNIWEESQggBEjkIi/SBrQMSBEdJUFIaA1NUSykAAAAAAAAAAEIFU01BUlRKBk5BU0RBUVIDVVNEWgRHSVBSYgNTQ00aA1NDTRJCCAISOQjAo8iuAxIEWFBPThoDU1RLKQAAAAAAAAAAQgVTTUFSVEoGTkFTREFRUgNVU0RaBFhQT05iA1NDTRoDU0NNEkIIAxI4CK/C0McCEgRNVlBMGgNTVEspAAAAAAAAAABCBVNNQVJUSgRBUkNBUgNVU0RaBE1WUExiBE1WUEwaBE1WUEwSQggEEjgIt4Xd9gESBE9CTkQaA1NUSykAAAAAAAAAAEIFU01BUlRKBEJBVFNSA1VTRFoET0JORGIET0JORBoET0JORBJCCAUSOAjN3fWXAxIESU5EWhoDU1RLKQAAAAAAAAAAQgVTTUFSVEoEQVJDQVIDVVNEWgRJTkRaYgRJTkRaGgRJTkRaEkIIBhI5CNmlkqYDEgRHSUVRGgNTVEspAAAAAAAAAABCBVNNQVJUSgZOQVNEQVFSA1VTRFoER0lFUWIDTk1TGgNOTVMSQggHEjkIwr6BswMSBE9TUFIaA1NUSykAAAAAAAAAAEIFU01BUlRKBk5BU0RBUVIDVVNEWgRPU1BSYgNOTVMaA05NUxJACAgSNwjtwfaGAxIDR0dSGgNTVEspAAAAAAAAAABCBVNNQVJUSgZOQVNEQVFSA1VTRFoDR0dSYgNTQ00aA1NDTRJCCAkSOAjwrc6CAxIEUE1TRRoDU1RLKQAAAAAAAAAAQgVTTUFSVEoEQkFUU1IDVVNEWgRQTVNFYgRQTVNFGgRQTVNF
+# leg=1 direction=client msg_id=23 encoding=protobuf payload_len=6
+raw client AAAABgAAAN8IAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=100
+raw server AAAAZAAAAMwIARCgt8+rgzQYogEiUkhpc3RvcmljYWwgTWFya2V0IERhdGEgU2VydmljZSBlcnJvciBtZXNzYWdlOkFQSSBzY2FubmVyIHN1YnNjcmlwdGlvbiBjYW5jZWxsZWQ6IDE=
+# leg=1 direction=client msg_id=49 encoding=protobuf payload_len=4
+raw client AAAABAAAAPk=
+# leg=1 direction=server msg_id=49 encoding=protobuf payload_len=10
+raw server AAAACgAAAPkI7NGy1AY=
+disconnect

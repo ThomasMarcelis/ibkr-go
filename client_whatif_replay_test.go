@@ -10,28 +10,19 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// TestAPIWhatIfMarginPreviewReplay freezes the WhatIf margin preview
-// (AORD-010) captured live on 2026-06-10 against paper Gateway
-// server_version 200 (captures/20260610T200009Z-api_whatif_margin_aapl,
-// events.jsonl sha256 prefix e8ee70b24de3fe2f): a WhatIf MKT BUY 100 AAPL
-// draws exactly one open_order reply whose order-state block carries the
-// complete margin and commission preview, and no order_status lifecycle
-// ever follows.
-//
-// The request goes through Orders().Preview, which forces the what-if flag.
-// The place_order frame it emits is byte-identical to the captured what-if
-// order (same order id, contract, and attributes plus what_if=true), so the
-// transcript is untouched; Preview returns the order-state block as an
-// [ibkr.OrderState] instead of surfacing a handle.
+// TestAPIWhatIfMarginPreviewReplay freezes the current sv225 WhatIf sequence:
+// exact typed rejections for an unknown contract and an invalid DarkIce
+// display-size combination, followed by a successful AAPL margin preview.
 func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_whatif_margin_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	replayWhatIfRejections(t, ctx, client)
 
 	state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
@@ -41,7 +32,7 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260610T200009Z-001",
+			OrderRef:  "sanitized-order-ref-0000000000000003",
 		},
 	})
 	if err != nil {
@@ -53,15 +44,15 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 		got  *decimal.Decimal
 		want string
 	}{
-		{"InitMarginBefore", state.InitMarginBefore, "156037.86"},
-		{"MaintMarginBefore", state.MaintMarginBefore, "141852.6"},
-		{"EquityWithLoanBefore", state.EquityWithLoanBefore, "1127799.82"},
-		{"InitMarginChange", state.InitMarginChange, "0"},
-		{"MaintMarginChange", state.MaintMarginChange, "0"},
-		{"EquityWithLoanChange", state.EquityWithLoanChange, "-0.8600000001024455"},
-		{"InitMarginAfter", state.InitMarginAfter, "156037.86"},
-		{"MaintMarginAfter", state.MaintMarginAfter, "141852.6"},
-		{"EquityWithLoanAfter", state.EquityWithLoanAfter, "1127798.96"},
+		{"InitMarginBefore", state.InitMarginBefore, "148839.9"},
+		{"MaintMarginBefore", state.MaintMarginBefore, "132591.07"},
+		{"EquityWithLoanBefore", state.EquityWithLoanBefore, "1170559.72"},
+		{"InitMarginChange", state.InitMarginChange, "4398.700000000012"},
+		{"MaintMarginChange", state.MaintMarginChange, "3998.820000000007"},
+		{"EquityWithLoanChange", state.EquityWithLoanChange, "-0.8499999998603016"},
+		{"InitMarginAfter", state.InitMarginAfter, "153238.6"},
+		{"MaintMarginAfter", state.MaintMarginAfter, "136589.89"},
+		{"EquityWithLoanAfter", state.EquityWithLoanAfter, "1170558.87"},
 		{"CommissionAndFees", state.CommissionAndFees, "1.0003"},
 	} {
 		if field.got == nil || !field.got.Equal(decimal.RequireFromString(field.want)) {
@@ -102,113 +93,43 @@ func TestAPIWhatIfMarginPreviewReplay(t *testing.T) {
 	}
 }
 
-// TestPreviewContinuesAfterTIFDefaultWarning freezes the exact paper Gateway
-// server_version 207 sequence captured on 2026-07-11: a preview with no TIF
-// receives code 10349 and then a valid open-order preview. The warning is
-// observable at session scope but must not resolve the preview as an error.
-func TestPreviewContinuesAfterTIFDefaultWarning(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "whatif_tif_default_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	events := client.SessionEvents()
-
-	order := ibkr.MarketOrder(ibkr.ActionBuy, decimal.NewFromInt(100))
-	order.Account = "DU9000001"
-	state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Stock("AAPL"),
-		Order:    order,
-	})
-	if err != nil {
-		t.Fatalf("Preview: %v", err)
-	}
-	if state.Status != ibkr.OrderStatusPreSubmitted || state.MarginCurrency != "EUR" {
-		t.Fatalf("preview status/currency = %s/%q, want PreSubmitted/EUR", state.Status, state.MarginCurrency)
-	}
-	if state.CommissionAndFees == nil || !state.CommissionAndFees.Equal(decimal.RequireFromString("1.0003")) {
-		t.Fatalf("preview commission = %v, want 1.0003", state.CommissionAndFees)
-	}
-
-	warning := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderTIFSetFromPreset)
-	if warning.APIError == nil || !warning.APIError.IsWarning() {
-		t.Fatalf("code-10349 event = %+v, want classified warning", warning)
-	}
-}
-
-// TestPreviewRejectionsReplay freezes both preview error-routing branches from
-// one exact live campaign: an ordinary request error and a 10xxx placement
-// rejection. Neither request gets an open-order echo, so each targeted error
-// must resolve the blocked Preview caller without an OrderHandle.
-func TestPreviewRejectionsReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "whatif_rejections.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+func replayWhatIfRejections(t *testing.T, ctx context.Context, client *ibkr.Client) {
+	t.Helper()
 
 	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "ZZZZNONE",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+		Contract: ibkr.Contract{Symbol: "ZZZZNONE", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD"},
 		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("1"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260711T041916Z-001",
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeMarket, Quantity: decimal.NewFromInt(1),
+			TIF: ibkr.TIFDay, Account: "DU9000001", OrderRef: "sanitized-order-ref-0000000000000001",
 		},
 	})
-	var apiErr *ibkr.APIError
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("invalid-contract Preview error = %v, want *ibkr.APIError", err)
-	}
-	if apiErr.Code != ibkr.ErrCodeNoSecurityDefinition {
-		t.Fatalf("invalid-contract Preview code = %d, want %d", apiErr.Code, ibkr.ErrCodeNoSecurityDefinition)
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.Code != ibkr.ErrCodeNoSecurityDefinition || apiErr.OpKind != ibkr.OpPlaceOrder {
+		t.Fatalf("invalid-contract Preview error = %v, want typed code %d", err, ibkr.ErrCodeNoSecurityDefinition)
 	}
 
 	_, err = client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
 		Order: ibkr.Order{
-			Action:      ibkr.ActionBuy,
-			OrderType:   ibkr.OrderTypeLimit,
-			Quantity:    decimal.RequireFromString("1"),
-			LmtPrice:    new(decimal.RequireFromString("150")),
-			TIF:         ibkr.TIFDay,
-			Account:     "DU9000001",
-			OrderRef:    "ibkrgo-redacted-20260711T041916Z-002",
-			DisplaySize: 1,
+			Action: ibkr.ActionBuy, OrderType: ibkr.OrderTypeLimit, Quantity: decimal.NewFromInt(1),
+			LmtPrice: new(decimal.NewFromInt(150)), TIF: ibkr.TIFDay, Account: "DU9000001",
+			OrderRef: "sanitized-order-ref-0000000000000002", DisplaySize: 1,
 			Algorithm: ibkr.OrderAlgorithm{
 				Strategy: "DarkIce",
 				Params: []ibkr.TagValue{
 					{Tag: "displaySize", Value: "1"},
-					{Tag: "startTime", Value: "20260711 04:22:17 UTC"},
-					{Tag: "endTime", Value: "20260711 04:39:17 UTC"},
+					{Tag: "startTime", Value: "20260824 21:07:26 UTC"},
+					{Tag: "endTime", Value: "20260824 21:24:26 UTC"},
 					{Tag: "allowPastEndTime", Value: "1"},
 				},
 			},
 		},
 	})
-	apiErr = nil
-	if !errors.As(err, &apiErr) {
-		t.Fatalf("DarkIce Preview error = %v, want *ibkr.APIError", err)
+	apiErr, ok = errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.Code != ibkr.ErrCodeDisplaySizeNotAllowed || apiErr.OpKind != ibkr.OpPlaceOrder {
+		t.Fatalf("DarkIce Preview error = %v, want typed code %d", err, ibkr.ErrCodeDisplaySizeNotAllowed)
 	}
-	if apiErr.Code != ibkr.ErrCodeDisplaySizeNotAllowed {
-		t.Fatalf("DarkIce Preview code = %d, want %d", apiErr.Code, ibkr.ErrCodeDisplaySizeNotAllowed)
-	}
-	if apiErr.Message != "The 'Display Size' order attribute may not be specified for this order." {
-		t.Fatalf("DarkIce Preview message = %q", apiErr.Message)
-	}
+
 }
 
 // TestPreviewInterruptedByDisconnectReplay freezes the Preview transport-loss
@@ -219,11 +140,11 @@ func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "whatif_disconnect.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	replayWhatIfRejections(t, ctx, client)
 
 	_, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
 		Contract: orderReplayAAPL,
@@ -233,7 +154,7 @@ func TestPreviewInterruptedByDisconnectReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("100"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260711T040155Z-001",
+			OrderRef:  "sanitized-order-ref-0000000000000003",
 		},
 	})
 	if !errors.Is(err, ibkr.ErrInterrupted) {

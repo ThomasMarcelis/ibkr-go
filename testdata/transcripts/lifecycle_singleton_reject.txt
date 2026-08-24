@@ -1,16 +1,37 @@
-# Exact request, snapshot boundary, and cancellation from paper IB Gateway
-# server_version 207 capture
-# /tmp/ibkr-go-empty-positions-paper-20260711/
-# 20260711T032432Z-positions_snapshot, events.jsonl sha256:
-# 93fe95e3b2f7f336e6c9fced2ca7b563dd4e9c6726343ca05df02335b020b24d
-#
-# The account is length-preserving redacted to DU9000001. Eight private
-# position rows between the request and end marker are omitted; they are not
-# relevant to the singleton-ownership behavior under test.
-handshake {"server_version":207,"connection_time":"20260711 05:24:32 Central European Standard Time"}
+# Exact capture 20260824T213802Z-positions_subscription for positions_subscription at server_version 225.
+# events.jsonl sha256: b2671a0a0a38b84d4aa857b1a4c710b1a5789e1883acef46c94c42b77c7ade00.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 23:38:02 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
-raw server AAAACAAAAAkxADEA
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEIxQQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDK/9WtgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARDK/9WtgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDK/9WtgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=61 encoding=protobuf payload_len=4
 raw client AAAABAAAAQU=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIzCPfVlJkBEgVBRFlFThoDU1RLKQAAAAAAAAAAQgNBRUJSA0VVUloFQURZRU5iBUFEWUVOGgMxMDAhpaDbSxqZjEA=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=95
+raw server AAAAXwAAAQUKCURVOTAwMDAwMRJCCLnPpvoCEgNNRVMaA0ZVVCIIMjAyNjA5MTgpAAAAAAAAAAA5AAAAAAAAFEBCA0NNRVIDVVNEWgVNRVNVNmIDTUVTGgEwIQAAAAAAAAAA
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=79
+raw server AAAATwAAAQUKCURVOTAwMDAwMRIxCPibnDgSBEFTTUwaA1NUSykAAAAAAAAAAEIGTkFTREFRUgNVU0RaBEFTTUxiA05NUxoCMzAh9Ae5Qaf2lUA=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRItCIm50mESA05YRRoDU1RLKQAAAAAAAAAAQgROWVNFUgNVU0RaA05YRWIDTlhFGgQ4MTg4IQLYgAhx/ShA
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=81
+raw server AAAAUQAAAQUKCURVOTAwMDAwMRIyCOeZjIICEgRDUkRPGgNTVEspAAAAAAAAAABCBk5BU0RBUVIDVVNEWgRDUkRPYgNOTVMaAzc1MyFzhj1Iyr9mQA==
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIyCKDlhoYBEgRESEVSGgNTVEspAAAAAAAAAABCBElCSVNSA0VVUloEREhFUmIFWEVUUkEaBDE1NjghWqGjsObMNEA=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=80
+raw server AAAAUAAAAQUKCURVOTAwMDAwMRIwCKGAtNUBEgNIQUcaA1NUSykAAAAAAAAAAEIESUJJU1IDRVVSWgNIQUdiBVhFVFJBGgQxNTU2IcROZ901u1NA
+# leg=1 direction=server msg_id=62 encoding=protobuf payload_len=4
 raw server AAAABAAAAQY=
+# leg=1 direction=client msg_id=64 encoding=protobuf payload_len=4
 raw client AAAABAAAAQg=
 disconnect

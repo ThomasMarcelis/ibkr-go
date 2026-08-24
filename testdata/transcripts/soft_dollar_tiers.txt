@@ -1,12 +1,27 @@
-# Live-derived from captures/20260711T021018Z-soft_dollar_tiers at
-# server_version 207; events.jsonl sha256:
-# eb77ab22b2e6be7edcdd14a9769aa66ec1885ecc8942aad1381d958c41d249c3.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted. The request and empty tier response
-# are exact captured frames.
-handshake {"server_version":207,"connection_time":"20260711 04:10:18 Central European Standard Time"}
+# Exact capture 20260824T202846Z-soft_dollar_tiers for soft_dollar_tiers at server_version 225.
+# events.jsonl sha256: 26e04d55d13bec7be0cb84fca1607eeffe62437de3f10e8f96aea91e25074180.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:28:46 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
-raw server AAAACAAAAAkxADEA
-raw client AAAABgAAAE8xAA==
-raw server AAAACAAAAE0xADAA
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCErdirgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCErdirgzQYuBAiK01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0ubmo=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=66
+raw server AAAAQgAAAMwI////////////ARCErdirgzQYuBAiJ01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpqZmFybQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=69
+raw server AAAARQAAAMwI////////////ARCErdirgzQYuBAiKk1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpjYXNoZmFybQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCErdirgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARCErdirgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCErdirgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=79 encoding=protobuf payload_len=6
+raw client AAAABgAAARcIAQ==
+# leg=1 direction=server msg_id=77 encoding=protobuf payload_len=6
+raw server AAAABgAAARUIAQ==
 disconnect

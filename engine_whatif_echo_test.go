@@ -72,7 +72,7 @@ func capturedWhatIfOpenOrder(t *testing.T) codec.OpenOrder {
 		if err != nil {
 			t.Fatal(err)
 		}
-		messages, err := codec.DecodeBatch(200, payload)
+		messages, err := codec.DecodeBatch(225, payload)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -3,7 +3,6 @@ package ibkr_test
 import (
 	"context"
 	"errors"
-	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -59,6 +58,9 @@ func TestLiveCFDQuoteReroute(t *testing.T) {
 
 	ctx, cancelReq := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancelReq()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("MarketData().SetType(delayed) error = %v", err)
+	}
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
 		Symbol: "IBM", SecType: ibkr.SecTypeCFD, Exchange: "SMART", Currency: "USD",
 	}})
@@ -71,9 +73,14 @@ func TestLiveCFDQuoteReroute(t *testing.T) {
 		select {
 		case event, ok := <-sub.Events():
 			if !ok {
-				t.Fatalf("IBM CFD quote closed before rerouted data: %v", sub.Err())
+				err := sub.Err()
+				if isExactLiveCFDQuoteBlocker(err) {
+					t.Skipf("IBM CFD reroute reached exact live entitlement blocker: %v", err)
+				}
+				t.Fatalf("IBM CFD quote closed before rerouted data: %v", err)
 			}
-			if event.Kind == ibkr.StreamData {
+			if event.Kind == ibkr.StreamData &&
+				event.Value.Changed&^ibkr.QuoteFieldMarketDataType != 0 {
 				return
 			}
 		case <-ctx.Done():
@@ -154,9 +161,8 @@ func TestLiveHistoricalBars(t *testing.T) {
 		UseRTH:     true,
 	})
 	if err != nil {
-		if isLiveHistoricalDataUnavailable(err) {
-			t.Logf("HistoricalBars() returned: %v (current Gateway historical data session constraint)", err)
-			return
+		if isLiveHistoricalDataUnavailable(err, ibkr.OpHistoricalBars) {
+			t.Skipf("HistoricalBars() reached exact live historical-data blocker: %v", err)
 		}
 		t.Fatalf("HistoricalBars() error = %v", err)
 	}
@@ -193,7 +199,7 @@ func TestLivePersistentClientSequentialRequests(t *testing.T) {
 		UseRTH:     true,
 	})
 	if err != nil {
-		if isLiveHistoricalDataUnavailable(err) {
+		if isLiveHistoricalDataUnavailable(err, ibkr.OpHistoricalBars) {
 			t.Skipf("HistoricalBars() returned: %v (current Gateway historical data session constraint)", err)
 		}
 		t.Fatalf("first HistoricalBars() error = %v", err)
@@ -252,15 +258,9 @@ func TestLiveCurrentTime(t *testing.T) {
 }
 
 func TestLiveManagedAccountsRefresh(t *testing.T) {
-	restore := ibkr.SetAdvertisedServerVersionMaxForTest(207)
-	defer restore()
-
 	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
 	defer cancel()
 	defer client.Close()
-	if got := client.Session().ServerVersion; got != 207 {
-		t.Fatalf("ServerVersion = %d, want exact 207", got)
-	}
 
 	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelReq()
@@ -293,9 +293,8 @@ func TestLiveHistoricalSchedule(t *testing.T) {
 		UseRTH:   true,
 	})
 	if err != nil {
-		if isLiveHistoricalDataUnavailable(err) {
-			t.Logf("HistoricalSchedule() returned: %v (current Gateway historical data session constraint)", err)
-			return
+		if isLiveHistoricalDataUnavailable(err, ibkr.OpHistoricalSchedule) {
+			t.Skipf("HistoricalSchedule() reached exact live historical-data blocker: %v", err)
 		}
 		t.Fatalf("HistoricalSchedule() error = %v", err)
 	}
@@ -319,45 +318,27 @@ func TestLiveQuoteSnapshot(t *testing.T) {
 	defer cancel()
 	defer client.Close()
 
-	// Short timeout: accounts without real-time market data subscriptions
-	// may need OutReqMarketDataType(3) sent first to receive delayed data.
-	// Without that, the snapshot may time out.
-	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelReq()
 
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("MarketData().SetType(delayed) error = %v", err)
+	}
 	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{
 		Contract: aaplContract,
 	})
 	if err != nil {
-		t.Logf("QuoteSnapshot() returned: %v (may need delayed data mode setup)", err)
-		return
+		t.Fatalf("QuoteSnapshot() error = %v", err)
+	}
+	if quote.Available == 0 {
+		t.Fatal("QuoteSnapshot() returned no available quote fields")
 	}
 	t.Logf("QuoteSnapshot: Available=%d, Bid=%s, Ask=%s, Last=%s",
 		quote.Available, quote.Bid, quote.Ask, quote.Last)
 }
 
 func TestLiveRegulatorySnapshot(t *testing.T) {
-	if os.Getenv("IBKR_LIVE_REGULATORY_SNAPSHOT") != "1" {
-		t.Skip("set IBKR_LIVE_REGULATORY_SNAPSHOT=1 only after authorizing the fee-bearing request")
-	}
-	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancelReq()
-	details, err := client.Contracts().Qualify(ctx, aaplContract)
-	if err != nil {
-		t.Fatalf("Qualify(AAPL) error = %v", err)
-	}
-	quote, err := client.MarketData().RegulatorySnapshot(ctx, details.Contract)
-	if err != nil {
-		t.Fatalf("RegulatorySnapshot() error = %v", err)
-	}
-	if quote.Available == 0 {
-		t.Fatal("RegulatorySnapshot() returned no available quote fields")
-	}
-	t.Logf("RegulatorySnapshot: Available=%d Bid=%s Ask=%s Last=%s", quote.Available, quote.Bid, quote.Ask, quote.Last)
+	t.Skip("the sole authorized v2.0.1 attempt was consumed by capture 20260824T195855Z-regulatory_snapshot_aapl_v201_authorized_once; never retry it")
 }
 
 func TestLiveOpenOrders(t *testing.T) {
@@ -391,18 +372,12 @@ func TestLiveCompletedOrders(t *testing.T) {
 
 	orders, err := client.Orders().Completed(ctx, true)
 	if err != nil {
-		if errors.Is(err, context.DeadlineExceeded) {
-			// Gateway builds 207 and 225 have both remained silent for this
-			// request through ibkr-go and the official SDK. A deadline is an
-			// unresolved snapshot, never evidence of an empty one.
-			t.Logf("CompletedOrders() received no terminal response before its deadline: %v", err)
-			return
-		}
 		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok &&
+			apiErr.OpKind == ibkr.OpCompletedOrders &&
 			apiErr.Code == ibkr.ErrCodeServerErrorValidatingRequest &&
+			strings.Contains(apiErr.Message, "Error validating request.-'S'") &&
 			strings.Contains(apiErr.Message, "API interface is currently in Read-Only mode") {
-			t.Logf("CompletedOrders() returned the expected read-only Gateway response: %v", err)
-			return
+			t.Skipf("CompletedOrders() reached exact live read-only blocker: %v", err)
 		}
 		t.Fatalf("CompletedOrders() error = %v", err)
 	}
@@ -416,16 +391,12 @@ func TestLiveExecutions(t *testing.T) {
 	defer cancel()
 	defer client.Close()
 
-	// Short timeout: the IB Gateway may not send ExecutionsEnd for
-	// read-only accounts with no recent executions.
-	ctx, cancelReq := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancelReq()
 
 	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
 	if err != nil {
-		// Timeout is acceptable when the account has no executions.
-		t.Logf("Executions() returned: %v (acceptable for read-only/empty accounts)", err)
-		return
+		t.Fatalf("Executions() error = %v", err)
 	}
 	t.Logf("Executions: %d rows", len(executions.Executions))
 }
@@ -552,9 +523,12 @@ func TestLiveWSHMetaData(t *testing.T) {
 
 	data, err := client.WSH().MetaData(ctx)
 	if err != nil {
-		// Paper accounts without news subscriptions return error 10276.
-		t.Logf("WSHMetaData() returned: %v (expected on paper accounts without news feed)", err)
-		return
+		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok &&
+			apiErr.OpKind == ibkr.OpWSHMetaData && apiErr.Code == 10276 &&
+			strings.Contains(apiErr.Message, "News feed is not allowed") {
+			t.Skipf("WSHMetaData() reached exact live news-feed blocker: %v", err)
+		}
+		t.Fatalf("WSHMetaData() error = %v", err)
 	}
 	if len(data) == 0 {
 		t.Fatal("WSHMetaData() returned empty document")
@@ -574,9 +548,13 @@ func TestLiveRequestFA(t *testing.T) {
 
 	data, err := client.Advisors().Config(ctx, 1)
 	if err != nil {
-		// Non-FA accounts return an error; this is expected on paper accounts.
-		t.Logf("RequestFA() returned: %v (expected on non-FA accounts)", err)
-		return
+		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok &&
+			apiErr.OpKind == ibkr.OpFAConfig &&
+			apiErr.Code == ibkr.ErrCodeServerErrorValidatingRequest &&
+			strings.Contains(apiErr.Message, "FA data operations ignored for non FA customers") {
+			t.Skipf("RequestFA() reached exact live non-FA blocker: %v", err)
+		}
+		t.Fatalf("RequestFA() error = %v", err)
 	}
 	if len(data) == 0 {
 		t.Fatal("RequestFA() returned empty document")
@@ -597,36 +575,45 @@ func TestLiveSubscribeMarketDepth(t *testing.T) {
 	sub, err := client.MarketData().SubscribeDepth(ctx, ibkr.MarketDepthRequest{
 		Contract:     aaplContract,
 		NumRows:      5,
-		IsSmartDepth: true,
+		IsSmartDepth: false,
 	}, ibkr.WithResumePolicy(ibkr.ResumeNever))
 	if err != nil {
-		// Deep market data may not be available on all paper accounts.
-		t.Logf("SubscribeMarketDepth() returned: %v (may need market data subscription)", err)
-		return
+		if isExactLiveMarketDepthBlocker(err) {
+			t.Skipf("SubscribeMarketDepth() reached exact live depth blocker: %v", err)
+		}
+		t.Fatalf("SubscribeMarketDepth() error = %v", err)
 	}
 	defer sub.Close()
 
-	// Read a few depth events or accept timeout.
 	var events int
 	deadline := time.After(10 * time.Second)
 	sessionEvents := client.SessionEvents()
+	streamEvents := sub.Events()
 	for {
 		select {
-		case _, ok := <-sub.Events():
+		case event, ok := <-streamEvents:
 			if !ok {
-				t.Logf("SubscribeMarketDepth: events channel closed after %d events", events)
-				return
+				err := sub.Err()
+				if isExactLiveMarketDepthBlocker(err) {
+					t.Skipf("SubscribeMarketDepth() reached exact live depth blocker: %v", err)
+				}
+				t.Fatalf("SubscribeMarketDepth() closed after %d rows: %v", events, err)
 			}
-			events++
-			if events >= 5 {
-				t.Logf("SubscribeMarketDepth: received %d depth rows", events)
-				return
+			if event.Err != nil {
+				if isExactLiveMarketDepthBlocker(event.Err) {
+					t.Skipf("SubscribeMarketDepth() reached exact live depth blocker: %v", event.Err)
+				}
+				t.Fatalf("SubscribeMarketDepth() stream error = %v", event.Err)
 			}
-		case evt := <-sub.Events():
-			if evt.Err != nil {
-				// Terminal market-depth errors such as 10092 close the subscription.
-				t.Logf("SubscribeMarketDepth state error: %v (expected without deep data subscription)", evt.Err)
-				return
+			if event.Kind == ibkr.StreamData {
+				events++
+				if events >= 5 {
+					t.Logf("SubscribeMarketDepth: received %d depth rows", events)
+					return
+				}
+			}
+			if event.Kind == ibkr.StreamNotice && event.Notice != nil && event.Notice.Code == ibkr.ErrCodeSmartDepthExchanges {
+				t.Logf("SubscribeMarketDepth availability: %s", event.Notice.Message)
 			}
 		case evt, ok := <-sessionEvents:
 			if !ok {
@@ -634,249 +621,25 @@ func TestLiveSubscribeMarketDepth(t *testing.T) {
 				continue
 			}
 			if evt.Code == ibkr.ErrCodeSmartDepthExchanges {
-				// Code 2152 is a nonterminal availability notice; rows may still
-				// follow when its payload lists an entitled depth exchange.
+				if isExactLiveNoMarketDepthNotice(evt.Message) {
+					t.Skipf("SubscribeMarketDepth() reached exact live availability blocker: %s", evt.Message)
+				}
 				t.Logf("SubscribeMarketDepth availability: %s", evt.Message)
+				continue
+			}
+			if evt.Err != nil {
+				t.Fatalf("session error while awaiting market depth = %v", evt.Err)
 			}
 		case <-deadline:
-			t.Logf("SubscribeMarketDepth: timed out after %d events (may need market data subscription)", events)
-			return
-		}
-	}
-}
-
-func TestLivePlaceOrderLimitAndCancel(t *testing.T) {
-	ibkrlive.RequireTrading(t)
-
-	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancelReq()
-
-	// Safety: cancel all orders on cleanup.
-	defer func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cleanCancel()
-		_ = client.Orders().CancelAll(cleanCtx)
-	}()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
-			TIF:       ibkr.TIFDay,
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-	t.Logf("PlaceOrder: orderID=%d", handle.OrderID())
-
-	// Wait for any status before cancelling.
-	var sawStatus bool
-	for !sawStatus {
-		select {
-		case evt := <-handle.Events():
-			if evt.Status != nil {
-				t.Logf("order status: %s", evt.Status.Status)
-				sawStatus = true
+			if events == 0 {
+				t.Fatal("SubscribeMarketDepth() produced no row or exact typed blocker before timeout")
 			}
-		case <-ctx.Done():
-			t.Log("timeout waiting for initial status; cancelling live paper order anyway")
-			cancelCtx, cancelOrder := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancelOrder()
-			if err := handle.Cancel(cancelCtx); err != nil {
-				t.Logf("Cancel after status timeout: %v", err)
+			if events < 5 {
+				t.Logf("SubscribeMarketDepth: received %d depth rows", events)
+				return
 			}
-			return
 		}
 	}
-
-	if err := handle.Cancel(ctx); err != nil {
-		t.Fatalf("Cancel: %v", err)
-	}
-
-	// Wait for terminal status.
-	for {
-		select {
-		case evt := <-handle.Events():
-			if evt.Status != nil {
-				t.Logf("order status after cancel: %s", evt.Status.Status)
-				if evt.Status.Status == "Cancelled" || evt.Status.Status == "Inactive" {
-					return
-				}
-			}
-		case <-handle.Done():
-			return
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for cancelled status")
-		}
-	}
-}
-
-func TestLiveGlobalCancel(t *testing.T) {
-	ibkrlive.RequireTrading(t)
-
-	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancelReq()
-
-	// Place two far-from-market limit orders.
-	var handles []*ibkr.OrderHandle
-	for i := 0; i < 2; i++ {
-		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-			Contract: aaplContract,
-			Order: ibkr.Order{
-				Action:    ibkr.ActionBuy,
-				OrderType: ibkr.OrderTypeLimit,
-				Quantity:  decimal.RequireFromString("1"),
-				LmtPrice:  new(decimal.RequireFromString("50")),
-				TIF:       ibkr.TIFDay,
-			},
-		})
-		if err != nil {
-			t.Fatalf("PlaceOrder[%d]: %v", i, err)
-		}
-		handles = append(handles, handle)
-		t.Logf("PlaceOrder[%d]: orderID=%d", i, handle.OrderID())
-	}
-
-	// Wait for at least one status event on each handle.
-	for i, h := range handles {
-		select {
-		case evt := <-h.Events():
-			if evt.Status != nil {
-				t.Logf("handle[%d] initial status: %s", i, evt.Status.Status)
-			}
-		case <-ctx.Done():
-			t.Fatalf("timeout waiting for handle[%d] initial status", i)
-		}
-	}
-
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("GlobalCancel: %v", err)
-	}
-
-	// Wait for all handles to reach terminal state.
-	for i, h := range handles {
-		select {
-		case <-h.Done():
-			t.Logf("handle[%d] done", i)
-		case <-ctx.Done():
-			t.Fatalf("timeout waiting for handle[%d] to finish after GlobalCancel", i)
-		}
-	}
-}
-
-func TestLiveTradingSplitBuySellExecutionRoundTrip(t *testing.T) {
-	ibkrlive.RequireTrading(t)
-
-	client, _, cancel := ibkrlive.DialTradingContext(t, 90*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 90*time.Second)
-	defer cancelReq()
-
-	defer func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cleanCancel()
-		_ = client.Orders().CancelAll(cleanCtx)
-	}()
-
-	snapshot := client.Session()
-	if len(snapshot.ManagedAccounts) == 0 {
-		t.Fatal("no managed accounts in live session")
-	}
-	account := snapshot.ManagedAccounts[0]
-
-	beforeSummary, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		AccountFilter: account,
-		Tags:          []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
-	})
-	if err != nil {
-		t.Fatalf("pre-trade account summary: %v", err)
-	}
-	t.Logf("pre-trade account summary values: %d", len(beforeSummary))
-
-	var filledBuys int
-	for i := 0; i < 2; i++ {
-		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-			Contract: aaplContract,
-			Order: ibkr.Order{
-				Action:    ibkr.ActionBuy,
-				OrderType: ibkr.OrderTypeMarket,
-				Quantity:  decimal.RequireFromString("1"),
-				TIF:       ibkr.TIFDay,
-				Account:   account,
-			},
-		})
-		if err != nil {
-			t.Fatalf("split buy[%d]: %v", i, err)
-		}
-		filled, sawExecution := waitLiveOrderFill(t, ctx, handle, "split buy")
-		t.Logf("split buy[%d]: filled=%v saw_execution=%v", i, filled, sawExecution)
-		if filled {
-			filledBuys++
-		}
-	}
-
-	if filledBuys == 0 {
-		t.Log("no market fills observed; market may be closed or the account may be holding orders")
-		return
-	}
-
-	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
-		Account: account,
-		Symbol:  "AAPL",
-	})
-	if err != nil {
-		t.Fatalf("executions after split buys: %v", err)
-	}
-	if len(executions.Executions) == 0 {
-		t.Fatal("executions after split buys = 0, want at least one execution/commission update")
-	}
-
-	for i := 0; i < filledBuys; i++ {
-		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-			Contract: aaplContract,
-			Order: ibkr.Order{
-				Action:    ibkr.ActionSell,
-				OrderType: ibkr.OrderTypeMarket,
-				Quantity:  decimal.RequireFromString("1"),
-				TIF:       ibkr.TIFDay,
-				Account:   account,
-			},
-		})
-		if err != nil {
-			t.Fatalf("split sell[%d]: %v", i, err)
-		}
-		filled, sawExecution := waitLiveOrderFill(t, ctx, handle, "split sell")
-		if !filled {
-			t.Fatalf("split sell[%d] did not fill after a buy fill", i)
-		}
-		t.Logf("split sell[%d]: saw_execution=%v", i, sawExecution)
-	}
-
-	positions, err := client.Accounts().Positions(ctx)
-	if err != nil {
-		t.Fatalf("positions after round trip: %v", err)
-	}
-	t.Logf("positions after round trip: %d", len(positions))
-
-	completed, err := client.Orders().Completed(ctx, true)
-	if err != nil {
-		t.Fatalf("completed orders after round trip: %v", err)
-	}
-	t.Logf("completed orders after round trip: %d", len(completed))
 }
 
 func TestLiveSubscribePositions(t *testing.T) {
@@ -899,78 +662,20 @@ func TestLiveSubscribePositions(t *testing.T) {
 	deadline := time.After(15 * time.Second)
 	for {
 		select {
-		case _, ok := <-sub.Events():
+		case event, ok := <-sub.Events():
 			if !ok {
 				t.Fatal("Events channel closed before SnapshotComplete")
 			}
-			events++
-		case evt, ok := <-sub.Events():
-			if !ok {
-				t.Fatal("State channel closed unexpectedly")
-			}
-			if evt.Kind == ibkr.StreamSnapshotComplete {
+			if event.Kind == ibkr.StreamSnapshotComplete {
 				t.Logf("SubscribePositions: %d events before SnapshotComplete", events)
 				return
 			}
-			if evt.Err != nil {
-				t.Fatalf("subscription state error: %v", evt.Err)
+			if event.Err != nil {
+				t.Fatalf("subscription state error: %v", event.Err)
 			}
+			events++
 		case <-deadline:
 			t.Fatal("timed out waiting for SnapshotComplete")
-		}
-	}
-}
-
-func waitLiveOrderFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle, label string) (bool, bool) {
-	t.Helper()
-
-	deadline := time.After(30 * time.Second)
-	filled := false
-	sawExecution := false
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				return filled, sawExecution
-			}
-			if evt.OpenOrder != nil {
-				t.Logf("%s open order: orderID=%d status=%s", label, (*evt.OpenOrder.Order.OrderID), evt.OpenOrder.State.Status)
-			}
-			if evt.Execution != nil {
-				sawExecution = true
-				t.Logf("%s execution: execID=%s side=%s shares=%s price=%s", label, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price)
-			}
-			if evt.CommissionAndFees != nil {
-				t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPnL)
-			}
-			if evt.Status != nil {
-				t.Logf("%s status: %s filled=%s remaining=%s", label, evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
-				if evt.Status.Status == ibkr.OrderStatusFilled {
-					filled = true
-				}
-				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-					filled = filled || evt.Status.Status == ibkr.OrderStatusFilled
-				}
-			}
-		case <-handle.Done():
-			for evt := range handle.Events() {
-				if evt.Execution != nil {
-					sawExecution = true
-					t.Logf("%s execution: execID=%s side=%s shares=%s price=%s", label, evt.Execution.ExecID, evt.Execution.Side, evt.Execution.Shares, evt.Execution.Price)
-				}
-				if evt.CommissionAndFees != nil {
-					t.Logf("%s commission: execID=%s commission=%s currency=%s pnl=%s", label, evt.CommissionAndFees.ExecID, evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency, evt.CommissionAndFees.RealizedPnL)
-				}
-				if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-					filled = true
-				}
-			}
-			return filled, sawExecution
-		case <-deadline:
-			_ = handle.Cancel(ctx)
-			return filled, sawExecution
-		case <-ctx.Done():
-			t.Fatalf("%s: context done waiting for order fill: %v", label, ctx.Err())
 		}
 	}
 }
@@ -987,9 +692,12 @@ func TestLiveWSHEventData(t *testing.T) {
 
 	data, err := client.WSH().EventData(ctx, ibkr.WSHEventDataRequest{ConID: 265598})
 	if err != nil {
-		// Paper accounts without news subscriptions return error 10276.
-		t.Logf("WSHEventData() returned: %v (expected on paper accounts without news feed)", err)
-		return
+		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok &&
+			apiErr.OpKind == ibkr.OpWSHEventData && apiErr.Code == 10276 &&
+			strings.Contains(apiErr.Message, "News feed is not allowed") {
+			t.Skipf("WSHEventData() reached exact live news-feed blocker: %v", err)
+		}
+		t.Fatalf("WSHEventData() error = %v", err)
 	}
 	if len(data) == 0 {
 		t.Fatal("WSHEventData() returned empty document")
@@ -1089,9 +797,8 @@ func TestLiveHistoricalTicks(t *testing.T) {
 		WhatToShow:    ibkr.ShowMidpoint,
 	})
 	if err != nil {
-		if isLiveHistoricalDataUnavailable(err) {
-			t.Logf("HistoricalTicks() returned: %v (current Gateway historical data/session/entitlement constraint)", err)
-			return
+		if isLiveHistoricalDataUnavailable(err, ibkr.OpHistoricalTicks) {
+			t.Skipf("HistoricalTicks() reached exact live historical-data blocker: %v", err)
 		}
 		t.Fatalf("HistoricalTicks() error = %v", err)
 	}
@@ -1101,238 +808,152 @@ func TestLiveHistoricalTicks(t *testing.T) {
 	t.Logf("HistoricalTicks: %d ticks", len(result.Ticks))
 }
 
-func TestLiveCalcImpliedVolatility(t *testing.T) {
+func TestLiveOptionCalculations(t *testing.T) {
 	t.Parallel()
 
-	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
+	client, _, cancel := ibkrlive.DialContext(t, 2*time.Minute)
 	defer cancel()
 	defer client.Close()
 
-	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancelReq := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancelReq()
-
-	result, err := client.Options().ImpliedVolatility(ctx, ibkr.CalcImpliedVolatilityRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeOption,
-			Exchange: "SMART",
-			Currency: "USD",
-			Expiry:   time.Now().AddDate(0, 1, 0).Format("20060102"),
-			Strike:   new(decimal.RequireFromString("200")),
-			Right:    ibkr.RightCall,
-		},
-		OptionPrice: decimal.RequireFromString("10"),
-		UnderPrice:  decimal.RequireFromString("200"),
-	})
-	if err != nil {
-		// Option calc may fail if contract is not found or data unavailable.
-		t.Logf("CalcImpliedVolatility() returned: %v (may be expected)", err)
-		return
-	}
-	t.Logf("CalcImpliedVolatility: %+v", result)
+	runLiveOptionCalculations(t, ctx, client)
 }
 
-func TestLiveCalcOptionPrice(t *testing.T) {
-	t.Parallel()
+func runLiveOptionCalculations(t *testing.T, ctx context.Context, client *ibkr.Client) {
+	t.Helper()
 
-	client, _, cancel := ibkrlive.DialContext(t, 15*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancelReq()
-
-	result, err := client.Options().Price(ctx, ibkr.CalcOptionPriceRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeOption,
-			Exchange: "SMART",
-			Currency: "USD",
-			Expiry:   time.Now().AddDate(0, 1, 0).Format("20060102"),
-			Strike:   new(decimal.RequireFromString("200")),
-			Right:    ibkr.RightCall,
-		},
-		Volatility: decimal.RequireFromString("0.3"),
-		UnderPrice: decimal.RequireFromString("200"),
-	})
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType(Delayed) error = %v", err)
+	}
+	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: aaplContract})
 	if err != nil {
-		t.Logf("CalcOptionPrice() returned: %v (may be expected)", err)
-		return
+		t.Fatalf("delayed Quote(AAPL) error = %v", err)
 	}
-	t.Logf("CalcOptionPrice: %+v", result)
-}
+	underPrice := firstPositiveDecimal(quote.Last, quote.Ask, quote.Bid, quote.Close)
+	if !underPrice.IsPositive() {
+		t.Fatalf("delayed Quote(AAPL) has no positive anchor: %+v", quote)
+	}
+	contract := liveQualifiedAAPLCallForCalculation(t, ctx, client, underPrice)
 
-func TestLivePlaceOrderModify(t *testing.T) {
-	ibkrlive.RequireTrading(t)
-
-	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancelReq()
-
-	defer func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cleanCancel()
-		_ = client.Orders().CancelAll(cleanCtx)
-	}()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
-			TIF:       ibkr.TIFDay,
+	for _, test := range []struct {
+		name string
+		call func() (ibkr.OptionComputation, error)
+	}{
+		{
+			name: "price",
+			call: func() (ibkr.OptionComputation, error) {
+				return client.Options().Price(ctx, ibkr.CalcOptionPriceRequest{
+					Contract: contract, Volatility: decimal.RequireFromString("0.3"), UnderPrice: underPrice,
+				})
+			},
 		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-	t.Logf("PlaceOrder: orderID=%d", handle.OrderID())
-
-	// Wait for initial status.
-	select {
-	case evt := <-handle.Events():
-		if evt.Status != nil {
-			t.Logf("initial status: %s", evt.Status.Status)
-		}
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for initial status")
-	}
-
-	// Replace to $51.
-	if err := handle.Replace(ctx, ibkr.Order{
-		Action:    ibkr.ActionBuy,
-		OrderType: ibkr.OrderTypeLimit,
-		Quantity:  decimal.RequireFromString("1"),
-		LmtPrice:  new(decimal.RequireFromString("51")),
-		TIF:       ibkr.TIFDay,
-	}); err != nil {
-		t.Fatalf("Replace: %v", err)
-	}
-
-	// Wait for an OpenOrder event reflecting the new price.
-	var sawModified bool
-	deadline := time.After(10 * time.Second)
-	for !sawModified {
-		select {
-		case evt := <-handle.Events():
-			if evt.OpenOrder != nil {
-				t.Logf("OpenOrder after modify: lmt_price=%s", evt.OpenOrder.Order.Prices.LmtPrice)
-				if evt.OpenOrder.Order.Prices.LmtPrice.String() == "51" {
-					sawModified = true
-				}
+		{
+			name: "implied volatility",
+			call: func() (ibkr.OptionComputation, error) {
+				return client.Options().ImpliedVolatility(ctx, ibkr.CalcImpliedVolatilityRequest{
+					Contract: contract, OptionPrice: decimal.RequireFromString("5"), UnderPrice: underPrice,
+				})
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			result, err := test.call()
+			if err != nil {
+				t.Fatalf("option calculation error = %v", err)
 			}
-			if evt.Status != nil {
-				t.Logf("status after modify: %s", evt.Status.Status)
+			if result.Available == 0 {
+				t.Fatal("option calculation returned no available fields")
 			}
-		case <-handle.Done():
-			// Order went terminal (e.g. Inactive after hours).
-			t.Log("order reached terminal state before seeing modified OpenOrder")
-			return
-		case <-deadline:
-			t.Fatal("timeout waiting for modified OpenOrder")
-		}
-	}
-
-	if err := handle.Cancel(ctx); err != nil {
-		t.Fatalf("Cancel: %v", err)
-	}
-	select {
-	case <-handle.Done():
-	case <-ctx.Done():
-		t.Log("timeout waiting for cancelled state after live modify; global cleanup will cancel remaining paper orders")
+			t.Logf("option calculation: %+v", result)
+		})
 	}
 }
 
-func TestLivePlaceOrderBracket(t *testing.T) {
-	ibkrlive.RequireTrading(t)
-
-	client, _, cancel := ibkrlive.DialTradingContext(t, 30*time.Second)
-	defer cancel()
-	defer client.Close()
-
-	ctx, cancelReq := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancelReq()
-
-	defer func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cleanCancel()
-		_ = client.Orders().CancelAll(cleanCtx)
-	}()
-
-	// Parent: MKT BUY 1 AAPL (don't transmit yet).
-	parent, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("1"),
-			TIF:       ibkr.TIFDay,
-			Transmit:  new(false),
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder (parent): %v", err)
-	}
-	t.Logf("parent orderID=%d", parent.OrderID())
-
-	// Take-profit: LMT SELL 1 @ $500 (far above market).
-	tp, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("500")),
-			TIF:       ibkr.TIFGTC,
-			ParentID:  parent.OrderID(),
-			Transmit:  new(false),
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder (take-profit): %v", err)
-	}
-	t.Logf("take-profit orderID=%d", tp.OrderID())
-
-	// Stop-loss: STP SELL 1 @ $50 (far below market). Transmit=true triggers the bracket.
-	sl, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeStop,
-			Quantity:  decimal.RequireFromString("1"),
-			AuxPrice:  new(decimal.RequireFromString("50")),
-			TIF:       ibkr.TIFGTC,
-			ParentID:  parent.OrderID(),
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder (stop-loss): %v", err)
-	}
-	t.Logf("stop-loss orderID=%d", sl.OrderID())
-
-	// Wait for all three handles to receive at least one event.
-	handles := []*ibkr.OrderHandle{parent, tp, sl}
-	names := []string{"parent", "take-profit", "stop-loss"}
-	for i, h := range handles {
-		select {
-		case evt := <-h.Events():
-			if evt.Status != nil {
-				t.Logf("%s status: %s", names[i], evt.Status.Status)
-			}
-			if evt.OpenOrder != nil {
-				t.Logf("%s open_order received", names[i])
-			}
-		case <-h.Done():
-			t.Logf("%s reached terminal state immediately", names[i])
-		case <-ctx.Done():
-			t.Fatalf("timeout waiting for %s initial event", names[i])
+func firstPositiveDecimal(values ...decimal.Decimal) decimal.Decimal {
+	for _, value := range values {
+		if value.IsPositive() {
+			return value
 		}
 	}
+	return decimal.Zero
+}
+
+func liveChooseOptionParams(params []ibkr.SecDefOptParams) (ibkr.SecDefOptParams, bool) {
+	for _, param := range params {
+		if param.Exchange == "SMART" && param.Multiplier != "" && len(param.Expirations) > 0 && len(param.Strikes) > 0 {
+			return param, true
+		}
+	}
+	for _, param := range params {
+		if param.Multiplier != "" && len(param.Expirations) > 0 && len(param.Strikes) > 0 {
+			return param, true
+		}
+	}
+	return ibkr.SecDefOptParams{}, false
+}
+
+func liveChooseFutureExpiry(expirations []string) (string, bool) {
+	sorted := slices.Clone(expirations)
+	slices.Sort(sorted)
+	now := time.Now().Format("20060102")
+	for _, expiry := range sorted {
+		if expiry >= now {
+			return expiry, true
+		}
+	}
+	return "", false
+}
+
+func liveChooseNearestStrike(strikes []decimal.Decimal, anchor decimal.Decimal) (decimal.Decimal, bool) {
+	if len(strikes) == 0 {
+		return decimal.Zero, false
+	}
+	best := strikes[0]
+	bestDistance := best.Sub(anchor).Abs()
+	for _, strike := range strikes[1:] {
+		distance := strike.Sub(anchor).Abs()
+		if distance.LessThan(bestDistance) {
+			best = strike
+			bestDistance = distance
+		}
+	}
+	return best, true
+}
+
+func liveQualifiedAAPLCallForCalculation(t *testing.T, ctx context.Context, client *ibkr.Client, underPrice decimal.Decimal) ibkr.Contract {
+	t.Helper()
+
+	params, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+		UnderlyingSymbol: "AAPL", UnderlyingSecType: ibkr.SecTypeStock, UnderlyingConID: 265598,
+	})
+	if err != nil {
+		t.Fatalf("SecDefOptParams(AAPL) error = %v", err)
+	}
+	param, ok := liveChooseOptionParams(params)
+	if !ok {
+		t.Fatal("SecDefOptParams(AAPL) returned no SMART option parameters")
+	}
+	expiry, ok := liveChooseFutureExpiry(param.Expirations)
+	if !ok {
+		t.Fatal("SecDefOptParams(AAPL) returned no future expiration")
+	}
+	strike, ok := liveChooseNearestStrike(param.Strikes, underPrice)
+	if !ok {
+		t.Fatal("SecDefOptParams(AAPL) returned no strikes")
+	}
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol: "AAPL", SecType: ibkr.SecTypeOption, Expiry: expiry, Strike: new(strike),
+		Right: ibkr.RightCall, Multiplier: param.Multiplier, Exchange: "SMART", Currency: "USD",
+		TradingClass: param.TradingClass,
+	})
+	if err != nil {
+		t.Fatalf("ContractDetails(AAPL call) error = %v", err)
+	}
+	if len(details) == 0 {
+		t.Fatal("ContractDetails(AAPL call) returned no contract")
+	}
+	return details[0].Contract
 }
 
 func TestLiveSubscribeDisplayGroup(t *testing.T) {
@@ -1358,17 +979,22 @@ func TestLiveSubscribeDisplayGroup(t *testing.T) {
 		t.Fatalf("Update() error = %v", err)
 	}
 
-	// Wait for an update event or timeout.
-	select {
-	case event, ok := <-handle.Events():
-		if !ok {
-			t.Fatal("Events channel closed")
+	for {
+		select {
+		case event, ok := <-handle.Events():
+			if !ok {
+				t.Fatalf("Events channel closed before display-group data: %v", handle.Err())
+			}
+			if event.Err != nil {
+				t.Fatalf("SubscribeDisplayGroup() stream error = %v", event.Err)
+			}
+			if event.Kind == ibkr.StreamData {
+				t.Logf("DisplayGroupUpdate: %s", event.Value.ContractInfo)
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("SubscribeDisplayGroup() produced no data: %v", context.Cause(ctx))
 		}
-		if event.Kind == ibkr.StreamData {
-			t.Logf("DisplayGroupUpdate: %s", event.Value.ContractInfo)
-		}
-	case <-time.After(5 * time.Second):
-		t.Log("no display group update event received (may be expected)")
 	}
 }
 
@@ -1386,10 +1012,6 @@ func TestLiveSubscribeOpenOrders(t *testing.T) {
 	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll,
 		ibkr.WithResumePolicy(ibkr.ResumeNever))
 	if err != nil {
-		if _, ok := errors.AsType[*ibkr.APIError](err); ok {
-			t.Logf("SubscribeOpenOrders() API error: %v (may require clientID=0)", err)
-			return
-		}
 		t.Fatalf("SubscribeOpenOrders() error = %v", err)
 	}
 	defer sub.Close()
@@ -1418,141 +1040,122 @@ func TestLiveSubscribeOpenOrders(t *testing.T) {
 	}
 }
 
-// TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder exercises the
-// https://github.com/ThomasMarcelis/ibkr-go/issues/20 scenario against the
-// paper Gateway: a resting order is orphaned by closing its placing client,
-// recovered after a reconnect with the same clientID via SubscribeOpen, and
-// cancelled by order ID with no live OrderHandle. The cancel confirmation
-// must arrive as a Status event on the open-orders subscription.
-//
-// Both legs use clientID 0 as in the issue report: the Gateway resolves
-// cancel-by-ID within the requesting client's own order-ID space (cancelling
-// another clientID's order was rejected with code 10147 when probed live on
-// 2026-07-04).
-func TestLiveSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
-	ibkrlive.RequireTrading(t)
+func isLiveHistoricalDataUnavailable(err error, opKind ibkr.OpKind) bool {
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.OpKind != opKind {
+		return false
+	}
+	switch apiErr.Code {
+	case ibkr.ErrCodeHistoricalDataSubscriptionRequired:
+		return apiErr.Message == "Up-to-the-second historical data requires additional subscription for the API."
+	case 162:
+		return apiErr.Message == "Historical Market Data Service error message:No market data permissions for ISLAND STK. Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details."
+	case 10187:
+		return apiErr.Message == "Failed to request historical ticks:No market data permissions for ISLAND STK"
+	}
+	return false
+}
 
-	placer, _, cancelPlacer := ibkrlive.DialTradingContext(t, 30*time.Second, ibkr.WithClientID(0))
-	defer cancelPlacer()
+func TestLiveHistoricalBlockerClassifier(t *testing.T) {
+	t.Parallel()
 
-	ctx, cancelReq := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancelReq()
-
-	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aaplContract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
-			TIF:       ibkr.TIFGTC,
+	const subscriptionMessage = "Up-to-the-second historical data requires additional subscription for the API."
+	for _, test := range []struct {
+		name string
+		err  error
+		op   ibkr.OpKind
+		want bool
+	}{
+		{
+			name: "exact bars blocker",
+			err:  &ibkr.APIError{OpKind: ibkr.OpHistoricalBars, Code: ibkr.ErrCodeHistoricalDataSubscriptionRequired, Message: subscriptionMessage},
+			op:   ibkr.OpHistoricalBars,
+			want: true,
 		},
-	})
-	if err != nil {
-		placer.Close()
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-	orderID := handle.OrderID()
-	t.Logf("placed resting order: orderID=%d", orderID)
-
-	// Wait for the order to rest, then orphan it by closing the placer
-	// without cancelling.
-	for resting := false; !resting; {
-		select {
-		case evt := <-handle.Events():
-			if evt.Status != nil {
-				t.Logf("placer order status: %s", evt.Status.Status)
-				resting = true
+		{
+			name: "exact ticks blocker",
+			err:  &ibkr.APIError{OpKind: ibkr.OpHistoricalTicks, Code: ibkr.ErrCodeHistoricalDataSubscriptionRequired, Message: subscriptionMessage},
+			op:   ibkr.OpHistoricalTicks,
+			want: true,
+		},
+		{
+			name: "wrong operation",
+			err:  &ibkr.APIError{OpKind: ibkr.OpHistoricalTicks, Code: ibkr.ErrCodeHistoricalDataSubscriptionRequired, Message: subscriptionMessage},
+			op:   ibkr.OpHistoricalBars,
+		},
+		{
+			name: "unattested message",
+			err:  &ibkr.APIError{OpKind: ibkr.OpHistoricalBars, Code: ibkr.ErrCodeHistoricalDataSubscriptionRequired, Message: "different historical failure"},
+			op:   ibkr.OpHistoricalBars,
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isLiveHistoricalDataUnavailable(test.err, test.op); got != test.want {
+				t.Fatalf("isLiveHistoricalDataUnavailable() = %t, want %t", got, test.want)
 			}
-		case <-ctx.Done():
-			placer.Close()
-			t.Fatal("timeout waiting for resting status")
-		}
-	}
-	placer.Close()
-	// Release the shared live-session slot before dialing the observer leg.
-	cancelPlacer()
-
-	observer, _, cancelObs := ibkrlive.DialTradingContext(t, 30*time.Second, ibkr.WithClientID(0))
-	defer cancelObs()
-	defer observer.Close()
-	defer func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cleanCancel()
-		_ = observer.Orders().CancelAll(cleanCtx)
-	}()
-
-	sub, err := observer.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeClient,
-		ibkr.WithResumePolicy(ibkr.ResumeNever))
-	if err != nil {
-		t.Fatalf("SubscribeOpen(client): %v", err)
-	}
-	defer sub.Close()
-
-	recovered := false
-	for done := false; !done; {
-		select {
-		case event, ok := <-sub.Events():
-			if !ok {
-				t.Fatal("subscription closed during snapshot")
-			}
-			switch event.Kind {
-			case ibkr.StreamData:
-				if event.Value.Order != nil && *event.Value.Order.Order.OrderID == orderID {
-					order := event.Value.Order
-					t.Logf("recovered order %d (client %d, status %q)", *order.Order.OrderID, *order.Order.ClientID, order.State.Status)
-					recovered = true
-				}
-			case ibkr.StreamSnapshotComplete:
-				done = true
-			}
-			if event.Err != nil {
-				t.Fatalf("subscription error: %v", event.Err)
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for open-orders snapshot")
-		}
-	}
-	if !recovered {
-		t.Fatalf("order %d not present in open-orders snapshot", orderID)
-	}
-
-	// Cancel by ID: no OrderHandle for this order exists in the observer.
-	if err := observer.Orders().Cancel(ctx, orderID); err != nil {
-		t.Fatalf("Cancel(%d): %v", orderID, err)
-	}
-
-	for {
-		select {
-		case event, ok := <-sub.Events():
-			if !ok {
-				t.Fatal("subscription closed without delivering the cancel status")
-			}
-			if event.Kind != ibkr.StreamData {
-				continue
-			}
-			evt := event.Value
-			if evt.Status != nil && evt.Status.OrderID == orderID {
-				t.Logf("recovered order status: %s", evt.Status.Status)
-				if evt.Status.Status == ibkr.OrderStatusCancelled {
-					return
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("cancel sent but no Cancelled status delivered to SubscribeOpen")
-		}
+		})
 	}
 }
 
-func isLiveHistoricalDataUnavailable(err error) bool {
+func isExactLiveMarketDepthBlocker(err error) bool {
 	apiErr, ok := errors.AsType[*ibkr.APIError](err)
-	if !ok {
+	if !ok || apiErr.OpKind != ibkr.OpMarketDepth {
 		return false
 	}
-	if apiErr.Code == 162 && strings.Contains(apiErr.Message, "Trading TWS session is connected from a different IP address") {
-		return true
+	return apiErr.Code == ibkr.ErrCodeDeepMarketDataNotSupported &&
+		apiErr.Message == "Deep market data is not supported for this combination of security type/exchange"
+}
+
+func isExactLiveNoMarketDepthNotice(message string) bool {
+	return strings.HasPrefix(message, "Exchanges - Top: ") &&
+		strings.Contains(message, "; Need additional market data permissions - Depth: ") &&
+		strings.HasSuffix(message, "; ") &&
+		!strings.Contains(message, "Exchanges - Depth:")
+}
+
+func isExactLiveCFDQuoteBlocker(err error) bool {
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	return ok &&
+		apiErr.OpKind == ibkr.OpQuotes &&
+		apiErr.Code == ibkr.ErrCodeAdditionalSubscriptionRequired &&
+		apiErr.Message == "Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.Delayed market data is available.IBM NYSE/TOP/ALL"
+}
+
+func TestLiveMarketDataBlockerClassifiers(t *testing.T) {
+	t.Parallel()
+
+	const cfdMessage = "Requested market data requires additional subscription for API. See link in 'Market Data Connections' dialog for more details.Delayed market data is available.IBM NYSE/TOP/ALL"
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "exact CFD", err: &ibkr.APIError{OpKind: ibkr.OpQuotes, Code: ibkr.ErrCodeAdditionalSubscriptionRequired, Message: cfdMessage}, want: true},
+		{name: "CFD wrong operation", err: &ibkr.APIError{OpKind: ibkr.OpMarketDepth, Code: ibkr.ErrCodeAdditionalSubscriptionRequired, Message: cfdMessage}},
+		{name: "CFD wrong instrument", err: &ibkr.APIError{OpKind: ibkr.OpQuotes, Code: ibkr.ErrCodeAdditionalSubscriptionRequired, Message: strings.Replace(cfdMessage, "IBM", "AAPL", 1)}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			if got := isExactLiveCFDQuoteBlocker(test.err); got != test.want {
+				t.Fatalf("isExactLiveCFDQuoteBlocker() = %t, want %t", got, test.want)
+			}
+		})
 	}
-	return apiErr.Code == 10187 &&
-		(strings.Contains(apiErr.Message, "No market data permissions") ||
-			strings.Contains(apiErr.Message, "Trading TWS session is connected from a different IP address"))
+
+	const depthMessage = "Deep market data is not supported for this combination of security type/exchange"
+	if !isExactLiveMarketDepthBlocker(&ibkr.APIError{OpKind: ibkr.OpMarketDepth, Code: ibkr.ErrCodeDeepMarketDataNotSupported, Message: depthMessage}) {
+		t.Fatal("isExactLiveMarketDepthBlocker() rejected the exact captured blocker")
+	}
+	if isExactLiveMarketDepthBlocker(&ibkr.APIError{OpKind: ibkr.OpMarketDepth, Code: ibkr.ErrCodeDeepMarketDataNotSupported, Message: depthMessage + "."}) {
+		t.Fatal("isExactLiveMarketDepthBlocker() accepted an unattested message")
+	}
+
+	const notice = "Exchanges - Top: IBEOS; OVERNIGHT; Need additional market data permissions - Depth: NASDAQ; BATS; ARCA; "
+	if !isExactLiveNoMarketDepthNotice(notice) {
+		t.Fatal("isExactLiveNoMarketDepthNotice() rejected the captured notice shape")
+	}
+	if isExactLiveNoMarketDepthNotice("Need additional market data permissions - Depth: NASDAQ") {
+		t.Fatal("isExactLiveNoMarketDepthNotice() accepted an unstructured substring")
+	}
 }

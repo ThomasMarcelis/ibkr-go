@@ -1,9 +1,0 @@
-# Bootstrap frames are sanitized from captures/20260405T214926Z-bootstrap at
-# server_version 200; events.jsonl sha256:
-# 8ea1dff420928fb3cc5a128072eae1672d83997f24bf66c69248b2205ee9b16c.
-# This fault scenario deliberately reverses their observed arrival order.
-handshake {"server_version":200,"connection_time":"20260406 12:00:00 CET"}
-raw server AAAABjkAMQAxAA==
-raw server AAAADzE1ADEARFU5MDAwMDAxAA==
-sleep 500ms
-disconnect

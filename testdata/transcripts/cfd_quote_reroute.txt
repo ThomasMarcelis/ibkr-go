@@ -1,0 +1,37 @@
+# Exact capture 20260825T201807Z-live_cfd_quote_reroute_v201_positive for live_cfd_quote_reroute_v201_positive at server_version 225.
+# events.jsonl sha256: ca8fbdf11d260066fb7cd1c3d60e6e44808a54bf6a8fc678f3597bd71a666f1c.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260825 22:18:10 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCT/crUgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARCT/crUgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCT/crUgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAw==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=32
+raw client AAAAIAAAAMkIARIYCAASA0lCTRoDQ0ZEQgVTTUFSVFIDVVNE
+# leg=1 direction=server msg_id=91 encoding=protobuf payload_len=16
+raw server AAAAEAAAASMIARD6QBoFU01BUlQ=
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=18
+raw client AAAAEgAAAMkIARIKCPpAQgVTTUFSVA==
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIARIEMC4wMRoGYTYwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=58 encoding=protobuf payload_len=8
+raw server AAAACAAAAQIIARAD
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=90
+raw server AAAAWgAAAMwIARC4/8rUgzQYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBIGfYoXI/CTW1AIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBJGbgehetRsGxAIgEwKAA=
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=15
+raw server AAAADwAAAMoIARBKGgUyOTk2Ng==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBLGeF6FK5H4WxAIgEwKAA=
+disconnect

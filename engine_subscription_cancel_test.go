@@ -124,7 +124,7 @@ func TestClosedUnkeyedStreamCannotBeReusedBeforeNewTransportGeneration(t *testin
 	t.Cleanup(func() { _ = newPeer.Close() })
 	e.connectAttemptID = 7
 	e.handleConnectResult(connectResult{
-		attempt: 7, reconnect: true, conn: newClient, serverVersion: 206,
+		attempt: 7, reconnect: true, conn: newClient, serverVersion: 225,
 	})
 	// A buffered callback from the retired generation has no replacement owner.
 	e.handleIncoming(codec.Position{Account: "DU9000001", Position: "999"})
@@ -357,12 +357,13 @@ func TestSlowQuoteConsumerPreservesCancellationAdmissionFailure(t *testing.T) {
 	_ = readObservedFrame(t, peer)
 	fillTransportQueue(t, e.transport, peer)
 
-	// captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl,
-	// server_version 200, events.jsonl sha256 prefix 84f1e78a18616e0f.
+	// captures/20260824T202345Z-api_duplicate_quote_subscriptions_aapl,
+	// server_version 225, events.jsonl sha256
+	// 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
 	// These are the capture's first two updates for request 1; the full outbound
 	// queue is deterministic fault injection for the cancellation-admission edge.
-	e.handleIncoming(decodeOne(t, []byte("81\x001\x000.01\x009c0001\x004\x00")))
-	e.handleIncoming(decodeOne(t, []byte("58\x001\x001\x003\x00")))
+	e.handleIncoming(decodeOne(t, decodeHexBytes(t, "0000011908011204302e30311a0639633030303120042a08302e3030303030313208302e303030303031")))
+	e.handleIncoming(decodeOne(t, decodeHexBytes(t, "0000010208011003")))
 
 	waitErr := sub.Wait()
 	finishObservedRetirement(t, e)
@@ -491,7 +492,7 @@ func TestSubscriptionCancelSkipsUnresumedReconnectRoute(t *testing.T) {
 	if err := e.sendContext(context.Background(), fence); err != nil {
 		t.Fatalf("enqueue transport fence: %v", err)
 	}
-	wantFence, err := codec.Encode(206, fence)
+	wantFence, err := codec.Encode(e.serverVersion, fence)
 	if err != nil {
 		t.Fatalf("encode transport fence: %v", err)
 	}
@@ -609,7 +610,7 @@ func TestClosedSingletonCannotCancelReplacement(t *testing.T) {
 	if err := e.sendContext(context.Background(), fence); err != nil {
 		t.Fatalf("enqueue transport fence: %v", err)
 	}
-	wantFence, err := codec.Encode(206, fence)
+	wantFence, err := codec.Encode(e.serverVersion, fence)
 	if err != nil {
 		t.Fatalf("encode transport fence: %v", err)
 	}
@@ -642,7 +643,7 @@ func TestDisplayGroupUpdateAfterCloseReturnsErrClosed(t *testing.T) {
 	if err := e.sendContext(context.Background(), fence); err != nil {
 		t.Fatalf("enqueue transport fence: %v", err)
 	}
-	wantFence, err := codec.Encode(206, fence)
+	wantFence, err := codec.Encode(e.serverVersion, fence)
 	if err != nil {
 		t.Fatalf("encode transport fence: %v", err)
 	}
@@ -689,7 +690,7 @@ func TestDisplayGroupUpdateWaitsForReconnectReady(t *testing.T) {
 	if err := <-updateErr; err != nil {
 		t.Fatalf("Update() after reconnect readiness = %v", err)
 	}
-	want, err := codec.Encode(206, codec.UpdateDisplayGroupRequest{ReqID: 1, ContractInfo: "265598@SMART"})
+	want, err := codec.Encode(e.serverVersion, codec.UpdateDisplayGroupRequest{ReqID: 1, ContractInfo: "265598@SMART"})
 	if err != nil {
 		t.Fatalf("encode display group update: %v", err)
 	}
@@ -725,7 +726,7 @@ func TestDisplayGroupUpdateRechecksRouteAfterReconnectWait(t *testing.T) {
 	if err := e.sendContext(context.Background(), fence); err != nil {
 		t.Fatalf("enqueue transport fence: %v", err)
 	}
-	wantFence, err := codec.Encode(206, fence)
+	wantFence, err := codec.Encode(e.serverVersion, fence)
 	if err != nil {
 		t.Fatalf("encode transport fence: %v", err)
 	}
@@ -746,17 +747,18 @@ func TestAccountSnapshotRetainsRowsWhenCleanupFails(t *testing.T) {
 		sub.closeWithErr(cancelErr)
 	})
 	sub.expectSnapshot()
-	// captures/20260405T215025Z-account_summary_snapshot, server_version 200;
-	// retained exactly in testdata/transcripts/grounded_account_summary.txt.
+	// captures/20260824T202344Z-account_summary_snapshot, server_version 225,
+	// events.jsonl SHA-256
+	// 6f8ede19db82acc23de6bd988381d40b339af0270133fdcabceba33082f6c181.
 	sub.emit(AccountValue{
-		Account: "DU9000001", Tag: "NetLiquidation", Value: "68000.00", Currency: "EUR",
+		Account: "DU9000001", Tag: "NetLiquidation", Value: "36992.49", Currency: "EUR",
 	})
 	sub.emitState(StreamSnapshotComplete, 0, nil)
 
 	values, err := collectSnapshotAndClose(context.Background(), sub, func(value AccountValue) (AccountValue, bool) {
 		return value, true
 	})
-	if len(values) != 1 || values[0].Account != "DU9000001" || values[0].Value != "68000.00" || values[0].Currency != "EUR" {
+	if len(values) != 1 || values[0].Account != "DU9000001" || values[0].Value != "36992.49" || values[0].Currency != "EUR" {
 		t.Fatalf("snapshot values = %+v, want retained live-derived row", values)
 	}
 	if err != cancelErr {

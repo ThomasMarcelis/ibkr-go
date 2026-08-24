@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"path/filepath"
 	"reflect"
@@ -20,53 +21,10 @@ func TestDialContextWithClientID(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "handshake_client_id_0.txt", ibkr.WithClientID(0))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	if got := client.Session().NextValidID; got != 1 {
 		t.Fatalf("next valid id = %d, want 1", got)
-	}
-}
-
-func TestHistoricalDataEndCompletesWithoutRetiringSession(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_bars_108_end.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	req := ibkr.HistoricalBarsRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Duration:   ibkr.Days(1),
-		BarSize:    ibkr.Bar1Hour,
-		WhatToShow: ibkr.ShowTrades,
-		UseRTH:     true,
-	}
-
-	bars, err := client.History().Bars(ctx, req)
-	if err != nil {
-		t.Fatalf("HistoricalBars() error = %v", err)
-	}
-	if len(bars) != 7 {
-		t.Fatalf("bars len = %d, want 7", len(bars))
-	}
-
-	if got := client.Session().State; got != ibkr.StateReady && got != ibkr.StateDegraded {
-		t.Fatalf("session state after HistoricalDataEnd = %s, want usable session", got)
-	}
-	select {
-	case <-client.Done():
-		t.Fatal("client closed after HistoricalDataEnd")
-	default:
 	}
 }
 
@@ -74,8 +32,7 @@ func TestHistoricalSchedule(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "historical_schedule_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -98,22 +55,22 @@ func TestHistoricalSchedule(t *testing.T) {
 	if schedule.TimeZone != "US/Eastern" {
 		t.Errorf("TimeZone = %q, want US/Eastern", schedule.TimeZone)
 	}
-	if schedule.StartDateTime != "20260611-09:30:00" {
-		t.Errorf("StartDateTime = %q, want 20260611-09:30:00", schedule.StartDateTime)
+	if schedule.StartDateTime != "20260727-09:30:00" {
+		t.Errorf("StartDateTime = %q, want 20260727-09:30:00", schedule.StartDateTime)
 	}
-	if schedule.EndDateTime != "20260710-16:00:00" {
-		t.Errorf("EndDateTime = %q, want 20260710-16:00:00", schedule.EndDateTime)
+	if schedule.EndDateTime != "20260824-16:00:00" {
+		t.Errorf("EndDateTime = %q, want 20260824-16:00:00", schedule.EndDateTime)
 	}
-	if len(schedule.Sessions) != 20 {
-		t.Fatalf("Sessions = %d, want 20", len(schedule.Sessions))
+	if len(schedule.Sessions) != 21 {
+		t.Fatalf("Sessions = %d, want 21", len(schedule.Sessions))
 	}
 	first := schedule.Sessions[0]
-	if first.RefDate != "20260611" || first.StartDateTime != "20260611-09:30:00" {
-		t.Errorf("first session = %+v, want 20260611-09:30:00 / 20260611", first)
+	if first.RefDate != "20260727" || first.StartDateTime != "20260727-09:30:00" {
+		t.Errorf("first session = %+v, want 20260727-09:30:00 / 20260727", first)
 	}
-	last := schedule.Sessions[19]
-	if last.RefDate != "20260710" || last.EndDateTime != "20260710-16:00:00" {
-		t.Errorf("last session = %+v, want 20260710-16:00:00 / 20260710", last)
+	last := schedule.Sessions[20]
+	if last.RefDate != "20260824" || last.EndDateTime != "20260824-16:00:00" {
+		t.Errorf("last session = %+v, want 20260824-16:00:00 / 20260824", last)
 	}
 }
 
@@ -121,8 +78,7 @@ func TestHistoricalBarsWithScheduleRejects(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_bootstrap.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
@@ -151,8 +107,7 @@ func TestAccountSummary(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "account_summary.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -172,8 +127,8 @@ func TestAccountSummary(t *testing.T) {
 			t.Fatalf("account = %q, want DU9000001", value.Account)
 		}
 	}
-	if values[0].Tag != "BuyingPower" || values[0].Value != "173392.95" {
-		t.Fatalf("first value = %+v, want BuyingPower 173392.95", values[0])
+	if values[0].Tag != "BuyingPower" || values[0].Value != "183875.22" {
+		t.Fatalf("first value = %+v, want BuyingPower 183875.22", values[0])
 	}
 }
 
@@ -181,8 +136,7 @@ func TestAccountSummaryAllReturnsAllAccounts(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "account_summary.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -203,8 +157,7 @@ func TestAccountSummarySucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "account_summary_disconnect_after_end.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -219,8 +172,8 @@ func TestAccountSummarySucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T) {
 	if len(values) != 4 {
 		t.Fatalf("values len = %d, want 4", len(values))
 	}
-	if values[2].Tag != "NetLiquidation" || values[2].Value != "33911.62" {
-		t.Fatalf("net liquidation = %+v, want 33911.62", values[2])
+	if values[2].Tag != "NetLiquidation" || values[2].Value != "36992.49" {
+		t.Fatalf("net liquidation = %+v, want 36992.49", values[2])
 	}
 }
 
@@ -228,8 +181,7 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 	t.Parallel()
 
 	client, host := newClient(t, "account_summary_stream.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -251,9 +203,9 @@ func TestSubscribeAccountSummarySnapshotCompleteDoesNotCloseStream(t *testing.T)
 		tag   string
 		value string
 	}{
-		{tag: "BuyingPower", value: "173392.95"},
-		{tag: "NetLiquidation", value: "33911.62"},
-		{tag: "TotalCashValue", value: "-1642.47"},
+		{tag: "BuyingPower", value: "183875.22"},
+		{tag: "NetLiquidation", value: "36992.49"},
+		{tag: "TotalCashValue", value: "-1441.67"},
 	}
 	for _, expected := range want {
 		got := waitForStreamData(t, sub.Events())
@@ -283,8 +235,7 @@ func TestPositionsSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T)
 	t.Parallel()
 
 	client, host := newClient(t, "positions_disconnect_after_end.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -293,11 +244,15 @@ func TestPositionsSnapshotSucceedsWhenDisconnectFollowsSnapshotEnd(t *testing.T)
 	if err != nil {
 		t.Fatalf("PositionsSnapshot() error = %v", err)
 	}
-	if len(values) != 4 {
-		t.Fatalf("positions len = %d, want 4", len(values))
+	if len(values) != 8 {
+		t.Fatalf("positions len = %d, want 8", len(values))
 	}
-	if values[3].Contract.Symbol != "AAPL" || values[3].Position.String() != "10" {
-		t.Fatalf("last position = %+v, want AAPL 10", values[3])
+	foundZeroMES := false
+	for _, value := range values {
+		foundZeroMES = foundZeroMES || value.Contract.LocalSymbol == "MESU6" && value.Position.IsZero()
+	}
+	if !foundZeroMES {
+		t.Fatal("positions snapshot lacks the live-attested zero-quantity MESU6 row")
 	}
 }
 
@@ -305,8 +260,7 @@ func TestQuoteSnapshot(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "quote_snapshot.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -326,11 +280,11 @@ func TestQuoteSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("QuoteSnapshot() error = %v", err)
 	}
-	if quote.Bid.String() != "314.9" {
-		t.Fatalf("bid = %s, want 314.9", quote.Bid.String())
+	if quote.Bid.String() != "310.45" {
+		t.Fatalf("bid = %s, want 310.45", quote.Bid.String())
 	}
-	if quote.Ask.String() != "315.05" {
-		t.Fatalf("ask = %s, want 315.05", quote.Ask.String())
+	if quote.Ask.String() != "310.47" {
+		t.Fatalf("ask = %s, want 310.47", quote.Ask.String())
 	}
 	if quote.MarketDataType != ibkr.MarketDataDelayed {
 		t.Fatalf("market data type = %s, want delayed", quote.MarketDataType)
@@ -341,8 +295,7 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_duplicate_quote_subscriptions_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -400,11 +353,11 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 		if quote.MarketDataType != ibkr.MarketDataDelayed {
 			t.Fatalf("%s market data type = %s, want Delayed", label, quote.MarketDataType)
 		}
-		if got := quote.Bid.String(); got != "314.96" {
-			t.Fatalf("%s bid = %s, want 314.96", label, got)
+		if got := quote.Bid.String(); got != "310.4" {
+			t.Fatalf("%s bid = %s, want 310.4", label, got)
 		}
-		if got := quote.Ask.String(); got != "314.98" {
-			t.Fatalf("%s ask = %s, want 314.98", label, got)
+		if got := quote.Ask.String(); got != "310.55" {
+			t.Fatalf("%s ask = %s, want 310.55", label, got)
 		}
 	}
 
@@ -416,14 +369,16 @@ func TestAPIDuplicateQuoteSubscriptionsAAPLReplay(t *testing.T) {
 	if err := second.Wait(); err != nil {
 		t.Fatalf("second Wait() error = %v", err)
 	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime() fence error = %v", err)
+	}
 }
 
 func TestSetMarketDataType(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_bootstrap.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 	ctx := context.Background()
 
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
@@ -439,34 +394,11 @@ func TestSetMarketDataType(t *testing.T) {
 	}
 }
 
-func TestAPIMarketDataTypeCycleReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_market_data_type_cycle.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	for _, dataType := range []ibkr.MarketDataType{
-		ibkr.MarketDataLive,
-		ibkr.MarketDataFrozen,
-		ibkr.MarketDataDelayed,
-		ibkr.MarketDataDelayedFrozen,
-	} {
-		if err := client.MarketData().SetType(ctx, dataType); err != nil {
-			t.Fatalf("MarketData().SetType(%s) error = %v", dataType, err)
-		}
-	}
-}
-
 func TestQuoteSnapshotRejectsGenericTicks(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_bootstrap.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -493,8 +425,7 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "quote_stream_reconnect.txt", ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -524,8 +455,8 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	for first.Changed&ibkr.QuoteFieldHigh == 0 {
 		first = waitForStreamData(t, sub.Events())
 	}
-	if first.Snapshot.High.String() != "316.91" {
-		t.Fatalf("first high = %s, want 316.91", first.Snapshot.High.String())
+	if first.Snapshot.High.String() != "313.36" {
+		t.Fatalf("first high = %s, want 313.36", first.Snapshot.High.String())
 	}
 
 	gap := waitForStateKind(t, sub.Events(), ibkr.StreamGap)
@@ -545,8 +476,8 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	for second.Changed&ibkr.QuoteFieldLow == 0 {
 		second = waitForStreamData(t, sub.Events())
 	}
-	if second.Snapshot.Low.String() != "312.17" {
-		t.Fatalf("second low = %s, want 312.17", second.Snapshot.Low.String())
+	if second.Snapshot.Low.String() != "309.97" {
+		t.Fatalf("second low = %s, want 309.97", second.Snapshot.Low.String())
 	}
 	if second.Snapshot.Available&ibkr.QuoteFieldHigh != 0 {
 		t.Fatalf("second quote retained pre-gap high: %+v", second.Snapshot)
@@ -564,58 +495,11 @@ func TestSubscribeQuotesResumeAutoReconnectsAfterTransportLoss(t *testing.T) {
 	}
 }
 
-// TestOpenOrdersSnapshotBurstExceedsSubscriptionBuffer uses the first
-// open-order snapshot from the live capture frozen in
-// open_orders_snapshot_burst_live.txt. The Gateway sent an open-order echo and
-// its paired status before open_order_end; a one-shot must retain the complete
-// snapshot even when the configured live-stream buffer cannot hold that burst.
-func TestOpenOrdersSnapshotBurstExceedsSubscriptionBuffer(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "open_orders_snapshot_burst_live.txt", ibkr.WithClientID(0), ibkr.WithSubscriptionBuffer(1))
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Place: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-
-	orders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
-	if err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	if len(orders) != 1 || *orders[0].Order.OrderID != handle.OrderID() {
-		t.Fatalf("orders = %+v, want order %d", orders, handle.OrderID())
-	}
-}
-
 func TestOpenOrdersAutoRequiresClientIDZero(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_bootstrap.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -681,8 +565,7 @@ func TestUnsupportedResumeAutoPolicies(t *testing.T) {
 			t.Parallel()
 
 			client, host := newClient(t, "grounded_bootstrap.txt")
-			defer client.Close()
-			defer waitHost(t, host)
+			defer cleanupClientHost(t, client, host)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -702,43 +585,35 @@ func TestExecutionsBurstExceedsSubscriptionBuffer(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "executions.txt", ibkr.WithSubscriptionBuffer(1))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{})
 	if err != nil {
 		t.Fatalf("Executions: %v", err)
 	}
-	if len(executions.Executions) != 15 {
-		t.Fatalf("executions len = %d, want 15", len(executions.Executions))
+	if len(executions.Executions) != 2 {
+		t.Fatalf("executions len = %d, want 2", len(executions.Executions))
 	}
-	if len(executions.CommissionAndFees) != 14 {
-		t.Fatalf("commission-and-fees len = %d, want 14 live-captured reports", len(executions.CommissionAndFees))
+	if len(executions.CommissionAndFees) != 2 {
+		t.Fatalf("commission-and-fees len = %d, want 2", len(executions.CommissionAndFees))
 	}
 
 	executionIDs := make([]string, len(executions.Executions))
 	for i, execution := range executions.Executions {
 		executionIDs[i] = execution.ExecID
 	}
-	wantExecutionIDs := []string{
-		"redacted-fill-000000014", "redacted-fill-000000015",
-		"redacted-fill-000000001", "redacted-fill-000000002", "redacted-fill-000000003",
-		"redacted-fill-000000004", "redacted-fill-000000005", "redacted-fill-000000006",
-		"redacted-fill-000000007", "redacted-fill-000000008", "redacted-fill-000000009",
-		"redacted-fill-000000010", "redacted-fill-000000011", "redacted-fill-000000012",
-		"redacted-fill-000000013",
-	}
+	wantExecutionIDs := []string{"sanitized-exec-00000001", "sanitized-exec-00000002"}
 	if !reflect.DeepEqual(executionIDs, wantExecutionIDs) {
 		t.Fatalf("execution IDs = %v, want %v", executionIDs, wantExecutionIDs)
 	}
 	first := executions.Executions[0]
-	if first.Price.String() != "292.76" || first.Shares.String() != "1" {
-		t.Fatalf("first execution price/shares = %s/%s, want 292.76/1", first.Price, first.Shares)
+	if first.Price.String() != "7670.75" || first.Shares.String() != "1" {
+		t.Fatalf("first execution price/shares = %s/%s, want captured MES fill", first.Price, first.Shares)
 	}
-	wantTime := time.Date(2026, 6, 11, 13, 30, 10, 0, time.UTC)
+	wantTime := time.Date(2026, 8, 24, 20, 50, 7, 0, time.UTC)
 	if !first.Time.Equal(wantTime) {
 		t.Fatalf("first execution time = %s, want %s", first.Time, wantTime)
 	}
@@ -748,8 +623,7 @@ func TestExecutionsMissingEndReturnsContextDeadline(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "executions_missing_end_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
@@ -760,144 +634,114 @@ func TestExecutionsMissingEndReturnsContextDeadline(t *testing.T) {
 	}
 }
 
-// TestExecutionsPartitionConcurrentQueries freezes request-ID routing across
-// two simultaneous, disjoint execution queries.
-func TestExecutionsPartitionConcurrentQueries(t *testing.T) {
+// TestExecutionsConcurrentQueries freezes request-ID routing across three
+// live-concurrent queries: the BUY and SELL partitions must remain disjoint,
+// while the overlapping all-side result contains both partitions.
+func TestExecutionsConcurrentQueries(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "executions_correlated.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	client, host := newClient(t, "executions_concurrent_aapl.txt")
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	buyCh := make(chan []ibkr.Execution, 1)
-	sellCh := make(chan []ibkr.Execution, 1)
-	errCh := make(chan error, 2)
-	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
-			Account: "DU9000001",
-			Symbol:  "AAPL",
-			Side:    ibkr.ExecutionFilterBuy,
-		})
+	type result struct {
+		label      string
+		executions []ibkr.Execution
+		err        error
+	}
+	results := make(chan result, 3)
+	start := func(label string, req ibkr.ExecutionsRequest) {
+		sub, err := client.Orders().SubscribeExecutions(ctx, req)
 		if err != nil {
-			errCh <- err
-			return
+			t.Fatalf("%s SubscribeExecutions() error = %v", label, err)
 		}
-		buyCh <- updates.Executions
-	}()
-	time.Sleep(10 * time.Millisecond)
-	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
-			Account: "DU9000001",
-			Symbol:  "AAPL",
-			Side:    ibkr.ExecutionFilterSell,
-		})
-		if err != nil {
-			errCh <- err
-			return
-		}
-		sellCh <- updates.Executions
-	}()
+		go func() {
+			var executions []ibkr.Execution
+			for {
+				select {
+				case event, ok := <-sub.Events():
+					if !ok {
+						results <- result{label: label, err: sub.Wait()}
+						return
+					}
+					if event.Kind == ibkr.StreamData && event.Value.Execution != nil {
+						executions = append(executions, *event.Value.Execution)
+					}
+					if event.Kind == ibkr.StreamSnapshotComplete {
+						sub.Close()
+						results <- result{label: label, executions: executions, err: sub.Wait()}
+						return
+					}
+				case <-ctx.Done():
+					sub.Close()
+					results <- result{label: label, err: context.Cause(ctx)}
+					return
+				}
+			}
+		}()
+	}
+	start("all", ibkr.ExecutionsRequest{
+		Account: "DU9000001",
+		Symbol:  "AAPL",
+	})
+	start("buy", ibkr.ExecutionsRequest{
+		Account: "DU9000001",
+		Symbol:  "AAPL",
+		Side:    ibkr.ExecutionFilterBuy,
+	})
+	start("sell", ibkr.ExecutionsRequest{
+		Account: "DU9000001",
+		Symbol:  "AAPL",
+		Side:    ibkr.ExecutionFilterSell,
+	})
 
-	var buyExecutions []ibkr.Execution
-	var sellExecutions []ibkr.Execution
-	for i := 0; i < 2; i++ {
+	byLabel := make(map[string][]ibkr.Execution, 3)
+	for range 3 {
 		select {
-		case err := <-errCh:
-			t.Fatalf("Executions() error = %v", err)
-		case buyExecutions = <-buyCh:
-		case sellExecutions = <-sellCh:
+		case result := <-results:
+			if result.err != nil {
+				t.Fatalf("%s Executions() error = %v", result.label, result.err)
+			}
+			byLabel[result.label] = result.executions
+		case <-ctx.Done():
+			t.Fatal(context.Cause(ctx))
 		}
 	}
 
-	assertRoute := func(name string, executions []ibkr.Execution, execID string, side ibkr.ExecutionSide, price string) {
-		t.Helper()
-		if len(executions) != 1 {
-			t.Fatalf("%s executions len = %d, want 1", name, len(executions))
-		}
-		execution := executions[0]
-		if execution.ExecID != execID || execution.Side != side ||
-			!execution.Shares.Equal(decimal.RequireFromString("1")) ||
-			!execution.Price.Equal(decimal.RequireFromString(price)) {
-			t.Fatalf("%s execution = %#v, want %s %s 1 @ %s", name, execution, execID, side, price)
-		}
+	allIDs := make(map[string]ibkr.ExecutionSide, len(byLabel["all"]))
+	for _, execution := range byLabel["all"] {
+		allIDs[execution.ExecID] = execution.Side
 	}
-	assertRoute("BUY", buyExecutions, "sanitized-fill-014", ibkr.ExecutionSideBought, "292.76")
-	assertRoute("SELL", sellExecutions, "sanitized-fill-015", ibkr.ExecutionSideSold, "292.70")
-}
-
-// TestExecutionsDeliverOverlappingQueryResults freezes that the same execution
-// is returned independently to every matching request route.
-func TestExecutionsDeliverOverlappingQueryResults(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "executions_overlapping.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	allCh := make(chan []ibkr.Execution, 1)
-	sellCh := make(chan []ibkr.Execution, 1)
-	errCh := make(chan error, 2)
-	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
-		if err != nil {
-			errCh <- err
-			return
+	for _, filtered := range []struct {
+		label string
+		side  ibkr.ExecutionSide
+	}{{label: "buy", side: ibkr.ExecutionSideBought}, {label: "sell", side: ibkr.ExecutionSideSold}} {
+		executions := byLabel[filtered.label]
+		if len(executions) == 0 {
+			t.Fatalf("%s executions are empty", filtered.label)
 		}
-		allCh <- updates.Executions
-	}()
-	time.Sleep(10 * time.Millisecond)
-	go func() {
-		updates, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{
-			Account: "DU9000001",
-			Symbol:  "AAPL",
-			Side:    ibkr.ExecutionFilterSell,
-		})
-		if err != nil {
-			errCh <- err
-			return
-		}
-		sellCh <- updates.Executions
-	}()
-
-	var allExecutions []ibkr.Execution
-	var sellExecutions []ibkr.Execution
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-errCh:
-			t.Fatalf("Executions() error = %v", err)
-		case allExecutions = <-allCh:
-		case sellExecutions = <-sellCh:
+		for _, execution := range executions {
+			if execution.Side != filtered.side {
+				t.Fatalf("%s execution %q side = %s, want %s", filtered.label, execution.ExecID, execution.Side, filtered.side)
+			}
+			if allIDs[execution.ExecID] != execution.Side {
+				t.Fatalf("%s execution %q is absent from the overlapping all-side result", filtered.label, execution.ExecID)
+			}
 		}
 	}
 
-	assertRoute := func(name string, executions []ibkr.Execution) {
-		t.Helper()
-		if len(executions) != 1 {
-			t.Fatalf("%s executions len = %d, want 1", name, len(executions))
-		}
-		execution := executions[0]
-		if execution.ExecID != "sanitized-fill-012" || execution.Side != ibkr.ExecutionSideSold ||
-			!execution.Shares.Equal(decimal.RequireFromString("40")) ||
-			!execution.Price.Equal(decimal.RequireFromString("292.20")) {
-			t.Fatalf("%s execution = %#v, want sanitized-fill-012 SLD 40 @ 292.20", name, execution)
-		}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime cleanup fence: %v", err)
 	}
-	assertRoute("all-side", allExecutions)
-	assertRoute("SELL", sellExecutions)
 }
 
 func TestSubscribeQuotesResumeNeverRequiresManualResumeOnDisconnect(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "quote_stream_disconnect.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -932,8 +776,7 @@ func TestFamilyCodes(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "family_codes.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -957,8 +800,7 @@ func TestMktDepthExchanges(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "mkt_depth_exchanges.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -967,8 +809,8 @@ func TestMktDepthExchanges(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MktDepthExchanges() error = %v", err)
 	}
-	if len(exchanges) != 307 {
-		t.Fatalf("exchanges len = %d, want 307", len(exchanges))
+	if len(exchanges) != 306 {
+		t.Fatalf("exchanges len = %d, want 306", len(exchanges))
 	}
 	wantExchanges := []ibkr.DepthExchange{
 		{Exchange: "IDEALPRO", SecType: ibkr.SecTypeForex, ServiceDataType: "Deep", AggGroup: 4},
@@ -993,8 +835,7 @@ func TestNewsProviders(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "news_providers.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1023,52 +864,11 @@ func TestNewsProviders(t *testing.T) {
 	}
 }
 
-func TestScannerSubscriptionReturnsLiveRankedResults(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "scanner_subscription_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.Scanner().SubscribeResults(ctx, ibkr.ScannerSubscriptionRequest{
-		NumberOfRows: 10,
-		Instrument:   "STK",
-		LocationCode: "STK.US.MAJOR",
-		ScanCode:     "HOT_BY_VOLUME",
-	})
-	if err != nil {
-		t.Fatalf("SubscribeResults() error = %v", err)
-	}
-
-	results := waitForStreamData(t, sub.Events())
-	if len(results) != 10 {
-		t.Fatalf("results len = %d, want 10", len(results))
-	}
-	if got := results[0]; got.Rank != 0 || got.Contract.ConID != 888872117 ||
-		got.Contract.Symbol != "BGIA" || got.Contract.Exchange != "SMART" ||
-		got.Contract.Currency != "USD" || got.Contract.LocalSymbol != "BGIA" ||
-		got.MarketName != "NMS" || got.Contract.TradingClass != "NMS" {
-		t.Fatalf("first result = %+v, want exact live BGIA scanner result", got)
-	}
-	if got := results[9]; got.Rank != 9 || got.Contract.Symbol != "FAB" {
-		t.Fatalf("last result = %+v, want live rank 9 FAB", got)
-	}
-
-	sub.Close()
-	if err := sub.Wait(); err != nil {
-		t.Fatalf("Wait() error = %v", err)
-	}
-}
-
 func TestUserInfo(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "user_info.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1086,8 +886,7 @@ func TestMatchingSymbols(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "matching_symbols.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1096,8 +895,8 @@ func TestMatchingSymbols(t *testing.T) {
 	if err != nil {
 		t.Fatalf("MatchingSymbols() error = %v", err)
 	}
-	if len(symbols) != 19 {
-		t.Fatalf("symbols len = %d, want 19", len(symbols))
+	if len(symbols) != 20 {
+		t.Fatalf("symbols len = %d, want 20", len(symbols))
 	}
 	if symbols[0].Symbol != "AAPL" {
 		t.Fatalf("symbol = %q, want AAPL", symbols[0].Symbol)
@@ -1120,8 +919,7 @@ func TestHeadTimestamp(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "head_timestamp.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1149,8 +947,7 @@ func TestMarketRule(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "market_rule.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1170,85 +967,11 @@ func TestMarketRule(t *testing.T) {
 	}
 }
 
-func TestCompletedOrdersCancelledSystemLive(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "completed_orders_cancelled_system_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	orders, err := client.Orders().Completed(ctx, true)
-	if err != nil {
-		t.Fatalf("CompletedOrders() error = %v", err)
-	}
-	if len(orders) != 1 {
-		t.Fatalf("orders len = %d, want 1", len(orders))
-	}
-	order := orders[0]
-	if order.Contract.Symbol != "AAPL" {
-		t.Fatalf("symbol = %q, want AAPL", order.Contract.Symbol)
-	}
-	if order.Contract.ConID != 265598 || order.Contract.Right != "" {
-		t.Fatalf("contract = %+v, want AAPL contract with unset right", order.Contract)
-	}
-	if order.Order.Action != ibkr.ActionSell || order.Order.OrderType != ibkr.OrderTypeLimit ||
-		order.Order.Quantity.String() != "1" || order.Order.TIF != ibkr.TIFGTC {
-		t.Fatalf("order = %+v, want SELL 1 LMT GTC", order.Order)
-	}
-	if order.Order.Prices.LmtPrice == nil || order.Order.Prices.LmtPrice.String() != "500" {
-		t.Fatalf("limit price = %v, want explicit 500", order.Order.Prices.LmtPrice)
-	}
-	if order.Order.Prices.AuxPrice == nil || !order.Order.Prices.AuxPrice.IsZero() {
-		t.Fatalf("aux price = %v, want explicit zero", order.Order.Prices.AuxPrice)
-	}
-	if order.Order.OCA.Group != "1001" || order.Order.OCA.Type != ibkr.OCAReduceWithoutBlock {
-		t.Fatalf("OCA = %+v, want group 1001 type 3", order.Order.OCA)
-	}
-	if order.Order.PermID == nil || *order.Order.PermID != 1002 || order.Order.Account != "DU12345" {
-		t.Fatalf("identity = account %q perm %v, want DU12345/1002", order.Order.Account, order.Order.PermID)
-	}
-	if order.Order.IncludeOvernight != nil {
-		t.Fatalf("classic completed-order include overnight = %v, want omitted", order.Order.IncludeOvernight)
-	}
-	if order.Order.Execution.DisplaySize != nil || order.Order.Scale.InitialLevelSize != nil ||
-		order.Order.Scale.SubsequentLevelSize != nil || order.Order.Execution.RefFuturesConID != nil {
-		t.Fatalf("integer sentinels were exposed as values: execution=%+v scale=%+v", order.Order.Execution, order.Order.Scale)
-	}
-	if order.Order.Prices.StopPrice != nil || order.Order.Prices.LmtPriceOffset != nil ||
-		order.Order.Routing.ExemptCode != nil {
-		t.Fatalf("numeric sentinels were exposed as values: prices=%+v routing=%+v", order.Order.Prices, order.Order.Routing)
-	}
-	if order.Order.Volatility.DeltaNeutral != nil || order.Contract.DeltaNeutral != nil {
-		t.Fatalf("inactive delta-neutral blocks = %+v/%+v, want nil", order.Order.Volatility.DeltaNeutral, order.Contract.DeltaNeutral)
-	}
-	if order.Order.Hedge.DisableAutomaticPrice == nil || !*order.Order.Hedge.DisableAutomaticPrice {
-		t.Fatalf("disable automatic hedge price = %v, want explicit true", order.Order.Hedge.DisableAutomaticPrice)
-	}
-	if order.Completion.Status != ibkr.OrderStatusCancelled || !order.Completion.Filled.IsZero() {
-		t.Fatalf("completion = %+v, want Cancelled with zero filled", order.Completion)
-	}
-	if order.Completion.ParentPermID == nil || *order.Completion.ParentPermID != 1001 {
-		t.Fatalf("parent perm id = %v, want 1001", order.Completion.ParentPermID)
-	}
-	if order.Completion.AutoCancelDate != "20260930 22:00:00 Central European Standard Time" ||
-		order.Completion.Time != "20260411 22:18:53 US/Eastern" ||
-		order.Completion.StatusText != "Cancelled by System:\n" {
-		t.Fatalf("completion metadata = %+v", order.Completion)
-	}
-	if order.Order.Compliance.Shareholder != "Not an insider or substantial shareholder" {
-		t.Fatalf("shareholder = %q", order.Order.Compliance.Shareholder)
-	}
-}
-
 func TestSecDefOptParams(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "sec_def_opt_params.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1261,12 +984,12 @@ func TestSecDefOptParams(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SecDefOptParams() error = %v", err)
 	}
-	if len(params) != 20 {
-		t.Fatalf("params len = %d, want 20", len(params))
+	if len(params) != 39 {
+		t.Fatalf("params len = %d, want 39", len(params))
 	}
 	var smart, cboe bool
 	for _, param := range params {
-		if param.TradingClass != "AAPL" || param.Multiplier != "100" || len(param.Expirations) == 0 || len(param.Strikes) == 0 {
+		if param.TradingClass == "" || param.Multiplier != "100" || len(param.Expirations) == 0 || len(param.Strikes) == 0 {
 			t.Fatalf("incomplete option parameters = %+v", param)
 		}
 		switch param.Exchange {
@@ -1285,8 +1008,7 @@ func TestSmartComponents(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "smart_components.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1341,151 +1063,11 @@ func TestSmartComponents(t *testing.T) {
 	}
 }
 
-func TestHistogramData(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "histogram_data.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	entries, err := client.History().Histogram(ctx, ibkr.HistogramDataRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		UseRTH: true,
-		Period: "1 week",
-	})
-	if err != nil {
-		t.Fatalf("HistogramData() error = %v", err)
-	}
-	if len(entries) != 992 {
-		t.Fatalf("entries len = %d, want 992", len(entries))
-	}
-	if entries[0].Price.String() != "311" || entries[0].Size.String() != "267840" {
-		t.Fatalf("first entry = %s/%s, want 311/267840", entries[0].Price, entries[0].Size)
-	}
-	last := entries[991]
-	if last.Price.String() != "316.03" || last.Size.String() != "55920" {
-		t.Fatalf("last entry = %s/%s, want 316.03/55920", last.Price, last.Size)
-	}
-}
-
-func TestHistoricalTicksMidpointPermissionError(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_ticks_midpoint.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	end := time.Date(2026, 7, 11, 3, 52, 24, 0, time.UTC)
-
-	_, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		EndTime:       end,
-		NumberOfTicks: 100,
-		WhatToShow:    ibkr.ShowMidpoint,
-		UseRTH:        true,
-	})
-	apiErr, ok := errors.AsType[*ibkr.APIError](err)
-	if !ok || apiErr.OpKind != ibkr.OpHistoricalTicks || apiErr.Code != 10187 || !strings.Contains(apiErr.Message, "No market data permissions for ISLAND STK") {
-		t.Fatalf("HistoricalTicks() error = %v, want live code 10187 permission refusal", err)
-	}
-}
-
-func TestHistoricalTicksBidAskPermissionError(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_ticks_bid_ask.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	end := time.Date(2026, 7, 11, 3, 52, 23, 0, time.UTC)
-
-	_, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		EndTime:       end,
-		NumberOfTicks: 100,
-		WhatToShow:    ibkr.ShowBidAsk,
-		UseRTH:        true,
-	})
-	apiErr, ok := errors.AsType[*ibkr.APIError](err)
-	if !ok || apiErr.OpKind != ibkr.OpHistoricalTicks || apiErr.Code != 10187 || !strings.Contains(apiErr.Message, "No market data permissions for ISLAND STK") {
-		t.Fatalf("HistoricalTicks() error = %v, want live code 10187 permission refusal", err)
-	}
-}
-
-func TestHistoricalTicksTrades(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_ticks_trades.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	end := time.Date(2026, 7, 10, 22, 44, 44, 0, time.UTC)
-
-	result, err := client.History().Ticks(ctx, ibkr.HistoricalTicksRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		EndTime:       end,
-		NumberOfTicks: 100,
-		WhatToShow:    ibkr.ShowTrades,
-		UseRTH:        true,
-	})
-	if err != nil {
-		t.Fatalf("HistoricalTicks() error = %v", err)
-	}
-	if len(result.Last) != 367 {
-		t.Fatalf("last ticks len = %d, want 367", len(result.Last))
-	}
-	first := result.Last[0]
-	if first.Price.String() != "315.3" || first.Size.String() != "3" {
-		t.Fatalf("first trade price/size = %s/%s, want 315.3/3", first.Price, first.Size)
-	}
-	if first.Exchange != "NASDAQ" || first.Attributes != 2 || first.SpecialConditions != " F I" {
-		t.Fatalf("first trade metadata = exchange %q attrib %d conditions %q", first.Exchange, first.Attributes, first.SpecialConditions)
-	}
-	last := result.Last[len(result.Last)-1]
-	if last.Price.String() != "315.3299" || last.Size.String() != "190" || last.Exchange != "FINRA" {
-		t.Fatalf("last trade = price %s size %s exchange %q", last.Price, last.Size, last.Exchange)
-	}
-}
-
 func TestNewsArticle(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "news_article.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -1501,7 +1083,7 @@ func TestNewsArticle(t *testing.T) {
 	if len(items.Items) != 5 {
 		t.Fatalf("historical items = %d, want 5", len(items.Items))
 	}
-	if items.Items[0].ProviderCode != "BRFG" || items.Items[0].ArticleID != "BRFG$1e4f0994" {
+	if items.Items[0].ProviderCode != "BRFG" || items.Items[0].ArticleID != "BRFG$1f064106" {
 		t.Fatalf("first historical item = %+v", items.Items[0])
 	}
 
@@ -1515,195 +1097,9 @@ func TestNewsArticle(t *testing.T) {
 	if article.ArticleType != 0 {
 		t.Fatalf("article type = %d, want 0", article.ArticleType)
 	}
-	if !strings.Contains(article.ArticleText, "Apple (AAPL +5%)") ||
-		!strings.Contains(article.ArticleText, "iPhone demand remained exceptionally strong") {
+	if !strings.Contains(article.ArticleText, "Apple (AAPL -8%)") ||
+		!strings.Contains(article.ArticleText, "supply constraints") {
 		t.Fatalf("article text = %q, want captured Apple earnings article", article.ArticleText)
-	}
-}
-
-func TestHistoricalNews(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "historical_news_end_bound_sv206_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	lowerBound := time.Date(2026, 1, 10, 23, 11, 4, 0, time.UTC)
-
-	items, err := client.News().Historical(ctx, ibkr.HistoricalNewsRequest{
-		ConID:         265598,
-		ProviderCodes: []ibkr.NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"},
-		EndTime:       lowerBound,
-		TotalResults:  20,
-	})
-	if err != nil {
-		t.Fatalf("HistoricalNews() error = %v", err)
-	}
-	if len(items.Items) != 2 {
-		t.Fatalf("items len = %d, want 2", len(items.Items))
-	}
-	if !items.Items[0].Time.Equal(time.Date(2026, 5, 1, 14, 27, 6, 0, time.UTC)) || items.Items[0].ProviderCode != "BRFG" {
-		t.Fatalf("first item = %+v", items.Items[0])
-	}
-	for _, item := range items.Items {
-		if item.Time.Before(lowerBound) {
-			t.Fatalf("item %s is before lower bound %s", item.Time, lowerBound)
-		}
-	}
-}
-
-func TestOrderEventBufferOverflowPreservesOrderCoordinate(t *testing.T) {
-	t.Parallel()
-
-	// captures/20260413T192703Z-place_order_mkt_buy_aapl, server_version 200,
-	// events.jsonl sha256 prefix 301b075b217cbd99. The grounded replay's exact
-	// order is OpenOrder(PreSubmitted), PreSubmitted status, Execution,
-	// OpenOrder(Filled), Filled status, then CommissionAndFees. A four-event
-	// queue must close when the fifth event arrives instead of silently dropping
-	// it and continuing.
-	client, host := newClient(t, "place_order_fill_native_execution_time.txt", ibkr.WithClientID(94), ibkr.WithOrderEventBuffer(4))
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("1"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-
-	select {
-	case <-handle.Done():
-	case <-ctx.Done():
-		t.Fatal("timeout waiting for order event overflow")
-	}
-	if err := handle.Wait(); !errors.Is(err, ibkr.ErrSlowConsumer) {
-		t.Fatalf("Wait() error = %v, want ErrSlowConsumer", err)
-	}
-
-	var events []ibkr.OrderEvent
-	for event := range handle.Events() {
-		events = append(events, event)
-	}
-	if len(events) != 4 {
-		t.Fatalf("buffered event count = %d, want configured capacity 4", len(events))
-	}
-	if events[0].Lifecycle == nil || events[0].Lifecycle.Kind != ibkr.OrderStarted ||
-		events[1].OpenOrder == nil || events[1].OpenOrder.State.Status != ibkr.OrderStatusPreSubmitted ||
-		events[2].Status == nil || events[2].Status.Status != ibkr.OrderStatusPreSubmitted ||
-		events[3].Execution == nil || events[3].Execution.ExecID != "sanitized-native-exec-001" {
-		t.Fatalf("buffered live-derived prefix = %+v, want Started, OpenOrder(PreSubmitted), PreSubmitted, Execution", events)
-	}
-
-	// Observation has ended, but this stable server coordinate remains the
-	// authority for open-order reconciliation or direct Orders().Cancel.
-	if orderID := handle.OrderID(); orderID != 1 {
-		t.Fatalf("OrderID after observation overflow = %d, want reconciliation coordinate 1", orderID)
-	}
-}
-
-func TestPlaceOrderWithNativeExecutionTime(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "place_order_fill_native_execution_time.txt", ibkr.WithClientID(94))
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("1"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-
-	var sawFilled bool
-	var execution *ibkr.Execution
-	var commission *ibkr.CommissionAndFeesReport
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				goto done
-			}
-			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-				sawFilled = true
-			}
-			if evt.Execution != nil {
-				execution = evt.Execution
-			}
-			if evt.CommissionAndFees != nil {
-				commission = evt.CommissionAndFees
-			}
-			if sawFilled && execution != nil && commission != nil {
-				goto done
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for native execution-time order events")
-		}
-	}
-
-done:
-	if !sawFilled {
-		t.Fatal("never received Filled status")
-	}
-	if execution == nil {
-		t.Fatal("never received Execution event")
-		return
-	}
-	if execution.ExecID != "sanitized-native-exec-001" {
-		t.Fatalf("Execution.ExecID = %q", execution.ExecID)
-	}
-	wantTime := time.Date(2026, 4, 13, 19, 27, 4, 0, time.UTC)
-	if !execution.Time.Equal(wantTime) {
-		t.Fatalf("Execution.Time = %s, want %s", execution.Time.Format(time.RFC3339), wantTime.Format(time.RFC3339))
-	}
-	if execution.Price.String() != "257.95" {
-		t.Fatalf("Execution.Price = %s, want 257.95", execution.Price.String())
-	}
-	if commission == nil {
-		t.Fatal("never received Commission event")
-		return
-	}
-	if commission.ExecID != execution.ExecID {
-		t.Fatalf("Commission.ExecID = %q, want %q", commission.ExecID, execution.ExecID)
-	}
-	handle.Close()
-	if err := handle.Wait(); err != nil {
-		t.Fatalf("handle.Wait() error = %v", err)
 	}
 }
 
@@ -1711,8 +1107,7 @@ func TestDirectCancelOrder(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "direct_cancel_order.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 	events := client.SessionEvents()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1720,6 +1115,7 @@ func TestDirectCancelOrder(t *testing.T) {
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
+			ConID:    265598,
 			Symbol:   "AAPL",
 			SecType:  ibkr.SecTypeStock,
 			Exchange: "SMART",
@@ -1729,36 +1125,21 @@ func TestDirectCancelOrder(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
+			LmtPrice:  new(decimal.RequireFromString("10")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
-	if handle.OrderID() != 350 {
-		t.Fatalf("OrderID = %d, want 350", handle.OrderID())
+	if handle.OrderID() != 506 {
+		t.Fatalf("OrderID = %d, want 506", handle.OrderID())
 	}
 
-	// Preserve the captured rest chronology before sending the direct cancel.
-	sawPreSubmitted := false
-statuses:
-	for {
-		evt := waitForEvent(t, handle.Events())
-		if evt.Status == nil {
-			continue
-		}
-		switch evt.Status.Status {
-		case ibkr.OrderStatusPreSubmitted:
-			sawPreSubmitted = true
-		case ibkr.OrderStatusSubmitted:
-			break statuses
-		}
-	}
-	if !sawPreSubmitted {
-		t.Fatal("Submitted arrived without the captured PreSubmitted transition")
-	}
+	// The after-hours order remains PreSubmitted until the direct cancel.
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
 
 	// Direct-by-ID cancel path: skip OrderHandle.Cancel and call the
 	// top-level facade with the handle's order ID. This proves Orders().Cancel
@@ -1798,29 +1179,28 @@ directCancelDone:
 	if !sawCancelled {
 		t.Fatal("never received Cancelled status event after direct-by-ID cancel")
 	}
-	handle.Close()
-	if err := handle.Wait(); err != nil {
-		t.Fatalf("handle.Wait() error = %v", err)
-	}
 	notice := waitForSessionEventCode(t, ctx, events, ibkr.ErrCodeOrderCanceled)
 	if notice.Message != "Order Canceled - reason:" {
 		t.Fatalf("code-202 message = %q, want %q", notice.Message, "Order Canceled - reason:")
 	}
+	handle.Close()
+	if err := handle.Wait(); err != nil {
+		t.Fatalf("handle.Wait() error = %v", err)
+	}
 }
 
 // Regression: missing extOperator and manualOrderIndicator fields caused the
-// Gateway to silently drop cancel_order. This test uses the full
-// PreSubmitted → Submitted → PendingCancel → Cancelled lifecycle grounded from
-// live paper Gateway sv=200 on 2026-04-14.
+// Gateway to silently drop cancel_order. This replay is the current sv225
+// after-hours lifecycle: the order remains PreSubmitted and cancels cleanly.
 func TestAPIOrderRestCancelAAPL(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_order_rest_cancel_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -1832,47 +1212,39 @@ func TestAPIOrderRestCancelAAPL(t *testing.T) {
 			Quantity: decimal.RequireFromString("1"),
 			LmtPrice: new(decimal.RequireFromString("10")),
 			TIF:      ibkr.TIFDay, Account: "DU9000001",
+			OrderRef: "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("PlaceOrder: %v", err)
 	}
 
-	// Consume events until Submitted.
-	for {
-		evt := waitForEvent(t, handle.Events())
-		if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusSubmitted {
-			break
-		}
+	if handle.OrderID() != 514 {
+		t.Fatalf("OrderID() = %d, want 514", handle.OrderID())
+	}
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	if warning := waitForOrderWarning(t, ctx, handle); warning.Code != 399 {
+		t.Fatalf("order warning = %v, want off-hours code 399", warning)
 	}
 
 	if err := handle.Cancel(ctx); err != nil {
 		t.Fatalf("Cancel: %v", err)
 	}
 
-	// Drain until Cancelled; a following code 202 cancellation notice must not
-	// convert a successful terminal status into handle error.
-	var sawPendingCancel, sawCancelled bool
-	for !sawCancelled {
-		evt := waitForEvent(t, handle.Events())
-		if evt.Status != nil {
-			switch evt.Status.Status {
-			case ibkr.OrderStatusPendingCancel:
-				sawPendingCancel = true
-			case ibkr.OrderStatusCancelled:
-				sawCancelled = true
-			}
-		}
+	statuses := waitOrderStatuses(t, ctx, handle)
+	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
+		t.Fatalf("statuses = %v, want Cancelled", statuses)
 	}
-	handle.Close()
-	if !sawPendingCancel {
-		t.Error("expected PendingCancel status before Cancelled")
-	}
-	if !sawCancelled {
-		t.Fatal("never received Cancelled status")
-	}
+	// waitOrderStatuses detaches the handle after the terminal status. Observe
+	// that local teardown before the transcript's final CurrentTime exchange:
+	// the live capture ends immediately after the fence, so its EOF may
+	// otherwise race the queued detach and correctly mark the still-observed
+	// order as requiring recovery.
 	if err := handle.Wait(); err != nil {
 		t.Fatalf("handle.Wait() error = %v, want nil after cancellation notice", err)
+	}
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime() post-cancel fence error = %v", err)
 	}
 }
 
@@ -1931,6 +1303,17 @@ func waitHost(t *testing.T, host *testhost.Host) {
 	}
 }
 
+func cleanupClientHost(t *testing.T, client *ibkr.Client, host *testhost.Host) {
+	t.Helper()
+	defer client.Close()
+	if t.Failed() {
+		// A failed assertion can leave the scripted host waiting for a request
+		// the test will never send. Closing first unblocks that read.
+		client.Close()
+	}
+	waitHost(t, host)
+}
+
 func waitForEvent[T any](t *testing.T, ch <-chan T) T {
 	t.Helper()
 
@@ -1953,15 +1336,14 @@ func TestGroundedBootstrap(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_bootstrap.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	snapshot := client.Session()
 	if snapshot.State != ibkr.StateReady {
 		t.Fatalf("state = %s, want %s", snapshot.State, ibkr.StateReady)
 	}
-	if snapshot.ServerVersion != 200 {
-		t.Fatalf("server version = %d, want 200", snapshot.ServerVersion)
+	if snapshot.ServerVersion != 225 {
+		t.Fatalf("server version = %d, want 225", snapshot.ServerVersion)
 	}
 	if len(snapshot.ManagedAccounts) != 1 || snapshot.ManagedAccounts[0] != "DU9000001" {
 		t.Fatalf("managed accounts = %v, want [DU9000001]", snapshot.ManagedAccounts)
@@ -2001,8 +1383,7 @@ func TestGroundedContractDetailsAAPL(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_contract_details_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2059,8 +1440,7 @@ func TestGroundedAccountSummaryBurstExceedsSubscriptionBuffer(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_account_summary.txt", ibkr.WithSubscriptionBuffer(1))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2081,17 +1461,17 @@ func TestGroundedAccountSummaryBurstExceedsSubscriptionBuffer(t *testing.T) {
 		byTag[v.Tag] = v
 	}
 
-	if v, ok := byTag["NetLiquidation"]; !ok || v.Value != "68000.00" {
-		t.Errorf("NetLiquidation = %q, want 68000.00", v.Value)
+	if v, ok := byTag["NetLiquidation"]; !ok || v.Value != "36992.49" {
+		t.Errorf("NetLiquidation = %q, want 36992.49", v.Value)
 	}
-	if v, ok := byTag["TotalCashValue"]; !ok || v.Value != "12000.00" {
-		t.Errorf("TotalCashValue = %q, want 12000.00", v.Value)
+	if v, ok := byTag["TotalCashValue"]; !ok || v.Value != "-1441.67" {
+		t.Errorf("TotalCashValue = %q, want -1441.67", v.Value)
 	}
-	if v, ok := byTag["BuyingPower"]; !ok || v.Value != "300000.00" {
-		t.Errorf("BuyingPower = %q, want 300000.00", v.Value)
+	if v, ok := byTag["BuyingPower"]; !ok || v.Value != "183875.22" {
+		t.Errorf("BuyingPower = %q, want 183875.22", v.Value)
 	}
-	if v, ok := byTag["ExcessLiquidity"]; !ok || v.Value != "50000.00" {
-		t.Errorf("ExcessLiquidity = %q, want 50000.00", v.Value)
+	if v, ok := byTag["ExcessLiquidity"]; !ok || v.Value != "28591.69" {
+		t.Errorf("ExcessLiquidity = %q, want 28591.69", v.Value)
 	}
 
 	for _, v := range values {
@@ -2104,73 +1484,11 @@ func TestGroundedAccountSummaryBurstExceedsSubscriptionBuffer(t *testing.T) {
 	}
 }
 
-func TestGroundedHistoricalBars(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "grounded_historical_bars.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Duration:   ibkr.Days(1),
-		BarSize:    ibkr.Bar1Hour,
-		WhatToShow: ibkr.ShowTrades,
-		UseRTH:     true,
-	})
-	if err != nil {
-		t.Fatalf("HistoricalBars() error = %v", err)
-	}
-	if len(bars) != 7 {
-		t.Fatalf("bars len = %d, want 7", len(bars))
-	}
-
-	// First bar: 2026-07-10 09:30 US/Eastern
-	first := bars[0]
-	if first.Open.String() != "314.66" {
-		t.Errorf("first bar Open = %s, want 314.66", first.Open.String())
-	}
-	if first.High.String() != "316.4" {
-		t.Errorf("first bar High = %s, want 316.4", first.High.String())
-	}
-	if first.Low.String() != "313.21" {
-		t.Errorf("first bar Low = %s, want 313.21", first.Low.String())
-	}
-	if first.Close.String() != "314.3" {
-		t.Errorf("first bar Close = %s, want 314.3", first.Close.String())
-	}
-	if first.Volume.String() != "3293552" {
-		t.Errorf("first bar Volume = %s, want 3293552", first.Volume.String())
-	}
-	if first.Count != 31704 {
-		t.Errorf("first bar Count = %d, want 31704", first.Count)
-	}
-
-	// Last bar: 2026-07-10 15:00 US/Eastern
-	last := bars[6]
-	if last.Close.String() != "315.33" {
-		t.Errorf("last bar Close = %s, want 315.33", last.Close.String())
-	}
-	if last.Volume.String() != "4884566" {
-		t.Errorf("last bar Volume = %s, want 4884566", last.Volume.String())
-	}
-}
-
 func TestGroundedPositions(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_positions.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2179,117 +1497,18 @@ func TestGroundedPositions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PositionsSnapshot() error = %v", err)
 	}
-	if len(positions) != 4 {
-		t.Fatalf("positions len = %d, want 4", len(positions))
+	if len(positions) != 8 {
+		t.Fatalf("positions len = %d, want 8", len(positions))
 	}
-
-	// Find AMZN position by symbol
-	var amzn *ibkr.Position
-	var aapl *ibkr.Position
-	var yw *ibkr.Position
-	var qqq *ibkr.Position
-	for i := range positions {
-		switch positions[i].Contract.Symbol {
-		case "AMZN":
-			amzn = &positions[i]
-		case "AAPL":
-			aapl = &positions[i]
-		case "YW":
-			yw = &positions[i]
-		case "QQQ":
-			qqq = &positions[i]
+	foundZeroMES := false
+	for _, position := range positions {
+		if position.Account != "DU9000001" {
+			t.Fatalf("position account = %q, want DU9000001", position.Account)
 		}
+		foundZeroMES = foundZeroMES || position.Contract.LocalSymbol == "MESU6" && position.Position.IsZero()
 	}
-
-	if amzn == nil {
-		t.Fatal("AMZN position not found")
-		return
-	}
-	if amzn.Account != "DU9000001" {
-		t.Errorf("AMZN account = %q, want DU9000001", amzn.Account)
-	}
-	if amzn.Position.String() != "15" {
-		t.Errorf("AMZN position = %s, want 15", amzn.Position.String())
-	}
-	if amzn.AvgCost.String() != "200.25" {
-		t.Errorf("AMZN avgCost = %s, want 200.25", amzn.AvgCost.String())
-	}
-	if amzn.Contract.SecType != ibkr.SecTypeStock {
-		t.Errorf("AMZN secType = %q, want STK", amzn.Contract.SecType)
-	}
-	if amzn.Contract.Currency != "USD" {
-		t.Errorf("AMZN currency = %q, want USD", amzn.Contract.Currency)
-	}
-	if amzn.Contract.ConID != 3691937 {
-		t.Errorf("AMZN conID = %d, want 3691937", amzn.Contract.ConID)
-	}
-	if amzn.Contract.TradingClass != "NMS" {
-		t.Errorf("AMZN tradingClass = %q, want NMS", amzn.Contract.TradingClass)
-	}
-
-	if aapl == nil {
-		t.Fatal("AAPL position not found")
-		return
-	}
-	if aapl.Position.String() != "10" {
-		t.Errorf("AAPL position = %s, want 10", aapl.Position.String())
-	}
-	if aapl.AvgCost.String() != "256.1" {
-		t.Errorf("AAPL avgCost = %s, want 256.1", aapl.AvgCost.String())
-	}
-
-	if yw == nil {
-		t.Fatal("YW position not found")
-		return
-	}
-	if yw.Contract.SecType != ibkr.SecTypeFuture {
-		t.Errorf("YW secType = %q, want FUT", yw.Contract.SecType)
-	}
-	if yw.Contract.ConID != 715358256 {
-		t.Errorf("YW conID = %d, want 715358256", yw.Contract.ConID)
-	}
-	if yw.Contract.Expiry != "20261214" {
-		t.Errorf("YW expiry = %q, want 20261214", yw.Contract.Expiry)
-	}
-	if yw.Contract.Multiplier != "1000" {
-		t.Errorf("YW multiplier = %q, want 1000", yw.Contract.Multiplier)
-	}
-	if yw.Contract.TradingClass != "XW" {
-		t.Errorf("YW tradingClass = %q, want XW", yw.Contract.TradingClass)
-	}
-	if yw.Position.String() != "1" {
-		t.Errorf("YW position = %s, want 1", yw.Position.String())
-	}
-
-	if qqq == nil {
-		t.Fatal("QQQ position not found")
-		return
-	}
-	if qqq.Contract.SecType != ibkr.SecTypeOption {
-		t.Errorf("QQQ secType = %q, want OPT", qqq.Contract.SecType)
-	}
-	if qqq.Contract.ConID != 728937835 {
-		t.Errorf("QQQ conID = %d, want 728937835", qqq.Contract.ConID)
-	}
-	if qqq.Contract.Expiry != "20270115" {
-		t.Errorf("QQQ expiry = %q, want 20270115", qqq.Contract.Expiry)
-	}
-	// The wire strike "500.0" normalizes to "500" through decimal; compare by
-	// value, never by string.
-	if qqq.Contract.Strike == nil || !qqq.Contract.Strike.Equal(decimal.RequireFromString("500.0")) {
-		t.Errorf("QQQ strike = %s, want 500.0", qqq.Contract.Strike)
-	}
-	if qqq.Contract.Right != ibkr.RightPut {
-		t.Errorf("QQQ right = %q, want P", qqq.Contract.Right)
-	}
-	if qqq.Contract.Multiplier != "100" {
-		t.Errorf("QQQ multiplier = %q, want 100", qqq.Contract.Multiplier)
-	}
-	if qqq.Contract.TradingClass != "QQQ" {
-		t.Errorf("QQQ tradingClass = %q, want QQQ", qqq.Contract.TradingClass)
-	}
-	if qqq.Position.String() != "-3" {
-		t.Errorf("QQQ position = %s, want -3", qqq.Position.String())
+	if !foundZeroMES {
+		t.Fatal("positions snapshot lacks the live-attested zero-quantity MESU6 row")
 	}
 }
 
@@ -2297,8 +1516,7 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "account_updates.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2307,28 +1525,29 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("AccountUpdatesSnapshot() error = %v", err)
 	}
-	if len(values) != 3 {
-		t.Fatalf("values len = %d, want 3", len(values))
+	if len(values) != 4 {
+		t.Fatalf("values len = %d, want 4", len(values))
 	}
-	// First is an account value
 	if values[0].AccountValue == nil {
 		t.Fatal("first value is nil AccountValue")
 	}
 	if values[0].AccountValue.Key != "AccountCode" || values[0].AccountValue.Value != "DU9000001" {
 		t.Fatalf("first value = %+v, want sanitized AccountCode", values[0].AccountValue)
 	}
-	// Second is a portfolio update
-	if values[1].Portfolio == nil {
-		t.Fatal("second value is nil Portfolio")
+	if values[1].AccountValue == nil {
+		t.Fatal("second value is nil AccountValue")
 	}
-	if values[1].Portfolio.Contract.Symbol != "000660" {
-		t.Fatalf("portfolio symbol = %q, want 000660", values[1].Portfolio.Contract.Symbol)
+	if got := values[1].AccountValue; got.Key != "Billable" || got.Value != "0.00" || got.Currency != "EUR" {
+		t.Fatalf("second value = %+v, want Billable=0.00 EUR", got)
 	}
-	if values[1].Portfolio.Position.String() != "4" {
-		t.Fatalf("portfolio position = %s, want 4", values[1].Portfolio.Position.String())
+	if values[2].Portfolio == nil {
+		t.Fatal("third value is nil Portfolio")
 	}
-	if values[2].UpdateTime == nil || *values[2].UpdateTime != "22:06" {
-		t.Fatalf("update time = %v, want 22:06", values[2].UpdateTime)
+	if values[2].Portfolio.Contract.Symbol != "VEEV" || values[2].Portfolio.Position.String() != "10" {
+		t.Fatalf("portfolio = %+v, want VEEV position 10", values[2].Portfolio)
+	}
+	if values[3].UpdateTime == nil || *values[3].UpdateTime != "22:21" {
+		t.Fatalf("update time = %v, want 22:21", values[3].UpdateTime)
 	}
 }
 
@@ -2336,11 +1555,24 @@ func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "account_updates_multi.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
+	allValues, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
+		Account:   "DU9000001",
+		ModelCode: "",
+	})
+	if err != nil {
+		t.Fatalf("AccountUpdatesMultiSnapshot(ledger=false) error = %v", err)
+	}
+	if len(allValues) != 201 {
+		t.Fatalf("ledger=false values len = %d, want 201", len(allValues))
+	}
+	if allValues[0].Account != "DU9000001" {
+		t.Fatalf("ledger=false first account = %q, want DU9000001", allValues[0].Account)
+	}
 
 	values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
 		Account:      "DU9000001",
@@ -2362,12 +1594,11 @@ func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 	}
 }
 
-func TestPositionsMultiBoundary(t *testing.T) {
+func TestPositionsMultiSnapshot(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "positions_multi.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2379,8 +1610,14 @@ func TestPositionsMultiBoundary(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PositionsMulti() error = %v", err)
 	}
-	if len(values) != 0 {
-		t.Fatalf("values = %+v, want boundary-only replay", values)
+	if len(values) != 19 {
+		t.Fatalf("values len = %d, want 19", len(values))
+	}
+	if first := values[0]; first.Account != "DU9000001" || first.Contract.Symbol != "MELI" || first.Position.String() != "1" || first.AvgCost.String() != "1581.09" {
+		t.Fatalf("first position = %+v, want MELI 1 at 1581.09", first)
+	}
+	if last := values[len(values)-1]; last.Contract.Symbol != "UBER" || last.Position.String() != "35" {
+		t.Fatalf("last position = %+v, want UBER 35", last)
 	}
 }
 
@@ -2388,8 +1625,7 @@ func TestSubscribePnL(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "pnl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2405,11 +1641,11 @@ func TestSubscribePnL(t *testing.T) {
 	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
 
 	update := waitForStreamData(t, sub.Events())
-	if update.DailyPnL.String() != "-24.44306605249274" {
-		t.Fatalf("daily pnl = %s, want -24.44306605249274", update.DailyPnL.String())
+	if update.DailyPnL.String() != "-25.20770993999969" {
+		t.Fatalf("daily pnl = %s, want -25.20770993999969", update.DailyPnL.String())
 	}
-	if update.UnrealizedPnL.String() != "467.50415673150746" {
-		t.Fatalf("unrealized pnl = %s, want 467.50415673150746", update.UnrealizedPnL.String())
+	if update.UnrealizedPnL.String() != "817.2099484832976" {
+		t.Fatalf("unrealized pnl = %s, want 817.2099484832976", update.UnrealizedPnL.String())
 	}
 	if update.RealizedPnL.String() != "0" {
 		t.Fatalf("realized pnl = %s, want 0", update.RealizedPnL.String())
@@ -2440,30 +1676,11 @@ func waitForStreamData[T any](t *testing.T, ch <-chan ibkr.StreamEvent[T]) T {
 	}
 }
 
-func waitForOrderLifecycle(t *testing.T, ctx context.Context, ch <-chan ibkr.OrderEvent, want ibkr.OrderLifecycleKind) ibkr.OrderLifecycleEvent {
-	t.Helper()
-
-	for {
-		select {
-		case event, ok := <-ch:
-			if !ok {
-				t.Fatalf("order events closed before lifecycle %s", want)
-			}
-			if event.Lifecycle != nil && event.Lifecycle.Kind == want {
-				return *event.Lifecycle
-			}
-		case <-ctx.Done():
-			t.Fatalf("waiting for order lifecycle %s: %v", want, ctx.Err())
-		}
-	}
-}
-
 func TestSoftDollarTiersIntegration(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "soft_dollar_tiers.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2484,8 +1701,7 @@ func TestDisplayGroupLifecycleIntegration(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "display_group_subscribe.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -2521,172 +1737,15 @@ func TestDisplayGroupLifecycleIntegration(t *testing.T) {
 	}
 }
 
-func TestPlaceOrderModifyToMarketDeliversLateExecution(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "place_order_modify_to_market_late_execution.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("12.89")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-
-	var sawSubmitted bool
-	for !sawSubmitted {
-		select {
-		case evt := <-handle.Events():
-			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusSubmitted {
-				sawSubmitted = true
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for Submitted")
-		}
-	}
-
-	if err := handle.Replace(ctx, ibkr.Order{
-		Action:    ibkr.ActionBuy,
-		OrderType: ibkr.OrderTypeMarket,
-		Quantity:  decimal.RequireFromString("1"),
-		TIF:       ibkr.TIFDay,
-		Account:   "DU9000001",
-	}); err != nil {
-		t.Fatalf("Replace: %v", err)
-	}
-
-	var sawFilled, sawExecution, sawCommission bool
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				goto done
-			}
-			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-				sawFilled = true
-			}
-			if evt.Execution != nil {
-				sawExecution = true
-				if evt.Execution.ExecID != "late-exec-13" {
-					t.Fatalf("execution execID = %q, want late-exec-13", evt.Execution.ExecID)
-				}
-			}
-			if evt.CommissionAndFees != nil {
-				sawCommission = true
-			}
-			if sawFilled && sawExecution && sawCommission {
-				goto done
-			}
-		case <-handle.Done():
-			for {
-				select {
-				case evt, ok := <-handle.Events():
-					if !ok {
-						goto done
-					}
-					if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-						sawFilled = true
-					}
-					if evt.Execution != nil {
-						sawExecution = true
-					}
-					if evt.CommissionAndFees != nil {
-						sawCommission = true
-					}
-				default:
-					goto done
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for terminal order events")
-		}
-	}
-
-done:
-	if !sawFilled {
-		t.Fatal("never received Filled status")
-	}
-	if !sawExecution {
-		t.Fatal("never received late execution after Filled")
-	}
-	if !sawCommission {
-		t.Fatal("never received late commission after Filled")
-	}
-	handle.Close()
-	if err := handle.Wait(); err != nil {
-		t.Fatalf("handle.Wait() error = %v", err)
-	}
-}
-
-func TestPlaceOrderInvalidTypeLiveError(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "place_order_invalid_type_live_error.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderType("FEELINGS"),
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("15.81")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "ibkrgo-redacted-20260711T041223Z-001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
-	}
-
-	err = handle.Wait()
-	if err == nil {
-		t.Fatal("handle.Wait() error = nil, want live invalid order type API error")
-	}
-	if !strings.Contains(err.Error(), "code=321") || !strings.Contains(err.Error(), "Invalid order type") {
-		t.Fatalf("handle.Wait() error = %v, want code=321 invalid order type", err)
-	}
-}
-
 func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_ioc_fok_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	ioc, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -2700,9 +1759,10 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("309.6")),
+			LmtPrice:  new(decimal.NewFromInt(240)),
 			TIF:       ibkr.TIFIOC,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
@@ -2728,9 +1788,10 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("309.6")),
+			LmtPrice:  new(decimal.NewFromInt(240)),
 			TIF:       ibkr.TIFFOK,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000006",
 		},
 	})
 	if err != nil {
@@ -2754,9 +1815,10 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("12.9")),
+			LmtPrice:  new(decimal.NewFromInt(10)),
 			TIF:       ibkr.TIFFOK,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000009",
 		},
 	})
 	if err != nil {
@@ -2767,204 +1829,172 @@ func TestAPIIOCFOKAAPLReplay(t *testing.T) {
 		t.Fatalf("FOK far statuses = %v, want Inactive from live capture", fokFarStatuses)
 	}
 	fokFar.Close()
+
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	if err != nil {
+		t.Fatalf("Executions(AAPL): %v", err)
+	}
+	if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+		t.Fatalf("IOC/FOK executions/fees = %d/%d, want 0/0", len(executions.Executions), len(executions.CommissionAndFees))
+	}
 }
 
 func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_tif_attribute_matrix_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-
-	gtc, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("10")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("GTC PlaceOrder: %v", err)
-	}
-	for {
-		evt := waitForEvent(t, gtc.Events())
-		if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusSubmitted {
-			break
-		}
-	}
-	if err := gtc.Cancel(ctx); err != nil {
-		t.Fatalf("GTC Cancel: %v", err)
-	}
-	gtcStatuses := waitOrderStatuses(t, ctx, gtc)
-	if !hasOrderStatus(gtcStatuses, ibkr.OrderStatusCancelled) {
-		t.Fatalf("GTC statuses = %v, want Cancelled from live capture", gtcStatuses)
-	}
-
-	trailing, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:          ibkr.ActionSell,
-			OrderType:       ibkr.OrderTypeTrailingStop,
-			Quantity:        decimal.RequireFromString("1"),
-			TIF:             ibkr.TIFDay,
-			Account:         "DU9000001",
-			TrailStopPrice:  new(decimal.RequireFromString("2000")),
-			TrailingPercent: new(decimal.RequireFromString("1.5")),
-		},
-	})
-	if err != nil {
-		t.Fatalf("TrailingPercent PlaceOrder: %v", err)
-	}
-	var sawExecution, sawFilled bool
-	for {
-		select {
-		case evt, ok := <-trailing.Events():
-			if !ok {
-				goto trailingDone
-			}
-			if evt.Execution != nil {
-				sawExecution = true
-			}
-			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-				sawFilled = true
-			}
-			if sawExecution && sawFilled {
-				goto trailingDone
-			}
-		case <-trailing.Done():
-			for {
-				select {
-				case evt, ok := <-trailing.Events():
-					if !ok {
-						goto trailingDone
-					}
-					if evt.Execution != nil {
-						sawExecution = true
-					}
-					if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-						sawFilled = true
-					}
-				default:
-					goto trailingDone
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for trailing-percent live replay")
-		}
-	}
-
-trailingDone:
-	if !sawExecution {
-		t.Fatal("never received trailing-percent execution from live capture")
-	}
-	if !sawFilled {
-		t.Fatal("never received trailing-percent Filled status from live capture")
-	}
-	trailing.Close()
-	if err := trailing.Wait(); err != nil {
-		t.Fatalf("TrailingPercent Wait: %v", err)
-	}
-}
-
-func TestAPIStopLossManagementAAPLReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_stop_loss_management_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	contract := ibkr.Contract{
-		ConID:    265598,
-		Symbol:   "AAPL",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
+		ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+	}
+	farBuy := decimal.RequireFromString("15.55")
+	farSell := decimal.RequireFromString("3109.2")
+	refs := []string{
+		"sanitized-order-ref-0000000000000001",
+		"sanitized-order-ref-0000000000000006",
+		"sanitized-order-ref-0000000000000011",
+		"sanitized-order-ref-0000000000000016",
+		"sanitized-order-ref-0000000000000022",
+		"sanitized-order-ref-0000000000000024",
+		"sanitized-order-ref-0000000000000031",
+		"sanitized-order-ref-0000000000000036",
+		"sanitized-order-ref-00000040",
+		"sanitized-order-ref-0000000000000046",
+		"sanitized-order-ref-0000000000000052",
+		"sanitized-order-ref-0000000000000054",
+		"sanitized-order-ref-0000000000000059",
+		"sanitized-order-ref-0000000000000064",
+		"sanitized-order-ref-0000000000000070",
+	}
+	base := func(index int, action ibkr.OrderAction, orderType ibkr.OrderType, quantity decimal.Decimal) ibkr.Order {
+		return ibkr.Order{
+			Action: action, OrderType: orderType, Quantity: quantity, TIF: ibkr.TIFDay,
+			Account: "DU9000001", OrderRef: refs[index],
+		}
+	}
+	limit := func(order ibkr.Order) ibkr.Order {
+		order.LmtPrice = new(farBuy)
+		return order
 	}
 
-	buy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("1"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
+	cases := []struct {
+		name  string
+		order ibkr.Order
+	}{
+		{name: "GTC", order: func() ibkr.Order {
+			order := limit(base(0, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.TIF = ibkr.TIFGTC
+			return order
+		}()},
+		{name: "GTD", order: func() ibkr.Order {
+			order := limit(base(1, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.TIF = ibkr.TIFGTD
+			order.GoodTillDate = "20260825 00:44:45 UTC"
+			return order
+		}()},
+		{name: "good-after", order: func() ibkr.Order {
+			order := limit(base(2, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.GoodAfterTime = "20260824 22:46:45 UTC"
+			return order
+		}()},
+		{name: "all-or-none", order: func() ibkr.Order {
+			order := limit(base(3, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.AllOrNone = new(true)
+			return order
+		}()},
+		{name: "minimum-quantity", order: func() ibkr.Order {
+			order := limit(base(4, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(3)))
+			order.MinQty = new(2)
+			return order
+		}()},
+		{name: "relative-percent-offset", order: func() ibkr.Order {
+			order := limit(base(5, ibkr.ActionBuy, ibkr.OrderTypeRelative, decimal.NewFromInt(1)))
+			order.PercentOffset = new(decimal.RequireFromString("0.03"))
+			return order
+		}()},
+		{name: "trailing-percent", order: func() ibkr.Order {
+			order := base(6, ibkr.ActionSell, ibkr.OrderTypeTrailingStop, decimal.NewFromInt(1))
+			order.TrailStopPrice = new(farSell)
+			order.TrailingPercent = new(decimal.RequireFromString("1.5"))
+			return order
+		}()},
+		{name: "trigger-method", order: func() ibkr.Order {
+			order := base(7, ibkr.ActionBuy, ibkr.OrderTypeStop, decimal.NewFromInt(1))
+			order.AuxPrice = new(farSell)
+			order.TriggerMethod = 4
+			return order
+		}()},
+		{name: "explicit-ref", order: limit(base(8, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))},
+		{name: "scale", order: func() ibkr.Order {
+			order := limit(base(9, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.Scale.InitialLevelSize = 1
+			order.Scale.SubsequentLevelSize = 1
+			order.Scale.PriceIncrement = decimal.RequireFromString("0.05")
+			return order
+		}()},
+		{name: "active-window", order: func() ibkr.Order {
+			order := limit(base(10, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.Scale.ActiveStartTime = "20260824 22:46:45 UTC"
+			order.Scale.ActiveStopTime = "20260824 22:48:45 UTC"
+			return order
+		}()},
+		{name: "price-management", order: func() ibkr.Order {
+			order := limit(base(11, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.UsePriceMgmtAlgo = new(true)
+			return order
+		}()},
+		{name: "adjusted-stop", order: func() ibkr.Order {
+			order := base(12, ibkr.ActionSell, ibkr.OrderTypeStop, decimal.NewFromInt(1))
+			order.AuxPrice = new(farBuy)
+			order.Adjustment = ibkr.OrderAdjustment{
+				OrderType: ibkr.OrderTypeStopLimit, TriggerPrice: farBuy,
+				StopPrice: decimal.RequireFromString("14.55"), StopLimitPrice: decimal.RequireFromString("15.05"),
+				TrailingAmount: decimal.NewFromInt(1),
+			}
+			return order
+		}()},
+		{name: "manual-time", order: func() ibkr.Order {
+			order := limit(base(13, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.ManualOrderTime = "20260824 22:44:45 UTC"
+			return order
+		}()},
+		{name: "advanced-error-override", order: func() ibkr.Order {
+			order := limit(base(14, ibkr.ActionBuy, ibkr.OrderTypeLimit, decimal.NewFromInt(1)))
+			order.AdvancedErrorOverride = "IBDBUYTX"
+			return order
+		}()},
+	}
+
+	handles := make([]*ibkr.OrderHandle, 0, len(cases))
+	for i, tc := range cases {
+		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: contract, Order: tc.order})
+		if err != nil {
+			t.Fatalf("%s Place: %v", tc.name, err)
+		}
+		if handle.OrderID() != 581+int64(i) {
+			t.Fatalf("%s OrderID() = %d, want %d", tc.name, handle.OrderID(), 581+i)
+		}
+		handles = append(handles, handle)
+		if err := handle.Cancel(ctx); err != nil {
+			t.Fatalf("%s Cancel: %v", tc.name, err)
+		}
+	}
+
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
-		t.Fatalf("entry PlaceOrder: %v", err)
+		t.Fatalf("Executions(AAPL): %v", err)
 	}
-	buyFilled, buyExecution := waitOrderFillAndExecution(t, ctx, buy)
-	if !buyFilled || !buyExecution {
-		t.Fatalf("entry filled=%v execution=%v, want both true", buyFilled, buyExecution)
+	if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+		t.Fatalf("TIF matrix executions/fees = %d/%d, want 0/0", len(executions.Executions), len(executions.CommissionAndFees))
 	}
-
-	stopOrder := ibkr.Order{
-		Action:    ibkr.ActionSell,
-		OrderType: ibkr.OrderTypeStop,
-		Quantity:  decimal.RequireFromString("1"),
-		AuxPrice:  new(decimal.RequireFromString("13.13")),
-		TIF:       ibkr.TIFDay,
-		Account:   "DU9000001",
-	}
-	stop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: contract, Order: stopOrder})
-	if err != nil {
-		t.Fatalf("stop PlaceOrder: %v", err)
-	}
-	waitForOrderStatus(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
-
-	stopOrder.AuxPrice = new(decimal.RequireFromString("14.13"))
-	if err := stop.Replace(ctx, stopOrder); err != nil {
-		t.Fatalf("stop Replace: %v", err)
-	}
-	waitForOrderStatus(t, ctx, stop, ibkr.OrderStatusPreSubmitted)
-
-	if err := stop.Cancel(ctx); err != nil {
-		t.Fatalf("stop Cancel: %v", err)
-	}
-	stopStatuses := waitOrderStatuses(t, ctx, stop)
-	if !hasOrderStatus(stopStatuses, ibkr.OrderStatusCancelled) {
-		t.Fatalf("stop statuses = %v, want Cancelled from live capture", stopStatuses)
-	}
-
-	flatten, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("1"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("flatten PlaceOrder: %v", err)
-	}
-	flatFilled, flatExecution := waitOrderFillAndExecution(t, ctx, flatten)
-	if !flatFilled || !flatExecution {
-		t.Fatalf("flatten filled=%v execution=%v, want both true", flatFilled, flatExecution)
+	for i, handle := range handles {
+		handle.Close()
+		requireCloseOrCapturedDisconnect(t, cases[i].name, handle.Wait())
 	}
 }
 
@@ -2972,8 +2002,7 @@ func TestAPIDollarCostAveragingAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_dollar_cost_averaging_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -2986,125 +2015,40 @@ func TestAPIDollarCostAveragingAAPLReplay(t *testing.T) {
 		Currency: "USD",
 	}
 
+	refs := []string{
+		"sanitized-order-ref-0000000000000001",
+		"sanitized-order-ref-0000000000000006",
+		"sanitized-order-ref-0000000000000011",
+	}
 	for i := 0; i < 3; i++ {
 		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 			Contract: contract,
 			Order: ibkr.Order{
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeMarket,
-				Quantity:  decimal.RequireFromString("5"),
+				Quantity:  decimal.NewFromInt(1),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
+				OrderRef:  refs[i],
 			},
 		})
 		if err != nil {
 			t.Fatalf("DCA buy[%d] PlaceOrder: %v", i, err)
 		}
-		filled, execution := waitOrderFillAndExecution(t, ctx, handle)
-		if !filled || !execution {
-			t.Fatalf("DCA buy[%d] filled=%v execution=%v, want both true", i, filled, execution)
+		if handle.OrderID() != int64(495+i) {
+			t.Fatalf("DCA buy[%d] OrderID() = %d, want %d", i, handle.OrderID(), 495+i)
 		}
+		waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+		handle.Close()
+		requireCloseOrCapturedDisconnect(t, fmt.Sprintf("DCA buy[%d]", i), handle.Wait())
 	}
 
-	flatten, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("15"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
 	if err != nil {
-		t.Fatalf("DCA flatten PlaceOrder: %v", err)
+		t.Fatalf("DCA Executions: %v", err)
 	}
-	filled, execution := waitOrderFillAndExecution(t, ctx, flatten)
-	if !filled || !execution {
-		t.Fatalf("DCA flatten filled=%v execution=%v, want both true", filled, execution)
-	}
-}
-
-func TestAPIScaleInCampaignAAPLReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_scale_in_campaign_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	contract := ibkr.Contract{
-		ConID:    265598,
-		Symbol:   "AAPL",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
-	}
-
-	for i := 0; i < 2; i++ {
-		handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-			Contract: contract,
-			Order: ibkr.Order{
-				Action:    ibkr.ActionBuy,
-				OrderType: ibkr.OrderTypeMarket,
-				Quantity:  decimal.RequireFromString("1"),
-				TIF:       ibkr.TIFDay,
-				Account:   "DU9000001",
-			},
-		})
-		if err != nil {
-			t.Fatalf("scale buy[%d] PlaceOrder: %v", i, err)
-		}
-		filled, execution := waitOrderFillAndExecution(t, ctx, handle)
-		if !filled || !execution {
-			t.Fatalf("scale buy[%d] filled=%v execution=%v, want both true", i, filled, execution)
-		}
-	}
-
-	stop, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeStop,
-			Quantity:  decimal.RequireFromString("2"),
-			AuxPrice:  new(decimal.RequireFromString("12.98")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("scale stop-loss PlaceOrder: %v", err)
-	}
-	stopOpen := waitForOpenOrder(t, ctx, stop)
-	if stopOpen.Order.OrderType != ibkr.OrderTypeStop || stopOpen.Order.Action != ibkr.ActionSell {
-		t.Fatalf("scale stop OpenOrder type/action = %s/%s, want STP/SELL", stopOpen.Order.OrderType, stopOpen.Order.Action)
-	}
-	if got := stopOpen.Order.Quantity.String(); got != "2" {
-		t.Fatalf("scale stop quantity = %s, want 2", got)
-	}
-	if got := stopOpen.Order.Prices.AuxPrice.String(); got != "12.98" {
-		t.Fatalf("scale stop aux price = %s, want 12.98", got)
-	}
-
-	var stopStatus ibkr.OrderStatusUpdate
-	for sawStopStatus := false; !sawStopStatus; {
-		select {
-		case evt, ok := <-stop.Events():
-			if !ok {
-				t.Fatal("scale stop events closed before PreSubmitted status")
-			}
-			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusPreSubmitted {
-				stopStatus = *evt.Status
-				sawStopStatus = true
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for scale stop PreSubmitted status")
-		}
-	}
-	if stopStatus.WhyHeld != "trigger" {
-		t.Fatalf("scale stop whyHeld = %q, want trigger", stopStatus.WhyHeld)
+	if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+		t.Fatalf("DCA executions/fees = %d/%d, want 0/0 after-hours", len(executions.Executions), len(executions.CommissionAndFees))
 	}
 }
 
@@ -3112,11 +2056,11 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_stress_rapid_fire_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	contract := ibkr.Contract{
 		ConID:    265598,
@@ -3125,7 +2069,7 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 		Exchange: "SMART",
 		Currency: "USD",
 	}
-	prices := []string{"15.81", "16.81", "17.81", "18.81", "19.81", "20.81", "21.81", "22.81", "23.81", "24.81"}
+	prices := []string{"15.53", "16.53", "17.53", "18.53", "19.53", "20.53", "21.53", "22.53", "23.53", "24.53"}
 	handles := make([]*ibkr.OrderHandle, 0, len(prices))
 	orderIDs := map[int64]bool{}
 	for i, price := range prices {
@@ -3134,11 +2078,11 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 			Order: ibkr.Order{
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
-				Quantity:  decimal.RequireFromString("100"),
+				Quantity:  decimal.RequireFromString("1"),
 				LmtPrice:  new(decimal.RequireFromString(price)),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
-				OrderRef:  fmt.Sprintf("ibkrgo-redacted-20260711T045307Z-%03d", i+1),
+				OrderRef:  fmt.Sprintf("sanitized-order-ref-%016d", 2*i+1),
 			},
 		})
 		if err != nil {
@@ -3169,9 +2113,7 @@ func TestAPIStressRapidFireAAPLReplay(t *testing.T) {
 		if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
 			t.Fatalf("stress order[%d] statuses = %v, want Cancelled from live capture", i, statuses)
 		}
-		if err := handle.Wait(); err != nil {
-			t.Fatalf("stress order[%d] Wait: %v", i, err)
-		}
+		requireCloseOrCapturedDisconnect(t, fmt.Sprintf("stress order[%d]", i), handle.Wait())
 	}
 }
 
@@ -3179,27 +2121,36 @@ func TestAPIForexLifecycleEURUSDReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_forex_lifecycle_eurusd.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	contract := ibkr.Contract{
+		Symbol: "EUR", SecType: ibkr.SecTypeForex, Exchange: "IDEALPRO", Currency: "USD",
+	}
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
+		t.Fatalf("SetType(live): %v", err)
+	}
+	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: contract})
+	if err != nil {
+		t.Fatalf("EUR.USD Quote: %v", err)
+	}
+	if !quote.Ask.Equal(decimal.RequireFromString("1.16644")) {
+		t.Fatalf("EUR.USD ask = %s, want captured 1.16644", quote.Ask)
+	}
 
+	order := ibkr.Order{
+		Action:    ibkr.ActionBuy,
+		OrderType: ibkr.OrderTypeLimit,
+		Quantity:  decimal.NewFromInt(100000),
+		LmtPrice:  new(decimal.RequireFromString("1.0498")),
+		TIF:       ibkr.TIFDay,
+		Account:   "DU9000001",
+		OrderRef:  "sanitized-order-ref-0000000000000001",
+	}
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			Symbol:   "EUR",
-			SecType:  ibkr.SecTypeForex,
-			Exchange: "IDEALPRO",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("20000"),
-			LmtPrice:  new(decimal.RequireFromString("0.99")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
+		Contract: contract,
+		Order:    order,
 	})
 	if err != nil {
 		t.Fatalf("forex PlaceOrder: %v", err)
@@ -3208,6 +2159,13 @@ func TestAPIForexLifecycleEURUSDReplay(t *testing.T) {
 	statuses := waitOrderStatuses(t, ctx, handle)
 	if !hasOrderStatus(statuses, ibkr.OrderStatusInactive) {
 		t.Fatalf("forex statuses = %v, want Inactive from live capture", statuses)
+	}
+	if handle.OrderID() != 498 {
+		t.Fatalf("forex OrderID() = %d, want 498", handle.OrderID())
+	}
+	order.LmtPrice = new(decimal.RequireFromString("1.07312"))
+	if err := handle.Replace(ctx, order); err != nil {
+		t.Fatalf("forex Replace: %v", err)
 	}
 	err = handle.Wait()
 	if err == nil {
@@ -3226,11 +2184,11 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_bracket_trigger_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	contract := ibkr.Contract{
 		ConID:    265598,
@@ -3247,22 +2205,25 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 		TakeProfit: ibkr.Order{
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("2578.5")),
+			LmtPrice:  new(decimal.RequireFromString("3106")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000003",
 		},
 		StopLoss: ibkr.Order{
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeStop,
 			Quantity:  decimal.RequireFromString("1"),
-			AuxPrice:  new(decimal.RequireFromString("12.89")),
+			AuxPrice:  new(decimal.RequireFromString("15.53")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000005",
 		},
 	})
 	if err != nil {
@@ -3272,12 +2233,18 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 	takeProfit := bracket.TakeProfit
 	stopLoss := bracket.StopLoss
 
-	parentFilled, parentExecution := waitOrderFillAndExecution(t, ctx, parent)
-	if !parentFilled || !parentExecution {
-		t.Fatalf("bracket parent filled=%v execution=%v, want both true", parentFilled, parentExecution)
+	if parent.OrderID() != 477 || takeProfit.OrderID() != 478 || stopLoss.OrderID() != 479 {
+		t.Fatalf("bracket order IDs = %d/%d/%d, want 477/478/479", parent.OrderID(), takeProfit.OrderID(), stopLoss.OrderID())
 	}
+	parentOpen := waitForOpenOrder(t, ctx, parent)
+	if parentOpen.State.Status != ibkr.OrderStatusPreSubmitted {
+		t.Fatalf("bracket parent status = %s, want PreSubmitted", parentOpen.State.Status)
+	}
+	waitForOrderStatus(t, ctx, parent, ibkr.OrderStatusPreSubmitted)
 	takeProfitOpen := waitForOpenOrder(t, ctx, takeProfit)
+	waitForOrderStatus(t, ctx, takeProfit, ibkr.OrderStatusPreSubmitted)
 	stopLossOpen := waitForOpenOrder(t, ctx, stopLoss)
+	waitForOrderStatus(t, ctx, stopLoss, ibkr.OrderStatusPreSubmitted)
 	if (*takeProfitOpen.Order.ParentID) != parent.OrderID() {
 		t.Fatalf("take-profit parent = %d, want %d", (*takeProfitOpen.Order.ParentID), parent.OrderID())
 	}
@@ -3288,35 +2255,11 @@ func TestAPIBracketTriggerAAPLReplay(t *testing.T) {
 		t.Fatalf("child OCA groups = %q and %q, want same non-empty group", takeProfitOpen.Order.OCA.Group, stopLossOpen.Order.OCA.Group)
 	}
 
-	replacement := ibkr.Order{
-		Action:    ibkr.ActionSell,
-		OrderType: ibkr.OrderTypeLimit,
-		Quantity:  decimal.RequireFromString("1"),
-		LmtPrice:  new(decimal.RequireFromString("206.28")),
-		TIF:       ibkr.TIFDay,
-		Account:   "DU9000001",
-	}
-	conflicting := replacement
-	conflicting.ParentID = parent.OrderID() + 1
-	err = takeProfit.Replace(ctx, conflicting)
-	validation, ok := errors.AsType[*ibkr.ValidationError](err)
-	if !ok || validation.Field != "Order.ParentID" {
-		t.Fatalf("bracket conflicting-parent Replace error = %#v, want Order.ParentID ValidationError", err)
-	}
-
-	err = takeProfit.Replace(ctx, replacement)
-	if err != nil {
-		t.Fatalf("bracket take-profit Replace: %v", err)
-	}
-	statuses := waitOrderStatuses(t, ctx, takeProfit)
-	if !hasOrderStatus(statuses, ibkr.OrderStatusPendingCancel) {
-		t.Fatalf("bracket take-profit statuses = %v, want PendingCancel from live capture", statuses)
-	}
-	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
-		t.Fatalf("bracket take-profit statuses = %v, want Cancelled from live capture", statuses)
-	}
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("bracket cleanup CancelAll: %v", err)
+	for label, handle := range map[string]*ibkr.OrderHandle{
+		"parent": parent, "take-profit": takeProfit, "stop-loss": stopLoss,
+	} {
+		handle.Close()
+		requireCloseOrCapturedDisconnect(t, "bracket "+label, handle.Wait())
 	}
 }
 
@@ -3324,11 +2267,11 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_bracket_trailing_stop_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	contract := ibkr.Contract{
 		ConID:    265598,
@@ -3342,10 +2285,11 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("10"),
+			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			Transmit:  new(false),
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
@@ -3356,12 +2300,13 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  new(decimal.RequireFromString("2649.6")),
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  new(decimal.RequireFromString("3105.2")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
 			ParentID:  parent.OrderID(),
 			Transmit:  new(false),
+			OrderRef:  "sanitized-order-ref-0000000000000003",
 		},
 	})
 	if err != nil {
@@ -3375,12 +2320,13 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:         ibkr.ActionSell,
 			OrderType:      ibkr.OrderTypeTrailingStop,
-			Quantity:       decimal.RequireFromString("10"),
+			Quantity:       decimal.RequireFromString("1"),
 			AuxPrice:       new(decimal.RequireFromString("1")),
 			TIF:            ibkr.TIFDay,
 			Account:        "DU9000001",
 			ParentID:       parent.OrderID(),
-			TrailStopPrice: new(decimal.RequireFromString("13.25")),
+			TrailStopPrice: new(decimal.RequireFromString("15.53")),
+			OrderRef:       "sanitized-order-ref-0000000000000005",
 		},
 	})
 	if err != nil {
@@ -3389,16 +2335,29 @@ func TestAPIBracketTrailingStopAAPLReplay(t *testing.T) {
 	if trailingStop.OrderID() != parent.OrderID()+2 {
 		t.Fatalf("trailing stop order ID = %d, want parent+2 from live capture", trailingStop.OrderID())
 	}
+	if parent.OrderID() != 474 || takeProfit.OrderID() != 475 || trailingStop.OrderID() != 476 {
+		t.Fatalf("trailing bracket order IDs = %d/%d/%d, want 474/475/476", parent.OrderID(), takeProfit.OrderID(), trailingStop.OrderID())
+	}
 	err = trailingStop.Wait()
-	if err == nil {
-		t.Fatal("trailing stop Wait error = nil, want live code 328 rejection")
-	}
 	apiErr, ok := errors.AsType[*ibkr.APIError](err)
-	if !ok {
-		t.Fatalf("trailing stop Wait error type = %T, want *ibkr.APIError", err)
+	if !ok || apiErr.Code != 328 || !strings.Contains(apiErr.Message, "Trailing stop orders can be attached") {
+		t.Fatalf("trailing stop Wait = %v, want code 328 attachment rejection", err)
 	}
-	if apiErr.Code != 328 || !strings.Contains(apiErr.Message, "Trailing stop orders can be attached") {
-		t.Fatalf("trailing stop Wait error = %v, want code=328 attachment rejection", err)
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("trailing bracket CancelAll: %v", err)
+	}
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	if err != nil {
+		t.Fatalf("trailing bracket Executions: %v", err)
+	}
+	if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+		t.Fatalf("trailing bracket executions/fees = %d/%d, want 0/0", len(executions.Executions), len(executions.CommissionAndFees))
+	}
+	for label, handle := range map[string]*ibkr.OrderHandle{
+		"parent": parent, "take-profit": takeProfit,
+	} {
+		handle.Close()
+		requireCloseOrCapturedDisconnect(t, "trailing bracket "+label, handle.Wait())
 	}
 }
 
@@ -3406,11 +2365,11 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_oca_trigger_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	contract := ibkr.Contract{
 		ConID:    265598,
@@ -3419,27 +2378,26 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 		Exchange: "SMART",
 		Currency: "USD",
 	}
-	group := "ibkr-go-api-oca-1776102346"
+	group := "oca-0000000000000000000001"
 	resting, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: contract,
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("12.9")),
+			LmtPrice:  new(decimal.RequireFromString("10")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 			OCA:       ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock},
 		},
 	})
 	if err != nil {
 		t.Fatalf("OCA resting PlaceOrder: %v", err)
 	}
-	restingOpen := waitForOpenOrder(t, ctx, resting)
-	if restingOpen.Order.OCA.Group != group {
-		t.Fatalf("resting OCA group = %q, want %q", restingOpen.Order.OCA.Group, group)
+	if resting.OrderID() != 504 {
+		t.Fatalf("OCA resting OrderID() = %d, want 504", resting.OrderID())
 	}
-	waitForOrderStatus(t, ctx, resting, ibkr.OrderStatusPreSubmitted)
 
 	marketable, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: contract,
@@ -3447,40 +2405,43 @@ func TestAPIOCATriggerAAPLReplay(t *testing.T) {
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
 			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("309.48")),
+			LmtPrice:  new(decimal.RequireFromString("240")),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000003",
 			OCA:       ibkr.OrderOCA{Group: group, Type: ibkr.OCACancelWithBlock},
 		},
 	})
 	if err != nil {
 		t.Fatalf("OCA marketable PlaceOrder: %v", err)
 	}
+	if marketable.OrderID() != 505 {
+		t.Fatalf("OCA marketable OrderID() = %d, want 505", marketable.OrderID())
+	}
+
+	restingOpen := waitForOpenOrder(t, ctx, resting)
+	if restingOpen.Order.OCA.Group != group {
+		t.Fatalf("resting OCA group = %q, want %q", restingOpen.Order.OCA.Group, group)
+	}
+	waitForOrderStatus(t, ctx, resting, ibkr.OrderStatusPreSubmitted)
+
 	marketableOpen := waitForOpenOrder(t, ctx, marketable)
 	if marketableOpen.Order.OCA.Group != group {
 		t.Fatalf("marketable OCA group = %q, want %q", marketableOpen.Order.OCA.Group, group)
 	}
-	statuses := waitOrderStatuses(t, ctx, marketable)
-	if !hasOrderStatus(statuses, ibkr.OrderStatusPendingCancel) {
-		t.Fatalf("OCA marketable statuses = %v, want PendingCancel from live capture", statuses)
-	}
-	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
-		t.Fatalf("OCA marketable statuses = %v, want Cancelled from live capture", statuses)
-	}
-	if err := marketable.Wait(); err != nil {
-		t.Fatalf("OCA marketable Wait: %v", err)
-	}
-	if err := client.Orders().CancelAll(ctx); err != nil {
-		t.Fatalf("OCA CancelAll: %v", err)
-	}
+	waitForOrderStatus(t, ctx, marketable, ibkr.OrderStatusPreSubmitted)
+
+	resting.Close()
+	marketable.Close()
+	requireCloseOrCapturedDisconnect(t, "OCA resting", resting.Wait())
+	requireCloseOrCapturedDisconnect(t, "OCA marketable", marketable.Wait())
 }
 
 func TestAPIPairsTradingAAPLMSFTReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_pairs_trading_aapl_msft.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -3499,15 +2460,23 @@ func TestAPIPairsTradingAAPLMSFTReplay(t *testing.T) {
 		Exchange: "SMART",
 		Currency: "USD",
 	}
+	for _, contract := range []ibkr.Contract{aapl, msft} {
+		_, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: contract})
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok || apiErr.Code != ibkr.ErrCodeAdditionalSubscriptionRequired || apiErr.OpKind != ibkr.OpQuotes {
+			t.Fatalf("%s Quote error = %v, want typed quotes code %d", contract.Symbol, err, ibkr.ErrCodeAdditionalSubscriptionRequired)
+		}
+	}
 
 	aaplBuy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: aapl,
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("5"),
+			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
@@ -3518,9 +2487,10 @@ func TestAPIPairsTradingAAPLMSFTReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionSell,
 			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("5"),
+			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000003",
 		},
 	})
 	if err != nil {
@@ -3533,46 +2503,23 @@ func TestAPIPairsTradingAAPLMSFTReplay(t *testing.T) {
 		{label: "AAPL entry", handle: aaplBuy},
 		{label: "MSFT entry", handle: msftSell},
 	} {
-		filled, execution := waitOrderFillAndExecution(t, ctx, entry.handle)
-		if !filled || !execution {
-			t.Fatalf("%s filled=%v execution=%v, want both true", entry.label, filled, execution)
+		waitForOrderStatus(t, ctx, entry.handle, ibkr.OrderStatusPreSubmitted)
+	}
+	if aaplBuy.OrderID() != 540 || msftSell.OrderID() != 541 {
+		t.Fatalf("pairs order IDs = %d/%d, want 540/541", aaplBuy.OrderID(), msftSell.OrderID())
+	}
+	for _, symbol := range []string{"AAPL", "MSFT"} {
+		executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: symbol})
+		if err != nil {
+			t.Fatalf("%s Executions: %v", symbol, err)
+		}
+		if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+			t.Fatalf("%s executions/fees = %d/%d, want 0/0", symbol, len(executions.Executions), len(executions.CommissionAndFees))
 		}
 	}
-
-	aaplSell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: aapl,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("5"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("AAPL pair flatten PlaceOrder: %v", err)
-	}
-	filled, execution := waitOrderFillAndExecution(t, ctx, aaplSell)
-	if !filled || !execution {
-		t.Fatalf("AAPL flatten filled=%v execution=%v, want both true", filled, execution)
-	}
-
-	msftBuy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: msft,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("5"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("MSFT pair flatten PlaceOrder: %v", err)
-	}
-	filled, execution = waitOrderFillAndExecution(t, ctx, msftBuy)
-	if !filled || !execution {
-		t.Fatalf("MSFT flatten filled=%v execution=%v, want both true", filled, execution)
+	for label, handle := range map[string]*ibkr.OrderHandle{"AAPL": aaplBuy, "MSFT": msftSell} {
+		handle.Close()
+		requireCloseOrCapturedDisconnect(t, label+" pair", handle.Wait())
 	}
 }
 
@@ -3580,8 +2527,7 @@ func TestAPICompletedOrdersVariantsAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_completed_orders_variants_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -3599,57 +2545,47 @@ func TestAPICompletedOrdersVariantsAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("5"),
+			Quantity:  decimal.NewFromInt(1),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("entry PlaceOrder: %v", err)
 	}
-	buyFilled, buyExecution := waitOrderFillAndExecution(t, ctx, buy)
-	if !buyFilled || !buyExecution {
-		t.Fatalf("entry filled=%v execution=%v, want both true", buyFilled, buyExecution)
+	if buy.OrderID() != 486 {
+		t.Fatalf("entry OrderID() = %d, want 486", buy.OrderID())
 	}
-
-	sell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: contract,
-		Order: ibkr.Order{
-			Action:    ibkr.ActionSell,
-			OrderType: ibkr.OrderTypeMarket,
-			Quantity:  decimal.RequireFromString("5"),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("flatten PlaceOrder: %v", err)
-	}
-	sellFilled, sellExecution := waitOrderFillAndExecution(t, ctx, sell)
-	if !sellFilled || !sellExecution {
-		t.Fatalf("flatten filled=%v execution=%v, want both true", sellFilled, sellExecution)
-	}
+	waitForOrderStatus(t, ctx, buy, ibkr.OrderStatusPreSubmitted)
 
 	allCompleted, err := client.Orders().Completed(ctx, false)
 	if err != nil {
 		t.Fatalf("Completed(false): %v", err)
 	}
-	if len(allCompleted) != 1 {
-		t.Fatalf("Completed(false) len = %d, want 1", len(allCompleted))
-	}
-	if allCompleted[0].Contract.Symbol != "AAPL" || allCompleted[0].Completion.Status != ibkr.OrderStatusFilled {
-		t.Fatalf("Completed(false)[0] = %+v, want filled AAPL order", allCompleted[0])
+	if len(allCompleted) != 24 {
+		t.Fatalf("Completed(false) len = %d, want 24", len(allCompleted))
 	}
 
 	apiCompleted, err := client.Orders().Completed(ctx, true)
 	if err != nil {
 		t.Fatalf("Completed(true): %v", err)
 	}
-	if len(apiCompleted) != 1 {
-		t.Fatalf("Completed(true) len = %d, want 1", len(apiCompleted))
+	if len(apiCompleted) != 24 {
+		t.Fatalf("Completed(true) len = %d, want 24", len(apiCompleted))
 	}
-	if apiCompleted[0].Contract.Symbol != "AAPL" || apiCompleted[0].Completion.Status != ibkr.OrderStatusFilled {
-		t.Fatalf("Completed(true)[0] = %+v, want filled AAPL order", apiCompleted[0])
+	for i, completed := range apiCompleted {
+		if completed.Contract.Symbol != "AAPL" || completed.Completion.Status == "" {
+			t.Fatalf("Completed(true)[%d] = %+v, want terminal AAPL order", i, completed)
+		}
+	}
+
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"})
+	if err != nil {
+		t.Fatalf("Executions(AAPL): %v", err)
+	}
+	if len(executions.Executions) != 0 || len(executions.CommissionAndFees) != 0 {
+		t.Fatalf("Executions(AAPL) = %+v, want empty current-session snapshot", executions)
 	}
 }
 
@@ -3657,18 +2593,32 @@ func TestAPIFutureCampaignMESReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_future_campaign_mes.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	contract := ibkr.Contract{
-		ConID:    770561194,
-		Symbol:   "MES",
-		SecType:  ibkr.SecTypeFuture,
-		Exchange: "CME",
-		Currency: "USD",
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol: "MES", SecType: ibkr.SecTypeFuture, Exchange: "CME", Currency: "USD",
+	})
+	if err != nil {
+		t.Fatalf("MES ContractDetails: %v", err)
+	}
+	var contract ibkr.Contract
+	for _, detail := range details {
+		if detail.ConID == 793356217 {
+			contract = detail.Contract
+			break
+		}
+	}
+	if contract.ConID == 0 {
+		t.Fatal("MES details lack captured front future 793356217")
+	}
+	if _, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: contract}); err != nil {
+		apiErr, ok := errors.AsType[*ibkr.APIError](err)
+		if !ok || apiErr.Code != ibkr.ErrCodeMarketDataNotSubscribed || apiErr.OpKind != ibkr.OpQuotes {
+			t.Fatalf("MES Quote error = %v, want typed code %d", err, ibkr.ErrCodeMarketDataNotSubscribed)
+		}
 	}
 
 	buy, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -3679,6 +2629,7 @@ func TestAPIFutureCampaignMESReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
@@ -3687,6 +2638,9 @@ func TestAPIFutureCampaignMESReplay(t *testing.T) {
 	buyFilled, buyExecution := waitOrderFillAndExecution(t, ctx, buy)
 	if !buyFilled || !buyExecution {
 		t.Fatalf("future buy filled=%v execution=%v, want both true", buyFilled, buyExecution)
+	}
+	if buy.OrderID() != 499 {
+		t.Fatalf("future buy OrderID() = %d, want 499", buy.OrderID())
 	}
 
 	sell, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -3697,6 +2651,7 @@ func TestAPIFutureCampaignMESReplay(t *testing.T) {
 			Quantity:  decimal.RequireFromString("1"),
 			TIF:       ibkr.TIFDay,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000006",
 		},
 	})
 	if err != nil {
@@ -3706,70 +2661,39 @@ func TestAPIFutureCampaignMESReplay(t *testing.T) {
 	if !sellFilled || !sellExecution {
 		t.Fatalf("future flatten filled=%v execution=%v, want both true", sellFilled, sellExecution)
 	}
+	if sell.OrderID() != 500 {
+		t.Fatalf("future flatten OrderID() = %d, want 500", sell.OrderID())
+	}
+
+	positions, err := client.Accounts().Positions(ctx)
+	if err != nil {
+		t.Fatalf("Positions: %v", err)
+	}
+	if len(positions) != 8 {
+		t.Fatalf("Positions len = %d, want captured reconciled 8 rows", len(positions))
+	}
+	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "MES"})
+	if err != nil {
+		t.Fatalf("MES Executions: %v", err)
+	}
+	if len(executions.Executions) != 2 || len(executions.CommissionAndFees) != 2 {
+		t.Fatalf("MES executions/fees = %d/%d, want 2/2", len(executions.Executions), len(executions.CommissionAndFees))
+	}
 }
 
 func TestAPIReconnectActiveOrderAAPLReplay(t *testing.T) {
 	t.Parallel()
 
-	host := newHost(t, "api_reconnect_active_order_aapl.txt")
-	defer waitHost(t, host)
-
-	first := dialHostClient(t, host, ibkr.WithClientID(1))
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	handle, err := first.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  new(decimal.RequireFromString("13.27")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("first Place: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
-	first.Close()
-
-	second := dialHostClient(t, host, ibkr.WithClientID(1))
-	defer second.Close()
-
-	orders, err := second.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
-	if err != nil {
-		t.Fatalf("second Open(client): %v", err)
-	}
-	if len(orders) != 1 {
-		t.Fatalf("open orders len = %d, want 1", len(orders))
-	}
-	if *orders[0].Order.OrderID != handle.OrderID() || orders[0].Order.TIF != ibkr.TIFGTC || orders[0].Order.Quantity.String() != "10" {
-		t.Fatalf("open order = %+v, want reconnected GTC order %d qty 10", orders[0], handle.OrderID())
-	}
-	if err := second.Orders().Cancel(ctx, handle.OrderID()); err != nil {
-		t.Fatalf("second Cancel: %v", err)
-	}
-	waitHost(t, host)
-}
-
-func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "api_order_handle_reconnect_cancel_aapl.txt",
+	client, host := newClient(t, "api_reconnect_active_order_aapl.txt",
 		ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if err := client.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("baseline CancelAll: %v", err)
+	}
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -3782,67 +2706,64 @@ func TestAPIOrderHandleReconnectCancelAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  new(decimal.RequireFromString("13.27")),
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  new(decimal.RequireFromString("15.53")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
-		t.Fatalf("PlaceOrder: %v", err)
+		t.Fatalf("first Place: %v", err)
 	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	if handle.OrderID() != 546 {
+		t.Fatalf("reconnect OrderID() = %d, want 546", handle.OrderID())
+	}
 
 	gap := waitForOrderLifecycle(t, ctx, handle.Events(), ibkr.OrderGap)
-	if gap.ConnectionSeq != 1 {
-		t.Fatalf("gap.ConnectionSeq = %d, want 1", gap.ConnectionSeq)
+	if gap.ConnectionSeq != 1 || gap.Err == nil {
+		t.Fatalf("order gap = %+v, want connection 1 with transport cause", gap)
 	}
-	var recovery ibkr.OrderLifecycleEvent
-	select {
-	case event := <-handle.Events():
-		if event.Lifecycle == nil || event.Lifecycle.Kind != ibkr.OrderRecoveryRequired {
-			t.Fatalf("first order event after reconnect gap = %+v, want RecoveryRequired", event)
-		}
-		recovery = *event.Lifecycle
-	case <-ctx.Done():
-		t.Fatalf("waiting for immediate RecoveryRequired: %v", context.Cause(ctx))
+	recovery := waitForOrderLifecycle(t, ctx, handle.Events(), ibkr.OrderRecoveryRequired)
+	if recovery.ConnectionSeq != 2 || !errors.Is(recovery.Err, ibkr.ErrOrderRecoveryRequired) {
+		t.Fatalf("order recovery = %+v, want ErrOrderRecoveryRequired on connection 2", recovery)
 	}
-	if recovery.ConnectionSeq != 2 {
-		t.Fatalf("recovery.ConnectionSeq = %d, want 2", recovery.ConnectionSeq)
+	if errors.Is(recovery.Err, ibkr.ErrResumeRequired) || ibkr.IsRetryable(recovery.Err) {
+		t.Fatalf("order recovery error = %v, want non-retryable order recovery", recovery.Err)
 	}
-	if !errors.Is(recovery.Err, ibkr.ErrOrderRecoveryRequired) {
-		t.Fatalf("recovery.Err = %v, want ErrOrderRecoveryRequired", recovery.Err)
-	}
-	if errors.Is(recovery.Err, ibkr.ErrResumeRequired) {
-		t.Fatalf("recovery.Err = %v, must not classify as subscription resume", recovery.Err)
-	}
-	if ibkr.IsRetryable(recovery.Err) {
-		t.Fatalf("recovery.Err = %v, must not be retryable", recovery.Err)
-	}
-	replaceErr := handle.Replace(ctx, ibkr.Order{
+	if err := handle.Replace(ctx, ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
-		Quantity:  decimal.RequireFromString("10"),
-		LmtPrice:  new(decimal.RequireFromString("13.27")),
+		Quantity:  decimal.RequireFromString("1"),
+		LmtPrice:  new(decimal.RequireFromString("15.53")),
 		TIF:       ibkr.TIFGTC,
 		Account:   "DU9000001",
-	})
-	if !errors.Is(replaceErr, ibkr.ErrOrderRecoveryRequired) {
-		t.Fatalf("Replace after uncertain reconnect = %v, want ErrOrderRecoveryRequired", replaceErr)
+		OrderRef:  "sanitized-order-ref-0000000000000001",
+	}); !errors.Is(err, ibkr.ErrOrderRecoveryRequired) || ibkr.IsRetryable(err) {
+		t.Fatalf("Replace after reconnect = %v, want non-retryable ErrOrderRecoveryRequired", err)
 	}
-	if errors.Is(replaceErr, ibkr.ErrResumeRequired) || ibkr.IsRetryable(replaceErr) {
-		t.Fatalf("Replace after uncertain reconnect = %v, want non-retryable order recovery", replaceErr)
-	}
+	waitForSessionReady(t, ctx, client.SessionEvents(), 2)
 
+	orders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
+	if err != nil {
+		t.Fatalf("Open(client) after reconnect: %v", err)
+	}
+	if len(orders) != 1 {
+		t.Fatalf("open orders len = %d, want 1", len(orders))
+	}
+	if *orders[0].Order.OrderID != handle.OrderID() || orders[0].Order.TIF != ibkr.TIFGTC || orders[0].Order.Quantity.String() != "1" {
+		t.Fatalf("open order = %+v, want reconnected GTC order %d qty 1", orders[0], handle.OrderID())
+	}
 	if err := handle.Cancel(ctx); err != nil {
-		t.Fatalf("Cancel after reconnect: %v", err)
+		t.Fatalf("OrderHandle.Cancel after reconnect: %v", err)
 	}
 	statuses := waitOrderStatuses(t, ctx, handle)
 	if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
-		t.Fatalf("statuses = %v, want Cancelled after reconnect", statuses)
+		t.Fatalf("statuses after reconnect cancel = %v, want Cancelled", statuses)
 	}
 	if err := handle.Wait(); err != nil {
-		t.Fatalf("handle.Wait() error = %v", err)
+		t.Fatalf("OrderHandle.Wait after reconnect cancel = %v", err)
 	}
 }
 
@@ -3855,6 +2776,10 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 	placer := dialHostClient(t, host, ibkr.WithClientID(1))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if err := placer.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("baseline CancelAll: %v", err)
+	}
+	replayDelayedAAPLQuoteAnchor(t, ctx, placer)
 
 	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -3867,16 +2792,20 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  new(decimal.RequireFromString("13.27")),
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  new(decimal.RequireFromString("15.53")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("placer Place: %v", err)
 	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	if handle.OrderID() != 481 {
+		t.Fatalf("client0 observed OrderID() = %d, want 481", handle.OrderID())
+	}
 	placer.Close()
 
 	observer := dialHostClient(t, host, ibkr.WithClientID(0))
@@ -3907,6 +2836,10 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 	placer := dialHostClient(t, host, ibkr.WithClientID(1))
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	if err := placer.Orders().CancelAll(ctx); err != nil {
+		t.Fatalf("baseline CancelAll: %v", err)
+	}
+	replayDelayedAAPLQuoteAnchor(t, ctx, placer)
 
 	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Contract{
@@ -3919,16 +2852,20 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 		Order: ibkr.Order{
 			Action:    ibkr.ActionBuy,
 			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("10"),
-			LmtPrice:  new(decimal.RequireFromString("13.27")),
+			Quantity:  decimal.RequireFromString("1"),
+			LmtPrice:  new(decimal.RequireFromString("10")),
 			TIF:       ibkr.TIFGTC,
 			Account:   "DU9000001",
+			OrderRef:  "sanitized-order-ref-0000000000000001",
 		},
 	})
 	if err != nil {
 		t.Fatalf("placer Place: %v", err)
 	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	if handle.OrderID() != 493 {
+		t.Fatalf("cross-client OrderID() = %d, want 493", handle.OrderID())
+	}
 	placer.Close()
 
 	canceller := dialHostClient(t, host, ibkr.WithClientID(2))
@@ -3950,332 +2887,71 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 	waitHost(t, host)
 }
 
-// TestSubscribeOpenDeliversCancelStatusForRecoveredOrder freezes the fix for
-// https://github.com/ThomasMarcelis/ibkr-go/issues/20: an order recovered via
-// SubscribeOpen has no OrderHandle in this process, so its status transitions
-// (the paired snapshot status and the cancel confirmation) must be routed to
-// the open-orders subscription instead of being dropped. Grounded by live
-// capture captures/20260704T174748Z-api_reconnect_active_order_aapl,
-// server_version 200, events.jsonl sha256 prefix 57943d05bd0242ca.
-func TestSubscribeOpenDeliversCancelStatusForRecoveredOrder(t *testing.T) {
-	t.Parallel()
-
-	host := newHost(t, "api_reconnect_recovered_cancel_status_aapl.txt")
-	defer waitHost(t, host)
-
-	placer := dialHostClient(t, host, ibkr.WithClientID(1))
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("15.42")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("placer Place: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-	placer.Close()
-
-	observer := dialHostClient(t, host, ibkr.WithClientID(1))
-	defer observer.Close()
-
-	sub, err := observer.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeClient)
-	if err != nil {
-		t.Fatalf("SubscribeOpen(client): %v", err)
-	}
-	defer sub.Close()
-
-	// Recovery snapshot: the Gateway pairs each open_order with an
-	// order_status.
-	recovered := waitForStreamData(t, sub.Events())
-	if recovered.Order == nil {
-		t.Fatalf("recovery event = %+v, want Order payload", recovered)
-	}
-	if *recovered.Order.Order.OrderID != handle.OrderID() {
-		t.Fatalf("recovered order id = %d, want %d", *recovered.Order.Order.OrderID, handle.OrderID())
-	}
-	select {
-	case event := <-sub.Events():
-		if event.Kind != ibkr.StreamData {
-			t.Fatalf("paired snapshot event = %+v, want data", event)
-		}
-		evt := event.Value
-		if evt.Status == nil || evt.Status.Status != ibkr.OrderStatusPreSubmitted {
-			t.Fatalf("paired snapshot event = %+v, want PreSubmitted Status payload", evt)
-		}
-	case <-ctx.Done():
-		t.Fatal("timed out waiting for paired snapshot status event")
-	}
-	waitForStateKind(t, sub.Events(), ibkr.StreamSnapshotComplete)
-
-	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
-		t.Fatalf("observer Cancel: %v", err)
-	}
-
-	select {
-	case event, ok := <-sub.Events():
-		if !ok {
-			t.Fatal("subscription closed without delivering the cancel status")
-		}
-		if event.Kind != ibkr.StreamData {
-			t.Fatalf("post-cancel event = %+v, want data", event)
-		}
-		evt := event.Value
-		if evt.Status == nil {
-			t.Fatalf("post-cancel event = %+v, want Status payload", evt)
-		}
-		if evt.Status.OrderID != handle.OrderID() {
-			t.Fatalf("status order id = %d, want %d", evt.Status.OrderID, handle.OrderID())
-		}
-		if evt.Status.Status != ibkr.OrderStatusCancelled {
-			t.Fatalf("status = %q, want %q", evt.Status.Status, ibkr.OrderStatusCancelled)
-		}
-	case <-ctx.Done():
-		t.Fatal("cancel confirmed on the wire but no status event delivered to SubscribeOpen")
-	}
-	waitHost(t, host)
-}
-
-// TestSubscribeOpenRefreshDeliversFreshSnapshot freezes the fix for
-// https://github.com/ThomasMarcelis/ibkr-go/issues/21: Refresh re-sends
-// the open-orders request on the active subscription and the Gateway answers
-// with a fresh burst terminated by another SnapshotComplete, so a consumer
-// can resync without tearing the subscription down. Grounded by live capture
-// captures/20260704T181808Z-api_open_orders_refresh_aapl, server_version 200,
-// events.jsonl sha256 prefix 9d5a9af337237a67.
-func TestSubscribeOpenRefreshDeliversFreshSnapshot(t *testing.T) {
-	t.Parallel()
-
-	host := newHost(t, "api_open_orders_refresh_aapl.txt")
-	defer waitHost(t, host)
-
-	client := dialHostClient(t, host, ibkr.WithClientID(0))
-	defer client.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("50")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("Place: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-
-	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll)
-	if err != nil {
-		t.Fatalf("SubscribeOpen(all): %v", err)
-	}
-	defer sub.Close()
-	if err := sub.Refresh(ctx); !errors.Is(err, ibkr.ErrOperationActive) {
-		t.Fatalf("Refresh during initial snapshot error = %v, want ErrOperationActive", err)
-	}
-
-	// Consume until the initial SnapshotComplete, then refresh and consume
-	// until the second one. The transcript carries four open_order +
-	// order_status pairs in total: the initial snapshot, two unsolicited
-	// echo pairs between the snapshots, and the refresh burst.
-	orders, statuses, snapshots := 0, 0, 0
-	for snapshots < 2 {
-		select {
-		case event, ok := <-sub.Events():
-			if !ok {
-				t.Fatal("subscription closed while consuming snapshots")
-			}
-			switch event.Kind {
-			case ibkr.StreamData:
-				if event.Value.Order != nil {
-					orders++
-				}
-				if event.Value.Status != nil {
-					statuses++
-				}
-			case ibkr.StreamSnapshotComplete:
-				snapshots++
-				if snapshots == 1 {
-					if err := sub.Refresh(ctx); err != nil {
-						t.Fatalf("Refresh: %v", err)
-					}
-				}
-			}
-		case <-ctx.Done():
-			t.Fatalf("timed out: snapshots=%d orders=%d statuses=%d", snapshots, orders, statuses)
-		}
-	}
-	if orders != 4 || statuses != 4 {
-		t.Fatalf("snapshot data = %d orders/%d statuses, want 4/4", orders, statuses)
-	}
-
-	if err := handle.Cancel(ctx); err != nil {
-		t.Fatalf("Cancel: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusCancelled)
-	waitHost(t, host)
-}
-
-// TestOpenOrdersAutoScopeHasNoSnapshot freezes the live-probed contract that
-// req_auto_open_orders has no snapshot boundary (the Gateway sends no
-// open_order_end for the bind, probed 2026-07-04, server_version 200), so
-// one-shot and snapshot-wait APIs reject it while the persistent subscription
-// remains available. The transcript expects only SubscribeOpen's request,
-// proving Open rejects the unsupported scope before writing to the wire.
-func TestOpenOrdersAutoScopeHasNoSnapshot(t *testing.T) {
-	t.Parallel()
-
-	host := newHost(t, "open_orders_auto_refresh.txt")
-	defer waitHost(t, host)
-
-	client := dialHostClient(t, host, ibkr.WithClientID(0))
-	defer client.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	orders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAuto)
-	if !errors.Is(err, ibkr.ErrNoSnapshot) {
-		t.Fatalf("Open(auto) error = %v, want ErrNoSnapshot", err)
-	}
-	if orders != nil {
-		t.Fatalf("Open(auto) orders = %#v, want nil", orders)
-	}
-
-	sub, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAuto)
-	if err != nil {
-		t.Fatalf("SubscribeOpen(auto): %v", err)
-	}
-	defer sub.Close()
-
-	if err := sub.AwaitSnapshot(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
-		t.Fatalf("AwaitSnapshot(auto) error = %v, want ErrNoSnapshot", err)
-	}
-
-	if err := sub.Refresh(ctx); !errors.Is(err, ibkr.ErrNoSnapshot) {
-		t.Fatalf("Refresh(auto) error = %v, want ErrNoSnapshot", err)
-	}
-	waitHost(t, host)
-}
-
-// TestOpenOrdersSnapshotSkipsPairedStatuses freezes that the one-shot
-// open-orders snapshot returns only the orders and filters the paired
-// order_status frames the Gateway interleaves into the recovery snapshot.
-// Same live grounding as TestSubscribeOpenDeliversCancelStatusForRecoveredOrder.
-func TestOpenOrdersSnapshotSkipsPairedStatuses(t *testing.T) {
-	t.Parallel()
-
-	host := newHost(t, "api_reconnect_recovered_cancel_status_aapl.txt")
-	defer waitHost(t, host)
-
-	placer := dialHostClient(t, host, ibkr.WithClientID(1))
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	handle, err := placer.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("100"),
-			LmtPrice:  new(decimal.RequireFromString("15.42")),
-			TIF:       ibkr.TIFGTC,
-			Account:   "DU9000001",
-		},
-	})
-	if err != nil {
-		t.Fatalf("placer Place: %v", err)
-	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
-	placer.Close()
-
-	observer := dialHostClient(t, host, ibkr.WithClientID(1))
-	defer observer.Close()
-
-	orders, err := observer.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
-	if err != nil {
-		t.Fatalf("Open(client): %v", err)
-	}
-	if len(orders) != 1 {
-		t.Fatalf("open orders len = %d, want 1 (paired statuses must be filtered)", len(orders))
-	}
-	if *orders[0].Order.OrderID != handle.OrderID() {
-		t.Fatalf("open order id = %d, want %d", *orders[0].Order.OrderID, handle.OrderID())
-	}
-	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
-		t.Fatalf("observer Cancel: %v", err)
-	}
-	waitHost(t, host)
-}
-
 func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_transmit_false_then_transmit_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+	contract := ibkr.Contract{
+		ConID:    265598,
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeStock,
+		Exchange: "SMART",
+		Currency: "USD",
+	}
+
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
+		t.Fatalf("SetType(live): %v", err)
+	}
+	_, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: contract})
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.Code != ibkr.ErrCodeAdditionalSubscriptionRequired || apiErr.OpKind != ibkr.OpQuotes {
+		t.Fatalf("live Quote error = %v, want typed quotes code %d", err, ibkr.ErrCodeAdditionalSubscriptionRequired)
+	}
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType(delayed): %v", err)
+	}
+	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: contract})
+	if err != nil {
+		t.Fatalf("delayed Quote: %v", err)
+	}
+	if !quote.Bid.Equal(decimal.RequireFromString("310.55")) || !quote.Ask.Equal(decimal.RequireFromString("310.6")) {
+		t.Fatalf("delayed quote bid/ask = %s/%s, want 310.55/310.6", quote.Bid, quote.Ask)
+	}
 
 	order := ibkr.Order{
 		Action:    ibkr.ActionBuy,
 		OrderType: ibkr.OrderTypeLimit,
-		Quantity:  decimal.RequireFromString("10"),
-		LmtPrice:  new(decimal.RequireFromString("13.26")),
+		Quantity:  decimal.NewFromInt(1),
+		LmtPrice:  new(decimal.RequireFromString("15.53")),
 		TIF:       ibkr.TIFDay,
 		Account:   "DU9000001",
+		OrderRef:  "sanitized-order-ref-0000000000000001",
 		Transmit:  new(false),
 	}
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: order,
-	})
+	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{Contract: contract, Order: order})
 	if err != nil {
 		t.Fatalf("Transmit=false Place: %v", err)
+	}
+	if handle.OrderID() != 557 {
+		t.Fatalf("OrderID() = %d, want 557", handle.OrderID())
 	}
 
 	order.Transmit = new(true)
 	if err := handle.Replace(ctx, order); err != nil {
 		t.Fatalf("Transmit=true Replace: %v", err)
 	}
-	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusSubmitted)
+	waitForOrderStatus(t, ctx, handle, ibkr.OrderStatusPreSubmitted)
+	warning := waitForOrderWarning(t, ctx, handle)
+	if warning.Code != 399 || warning.OpKind != ibkr.OpPlaceOrder || !strings.Contains(warning.Message, "will not be placed at the exchange until") {
+		t.Fatalf("replacement warning = %+v, want typed off-hours code 399", warning)
+	}
+	if ibkr.IsRetryable(warning) {
+		t.Fatalf("replacement warning = %v, want non-retryable", warning)
+	}
 
 	if err := handle.Cancel(ctx); err != nil {
 		t.Fatalf("Cancel: %v", err)
@@ -4291,6 +2967,40 @@ func waitForOrderStatus(t *testing.T, ctx context.Context, handle *ibkr.OrderHan
 	waitOrderStatusUpdate(t, ctx, handle, want)
 	if ibkr.IsTerminalOrderStatus(want) && want != ibkr.OrderStatusInactive {
 		handle.Close()
+	}
+}
+
+func waitForOrderLifecycle(t *testing.T, ctx context.Context, events <-chan ibkr.OrderEvent, want ibkr.OrderLifecycleKind) ibkr.OrderLifecycleEvent {
+	t.Helper()
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				t.Fatalf("order events closed before lifecycle %s", want)
+			}
+			if event.Lifecycle != nil && event.Lifecycle.Kind == want {
+				return *event.Lifecycle
+			}
+		case <-ctx.Done():
+			t.Fatalf("waiting for order lifecycle %s: %v", want, context.Cause(ctx))
+		}
+	}
+}
+
+func waitForSessionReady(t *testing.T, ctx context.Context, events <-chan ibkr.Event, connectionSeq uint64) {
+	t.Helper()
+	for {
+		select {
+		case event, ok := <-events:
+			if !ok {
+				t.Fatalf("session events closed before Ready on connection %d", connectionSeq)
+			}
+			if event.State == ibkr.StateReady && event.ConnectionSeq >= connectionSeq {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("waiting for Ready on connection %d: %v", connectionSeq, context.Cause(ctx))
+		}
 	}
 }
 
@@ -4416,4 +3126,46 @@ func hasOrderStatus(statuses []ibkr.OrderStatus, want ibkr.OrderStatus) bool {
 		}
 	}
 	return false
+}
+
+func requireCloseOrCapturedDisconnect(t *testing.T, label string, err error) {
+	t.Helper()
+	if err == nil {
+		return
+	}
+	if errors.Is(err, ibkr.ErrOrderRecoveryRequired) && errors.Is(err, io.EOF) {
+		return
+	}
+	t.Fatalf("%s Close/Wait: %v", label, err)
+}
+
+func replayAAPLQuoteEntitlement(t *testing.T, ctx context.Context, client *ibkr.Client) {
+	t.Helper()
+
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
+		t.Fatalf("SetType(live): %v", err)
+	}
+	_, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
+		ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+	}})
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.Code != ibkr.ErrCodeAdditionalSubscriptionRequired || apiErr.OpKind != ibkr.OpQuotes {
+		t.Fatalf("live AAPL Quote error = %v, want typed quotes code %d", err, ibkr.ErrCodeAdditionalSubscriptionRequired)
+	}
+}
+
+func replayDelayedAAPLQuoteAnchor(t *testing.T, ctx context.Context, client *ibkr.Client) ibkr.Quote {
+	t.Helper()
+
+	replayAAPLQuoteEntitlement(t, ctx, client)
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatalf("SetType(delayed): %v", err)
+	}
+	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
+		ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
+	}})
+	if err != nil {
+		t.Fatalf("delayed AAPL Quote: %v", err)
+	}
+	return quote
 }

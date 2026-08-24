@@ -1,0 +1,50 @@
+# Exact capture 20260825T181306Z-api_include_overnight_lifecycle_aapl for api_include_overnight_lifecycle_aapl at server_version 225.
+# events.jsonl sha256: f3585ff96e9a0a936a559e52e9d69e860e6182e769418d987314ce9419c90e9c.
+# Account, order-reference, permanent-ID, and submitter values are deterministically sanitized.
+#
+# The dedicated paper account had zero working orders before admission. The
+# Gateway echoed IncludeOvernight=true, retained that value when an explicit
+# false replacement received code 462, and acknowledged targeted cancellation
+# with no fill. A fresh explicit-false placement was accepted; its OpenOrder
+# echo omitted field 135 and reported TIF=DAY, observably distinct from true.
+# The three-leg campaign reconciled zero open orders, unchanged executions,
+# and the same position inventory as its baseline.
+handshake {"server_version":225,"connection_time":"20260825 20:13:05 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABwAAANEI6gM=
+
+# Place a nonmarketable one-share SMART AAPL DAY limit with protobuf field 135
+# explicitly true. The OpenOrder echo preserves true and reports the broker TIF.
+raw client AAAAmgAAAMsI6gMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpyIAAqA0JVWTIBMTgAQgNMTVRJ9ihcj8L1LkBaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAkAQBqAQAwAT///////////8BkAYAygYAuAgBIgA=
+raw server AAABTAAAAM0I6gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoECCAAQ6gMY6rfEwyEgACoDQlVZMgExQgNMTVRJ9ihcj8L1LkBRAAAAAAAAAABaD09WRVJOSUdIVCArIERBWWIJRFU5MDAwMDAxegJJQpgBAbkBexSuR+F6MEDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHALgIAcoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+raw server AAAAQAAAAMsI6gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDqt8TDITgAQQAAAAAAAAAASABZAAAAAAAAAAA=
+
+# Re-place the same order ID with protobuf field 135 explicitly false. This
+# Gateway/account rejected the TIF transition with exact code 462 and echoed
+# the still-working order with IncludeOvernight=true.
+raw client AAAAmgAAAMsI6gMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpyIAAqA0JVWTIBMTgAQgNMTVRJ9ihcj8L1LkBaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAkAQBqAQAwAT///////////8BkAYAygYAuAgAIgA=
+raw server AAABSQAAAM0I6gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGoECCAAQ6gMY6rfEwyEgACoDQlVZMgExQgNMTVRJ9ihcj8L1LkBRAAAAAAAAAABaD09WRVJOSUdIVCArIERBWWIJRFU5MDAwMDAxegJJQpgBAbkBexSuR+F6MEDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHALgIAcoIDXBhcGVyLXVzZXItMDHwCAAiCwoJU3VibWl0dGVk
+raw server AAAAPQAAAMsI6gMSCVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDqt8TDITgAQQAAAAAAAAAASABZAAAAAAAAAAA=
+raw server AAAAUgAAAMwI6gMQ0viA0YM0GM4DIj9PcmRlciBtb2RpZnkgZmFpbGVkLiBDYW5ub3QgY2hhbmdlIHRvIHRoZSBuZXcgVGltZSBpbiBGb3JjZS5EQVk=
+
+# Targeted cancellation reached Cancelled with filled=0, then CurrentTime
+# fenced every earlier write before the fresh placement.
+raw client AAAACQAAAMwI6gMSAA==
+raw server AAAAPQAAAMsI6gMSCUNhbmNlbGxlZBoBMCIBMSkAAAAAAAAAADDqt8TDITgAQQAAAAAAAAAASABZAAAAAAAAAAA=
+raw server AAAAKwAAAMwI6gMQuP6A0YM0GMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo=
+raw client AAAABAAAAPk=
+raw server AAAACgAAAPkIsra31AY=
+
+# A fresh order explicitly sends field 135=false. The Gateway accepts it and
+# canonicalizes the OpenOrder echo to absent field 135 with TIF=DAY.
+raw client AAAAmgAAAMsI6wMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpyIAAqA0JVWTIBMTgAQgNMTVRJ9ihcj8L1LkBaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDA18AEA+AEAkAQBqAQAwAT///////////8BkAYAygYAuAgAIgA=
+raw server AAABOgAAAM0I6wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAAQ6wMY67fEwyEgACoDQlVZMgExQgNMTVRJ9ihcj8L1LkBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBexSuR+F6MEDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDXwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+raw server AAAAQAAAAMsI6wMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDrt8TDITgAQQAAAAAAAAAASABZAAAAAAAAAAA=
+
+# The fresh false order is also terminally cancelled with no fill.
+raw client AAAACQAAAMwI6wMSAA==
+raw server AAABNwAAAM0I6wMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAAQ6wMY67fEwyEgACoDQlVZMgExQgNMTVRJ9ihcj8L1LkBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBexSuR+F6MEDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDXwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiCwoJU3VibWl0dGVk
+raw server AAAAPQAAAMsI6wMSCVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADDrt8TDITgAQQAAAAAAAAAASABZAAAAAAAAAAA=
+raw server AAAAPQAAAMsI6wMSCUNhbmNlbGxlZBoBMCIBMSkAAAAAAAAAADDrt8TDITgAQQAAAAAAAAAASABZAAAAAAAAAAA=
+raw server AAAAKwAAAMwI6wMQuP6A0YM0GMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo=
+disconnect

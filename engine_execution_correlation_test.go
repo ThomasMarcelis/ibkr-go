@@ -14,32 +14,27 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
-// These tests decode exact raw server frames from two paper-Gateway captures
-// at server_version 200 instead of reconstructing protocol messages:
-//
-//   - executions.txt SHA-256
-//     91b7b157002bef352b1bae8eb79d3aca1057a43cf3ffcf9497c8f1369b816ddc
-//   - api_order_fill_aapl.txt SHA-256
-//     1b25f0d53f4f7ec4fe7940e0b99ba3665c8cffaa5685d42c3d534b8bcddc35bf
-//
-// The latter records fill-012 live, its fee, the same fill replayed by an
-// execution query, and the exact fee replay. Tests state any ordering fault
+// These tests decode exact raw server frames from the paper-Gateway
+// api_future_campaign_mes capture at server_version 225 instead of
+// reconstructing protocol messages. Its events.jsonl SHA-256 is
+// dd5eeefb0d5bb095dc3da778767570b5286f733491489cde66abcf70488bd005.
+// The capture records each MES fill live, its fee, the same fill replayed by
+// an execution query, and the exact fee replay. Tests state any ordering fault
 // injection explicitly; captured message fields are never changed.
 
 const (
-	executionsCapturePath = "testdata/transcripts/executions.txt"
-	orderFillCapturePath  = "testdata/transcripts/api_order_fill_aapl.txt"
-	capturedReplayExecID  = "redacted-fill-000000012"
+	executionsCapturePath = "testdata/transcripts/api_future_campaign_mes.txt"
+	capturedReplayExecID  = "sanitized-exec-00000001"
 )
 
 func TestExecutionSubscriptionAcceptsCorrelationBoundaryAndRejectsNextID(t *testing.T) {
 	executions := capturedExecutions(t, executionsCapturePath)
-	if len(executions) < 3 {
-		t.Fatalf("captured executions = %d, want at least three", len(executions))
+	if len(executions) < 2 {
+		t.Fatalf("captured executions = %d, want at least two", len(executions))
 	}
 
 	e, peer := newObservedExecutionEngine(t)
-	reqID, sub := installObservedExecutionRoute(t, e, WithQueueSize(16), WithExecutionCorrelationLimit(2))
+	reqID, sub := installObservedExecutionRoute(t, e, WithQueueSize(16), WithExecutionCorrelationLimit(1))
 	_ = readObservedFrame(t, peer)
 	route := e.keyed[reqID]
 
@@ -52,7 +47,6 @@ func TestExecutionSubscriptionAcceptsCorrelationBoundaryAndRejectsNextID(t *test
 
 	route.handle(executions[0], e)
 	route.handle(executions[1], e)
-	route.handle(executions[2], e)
 
 	err := sub.Wait()
 	if !errors.Is(err, ErrExecutionCorrelationOverflow) {
@@ -69,12 +63,11 @@ func TestExecutionSubscriptionAcceptsCorrelationBoundaryAndRejectsNextID(t *test
 	}
 
 	updates := closedExecutionUpdates(sub)
-	if len(updates) != 2 {
-		t.Fatalf("data updates = %d, want two boundary executions", len(updates))
+	if len(updates) != 1 {
+		t.Fatalf("data updates = %d, want one boundary execution", len(updates))
 	}
-	if updates[0].Execution == nil || updates[0].Execution.ExecID != executions[0].ExecID ||
-		updates[1].Execution == nil || updates[1].Execution.ExecID != executions[1].ExecID {
-		t.Fatalf("execution updates = %+v, want only the two admitted IDs", updates)
+	if updates[0].Execution == nil || updates[0].Execution.ExecID != executions[0].ExecID {
+		t.Fatalf("execution updates = %+v, want only the admitted ID", updates)
 	}
 }
 
@@ -112,8 +105,8 @@ func TestExecutionSubscriptionOrdersCapturedFeeBeforeExecutionAndDedupesReplay(t
 		t.Fatalf("first update = %+v, want execution before queued fee", updates[0])
 	}
 	if updates[1].CommissionAndFees == nil || updates[1].CommissionAndFees.ExecID != capturedReplayExecID ||
-		updates[1].CommissionAndFees.Amount == nil || updates[1].CommissionAndFees.Amount.String() != "0.248693" {
-		t.Fatalf("second update = %+v, want the captured fee once", updates[1])
+		updates[1].CommissionAndFees.Amount == nil || updates[1].CommissionAndFees.Amount.String() != "0.61" {
+		t.Fatalf("second update = %+v, want the captured fee once", updates[1].CommissionAndFees)
 	}
 }
 
@@ -156,9 +149,14 @@ func TestExecutionSubscriptionIgnoresUnknownFeesAfterSnapshotAndKeepsKnownLateFe
 	sequence := capturedQueryReplaySequence(t)
 	execution := sequence[1].(codec.ExecutionDetail)
 	lateKnownFee := sequence[2].(codec.CommissionReport)
-	reports := capturedCommissionsFrom(capturedServerMessages(t, executionsCapturePath))
-	if len(reports) < 3 {
-		t.Fatalf("captured commissions = %d, want at least three", len(reports))
+	var unrelated []codec.CommissionReport
+	for _, report := range capturedCommissionsFrom(capturedServerMessages(t, executionsCapturePath)) {
+		if report.ExecID != execution.ExecID {
+			unrelated = append(unrelated, report)
+		}
+	}
+	if len(unrelated) == 0 {
+		t.Fatal("capture contains no fee for the other MES execution")
 	}
 
 	e, peer := newObservedExecutionEngine(t)
@@ -176,10 +174,7 @@ func TestExecutionSubscriptionIgnoresUnknownFeesAfterSnapshotAndKeepsKnownLateFe
 	// frames for other executions after this route's end marker. Message fields
 	// are unchanged. A completed route cannot receive another keyed execution,
 	// so these global broadcasts must not claim correlation capacity.
-	for _, report := range reports[:3] {
-		if report.ExecID == execution.ExecID {
-			t.Fatalf("unrelated captured fee unexpectedly uses known ExecID %q", report.ExecID)
-		}
+	for _, report := range unrelated {
 		route.handleCommission(report, e)
 	}
 	select {
@@ -250,22 +245,22 @@ func TestExecutionCorrelationSnapshotCompletionDropsUnmatchedPendingReports(t *t
 
 func TestExecutionCorrelationBoundsPendingReportsIndependently(t *testing.T) {
 	reports := capturedCommissionsFrom(capturedServerMessages(t, executionsCapturePath))
-	if len(reports) < 3 {
-		t.Fatalf("captured commissions = %d, want at least three", len(reports))
+	if len(reports) < 2 {
+		t.Fatalf("captured commissions = %d, want at least two", len(reports))
 	}
 
-	correlation := newExecutionCorrelation(3)
+	correlation := newExecutionCorrelation(2)
 	// Production gives both resources the public limit. A lower internal
 	// pending ceiling isolates that invariant with three unchanged live-derived
 	// reports; it does not claim evidence of a changed same-ID fee revision.
-	correlation.pendingLimit = 2
-	for i, report := range reports[:3] {
+	correlation.pendingLimit = 1
+	for i, report := range reports[:2] {
 		entry, err := correlation.entry(report.ExecID)
 		if err != nil {
 			t.Fatalf("entry(%d): %v", i, err)
 		}
 		queued, err := correlation.queuePending(entry, report)
-		if i < 2 {
+		if i < 1 {
 			if err != nil || !queued {
 				t.Fatalf("queuePending(%d) = %v, %v; want true, nil", i, queued, err)
 			}
@@ -275,8 +270,8 @@ func TestExecutionCorrelationBoundsPendingReportsIndependently(t *testing.T) {
 			t.Fatalf("queuePending(%d) = %v, %v; want false, ErrExecutionCorrelationOverflow", i, queued, err)
 		}
 	}
-	if correlation.pendingReports != 2 {
-		t.Fatalf("pending reports = %d, want boundary 2", correlation.pendingReports)
+	if correlation.pendingReports != 1 {
+		t.Fatalf("pending reports = %d, want boundary 1", correlation.pendingReports)
 	}
 }
 
@@ -284,15 +279,15 @@ func TestUnrelatedCommissionBroadcastOverflowClosesOnlyBoundedRoute(t *testing.T
 	messages := capturedServerMessages(t, executionsCapturePath)
 	executions := executionByID(capturedExecutionsFrom(messages))
 	reports := capturedCommissionsFrom(messages)
-	if len(reports) < 3 {
-		t.Fatalf("captured commissions = %d, want at least three", len(reports))
+	if len(reports) < 2 {
+		t.Fatalf("captured commissions = %d, want at least two", len(reports))
 	}
-	reports = reports[:3]
+	reports = reports[:2]
 
 	e, peer := newObservedExecutionEngine(t)
-	targetReqID, target := installObservedExecutionRoute(t, e, WithQueueSize(16), WithExecutionCorrelationLimit(2))
+	targetReqID, target := installObservedExecutionRoute(t, e, WithQueueSize(16), WithExecutionCorrelationLimit(1))
 	_ = readObservedFrame(t, peer)
-	siblingReqID, sibling := installObservedExecutionRoute(t, e, WithQueueSize(16), WithExecutionCorrelationLimit(4))
+	siblingReqID, sibling := installObservedExecutionRoute(t, e, WithQueueSize(16), WithExecutionCorrelationLimit(2))
 	_ = readObservedFrame(t, peer)
 
 	for _, report := range reports {
@@ -324,7 +319,7 @@ func TestUnrelatedCommissionBroadcastOverflowClosesOnlyBoundedRoute(t *testing.T
 	}
 
 	siblingRoute := e.keyed[siblingReqID]
-	siblingRoute.handle(executions[reports[2].ExecID], e)
+	siblingRoute.handle(executions[reports[1].ExecID], e)
 	updates := availableExecutionUpdates(sibling)
 	if len(updates) != 2 || updates[0].Execution == nil || updates[1].CommissionAndFees == nil {
 		t.Fatalf("sibling updates = %+v, want execution then its queued fee", updates)
@@ -339,7 +334,7 @@ func TestUnrelatedCommissionBroadcastOverflowClosesOnlyBoundedRoute(t *testing.T
 
 func TestExecutionSnapshotCollectorUsesCorrelationLimit(t *testing.T) {
 	var replayed []codec.ExecutionDetail
-	for _, execution := range capturedExecutions(t, orderFillCapturePath) {
+	for _, execution := range capturedExecutions(t, executionsCapturePath) {
 		if execution.ExecID == capturedReplayExecID {
 			replayed = append(replayed, execution)
 		}
@@ -379,7 +374,7 @@ func TestExecutionSnapshotCollectorUsesCorrelationLimit(t *testing.T) {
 func newObservedExecutionEngine(t *testing.T) (*engine, net.Conn) {
 	t.Helper()
 	e, peer := newObservedMarketDataEngine(t)
-	e.serverVersion = 200
+	e.serverVersion = 225
 	e.nextReqID = 701
 	return e, peer
 }
@@ -417,8 +412,6 @@ func capturedServerMessages(t *testing.T, path string) []codec.Message {
 	switch path {
 	case executionsCapturePath:
 		data, err = os.ReadFile(executionsCapturePath)
-	case orderFillCapturePath:
-		data, err = os.ReadFile(orderFillCapturePath)
 	default:
 		t.Fatalf("unsupported execution capture %q", path)
 	}
@@ -444,7 +437,7 @@ func capturedServerMessages(t *testing.T, path string) []codec.Message {
 		if reader.Len() != 0 {
 			t.Fatalf("capture %s line %d has %d trailing frame bytes", path, lineNumber+1, reader.Len())
 		}
-		decoded, err := codec.DecodeBatch(200, payload)
+		decoded, err := codec.DecodeBatch(225, payload)
 		if err != nil {
 			t.Fatalf("decode capture frame %s line %d: %v", path, lineNumber+1, err)
 		}
@@ -500,7 +493,7 @@ func executionByID(executions []codec.ExecutionDetail) map[string]codec.Executio
 func capturedQueryReplaySequence(t *testing.T) []any {
 	t.Helper()
 	var sequence []any
-	for _, message := range capturedServerMessages(t, orderFillCapturePath) {
+	for _, message := range capturedServerMessages(t, executionsCapturePath) {
 		switch message := message.(type) {
 		case codec.ExecutionDetail:
 			if message.ExecID == capturedReplayExecID && message.ReqID >= 0 {

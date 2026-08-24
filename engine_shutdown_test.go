@@ -74,15 +74,16 @@ func TestAttachTransportPumpUnblocksOnEngineShutdown(t *testing.T) {
 			incoming:      make(chan any),           // unbuffered: no run loop, so one decode wedges the pump
 			transportErr:  make(chan transportLoss), // unbuffered: same for the error forwarder
 			done:          make(chan struct{}),
-			serverVersion: 206,
+			serverVersion: 225,
 		}
 		e.attachTransport(tr)
 
 		// Deliver one decodable frame. The pump decodes it and blocks on the
 		// unconsumed e.incoming, standing in for a hot feed at shutdown. This
-		// exact CurrentTime payload is from capture 20260710T215126Z-current_time,
-		// events SHA-256 c4ad2ec73d6d2a92a645fefeeb2d4d74335262dec23813e9645732c878ff826d.
-		payload := []byte{0, 0, 0, 49, '1', 0, '1', '7', '8', '3', '7', '2', '0', '2', '8', '5', 0}
+		// exact CurrentTime payload is from capture
+		// 20260824T202747Z-current_time at server_version 225, events
+		// SHA-256 a9029ff8e7cfed19cab1e3e2eccc4c36d7c91b95aa6aa03f75543bacac454a9e.
+		payload := liveCapturedFrame(t, "AAAACgAAAPkIwtKy1AY=")
 		go func() { _ = wire.WriteFrame(serverConn, payload) }()
 
 		synctest.Wait() // pump is now durably blocked on e.incoming <- msg
@@ -112,7 +113,7 @@ func TestCloseDrainsTrackedCompletionsWithoutActorDeadlock(t *testing.T) {
 		done:           make(chan struct{}),
 		events:         newObserver[Event](cfg.eventBuffer),
 		transport:      tr,
-		serverVersion:  200,
+		serverVersion:  225,
 		keyed:          make(map[int]*route),
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
@@ -253,7 +254,7 @@ func TestPhysicalReconnectMarksOrderRecoveryBeforeBusinessEvents(t *testing.T) {
 
 	peer, client := net.Pipe()
 	cfg := defaultConfig()
-	handle := newOrderHandle(444, 8)
+	handle := newOrderHandle(546, 8)
 	e := &engine{
 		cfg:              cfg,
 		incoming:         make(chan any, 8),
@@ -262,25 +263,26 @@ func TestPhysicalReconnectMarksOrderRecoveryBeforeBusinessEvents(t *testing.T) {
 		events:           newObserver[Event](cfg.eventBuffer),
 		keyed:            make(map[int]*route),
 		singletons:       make(map[string]*route),
-		orders:           map[int64]*orderRoute{444: {orderID: 444, handle: handle, gapped: true}},
+		orders:           map[int64]*orderRoute{546: {orderID: 546, handle: handle, gapped: true}},
 		execDeliveries:   make(map[string]*execDelivery),
 		connectAttemptID: 4,
 		snapshot:         Snapshot{State: StateReconnecting, ConnectionSeq: 9},
 	}
 
 	e.handleConnectResult(connectResult{
-		attempt: 4, reconnect: true, conn: client, serverVersion: 200,
+		attempt: 4, reconnect: true, conn: client, serverVersion: 225,
 	})
-	// Capture 20260704T174748Z-api_reconnect_active_order_aapl, events.jsonl
-	// sha256 57943d05bd0242ca4a061d10c50291b8d30ef93f1f833e4da66704b400815bf7.
+	// Capture 20260824T210312Z-api_reconnect_active_order_aapl, server_version
+	// 225, events.jsonl sha256
+	// bb1d3c6803a7140fd4636570f43e91f047f57177e280b10b602f4786ace980a9.
 	// On reconnect the Gateway sent OpenOrder and this exact OrderStatus before
 	// ManagedAccounts/NextValidID, so recovery must be published at connection
 	// attachment rather than delayed until bootstrap readiness.
-	framed, err := base64.StdEncoding.DecodeString("AAAALjMANDQ0AFByZVN1Ym1pdHRlZAAwADEwMAAwADIwMjgxNjgxMgAwADAAMQAAMAA=")
+	framed, err := base64.StdEncoding.DecodeString("AAAAQAAAAMsIogQSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCiuMTDITgAQQAAAAAAAAAASAFZAAAAAAAAAAA=")
 	if err != nil {
 		t.Fatalf("decode captured reconnect order status: %v", err)
 	}
-	message, err := codec.Decode(200, framed[4:])
+	message, err := codec.Decode(225, framed[4:])
 	if err != nil {
 		t.Fatalf("decode captured reconnect order status: %v", err)
 	}
@@ -294,7 +296,7 @@ func TestPhysicalReconnectMarksOrderRecoveryBeforeBusinessEvents(t *testing.T) {
 		t.Fatalf("RecoveryRequired connection sequence = %d, want 10", first.Lifecycle.ConnectionSeq)
 	}
 	second := <-handle.Events()
-	if second.Status == nil || second.Status.OrderID != 444 || second.Status.Status != OrderStatusPreSubmitted {
+	if second.Status == nil || second.Status.OrderID != 546 || second.Status.Status != OrderStatusPreSubmitted {
 		t.Fatalf("second reconnect order event = %+v, want captured PreSubmitted status", second)
 	}
 

@@ -1,16 +1,27 @@
-# Live-derived from /tmp/ibkr-current-eight-captures/
-# 20260710T223024Z-account_summary_stream at server_version 206; events.jsonl sha256:
-# 7d4fd505b88228d09c76bfc7a536444cb2f761bc799630c4a8f870072a3d3769.
-# Account identifiers are deterministic length-preserving substitutions.
-# Ambient farm-status frames and the later current-time fence are omitted.
-# Request, all three values, snapshot end, and cancellation are exact.
-handshake {"server_version":206,"connection_time":"20260711 00:30:24 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-raw client AAAANgAAAD4xADEAQWxsAE5ldExpcXVpZGF0aW9uLFRvdGFsQ2FzaFZhbHVlLEJ1eWluZ1Bvd2VyAA==
-raw server AAAALAAAAD8xADEARFU5MDAwMDAxAEJ1eWluZ1Bvd2VyADE3MzM5Mi45NQBFVVIA
-raw server AAAALgAAAD8xADEARFU5MDAwMDAxAE5ldExpcXVpZGF0aW9uADMzOTExLjYyAEVVUgA=
-raw server AAAALgAAAD8xADEARFU5MDAwMDAxAFRvdGFsQ2FzaFZhbHVlAC0xNjQyLjQ3AEVVUgA=
-raw server AAAACAAAAEAxADEA
-raw client AAAACAAAAD8xADEA
+# Exact capture 20260824T202344Z-account_summary_stream for account_summary_stream at server_version 225.
+# events.jsonl sha256: 4276df3a9bb66e0feced005f71bdb87040d3abba5ae526bdb42002daf9fcec82.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:23:44 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC58sWrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARC58sWrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARC58sWrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=62 encoding=protobuf payload_len=54
+raw client AAAANgAAAQYIARIDQWxsGilOZXRMaXF1aWRhdGlvbixUb3RhbENhc2hWYWx1ZSxCdXlpbmdQb3dlcg==
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=46
+raw server AAAALgAAAQcIARIJRFU5MDAwMDAxGgtCdXlpbmdQb3dlciIJMTgzODc1LjIyKgNFVVI=
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=48
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5OZXRMaXF1aWRhdGlvbiIIMzY5OTIuNDkqA0VVUg==
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=48
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5Ub3RhbENhc2hWYWx1ZSIILTE0NDEuNjcqA0VVUg==
+# leg=1 direction=server msg_id=64 encoding=protobuf payload_len=6
+raw server AAAABgAAAQgIAQ==
+# leg=1 direction=client msg_id=63 encoding=protobuf payload_len=6
+raw client AAAABgAAAQcIAQ==
 disconnect

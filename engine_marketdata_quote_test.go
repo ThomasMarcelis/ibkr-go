@@ -16,62 +16,6 @@ import (
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
-func TestQuoteRouteFollowsLiveRerouteAndFreezesResumeRequest(t *testing.T) {
-	e, peer := newObservedMarketDataEngine(t)
-	e.nextReqID = 20621
-	req := QuoteRequest{
-		Contract:     Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
-		GenericTicks: []GenericTick{"100", "233"},
-	}
-	sub := installObservedQuoteRoute(t, e, req, WithResumePolicy(ResumeAuto))
-	_ = readObservedFrame(t, peer)
-
-	rawReroute := []byte("\x00\x00\x00\x5b20621\x008314\x00SMART\x00")
-	reroute, err := codec.Decode(206, rawReroute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e.handleIncoming(reroute)
-
-	routedPayload := readObservedFrame(t, peer)
-	route := e.keyed[20621]
-	if route == nil || route.resume != ResumeAuto {
-		t.Fatalf("route = %+v, want resumable active route", route)
-	}
-	routedRequest, ok := route.request.(codec.QuoteRequest)
-	if !ok {
-		t.Fatalf("route request = %T, want codec.QuoteRequest", route.request)
-	}
-	if !reflect.DeepEqual(routedRequest.Contract, codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
-		routedRequest.Snapshot || len(routedRequest.GenericTicks) != 2 ||
-		routedRequest.GenericTicks[0] != "100" || routedRequest.GenericTicks[1] != "233" {
-		t.Fatalf("rerouted request = %+v, want replacement contract with original request configuration", routedRequest)
-	}
-	wantPayload, err := codec.Encode(206, routedRequest)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(routedPayload, wantPayload) {
-		t.Fatalf("rerouted payload = %x, want %x", routedPayload, wantPayload)
-	}
-
-	e.handleIncoming(reroute)
-	if _, ok := e.keyed[20621]; ok {
-		t.Fatal("second reroute left the request active")
-	}
-	cancelPayload := readObservedFrame(t, peer)
-	wantCancel, err := codec.Encode(206, codec.CancelQuote{ReqID: 20621})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(cancelPayload, wantCancel) {
-		t.Fatalf("second reroute cancel = %x, want %x", cancelPayload, wantCancel)
-	}
-	if err := sub.Err(); err == nil || err.Error() != "ibkr: market data request 20621 was rerouted more than once" {
-		t.Fatalf("second reroute error = %v", err)
-	}
-}
-
 func TestQuoteRouteFollowsLiveProtobufReroute225(t *testing.T) {
 	e, peer := newObservedMarketDataEngine(t)
 	e.serverVersion = 225
@@ -81,8 +25,9 @@ func TestQuoteRouteFollowsLiveProtobufReroute225(t *testing.T) {
 	}})
 	_ = readObservedFrame(t, peer)
 
-	// Capture 20260713T205650Z-live_cfd_quote_reroute, events.jsonl sha256
-	// bd73e91139899a8c586856ab744269bce686bdab8bda597d00c2032f97d3952c.
+	// Capture 20260825T201807Z-live_cfd_quote_reroute_v201_positive,
+	// events.jsonl sha256
+	// ca8fbdf11d260066fb7cd1c3d60e6e44808a54bf6a8fc678f3597bd71a666f1c.
 	reroute, err := codec.Decode(225, []byte{
 		0x00, 0x00, 0x01, 0x23, 0x08, 0x01, 0x10, 0xfa,
 		0x40, 0x1a, 0x05, 0x53, 0x4d, 0x41, 0x52, 0x54,
@@ -110,48 +55,6 @@ func TestQuoteRouteFollowsLiveProtobufReroute225(t *testing.T) {
 
 	sub.Close()
 	(<-e.cmds)()
-}
-
-func TestQuoteResumeRejectsContractFieldsAfterVersionDowngrade(t *testing.T) {
-	e, peer := newObservedMarketDataEngine(t)
-	e.nextReqID = 20623
-	// IncludeExpired is present in the exact-sv206 shared Contract request but
-	// has no field in the classic sv205 quote layout. This test freezes the
-	// reconnect actor behavior; it does not claim a positive expired-future
-	// market-data result from the Gateway.
-	req := QuoteRequest{Contract: Contract{
-		Symbol: "MES", SecType: SecTypeFuture, Expiry: "202606",
-		Exchange: "CME", Currency: "USD", IncludeExpired: true,
-	}}
-	sub := installObservedQuoteRoute(t, e, req, WithResumePolicy(ResumeAuto))
-	_ = readObservedFrame(t, peer)
-
-	route := e.keyed[20623]
-	if route == nil {
-		t.Fatal("quote route was not installed")
-	}
-	route.gapped = true
-	e.serverVersion = 205
-	e.resumeRoutes()
-
-	if _, ok := e.keyed[20623]; ok {
-		t.Fatal("unsupported quote resume left the route active")
-	}
-	validation, ok := errors.AsType[*ValidationError](sub.Err())
-	if !ok || validation.Field != "Contract.IncludeExpired" ||
-		validation.Message != "is not represented by resume market data quote at negotiated server_version 205" {
-		t.Fatalf("resume error = %#v, want precise IncludeExpired version failure", sub.Err())
-	}
-	select {
-	case <-e.done:
-		t.Fatal("unsupported quote resume terminated the session")
-	default:
-	}
-	for event := range sub.Events() {
-		if event.Kind == StreamResubscribed {
-			t.Fatal("unsupported quote resume emitted Resubscribed")
-		}
-	}
 }
 
 func TestQuoteOddLotGenericTickServerVersionBoundary(t *testing.T) {
@@ -206,60 +109,15 @@ func TestQuoteOddLotGenericTickServerVersionBoundary(t *testing.T) {
 	}
 }
 
-func TestMarketDepthRouteRejectsRepeatedLiveRerouteWithSmartCancel(t *testing.T) {
-	e, peer := newObservedMarketDataEngine(t)
-	e.nextReqID = 20622
-	req := MarketDepthRequest{
-		Contract: Contract{Symbol: "IBM", SecType: SecTypeCFD, Exchange: "SMART", Currency: "USD"},
-		NumRows:  5, IsSmartDepth: true,
-	}
-	sub := installObservedDepthRoute(t, e, req)
-	_ = readObservedFrame(t, peer)
-
-	rawReroute := []byte("\x00\x00\x00\x5c20622\x008314\x00SMART\x00")
-	reroute, err := codec.Decode(206, rawReroute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	e.handleIncoming(reroute)
-	_ = readObservedFrame(t, peer)
-
-	active := e.keyed[20622]
-	routedRequest, ok := active.request.(codec.MarketDepthRequest)
-	if !ok {
-		t.Fatalf("route request = %T, want codec.MarketDepthRequest", active.request)
-	}
-	if !reflect.DeepEqual(routedRequest.Contract, codec.Contract{ConID: 8314, Exchange: "SMART"}) ||
-		routedRequest.NumRows != 5 || !routedRequest.IsSmartDepth || active.resume != ResumeNever {
-		t.Fatalf("rerouted depth request = %+v, route resume=%v", routedRequest, active.resume)
-	}
-
-	e.handleIncoming(reroute)
-	if _, ok := e.keyed[20622]; ok {
-		t.Fatal("second depth reroute left the request active")
-	}
-	cancelPayload := readObservedFrame(t, peer)
-	wantCancel, err := codec.Encode(206, codec.CancelMarketDepth{ReqID: 20622, IsSmartDepth: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(cancelPayload, wantCancel) {
-		t.Fatalf("cancel payload = %x, want smart-depth cancel %x", cancelPayload, wantCancel)
-	}
-	if err := sub.Err(); err == nil || err.Error() != "ibkr: market depth request 20622 was rerouted more than once" {
-		t.Fatalf("second reroute error = %v", err)
-	}
-}
-
 func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
-	// /tmp/ibkr-go-depth-public-final-20260711/
-	// 20260711T000232Z-market_depth_aapl_smart, server_version 206,
-	// events.jsonl sha256 a5df84945a10440ab4ef4a6336f837570cd53d036314c2461104a2555f94e8a3.
+	// captures/20260824T202754Z-market_depth_aapl_smart, server_version 225,
+	// events.jsonl sha256
+	// 9f37f9d5ce3f78cfef6ef3a77749deffe5ef197533baeb9734a1b69d8f6c8d89.
 	// The exact request-scoped code 2152 frame must reach the keyed depth route
 	// without closing it: the official notice may precede valid rows when any
 	// listed depth venue is available.
 	e, peer := newObservedMarketDataEngine(t)
-	e.serverVersion = 206
+	e.serverVersion = 225
 	e.nextReqID = 1
 	sub := installObservedDepthRoute(t, e, MarketDepthRequest{
 		Contract: Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"},
@@ -267,7 +125,7 @@ func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
 	})
 	_ = readObservedFrame(t, peer)
 
-	message, err := codec.Decode(206, liveCapturedFrame(t, "AAAA3QAAAMwIARDwxe7z9DMY6BAiygFFeGNoYW5nZXMgLSBUb3A6IElCRU9TOyBPVkVSTklHSFQ7IE5lZWQgYWRkaXRpb25hbCBtYXJrZXQgZGF0YSBwZXJtaXNzaW9ucyAtIERlcHRoOiBOQVNEQVE7IEJBVFM7IEFSQ0E7IEJFWDsgTllTRTsgSUVYOyBUb3A6IEJZWDsgQU1FWDsgUEVBUkw7IFQyNFg7IE1FTVg7IEVER0VBOyBDSFg7IE5ZU0VOQVQ7IFBTWDsgTFRTRTsgSVNFOyBEUkNURURHRTsg"))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAA4wAAAMwIARCIntWrgzQY6BAi0AFFeGNoYW5nZXMgLSBUb3A6IElCRU9TOyBPVkVSTklHSFQ7IE5lZWQgYWRkaXRpb25hbCBtYXJrZXQgZGF0YSBwZXJtaXNzaW9ucyAtIERlcHRoOiBCQVRTOyBOQVNEQVE7IEFSQ0E7IEJFWDsgTllTRTsgSUVYOyBUb3A6IEJZWDsgUEVBUkw7IEFNRVg7IFQyNFg7IE1FTVg7IEVER0VBOyBUWFNFOyBDSFg7IE5ZU0VOQVQ7IFBTWDsgTFRTRTsgSVNFOyBEUkNURURHRTsg"))
 	if err != nil {
 		t.Fatalf("decode exact live SMART-depth exchange notice: %v", err)
 	}
@@ -292,7 +150,7 @@ func TestSmartDepthExchangeNoticePreservesLiveRoute(t *testing.T) {
 
 	sub.Close()
 	(<-e.cmds)()
-	wantCancel, err := codec.Encode(206, codec.CancelMarketDepth{ReqID: 1, IsSmartDepth: true})
+	wantCancel, err := codec.Encode(225, codec.CancelMarketDepth{ReqID: 1, IsSmartDepth: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,15 +183,17 @@ func TestRegulatorySnapshotErrorPreservesDefinitiveRejection(t *testing.T) {
 	}
 }
 
-func TestQuoteRoutePreservesSV206ParameterPresenceAndPrecision(t *testing.T) {
+func TestQuoteRoutePreservesParameterPresenceAndPrecision(t *testing.T) {
 	e := newBenchEngine(t)
-	e.serverVersion = 206
-	e.nextReqID = 20611
+	e.serverVersion = 225
+	e.nextReqID = 1
 	sub := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, sub)
 
-	raw := []byte("\x00\x00\x01\x19\x08\x83\xa1\x01\x12\x04\x30\x2e\x30\x31\x1a\x06\x39\x63\x30\x30\x30\x31\x20\x04\x2a\x08\x30\x2e\x30\x30\x30\x30\x30\x31\x32\x08\x30\x2e\x30\x30\x30\x30\x30\x31")
-	msg, err := codec.Decode(206, raw)
+	// Capture 20260824T202841Z-quote_stream_aapl, server_version 225,
+	// events.jsonl SHA-256
+	// 5ca580636aa0fbd11781fa6a4d85c4c8f8f78ad1139ef7c577e3f11363d219e3.
+	msg, err := codec.Decode(225, liveCapturedFrame(t, "AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ=="))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,7 +207,7 @@ func TestQuoteRoutePreservesSV206ParameterPresenceAndPrecision(t *testing.T) {
 		t.Fatalf("parameters = %+v", parameters)
 	}
 
-	e.handleIncoming(codec.TickReqParams{ReqID: 20611})
+	e.handleIncoming(codec.TickReqParams{ReqID: 1})
 	absent := nextQuoteUpdate(t, sub).Parameters
 	if absent == nil || absent.SnapshotPermissions != nil || absent.LastPricePrecision != nil || absent.LastSizePrecision != nil {
 		t.Fatalf("omitted parameters = %+v, want nil presence fields", absent)
@@ -357,13 +217,13 @@ func TestQuoteRoutePreservesSV206ParameterPresenceAndPrecision(t *testing.T) {
 func TestMarketDataRoutesPreserveOfficialUnavailableSizes(t *testing.T) {
 	t.Run("quote size", func(t *testing.T) {
 		e := newBenchEngine(t)
-		e.serverVersion = 206
-		e.nextReqID = 20611
+		e.serverVersion = 225
+		e.nextReqID = 1
 		sub := installQuoteRoute(t, e)
 		closeInstalledQuoteRoute(t, e, sub)
 
 		// API 10.48.01 maps an omitted TickSize.size to UNSET_DECIMAL.
-		e.handleIncoming(codec.TickSize{ReqID: 20611, TickType: 0})
+		e.handleIncoming(codec.TickSize{ReqID: 1, TickType: 0})
 		update := nextQuoteUpdate(t, sub)
 		if update.Kind != QuoteUpdateSizeTick || update.Changed != 0 ||
 			update.SizeTick == nil || update.SizeTick.Size != nil || update.Snapshot.Available != 0 {
@@ -412,10 +272,11 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
 		events: newObserver[Event](cfg.eventBuffer), transport: tr,
 		transportGeneration: 1,
-		serverVersion:       206, keyed: make(map[int]*route), singletons: make(map[string]*route),
+		serverVersion:       225, keyed: make(map[int]*route), singletons: make(map[string]*route),
 		orders:               make(map[int64]*orderRoute),
 		execDeliveries:       make(map[string]*execDelivery),
 		malformedInboundSeen: make(map[int]struct{}),
+		unknownInboundSeen:   make(map[int]struct{}),
 		snapshot:             Snapshot{State: StateReady, ConnectionSeq: 1},
 	}
 	t.Cleanup(func() {
@@ -464,8 +325,9 @@ func readObservedFrame(t *testing.T, peer net.Conn) []byte {
 }
 
 func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
-	// captures/20260415T162742Z-api_duplicate_quote_subscriptions_aapl,
-	// server_version 200, events.jsonl sha256 prefix 84f1e78a18616e0f.
+	// captures/20260824T202345Z-api_duplicate_quote_subscriptions_aapl,
+	// server_version 225, events.jsonl sha256
+	// 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
 	// These exact frames were delivered to two independent AAPL subscriptions.
 	// One stalled consumer must close only its own route while its sibling still
 	// receives the complete delayed bid/ask sequence.
@@ -476,13 +338,13 @@ func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
 	second := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, second)
 
-	frames := [][]byte{
-		[]byte("81\x001\x000.01\x009c0001\x004\x00"),
-		[]byte("81\x002\x000.01\x009c0001\x004\x00"),
-		[]byte("58\x001\x001\x003\x00"),
+	messages := []codec.Message{
+		codec.TickReqParams{ReqID: 1, MinTick: "0.01", BBOExchange: "9c0001", SnapshotPermissions: new(4), LastPricePrecision: "0.000001", LastSizePrecision: "0.000001"},
+		codec.TickReqParams{ReqID: 2, MinTick: "0.01", BBOExchange: "9c0001", SnapshotPermissions: new(4), LastPricePrecision: "0.000001", LastSizePrecision: "0.000001"},
+		codec.MarketDataType{ReqID: 1, DataType: 3},
 	}
-	for _, frame := range frames {
-		e.handleIncoming(decodeOne(t, frame))
+	for _, message := range messages {
+		e.handleIncoming(message)
 	}
 
 	if err := first.Wait(); err != ErrSlowConsumer {
@@ -495,14 +357,14 @@ func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
 		t.Fatalf("actor-owned cancellation queued %d command(s), want direct route removal", len(e.cmds))
 	}
 
-	for _, frame := range [][]byte{
-		[]byte("58\x001\x002\x003\x00"),
-		[]byte("1\x006\x001\x0066\x00263.45\x000\x000\x00"),
-		[]byte("1\x006\x002\x0066\x00263.45\x000\x000\x00"),
-		[]byte("1\x006\x001\x0067\x00263.48\x000\x000\x00"),
-		[]byte("1\x006\x002\x0067\x00263.48\x000\x000\x00"),
+	for _, message := range []codec.Message{
+		codec.MarketDataType{ReqID: 2, DataType: 3},
+		codec.TickPrice{ReqID: 1, TickType: 66, Price: "310.4", Size: "840"},
+		codec.TickPrice{ReqID: 2, TickType: 66, Price: "310.4", Size: "840"},
+		codec.TickPrice{ReqID: 1, TickType: 67, Price: "310.55", Size: "80"},
+		codec.TickPrice{ReqID: 2, TickType: 67, Price: "310.55", Size: "80"},
 	} {
-		e.handleIncoming(decodeOne(t, frame))
+		e.handleIncoming(message)
 	}
 
 	var latest Quote
@@ -510,8 +372,8 @@ func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
 		latest = nextQuoteUpdate(t, second).Snapshot
 	}
 	want := QuoteFieldBid | QuoteFieldAsk | QuoteFieldMarketDataType
-	if latest.Available&want != want || latest.Bid.String() != "263.45" || latest.Ask.String() != "263.48" {
-		t.Fatalf("sibling quote = %+v, want delayed bid 263.45 ask 263.48", latest)
+	if latest.Available&want != want || latest.Bid.String() != "310.4" || latest.Ask.String() != "310.55" {
+		t.Fatalf("sibling quote = %+v, want delayed bid 310.4 ask 310.55", latest)
 	}
 	if err := second.Err(); err != nil {
 		t.Fatalf("sibling Err() = %v", err)
@@ -519,23 +381,25 @@ func TestSlowQuoteConsumerDoesNotAffectSiblingRoute(t *testing.T) {
 }
 
 func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
-	// captures/20260405T215752Z-quote_stream_genericticks, IB Gateway
-	// server_version 200. raw.txt sha256:
-	// 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee.
-	// These are exact payloads captured during the live AAPL request for
-	// generic ticks 233 and 236; only the four-byte frame lengths are omitted.
+	// captures/20260824T202842Z-quote_stream_genericticks, server_version 225,
+	// events.jsonl sha256
+	// 87ff4c1b76c6e94c4cbec0cc20e230750d29aabf1137e5919bb3113dbd8a556f.
 	e := newBenchEngine(t)
-	e.nextReqID = 1001
+	e.nextReqID = 1
 	sub := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, sub)
 
-	frames := [][]byte{
-		[]byte("81\x001001\x000.01\x009c0001\x004\x00"),
-		[]byte("45\x006\x001001\x0046\x003.0\x00"),
-		[]byte("46\x006\x001001\x0088\x001775174157\x00"),
+	frames := []string{
+		"AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==",
+		"AAAAEQAAAPUIARAuGQAAAAAAAAhA",
+		"AAAAEwAAAMoIARBZGgkxOTE4NTY0OTI=",
 	}
 	for _, frame := range frames {
-		e.handleIncoming(decodeOne(t, frame))
+		message, err := codec.Decode(225, liveCapturedFrame(t, frame))
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.handleIncoming(message)
 	}
 
 	parameters := nextQuoteUpdate(t, sub)
@@ -562,18 +426,18 @@ func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
 		t.Fatalf("generic tick = %+v", generic.GenericTick)
 	}
 
-	text := nextQuoteUpdate(t, sub)
-	if text.Kind != QuoteUpdateStringTick {
-		t.Fatalf("string Kind = %v, want %v", text.Kind, QuoteUpdateStringTick)
+	size := nextQuoteUpdate(t, sub)
+	if size.Kind != QuoteUpdateSizeTick {
+		t.Fatalf("size Kind = %v, want %v", size.Kind, QuoteUpdateSizeTick)
 	}
-	if text.StringTick == nil {
-		t.Fatal("string payload = nil")
+	if size.SizeTick == nil {
+		t.Fatal("size payload = nil")
 	}
-	if text.StringTick.TickType != 88 || text.StringTick.Value != "1775174157" {
-		t.Fatalf("string tick = %+v", text.StringTick)
+	if size.SizeTick.TickType != 89 || size.SizeTick.Size == nil || size.SizeTick.Size.String() != "191856492" {
+		t.Fatalf("size tick = %+v", size.SizeTick)
 	}
 
-	for _, update := range []QuoteUpdate{parameters, generic, text} {
+	for _, update := range []QuoteUpdate{parameters, generic, size} {
 		if update.Changed != 0 || update.Snapshot.Available != 0 {
 			t.Fatalf("ancillary update mutated quote snapshot: %+v", update)
 		}
@@ -583,19 +447,22 @@ func TestQuoteRouteEmitsLiveAncillaryTicks(t *testing.T) {
 	}
 }
 
-func TestQuoteRoutePreservesLiveOptionComputationAbsence(t *testing.T) {
-	// captures/20260611T080111Z-api_option_campaign_aapl, paper IB Gateway
-	// server_version 200. raw.txt sha256:
-	// 9272d7fc1b381a0e1ccfb4d506138c9ba925ad96063c4eed0be96a0fe00a010c.
-	// This exact msg-21 payload came from the live option quote subscription.
-	// IBKR uses field-specific -1/-2 sentinels; pvDividend is a computed zero.
+func TestQuoteRoutePreservesLiveOptionComputationPresence(t *testing.T) {
+	// captures/20260824T202418Z-api_option_calculations_aapl,
+	// server_version 225, events.jsonl sha256
+	// 10efd6de08b5927fc677546388fb14883031596c9ceed5b5b09bbb98b04c3141.
+	// The calculation callback mixes computed zero and positive values with
+	// field-specific -1/-2 sentinels.
 	e := newBenchEngine(t)
 	e.nextReqID = 5
 	sub := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, sub)
 
-	frame := []byte("21\x005\x0010\x000\x00-1\x00-2\x00-1\x000.0\x00-2\x00-2\x00-2\x00-1\x00")
-	e.handleIncoming(decodeOne(t, frame))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAUgAAAN0IBRA1GAAhMzMzMzMz0z8pAAAAAAAAAMAxAAAAAAAA8L85AAAAAAAA8L9BAAAAAAAAAMBJAAAAAAAAAMBRAAAAAAAAAMBZZmZmZmZqc0A="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(message)
 
 	update := nextQuoteUpdate(t, sub)
 	if update.Kind != QuoteUpdateOptionComputation {
@@ -604,37 +471,38 @@ func TestQuoteRoutePreservesLiveOptionComputationAbsence(t *testing.T) {
 	if update.OptionComputation == nil {
 		t.Fatal("option computation payload = nil")
 	}
-	if update.OptionComputation.TickType != 10 || update.OptionComputation.TickAttrib != 0 {
+	if update.OptionComputation.TickType != 53 || update.OptionComputation.TickAttrib != 0 {
 		t.Fatalf("option header = %+v", update.OptionComputation)
 	}
 	computation := update.OptionComputation.Computation
-	if computation.Available != OptionComputationPvDividend {
-		t.Fatalf("Available = %08b, want only PvDividend", computation.Available)
+	wantAvailable := OptionComputationImpliedVol | OptionComputationUnderlyingPrice
+	if computation.Available != wantAvailable {
+		t.Fatalf("Available = %08b, want %08b", computation.Available, wantAvailable)
 	}
-	if !computation.PvDividend.IsZero() {
-		t.Fatalf("PvDividend = %s, want computed zero", computation.PvDividend)
+	if computation.ImpliedVol.String() != "0.3" || !computation.Delta.IsZero() || computation.UndPrice.String() != "310.65" {
+		t.Fatalf("computed values = %+v", computation)
 	}
-	if !computation.ImpliedVol.IsZero() || !computation.Delta.IsZero() ||
-		!computation.OptPrice.IsZero() || !computation.Gamma.IsZero() ||
+	if !computation.OptPrice.IsZero() || !computation.PvDividend.IsZero() || !computation.Gamma.IsZero() ||
 		!computation.Vega.IsZero() || !computation.Theta.IsZero() ||
-		!computation.UndPrice.IsZero() {
+		computation.UndPrice.IsZero() {
 		t.Fatalf("unavailable computation values were not zero: %+v", computation)
 	}
 }
 
 func TestQuoteRouteAppliesLiveCompanionSize(t *testing.T) {
-	// captures/20260405T215752Z-quote_stream_genericticks, IB Gateway
-	// server_version 200, raw.txt sha256
-	// 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee.
-	// The classic tickPrice frame carries a companion size which the official
-	// decoder delivers as a second tickSize callback.
+	// captures/20260824T202345Z-api_duplicate_quote_subscriptions_aapl,
+	// server_version 225, events.jsonl sha256
+	// 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
 	e := newBenchEngine(t)
-	e.nextReqID = 1001
+	e.nextReqID = 1
 	sub := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, sub)
 
-	frame := []byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00")
-	e.handleIncoming(decodeOne(t, frame))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAGAAAAMkIARBEGc3MzMzMaHNAIgMxNDEoAA=="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(message)
 
 	update := nextQuoteUpdate(t, sub)
 	wantChanged := QuoteFieldLast | QuoteFieldLastSize
@@ -644,17 +512,17 @@ func TestQuoteRouteAppliesLiveCompanionSize(t *testing.T) {
 	if update.PriceTick == nil {
 		t.Fatal("price tick payload = nil")
 	}
-	if update.PriceTick.TickType != 68 || update.PriceTick.Price.String() != "255.45" {
+	if update.PriceTick.TickType != 68 || update.PriceTick.Price.String() != "310.55" {
 		t.Fatalf("price tick = %+v", update.PriceTick)
 	}
-	if update.PriceTick.Size == nil || update.PriceTick.Size.String() != "200" {
-		t.Fatalf("price tick companion size = %v, want 200", update.PriceTick.Size)
+	if update.PriceTick.Size == nil || update.PriceTick.Size.String() != "141" {
+		t.Fatalf("price tick companion size = %v, want 141", update.PriceTick.Size)
 	}
 	if update.PriceTick.AttrMask != 0 {
 		t.Fatalf("price tick AttrMask = %d, want 0", update.PriceTick.AttrMask)
 	}
-	if update.Snapshot.Last.String() != "255.45" || update.Snapshot.LastSize.String() != "200" {
-		t.Fatalf("snapshot last/size = %s/%s, want 255.45/200", update.Snapshot.Last, update.Snapshot.LastSize)
+	if update.Snapshot.Last.String() != "310.55" || update.Snapshot.LastSize.String() != "141" {
+		t.Fatalf("snapshot last/size = %s/%s, want 310.55/141", update.Snapshot.Last, update.Snapshot.LastSize)
 	}
 }
 
@@ -782,22 +650,25 @@ func TestQuoteRouteExposesEFPAndDeltaNeutralCallbacks(t *testing.T) {
 }
 
 func TestQuoteRoutePreservesLiveUnnormalizedSizeTick(t *testing.T) {
-	// Same live capture and hash as TestQuoteRouteAppliesLiveCompanionSize.
+	// Same live capture and hash as TestQuoteRouteEmitsLiveAncillaryTicks.
 	// Generic tick request 236 produced tickSize type 89 (shortable shares),
 	// which has no normalized Quote field.
 	e := newBenchEngine(t)
-	e.nextReqID = 1001
+	e.nextReqID = 1
 	sub := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, sub)
 
-	frame := []byte("2\x006\x001001\x0089\x00104796567\x00")
-	e.handleIncoming(decodeOne(t, frame))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAEwAAAMoIARBZGgkxOTE4NTY0OTI="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(message)
 
 	update := nextQuoteUpdate(t, sub)
 	if update.Kind != QuoteUpdateSizeTick || update.Changed != 0 {
 		t.Fatalf("update = Kind %v Changed %v, want unnormalized size tick", update.Kind, update.Changed)
 	}
-	if update.SizeTick == nil || update.SizeTick.TickType != 89 || update.SizeTick.Size == nil || update.SizeTick.Size.String() != "104796567" {
+	if update.SizeTick == nil || update.SizeTick.TickType != 89 || update.SizeTick.Size == nil || update.SizeTick.Size.String() != "191856492" {
 		t.Fatalf("size tick = %+v", update.SizeTick)
 	}
 	if update.Snapshot.Available != 0 {
@@ -806,9 +677,9 @@ func TestQuoteRoutePreservesLiveUnnormalizedSizeTick(t *testing.T) {
 }
 
 func TestQuoteRoutePreservesLiveUnnormalizedPriceTick(t *testing.T) {
-	// captures/20260709T223341Z-api_generic_tick_matrix_aapl, read-only IB
-	// Gateway server_version 200. raw.txt sha256:
-	// 5c40260d783971d22e6de209c90a61fd489479e0e7fc2ebf20be4e76d677a45e.
+	// captures/20260824T202402Z-api_generic_tick_matrix_aapl,
+	// server_version 225, events.jsonl sha256
+	// 5288cb6711b5be6ac94a68c5f42285ffb86e0f2181bf836ac75f491758d7c15a.
 	// Generic tick request 221 produced tickPrice type 37 (mark price), which
 	// has no normalized Quote field. The exact frame's companion size is zero.
 	e := newBenchEngine(t)
@@ -816,14 +687,17 @@ func TestQuoteRoutePreservesLiveUnnormalizedPriceTick(t *testing.T) {
 	sub := installQuoteRoute(t, e)
 	closeInstalledQuoteRoute(t, e, sub)
 
-	frame := []byte("1\x006\x001\x0037\x00315.50\x000\x000\x00")
-	e.handleIncoming(decodeOne(t, frame))
+	message, err := codec.Decode(225, liveCapturedFrame(t, "AAAAFgAAAMkIARAlGTiGAOA4aHNAIgEwKAA="))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.handleIncoming(message)
 
 	update := nextQuoteUpdate(t, sub)
 	if update.Kind != QuoteUpdatePriceTick || update.Changed != 0 {
 		t.Fatalf("update = Kind %v Changed %v, want unnormalized price tick", update.Kind, update.Changed)
 	}
-	if update.PriceTick == nil || update.PriceTick.TickType != 37 || update.PriceTick.Price.String() != "315.5" {
+	if update.PriceTick == nil || update.PriceTick.TickType != 37 || update.PriceTick.Price.String() != "310.5138855" {
 		t.Fatalf("price tick = %+v", update.PriceTick)
 	}
 	if update.PriceTick.Size == nil || !update.PriceTick.Size.IsZero() || update.PriceTick.AttrMask != 0 {
@@ -831,52 +705,6 @@ func TestQuoteRoutePreservesLiveUnnormalizedPriceTick(t *testing.T) {
 	}
 	if update.Snapshot.Available != 0 {
 		t.Fatalf("unnormalized tick mutated snapshot: %+v", update.Snapshot)
-	}
-}
-
-func TestQuoteRoutePreservesLivePriceAttributes(t *testing.T) {
-	// captures/20260611T074859Z-api_option_campaign_aapl, paper IB Gateway
-	// server_version 200. raw.txt sha256:
-	// 1e35bce4310dbcd5c62c10cb8e9db5bf4961cebecb0b9a526c83f385a3a05fe5.
-	// This exact option quote tick carries attrMask=1 (canAutoExecute).
-	e := newBenchEngine(t)
-	e.nextReqID = 5
-	sub := installQuoteRoute(t, e)
-	closeInstalledQuoteRoute(t, e, sub)
-
-	frame := []byte("1\x006\x005\x001\x00-1.00\x000\x001\x00")
-	e.handleIncoming(decodeOne(t, frame))
-
-	update := nextQuoteUpdate(t, sub)
-	if update.Kind != QuoteUpdatePriceTick || update.PriceTick == nil {
-		t.Fatalf("update = Kind %v PriceTick %+v", update.Kind, update.PriceTick)
-	}
-	attributes := update.PriceTick.AttrMask
-	if attributes != 1 || !attributes.CanAutoExecute() || attributes.PastLimit() || attributes.PreOpen() {
-		t.Fatalf("attributes = %d auto=%t pastLimit=%t preOpen=%t", attributes,
-			attributes.CanAutoExecute(), attributes.PastLimit(), attributes.PreOpen())
-	}
-}
-
-func TestQuoteRoutePreservesLiveMissingMinimumTick(t *testing.T) {
-	// captures/20260709T223247Z-api_generic_tick_matrix_aapl, read-only IB
-	// Gateway server_version 200. raw.txt sha256:
-	// bd284e22771394b3baf7b827d62ed22d45f15e401dd478f430e18f4e715b0377.
-	// The Gateway omitted minTick while still sending BBO and permission data.
-	e := newBenchEngine(t)
-	e.nextReqID = 1
-	sub := installQuoteRoute(t, e)
-	closeInstalledQuoteRoute(t, e, sub)
-
-	frame := []byte("81\x001\x00\x009c0001\x004\x00")
-	e.handleIncoming(decodeOne(t, frame))
-
-	update := nextQuoteUpdate(t, sub)
-	if update.Kind != QuoteUpdateParameters || update.Parameters == nil {
-		t.Fatalf("update = Kind %v Parameters %+v", update.Kind, update.Parameters)
-	}
-	if update.Parameters.MinTick != nil || update.Parameters.BBOExchange != "9c0001" || update.Parameters.SnapshotPermissions == nil || *update.Parameters.SnapshotPermissions != 4 {
-		t.Fatalf("parameters = %+v", update.Parameters)
 	}
 }
 

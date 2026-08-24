@@ -3,11 +3,12 @@ package ibkr_test
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
-	"github.com/shopspring/decimal"
 )
 
 // Replay coverage for the contract-details asset-type matrix (REF-001).
@@ -18,29 +19,47 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "contract_details_aapl_opt.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	parameters, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+		UnderlyingSymbol:  "AAPL",
+		UnderlyingSecType: ibkr.SecTypeStock,
+		UnderlyingConID:   265598,
+	})
+	if err != nil {
+		t.Fatalf("SecDefOptParams() error = %v", err)
+	}
+	var foundExpiry bool
+	for _, parameter := range parameters {
+		if parameter.Exchange == "SMART" && parameter.TradingClass == "AAPL" && slices.Contains(parameter.Expirations, "20260824") {
+			foundExpiry = true
+			break
+		}
+	}
+	if !foundExpiry {
+		t.Fatal("SMART AAPL option parameters lack captured nearest expiry 20260824")
+	}
+
 	details, err := client.Contracts().Details(ctx, ibkr.Contract{
 		Symbol:   "AAPL",
 		SecType:  ibkr.SecTypeOption,
-		Expiry:   "20260713",
+		Expiry:   "20260824",
 		Exchange: "SMART",
 		Currency: "USD",
 	})
 	if err != nil {
 		t.Fatalf("ContractDetails() error = %v", err)
 	}
-	if len(details) != 4 {
-		t.Fatalf("details len = %d, want 4", len(details))
+	if len(details) != 112 {
+		t.Fatalf("details len = %d, want 112", len(details))
 	}
 
 	first := details[0]
-	if first.ConID != 896781604 {
-		t.Errorf("ConID = %d, want 896781604", first.ConID)
+	if first.ConID != 909446159 {
+		t.Errorf("ConID = %d, want 909446159", first.ConID)
 	}
 	if first.Symbol != "AAPL" {
 		t.Errorf("Symbol = %q, want AAPL", first.Symbol)
@@ -48,11 +67,11 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.SecType != ibkr.SecTypeOption {
 		t.Errorf("SecType = %q, want OPT", first.SecType)
 	}
-	if first.Expiry != "20260713" {
-		t.Errorf("Expiry = %q, want 20260713", first.Expiry)
+	if first.Expiry != "20260824" {
+		t.Errorf("Expiry = %q, want 20260824", first.Expiry)
 	}
-	if first.Strike == nil || !first.Strike.Equal(decimal.RequireFromString("210")) {
-		t.Errorf("Strike = %s, want 210", first.Strike)
+	if first.Strike == nil || first.Strike.String() != "310" {
+		t.Errorf("Strike = %s, want 310", first.Strike)
 	}
 	if first.Right != ibkr.RightCall {
 		t.Errorf("Right = %q, want C", first.Right)
@@ -63,8 +82,8 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.Currency != "USD" {
 		t.Errorf("Currency = %q, want USD", first.Currency)
 	}
-	if first.LocalSymbol != "AAPL  260713C00210000" {
-		t.Errorf("LocalSymbol = %q, want AAPL  260713C00210000", first.LocalSymbol)
+	if first.LocalSymbol != "AAPL  260824C00310000" {
+		t.Errorf("LocalSymbol = %q, want AAPL  260824C00310000", first.LocalSymbol)
 	}
 	if first.TradingClass != "AAPL" {
 		t.Errorf("TradingClass = %q, want AAPL", first.TradingClass)
@@ -78,42 +97,19 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	if first.LongName != "APPLE INC" {
 		t.Errorf("LongName = %q, want APPLE INC", first.LongName)
 	}
-	if first.TimeZoneID != "US/Eastern" {
-		t.Errorf("TimeZoneID = %q, want US/Eastern", first.TimeZoneID)
+	if first.TimeZoneID != "" {
+		t.Errorf("TimeZoneID = %q, want absent in sv225 protobuf echo", first.TimeZoneID)
 	}
 
-	wantCalls := []struct {
-		conID  ibkr.ContractID
-		strike string
-	}{
-		{896781604, "210"},
-		{896783364, "215"},
-		{896783404, "220"},
-	}
-	for i, want := range wantCalls {
-		if details[i].ConID != want.conID {
-			t.Errorf("details[%d].ConID = %d, want %d", i, details[i].ConID, want.conID)
-		}
-		if details[i].Strike == nil || !details[i].Strike.Equal(decimal.RequireFromString(want.strike)) {
-			t.Errorf("details[%d].Strike = %s, want %s", i, details[i].Strike, want.strike)
-		}
-		if details[i].Right != ibkr.RightCall {
-			t.Errorf("details[%d].Right = %q, want C", i, details[i].Right)
+	var sawPut bool
+	for _, detail := range details {
+		if detail.Right == ibkr.RightPut {
+			sawPut = true
+			break
 		}
 	}
-
-	put := details[3]
-	if put.ConID != 896784375 {
-		t.Errorf("put ConID = %d, want 896784375", put.ConID)
-	}
-	if put.Right != ibkr.RightPut {
-		t.Errorf("put Right = %q, want P", put.Right)
-	}
-	if put.Strike == nil || !put.Strike.Equal(decimal.RequireFromString("210")) {
-		t.Errorf("put Strike = %s, want 210", put.Strike)
-	}
-	if put.LocalSymbol != "AAPL  260713P00210000" {
-		t.Errorf("put LocalSymbol = %q, want AAPL  260713P00210000", put.LocalSymbol)
+	if !sawPut {
+		t.Fatal("nearest-expiry ladder contains no put")
 	}
 }
 
@@ -121,64 +117,18 @@ func TestContractDetailsAppleBondsReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "contract_details_apple_bonds.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	details, err := client.Contracts().Details(ctx, ibkr.Contract{IssuerID: "e1432232"})
-	if err != nil {
-		t.Fatalf("ContractDetails() error = %v", err)
+	_, err := client.Contracts().Details(ctx, ibkr.Contract{IssuerID: "e1432232"})
+	apiErr, ok := errors.AsType[*ibkr.APIError](err)
+	if !ok || apiErr.Code != 2130 || apiErr.OpKind != ibkr.OpContractDetails || !strings.Contains(apiErr.Message, "2 products are trading on the basis of currency price with factor") {
+		t.Fatalf("ContractDetails() error = %v, want typed code-2130 issuer ambiguity blocker", err)
 	}
-	if len(details) != 58 {
-		t.Fatalf("details len = %d, want 58", len(details))
-	}
-
-	var first, second *ibkr.ContractDetails
-	for i := range details {
-		d := &details[i]
-		if d.SecType != ibkr.SecTypeBond || d.TradingClass != "AAPL" || d.Bond == nil {
-			t.Errorf("details[%d] identity = secType %q tradingClass %q bond %v", i, d.SecType, d.TradingClass, d.Bond)
-		}
-		switch d.ConID {
-		case 127128131:
-			first = d
-		case 194154340:
-			second = d
-		}
-	}
-	if first == nil || second == nil {
-		t.Fatalf("representative bonds present = %t/%t, want true/true", first != nil, second != nil)
-	}
-
-	if first.ConID != 127128131 || first.SecType != ibkr.SecTypeBond || first.TradingClass != "AAPL" {
-		t.Errorf("first identity = conID %d secType %q tradingClass %q", first.ConID, first.SecType, first.TradingClass)
-	}
-	if first.Bond == nil {
-		t.Fatal("first Bond = nil")
-	}
-	if first.Bond.CUSIP != "IBCID127128131" || first.Bond.Coupon != nil || first.Bond.DescriptionAppend != "AAPL 3.85 05/04/43" {
-		t.Errorf("first Bond = %+v", *first.Bond)
-	}
-	if len(first.SecurityIDs) != 2 || first.SecurityIDs[0] != (ibkr.TagValue{Tag: "CUSIP", Value: "037833AL4"}) || first.SecurityIDs[1] != (ibkr.TagValue{Tag: "ISIN", Value: "US037833AL42"}) {
-		t.Errorf("first SecurityIDs = %+v", first.SecurityIDs)
-	}
-	if len(first.ValidExchanges) != 1 || first.ValidExchanges[0] != (ibkr.ContractExchange{Exchange: "SMART", MarketRuleID: 1386}) {
-		t.Errorf("first ValidExchanges = %+v", first.ValidExchanges)
-	}
-	if first.MinTick.String() != "0.0001" || first.MinSize == nil || first.MinSize.String() != "2" || first.SizeIncrement == nil || first.SizeIncrement.String() != "1" {
-		t.Errorf("first tick/size = %s / %v / %v", first.MinTick, first.MinSize, first.SizeIncrement)
-	}
-
-	if second.ConID != 194154340 || second.Bond == nil || second.Bond.CUSIP != "IBCID194154340" || second.Bond.DescriptionAppend != "AAPL 1 5/8 11/10/26" {
-		t.Errorf("second = %+v", second)
-	}
-	if len(second.SecurityIDs) != 1 || second.SecurityIDs[0] != (ibkr.TagValue{Tag: "ISIN", Value: "XS1135337498"}) {
-		t.Errorf("second SecurityIDs = %+v", second.SecurityIDs)
-	}
-	if second.MinSize == nil || second.MinSize.String() != "100" {
-		t.Errorf("second MinSize = %v, want 100", second.MinSize)
+	if ibkr.IsRetryable(apiErr) {
+		t.Fatalf("ContractDetails() error = %v, want non-retryable", err)
 	}
 }
 
@@ -186,8 +136,7 @@ func TestContractDetailsEURUSDCashReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "contract_details_eurusd_cash.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -270,8 +219,7 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "contract_details_es_fut.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -290,17 +238,17 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 	}
 
 	front := details[0]
-	if front.ConID != 515416632 {
-		t.Errorf("front ConID = %d, want 515416632", front.ConID)
+	if front.ConID != 649180671 {
+		t.Errorf("front ConID = %d, want 649180671", front.ConID)
 	}
 	if front.Symbol != "ES" {
 		t.Errorf("front Symbol = %q, want ES", front.Symbol)
 	}
-	if front.LocalSymbol != "ESZ6" {
-		t.Errorf("front LocalSymbol = %q, want ESZ6", front.LocalSymbol)
+	if front.LocalSymbol != "ESU6" {
+		t.Errorf("front LocalSymbol = %q, want ESU6", front.LocalSymbol)
 	}
-	if front.Expiry != "20261218" || front.LastTradeDate != "20261218" || front.LastTradeTime != "08:30:00" {
-		t.Errorf("front expiry fields = %q/%q/%q, want 20261218/20261218/08:30:00", front.Expiry, front.LastTradeDate, front.LastTradeTime)
+	if front.Expiry != "20260918" || front.LastTradeDate != "20260918" || front.LastTradeTime != "08:30:00" {
+		t.Errorf("front expiry fields = %q/%q/%q, want 20260918/20260918/08:30:00", front.Expiry, front.LastTradeDate, front.LastTradeTime)
 	}
 
 	for i, d := range details {
@@ -326,8 +274,7 @@ func TestContractDetailsNotFoundReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "contract_details_not_found.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -361,8 +308,7 @@ func TestQualifyContractAmbiguousReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "qualify_contract_ambiguous.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

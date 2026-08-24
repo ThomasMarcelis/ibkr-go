@@ -29,7 +29,7 @@ func (h blockingLogHandler) WithGroup(string) slog.Handler      { return h }
 
 func TestBlockingLoggerDoesNotBlockClientClose(t *testing.T) {
 	// newProtocolErrorGateway sends a structural malformed-frame diagnostic
-	// after an exact server-version-200 bootstrap.
+	// after an exact server-version-225 bootstrap.
 	gateway := newProtocolErrorGateway(t)
 	handler := blockingLogHandler{
 		entered: make(chan struct{}),

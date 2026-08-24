@@ -46,7 +46,7 @@ func TestConnectivity1101DropsLostWorkAndResubscribes(t *testing.T) {
 		done:           make(chan struct{}),
 		events:         newObserver[Event](8),
 		transport:      tr,
-		serverVersion:  200,
+		serverVersion:  225,
 		keyed:          map[int]*route{1: auto},
 		singletons:     make(map[string]*route),
 		orders:         make(map[int64]*orderRoute),
@@ -68,7 +68,7 @@ func TestConnectivity1101DropsLostWorkAndResubscribes(t *testing.T) {
 
 	e.handleAPIError(codec.APIError{Code: 1101, Message: "Connectivity restored - data lost."})
 
-	wantRequest, err := codec.Encode(200, auto.request)
+	wantRequest, err := codec.Encode(225, auto.request)
 	if err != nil {
 		t.Fatalf("encode resumed request: %v", err)
 	}

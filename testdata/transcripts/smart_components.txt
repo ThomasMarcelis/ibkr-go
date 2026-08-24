@@ -1,21 +1,39 @@
-# Grounded by readonly-live capture 20260710T221437Z-smart_components.
-# server_version=206; events.jsonl sha256:
-# c32ec635ec50ff69e951e8b79aec76f2048240c862e8cefa702def897225d263
-#
-# The public scenario requested delayed AAPL data, consumed the BBO mapping
-# identifier from TickReqParams on that connection, and requested all 20 smart
-# components while the quote remained active. Account data is sanitized and
-# unrelated farm-status frames are omitted; retained protocol frames are exact.
-handshake {"server_version":206,"connection_time":"20260711 00:14:37 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-
+# Exact capture 20260824T202846Z-smart_components for smart_components at server_version 225.
+# events.jsonl sha256: 7f463077c49e333c6f6f581cab6209313b3f22a7f27682d72ce0c55fb8fdf1ee.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:28:46 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARD7qdirgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARD7qdirgzQYuBAiK01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0ubmo=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=66
+raw server AAAAQgAAAMwI////////////ARD7qdirgzQYuBAiJ01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpqZmFybQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=69
+raw server AAAARQAAAMwI////////////ARD7qdirgzQYuBAiKk1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpjYXNoZmFybQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARD7qdirgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARD7qdirgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARD7qdirgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
 raw client AAAABgAAAQMIAw==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=35
 raw client AAAAIwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNE
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
 raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
-raw client AAAADQAAAFMyADljMDAwMQA=
+# leg=1 direction=client msg_id=83 encoding=protobuf payload_len=14
+raw client AAAADgAAARsIAhIGOWMwMDAx
+# leg=1 direction=server msg_id=58 encoding=protobuf payload_len=8
 raw server AAAACAAAAQIIARAD
-raw server AAAAWgAAAMwIARCwqePw9DMYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
-raw server AAAAzQAAAFIyADIwADAAQU1FWABBADEAQkVYAEIAMgBOWVNFTkFUAEMAMwBGSU5SQQBEADQASVNFAEkANQBFREdFQQBKADYARFJDVEVER0UASwA3AENIWABNADgAQVJDQQBQADkATkFTREFRAFEAMTAASUVYAFYAMTEAVDI0WABHADEyAFBTWABYADEzAEJZWABZADE0AEJBVFMAWgAxNQBOWVNFAE4AMTYATFRTRQBMADE3AE1FTVgAVQAxOABQRUFSTABIADE5AFRYU0UARgA=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=90
+raw server AAAAWgAAAMwIARCwqNirgzQYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+# leg=1 direction=server msg_id=82 encoding=protobuf payload_len=270
+raw server AAABDgAAARoIAhIJEgRBTUVYGgFBEgoIARIDQkVYGgFCEg4IAhIHTllTRU5BVBoBQxIMCAMSBUZJTlJBGgFEEgoIBBIDSVNFGgFJEgwIBRIFRURHRUEaAUoSDwgGEghEUkNURURHRRoBSxIKCAcSA0NIWBoBTRILCAgSBEFSQ0EaAVASDQgJEgZOQVNEQVEaAVESCggKEgNJRVgaAVYSCwgLEgRUMjRYGgFHEgoIDBIDUFNYGgFYEgoIDRIDQllYGgFZEgsIDhIEQkFUUxoBWhILCA8SBE5ZU0UaAU4SCwgQEgRMVFNFGgFMEgsIERIETUVNWBoBVRIMCBISBVBFQVJMGgFIEgsIExIEVFhTRRoBRg==
+# leg=1 direction=client msg_id=2 encoding=protobuf payload_len=6
 raw client AAAABgAAAMoIAQ==
 disconnect

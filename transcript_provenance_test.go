@@ -1,73 +1,96 @@
 package ibkr_test
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
 var (
-	captureIDPattern     = regexp.MustCompile(`\b[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9][A-Za-z0-9_-]*\b`)
-	serverVersionPattern = regexp.MustCompile(`\bserver_version\s*(?:=|:)?\s*([0-9]+)\b`)
-	eventsHashPattern    = regexp.MustCompile(`(?i)\bevents\.jsonl sha256\s*:?\s*([0-9a-f]{64})\b`)
-	legacyHashPattern    = regexp.MustCompile(`(?i)\bevents\.jsonl sha256\s+legacy prefix\s*:?\s*([0-9a-f]{16})\b`)
+	captureIDPattern      = regexp.MustCompile(`\b[0-9]{8}T[0-9]{6}Z-[A-Za-z0-9][A-Za-z0-9_-]*\b`)
+	serverVersionPattern  = regexp.MustCompile(`\bserver_version\s*(?:=|:)?\s*([0-9]+)\b`)
+	serverVersionsPattern = regexp.MustCompile(`\bserver_versions\s*(?:=|:)?\s*([0-9]+)\s*-\s*([0-9]+)\b`)
+	eventsHashPattern     = regexp.MustCompile(`(?i)\bevents\.jsonl sha256\s*:?\s*([0-9a-f]{64})\b`)
 )
 
 type transcriptProvenance struct {
-	CaptureIDs             []string
-	ServerVersion          int
-	EventsSHA256           []string
-	LegacyEventsHashPrefix string
+	CaptureIDs     []string
+	ServerVersions []int
+	EventsSHA256   []string
 }
 
 func TestTranscriptProvenanceInventory(t *testing.T) {
 	t.Parallel()
+	const wantTranscripts = 99
 
 	files, err := filepath.Glob("testdata/transcripts/*.txt")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 134 {
-		t.Fatalf("transcript count = %d, want 134", len(files))
+	if len(files) != wantTranscripts {
+		t.Fatalf("transcript corpus contains %d files, want migration inventory count %d", len(files), wantTranscripts)
 	}
-	raw := 0
-	legacyFiles := make(map[string]string)
+	_, captureCorpusErr := os.Stat("captures")
+	verifyCaptureSources := captureCorpusErr == nil
+	if captureCorpusErr != nil && !os.IsNotExist(captureCorpusErr) {
+		t.Fatal(captureCorpusErr)
+	}
 	for _, file := range files {
 		data, err := os.ReadFile(file) // #nosec G304 -- files come from the fixed transcript-directory glob.
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(data), "raw server ") || strings.Contains(string(data), "raw client ") {
-			raw++
+		if !strings.Contains(string(data), "raw server ") && !strings.Contains(string(data), "raw client ") {
+			t.Errorf("%s: transcript has no captured raw frame", file)
 		}
 		provenance, err := parseTranscriptProvenance(data)
 		if err != nil {
 			t.Errorf("%s: %v", file, err)
 			continue
 		}
-		if provenance.LegacyEventsHashPrefix != "" {
-			legacyFiles[filepath.Base(file)] = provenance.LegacyEventsHashPrefix
+		for _, version := range provenance.ServerVersions {
+			if version < protocol.SupportedMinServerVersion || version > protocol.SupportedMaxServerVersion {
+				t.Errorf("%s: server_version %d is outside supported range %d-%d", file, version, protocol.SupportedMinServerVersion, protocol.SupportedMaxServerVersion)
+			}
+		}
+		if verifyCaptureSources {
+			verifyTranscriptCaptureSources(t, file, provenance)
 		}
 	}
-	if raw != 101 {
-		t.Fatalf("raw transcript count = %d, want 101", raw)
-	}
-	if len(legacyFiles) != 1 || legacyFiles["completed_orders_cancelled_system_live.txt"] != "889d6f7f0ea2308d" {
-		t.Fatalf("legacy transcript evidence = %v, want only completed_orders_cancelled_system_live.txt at 889d6f7f0ea2308d", legacyFiles)
+}
+
+func verifyTranscriptCaptureSources(t *testing.T, transcript string, provenance transcriptProvenance) {
+	t.Helper()
+
+	for i, captureID := range provenance.CaptureIDs {
+		path := filepath.Join("captures", captureID, "events.jsonl")
+		data, err := os.ReadFile(path) // #nosec G304 -- captureID is constrained by captureIDPattern.
+		if err != nil {
+			t.Errorf("%s: read declared source %s: %v", transcript, path, err)
+			continue
+		}
+		got := fmt.Sprintf("%x", sha256.Sum256(data))
+		if want := provenance.EventsSHA256[i]; got != want {
+			t.Errorf("%s: %s sha256 = %s, want %s", transcript, path, got, want)
+		}
 	}
 }
 
 func TestTranscriptProvenanceParserIgnoresLaterComments(t *testing.T) {
 	t.Parallel()
 
-	data := []byte("# capture 20260710T223024Z-account_summary_snapshot, server_version 206\n" +
+	data := []byte("# capture 20260710T223024Z-account_summary_snapshot, server_version 225\n" +
 		"# events.jsonl sha256: 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db\n" +
-		"handshake {\"server_version\":206}\n" +
+		"handshake {\"server_version\":225}\n" +
 		"# capture 19990101T000000Z-not-header, server_version 999\n")
 	provenance, err := parseTranscriptProvenance(data)
 	if err != nil {
@@ -78,18 +101,37 @@ func TestTranscriptProvenanceParserIgnoresLaterComments(t *testing.T) {
 	}
 }
 
+func TestTranscriptProvenanceParserAcceptsExactVersionRange(t *testing.T) {
+	t.Parallel()
+
+	data := "# capture 20260824T213929Z-supported_version_matrix_paper, server_versions 208-210\n" +
+		"# events.jsonl sha256: 64ee4350f0bde347a9da914a82865e88e0a68d06924cb13335fd2084595a7727\n" +
+		"handshake {\"server_version\":208}\n" +
+		"disconnect\n" +
+		"handshake {\"server_version\":209}\n" +
+		"disconnect\n" +
+		"handshake {\"server_version\":210}\n"
+	provenance, err := parseTranscriptProvenance([]byte(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(provenance.ServerVersions, []int{208, 209, 210}) {
+		t.Fatalf("server versions = %v, want 208-210", provenance.ServerVersions)
+	}
+}
+
 func TestTranscriptProvenanceParserRejectsIncompleteEvidence(t *testing.T) {
 	t.Parallel()
 
-	const valid = "# capture 20260710T223024Z-account_summary_snapshot, server_version 206\n" +
+	const valid = "# capture 20260710T223024Z-account_summary_snapshot, server_version 225\n" +
 		"# events.jsonl sha256: 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db\n" +
-		"handshake {\"server_version\":206}\n"
+		"handshake {\"server_version\":225}\n"
 	for name, data := range map[string]string{
 		"missing capture":           strings.Replace(valid, "20260710T223024Z-account_summary_snapshot", "account_summary_snapshot", 1),
-		"multiple versions":         strings.Replace(valid, "\n# events", ", server_version 207\n# events", 1),
+		"multiple versions":         strings.Replace(valid, "\n# events", ", server_version 224\n# events", 1),
 		"unlabelled prefix":         strings.Replace(valid, "events.jsonl sha256: 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db", "events.jsonl sha256 prefix: 71f26259c1556157", 1),
-		"handshake mismatch":        strings.Replace(valid, `"server_version":206`, `"server_version":207`, 1),
-		"handshake missing version": strings.Replace(valid, `{"server_version":206}`, `{}`, 1),
+		"handshake mismatch":        strings.Replace(valid, `"server_version":225`, `"server_version":224`, 1),
+		"handshake missing version": strings.Replace(valid, `{"server_version":225}`, `{}`, 1),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := parseTranscriptProvenance([]byte(data)); err == nil {
@@ -115,21 +157,29 @@ func parseTranscriptProvenance(data []byte) (transcriptProvenance, error) {
 		return provenance, fmt.Errorf("initial comment block has no capture ID")
 	}
 	versions := serverVersionPattern.FindAllStringSubmatch(header, -1)
-	if len(versions) != 1 {
-		return provenance, fmt.Errorf("initial comment block declares %d server versions, want exactly one", len(versions))
+	versionRanges := serverVersionsPattern.FindAllStringSubmatch(header, -1)
+	if len(versions)+len(versionRanges) != 1 {
+		return provenance, fmt.Errorf("initial comment block declares %d server-version specifications, want exactly one", len(versions)+len(versionRanges))
 	}
-	provenance.ServerVersion, _ = strconv.Atoi(versions[0][1])
+	if len(versions) == 1 {
+		version, _ := strconv.Atoi(versions[0][1])
+		provenance.ServerVersions = []int{version}
+	} else {
+		first, _ := strconv.Atoi(versionRanges[0][1])
+		last, _ := strconv.Atoi(versionRanges[0][2])
+		if first > last {
+			return provenance, fmt.Errorf("initial comment block has descending server-version range %d-%d", first, last)
+		}
+		provenance.ServerVersions = make([]int, last-first+1)
+		for i := range provenance.ServerVersions {
+			provenance.ServerVersions[i] = first + i
+		}
+	}
 	provenance.EventsSHA256 = uniqueMatches(eventsHashPattern, header)
-	legacy := legacyHashPattern.FindAllStringSubmatch(header, -1)
-	if len(provenance.EventsSHA256) == 0 && len(legacy) != 1 {
-		return provenance, fmt.Errorf("initial comment block must declare a full events hash or one explicitly labelled legacy prefix")
+	if len(provenance.EventsSHA256) != len(provenance.CaptureIDs) {
+		return provenance, fmt.Errorf("initial comment block declares %d capture IDs and %d full events hashes", len(provenance.CaptureIDs), len(provenance.EventsSHA256))
 	}
-	if len(legacy) > 1 || len(provenance.EventsSHA256) != 0 && len(legacy) != 0 {
-		return provenance, fmt.Errorf("initial comment block has ambiguous events hashes")
-	}
-	if len(legacy) == 1 {
-		provenance.LegacyEventsHashPrefix = legacy[0][1]
-	}
+	var handshakeVersions []int
 	for line := range strings.Lines(text) {
 		line = strings.TrimSuffix(line, "\n")
 		if !strings.HasPrefix(line, "handshake ") {
@@ -144,9 +194,12 @@ func parseTranscriptProvenance(data []byte) (transcriptProvenance, error) {
 		if handshake.ServerVersion == nil {
 			return provenance, fmt.Errorf("handshake has no server_version")
 		}
-		if *handshake.ServerVersion != provenance.ServerVersion {
-			return provenance, fmt.Errorf("handshake server_version %d disagrees with declared %d", *handshake.ServerVersion, provenance.ServerVersion)
+		if len(handshakeVersions) == 0 || handshakeVersions[len(handshakeVersions)-1] != *handshake.ServerVersion {
+			handshakeVersions = append(handshakeVersions, *handshake.ServerVersion)
 		}
+	}
+	if !slices.Equal(handshakeVersions, provenance.ServerVersions) {
+		return provenance, fmt.Errorf("handshake server versions %v disagree with declared %v", handshakeVersions, provenance.ServerVersions)
 	}
 	return provenance, nil
 }

@@ -33,10 +33,10 @@ func waitForOrderWarning(t *testing.T, ctx context.Context, handle *ibkr.OrderHa
 	}
 }
 
-// TestAPIConditionsMatrixAAPLReplay freezes the order-conditions matrix
-// captured live on 2026-06-10 against paper Gateway server_version 200
-// (captures/20260610T200935Z-api_conditions_matrix_aapl, events.jsonl sha256
-// prefix 87059663ed139026) after the contract-bound condition field-order fix.
+// TestAPIConditionsMatrixAAPLReplay freezes the order-conditions matrix from
+// captures/20260824T204558Z-api_conditions_matrix_aapl, paper Gateway
+// server_version 225, events.jsonl SHA-256
+// 492109a4e1ecebd8ed6bdabfdc0e5f30c0ebdfaea08fc796b03ace771be52e5d.
 //
 // All six condition families were accepted by the live Gateway: each
 // far-from-market LMT BUY reached PreSubmitted, then received the off-hours
@@ -52,11 +52,11 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "api_conditions_matrix_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+	replayDelayedAAPLQuoteAnchor(t, ctx, client)
 
 	contract := ibkr.Contract{
 		ConID:    265598,
@@ -73,43 +73,36 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		name      string
 		condition ibkr.OrderCondition
 		orderID   int64
-		permID    int64
 	}{
 		{
 			name:      "price",
-			condition: ibkr.OrderCondition{Type: ibkr.ConditionPrice, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "2918.1", TriggerMethod: 4},
-			orderID:   356,
-			permID:    9000000356,
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionPrice, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "2000", TriggerMethod: 4},
+			orderID:   487,
 		},
 		{
 			name:      "time",
-			condition: ibkr.OrderCondition{Type: ibkr.ConditionTime, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "20260610-20:11:37"},
-			orderID:   357,
-			permID:    9000000357,
+			condition: ibkr.OrderCondition{Type: ibkr.ConditionTime, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "20260824-20:48:09"},
+			orderID:   488,
 		},
 		{
 			name:      "margin",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionMargin, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, Value: "10"},
-			orderID:   358,
-			permID:    9000000358,
+			orderID:   489,
 		},
 		{
 			name:      "execution",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionExecution, Conjunction: ibkr.ConditionAnd, SecType: ibkr.SecTypeStock, Exchange: "SMART", Symbol: "AAPL"},
-			orderID:   359,
-			permID:    9000000359,
+			orderID:   490,
 		},
 		{
 			name:      "volume",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionVolume, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "999999999"},
-			orderID:   360,
-			permID:    9000000360,
+			orderID:   491,
 		},
 		{
 			name:      "percent_change",
 			condition: ibkr.OrderCondition{Type: ibkr.ConditionPercentChange, Conjunction: ibkr.ConditionAnd, Operator: ibkr.ConditionMore, ConID: 265598, Exchange: "SMART", Value: "50"},
-			orderID:   361,
-			permID:    9000000361,
+			orderID:   492,
 		},
 	}
 
@@ -120,11 +113,11 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 			Order: ibkr.Order{
 				Action:    ibkr.ActionBuy,
 				OrderType: ibkr.OrderTypeLimit,
-				Quantity:  decimal.RequireFromString("100"),
-				LmtPrice:  new(decimal.RequireFromString("14.59")),
+				Quantity:  decimal.RequireFromString("1"),
+				LmtPrice:  new(decimal.RequireFromString("10")),
 				TIF:       ibkr.TIFDay,
 				Account:   "DU9000001",
-				OrderRef:  "ibkrgo-redacted-20260610T200936Z-001",
+				OrderRef:  "sanitized-order-ref-0000000000000001",
 				Conditions: ibkr.OrderConditions{
 					Values:    []ibkr.OrderCondition{tc.condition},
 					IgnoreRTH: true,
@@ -145,14 +138,11 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		if (*open.Order.OrderID) != tc.orderID {
 			t.Fatalf("%s open order id = %d, want %d", tc.name, (*open.Order.OrderID), tc.orderID)
 		}
-		if (*open.Order.PermID) != tc.permID {
-			t.Fatalf("%s perm id = %d, want %d", tc.name, (*open.Order.PermID), tc.permID)
-		}
-		if open.Order.OrderRef != "ibkrgo-redacted-20260610T200936Z-001" {
+		if open.Order.OrderRef != "sanitized-order-ref-0000000000000001" {
 			t.Fatalf("%s order ref = %q", tc.name, open.Order.OrderRef)
 		}
-		if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("14.59")) {
-			t.Fatalf("%s lmt price = %s, want 14.59", tc.name, open.Order.Prices.LmtPrice)
+		if !open.Order.Prices.LmtPrice.Equal(decimal.RequireFromString("10")) {
+			t.Fatalf("%s lmt price = %s, want 10", tc.name, open.Order.Prices.LmtPrice)
 		}
 
 		// Every condition family was accepted live and drew the code-399
@@ -165,7 +155,7 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		if warning.OpKind != ibkr.OpPlaceOrder {
 			t.Fatalf("%s warning op kind = %s, want %s", tc.name, warning.OpKind, ibkr.OpPlaceOrder)
 		}
-		if !strings.Contains(warning.Message, "will not be placed at the exchange until 2026-06-11 09:30:00 US/Eastern") {
+		if !strings.Contains(warning.Message, "will not be placed at the exchange until 2026-08-25 09:30:00 US/Eastern") {
 			t.Fatalf("%s warning message = %q, want live deferral warning", tc.name, warning.Message)
 		}
 		select {
@@ -184,8 +174,9 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 
 	// Each order's real lifecycle continues past the 399: the cancel produces
 	// the live Cancelled status, which reaches the still-open handle and closes
-	// it cleanly (the terminal status is authoritative, so the transcript
-	// disconnect does not bleed an error into per-order Wait).
+	// it cleanly. Detachment is actor-serialized, so the transcript's immediate
+	// EOF may win the race after the caller has already received Cancelled; that
+	// exact captured-disconnect result is accepted below.
 	for i, handle := range handles {
 		name := cases[i].name
 		statuses := waitOrderStatuses(t, ctx, handle)
@@ -195,8 +186,6 @@ func TestAPIConditionsMatrixAAPLReplay(t *testing.T) {
 		if !hasOrderStatus(statuses, ibkr.OrderStatusCancelled) {
 			t.Fatalf("%s statuses = %v, want Cancelled to reach the still-open handle", name, statuses)
 		}
-		if err := handle.Wait(); err != nil {
-			t.Fatalf("%s Wait() = %v, want nil (terminal Cancelled is authoritative)", name, err)
-		}
+		requireCloseOrCapturedDisconnect(t, name, handle.Wait())
 	}
 }

@@ -3,6 +3,7 @@ package ibkr
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"net"
 	"testing"
@@ -19,7 +20,7 @@ func TestConnectivity1101BareGapsOrderBeforeRecovery(t *testing.T) {
 	e.cmds = make(chan func(), 1)
 	e.done = make(chan struct{})
 	e.events = newObserver[Event](8)
-	e.serverVersion = 200
+	e.serverVersion = 225
 	e.snapshot = Snapshot{State: StateReady, ConnectionSeq: 4}
 	peer, client := net.Pipe()
 	e.transport = transport.New(client, nil, 0)
@@ -72,8 +73,8 @@ func TestConnectivity1101BareGapsOrderBeforeRecovery(t *testing.T) {
 
 func TestDegradedWork1101ClearsQuoteBeforeResubscribe(t *testing.T) {
 	e, peer := newObservedMarketDataEngine(t)
-	e.serverVersion = 200
-	e.nextReqID = 1001
+	e.serverVersion = 225
+	e.nextReqID = 1
 	e.handleAPIError(codec.APIError{Code: 1100, Message: "Connectivity between IB and TWS has been lost."})
 
 	req := QuoteRequest{Contract: Stock("AAPL")}
@@ -88,9 +89,10 @@ func TestDegradedWork1101ClearsQuoteBeforeResubscribe(t *testing.T) {
 		t.Fatalf("non-resuming subscription first event = %+v, want Started", event)
 	}
 
-	// Capture 20260405T215752Z-quote_stream_genericticks, server_version 200,
-	// raw.txt sha256 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee.
-	e.handleIncoming(decodeOne(t, []byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00")))
+	// Capture 20260824T202345Z-api_duplicate_quote_subscriptions_aapl,
+	// server_version 225, events SHA-256
+	// 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
+	e.handleIncoming(decodeOne(t, decodeHexBytes(t, "000000c90801104419cdcccccccc68734022033134312800")))
 	before := <-auto.Events()
 	if before.Kind != StreamData || before.Value.Snapshot.Available&QuoteFieldLast == 0 {
 		t.Fatalf("pre-restoration quote = %+v, want captured last price", before)
@@ -113,7 +115,7 @@ func TestDegradedWork1101ClearsQuoteBeforeResubscribe(t *testing.T) {
 
 	// The matching captured MarketDataType frame exposes whether the quote
 	// accumulator retained the captured last price across the 1101 boundary.
-	e.handleIncoming(decodeOne(t, []byte("58\x001\x001001\x003\x00")))
+	e.handleIncoming(decodeOne(t, decodeHexBytes(t, "0000010208011003")))
 	after := <-auto.Events()
 	if after.Kind != StreamData || after.Value.Snapshot.Available != QuoteFieldMarketDataType {
 		t.Fatalf("first quote after resubscribe retained pre-loss fields: %+v", after)
@@ -150,4 +152,13 @@ func nextConnectivityStreamEvent[T any](t *testing.T, sub *Subscription[T]) Stre
 		t.Fatal("stream lifecycle event missing")
 		return StreamEvent[T]{}
 	}
+}
+
+func decodeHexBytes(t *testing.T, value string) []byte {
+	t.Helper()
+	decoded, err := hex.DecodeString(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return decoded
 }

@@ -26,7 +26,7 @@ func TestExecutionsRequestProjectsCompleteFilter(t *testing.T) {
 		},
 	}
 
-	got, err := executionsRequest(req, 200)
+	got, err := executionsRequest(req)
 	if err != nil {
 		t.Fatalf("executionsRequest() error = %v", err)
 	}
@@ -56,7 +56,7 @@ func TestExecutionsRequestValidation(t *testing.T) {
 		{req: ExecutionsRequest{SpecificDates: []time.Time{{}}}, field: "ExecutionsRequest.SpecificDates[0]"},
 	}
 	for _, tt := range tests {
-		_, err := executionsRequest(tt.req, 200)
+		_, err := executionsRequest(tt.req)
 		validationErr, ok := errors.AsType[*ValidationError](err)
 		if !ok || validationErr.Field != tt.field {
 			t.Errorf("executionsRequest(%+v) error = %v, want %s validation", tt.req, err, tt.field)

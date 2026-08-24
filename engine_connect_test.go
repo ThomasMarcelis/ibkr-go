@@ -8,6 +8,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"strconv"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -35,6 +36,51 @@ type connectTestDialer func(context.Context, string, string) (net.Conn, error)
 
 func (d connectTestDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	return d(ctx, network, address)
+}
+
+func TestDialConnectionAcceptsExactlySupportedVersionTrain(t *testing.T) {
+	for serverVersion := minServerVersion; serverVersion <= maxServerVersion; serverVersion++ {
+		t.Run(strconv.Itoa(serverVersion), func(t *testing.T) {
+			server, client := net.Pipe()
+			defer server.Close()
+			cfg := defaultConfig()
+			cfg.dialer = connectTestDialer(func(context.Context, string, string) (net.Conn, error) {
+				return client, nil
+			})
+			serverErr := make(chan error, 1)
+			go func() {
+				prefix := make([]byte, len(codec.EncodeHandshakePrefix()))
+				if _, err := io.ReadFull(server, prefix); err != nil {
+					serverErr <- err
+					return
+				}
+				versionRange, err := wire.ReadFrame(server)
+				if err != nil {
+					serverErr <- err
+					return
+				}
+				if got, want := string(versionRange), "v208..225"; got != want {
+					serverErr <- fmt.Errorf("version range = %q, want %q", got, want)
+					return
+				}
+				if err := wire.WriteFrame(server, wire.EncodeFields([]string{strconv.Itoa(serverVersion), "20260824 21:57:33 CET"})); err != nil {
+					serverErr <- err
+					return
+				}
+				_, err = wire.ReadFrame(server)
+				serverErr <- err
+			}()
+
+			result := dialConnection(context.Background(), cfg, maxServerVersion)
+			if result.err != nil || result.unsupported || result.serverVersion != serverVersion || result.conn == nil {
+				t.Fatalf("dialConnection() = %+v, want accepted server_version %d", result, serverVersion)
+			}
+			_ = result.conn.Close()
+			if err := <-serverErr; err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
 }
 
 func (d *bootstrapDropDialer) DialContext(ctx context.Context, _, _ string) (net.Conn, error) {
@@ -206,7 +252,10 @@ func TestAttachTransportTranslatesFrameLimitWithoutLosingDecodeFailure(t *testin
 
 	const frameLimit = 8
 	tr := transport.NewWithInboundFrameLimit(client, nil, 0, frameLimit)
-	malformed, err := wire.EncodeFrame([]byte("bad\x00"))
+	// Truncate the raw message ID from the live sv225 position callback used by
+	// capturedMalformedPosition. The transport frame remains intact, while its
+	// supported-floor envelope is independently malformed.
+	malformed, err := wire.EncodeFrame(capturedPositionPayload(t)[:3])
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +276,7 @@ func TestAttachTransportTranslatesFrameLimitWithoutLosingDecodeFailure(t *testin
 	}
 
 	e := &engine{
-		serverVersion: 200,
+		serverVersion: 225,
 		incoming:      make(chan any, 1),
 		transportErr:  make(chan transportLoss, 1),
 		done:          make(chan struct{}),
@@ -330,7 +379,7 @@ func TestDialContextReconnectTimeoutIncludesLastConnectionFailure(t *testing.T) 
 			serverErr <- fmt.Errorf("read version range: %w", err)
 			return
 		}
-		if err := wire.WriteFrame(server, wire.EncodeFields([]string{"200", "2026-07-11T12:00:00Z"})); err != nil {
+		if err := wire.WriteFrame(server, wire.EncodeFields([]string{"225", "2026-07-11T12:00:00Z"})); err != nil {
 			serverErr <- fmt.Errorf("write server info: %w", err)
 			return
 		}

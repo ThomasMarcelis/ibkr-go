@@ -14,19 +14,19 @@ import (
 func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 	t.Parallel()
 
-	// This ownership-only composite uses independently grounded fields: order
-	// ID 443 and NonGuaranteed routing came from the 2026-06-11 paper BAG
-	// campaign (events SHA-256 053baca75621b4a22b8c0e64b87371fcd414082a52e9980f327fe405ccb8ed9e);
-	// legs 887307502/887307536 came from the exact-200 BAG quote capture (events
-	// SHA-256 1f8354ee5d9ea0570472caa35d905127f5a8c5bab694ba1f9a74532178842c69).
+	// The ownership-only composite starts from the current sv225 paper BAG
+	// order echo (order 485, legs 909446204/909903509, and NonGuaranteed
+	// routing), capture 20260824T204518Z-api_combo_option_vertical_aapl,
+	// events SHA-256
+	// 2bc51d3660286ba2b739fdf44acab818a3468efbceb172712d278eb4bb59278b.
 	// The 0.05 per-leg decimal is the official ComboLeg.proto tag-9 source-law
 	// vector frozen in codec_orders_proto203_test.go; IncludeOvernight=true is
 	// likewise an official Order.proto source-law value, not a positive live
 	// attestation. Combining them here exercises ownership, not Gateway meaning.
 	openOrders := make(chan OpenOrder, 1)
-	handle := newOrderHandle(443, 64)
+	handle := newOrderHandle(485, 64)
 	e := &engine{
-		orders: map[int64]*orderRoute{443: {orderID: 443, handle: handle}},
+		orders: map[int64]*orderRoute{485: {orderID: 485, handle: handle}},
 		singletons: map[string]*route{singletonOpenOrders: {
 			handle: func(msg any, _ *engine) {
 				openOrders <- msg.(OpenOrder)
@@ -34,12 +34,12 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 		}},
 	}
 	e.dispatchObservedOpenOrder(codec.OpenOrder{
-		OrderID: 443,
+		OrderID: 485,
 		OrderDetails: codec.OrderDetails{Contract: codec.Contract{
 			Symbol: "AAPL", SecType: "BAG", Exchange: "SMART", Currency: "USD",
 			ComboLegs: []codec.ComboLeg{
-				{ConID: 887307502, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
-				{ConID: 887307536, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
+				{ConID: 909446204, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
+				{ConID: 909903509, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},
 			},
 		},
 			Action: "BUY", OrderType: "LMT", Quantity: "5", LmtPrice: "0.05", IncludeOvernight: "1", OrderComboLegPrices: []string{"0.05", ""},
@@ -211,49 +211,50 @@ func TestOrderIDAllocationStopsAtSignedWireBoundary(t *testing.T) {
 	}
 }
 
-// The values below are the second-client leg of
-// api_cross_client_cancel_aapl (server_version 200, events SHA-256
-// fcb7e811624e4aa935e1b50fe55b67caf143383264c29916833190ffe5ac35a4):
-// NextValidID regressed to 18 before the client received OpenOrder for another
-// client's order 296. The independent low request sequence must remain intact
+// The values below are the second-client leg of capture
+// 20260824T204700Z-api_cross_client_cancel_aapl at server_version 225,
+// events SHA-256
+// 9d7fafb105cfe1cd1b12b46b6dcf00d983a20b4e3c71a14239dd441795b1f3c6:
+// NextValidID regressed to 299 before the client received OpenOrder for another
+// client's order 493. The independent low request sequence must remain intact
 // while a bounded conservative interval prevents it from ever reaching order
-// 296.
+// 493.
 func TestObservedCrossClientOrderBoundsIdentifierInterval(t *testing.T) {
 	t.Parallel()
 
 	e := &engine{
-		nextReqID: 18,
+		nextReqID: 299,
 		keyed:     make(map[int]*route),
 		orders:    make(map[int64]*orderRoute),
 		previews:  make(map[int64]*previewRoute),
-		snapshot:  Snapshot{NextValidID: 18},
+		snapshot:  Snapshot{NextValidID: 299},
 	}
 	// Only the identifier-bearing fields are needed here; both values are the
 	// exact projection of the second-leg OpenOrder callback.
 	e.dispatchObservedOpenOrder(codec.OpenOrder{
-		OrderID: 296,
+		OrderID: 493,
 		OrderDetails: codec.OrderDetails{
 			ClientID: "1",
 		},
 	})
-	if got := e.snapshot.NextValidID; got != 297 {
-		t.Fatalf("NextValidID after observed order 296 = %d, want 297", got)
+	if got := e.snapshot.NextValidID; got != 494 {
+		t.Fatalf("NextValidID after observed order 493 = %d, want 494", got)
 	}
-	if e.orderIDLowWater != 296 {
-		t.Fatalf("order ID low-water = %d, want 296", e.orderIDLowWater)
+	if e.orderIDLowWater != 493 {
+		t.Fatalf("order ID low-water = %d, want 493", e.orderIDLowWater)
 	}
-	if got, err := e.allocReqID(); err != nil || got != 18 {
-		t.Fatalf("independent request ID after observed order 296 = %d, %v; want 18", got, err)
+	if got, err := e.allocReqID(); err != nil || got != 299 {
+		t.Fatalf("independent request ID after observed order 493 = %d, %v; want 299", got, err)
 	}
-	if got, err := e.allocOrderID(); err != nil || got != 297 {
-		t.Fatalf("order ID after request 18 = %d, %v; want 297", got, err)
+	if got, err := e.allocOrderID(); err != nil || got != 494 {
+		t.Fatalf("order ID after request 299 = %d, %v; want 494", got, err)
 	}
-	e.nextReqID = 295
-	if got, err := e.allocReqID(); err != nil || got != 295 {
-		t.Fatalf("request ID below historical order interval = %d, %v; want 295", got, err)
+	e.nextReqID = 492
+	if got, err := e.allocReqID(); err != nil || got != 492 {
+		t.Fatalf("request ID below historical order interval = %d, %v; want 492", got, err)
 	}
-	if got, err := e.allocReqID(); err != nil || got != 298 {
-		t.Fatalf("request ID entering historical order interval = %d, %v; want 298", got, err)
+	if got, err := e.allocReqID(); err != nil || got != 495 {
+		t.Fatalf("request ID entering historical order interval = %d, %v; want 495", got, err)
 	}
 }
 
@@ -272,7 +273,7 @@ func TestIdentifierFloorsSurviveReconnect(t *testing.T) {
 	e.done = make(chan struct{})
 	e.dirtySingletons = make(map[string]uint64)
 	server, client := net.Pipe()
-	e.handleConnectResult(connectResult{conn: client, serverVersion: 200, reconnect: true})
+	e.handleConnectResult(connectResult{conn: client, serverVersion: 225, reconnect: true})
 	t.Cleanup(func() {
 		_ = e.transport.Close()
 		_ = server.Close()

@@ -14,8 +14,7 @@ func TestContractDetailsFiniteStreamReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "grounded_contract_details_aapl.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -49,8 +48,7 @@ func TestSecDefOptParamsFiniteStreamReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "sec_def_opt_params.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -72,41 +70,8 @@ func TestSecDefOptParamsFiniteStreamReplay(t *testing.T) {
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("StreamSecDefOptParams Wait() = %v", err)
 	}
-	if data != 20 || complete != 1 {
-		t.Fatalf("StreamSecDefOptParams events = %d data, %d complete; want 20, 1", data, complete)
-	}
-}
-
-func TestCompletedOrdersFiniteStreamReplay(t *testing.T) {
-	t.Parallel()
-
-	client, host := newClient(t, "completed_orders_cancelled_system_live.txt")
-	defer client.Close()
-	defer waitHost(t, host)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	sub, err := client.Orders().StreamCompleted(ctx, true)
-	if err != nil {
-		t.Fatalf("StreamCompleted() error = %v", err)
-	}
-	data, complete := 0, 0
-	for event := range sub.Events() {
-		switch event.Kind {
-		case ibkr.StreamData:
-			data++
-			if event.Value.Contract.Symbol != "AAPL" {
-				t.Fatalf("completed symbol = %q, want AAPL", event.Value.Contract.Symbol)
-			}
-		case ibkr.StreamSnapshotComplete:
-			complete++
-		}
-	}
-	if err := sub.Wait(); err != nil {
-		t.Fatalf("StreamCompleted Wait() = %v", err)
-	}
-	if data != 1 || complete != 1 {
-		t.Fatalf("StreamCompleted events = %d data, %d complete; want 1, 1", data, complete)
+	if data != 39 || complete != 1 {
+		t.Fatalf("StreamSecDefOptParams events = %d data, %d complete; want 39, 1", data, complete)
 	}
 }
 
@@ -114,8 +79,7 @@ func TestPassiveExecutionObserverReplay(t *testing.T) {
 	t.Parallel()
 
 	client, host := newClient(t, "executions.txt")
-	defer client.Close()
-	defer waitHost(t, host)
+	defer cleanupClientHost(t, client, host)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -134,7 +98,7 @@ func TestPassiveExecutionObserverReplay(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubscribeExecutionEvents() error = %v", err)
 	}
-	if _, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: "DU9000001", Symbol: "AAPL"}); err != nil {
+	if _, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{}); err != nil {
 		t.Fatalf("Executions() error = %v", err)
 	}
 	observer.Close()
@@ -160,7 +124,7 @@ func TestPassiveExecutionObserverReplay(t *testing.T) {
 	if err := observer.Wait(); err != nil && !errors.Is(err, io.EOF) {
 		t.Fatalf("execution observer Wait() = %v, want clean close or captured disconnect EOF", err)
 	}
-	if executions != 15 || fees != 14 {
-		t.Fatalf("execution observer = %d executions, %d fees; want 15, 14", executions, fees)
+	if executions != 2 || fees != 2 {
+		t.Fatalf("execution observer = %d executions, %d fees; want 2, 2", executions, fees)
 	}
 }

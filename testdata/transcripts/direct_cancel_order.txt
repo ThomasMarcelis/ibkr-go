@@ -1,27 +1,26 @@
-# Grounded by live paper-Gateway capture
-# captures/20260610T195928Z-place_order_direct_cancel, server_version=200,
-# events.jsonl sha256 2dcef3d40bd5fc58a6ac1593a5a10d7388d97bb7c648222d93263a3a06e5c75a.
-# The capture freezes Orders().Cancel(ctx, orderID) after order 350 rests:
-# PreSubmitted -> Submitted -> direct five-field cancel -> Cancelled -> code 202.
-# Transformations: the account identifier is redacted to DU9000001 and the
-# perm ID to 900350. The captured client price 50.00 is represented by this
-# client's canonical decimal encoding, 50. No status, order ID, response
-# value, timestamp, or event ordering is changed.
-handshake {"server_version":200,"connection_time":"20260610 21:59:28 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":350}
-server api_error {"req_id":-1,"code":2104,"message":"Market data farm connection is OK:usfarm","advanced_order_reject_json":"","error_time_ms":"1781121568510"}
-server api_error {"req_id":-1,"code":2107,"message":"HMDS data farm connection is inactive but should be available upon demand.ushmds","advanced_order_reject_json":"","error_time_ms":"1781121568510"}
-server api_error {"req_id":-1,"code":2158,"message":"Sec-def data farm connection is OK:secdefnj","advanced_order_reject_json":"","error_time_ms":"1781121568510"}
-
-client place_order {"order_id":"350","contract":{"con_id":"0","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"1","order_type":"LMT","lmt_price":"50","tif":"DAY","account":"DU9000001"}
-server open_order {"order_id":350,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"PreSubmitted","quantity":"1","lmt_price":"50.0","aux_price":"0.0","tif":"DAY","perm_id":"900350","client_id":"1","origin":"0"}
-server order_status {"order_id":350,"status":"PreSubmitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server open_order {"order_id":350,"account":"DU9000001","contract":{"con_id":265598,"symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD","local_symbol":"AAPL","trading_class":"NMS"},"action":"BUY","order_type":"LMT","status":"Submitted","quantity":"1","lmt_price":"50.0","aux_price":"0.0","tif":"DAY","perm_id":"900350","client_id":"1","origin":"0"}
-server order_status {"order_id":350,"status":"Submitted","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-
-client cancel_order {"field_count":"5","order_id":"350","manual_order_cancel_time":"","ext_operator":"","manual_order_indicator":""}
-server order_status {"order_id":350,"status":"Cancelled","filled":"0","remaining":"1","avg_fill_price":"0","perm_id":"900350","parent_id":"0","last_fill_price":"0","client_id":"1","why_held":"","mkt_cap_price":"0"}
-server api_error {"req_id":350,"code":202,"message":"Order Canceled - reason:","advanced_order_reject_json":"","error_time_ms":"1781121571000"}
+# Curated direct-by-ID cancellation from paper IB Gateway server_version 225.
+# Capture 20260824T205145Z-api_order_direct_cancel_aapl; events.jsonl sha256:
+# 0d1ae3a46ea36eb52af26be7248e50866e46f27460641a4ae61d6080f7e7761c.
+# The exact place/cancel frames and every order callback through terminal code
+# 202 are retained. Unrelated preexisting-order, quote, fence, and farm-status
+# frames are omitted. Account, permanent-ID, order-reference, and submitter
+# identifiers are deterministically sanitized; no retained broker value or
+# callback ordering is changed.
+handshake {"server_version":225,"connection_time":"20260824 22:51:45 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABwAAANEI+gM=
+raw client AAAAlwAAAMsI+gMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpvIAAqA0JVWTIBMTgAQgNMTVRJAAAAAAAAJEBaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAkAQBqAQAwAT///////////8BkAYAygYAIgA=
+raw server AAABOgAAAM0I+gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ+gMY+tWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAJEBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAAJkDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+raw server AAAAQAAAAMsI+gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD61ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+raw client AAAACQAAAMwI+gMSAA==
+raw server AAAAlQAAAMwI+gMQyJutrIM0GI8DIoEBT3JkZXIgTWVzc2FnZToKQlVZIDEgQUFQTCBOQVNEQVEuTk1TCldhcm5pbmc6IFlvdXIgb3JkZXIgd2lsbCBub3QgYmUgcGxhY2VkIGF0IHRoZSBleGNoYW5nZSB1bnRpbCAyMDI2LTA4LTI1IDA5OjMwOjAwIFVTL0Vhc3Rlcm4u
+raw server AAABOgAAAM0I+gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ+gMY+tWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAJEBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAAJkDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+raw server AAAAQAAAAMsI+gMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADD61ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+raw server AAABOwAAAM0I+gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ+gMY+tWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAJEBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAAJkDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDwoNUGVuZGluZ0NhbmNlbA==
+raw server AAAAQQAAAMsI+gMSDVBlbmRpbmdDYW5jZWwaATAiATEpAAAAAAAAAAAw+tWTrQM4AEEAAAAAAAAAAEgBWQAAAAAAAAAA
+raw server AAABOwAAAM0I+gMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGu8BCAEQ+gMY+tWTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAAJEBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAAAAJkDiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDwoNUGVuZGluZ0NhbmNlbA==
+raw server AAAAQQAAAMsI+gMSDVBlbmRpbmdDYW5jZWwaATAiATEpAAAAAAAAAAAw+tWTrQM4AEEAAAAAAAAAAEgBWQAAAAAAAAAA
+raw server AAAAPQAAAMsI+gMSCUNhbmNlbGxlZBoBMCIBMSkAAAAAAAAAADD61ZOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+raw server AAAAKwAAAMwI+gMQyJutrIM0GMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo=
 sleep 500ms
 disconnect

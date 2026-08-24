@@ -1,12 +1,21 @@
-# Live-derived from captures/20260711T021018Z-family_codes at
-# server_version 207; events.jsonl sha256:
-# 22f9095fd0f3b66110028cb01cff96710895ee11fb0e45beb9de692a82d492fe.
-# The account identifier is a deterministic length-preserving substitution.
-# Ambient farm-status frames are omitted. The request and family-code response
-# are exact captured frames.
-handshake {"server_version":207,"connection_time":"20260711 04:10:17 Central European Standard Time"}
+# Exact capture 20260824T202748Z-family_codes for family_codes at server_version 225.
+# events.jsonl sha256: 758af5124ed7f5eab257e8b5b6d4219d92015ee20db482b8fbbc952c8a0ff4c7.
+# Account, order-reference, execution-ID, OCA-group, and permanent-ID values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:27:47 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
-raw server AAAACAAAAAkxADEA
-raw client AAAABAAAAFA=
-raw server AAAACQAAAE4xACoAAA==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCM3dSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCM3dSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARCM3dSrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCM3dSrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=80 encoding=protobuf payload_len=4
+raw client AAAABAAAARg=
+# leg=1 direction=server msg_id=78 encoding=protobuf payload_len=9
+raw server AAAACQAAARYKAwoBKg==
 disconnect

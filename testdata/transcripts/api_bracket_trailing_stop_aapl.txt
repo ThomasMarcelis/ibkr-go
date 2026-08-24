@@ -1,16 +1,75 @@
-# Grounded by live API capture captures/20260415T161944Z-api_bracket_trailing_stop_aapl.
-# server_version=200, events.jsonl sha256: 2c0453360020a3adcc01b77f5f139f1f4151ff79979f3d814147ec3ef37e248e.
-# Account and order-ref identifiers are sanitized; this replay freezes the real
-# Gateway code 328 rejection observed on 2026-04-15 when a TRAIL child was
-# attached under a market bracket parent. The source tail entered an
-# execution-query timeout and cleanup; that tail is intentionally not replayed.
-handshake {"server_version":200,"connection_time":"20260415 18:19:44 Central European Standard Time"}
-server managed_accounts {"accounts":["DU9000001"]}
-server next_valid_id {"order_id":286}
-
-client place_order {"order_id":"286","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"BUY","total_quantity":"10","order_type":"MKT","tif":"DAY","account":"DU9000001","transmit":false}
-client place_order {"order_id":"287","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"10","order_type":"LMT","lmt_price":"2649.6","tif":"DAY","account":"DU9000001","transmit":false,"parent_id":"286"}
-client place_order {"order_id":"288","contract":{"con_id":"265598","symbol":"AAPL","sec_type":"STK","exchange":"SMART","currency":"USD"},"action":"SELL","total_quantity":"10","order_type":"TRAIL","aux_price":"1","tif":"DAY","account":"DU9000001","parent_id":"286","trail_stop_price":"13.25"}
-server api_error {"req_id":288,"code":328,"message":"Trailing stop orders can be attached to limit or stop-limit orders only.","advanced_order_reject_json":"","error_time_ms":"1776269986150"}
-
+# Exact capture 20260824T204219Z-api_bracket_trailing_stop_aapl for api_bracket_trailing_stop_aapl at server_version 225.
+# events.jsonl sha256: 0f9bdf800fe914bedafd7b6434e48339cbdf2cb708640ec3dff01fc4dbc3bfa1.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:42:18 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEI2gM=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCX9ImsgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpldWZhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARCX9ImsgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARCX9ImsgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARCX9ImsgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAQ==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=201
+raw server AAAAyQAAAMwIARCc94msgzQY6U4itgFSZXF1ZXN0ZWQgbWFya2V0IGRhdGEgcmVxdWlyZXMgYWRkaXRpb25hbCBzdWJzY3JpcHRpb24gZm9yIEFQSS4gU2VlIGxpbmsgaW4gJ01hcmtldCBEYXRhIENvbm5lY3Rpb25zJyBkaWFsb2cgZm9yIG1vcmUgZGV0YWlscy5EZWxheWVkIG1hcmtldCBkYXRhIGlzIGF2YWlsYWJsZS5BQVBMIE5BU0RBUS5OTVMvVE9QL0FMTA==
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAw==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIAhIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=1 direction=server msg_id=58 encoding=protobuf payload_len=8
+raw server AAAACAAAAQIIAhAD
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIAhIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBCGc3MzMzMaHNAIgEyKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBDGdejcD0Ka3NAIgE2KAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=24
+raw server AAAAGAAAAMkIAhBEGbgehetRaHNAIgMyMDAoAA==
+# leg=1 direction=server msg_id=46 encoding=protobuf payload_len=20
+raw server AAAAFAAAAPYIAhBYGgoxNzg3NjAzMjM4
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBIGfYoXI/ClXNAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBJGexRuB6FX3NAIgEwKAA=
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=16
+raw server AAAAEAAAAMoIAhBKGgY4MTI4NDA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBLGZqZmZmZVXNAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhBMGexRuB6Fc3NAIgEwKAA=
+# leg=1 direction=server msg_id=57 encoding=protobuf payload_len=6
+raw server AAAABgAAAQEIAg==
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=139
+raw client AAAAiwAAAMsI2gMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpjIAAqA0JVWTIBMTgAQgNNS1RaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAqAQAwAT///////////8BkAYAygYAIgA=
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=150
+raw client AAAAlgAAAMsI2wMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpuINoDKgRTRUxMMgExOABCA0xNVElmZmZmZkKoQFoDREFZYglEVTkwMDAwMDHiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDPwAQD4AQCoBADABP///////////wGQBgDKBgAiAA==
+# leg=1 direction=client msg_id=3 encoding=protobuf payload_len=165
+raw client AAAApQAAAMsI3AMSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBp9INoDKgRTRUxMMgExOABCBVRSQUlMUQAAAAAAAPA/WgNEQVliCURVOTAwMDAwMbkBj8L1KFwPL0DiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDXwAQD4AQCQBAGoBADABP///////////wGQBgDKBgAiAA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=91
+raw server AAAAWwAAAMwI3AMQuvqJrIM0GMgCIkhUcmFpbGluZyBzdG9wIG9yZGVycyBjYW4gYmUgYXR0YWNoZWQgdG8gbGltaXQgb3Igc3RvcC1saW1pdCBvcmRlcnMgb25seS4=
+# leg=1 direction=client msg_id=58 encoding=protobuf payload_len=6
+raw client AAAABgAAAQIKAA==
+# leg=1 direction=server msg_id=3 encoding=protobuf payload_len=61
+raw server AAAAPQAAAMsI2gMSCUNhbmNlbGxlZBoBMCIBMSkAAAAAAAAAADCxx/KUATgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=63
+raw server AAAAPwAAAMwI2gMQpaaMrIM0GMoBIixPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjpPcmRlciB3YXMgZGlzY2FyZGVkLg==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=102
+raw server AAAAZgAAAMwI2gMQpaaMrIM0GKEBIlNDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTMxMjI1NTQwOQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=102
+raw server AAAAZgAAAMwIzAMQpaaMrIM0GKEBIlNDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTMxMjI1NTM5NQ==
+# leg=1 direction=client msg_id=7 encoding=protobuf payload_len=25
+raw client AAAAGQAAAM8IAxIREglEVTkwMDAwMDEiBEFBUEw=
+# leg=1 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IAw==
 disconnect

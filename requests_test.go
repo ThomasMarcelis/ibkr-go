@@ -264,8 +264,8 @@ func TestFormatProviderCodesOwnsCapturedRequest(t *testing.T) {
 		t.Fatalf("formatProviderCodes(nil) = %q, want empty", got)
 	}
 
-	// captures/20260415T162244Z-api_news_article_aapl, server_version 200,
-	// events.jsonl sha256 3c6ef62da8d60e95ed8f05418ca218268d652fb6fc99bf1e6e90d7dcad20c8e3.
+	// captures/20260824T202418Z-api_news_article_aapl, server_version 225,
+	// events.jsonl SHA-256 b7c40100f09e2b865268d16af2e458360cb610a5028a4153745c0c6d0e525215.
 	providers := []NewsProviderCode{"BRFG", "BRFUPDN", "DJNL"}
 	got := formatProviderCodes(providers)
 	providers[0] = "mutated"
@@ -277,8 +277,8 @@ func TestFormatProviderCodesOwnsCapturedRequest(t *testing.T) {
 func TestFormatGenericTicksOwnsCapturedRequest(t *testing.T) {
 	t.Parallel()
 
-	// captures/20260405T215752Z-quote_stream_genericticks, server_version 200,
-	// raw.txt sha256 9c4fec0cd44041ccfec4fee372ed6cea437418183b42591936c64ee4fdf52bee.
+	// captures/20260824T202842Z-quote_stream_genericticks, server_version 225,
+	// events.jsonl SHA-256 87ff4c1b76c6e94c4cbec0cc20e230750d29aabf1137e5919bb3113dbd8a556f.
 	ticks := []GenericTick{"233", "236"}
 	formatted := formatGenericTicks(ticks)
 	ticks[0] = "mutated"
@@ -290,8 +290,8 @@ func TestFormatGenericTicksOwnsCapturedRequest(t *testing.T) {
 func TestCloneAccountSummaryRequestOwnsCapturedTags(t *testing.T) {
 	t.Parallel()
 
-	// captures/20260405T215025Z-account_summary_snapshot, server_version 200,
-	// raw.txt sha256 fd89c530af30e530bdd2dd76de7637e7bb8cb9fcdbba45cf70e955f4e5b592fd.
+	// captures/20260824T202344Z-account_summary_snapshot, server_version 225,
+	// events.jsonl SHA-256 6f8ede19db82acc23de6bd988381d40b339af0270133fdcabceba33082f6c181.
 	req := AccountSummaryRequest{Tags: []string{
 		"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity",
 	}}
@@ -365,10 +365,9 @@ func TestValidateHistoricalTicksRequest(t *testing.T) {
 
 func TestFormatHistoricalNewsTime(t *testing.T) {
 	t.Parallel()
-	// Exact-sv206 SDK oracle: the .0 end bound returned 17 live items
-	// (events SHA-256 77f0031eef632b2779333eefc051f6731bb0d77daa8b35d3585771e7eccb854c),
-	// while the otherwise identical request without .0 returned none
-	// (63ca8e1ae5e99e8544491a051dd8f771d228b5d2b33b9f0baec8311b3b6e2b58).
+	// The sv225 api_news_article_aapl capture returned historical-news rows
+	// with the documented .0 bounds (events SHA-256
+	// b7c40100f09e2b865268d16af2e458360cb610a5028a4153745c0c6d0e525215).
 
 	if got := formatHistoricalNewsTime(time.Time{}); got != "" {
 		t.Fatalf("formatHistoricalNewsTime(zero) = %q, want empty", got)

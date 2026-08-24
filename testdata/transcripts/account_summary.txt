@@ -1,17 +1,19 @@
-# Live-derived from /tmp/ibkr-current-eight-captures/
-# 20260710T223024Z-account_summary_snapshot at server_version 206; events.jsonl sha256:
-# 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db.
-# Account identifiers are deterministic length-preserving substitutions.
-# Ambient farm-status frames and the later current-time fence are omitted.
-# Request, all four values, end, and cancellation are exact.
-handshake {"server_version":206,"connection_time":"20260711 00:30:24 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-raw client AAAARgAAAD4xADEAQWxsAE5ldExpcXVpZGF0aW9uLFRvdGFsQ2FzaFZhbHVlLEJ1eWluZ1Bvd2VyLEV4Y2Vzc0xpcXVpZGl0eQA=
-raw server AAAALAAAAD8xADEARFU5MDAwMDAxAEJ1eWluZ1Bvd2VyADE3MzM5Mi45NQBFVVIA
-raw server AAAALwAAAD8xADEARFU5MDAwMDAxAEV4Y2Vzc0xpcXVpZGl0eQAyNjgwOC45NQBFVVIA
-raw server AAAALgAAAD8xADEARFU5MDAwMDAxAE5ldExpcXVpZGF0aW9uADMzOTExLjYyAEVVUgA=
-raw server AAAALgAAAD8xADEARFU5MDAwMDAxAFRvdGFsQ2FzaFZhbHVlAC0xNjQyLjQ3AEVVUgA=
-raw server AAAACAAAAEAxADEA
-raw client AAAACAAAAD8xADEA
+# Exact capture 20260824T202344Z-account_summary_snapshot for
+# account_summary_snapshot at server_version 225. events.jsonl sha256:
+# 6f8ede19db82acc23de6bd988381d40b339af0270133fdcabceba33082f6c181.
+# The account identifier is deterministically sanitized. Ambient farm notices
+# are retained; the recorder's final CurrentTime cleanup fence is omitted.
+handshake {"server_version":225,"connection_time":"20260824 22:23:43 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABgAAANEIAQ==
+raw server AAAAQwAAAMwI////////////ARCe8MWrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAQQAAAMwI////////////ARCe8MWrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+raw server AAAARgAAAMwI////////////ARCe8MWrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAARgAAAQYIARIDQWxsGjlOZXRMaXF1aWRhdGlvbixUb3RhbENhc2hWYWx1ZSxCdXlpbmdQb3dlcixFeGNlc3NMaXF1aWRpdHk=
+raw server AAAALgAAAQcIARIJRFU5MDAwMDAxGgtCdXlpbmdQb3dlciIJMTgzODc1LjIyKgNFVVI=
+raw server AAAAMQAAAQcIARIJRFU5MDAwMDAxGg9FeGNlc3NMaXF1aWRpdHkiCDI4NTkxLjY5KgNFVVI=
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5OZXRMaXF1aWRhdGlvbiIIMzY5OTIuNDkqA0VVUg==
+raw server AAAAMAAAAQcIARIJRFU5MDAwMDAxGg5Ub3RhbENhc2hWYWx1ZSIILTE0NDEuNjcqA0VVUg==
+raw server AAAABgAAAQgIAQ==
+raw client AAAABgAAAQcIAQ==
 disconnect

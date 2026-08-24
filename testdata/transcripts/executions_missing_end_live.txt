@@ -1,14 +1,21 @@
-# Fault-injection replay using the exact unfiltered execution request from
-# read-only IB Gateway server_version 207 capture 20260711T035816Z-executions_snapshot.
-# events.jsonl sha256:
-# c73df531322d01d762188d0792c12214ccc4ae4caad366f2658efaee57a06264
-#
-# The account is length-preserving redacted to DU9000001. Ambient farm-status
-# frames and the captured execution-end response are omitted so the caller's
-# context deadline remains the only completion signal.
-handshake {"server_version":207,"connection_time":"20260711 05:58:16 Central European Standard Time"}
+# Fault injection over the exact public API execution snapshot from paper IB
+# Gateway server_version 225. Capture
+# 20260824T210943Z-executions_snapshot; events.jsonl sha256:
+# 2afd72c3c685c29c00e0f9541eda8e56fd9f372369bbd11a45a30396be423eff.
+# Account, execution, order-reference, and submitter identifiers are
+# deterministically sanitized. The captured executions_end frame is omitted so
+# the caller's context deadline remains the only completion signal.
+handshake {"server_version":225,"connection_time":"20260824 23:09:43 CET"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
-raw server AAAACAAAAAkxADEA
+raw server AAAABwAAANEIxQQ=
+raw server AAAAQgAAAMwI////////////ARDXpe6sgzQYuBAiJ01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c29wdA==
+raw server AAAAQwAAAMwI////////////ARDXpe6sgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAawAAAMwI////////////ARDXpe6sgzQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgaW5hY3RpdmUgYnV0IHNob3VsZCBiZSBhdmFpbGFibGUgdXBvbiBkZW1hbmQudXNobWRz
+raw server AAAARgAAAMwI////////////ARDYpe6sgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
 raw client AAAACAAAAM8IARIA
+raw server AAAA8QAAANMIARJCCLnPpvoCEgNNRVMaA0ZVVCIIMjAyNjA5MTgpAAAAAAAAAAA5AAAAAAAAFEBCA0NNRVIDVVNEWgVNRVNVNmIDTUVTGqQBCPMDEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMRocMjAyNjA4MjQgMTU6NTA6MDcgVVMvQ2VudHJhbCIJRFU5MDAwMDAxKgNDTUUyA0JPVDoBMUEAAAAAwPa9QEjz1ZOtA1ABYgExaQAAAADA9r1AciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDGQAQGoAf///////////wE=
+raw server AAAA8QAAANMIARJCCLnPpvoCEgNNRVMaA0ZVVCIIMjAyNjA5MTgpAAAAAAAAAAA5AAAAAAAAFEBCA0NNRVIDVVNEWgVNRVNVNmIDTUVTGqQBCPQDEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMhocMjAyNjA4MjQgMTU6NTA6MDcgVVMvQ2VudHJhbCIJRFU5MDAwMDAxKgNDTUUyA1NMRDoBMUEAAAAAgPa9QEj01ZOtA1ABYgExaQAAAACA9r1AciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMDKQAQGoAf///////////wE=
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAxEYXrUbgeheM/GgNVU0Q=
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAyEYXrUbgeheM/GgNVU0Qhw/UoXI/CA8A=
 sleep 200ms
 disconnect
