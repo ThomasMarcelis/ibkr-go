@@ -410,7 +410,7 @@ func decodeOrderDetailsProto(body []byte, m *OrderDetails) error {
 			}
 			m.Conditions = append(m.Conditions, condition)
 		default:
-			// Exact 204 emits several defaults from the larger Order schema that
+			// The protobuf callback emits defaults from the larger Order schema that
 			// have no completed-order API meaning. Keep them out of the public
 			// result while still accepting future unknown protobuf fields.
 			if err := skipProtoField(&body, number, typ); err != nil {

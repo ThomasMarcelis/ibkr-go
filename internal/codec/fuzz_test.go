@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
 )
 
 // mustNotPanic calls fn and reports a test error if fn panics.
@@ -21,107 +20,22 @@ func mustNotPanic(t *testing.T, fn func()) {
 	fn()
 }
 
-// allInboundMsgIDs is the complete set of known inbound (server -> client) message IDs.
-var allInboundMsgIDs = []int{
-	protocol.InTickPrice,              // 1
-	protocol.InTickSize,               // 2
-	protocol.InOrderStatus,            // 3
-	protocol.InErrMsg,                 // 4
-	protocol.InOpenOrder,              // 5
-	protocol.InUpdateAccountValue,     // 6
-	protocol.InUpdatePortfolio,        // 7
-	protocol.InUpdateAccountTime,      // 8
-	protocol.InNextValidID,            // 9
-	protocol.InContractData,           // 10
-	protocol.InExecutionData,          // 11
-	protocol.InMarketDepth,            // 12
-	protocol.InMarketDepthL2,          // 13
-	protocol.InNewsBulletins,          // 14
-	protocol.InManagedAccounts,        // 15
-	protocol.InHistoricalData,         // 17
-	protocol.InBondContractData,       // 18
-	protocol.InScannerParameters,      // 19
-	protocol.InScannerData,            // 20
-	protocol.InTickOptionComputation,  // 21
-	protocol.InTickGeneric,            // 45
-	protocol.InTickString,             // 46
-	protocol.InTickEFP,                // 47
-	protocol.InCurrentTime,            // 49
-	protocol.InRealTimeBars,           // 50
-	protocol.InContractDataEnd,        // 52
-	protocol.InOpenOrderEnd,           // 53
-	protocol.InAccountDownloadEnd,     // 54
-	protocol.InExecutionDataEnd,       // 55
-	protocol.InDeltaNeutralValidation, // 56
-	protocol.InTickSnapshotEnd,        // 57
-	protocol.InMarketDataType,         // 58
-	protocol.InCommissionReport,       // 59
-	protocol.InPositionData,           // 61
-	protocol.InPositionEnd,            // 62
-	protocol.InAccountSummary,         // 63
-	protocol.InAccountSummaryEnd,      // 64
-	protocol.InPositionMulti,          // 71
-	protocol.InPositionMultiEnd,       // 72
-	protocol.InAccountUpdateMulti,     // 73
-	protocol.InAccountUpdateMultiEnd,  // 74
-	protocol.InSecDefOptParams,        // 75
-	protocol.InSecDefOptParamsEnd,     // 76
-	protocol.InFamilyCodes,            // 78
-	protocol.InSymbolSamples,          // 79
-	protocol.InMktDepthExchanges,      // 80
-	protocol.InTickReqParams,          // 81
-	protocol.InSmartComponents,        // 82
-	protocol.InNewsArticle,            // 83
-	protocol.InTickNews,               // 84
-	protocol.InNewsProviders,          // 85
-	protocol.InHistoricalNews,         // 86
-	protocol.InHistoricalNewsEnd,      // 87
-	protocol.InHeadTimestamp,          // 88
-	protocol.InHistogramData,          // 89
-	protocol.InMarketDataReroute,      // 91
-	protocol.InMarketDepthReroute,     // 92
-	protocol.InMarketRule,             // 93
-	protocol.InPnL,                    // 94
-	protocol.InPnLSingle,              // 95
-	protocol.InHistoricalTicks,        // 96
-	protocol.InHistoricalTicksBidAsk,  // 97
-	protocol.InHistoricalTicksLast,    // 98
-	protocol.InTickByTick,             // 99
-	protocol.InOrderBound,             // 100
-	protocol.InCompletedOrder,         // 101
-	protocol.InCompletedOrderEnd,      // 102
-	protocol.InUserInfo,               // 107
-	protocol.InHistoricalDataUpdate,   // 90
-	protocol.InHistoricalDataEnd,      // 108
-	protocol.InReceiveFA,              // 16
-	protocol.InSoftDollarTiers,        // 77
-	protocol.InDisplayGroupList,       // 67
-	protocol.InDisplayGroupUpdated,    // 68
-	protocol.InWSHMetaData,            // 104
-	protocol.InWSHEventData,           // 105
-	protocol.InHistoricalSchedule,     // 106
-	protocol.InCurrentTimeInMillis,    // 109
-}
-
 // FuzzDecodeBatch proves DecodeBatch never panics across every supported
 // negotiated version. Exact live classic/protobuf seeds anchor both envelopes;
 // the remaining readable seeds exercise containment boundaries.
 func FuzzDecodeBatch(f *testing.F) {
-	// Classic ManagedAccounts is from capture
-	// 20260710T223024Z-account_summary_snapshot (events SHA-256
-	// 71f26259c1556157c0fd72b635934de341d43fe69bb04df72be27927bfa456db).
-	f.Add(byte(0), []byte("15\x001\x00DU9000001\x00"))
-	// Protobuf ExecutionsEnd is from exact-sv201 capture
-	// 20260709T222913Z-protobuf-sv201-executions-empty (events SHA-256
-	// a3610dc87dbe654d8fd86ca65e552be706ab3d814244ce941208ac49dfcd819d).
+	// Classic NextValidID is from the exact sv208 leg of capture
+	// 20260824T213929Z-supported_version_matrix_paper (events SHA-256
+	// 64ee4350f0bde347a9da914a82865e88e0a68d06924cb13335fd2084595a7727).
+	f.Add(byte(0), []byte{0, 0, 0, 9, '1', 0, '5', '8', '1', 0})
+	// Protobuf ExecutionsEnd is from sv225 capture
+	// 20260824T210943Z-executions_snapshot (events SHA-256
+	// 2afd72c3c685c29c00e0f9541eda8e56fd9f372369bbd11a45a30396be423eff).
 	f.Add(byte(1), []byte{0, 0, 0, 255, 0x08, 0x01})
-	f.Add(byte(0), []byte("999\x00"))
-	f.Add(byte(0), []byte("998\x00unterminated"))
-	// Structural truncation of the captured account-summary row above.
-	f.Add(byte(0), []byte("63\x001\x001\x00DU9000001\x00NetLiquidation\x0033911.62\x00EUR"))
-	f.Add(byte(0), []byte("17\x001\x002147483647\x00"))
+	f.Add(byte(0), []byte{0, 0, 3, 231})
+	f.Add(byte(0), []byte{0, 0, 3, 230, 'u', 'n', 't', 'e', 'r', 'm', 'i', 'n', 'a', 't', 'e', 'd'})
 	f.Add(byte(0), []byte{})
-	f.Add(byte(0), []byte("not-a-message-id\x00"))
+	f.Add(byte(0), []byte{0, 0, 0})
 
 	f.Fuzz(func(t *testing.T, versionSelector byte, data []byte) {
 		defer func() {
@@ -129,85 +43,63 @@ func FuzzDecodeBatch(f *testing.F) {
 				t.Errorf("unexpected panic: %v", r)
 			}
 		}()
-		_, _ = DecodeBatch(200+int(versionSelector)%26, data)
+		_, _ = DecodeBatch(208+int(versionSelector)%18, data)
 	})
 }
 
 func TestDecodeShortFields(t *testing.T) {
 	t.Parallel()
 
-	// Each entry: msg ID, name for diagnostics, max field count the decoder
-	// reads (after the msg_id field itself). These counts are derived from
-	// the decodeByMsgID switch cases.
 	cases := []struct {
 		name      string
 		msgID     int
 		maxFields int
 	}{
-		{"TickPrice", protocol.InTickPrice, 7},                          // version, reqID, tickType, price, size, attrMask
-		{"TickSize", protocol.InTickSize, 5},                            // version, reqID, tickType, size
-		{"OrderStatus", protocol.InOrderStatus, 4},                      // orderID, status, filled, remaining
-		{"ErrMsg", protocol.InErrMsg, 5},                                // reqID, code, message, advJSON, errorTimeMs
-		{"OpenOrder", protocol.InOpenOrder, 165},                        // upper bound on the live walk: 29 base + pre-status block + "None" DN block + variable sections + status block + 32-field tail
-		{"UpdateAccountValue", protocol.InUpdateAccountValue, 5},        // version, key, value, currency, account
-		{"UpdatePortfolio", protocol.InUpdatePortfolio, 19},             // version, conID, symbol, secType, expiry, strike, right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice, marketValue, avgCost, unrealizedPNL, realizedPNL, account
-		{"UpdateAccountTime", protocol.InUpdateAccountTime, 2},          // version, timestamp
-		{"NextValidID", protocol.InNextValidID, 2},                      // version, orderID
-		{"ContractData", protocol.InContractData, 26},                   // reqID, symbol, secType, expiry, skip, strike, right, exchange, currency, localSymbol, marketName, tradingClass, conID, minTick, 5 skip, longName, primaryExchange, 4 skip, timeZoneID
-		{"ExecutionData", protocol.InExecutionData, 32},                 // complete classic sv200 execution detail
-		{"NewsBulletins", protocol.InNewsBulletins, 5},                  // version, msgId, msgType, headline, source
-		{"ManagedAccounts", protocol.InManagedAccounts, 2},              // version, accountsList
-		{"HistoricalData", protocol.InHistoricalData, 12},               // reqID, barCount, then up to 8 bar fields (time,O,H,L,C,vol,wap,count) + end
-		{"BondContractData", protocol.InBondContractData, 42},           // reqID, 31 fixed bond/common fields, security IDs, and size-rule tail
-		{"ScannerParameters", protocol.InScannerParameters, 2},          // version, xml
-		{"ScannerData", protocol.InScannerData, 20},                     // version, reqID, count, entries(rank + 10 contract + market name + 4 fields)
-		{"TickOptionComputation", protocol.InTickOptionComputation, 12}, // version, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice
-		{"TickGeneric", protocol.InTickGeneric, 4},                      // version, reqID, tickType, value
-		{"TickString", protocol.InTickString, 4},                        // version, reqID, tickType, value
-		{"CurrentTime", protocol.InCurrentTime, 2},                      // version, time
-		{"RealTimeBars", protocol.InRealTimeBars, 10},                   // version, reqID, time, O, H, L, C, vol, wap, count
-		{"ContractDataEnd", protocol.InContractDataEnd, 2},              // version, reqID
-		{"OpenOrderEnd", protocol.InOpenOrderEnd, 1},                    // version
-		{"AccountDownloadEnd", protocol.InAccountDownloadEnd, 2},        // version, account
-		{"ExecutionDataEnd", protocol.InExecutionDataEnd, 2},            // version, reqID
-		{"TickSnapshotEnd", protocol.InTickSnapshotEnd, 2},              // version, reqID
-		{"MarketDataType", protocol.InMarketDataType, 3},                // version, reqID, dataType
-		{"CommissionReport", protocol.InCommissionReport, 7},            // version plus six report fields
-		{"PositionData", protocol.InPositionData, 15},                   // version, account, 11 contract, position, avgCost
-		{"PositionEnd", protocol.InPositionEnd, 1},                      // version
-		{"AccountSummary", protocol.InAccountSummary, 6},                // version, reqID, account, tag, value, currency
-		{"AccountSummaryEnd", protocol.InAccountSummaryEnd, 2},          // version, reqID
-		{"PositionMulti", protocol.InPositionMulti, 17},                 // version, reqID, account, 11 contract, position, avgCost, modelCode
-		{"PositionMultiEnd", protocol.InPositionMultiEnd, 2},            // version, reqID
-		{"AccountUpdateMulti", protocol.InAccountUpdateMulti, 7},        // version, reqID, account, modelCode, key, value, currency
-		{"AccountUpdateMultiEnd", protocol.InAccountUpdateMultiEnd, 2},  // version, reqID
-		{"SecDefOptParams", protocol.InSecDefOptParams, 10},             // reqID, exchange, underConID, tradingClass, multiplier, marketRuleId, expirationCount, (expirations...), strikeCount, (strikes...)
-		{"SecDefOptParamsEnd", protocol.InSecDefOptParamsEnd, 1},        // reqID
-		{"FamilyCodes", protocol.InFamilyCodes, 5},                      // count, then pairs
-		{"MktDepthExchanges", protocol.InMktDepthExchanges, 10},         // count + entries(5 each)
-		{"TickReqParams", protocol.InTickReqParams, 4},                  // reqID, minTick, bboExchange, snapshotPermissions
-		{"SymbolSamples", protocol.InSymbolSamples, 10},                 // reqID, count, entries(conID, symbol, secType, primaryExch, currency, derivCount, derivTypes..., description, issuerID)
-		{"SmartComponents", protocol.InSmartComponents, 5},              // reqID, count, entries(bitNumber, exchangeName, exchangeLetter)
-		{"NewsArticle", protocol.InNewsArticle, 3},                      // reqID, articleType, articleText
-		{"TickNews", protocol.InTickNews, 6},                            // reqID, time, providerCode, articleId, headline, extraData
-		{"NewsProviders", protocol.InNewsProviders, 5},                  // count, then pairs
-		{"HistoricalNews", protocol.InHistoricalNews, 5},                // reqID, time, providerCode, articleId, headline
-		{"HistoricalNewsEnd", protocol.InHistoricalNewsEnd, 2},          // reqID, hasMore
-		{"HeadTimestamp", protocol.InHeadTimestamp, 2},                  // reqID, headTimestamp
-		{"HistogramData", protocol.InHistogramData, 6},                  // reqID, count, then pairs
-		{"MarketRule", protocol.InMarketRule, 6},                        // marketRuleId, count, then pairs
-		{"PnL", protocol.InPnL, 4},                                      // reqID, dailyPnL, unrealizedPnL, realizedPnL
-		{"PnLSingle", protocol.InPnLSingle, 6},                          // reqID, pos, dailyPnL, unrealizedPnL, realizedPnL, value
-		{"HistoricalTicks", protocol.InHistoricalTicks, 8},              // reqID, count, entries(time, unused, price, size), done
-		{"HistoricalTicksBidAsk", protocol.InHistoricalTicksBidAsk, 10}, // reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done
-		{"HistoricalTicksLast", protocol.InHistoricalTicksLast, 10},     // reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done
-		{"TickByTick", protocol.InTickByTick, 10},                       // reqID, tickType, time, then type-dependent fields
-		{"CompletedOrder", protocol.InCompletedOrder, 95},               // 11 contract + action + qty + orderType + 4 skip + 71 skip + status + 3 skip + filled + remaining
-		{"CompletedOrderEnd", protocol.InCompletedOrderEnd, 0},          // no fields after msg_id
-		{"UserInfo", protocol.InUserInfo, 2},                            // reqID, whiteBrandingId
-		{"HistoricalSchedule", protocol.InHistoricalSchedule, 5},        // reqID, start, end, timezone, session count
-		{"HistoricalDataUpdate", protocol.InHistoricalDataUpdate, 9},    // reqID, barCount, time, O, C, H, L, wap, vol
-		{"HistoricalDataEnd", protocol.InHistoricalDataEnd, 3},          // reqID, startDateTime, endDateTime
+		{"CurrentTimeInMillis", protocol.InCurrentTimeInMillis, 1},
+		{"NextValidID", protocol.InNextValidID, 2},
+		{"ScannerParameters", protocol.InScannerParameters, 2},
+		{"ScannerData", protocol.InScannerData, 20},
+		{"TickEFP", protocol.InTickEFP, 10},
+		{"CurrentTime", protocol.InCurrentTime, 2},
+		{"DeltaNeutralValidation", protocol.InDeltaNeutralValidation, 13},
+		{"SecDefOptParams", protocol.InSecDefOptParams, 10},
+		{"SecDefOptParamsEnd", protocol.InSecDefOptParamsEnd, 1},
+		{"FamilyCodes", protocol.InFamilyCodes, 5},
+		{"MktDepthExchanges", protocol.InMktDepthExchanges, 10},
+		{"NewsArticle", protocol.InNewsArticle, 3},
+		{"TickNews", protocol.InTickNews, 6},
+		{"NewsProviders", protocol.InNewsProviders, 5},
+		{"SymbolSamples", protocol.InSymbolSamples, 10},
+		{"SmartComponents", protocol.InSmartComponents, 5},
+		{"HistoricalNews", protocol.InHistoricalNews, 5},
+		{"HistoricalNewsEnd", protocol.InHistoricalNewsEnd, 2},
+		{"MarketRule", protocol.InMarketRule, 6},
+		{"UserInfo", protocol.InUserInfo, 2},
+		{"NewsBulletins", protocol.InNewsBulletins, 5},
+		{"PnL", protocol.InPnL, 4},
+		{"PnLSingle", protocol.InPnLSingle, 6},
+		{"ReceiveFA", protocol.InReceiveFA, 3},
+		{"SoftDollarTiers", protocol.InSoftDollarTiers, 6},
+		{"WSHMetaData", protocol.InWSHMetaData, 2},
+		{"WSHEventData", protocol.InWSHEventData, 2},
+		{"DisplayGroupList", protocol.InDisplayGroupList, 3},
+		{"DisplayGroupUpdated", protocol.InDisplayGroupUpdated, 3},
+	}
+
+	covered := make(map[int]bool, len(cases))
+	for _, tc := range cases {
+		if covered[tc.msgID] {
+			t.Fatalf("duplicate classic short-field case for msg_id %d", tc.msgID)
+		}
+		covered[tc.msgID] = true
+		if _, ok := inboundDecoders[tc.msgID]; !ok {
+			t.Fatalf("classic short-field case %s names inactive msg_id %d", tc.name, tc.msgID)
+		}
+	}
+	for msgID := range inboundDecoders {
+		if !covered[msgID] {
+			t.Fatalf("active classic msg_id %d has no short-field case", msgID)
+		}
 	}
 
 	for _, tc := range cases {
@@ -217,9 +109,8 @@ func TestDecodeShortFields(t *testing.T) {
 				fields[i] = "0"
 			}
 			t.Run(fmt.Sprintf("%s/%d_fields", tc.name, n), func(t *testing.T) {
-				payload := wire.EncodeFields(append([]string{strconv.Itoa(tc.msgID)}, fields...))
-				// Must not panic. Errors are acceptable.
-				mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
+				payload := mustEncodeClassicEnvelope(t, tc.msgID, fields)
+				mustNotPanic(t, func() { _, _ = DecodeBatch(208, payload) })
 			})
 		}
 	}
@@ -231,19 +122,21 @@ func TestDecodeShortFields(t *testing.T) {
 func TestDecodeUnknownMsgID(t *testing.T) {
 	t.Parallel()
 
-	known := make(map[int]bool, len(allInboundMsgIDs))
-	for _, id := range allInboundMsgIDs {
-		known[id] = true
+	known := make(map[int]bool)
+	for _, message := range protocol.Messages() {
+		if message.Direction == protocol.ServerToClient {
+			known[message.ID] = true
+		}
 	}
 
-	for id := 0; id <= 255; id++ {
+	for id := 1; id <= protocol.ProtobufMessageID; id++ {
 		if known[id] {
 			continue
 		}
 		t.Run(strconv.Itoa(id), func(t *testing.T) {
 			t.Parallel()
-			payload := wire.EncodeFields([]string{strconv.Itoa(id), "0", "1", "abc"})
-			msgs, err := DecodeBatch(200, payload)
+			payload := mustEncodeClassicEnvelope(t, id, []string{"0", "1", "abc"})
+			msgs, err := DecodeBatch(208, payload)
 			if err != nil {
 				t.Fatalf("msg_id %d: unknown msg ID must not error (it would kill the session): %v", id, err)
 			}
@@ -270,70 +163,38 @@ func TestDecodeUnknownMsgID(t *testing.T) {
 func TestDecodeNegativeAndOverflowCounts(t *testing.T) {
 	t.Parallel()
 
-	// Messages where the second-ish field after msg_id is a count driving a loop.
-	countMsgs := []struct {
+	cases := []struct {
 		name   string
-		fields []string // msg_id, then fields up to and including the count
+		fields []string
 	}{
-		// HistoricalData: [17, reqID, barCount, ...] — negative barCount
-		{"HistoricalData/negative_count", []string{"17", "1", "-1"}},
-		{"HistoricalData/zero_count", []string{"17", "1", "0"}},
-
-		// FamilyCodes: [78, count, ...] — negative count
 		{"FamilyCodes/negative_count", []string{"78", "-5"}},
 		{"FamilyCodes/zero_count", []string{"78", "0"}},
-
-		// MktDepthExchanges: [80, count, ...] — negative count
-		// With >2 remaining fields it takes the MktDepthExchanges path.
 		{"MktDepthExchanges/negative_count", []string{"80", "-5", "0", "0", "0"}},
 		{"MktDepthExchanges/zero_count", []string{"80", "0", "0", "0", "0"}},
-
-		// NewsProviders: [85, count, ...]
 		{"NewsProviders/negative_count", []string{"85", "-1"}},
 		{"NewsProviders/zero_count", []string{"85", "0"}},
-
-		// ScannerData: [20, version, reqID, count, ...]
 		{"ScannerData/negative_count", []string{"20", "3", "1", "-1"}},
 		{"ScannerData/zero_count", []string{"20", "3", "1", "0"}},
-
-		// HistogramData: [89, reqID, count, ...]
-		{"HistogramData/negative_count", []string{"89", "1", "-1"}},
-		{"HistogramData/zero_count", []string{"89", "1", "0"}},
-
-		// MarketRule: [93, ruleID, count, ...]
 		{"MarketRule/negative_count", []string{"93", "1", "-1"}},
 		{"MarketRule/zero_count", []string{"93", "1", "0"}},
-
-		// HistoricalTicks: [96, reqID, count, ...]
-		{"HistoricalTicks/negative_count", []string{"96", "1", "-1"}},
-		{"HistoricalTicks/zero_count", []string{"96", "1", "0"}},
-
-		// HistoricalTicksBidAsk: [97, reqID, count, ...]
-		{"HistoricalTicksBidAsk/negative_count", []string{"97", "1", "-1"}},
-
-		// HistoricalTicksLast: [98, reqID, count, ...]
-		{"HistoricalTicksLast/negative_count", []string{"98", "1", "-1"}},
-
-		// SecDefOptParams: [75, reqID, exchange, underConID, tradingClass, multiplier, marketRuleId, expirationCount, ...]
 		{"SecDefOptParams/negative_expiration_count", []string{"75", "1", "SMART", "0", "OPT", "100", "26", "-1"}},
 		{"SecDefOptParams/zero_counts", []string{"75", "1", "SMART", "0", "OPT", "100", "26", "0", "0"}},
-
-		// SymbolSamples: [79, reqID, count, ...]
 		{"SymbolSamples/negative_count", []string{"79", "1", "-1"}},
 		{"SymbolSamples/zero_count", []string{"79", "1", "0"}},
-
-		// SymbolSamples nested derivative-type count: one entry whose
-		// per-entry derivCount is negative or absurd must error, not panic
-		// on make([]string, derivCount).
 		{"SymbolSamples/negative_deriv_count", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "-1"}},
 		{"SymbolSamples/overflow_deriv_count", []string{"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "2147483647"}},
+		{"SmartComponents/negative_count", []string{"82", "1", "-1"}},
+		{"SoftDollarTiers/negative_count", []string{"77", "1", "-1"}},
 	}
 
-	for _, tc := range countMsgs {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			payload := wire.EncodeFields(tc.fields)
-			// Must not panic.
-			mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
+			msgID, _ := strconv.Atoi(tc.fields[0])
+			if _, ok := inboundDecoders[msgID]; !ok {
+				t.Fatalf("count case names inactive classic msg_id %d", msgID)
+			}
+			payload := mustEncodeClassicFields(t, tc.fields)
+			mustNotPanic(t, func() { _, _ = DecodeBatch(208, payload) })
 		})
 	}
 }
@@ -345,72 +206,28 @@ func TestDecodeFieldParseErrors(t *testing.T) {
 		name   string
 		fields []string
 	}{
-		// TickPrice with non-numeric version
-		{"TickPrice/bad_version", []string{"1", "abc", "1", "1", "100", "50", "0"}},
-		// TickPrice with non-numeric reqID
-		{"TickPrice/bad_reqID", []string{"1", "6", "xyz", "1", "100", "50", "0"}},
-		// NextValidID with non-numeric orderID (returned as error, not panic)
 		{"NextValidID/bad_orderID", []string{"9", "1", "not_a_number"}},
-		// TickReqParams with non-numeric reqID
-		{"TickReqParams/bad_reqID", []string{"81", "abc", "0.01", "SMART", "3"}},
-		// AccountSummary with non-numeric version
-		{"AccountSummary/bad_version", []string{"63", "xyz", "1", "DU123", "Tag", "100", "USD"}},
-		// MarketDataType with non-numeric dataType
-		{"MarketDataType/bad_dataType", []string{"58", "1", "1", "not_int"}},
-		// HeadTimestamp with non-numeric reqID
-		{"HeadTimestamp/bad_reqID", []string{"88", "bad", "timestamp"}},
-		// PnL with non-numeric reqID
+		{"CurrentTime/bad_time", []string{"49", "1", "not_a_number"}},
+		{"CurrentTimeInMillis/bad_time", []string{"109", "not_a_number"}},
+		{"TickEFP/bad_reqID", []string{"47", "1", "bad"}},
+		{"DeltaNeutralValidation/bad_reqID", []string{"56", "1", "bad"}},
 		{"PnL/bad_reqID", []string{"94", "bad", "100", "200", "300"}},
-		// HistoricalDataUpdate with non-numeric reqID
-		{"HistoricalDataUpdate/bad_reqID", []string{"90", "bad", "1", "t", "o", "h", "l", "c", "v", "w", "n"}},
+		{"PnLSingle/bad_reqID", []string{"95", "bad", "1", "2", "3", "4", "5"}},
+		{"ReceiveFA/bad_data_type", []string{"16", "1", "bad", "<xml/>"}},
+		{"DisplayGroupList/bad_reqID", []string{"67", "1", "bad", "1|2"}},
+		{"WSHMetaData/bad_reqID", []string{"104", "bad", "{}"}},
+		{"UserInfo/bad_reqID", []string{"107", "bad", ""}},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			payload := wire.EncodeFields(tc.fields)
-			// Must not panic. Errors are acceptable.
-			mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
-		})
-	}
-}
-
-// TestDecodeTickByTickVariants exercises each TickByTick sub-type (Last, AllLast,
-// BidAsk, MidPoint) with minimal and short field arrays.
-func TestDecodeTickByTickVariants(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name   string
-		fields []string
-	}{
-		// tickType=1 (Last): reqID, tickType, time, price, size, attrib, exchange, specialConditions
-		{"Last/full", []string{"99", "1", "1", "1712345678", "100.5", "200", "0", "SMART", ""}},
-		{"Last/short", []string{"99", "1", "1", "1712345678"}},
-		{"Last/minimal", []string{"99", "1", "1"}},
-
-		// tickType=2 (AllLast)
-		{"AllLast/full", []string{"99", "1", "2", "1712345678", "100.5", "200", "0", "SMART", ""}},
-
-		// tickType=3 (BidAsk): reqID, tickType, time, bidPrice, askPrice, bidSize, askSize, attrib
-		{"BidAsk/full", []string{"99", "1", "3", "1712345678", "100.0", "100.5", "100", "200", "0"}},
-		{"BidAsk/short", []string{"99", "1", "3", "1712345678"}},
-
-		// tickType=4 (MidPoint): reqID, tickType, time, midPoint
-		{"MidPoint/full", []string{"99", "1", "4", "1712345678", "100.25"}},
-		{"MidPoint/short", []string{"99", "1", "4"}},
-
-		// tickType=0 (unknown sub-type): should not panic
-		{"Unknown/zero", []string{"99", "1", "0", "1712345678"}},
-		{"Unknown/99", []string{"99", "1", "99", "1712345678"}},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			payload := wire.EncodeFields(tc.fields)
-			// Must not panic.
-			mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
+			msgID, _ := strconv.Atoi(tc.fields[0])
+			if _, ok := inboundDecoders[msgID]; !ok {
+				t.Fatalf("parse-error case names inactive classic msg_id %d", msgID)
+			}
+			payload := mustEncodeClassicFields(t, tc.fields)
+			mustNotPanic(t, func() { _, _ = DecodeBatch(208, payload) })
 		})
 	}
 }
@@ -435,13 +252,13 @@ func TestDecodeHistoricalNewsEndAndMktDepthExchanges(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			payload := wire.EncodeFields(tc.fields)
+			payload := mustEncodeClassicFields(t, tc.fields)
 			if tc.wantName == "" {
 				// We just verify no panic; error or weird result is acceptable.
-				mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
+				mustNotPanic(t, func() { _, _ = DecodeBatch(208, payload) })
 				return
 			}
-			msgs, err := DecodeBatch(200, payload)
+			msgs, err := DecodeBatch(208, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch: %v", err)
 			}
@@ -478,12 +295,12 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			payload := wire.EncodeFields(tc.fields)
+			payload := mustEncodeClassicFields(t, tc.fields)
 			if tc.wantName == "" {
-				mustNotPanic(t, func() { _, _ = DecodeBatch(200, payload) })
+				mustNotPanic(t, func() { _, _ = DecodeBatch(208, payload) })
 				return
 			}
-			msgs, err := DecodeBatch(200, payload)
+			msgs, err := DecodeBatch(208, payload)
 			if err != nil {
 				t.Fatalf("DecodeBatch: %v", err)
 			}
@@ -500,7 +317,7 @@ func TestDecodeSymbolSamplesAndSmartComponents(t *testing.T) {
 func TestDecodeSymbolSamplesUnconditionalMetadata(t *testing.T) {
 	t.Parallel()
 
-	msgs, err := DecodeBatch(200, wire.EncodeFields([]string{
+	msgs, err := DecodeBatch(208, mustEncodeClassicFields(t, []string{
 		"79", "1", "1", "265598", "AAPL", "STK", "NASDAQ", "USD", "0", "123", "issuer-1",
 	}))
 	if err != nil {
@@ -510,4 +327,13 @@ func TestDecodeSymbolSamplesUnconditionalMetadata(t *testing.T) {
 	if got.Description != "123" || got.IssuerID != "issuer-1" {
 		t.Fatalf("symbol metadata = description %q, issuer %q", got.Description, got.IssuerID)
 	}
+}
+
+func mustEncodeClassicFields(t *testing.T, fields []string) []byte {
+	t.Helper()
+	msgID, err := strconv.Atoi(fields[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	return mustEncodeClassicEnvelope(t, msgID, fields[1:])
 }

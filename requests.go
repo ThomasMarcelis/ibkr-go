@@ -295,8 +295,8 @@ func formatHistoricalTickTime(t time.Time) string {
 }
 
 // The Gateway requires the documented fractional-second suffix on historical
-// news bounds. Without it, server_version 206 accepts the request but ignores
-// the window. Preserve the caller's explicit zone so login zones cannot shift it.
+// news bounds. Preserve the caller's explicit zone so login zones cannot shift
+// the window.
 func formatHistoricalNewsTime(t time.Time) string {
 	if t.IsZero() {
 		return ""

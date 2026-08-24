@@ -31,7 +31,7 @@ func (e *engine) StreamContractDetails(ctx context.Context, contract Contract, o
 
 	resp := make(chan result, 1)
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if err := validateContractFieldSupport(contract, "contract details", e.serverVersion, contractDetailsContractFields(e.serverVersion)); err != nil {
+		if err := validateContractFieldSupport(contract, "contract details", e.serverVersion, contractFieldsAll); err != nil {
 			resp <- result{err: err}
 			return
 		}

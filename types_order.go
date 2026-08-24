@@ -188,7 +188,7 @@ type ExecutionsRequest struct {
 	Exchange      string
 	Side          ExecutionFilterSide
 	LastDays      int         // zero disables the filter; IBKR accepts 1 through 7
-	SpecificDates []time.Time // explicit execution dates; requires server_version 200
+	SpecificDates []time.Time // explicit execution dates
 }
 
 // CommissionAndFeesReport holds IBKR's separate cost report for an execution.
@@ -456,7 +456,7 @@ type Order struct {
 	// IncludeOvernight requests IBKR Overnight Trading for eligible
 	// SMART-routed DAY orders. It is distinct from OutsideRTH, which controls
 	// execution outside regular trading hours.
-	IncludeOvernight      bool
+	IncludeOvernight      *bool                 // nil = server default; non-nil forces the requested value
 	TriggerMethod         int                   // stop-trigger method; 0 = default
 	DisplaySize           int                   // iceberg display size; 0 = show full size
 	OrderRef              string                // free-form client order reference/tag
@@ -580,9 +580,8 @@ type CompletedOrderResult struct {
 // completed-order messages. Pointer-valued values distinguish an explicit
 // zero or false from a field the broker did not send.
 type OrderDetails struct {
-	// OrderID, ClientID, and ParentID are nil for classic completed-order
-	// replies, whose wire shape does not carry those identities. A non-nil
-	// pointer preserves an explicit zero from protobuf replies.
+	// OrderID, ClientID, and ParentID preserve broker presence. A non-nil
+	// pointer preserves an explicit zero.
 	OrderID    *int64
 	ClientID   *ClientID
 	ParentID   *int64
@@ -596,9 +595,8 @@ type OrderDetails struct {
 	OrderRef   string
 	PermID     *int64
 	OutsideRTH bool
-	// IncludeOvernight is nil when the broker omitted the echo. Classic and
-	// protobuf OpenOrder replies preserve broker presence, as do protobuf
-	// CompletedOrder replies; classic CompletedOrder always omits this field.
+	// IncludeOvernight is nil when the broker omitted the echo. OpenOrder and
+	// CompletedOrder replies preserve broker presence.
 	IncludeOvernight *bool
 	Hidden           bool
 	GoodAfterTime    string

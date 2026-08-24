@@ -10,6 +10,30 @@ import (
 
 const historicalSV208CaptureHash = "70229f753fb62a4c553b2fb2d1a2f9c2a19cafc5242945daf433b4b93a378ea3"
 
+func TestDecodeHistoricalTicksLastProto215LiveFrame(t *testing.T) {
+	t.Parallel()
+
+	// Capture 20260713T164153Z-sdk_sv215_request_cancels, events.jsonl SHA-256
+	// b3515b46284970f338db6ede7b2864f4d63449027f9f48ff203a67f4fd34d019.
+	// API 10.48.01 requested the data from a live server_version 215 Gateway.
+	frame := decodeGzipBase64(t, "H4sIAAAAAAACA9WYT2gTQRTGd5O1Tb0oxYO51E1MWrNg2dmsaYoIbpukBm0hacEeKnrwIChY8ZZ7D6Vie1IUBLWCCuKhB6kHLz148Q/JVmgbReiphx5ERFFK0U2a7s6bzGTHkNi65x/fvPd9b2YyEQRR8c0dbw/7lmY/mC3tkk/YL/p/HBmbXihcPxn0oKgi9Rkjw5okp+Q0E9NURTKy/QYV6565/xOZFiYiZU8qPZQtYXIVZgqfPW3uWOt7f6ZY2J1qnBinIYmpK2sbhUa1wIk9Gj+xd8kdS3f/Dmy6YxfPfUp5zUapvXmQfPHtf6stgGGC3zJ3dryEeTVVrYAEcmo1d+B5eVfpqtIyZAwnjAwPEqQjXoQcBta8tvH0q+leM0dBTlsoZrcV9i3z+dg8rMbQ16FmGyHGIBbEMMGfne+YWC9hElJVhhtM63dBm5xqnJhj2j9clGnvIZAUmOzyBUZEie0iFZ/9ZbftwVl1J90qD9L4LD3Gh2l1BcQqTtNreXr3jvWVubi69dthZ5KGmL0nq7EVPrUVvtoaiXUBzDEWoe05s5OigiIvFye4MFPPrk9vuHewuHdvrW+xsquwVc/W5zFncc+mPl4SFoktU90qc8vIGIafDDHkXAPNmhDsFvboePIpWSZGyQGjvUT0EYaitZl9iWz/SDIxkKxohlmLq9ibQWYqWp6QihFGlaiXQMlpwRqKQ4dCdM4yEj5Y6JRWKxVcbOcPC4g9eX26Z5I+MUUsjdKADhB3lz0xRUzPATUIlhZmKuJjEKLrVQXBXJWNnemZNC7QPcGxifXMfAft2uyiYx4tRrTKBElPQsyF8dc0i4KWyMBfZ1H7XOQgoBGvsrcCN938EraO4DwlSqjmYCgO2uukq3lRVFekweTgqIsckXmIjmFuVUfO7DQAarOmbDWXJ15lUOmh9bzbzLvO2I2Xl9t+lR+VOnmB4JhsXj3f6j6xnNjtmX25WMPUmBgM4Frp+NsOAPxF1LxGI2PTC9/dQ+DMCh8hgB0G2NG5e18eVzBvX3L0rxo4KP4BL3chDGITAAA=")
+	decoded, err := Decode(215, frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, ok := decoded.(HistoricalTicksLastResponse)
+	if !ok {
+		t.Fatalf("Decode() = %T, want HistoricalTicksLastResponse", decoded)
+	}
+	if response.ReqID != 7602 || !response.Done || len(response.Ticks) != 128 {
+		t.Fatalf("response identity = reqID %d, ticks %d, done %t", response.ReqID, len(response.Ticks), response.Done)
+	}
+	first := response.Ticks[0]
+	if first.Time != "1783960023" || first.Size != "13" || first.Exchange != "BATS" || first.SpecialConditions != " F I" {
+		t.Fatalf("first historical last tick = %+v", first)
+	}
+}
+
 func TestHistoricalProto208LiveVectors(t *testing.T) {
 	t.Parallel()
 
@@ -54,31 +78,20 @@ func TestHistoricalProto208LiveVectors(t *testing.T) {
 	}
 }
 
-func TestHistoricalEncodingBoundary208(t *testing.T) {
+func TestHistoricalEncodingAtSupportedFloor(t *testing.T) {
 	t.Parallel()
 
 	msg := HistoricalBarsRequest{
 		ReqID: 17, Contract: Contract{Symbol: "AAPL", SecType: "STK", Exchange: "SMART", Currency: "USD"},
 		BarSize: "1 day", Duration: "1 D", WhatToShow: "TRADES",
 	}
-	classic, err := Encode(207, msg)
-	if err != nil {
-		t.Fatal(err)
-	}
 	protobuf, err := Encode(208, msg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	classicEnvelope, err := protocol.DecodeEnvelope(207, classic)
 	if err != nil {
 		t.Fatal(err)
 	}
 	protobufEnvelope, err := protocol.DecodeEnvelope(208, protobuf)
 	if err != nil {
 		t.Fatal(err)
-	}
-	if classicEnvelope.MsgID != protocol.OutReqHistoricalData || classicEnvelope.Encoding != protocol.ClassicBody {
-		t.Fatalf("Encode(207) envelope = %#v", classicEnvelope)
 	}
 	if protobufEnvelope.MsgID != protocol.OutReqHistoricalData || protobufEnvelope.Encoding != protocol.ProtobufBody {
 		t.Fatalf("Encode(208) envelope = %#v", protobufEnvelope)

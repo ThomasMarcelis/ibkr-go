@@ -65,15 +65,22 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 		}
 		return msgs, nil
 	}
+	if _, ok := inboundDecoders[envelope.MsgID]; !ok {
+		return []Message{UnknownInbound{
+			MsgID:    envelope.MsgID,
+			Encoding: protocol.ClassicBody,
+			Fields:   copyClassicFields(envelope.Body),
+			Payload:  append([]byte(nil), envelope.Body...),
+		}}, nil
+	}
 
 	if len(envelope.Body) > 0 && envelope.Body[len(envelope.Body)-1] != 0 {
 		fields := copyClassicFields(envelope.Body)
 		return []Message{MalformedInbound{
-			MsgID:       envelope.MsgID,
-			Encoding:    protocol.ClassicBody,
-			Fields:      fields,
-			Correlation: classicMalformedCorrelation(envelope.MsgID, fields),
-			Err:         wire.ErrMalformedFrame,
+			MsgID:    envelope.MsgID,
+			Encoding: protocol.ClassicBody,
+			Fields:   fields,
+			Err:      wire.ErrMalformedFrame,
 		}}, nil
 	}
 	r := newFieldReaderBytes(envelope.Body)
@@ -86,11 +93,10 @@ func DecodeBatch(sv int, payload []byte) ([]Message, error) {
 	if err != nil {
 		fields := copyClassicFields(envelope.Body)
 		return []Message{MalformedInbound{
-			MsgID:       envelope.MsgID,
-			Encoding:    protocol.ClassicBody,
-			Fields:      fields,
-			Correlation: classicMalformedCorrelation(envelope.MsgID, fields),
-			Err:         fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err),
+			MsgID:    envelope.MsgID,
+			Encoding: protocol.ClassicBody,
+			Fields:   fields,
+			Err:      fmt.Errorf("codec: msg_id %d: %w", envelope.MsgID, err),
 		}}, nil
 	}
 	return msgs, nil
@@ -113,16 +119,9 @@ func Decode(sv int, payload []byte) (Message, error) {
 
 // Encode encodes a message in the real TWS wire format (integer msg_id prefix).
 func Encode(sv int, msg OutboundMessage) ([]byte, error) {
-	fields, err := msg.encodeWire(sv)
-	if err != nil {
-		return nil, err
-	}
-	if len(fields) == 0 {
-		return nil, fmt.Errorf("codec: message encoded no fields")
-	}
-	msgID, err := strconv.Atoi(fields[0])
-	if err != nil || msgID < 0 {
-		return nil, fmt.Errorf("codec: invalid outbound msg_id %q", fields[0])
+	msgID := msg.messageID()
+	if msgID < 0 {
+		return nil, fmt.Errorf("codec: invalid outbound msg_id %d", msgID)
 	}
 	if version, ok := protocol.OutboundProtobufVersion(msgID); ok && sv >= version {
 		if proto, ok := msg.(protobufEncoder); ok {
@@ -134,31 +133,23 @@ func Encode(sv int, msg OutboundMessage) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("codec: msg_id %d protobuf encoding is not implemented for server_version %d", msgID, sv)
 	}
-	return protocol.EncodeClassicEnvelope(sv, msgID, fields[1:])
-}
-
-// EncodeLegacyServer encodes one of the testhost's retained symbolic server
-// fixtures in the classic wire format. Production client traffic uses Encode.
-func EncodeLegacyServer(sv int, msg LegacyServerMessage) ([]byte, error) {
-	var fields []string
-	var err error
-	switch encoder := msg.(type) {
-	case infallibleLegacyServerEncoder:
-		fields = encoder.encodeLegacyServerWire()
-	case fallibleLegacyServerEncoder:
-		fields, err = encoder.encodeLegacyServerWire()
-	default:
-		return nil, fmt.Errorf("codec: legacy server message %T has no encoder", msg)
+	classic, ok := msg.(classicEncoder)
+	if !ok {
+		if version, versioned := protocol.OutboundProtobufVersion(msgID); versioned {
+			return nil, fmt.Errorf("codec: msg_id %d requires server_version %d", msgID, version)
+		}
+		return nil, fmt.Errorf("codec: msg_id %d classic encoding is not implemented for server_version %d", msgID, sv)
 	}
+	fields, err := classic.encodeWire(sv)
 	if err != nil {
 		return nil, err
 	}
 	if len(fields) == 0 {
-		return nil, fmt.Errorf("codec: legacy server message encoded no fields")
+		return nil, fmt.Errorf("codec: message encoded no fields")
 	}
-	msgID, err := strconv.Atoi(fields[0])
-	if err != nil || msgID < 0 {
-		return nil, fmt.Errorf("codec: invalid legacy server msg_id %q", fields[0])
+	wireMsgID, err := strconv.Atoi(fields[0])
+	if err != nil || wireMsgID != msgID {
+		return nil, fmt.Errorf("codec: classic encoder returned msg_id %q, want %d", fields[0], msgID)
 	}
 	return protocol.EncodeClassicEnvelope(sv, msgID, fields[1:])
 }
@@ -173,40 +164,13 @@ type protobufEncoder interface {
 // inboundDecoders maps msg_id to its decoder. One explicit table, no
 // init() registration.
 var inboundDecoders = map[int]decodeFunc{
-	protocol.InTickPrice:              decodeTickPrice,
-	protocol.InTickSize:               decodeTickSize,
-	protocol.InOrderStatus:            decodeOrderStatus,
-	protocol.InErrMsg:                 decodeErrMsg,
-	protocol.InOpenOrder:              decodeOpenOrder,
 	protocol.InCurrentTimeInMillis:    decodeCurrentTimeInMillis,
 	protocol.InNextValidID:            decodeNextValidID,
-	protocol.InContractData:           decodeContractData,
-	protocol.InExecutionData:          decodeExecutionData,
-	protocol.InMarketDepth:            decodeMarketDepth,
-	protocol.InMarketDepthL2:          decodeMarketDepthL2,
-	protocol.InManagedAccounts:        decodeManagedAccounts,
-	protocol.InHistoricalData:         decodeHistoricalData,
-	protocol.InBondContractData:       decodeBondContractData,
 	protocol.InScannerParameters:      decodeScannerParameters,
 	protocol.InScannerData:            decodeScannerData,
-	protocol.InTickOptionComputation:  decodeTickOptionComputation,
-	protocol.InTickGeneric:            decodeTickGeneric,
-	protocol.InTickString:             decodeTickString,
 	protocol.InTickEFP:                decodeTickEFP,
-	protocol.InTickReqParams:          decodeTickReqParams,
 	protocol.InCurrentTime:            decodeCurrentTime,
-	protocol.InRealTimeBars:           decodeRealTimeBars,
-	protocol.InContractDataEnd:        decodeContractDataEnd,
-	protocol.InOpenOrderEnd:           decodeOpenOrderEnd,
-	protocol.InExecutionDataEnd:       decodeExecutionDataEnd,
 	protocol.InDeltaNeutralValidation: decodeDeltaNeutralValidation,
-	protocol.InTickSnapshotEnd:        decodeTickSnapshotEnd,
-	protocol.InMarketDataType:         decodeMarketDataType,
-	protocol.InCommissionReport:       decodeCommissionReport,
-	protocol.InPositionData:           decodePositionData,
-	protocol.InPositionEnd:            decodePositionEnd,
-	protocol.InAccountSummary:         decodeAccountSummary,
-	protocol.InAccountSummaryEnd:      decodeAccountSummaryEnd,
 	protocol.InSecDefOptParams:        decodeSecDefOptParams,
 	protocol.InSecDefOptParamsEnd:     decodeSecDefOptParamsEnd,
 	protocol.InFamilyCodes:            decodeFamilyCodes,
@@ -218,37 +182,15 @@ var inboundDecoders = map[int]decodeFunc{
 	protocol.InSmartComponents:        decodeSmartComponents,
 	protocol.InHistoricalNews:         decodeHistoricalNews,
 	protocol.InHistoricalNewsEnd:      decodeHistoricalNewsEnd,
-	protocol.InHeadTimestamp:          decodeHeadTimestamp,
-	protocol.InHistogramData:          decodeHistogramData,
 	protocol.InMarketRule:             decodeMarketRule,
-	protocol.InMarketDataReroute:      decodeMarketDataReroute,
-	protocol.InMarketDepthReroute:     decodeMarketDepthReroute,
-	protocol.InCompletedOrder:         decodeCompletedOrder,
-	protocol.InOrderBound:             decodeOrderBound,
-	protocol.InCompletedOrderEnd:      decodeCompletedOrderEnd,
 	protocol.InUserInfo:               decodeUserInfo,
-	protocol.InUpdateAccountValue:     decodeUpdateAccountValue,
-	protocol.InUpdatePortfolio:        decodeUpdatePortfolio,
-	protocol.InUpdateAccountTime:      decodeUpdateAccountTime,
-	protocol.InAccountDownloadEnd:     decodeAccountDownloadEnd,
 	protocol.InNewsBulletins:          decodeNewsBulletins,
-	protocol.InPositionMulti:          decodePositionMulti,
-	protocol.InPositionMultiEnd:       decodePositionMultiEnd,
-	protocol.InAccountUpdateMulti:     decodeAccountUpdateMulti,
-	protocol.InAccountUpdateMultiEnd:  decodeAccountUpdateMultiEnd,
 	protocol.InPnL:                    decodePnL,
 	protocol.InPnLSingle:              decodePnLSingle,
-	protocol.InHistoricalTicks:        decodeHistoricalTicks,
-	protocol.InHistoricalTicksBidAsk:  decodeHistoricalTicksBidAsk,
-	protocol.InHistoricalTicksLast:    decodeHistoricalTicksLast,
-	protocol.InTickByTick:             decodeTickByTick,
-	protocol.InHistoricalDataUpdate:   decodeHistoricalDataUpdate,
-	protocol.InHistoricalDataEnd:      decodeHistoricalDataEnd,
 	protocol.InReceiveFA:              decodeReceiveFA,
 	protocol.InSoftDollarTiers:        decodeSoftDollarTiers,
 	protocol.InWSHMetaData:            decodeWSHMetaData,
 	protocol.InWSHEventData:           decodeWSHEventData,
-	protocol.InHistoricalSchedule:     decodeHistoricalSchedule,
 	protocol.InDisplayGroupList:       decodeDisplayGroupList,
 	protocol.InDisplayGroupUpdated:    decodeDisplayGroupUpdated,
 }
@@ -268,23 +210,14 @@ type UnknownInbound struct {
 
 // MalformedInbound carries a self-contained frame with a trustworthy message
 // ID whose body violates classic framing or did not match its registered
-// decoder. The frame boundary remains trustworthy, so callers can report and
-// skip this message without tearing down unrelated routes on the connection.
+// decoder. The engine reports the diagnostic and retires the entire transport
+// generation because later frames cannot safely complete a partial snapshot.
 type MalformedInbound struct {
-	MsgID       int
-	Encoding    protocol.BodyEncoding
-	Fields      []string
-	Payload     []byte
-	Correlation *MalformedCorrelation
-	Err         error
-}
-
-// MalformedCorrelation is routing identity recovered by a message-specific
-// classic layout after the outer frame boundary succeeded. It is deliberately
-// absent for generic/protobuf recovery: a partial protobuf scan cannot prove
-// last-one-wins singular-field identity.
-type MalformedCorrelation struct {
-	RequestID int
+	MsgID    int
+	Encoding protocol.BodyEncoding
+	Fields   []string
+	Payload  []byte
+	Err      error
 }
 
 func copyClassicFields(body []byte) []string {
@@ -297,38 +230,11 @@ func copyClassicFields(body []byte) []string {
 	return strings.Split(string(body), "\x00")
 }
 
-func classicMalformedCorrelation(msgID int, fields []string) *MalformedCorrelation {
-	var requestIDField int
-	switch msgID {
-	case protocol.InMarketDepth, protocol.InMarketDepthL2:
-		// Classic depth rows are [version, reqID, ...]. No other layout is
-		// inferred here; add cases only with their own captured field law.
-		requestIDField = 1
-	default:
-		return nil
-	}
-	if len(fields) <= requestIDField {
-		return nil
-	}
-	requestID, err := strconv.Atoi(fields[requestIDField])
-	if err != nil || requestID <= 0 {
-		return nil
-	}
-	return &MalformedCorrelation{RequestID: requestID}
-}
-
 // decodeByMsgID dispatches on the integer message ID and reads fields in real TWS wire layout.
 // Returns []Message because historical data packs multiple bars into one frame.
 // r is positioned just past the msg_id field.
 func decodeByMsgID(sv int, msgID int, r *fieldReader) ([]Message, error) {
-	dec, ok := inboundDecoders[msgID]
-	if !ok {
-		fields := make([]string, 0, r.Remaining())
-		for r.Remaining() > 0 {
-			fields = append(fields, r.ReadString())
-		}
-		return []Message{UnknownInbound{MsgID: msgID, Encoding: protocol.ClassicBody, Fields: fields}}, nil
-	}
+	dec := inboundDecoders[msgID]
 	msgs, err := dec(r, sv)
 	if err == nil && r.Err() != nil {
 		return nil, r.Err()
@@ -352,28 +258,6 @@ func writeWireContract(w *fieldWriter, c Contract) {
 	w.WriteString(c.TradingClass)
 }
 
-// readWireContract reads the 11-field contract block (server->client):
-// [conID, symbol, secType, expiry, strike, right, multiplier, exchange, currency, localSymbol, tradingClass]
-func readWireContract(r *fieldReader) Contract {
-	conID, _ := r.ReadInt()
-	symbol := r.ReadString()
-	secType := r.ReadString()
-	expiry := r.ReadString()
-	strike := r.ReadString()
-	right := r.ReadString()
-	multiplier := r.ReadString()
-	exchange := r.ReadString()
-	currency := r.ReadString()
-	localSymbol := r.ReadString()
-	tradingClass := r.ReadString()
-	return Contract{
-		ConID: conID, Symbol: symbol, SecType: secType,
-		Expiry: expiry, Strike: strike, Right: right,
-		Multiplier: multiplier, Exchange: exchange, Currency: currency,
-		LocalSymbol: localSymbol, TradingClass: tradingClass,
-	}
-}
-
 func itoa(v int) string     { return strconv.Itoa(v) }
 func i64toa(v int64) string { return strconv.FormatInt(v, 10) }
 
@@ -382,171 +266,4 @@ func btoa(v bool) string {
 		return "1"
 	}
 	return "0"
-}
-
-// unsetDoubleSentinel is the wire rendering of the official UNSET_DOUBLE
-// (DBL_MAX): an unset numeric slot, not a value.
-const unsetDoubleSentinel = "1.7976931348623157E308"
-
-func isPositiveWireNumber(raw string) bool {
-	if raw == "" {
-		return false
-	}
-	v, err := strconv.ParseFloat(raw, 64)
-	return err == nil && v > 0
-}
-
-func mustReadInt(r *fieldReader) int {
-	v, _ := r.ReadInt()
-	return v
-}
-
-func mustReadBool(r *fieldReader) bool {
-	v, _ := r.ReadBool()
-	return v
-}
-
-func readTagValuePairs(r *fieldReader, label string, count int) ([]TagValue, error) {
-	if err := r.RequireFixedEntryFields(label, count, 2, 0); err != nil {
-		return nil, err
-	}
-	values := make([]TagValue, count)
-	for i := range values {
-		values[i] = TagValue{Tag: r.ReadString(), Value: r.ReadString()}
-	}
-	return values, nil
-}
-
-func writeTagValuePairs(w *fieldWriter, values []TagValue) {
-	w.WriteInt(len(values))
-	for _, value := range values {
-		w.WriteString(value.Tag)
-		w.WriteString(value.Value)
-	}
-}
-
-func readOrderCondition(r *fieldReader, conditionType int) (OrderCondition, error) {
-	cond := OrderCondition{Type: conditionType}
-	switch conditionType {
-	case 1: // Price
-		cond.Conjunction = r.ReadString()
-		if more, err := r.ReadBool(); err != nil {
-			return OrderCondition{}, err
-		} else if more {
-			cond.Operator = 2
-		} else {
-			cond.Operator = 1
-		}
-		cond.Value = r.ReadString()
-		cond.ConID, _ = r.ReadInt()
-		cond.Exchange = r.ReadString()
-		cond.TriggerMethod, _ = r.ReadInt()
-	case 3: // Time
-		cond.Conjunction = r.ReadString()
-		if more, err := r.ReadBool(); err != nil {
-			return OrderCondition{}, err
-		} else if more {
-			cond.Operator = 2
-		} else {
-			cond.Operator = 1
-		}
-		cond.Value = r.ReadString()
-	case 4: // Margin
-		cond.Conjunction = r.ReadString()
-		if more, err := r.ReadBool(); err != nil {
-			return OrderCondition{}, err
-		} else if more {
-			cond.Operator = 2
-		} else {
-			cond.Operator = 1
-		}
-		cond.Value = r.ReadString()
-	case 5: // Execution
-		cond.Conjunction = r.ReadString()
-		cond.SecType = r.ReadString()
-		cond.Exchange = r.ReadString()
-		cond.Symbol = r.ReadString()
-	case 6: // Volume
-		cond.Conjunction = r.ReadString()
-		if more, err := r.ReadBool(); err != nil {
-			return OrderCondition{}, err
-		} else if more {
-			cond.Operator = 2
-		} else {
-			cond.Operator = 1
-		}
-		cond.Value = r.ReadString()
-		cond.ConID, _ = r.ReadInt()
-		cond.Exchange = r.ReadString()
-	case 7: // Percent change
-		cond.Conjunction = r.ReadString()
-		if more, err := r.ReadBool(); err != nil {
-			return OrderCondition{}, err
-		} else if more {
-			cond.Operator = 2
-		} else {
-			cond.Operator = 1
-		}
-		cond.Value = r.ReadString()
-		cond.ConID, _ = r.ReadInt()
-		cond.Exchange = r.ReadString()
-	default:
-		return OrderCondition{}, fmt.Errorf("codec: unsupported order condition type %d", conditionType)
-	}
-	return cond, nil
-}
-
-func writeOrderCondition(w *fieldWriter, cond OrderCondition) error {
-	w.WriteInt(cond.Type)
-	if cond.Conjunction == "o" {
-		w.WriteString("o")
-	} else {
-		w.WriteString("a")
-	}
-	// Contract-bound conditions follow the official client's writeExternal
-	// hierarchy: the OperatorCondition value precedes the ContractCondition
-	// conId/exchange pair. Live Gateway (server_version 200) rejects the
-	// reversed order with code 320 field-parse errors.
-	isMore := cond.Operator == 2
-	switch cond.Type {
-	case 1:
-		w.WriteBool(isMore)
-		w.WriteString(cond.Value)
-		w.WriteInt(cond.ConID)
-		w.WriteString(cond.Exchange)
-		w.WriteInt(cond.TriggerMethod)
-	case 3, 4:
-		w.WriteBool(isMore)
-		w.WriteString(cond.Value)
-	case 5:
-		w.WriteString(cond.SecType)
-		w.WriteString(cond.Exchange)
-		w.WriteString(cond.Symbol)
-	case 6, 7:
-		w.WriteBool(isMore)
-		w.WriteString(cond.Value)
-		w.WriteInt(cond.ConID)
-		w.WriteString(cond.Exchange)
-	default:
-		return fmt.Errorf("codec: unsupported order condition type %d", cond.Type)
-	}
-	return nil
-}
-
-func writeObservedWireContract(w *fieldWriter, c Contract) {
-	w.WriteInt(c.ConID)
-	w.WriteString(c.Symbol)
-	w.WriteString(c.SecType)
-	w.WriteString(c.Expiry)
-	if c.Strike == "" {
-		w.WriteString("0")
-	} else {
-		w.WriteString(c.Strike)
-	}
-	w.WriteString(c.Right)
-	w.WriteString(c.Multiplier)
-	w.WriteString(c.Exchange)
-	w.WriteString(c.Currency)
-	w.WriteString(c.LocalSymbol)
-	w.WriteString(c.TradingClass)
 }

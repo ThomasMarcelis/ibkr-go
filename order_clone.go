@@ -44,6 +44,9 @@ func cloneOrder(order Order) Order {
 	if order.Transmit != nil {
 		order.Transmit = new(*order.Transmit)
 	}
+	if order.IncludeOvernight != nil {
+		order.IncludeOvernight = new(*order.IncludeOvernight)
+	}
 	if order.AllOrNone != nil {
 		order.AllOrNone = new(*order.AllOrNone)
 	}

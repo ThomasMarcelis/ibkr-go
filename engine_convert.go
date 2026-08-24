@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/shopspring/decimal"
 )
 
@@ -239,32 +238,4 @@ func validateContractFieldSupport(contract Contract, operation string, serverVer
 		return unsupported("Contract.PrimaryExchange", contract.PrimaryExchange)
 	}
 	return nil
-}
-
-func quoteContractFields(serverVersion int) contractFields {
-	if serverVersion >= protocol.MinServerVersionProtobufMarketData {
-		return contractFieldsAll
-	}
-	return contractFieldPrimaryExchange | contractFieldComboLegs | contractFieldDeltaNeutral
-}
-
-func depthContractFields(serverVersion int) contractFields {
-	if serverVersion >= protocol.MinServerVersionProtobufMarketData {
-		return contractFieldsAll
-	}
-	return contractFieldPrimaryExchange
-}
-
-func contractDetailsContractFields(serverVersion int) contractFields {
-	if serverVersion >= protocol.MinServerVersionProtobufContractData {
-		return contractFieldsAll
-	}
-	return contractFieldPrimaryExchange | contractFieldIncludeExpired | contractFieldSecurityID | contractFieldIssuerID
-}
-
-func placeOrderContractFields(serverVersion int) contractFields {
-	if serverVersion >= protocol.MinServerVersionProtobufPlaceOrder {
-		return contractFieldsAll
-	}
-	return contractFieldPrimaryExchange | contractFieldSecurityID | contractFieldComboLegs | contractFieldComboLegDetails | contractFieldDeltaNeutral
 }

@@ -2,9 +2,9 @@
 // protocol. It exposes broad account, contract, market-data, historical, order,
 // option, news, scanner, advisor, and TWS functionality through typed methods
 // and generic subscriptions with explicit lifecycle semantics. The client
-// negotiates server_version 200 through 225; version 200 is the live-attested
-// classic-wire baseline, and later versions add the version-gated raw-ID,
-// protobuf, and semantic changes recorded in the project coverage matrix.
+// negotiates server_version 208 through 225. Versions below 208 are rejected;
+// the supported range covers the remaining staged protobuf boundaries and
+// semantic changes recorded in the project coverage matrix.
 //
 // # Connecting
 //

@@ -22,17 +22,8 @@ func TestEnvelopeNegotiatedEncoding(t *testing.T) {
 		hexBody    string
 	}{
 		{
-			name:       "classic server 200",
-			version:    200,
-			hexPayload: "370033003130303100",
-			msgID:      7,
-			wireID:     7,
-			encoding:   ClassicBody,
-			hexBody:    "33003130303100",
-		},
-		{
-			name:       "raw classic start api server 201",
-			version:    201,
+			name:       "raw classic start api at supported floor",
+			version:    208,
 			hexPayload: "00000047320039320000",
 			msgID:      71,
 			wireID:     71,
@@ -40,8 +31,8 @@ func TestEnvelopeNegotiatedEncoding(t *testing.T) {
 			hexBody:    "320039320000",
 		},
 		{
-			name:       "protobuf executions server 201",
-			version:    201,
+			name:       "protobuf executions at supported floor",
+			version:    208,
 			hexPayload: "000000cf08e9071200",
 			msgID:      7,
 			wireID:     207,
@@ -71,10 +62,10 @@ func TestEnvelopeNegotiatedEncoding(t *testing.T) {
 	}
 }
 
-func TestEncodeEnvelopeExactServer201Vectors(t *testing.T) {
+func TestEncodeEnvelopeSupportedFloorVectors(t *testing.T) {
 	t.Parallel()
 
-	startAPI, err := EncodeClassicEnvelope(201, OutStartAPI, []string{"2", "92", ""})
+	startAPI, err := EncodeClassicEnvelope(208, OutStartAPI, []string{"2", "92", ""})
 	if err != nil {
 		t.Fatalf("EncodeClassicEnvelope() error = %v", err)
 	}
@@ -82,7 +73,7 @@ func TestEncodeEnvelopeExactServer201Vectors(t *testing.T) {
 		t.Fatalf("start API = %x, want %x", startAPI, want)
 	}
 
-	executions, err := EncodeProtobufEnvelope(201, OutReqExecutions, mustDecodeHex(t, "08e9071200"))
+	executions, err := EncodeProtobufEnvelope(208, OutReqExecutions, mustDecodeHex(t, "08e9071200"))
 	if err != nil {
 		t.Fatalf("EncodeProtobufEnvelope() error = %v", err)
 	}
@@ -94,11 +85,9 @@ func TestEncodeEnvelopeExactServer201Vectors(t *testing.T) {
 func TestEncodeClassicEnvelopeRejectsEmbeddedNUL(t *testing.T) {
 	t.Parallel()
 
-	for _, serverVersion := range []int{200, 201} {
-		_, err := EncodeClassicEnvelope(serverVersion, OutStartAPI, []string{"2", "bad\x00field"})
-		if err == nil {
-			t.Fatalf("EncodeClassicEnvelope(%d) error = nil", serverVersion)
-		}
+	_, err := EncodeClassicEnvelope(208, OutStartAPI, []string{"2", "bad\x00field"})
+	if err == nil {
+		t.Fatal("EncodeClassicEnvelope() error = nil")
 	}
 }
 
@@ -106,25 +95,16 @@ func TestDecodeEnvelopeRejectsMalformedRawID(t *testing.T) {
 	t.Parallel()
 
 	for _, payload := range [][]byte{{0, 0, 1}, {0, 0, 0, 0}} {
-		if _, err := DecodeEnvelope(201, payload); !errors.Is(err, wire.ErrMalformedFrame) {
-			t.Fatalf("DecodeEnvelope(201, %x) error = %v, want ErrMalformedFrame", payload, err)
+		if _, err := DecodeEnvelope(208, payload); !errors.Is(err, wire.ErrMalformedFrame) {
+			t.Fatalf("DecodeEnvelope(208, %x) error = %v, want ErrMalformedFrame", payload, err)
 		}
 	}
 }
 
-func TestDecodeEnvelopeRejectsOverflowingClassicID(t *testing.T) {
-	t.Parallel()
-
-	payload := []byte("999999999999999999999999999999999999999999999999999999999999\x00")
-	if _, err := DecodeEnvelope(200, payload); !errors.Is(err, wire.ErrMalformedFrame) {
-		t.Fatalf("DecodeEnvelope() error = %v, want ErrMalformedFrame", err)
-	}
-}
-
-func TestDecodeClassicEnvelopeAllocations(t *testing.T) {
-	payload := []byte("1\x006\x001001\x0068\x00255.45\x00200\x000\x00")
+func TestDecodeEnvelopeAllocations(t *testing.T) {
+	payload := append([]byte{0, 0, 0, 1}, []byte("6\x001001\x0068\x00255.45\x00200\x000\x00")...)
 	if allocations := testing.AllocsPerRun(1000, func() {
-		if _, err := DecodeEnvelope(200, payload); err != nil {
+		if _, err := DecodeEnvelope(208, payload); err != nil {
 			t.Fatal(err)
 		}
 	}); allocations != 0 {

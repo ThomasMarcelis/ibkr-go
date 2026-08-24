@@ -92,6 +92,10 @@ const (
 	// ErrCodeHistoricalDataFarmInactive: historical (HMDS) data farm
 	// connection is inactive but should be available upon demand.
 	ErrCodeHistoricalDataFarmInactive = 2107
+	// ErrCodeHistoricalDataSubscriptionRequired: up-to-the-second historical
+	// data requires an additional API market-data subscription. Live-attested
+	// on readonly-live at server_version 225.
+	ErrCodeHistoricalDataSubscriptionRequired = 2188
 	// ErrCodeSmartDepthExchanges: a SMART market-depth availability notice
 	// listing exchanges that can supply depth and exchanges that need
 	// additional permissions. It is nonterminal; depth rows may follow.
@@ -147,13 +151,16 @@ const (
 
 // IsEntitlement reports whether the error signals a missing market-data or
 // news entitlement: [ErrCodeMarketDataNotSubscribed],
-// [ErrCodeAdditionalSubscriptionRequired], [ErrCodeDelayedMarketDataDisplayed],
-// [ErrCodeTickByTickDataNotAllowed], and [ErrCodeNewsFeedNotAllowed].
+// [ErrCodeAdditionalSubscriptionRequired],
+// [ErrCodeHistoricalDataSubscriptionRequired],
+// [ErrCodeDelayedMarketDataDisplayed], [ErrCodeTickByTickDataNotAllowed], and
+// [ErrCodeNewsFeedNotAllowed].
 // [ErrCodeDeepMarketDataNotSupported] is excluded: it reports a venue
 // capability gap, not a missing subscription.
 func (e *APIError) IsEntitlement() bool {
 	switch e.Code {
 	case ErrCodeMarketDataNotSubscribed, ErrCodeAdditionalSubscriptionRequired,
+		ErrCodeHistoricalDataSubscriptionRequired,
 		ErrCodeDelayedMarketDataDisplayed, ErrCodeTickByTickDataNotAllowed,
 		ErrCodeNewsFeedNotAllowed:
 		return true

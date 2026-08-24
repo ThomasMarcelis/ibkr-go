@@ -1,10 +1,6 @@
 package codec
 
-import (
-	"strings"
-
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
-)
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 
 type QuoteRequest struct {
 	ReqID              int
@@ -14,41 +10,8 @@ type QuoteRequest struct {
 	GenericTicks       []string
 }
 
-func (m QuoteRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqMktData)
-	w.WriteInt(11) // version
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	if m.Contract.SecType == "BAG" {
-		w.WriteInt(len(m.Contract.ComboLegs))
-		for _, leg := range m.Contract.ComboLegs {
-			w.WriteInt(leg.ConID)
-			w.WriteInt(leg.Ratio)
-			w.WriteString(leg.Action)
-			w.WriteString(leg.Exchange)
-		}
-	}
-	w.WriteBool(m.Contract.DeltaNeutral != nil)
-	if m.Contract.DeltaNeutral != nil {
-		w.WriteInt(m.Contract.DeltaNeutral.ConID)
-		w.WriteString(m.Contract.DeltaNeutral.Delta)
-		w.WriteString(m.Contract.DeltaNeutral.Price)
-	}
-	w.WriteString(strings.Join(m.GenericTicks, ","))
-	w.WriteBool(m.Snapshot)
-	w.WriteBool(m.RegulatorySnapshot)
-	w.WriteString("") // mktDataOptions
-	return w.Fields(), nil
-}
-
 type CancelQuote struct {
 	ReqID int
-}
-
-func (m CancelQuote) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelMktData), "1", itoa(m.ReqID)}, nil
 }
 
 type TickPrice struct {
@@ -81,26 +44,8 @@ type RealTimeBarsRequest struct {
 	UseRTH     bool
 }
 
-func (m RealTimeBarsRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqRealTimeBars)
-	w.WriteInt(3) // version
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteInt(5) // barSize (always 5 sec)
-	w.WriteString(m.WhatToShow)
-	w.WriteBool(m.UseRTH)
-	w.WriteString("") // options
-	return w.Fields(), nil
-}
-
 type CancelRealTimeBars struct {
 	ReqID int
-}
-
-func (m CancelRealTimeBars) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelRealTimeBars), "1", itoa(m.ReqID)}, nil
 }
 
 type RealTimeBar struct {
@@ -169,10 +114,6 @@ type ReqMarketDataType struct {
 	DataType int
 }
 
-func (m ReqMarketDataType) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqMarketDataType), "1", itoa(m.DataType)}, nil
-}
-
 type MktDepthExchangesRequest struct{}
 
 func (m MktDepthExchangesRequest) encodeWire(sv int) ([]string, error) {
@@ -201,24 +142,8 @@ type TickByTickRequest struct {
 	IgnoreSize    bool
 }
 
-func (m TickByTickRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqTickByTickData)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteString(m.TickType)
-	w.WriteInt(m.NumberOfTicks)
-	w.WriteBool(m.IgnoreSize)
-	return w.Fields(), nil
-}
-
 type CancelTickByTick struct {
 	ReqID int
-}
-
-func (m CancelTickByTick) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelTickByTickData), itoa(m.ReqID)}, nil
 }
 
 type TickByTickData struct {
@@ -249,9 +174,10 @@ type CalcImpliedVolatilityRequest struct {
 }
 
 func (m CalcImpliedVolatilityRequest) encodeWire(sv int) ([]string, error) {
-	// No includeExpired field: the live sv200 Gateway parses optionPrice
-	// directly after tradingClass (code 320 evidence, capture
-	// 20260611T074859Z, sha 241a49023701e9ec).
+	// No includeExpired field: the captured classic layout parses optionPrice
+	// directly after tradingClass (sv210 capture
+	// 20260825T203959Z-sv210_classic_option_calculations, events sha256
+	// 510dedb3be94ed96c3201807cc7d91e0fcd9756e9f98444efa0dbb66faea2289).
 	w := fieldWriter{}
 	w.WriteInt(protocol.OutReqCalcImpliedVolatility)
 	w.WriteInt(3) // version
@@ -327,31 +253,9 @@ type MarketDepthRequest struct {
 	IsSmartDepth bool
 }
 
-func (m MarketDepthRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqMktDepth)
-	w.WriteInt(5) // version
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteInt(m.NumRows)
-	w.WriteBool(m.IsSmartDepth)
-	w.WriteString("") // mktDepthOptions
-	return w.Fields(), nil
-}
-
 type CancelMarketDepth struct {
 	ReqID        int
 	IsSmartDepth bool
-}
-
-func (m CancelMarketDepth) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutCancelMktDepth)
-	w.WriteInt(1)
-	w.WriteInt(m.ReqID)
-	w.WriteBool(m.IsSmartDepth)
-	return w.Fields(), nil
 }
 
 type MarketDepthUpdate struct {
@@ -374,93 +278,11 @@ type MarketDepthL2Update struct {
 	IsSmartDepth bool
 }
 
-// [1, version, reqID, tickType, price, size, attrMask]
-func decodeTickPrice(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	tickType, _ := r.ReadInt()
-	price := r.ReadString()
-	size := r.ReadString()
-	attrMask, _ := r.ReadInt()
-	return []Message{TickPrice{ReqID: reqID, TickType: tickType, Price: price, Size: size, AttrMask: attrMask}}, nil
-}
-
-// [2, version, reqID, tickType, size]
-func decodeTickSize(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	tickType, _ := r.ReadInt()
-	size := r.ReadString()
-	return []Message{TickSize{ReqID: reqID, TickType: tickType, Size: size}}, nil
-}
-
-// [12, version, reqID, position, operation, side, price, size]
-func decodeMarketDepth(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	position, _ := r.ReadInt()
-	operation, _ := r.ReadInt()
-	side, _ := r.ReadInt()
-	price := r.ReadString()
-	size := r.ReadString()
-	return []Message{MarketDepthUpdate{ReqID: reqID, Position: position, Operation: operation, Side: side, Price: price, Size: size}}, nil
-}
-
-// [13, version, reqID, position, marketMaker, operation, side, price, size, isSmartDepth]
-func decodeMarketDepthL2(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	position, _ := r.ReadInt()
-	marketMaker := r.ReadString()
-	operation, _ := r.ReadInt()
-	side, _ := r.ReadInt()
-	price := r.ReadString()
-	size := r.ReadString()
-	isSmartDepth, _ := r.ReadBool()
-	return []Message{MarketDepthL2Update{ReqID: reqID, Position: position, MarketMaker: marketMaker, Operation: operation, Side: side, Price: price, Size: size, IsSmartDepth: isSmartDepth}}, nil
-}
-
 // [21, reqID, tickType, tickAttrib, impliedVol, delta, optPrice, pvDividend, gamma, vega, theta, undPrice]
-func decodeTickOptionComputation(r *fieldReader, sv int) ([]Message, error) {
-	// No version field on the live sv200 wire; the legacy version skip
-	// consumed the request id and killed the session on the first real
-	// greeks reply (capture 20260611T075300Z-api_option_campaign_aapl).
-	reqID, _ := r.ReadInt()
-	tickType, _ := r.ReadInt()
-	tickAttrib, _ := r.ReadInt()
-	impliedVol := r.ReadString()
-	delta := r.ReadString()
-	optPrice := r.ReadString()
-	pvDividend := r.ReadString()
-	gamma := r.ReadString()
-	vega := r.ReadString()
-	theta := r.ReadString()
-	undPrice := r.ReadString()
-	return []Message{TickOptionComputation{
-		ReqID: reqID, TickType: tickType, TickAttrib: tickAttrib,
-		ImpliedVol: impliedVol, Delta: delta, OptPrice: optPrice,
-		PvDividend: pvDividend, Gamma: gamma, Vega: vega,
-		Theta: theta, UndPrice: undPrice,
-	}}, nil
-}
 
 // [45, version, reqID, tickType, value]
-func decodeTickGeneric(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	tickType, _ := r.ReadInt()
-	value := r.ReadString()
-	return []Message{TickGeneric{ReqID: reqID, TickType: tickType, Value: value}}, nil
-}
 
 // [46, version, reqID, tickType, value]
-func decodeTickString(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	tickType, _ := r.ReadInt()
-	value := r.ReadString()
-	return []Message{TickString{ReqID: reqID, TickType: tickType, Value: value}}, nil
-}
 
 // [47, version, reqID, tickType, basisPoints, formattedBasisPoints,
 // impliedFuturesPrice, holdDays, futureLastTradeDate, dividendImpact,
@@ -503,54 +325,16 @@ func decodeDeltaNeutralValidation(r *fieldReader, sv int) ([]Message, error) {
 }
 
 // [81, reqID, minTick, bboExchange, snapshotPermissions] — no version
-func decodeTickReqParams(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	minTick := r.ReadString()
-	bboExchange := r.ReadString()
-	snapshotPermissions, _ := r.ReadInt()
-	return []Message{TickReqParams{ReqID: reqID, MinTick: minTick, BBOExchange: bboExchange, SnapshotPermissions: new(snapshotPermissions)}}, nil
-}
 
-// [91, reqID, conID, exchange] — no version, including after server_version 200.
-func decodeMarketDataReroute(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	conID, _ := r.ReadInt()
-	return []Message{MarketDataReroute{ReqID: reqID, ConID: conID, Exchange: r.ReadString()}}, nil
-}
+// [91, reqID, conID, exchange] — no version.
 
-// [92, reqID, conID, exchange] — no version, including after server_version 200.
-func decodeMarketDepthReroute(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	conID, _ := r.ReadInt()
-	return []Message{MarketDepthReroute{ReqID: reqID, ConID: conID, Exchange: r.ReadString()}}, nil
-}
+// [92, reqID, conID, exchange] — no version.
 
 // [50, version, reqID, time, O, H, L, C, vol, wap, count]
-func decodeRealTimeBars(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	reqID, _ := r.ReadInt()
-	return []Message{RealTimeBar{
-		ReqID: reqID, Time: r.ReadString(),
-		Open: r.ReadString(), High: r.ReadString(), Low: r.ReadString(),
-		Close: r.ReadString(), Volume: r.ReadString(),
-		WAP: r.ReadString(), Count: r.ReadString(),
-	}}, nil
-}
 
 // [57, version, reqID]
-func decodeTickSnapshotEnd(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	reqID, _ := r.ReadInt()
-	return []Message{TickSnapshotEnd{ReqID: reqID}}, nil
-}
 
 // [58, version, reqID, dataType]
-func decodeMarketDataType(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	reqID, _ := r.ReadInt()
-	dataType, _ := r.ReadInt()
-	return []Message{MarketDataType{ReqID: reqID, DataType: dataType}}, nil
-}
 
 func decodeMktDepthExchanges(r *fieldReader, sv int) ([]Message, error) {
 	// MktDepthExchanges: [80, count, repeated(exchange, secType, listingExch, serviceDataType, aggGroup)] — no version
@@ -573,26 +357,3 @@ func decodeMktDepthExchanges(r *fieldReader, sv int) ([]Message, error) {
 }
 
 // [99, reqID, tickType, time, ...]
-func decodeTickByTick(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	tickType, _ := r.ReadInt()
-	timeStr := r.ReadString()
-	tick := TickByTickData{ReqID: reqID, TickType: tickType, Time: timeStr}
-	switch tickType {
-	case 1, 2: // Last, AllLast
-		tick.Price = r.ReadString()
-		tick.Size = r.ReadString()
-		tick.TickAttribLast, _ = r.ReadInt()
-		tick.Exchange = r.ReadString()
-		tick.SpecialConditions = r.ReadString()
-	case 3: // BidAsk
-		tick.BidPrice = r.ReadString()
-		tick.AskPrice = r.ReadString()
-		tick.BidSize = r.ReadString()
-		tick.AskSize = r.ReadString()
-		tick.TickAttribBidAsk, _ = r.ReadInt()
-	case 4: // MidPoint
-		tick.MidPoint = r.ReadString()
-	}
-	return []Message{tick}, nil
-}

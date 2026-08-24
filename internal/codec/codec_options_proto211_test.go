@@ -10,6 +10,38 @@ import (
 
 const faSV211CaptureHash = "562c394c0570e39ebf34776710f9d7c146005144b96b990a00eb9a93e3b601ae"
 
+const optionCalculationsSV210CaptureHash = "510dedb3be94ed96c3201807cc7d91e0fcd9756e9f98444efa0dbb66faea2289"
+
+func TestEncodeOptionsClassicSV210LiveVectors(t *testing.T) {
+	t.Parallel()
+
+	contract := Contract{
+		ConID: 909906426, Symbol: "AAPL", SecType: "OPT", Expiry: "20260826",
+		Strike: "310", Right: "C", Multiplier: "100", Exchange: "SMART",
+		Currency: "USD", LocalSymbol: "AAPL  260826C00310000", TradingClass: "AAPL",
+	}
+	tests := []struct {
+		name string
+		msg  OutboundMessage
+		hex  string
+	}{
+		{"option price", CalcOptionPriceRequest{ReqID: 4, Contract: contract, Volatility: "0.3", UnderPrice: "309.89"}, "0000003732003400393039393036343236004141504c004f50540032303236303832360033313000430031303000534d4152540000555344004141504c2020323630383236433030333130303030004141504c00302e33003330392e38390000"},
+		{"implied volatility", CalcImpliedVolatilityRequest{ReqID: 5, Contract: contract, OptionPrice: "5", UnderPrice: "309.89"}, "0000003633003500393039393036343236004141504c004f50540032303236303832360033313000430031303000534d4152540000555344004141504c2020323630383236433030333130303030004141504c0035003330392e38390000"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := Encode(210, tc.msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := decodeHex(t, tc.hex); !bytes.Equal(got, want) {
+				t.Fatalf("Encode() = %x\nwant live sv210 vector %x; capture events sha256 %s", got, want, optionCalculationsSV210CaptureHash)
+			}
+		})
+	}
+}
+
 func TestEncodeFAProto211LiveVector(t *testing.T) {
 	t.Parallel()
 

@@ -201,6 +201,7 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 	// the freshly negotiated version, and the decode pump runs off the actor
 	// goroutine, so it must not read e.serverVersion directly.
 	sv := e.serverVersion
+	generation := e.transportGeneration
 	decodeResult := make(chan error, 1)
 	go func() {
 		var result error
@@ -214,7 +215,7 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 			}
 			for _, msg := range msgs {
 				select {
-				case e.incoming <- msg:
+				case e.incoming <- decodedTransportInput{generation: generation, message: msg}:
 				case <-e.done:
 					return
 				}

@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
@@ -108,22 +107,6 @@ func (e *engine) handleIncoming(msg any) {
 		e.emitExecutionDetailEvent(m)
 	case codec.CommissionReport:
 		e.emitCommissionEvent(m)
-	case codec.MarketDepthUpdate:
-		if e.handleUnattributableMarketDepth(protocol.InMarketDepth, m.ReqID) {
-			return
-		}
-	case codec.MarketDepthL2Update:
-		if e.handleUnattributableMarketDepth(protocol.InMarketDepthL2, m.ReqID) {
-			return
-		}
-	case codec.MarketDataReroute:
-		if e.handleUnattributableReroute(protocol.InMarketDataReroute, m.ReqID, OpQuotes) {
-			return
-		}
-	case codec.MarketDepthReroute:
-		if e.handleUnattributableReroute(protocol.InMarketDepthReroute, m.ReqID, OpMarketDepth) {
-			return
-		}
 	case codec.APIError:
 		e.handleAPIError(m)
 		return
@@ -139,54 +122,6 @@ func (e *engine) handleIncoming(msg any) {
 			e.cfg.logger.Warn("ibkr: dropping inbound frames with unknown msg_id",
 				"msg_id", m.MsgID, "field_count", len(m.Fields), "binary_body_bytes", len(m.Payload))
 			e.emitEvent(0, fmt.Sprintf("dropping inbound frames with unknown msg_id %d (%d fields, %d binary body bytes)", m.MsgID, len(m.Fields), len(m.Payload)))
-		}
-		return
-	case codec.MalformedInbound:
-		// The outer length frame and message ID decoded successfully, so this
-		// failure is confined to one self-contained message. A malformed depth
-		// row cannot be attributed to a trustworthy request ID, and dropping it
-		// would silently corrupt every matching local book. Terminate all depth
-		// routes while keeping unrelated routes and the session alive. Reporting
-		// remains once per distinct msg_id, independently of route teardown, so a
-		// repeated bad frame still terminates depth routes created in the interim.
-		protocolErr := &ProtocolError{
-			Direction: "inbound",
-			Message:   fmt.Sprintf("msg_id %d", m.MsgID),
-			Err:       m.Err,
-		}
-		switch m.MsgID {
-		case protocol.InMarketDepth, protocol.InMarketDepthL2:
-			var depthReqIDs []int
-			if m.Correlation != nil {
-				if route, found := e.keyed[m.Correlation.RequestID]; found && route.opKind == OpMarketDepth {
-					depthReqIDs = append(depthReqIDs, m.Correlation.RequestID)
-				} else if found {
-					// A corrupt depth ID colliding with another operation cannot
-					// dispatch there. Quarantine the bounded depth family instead.
-					for reqID, candidate := range e.keyed {
-						if candidate.opKind == OpMarketDepth {
-							depthReqIDs = append(depthReqIDs, reqID)
-						}
-					}
-				}
-			} else {
-				for reqID, route := range e.keyed {
-					if route.opKind == OpMarketDepth {
-						depthReqIDs = append(depthReqIDs, reqID)
-					}
-				}
-			}
-			e.cancelAndCloseMarketDepthRoutes(depthReqIDs, protocolErr)
-		case protocol.InMarketDataReroute:
-			e.cancelAndCloseQuoteRoutes(e.keyedRouteIDs(OpQuotes), protocolErr)
-		case protocol.InMarketDepthReroute:
-			e.cancelAndCloseMarketDepthRoutes(e.keyedRouteIDs(OpMarketDepth), protocolErr)
-		}
-		if _, seen := e.malformedInboundSeen[m.MsgID]; !seen {
-			e.malformedInboundSeen[m.MsgID] = struct{}{}
-			e.cfg.logger.Warn("ibkr: dropping malformed inbound frame",
-				"msg_id", m.MsgID, "field_count", len(m.Fields), "binary_body_bytes", len(m.Payload), "error", m.Err)
-			e.emitSessionEvent(0, fmt.Sprintf("dropping malformed inbound frame with msg_id %d", m.MsgID), protocolErr)
 		}
 		return
 	}
@@ -278,82 +213,22 @@ func (e *engine) handleIncoming(msg any) {
 	}
 }
 
-// handleUnattributableMarketDepth terminates every active depth stream when a
-// decoded row has no trustworthy depth-route owner. Protobuf omission decodes
-// to request ID -1, while a positive ID can collide with an unrelated keyed
-// operation. Neither row can be dropped without silently corrupting a local
-// book, and a collision must not be dispatched into the unrelated handler.
-func (e *engine) handleUnattributableMarketDepth(msgID, reqID int) bool {
-	if reqID > 0 {
-		route, found := e.keyed[reqID]
-		if !found || route.opKind == OpMarketDepth {
-			return false
-		}
-	}
-
+func (e *engine) handleMalformedInbound(m codec.MalformedInbound) {
 	protocolErr := &ProtocolError{
 		Direction: "inbound",
-		Message:   fmt.Sprintf("msg_id %d req_id %d", msgID, reqID),
-		Err:       fmt.Errorf("unattributable market depth row request id %d", reqID),
+		Message:   fmt.Sprintf("msg_id %d", m.MsgID),
+		Err:       m.Err,
 	}
-	var depthReqIDs []int
-	for depthReqID, route := range e.keyed {
-		if route.opKind == OpMarketDepth {
-			depthReqIDs = append(depthReqIDs, depthReqID)
-		}
+	if _, seen := e.malformedInboundSeen[m.MsgID]; !seen {
+		e.malformedInboundSeen[m.MsgID] = struct{}{}
+		e.cfg.logger.Warn("ibkr: dropping malformed inbound frame and retiring transport generation",
+			"msg_id", m.MsgID, "field_count", len(m.Fields), "binary_body_bytes", len(m.Payload), "error", m.Err)
+		e.emitSessionEvent(0, fmt.Sprintf("dropping malformed inbound frame with msg_id %d", m.MsgID), protocolErr)
 	}
-	e.cancelAndCloseMarketDepthRoutes(depthReqIDs, protocolErr)
-	if len(depthReqIDs) != 0 {
-		e.cfg.logger.Warn("ibkr: terminating market depth after unattributable inbound row",
-			"msg_id", msgID, "req_id", reqID)
-		e.emitSessionEvent(0, fmt.Sprintf("terminating market depth after unattributable msg_id %d req_id %d", msgID, reqID), protocolErr)
-	}
-	return true
-}
-
-// handleUnattributableReroute confines an unusable reroute to its operation
-// family. A stale positive ID has no current owner and is dropped. An omitted
-// ID or an ID owned by another operation cannot identify the route that must
-// be replaced, so every active route in that bounded family is terminated.
-func (e *engine) handleUnattributableReroute(msgID, reqID int, opKind OpKind) bool {
-	if reqID > 0 {
-		route, found := e.keyed[reqID]
-		if !found {
-			return true
-		}
-		if route.opKind == opKind {
-			return false
-		}
-	}
-
-	protocolErr := &ProtocolError{
-		Direction: "inbound",
-		Message:   fmt.Sprintf("msg_id %d req_id %d", msgID, reqID),
-		Err:       fmt.Errorf("unattributable reroute request id %d", reqID),
-	}
-	reqIDs := e.keyedRouteIDs(opKind)
-	switch opKind {
-	case OpQuotes:
-		e.cancelAndCloseQuoteRoutes(reqIDs, protocolErr)
-	case OpMarketDepth:
-		e.cancelAndCloseMarketDepthRoutes(reqIDs, protocolErr)
-	}
-	if len(reqIDs) != 0 {
-		e.cfg.logger.Warn("ibkr: terminating request family after unattributable reroute",
-			"msg_id", msgID, "req_id", reqID, "op", opKind)
-		e.emitSessionEvent(0, fmt.Sprintf("terminating %s after unattributable msg_id %d req_id %d", opKind, msgID, reqID), protocolErr)
-	}
-	return true
-}
-
-func (e *engine) keyedRouteIDs(opKind OpKind) []int {
-	var reqIDs []int
-	for reqID, route := range e.keyed {
-		if route.opKind == opKind {
-			reqIDs = append(reqIDs, reqID)
-		}
-	}
-	return reqIDs
+	// A registered decoder no longer has a trustworthy semantic boundary.
+	// Interrupt every route on this generation and retain the protocol cause so
+	// consumers cannot classify a corrupt partial snapshot as safely retryable.
+	e.retireTransport(interrupted(protocolErr))
 }
 
 func (e *engine) handleAPIError(msg codec.APIError) {
@@ -488,7 +363,7 @@ func unkeyedAPIErrorSingleton(msg codec.APIError) string {
 		return ""
 	}
 	switch {
-	case (strings.Contains(msg.Message, "-'b7'") || strings.Contains(msg.Message, "-'aa'")) && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
+	case strings.Contains(msg.Message, "-'aa'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonOrderID
 	case strings.Contains(msg.Message, "-'as'") && strings.Contains(msg.Message, "The API interface is currently in Read-Only mode"):
 		return singletonOpenOrders
@@ -537,9 +412,10 @@ func (e *engine) handlePreviewAPIError(msg codec.APIError) bool {
 		e.emitAPIEvent(msg)
 		return true
 	}
-	// Rejected what-if requests do not get an open-order echo (live-attested:
-	// code 10255 in captures/20260705T011725Z), so the targeted error is the
-	// preview's only completion signal.
+	// Rejected what-if requests do not get an open-order echo (sv225 capture
+	// 20260824T210426Z-api_whatif_margin_aapl, events SHA-256
+	// 686932b92e69fcf4030a9637d82117682be8c76d1039819d048ee58272ae81ee),
+	// so the targeted error is the preview's only completion signal.
 	preview.resolve(previewResult{err: apiErr})
 	delete(e.previews, int64(msg.ReqID))
 	return true

@@ -125,7 +125,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if err := validateContractFieldSupport(req.Contract, "market data quote", e.serverVersion, quoteContractFields(e.serverVersion)); err != nil {
+		if err := validateContractFieldSupport(req.Contract, "market data quote", e.serverVersion, contractFieldsAll); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -166,7 +166,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 			GenericTicks:       genericTicks,
 		}
 		quoteRoute.validateResume = func(e *engine) error {
-			if err := validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, quoteContractFields(e.serverVersion)); err != nil {
+			if err := validateContractFieldSupport(resumeContract, "resume market data quote", e.serverVersion, contractFieldsAll); err != nil {
 				return err
 			}
 			return validateVersion(e.serverVersion)
@@ -393,7 +393,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 		}
 		quoteRoute.onDisconnect = func(e *engine, err error) bool {
 			if snapshot {
-				sub.closeWithErr(ErrInterrupted)
+				sub.closeWithErr(interrupted(err))
 				return false
 			}
 			if cfg.resume == ResumeAuto && e.cfg.reconnect == ReconnectAuto {
@@ -401,7 +401,7 @@ func (e *engine) subscribeQuotes(ctx context.Context, req QuoteRequest, snapshot
 				sub.emitState(StreamGap, e.connectionSeq(), err)
 				return true
 			}
-			sub.closeWithErr(ErrResumeRequired)
+			sub.closeWithErr(resumeRequired(err))
 			return false
 		}
 		quoteRoute.emitGap = func(e *engine) {
@@ -504,7 +504,7 @@ func (e *engine) SubscribeRealTimeBars(ctx context.Context, req RealTimeBarsRequ
 				sub.emitState(StreamGap, e.connectionSeq(), err)
 				return true
 			}
-			sub.closeWithErr(ErrResumeRequired)
+			sub.closeWithErr(resumeRequired(err))
 			return false
 		}
 		ownedRoute.emitGap = func(e *engine) {
@@ -549,7 +549,7 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 	resp := make(chan result, 1)
 
 	enqueueSubscriptionSetup(ctx, e, resp, func() {
-		if err := validateContractFieldSupport(req.Contract, "market depth", e.serverVersion, depthContractFields(e.serverVersion)); err != nil {
+		if err := validateContractFieldSupport(req.Contract, "market depth", e.serverVersion, contractFieldsAll); err != nil {
 			resp <- result{err: err}
 			return
 		}
@@ -649,52 +649,19 @@ func (e *engine) SubscribeMarketDepth(ctx context.Context, req MarketDepthReques
 // admitted before local route deletion; if admission fails, the caller needs
 // both the data-integrity failure and the uncertain remote-stream state.
 func (e *engine) cancelAndCloseMarketDepthRoute(reqID int, cause error) {
-	e.cancelAndCloseMarketDepthRoutes([]int{reqID}, cause)
-}
-
-func (e *engine) cancelAndCloseQuoteRoutes(reqIDs []int, cause error) {
-	var retirementErrs []error
-	for _, reqID := range reqIDs {
-		quoteRoute, ok := e.keyed[reqID]
-		if !ok || quoteRoute.opKind != OpQuotes {
-			continue
-		}
-		cancelErr := e.cancelRouteSubscription(quoteRoute, OpQuotes, codec.CancelQuote{ReqID: reqID})
-		e.deleteKeyedRoute(reqID)
-		closeErr := cause
-		if cancelErr != nil {
-			closeErr = errors.Join(cause, cancelErr)
-		}
-		quoteRoute.close(closeErr)
-		if cancelErr != nil {
-			retirementErrs = append(retirementErrs, cancelErr)
-		}
+	depthRoute, ok := e.keyed[reqID]
+	if !ok || depthRoute.opKind != OpMarketDepth {
+		return
 	}
-	e.retireSubscriptionTransport(errors.Join(retirementErrs...))
-}
-
-func (e *engine) cancelAndCloseMarketDepthRoutes(reqIDs []int, cause error) {
-	var retirementErrs []error
-	for _, reqID := range reqIDs {
-		depthRoute, ok := e.keyed[reqID]
-		if !ok || depthRoute.opKind != OpMarketDepth {
-			continue
-		}
-		request := depthRoute.request.(codec.MarketDepthRequest)
-		cancelErr := e.cancelRouteSubscription(depthRoute, OpMarketDepth, codec.CancelMarketDepth{
-			ReqID: reqID, IsSmartDepth: request.IsSmartDepth,
-		})
-		e.deleteKeyedRoute(reqID)
-		closeErr := cause
-		if cancelErr != nil {
-			closeErr = errors.Join(cause, cancelErr)
-		}
-		depthRoute.close(closeErr)
-		if cancelErr != nil {
-			retirementErrs = append(retirementErrs, cancelErr)
-		}
+	request := depthRoute.request.(codec.MarketDepthRequest)
+	cancelErr := e.cancelRouteSubscription(depthRoute, OpMarketDepth, codec.CancelMarketDepth{
+		ReqID: reqID, IsSmartDepth: request.IsSmartDepth,
+	})
+	e.deleteKeyedRoute(reqID)
+	depthRoute.close(errors.Join(cause, cancelErr))
+	if cancelErr != nil {
+		e.retireSubscriptionTransport(cancelErr)
 	}
-	e.retireSubscriptionTransport(errors.Join(retirementErrs...))
 }
 
 func (e *engine) MktDepthExchanges(ctx context.Context) ([]DepthExchange, error) {

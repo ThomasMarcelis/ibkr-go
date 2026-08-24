@@ -9,14 +9,14 @@ func TestOutboundProtobufMigrationGates(t *testing.T) {
 		msgID int
 		want  int
 	}{
-		{OutReqExecutions, 201},
-		{OutPlaceOrder, 203},
-		{OutReqOpenOrders, 204},
-		{OutReqAutoOpenOrders, 204},
-		{OutReqAllOpenOrders, 204},
-		{OutReqCompletedOrders, 204},
-		{OutReqContractData, 205},
-		{OutReqAccountSummary, 207},
+		{OutReqExecutions, 208},
+		{OutPlaceOrder, 208},
+		{OutReqOpenOrders, 208},
+		{OutReqAutoOpenOrders, 208},
+		{OutReqAllOpenOrders, 208},
+		{OutReqCompletedOrders, 208},
+		{OutReqContractData, 208},
+		{OutReqAccountSummary, 208},
 		{OutReqHistoricalData, 208},
 		{OutCancelHistoricalData, 208},
 		{OutReqTickByTickData, 208},
@@ -53,10 +53,5 @@ func TestOutboundProtobufMigrationGates(t *testing.T) {
 	}
 	if _, ok := OutboundProtobufVersion(10_000); ok {
 		t.Fatal("unknown outbound ID has a protobuf migration gate")
-	}
-	for msgID, version := range outboundProtobufVersion {
-		if version == MinServerVersionZeroStrike {
-			t.Fatalf("outbound message %d migrates at zero-strike-only server_version 202", msgID)
-		}
 	}
 }

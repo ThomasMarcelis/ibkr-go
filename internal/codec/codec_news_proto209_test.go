@@ -10,6 +10,30 @@ import (
 
 const newsSV209CaptureHash = "37b9fcdc9e5dc4ec5c1961e9a40dcec9aad165bd975e963543f1214efa8254e0"
 
+func TestDecodeTickNewsProto225LiveFrame(t *testing.T) {
+	t.Parallel()
+
+	// Capture 20260825T192551Z-api_tick_news_aapl_probe, events.jsonl SHA-256
+	// 1051f51ac8dd20cd3b7e22b404c678bed805673851eb72f90dd451987715d6b8.
+	// The compressed literal expands to the exact length-prefix-free server frame.
+	frame := decodeGzipBase64(t, "H4sIAAAAAAACA2NgYJThYBTY8fDY1cXGUixOQW7uSrwgUsUw2dLIMM08WcvPsaAgJ1W9WCG4pCg/L10h0EQhOLUExE1MT1VIyy9SCEpNzi9KUQg01FFwKi1R8MwrSy0uyS8qVghPzCtR8M0vSlVw9FRwzkksyiypNNJwtLIwMDAwNLXysUrNs/K2MtCzNLByBlIWluZGZhamxsbmBmZmZqYAfp5V0JwAAAA=")
+	got, err := Decode(225, frame)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := TickNews{
+		ReqID:        1,
+		Time:         "1761921315000",
+		ProviderCode: "BRFG",
+		ArticleID:    "BRFG$1c921f7c",
+		Headline:     "Apple's Strong Q4 Sets Stage for Record Q1, But Investors Want More AI Clarity",
+		ExtraData:    "A:800015:L:en:K:0.90:C:0.897268533706665",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("Decode() = %#v, want %#v", got, want)
+	}
+}
+
 func TestEncodeNewsProto209LiveVectors(t *testing.T) {
 	t.Parallel()
 

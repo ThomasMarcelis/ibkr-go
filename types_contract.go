@@ -74,30 +74,23 @@ type SecurityID struct {
 //   - BOND: IssuerID from [MatchingSymbol.IssuerID] resolves the issuer's bonds.
 //
 // Setting ConID alone unambiguously identifies a contract the client has
-// already qualified; the descriptive fields can then be left zero. Request
-// families migrate independently: place order at server version 203, contract
-// details at 205, market data at 206, accounts at 207, and the remaining
-// protobuf families through 213. A nil Strike is
-// absent where the protocol preserves presence; a non-nil zero is an explicitly
-// selected or returned zero strike. The legacy
-// option-exercise layout requires a numeric zero when strike is absent. Empty
-// Expiry, Right, and Multiplier mean unset. Use
+// already qualified; the descriptive fields can then be left zero. Supported
+// request families migrate from their remaining classic bodies to protobuf
+// between server versions 208 and 213. A nil Strike is absent where the
+// protocol preserves presence; a non-nil zero is an explicitly selected or
+// returned zero strike. The sv208–210 option-exercise layout requires a
+// numeric zero when strike is absent. Empty Expiry, Right, and Multiplier mean
+// unset. Use
 // [ContractsClient.Qualify] to resolve a partial contract to a fully specified
 // one.
 //
 // Methods reject canonical fields that their negotiated wire layout cannot
-// represent; no field is silently dropped. Before the protobuf migrations,
-// quotes carry ComboLegs and DeltaNeutral, depth carries none of the five
-// extended fields, contract details carry IncludeExpired, SecurityID, and
-// IssuerID, and place order carries SecurityID, ComboLegs, and DeltaNeutral.
-// Historical bars/schedule/streams carry IncludeExpired and ComboLegs; head
-// timestamp, histogram, and historical ticks carry only IncludeExpired;
-// real-time bars, tick-by-tick, and option calculations carry none. Exercise
-// also omits PrimaryExchange from the otherwise common identity block. Classic
-// quote and historical combo layouts carry only each leg's ConID, Ratio,
-// Action, and Exchange; nondefault position/short-sale fields require a full
-// order or protobuf leg. The shared protobuf Contract used by place order at
-// 203, contract details at 205, and quotes/depth at 206 carries all fields.
+// represent; no field is silently dropped. Quotes, depth, contract details,
+// and order requests carry every canonical field. Historical bars,
+// schedules, and streams carry IncludeExpired and ComboLegs; head timestamp,
+// histogram, and historical ticks carry only IncludeExpired. Real-time bars,
+// tick-by-tick data, and option calculations carry no extended fields beyond
+// PrimaryExchange. Exercise also omits PrimaryExchange.
 type Contract struct {
 	ConID           ContractID       // IBKR contract ID; nonzero pins an exact contract
 	Symbol          string           // underlying symbol (ticker); base currency for forex

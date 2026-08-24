@@ -10,39 +10,14 @@ import (
 type Message any
 
 // OutboundMessage is a client-to-Gateway message accepted by Encode. Its
-// unexported method keeps wire encoding owned by this package.
+// unexported method keeps message identity owned by this package.
 type OutboundMessage interface {
+	messageID() int
+}
+
+type classicEncoder interface {
 	encodeWire(sv int) ([]string, error)
 }
-
-// LegacyServerMessage is a Gateway-to-client message retained only for the
-// testhost's legacy symbolic server fixtures. New replay coverage uses raw,
-// captured server frames instead.
-type LegacyServerMessage interface {
-	isLegacyServerMessage()
-}
-
-type infallibleLegacyServerEncoder interface {
-	LegacyServerMessage
-	encodeLegacyServerWire() []string
-}
-
-type fallibleLegacyServerEncoder interface {
-	LegacyServerMessage
-	encodeLegacyServerWire() ([]string, error)
-}
-
-func (APIError) isLegacyServerMessage()          {}
-func (NextValidID) isLegacyServerMessage()       {}
-func (ManagedAccounts) isLegacyServerMessage()   {}
-func (OrderStatus) isLegacyServerMessage()       {}
-func (OpenOrder) isLegacyServerMessage()         {}
-func (ExecutionDetail) isLegacyServerMessage()   {}
-func (OpenOrderEnd) isLegacyServerMessage()      {}
-func (ExecutionsEnd) isLegacyServerMessage()     {}
-func (CommissionReport) isLegacyServerMessage()  {}
-func (CompletedOrder) isLegacyServerMessage()    {}
-func (CompletedOrderEnd) isLegacyServerMessage() {}
 
 type ScannerParametersRequest struct{}
 

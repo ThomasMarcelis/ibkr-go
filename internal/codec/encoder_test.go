@@ -2,7 +2,6 @@ package codec
 
 import (
 	"math"
-	"slices"
 	"testing"
 )
 
@@ -169,50 +168,5 @@ func TestFieldWriterFieldsEmpty(t *testing.T) {
 	got := w.Fields()
 	if got != nil {
 		t.Errorf("Fields() on empty writer = %v, want nil", got)
-	}
-}
-
-func TestEncodeExecutionsRequestServer200Layout(t *testing.T) {
-	t.Parallel()
-
-	fields, err := ExecutionsRequest{
-		ReqID:   3,
-		Account: "DU9000001",
-		Symbol:  "AAPL",
-	}.encodeWire(200)
-	if err != nil {
-		t.Fatalf("encodeWire(ExecutionsRequest) error = %v", err)
-	}
-
-	want := []string{"7", "3", "3", "0", "DU9000001", "", "AAPL", "", "", "", "2147483647", "0"}
-	if len(fields) != len(want) {
-		t.Fatalf("fields len = %d, want %d: %v", len(fields), len(want), fields)
-	}
-	for i := range want {
-		if fields[i] != want[i] {
-			t.Fatalf("fields[%d] = %q, want %q; fields=%v", i, fields[i], want[i], fields)
-		}
-	}
-}
-
-func TestEncodeExecutionsRequestServer200CompleteFilter(t *testing.T) {
-	t.Parallel()
-
-	fields, err := (ExecutionsRequest{
-		ReqID: 7, ClientID: 42, Account: "DU9000001",
-		Time: "20260709-12:30:00", Symbol: "AAPL", SecType: "STK",
-		Exchange: "IEX", Side: "BUY", LastNDays: new(5),
-		SpecificDates: []int{20260708, 20260709},
-	}).encodeWire(200)
-	if err != nil {
-		t.Fatalf("encodeWire(ExecutionsRequest) error = %v", err)
-	}
-
-	want := []string{
-		"7", "3", "7", "42", "DU9000001", "20260709-12:30:00",
-		"AAPL", "STK", "IEX", "BUY", "5", "2", "20260708", "20260709",
-	}
-	if !slices.Equal(fields, want) {
-		t.Fatalf("fields = %#v, want %#v", fields, want)
 	}
 }

@@ -2,15 +2,13 @@ package codec
 
 import (
 	"bytes"
-	"encoding/base64"
-	"encoding/binary"
 	"math"
 	"testing"
 
 	"google.golang.org/protobuf/encoding/protowire"
 )
 
-func TestEncodeServer203OrderRequestVectors(t *testing.T) {
+func TestEncodePlaceOrderRequestVectors(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -41,7 +39,7 @@ func TestEncodeServer203OrderRequestVectors(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := Encode(203, tc.msg)
+			got, err := Encode(208, tc.msg)
 			if err != nil {
 				t.Fatalf("Encode() error = %v", err)
 			}
@@ -87,15 +85,17 @@ func TestIncludeOvernightOrderProtoSourceLaw(t *testing.T) {
 
 	// API 10.48.01 Order.proto SHA-256
 	// 3a963d252987b4a1450d6ded1901f46fdbad16039b6f717dc8beb597e78695c8
-	// defines optional bool includeOvernight as field 135. The official
-	// encoder omits false and emits the field only for true. Every Order also
-	// contains the official empty SoftDollarTier message at field 105.
+	// defines optional bool includeOvernight as field 135. The public pointer
+	// distinguishes absent from explicit false, so both supplied values retain
+	// their protobuf presence. Every Order also contains the official empty
+	// SoftDollarTier message at field 105.
 	for _, tc := range []struct {
 		name  string
 		value string
 		want  string
 	}{
-		{name: "false omitted", want: "ca0600"},
+		{name: "absent", want: "ca0600"},
+		{name: "explicit false field 135", value: "0", want: "ca0600b80800"},
 		{name: "true field 135", value: "1", want: "ca0600b80801"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -268,70 +268,7 @@ func TestEncodeAdditionalOrderParameterBoundaries(t *testing.T) {
 	}
 }
 
-func TestDecodeServer203OrderCallbacks(t *testing.T) {
-	t.Parallel()
-
-	// Exact callbacks from the sanitized 20260710 exact-sv203 paper capture
-	// frozen in order_lifecycle_sv203_live.txt. These retain every live
-	// protobuf field; only account/permanent/submitter identifiers were
-	// substituted.
-	openMessage, err := Decode(203, recordedPayload(t, "AAABEwAAAM0IwAMSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGsgBCAEQwAMYgdKTrQMgACoDQlVZMgExQgNMTVRJAAAAAAAASUBRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQrkBAAAAAACASUDwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVydHJhZGVyMDHwCAAiDgoMUHJlU3VibWl0dGVk"))
-	if err != nil {
-		t.Fatalf("Decode(open order) error = %v", err)
-	}
-	openOrder, ok := openMessage.(OpenOrder)
-	if !ok {
-		t.Fatalf("Decode(open order) = %T", openMessage)
-	}
-	if openOrder.OrderID != 448 || openOrder.Contract.ConID != 265598 || openOrder.Contract.Symbol != "AAPL" ||
-		openOrder.Contract.Strike != "0" || openOrder.Action != "BUY" || openOrder.Quantity != "1" ||
-		openOrder.OrderType != "LMT" || openOrder.LmtPrice != "50" || openOrder.Account != "DU9000001" ||
-		openOrder.ClientID != "1" || openOrder.PermID != "900000001" || openOrder.Status != "PreSubmitted" {
-		t.Fatalf("open order = %+v", openOrder)
-	}
-	if openOrder.IncludeOvernight != "" {
-		t.Fatalf("open order include overnight = %q, want omitted", openOrder.IncludeOvernight)
-	}
-
-	statusMessage, err := Decode(203, recordedPayload(t, "AAAAQAAAAMsIwAMSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCB0pOtAzgAQQAAAAAAAAAASAFZAAAAAAAAAAA="))
-	if err != nil {
-		t.Fatalf("Decode(order status) error = %v", err)
-	}
-	status, ok := statusMessage.(OrderStatus)
-	if !ok || status.OrderID != 448 || status.Status != "PreSubmitted" || status.Filled != "0" ||
-		status.Remaining != "1" || status.PermID != "900000001" || status.ClientID != "1" {
-		t.Fatalf("order status = %#v", statusMessage)
-	}
-
-	for _, tc := range []struct {
-		name string
-		data string
-		code int
-		when string
-	}{
-		{"targeted cancel", "AAAAKwAAAMwIwAMQqJCp5vQzGMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo=", 202, "1783699753000"},
-		{"global cancel after terminal", "AAAAZgAAAMwIwAMQrZep5vQzGKEBIlNDYW5jZWwgYXR0ZW1wdGVkIHdoZW4gb3JkZXIgaXMgbm90IGluIGEgY2FuY2VsbGFibGUgc3RhdGUuICBPcmRlciBwZXJtSWQgPTkwMDAwMDAwMQ==", 161, "1783699753901"},
-	} {
-		message, err := Decode(203, recordedPayload(t, tc.data))
-		if err != nil {
-			t.Fatalf("Decode(%s error) = %v", tc.name, err)
-		}
-		apiError, ok := message.(APIError)
-		if !ok || apiError.ReqID != 448 || apiError.Code != tc.code || apiError.ErrorTimeMs != tc.when {
-			t.Fatalf("%s error = %#v", tc.name, message)
-		}
-	}
-
-	end, err := Decode(203, decodeHex(t, "000000fd"))
-	if err != nil {
-		t.Fatalf("Decode(open orders end) = %v", err)
-	}
-	if _, ok := end.(OpenOrderEnd); !ok {
-		t.Fatalf("open orders end = %T", end)
-	}
-}
-
-func TestEncodeServer203OrdersFailClosed(t *testing.T) {
+func TestEncodePlaceOrdersFailClosed(t *testing.T) {
 	t.Parallel()
 
 	for _, msg := range []OutboundMessage{
@@ -341,20 +278,8 @@ func TestEncodeServer203OrdersFailClosed(t *testing.T) {
 		CancelOrderRequest{OrderID: math.MaxInt32 + 1},
 		GlobalCancelRequest{ManualOrderIndicator: "unknown"},
 	} {
-		if _, err := Encode(203, msg); err == nil {
+		if _, err := Encode(208, msg); err == nil {
 			t.Fatalf("Encode(%T) accepted an incomplete protobuf shape", msg)
 		}
 	}
-}
-
-func recordedPayload(t *testing.T, value string) []byte {
-	t.Helper()
-	frame, err := base64.StdEncoding.DecodeString(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(frame) < 4 || int(binary.BigEndian.Uint32(frame[:4])) != len(frame)-4 {
-		t.Fatalf("recorded frame has invalid length prefix")
-	}
-	return frame[4:]
 }

@@ -290,7 +290,7 @@ func (e *engine) subscribeExecutions(ctx context.Context, req ExecutionsRequest,
 			resp <- result{err: err}
 			return
 		}
-		wireReq, err := executionsRequest(req, e.serverVersion)
+		wireReq, err := executionsRequest(req)
 		if err != nil {
 			resp <- result{err: err}
 			return
@@ -549,7 +549,7 @@ func (e *engine) PlaceOrder(ctx context.Context, req PlaceOrderRequest) (*OrderH
 	enqueueReadySetup(ctx, e, func() {
 		resp <- placeOrderResult{err: context.Cause(ctx)}
 	}, func() {
-		if err := validateContractFieldSupport(req.Contract, "place order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+		if err := validateContractFieldSupport(req.Contract, "place order", e.serverVersion, contractFieldsAll); err != nil {
 			resp <- placeOrderResult{err: err}
 			return
 		}
@@ -593,7 +593,7 @@ func (e *engine) PlaceBracket(ctx context.Context, req PlaceBracketRequest) (Bra
 	enqueueReadySetup(ctx, e, func() {
 		resp <- bracketOrderResult{err: context.Cause(ctx)}
 	}, func() {
-		if err := validateContractFieldSupport(req.Contract, "place bracket", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+		if err := validateContractFieldSupport(req.Contract, "place bracket", e.serverVersion, contractFieldsAll); err != nil {
 			resp <- bracketOrderResult{err: err}
 			return
 		}
@@ -694,7 +694,7 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract, parentID int6
 		}
 		order = cloneOrder(order)
 		return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-			if err := validateContractFieldSupport(contract, "modify order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+			if err := validateContractFieldSupport(contract, "modify order", e.serverVersion, contractFieldsAll); err != nil {
 				return err
 			}
 			if err := validateOrderServerVersion(order, e.serverVersion); err != nil {
@@ -758,7 +758,7 @@ func (e *engine) PreviewOrder(ctx context.Context, req PlaceOrderRequest) (Order
 	orderIDCh := make(chan int64, 1)
 
 	enqueueOneShotSetup(ctx, e, func() {
-		if err := validateContractFieldSupport(req.Contract, "preview order", e.serverVersion, placeOrderContractFields(e.serverVersion)); err != nil {
+		if err := validateContractFieldSupport(req.Contract, "preview order", e.serverVersion, contractFieldsAll); err != nil {
 			setupResp <- setup{err: err}
 			return
 		}

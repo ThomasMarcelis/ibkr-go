@@ -73,7 +73,7 @@ func (m ExecutionsRequest) encodeProto(sv int) ([]byte, error) {
 		}
 		filter = appendProtoMessage(filter, 9, packed)
 	}
-	// The live sv201 request contains an explicitly present, empty filter.
+	// The supported protobuf request contains an explicitly present, empty filter.
 	// Presence is semantically different from omitting this optional message.
 	return appendProtoMessage(body, 2, filter), nil
 }

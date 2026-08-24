@@ -40,6 +40,7 @@ type engine struct {
 	transportRetireErr  error
 	transportRouteErr   error
 	transportGeneration uint64
+	poisonedGeneration  uint64
 	serverVersion       int
 
 	keyed      map[int]*route
@@ -117,6 +118,15 @@ type transportWrite struct {
 	result    transport.WriteResult
 }
 
+// decodedTransportInput binds a decoded callback to the physical transport
+// generation that produced it. The actor uses that ownership to discard a
+// poisoned generation's buffered tail without discarding tracked write
+// completions from the same connection.
+type decodedTransportInput struct {
+	generation uint64
+	message    any
+}
+
 type bootstrapState struct {
 	serverInfo    bool
 	managed       bool
@@ -125,8 +135,8 @@ type bootstrapState struct {
 }
 
 const (
-	// Supported versions are the live-validated 200 classic layout and the
-	// staged protobuf migrations and protocol additions through 225.
+	// Supported versions are the live-validated protocol train from the first
+	// fully current v2 layout through the API 10.48.01 ceiling.
 	minServerVersion = protocol.SupportedMinServerVersion
 	maxServerVersion = protocol.SupportedMaxServerVersion
 	bootstrapTimeout = 5 * time.Second

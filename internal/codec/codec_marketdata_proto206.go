@@ -1,6 +1,7 @@
 package codec
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -340,7 +341,8 @@ func decodeMarketDepthRerouteProto(body []byte, sv int) ([]Message, error) {
 }
 
 func decodeMarketDataRerouteBodyProto(body []byte, label string) (int, int, string, error) {
-	reqID := -1
+	var reqID int
+	var hasReqID bool
 	var conID int
 	var exchange string
 	for {
@@ -349,6 +351,9 @@ func decodeMarketDataRerouteBodyProto(body []byte, label string) (int, int, stri
 			return 0, 0, "", err
 		}
 		if !ok {
+			if !hasReqID {
+				return 0, 0, "", fmt.Errorf("%s missing required request id", label)
+			}
 			return reqID, conID, exchange, nil
 		}
 		switch number {
@@ -359,6 +364,7 @@ func decodeMarketDataRerouteBodyProto(body []byte, label string) (int, int, stri
 			}
 			if number == 1 {
 				reqID = decodeProtoInt32(value)
+				hasReqID = true
 			} else {
 				conID = decodeProtoInt32(value)
 			}
@@ -410,7 +416,8 @@ type protoMarketDepth struct {
 }
 
 func decodeMarketDepthMessageProto(body []byte, label string) (int, protoMarketDepth, bool, error) {
-	reqID := -1
+	var reqID int
+	var hasReqID bool
 	depth := protoMarketDepth{Price: "0"}
 	var depthPresent bool
 	for {
@@ -420,7 +427,10 @@ func decodeMarketDepthMessageProto(body []byte, label string) (int, protoMarketD
 		}
 		if !ok {
 			if !depthPresent {
-				return 0, protoMarketDepth{}, false, nil
+				return 0, protoMarketDepth{}, false, fmt.Errorf("%s missing required depth data", label)
+			}
+			if !hasReqID {
+				return 0, protoMarketDepth{}, false, fmt.Errorf("%s missing required request id", label)
 			}
 			return reqID, depth, true, nil
 		}
@@ -431,6 +441,7 @@ func decodeMarketDepthMessageProto(body []byte, label string) (int, protoMarketD
 				return 0, protoMarketDepth{}, false, protoFieldError(label, number, err)
 			}
 			reqID = decodeProtoInt32(value)
+			hasReqID = true
 		case 2:
 			value, err := consumeProtoBytes(&body, typ)
 			if err != nil {

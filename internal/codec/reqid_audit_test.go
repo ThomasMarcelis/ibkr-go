@@ -5,7 +5,6 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
-	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -22,11 +21,8 @@ import (
 // list of message names:
 //
 //  1. Find every struct with a `ReqID int` field.
-//  2. Exempt structs whose encodeWire method identifies them as client-to-
-//     Gateway messages through a protocol.OutXxx constant. Decode-only
-//     structs deliberately have no encoder; the retained structured-testhost
-//     encoders identify themselves through protocol.InXxx constants and are
-//     treated as inbound too.
+//  2. Exempt structs with the package-private messageID method that marks an
+//     OutboundMessage. Decode-only structs deliberately have no such method.
 //  3. Every inbound-direction struct must implement RequestID(), except the
 //     documented exception below.
 //
@@ -55,9 +51,7 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 
 	reqIDStructs := map[string]bool{}     // struct name -> has a `ReqID int` field
 	requestIDMethods := map[string]bool{} // struct name -> implements RequestID() int
-	direction := map[string]string{}      // encoded struct name -> "In" or "Out"
-
-	dirConst := regexp.MustCompile(`^(In|Out)[A-Z]`)
+	outbound := map[string]bool{}         // struct name -> implements messageID() int
 
 	fset := token.NewFileSet()
 	entries, err := os.ReadDir(".")
@@ -111,33 +105,8 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 				switch d.Name.Name {
 				case "RequestID":
 					requestIDMethods[recv] = true
-				case "encodeWire":
-					if d.Body == nil {
-						continue
-					}
-					ast.Inspect(d.Body, func(n ast.Node) bool {
-						if _, done := direction[recv]; done {
-							return false
-						}
-						call, ok := n.(*ast.CallExpr)
-						if !ok || len(call.Args) == 0 {
-							return true
-						}
-						fnName := calleeName(call.Fun)
-						if fnName != "itoa" && fnName != "i64toa" && fnName != "WriteInt" {
-							return true
-						}
-						name := protocolConstantName(call.Args[0])
-						if !dirConst.MatchString(name) {
-							return true
-						}
-						if strings.HasPrefix(name, "In") {
-							direction[recv] = "In"
-						} else {
-							direction[recv] = "Out"
-						}
-						return false
-					})
+				case "messageID":
+					outbound[recv] = true
 				}
 			}
 		}
@@ -145,7 +114,7 @@ func TestReqIDAuditInboundMessagesImplementRequestID(t *testing.T) {
 
 	var violations []string
 	for typeName := range reqIDStructs {
-		if direction[typeName] == "Out" {
+		if outbound[typeName] {
 			continue // outbound request/cancel: never routed back by ReqID
 		}
 		if requestIDMethods[typeName] {
@@ -190,29 +159,4 @@ func receiverTypeName(d *ast.FuncDecl) string {
 		return ""
 	}
 	return ident.Name
-}
-
-func protocolConstantName(expr ast.Expr) string {
-	selector, ok := expr.(*ast.SelectorExpr)
-	if !ok {
-		return ""
-	}
-	pkg, ok := selector.X.(*ast.Ident)
-	if !ok || pkg.Name != "protocol" {
-		return ""
-	}
-	return selector.Sel.Name
-}
-
-// calleeName returns the identifier name of a call expression's function,
-// handling both bare calls (itoa(...)) and selector calls (w.WriteInt(...)).
-func calleeName(fn ast.Expr) string {
-	switch e := fn.(type) {
-	case *ast.Ident:
-		return e.Name
-	case *ast.SelectorExpr:
-		return e.Sel.Name
-	default:
-		return ""
-	}
 }

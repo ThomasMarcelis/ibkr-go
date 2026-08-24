@@ -724,7 +724,6 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		{117, m.AutoCancelParent, "auto cancel parent"},
 		{119, m.ImbalanceOnly, "imbalance only"},
 		{133, m.ProfessionalCustomer, "professional customer"},
-		{135, m.IncludeOvernight, "include overnight"},
 		{138, m.Deactivate, "deactivate"},
 		{139, m.PostOnly, "post only"},
 		{140, m.AllowPreOpen, "allow pre-open"},
@@ -734,6 +733,10 @@ func encodeOrderProto(m PlaceOrderRequest) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+	body, err = appendOptionalProtoBool(body, 135, m.IncludeOvernight, "include overnight")
+	if err != nil {
+		return nil, err
 	}
 	if m.OrderMiscOptions != "" {
 		return nil, fmt.Errorf("codec: order misc options protobuf map cannot be encoded from %q", m.OrderMiscOptions)
@@ -897,6 +900,19 @@ func appendOptionalProtoTrue(body []byte, number protowire.Number, value, label 
 	switch value {
 	case "", "0":
 		return body, nil
+	case "1":
+		return appendProtoVarint(body, number, 1), nil
+	default:
+		return nil, fmt.Errorf("codec: %s %q is not a protobuf bool", label, value)
+	}
+}
+
+func appendOptionalProtoBool(body []byte, number protowire.Number, value, label string) ([]byte, error) {
+	switch value {
+	case "":
+		return body, nil
+	case "0":
+		return appendProtoVarint(body, number, 0), nil
 	case "1":
 		return appendProtoVarint(body, number, 1), nil
 	default:

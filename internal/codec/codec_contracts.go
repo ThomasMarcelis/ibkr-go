@@ -2,9 +2,7 @@ package codec
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
-	"unicode/utf16"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
@@ -42,20 +40,6 @@ type DeltaNeutralContract struct {
 type ContractDetailsRequest struct {
 	ReqID    int
 	Contract Contract
-}
-
-func (m ContractDetailsRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqContractData)
-	w.WriteInt(8) // version
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteBool(m.Contract.IncludeExpired)
-	w.WriteString(m.Contract.SecurityIDType)
-	w.WriteString(m.Contract.SecurityID)
-	w.WriteString(m.Contract.IssuerID)
-	return w.Fields(), nil
 }
 
 type ContractDetails struct {
@@ -243,225 +227,9 @@ type SmartComponentsResponse struct {
 	Components []SmartComponentEntry
 }
 
-// Server-version 200 classic layout. Explicit codec literals freeze live stock,
-// option, future, and mutual-fund responses; index and crypto responses are
-// additionally present in the checked-in capture corpus.
-func decodeContractData(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	symbol := r.ReadString()
-	secType := r.ReadString()
-	expiry, lastTradeTime := splitLastTradeDate(r.ReadString())
-	lastTradeDate := r.ReadString()
-	strike := r.ReadString()
-	right := r.ReadString()
-	exchange := r.ReadString()
-	currency := r.ReadString()
-	localSymbol := r.ReadString()
-	marketName := r.ReadString()
-	tradingClass := r.ReadString()
-	conID, _ := r.ReadInt()
-	minTick := r.ReadString()
-	// mdSizeMultiplier left the wire at SIZE_RULES (164). In every supported
-	// server version this slot is the contract multiplier.
-	multiplier := r.ReadString()
-	orderTypes := r.ReadString()
-	validExchanges := r.ReadString()
-	priceMagnifier, _ := r.ReadInt()
-	underConID, _ := r.ReadInt()
-	longName := decodeUnicodeEscapes(r.ReadString())
-	primaryExchange := r.ReadString()
-	contractMonth := r.ReadString()
-	industry := r.ReadString()
-	category := r.ReadString()
-	subcategory := r.ReadString()
-	timeZoneID := r.ReadString()
-	tradingHours := r.ReadString()
-	liquidHours := r.ReadString()
-	economicValueRule := r.ReadString()
-	economicValueMultiplier := r.ReadString()
-
-	securityIDCount, err := r.ReadCount("contract security id count")
-	if err != nil {
-		return nil, err
-	}
-	trailerFields := 10 // fixed tail plus ineligibility-reason count
-	if secType == "FUND" {
-		trailerFields += 17
-	}
-	if err := r.RequireFixedEntryFields("contract security ids", securityIDCount, 2, trailerFields); err != nil {
-		return nil, err
-	}
-	var securityIDs []TagValue
-	if securityIDCount > 0 {
-		securityIDs = make([]TagValue, securityIDCount)
-	}
-	for i := range securityIDs {
-		securityIDs[i] = TagValue{Tag: r.ReadString(), Value: r.ReadString()}
-	}
-
-	aggGroup, _ := r.ReadInt()
-	underSymbol := r.ReadString()
-	underSecType := r.ReadString()
-	marketRuleIDs := r.ReadString()
-	realExpirationDate := r.ReadString()
-	stockType := r.ReadString()
-	minSize := r.ReadDecimal()
-	sizeIncrement := r.ReadDecimal()
-	suggestedSizeIncrement := r.ReadDecimal()
-
-	var fund *FundDetails
-	if secType == "FUND" {
-		fund = &FundDetails{
-			Name:                 r.ReadString(),
-			Family:               r.ReadString(),
-			Type:                 r.ReadString(),
-			FrontLoad:            r.ReadString(),
-			BackLoad:             r.ReadString(),
-			BackLoadTimeInterval: r.ReadString(),
-			ManagementFee:        r.ReadString(),
-		}
-		fund.Closed, _ = r.ReadBool()
-		fund.ClosedForNewInvestors, _ = r.ReadBool()
-		fund.ClosedForNewMoney, _ = r.ReadBool()
-		fund.NotifyAmount = r.ReadString()
-		fund.MinimumInitialPurchase = r.ReadString()
-		fund.MinimumSubsequentPurchase = r.ReadString()
-		fund.BlueSkyStates = r.ReadString()
-		fund.BlueSkyTerritories = r.ReadString()
-		fund.DistributionPolicy = r.ReadString()
-		fund.AssetType = r.ReadString()
-	}
-
-	count, err := r.ReadCount("contract ineligibility reason count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("contract ineligibility reasons", count, 2, 0); err != nil {
-		return nil, err
-	}
-	var ineligibilityReasons []IneligibilityReason
-	if count > 0 {
-		ineligibilityReasons = make([]IneligibilityReason, count)
-	}
-	for i := range ineligibilityReasons {
-		ineligibilityReasons[i] = IneligibilityReason{ID: r.ReadString(), Description: r.ReadString()}
-	}
-	if remaining := r.Remaining(); remaining != 0 {
-		return nil, fmt.Errorf("ibkr codec: contract details has %d trailing fields", remaining)
-	}
-
-	return []Message{ContractDetails{
-		ReqID: reqID,
-		Contract: Contract{
-			ConID: conID, Symbol: symbol, SecType: secType,
-			Expiry: expiry, Strike: strike, Right: right,
-			Multiplier: multiplier,
-			Exchange:   exchange, Currency: currency,
-			LocalSymbol: localSymbol, TradingClass: tradingClass,
-			PrimaryExchange: primaryExchange,
-		},
-		MarketName: marketName, MinTick: minTick,
-		PriceMagnifier: priceMagnifier, OrderTypes: orderTypes,
-		ValidExchanges: validExchanges, UnderConID: underConID,
-		LongName: longName, ContractMonth: contractMonth,
-		Industry: industry, Category: category, Subcategory: subcategory,
-		TimeZoneID: timeZoneID, TradingHours: tradingHours, LiquidHours: liquidHours,
-		EconomicValueRule: economicValueRule, EconomicValueMultiplier: economicValueMultiplier,
-		SecurityIDs: securityIDs, AggGroup: aggGroup,
-		UnderSymbol: underSymbol, UnderSecType: underSecType,
-		MarketRuleIDs: marketRuleIDs, RealExpirationDate: realExpirationDate,
-		LastTradeDate: lastTradeDate, LastTradeTime: lastTradeTime, StockType: stockType,
-		MinSize: minSize, SizeIncrement: sizeIncrement, SuggestedSizeIncrement: suggestedSizeIncrement,
-		Fund: fund, IneligibilityReasons: ineligibilityReasons,
-	}}, nil
-}
-
-// Server-version 200 classic bond layout. Live frames are frozen
-// in codec_capture_test.go; API 10.48.01 processBondContractDataMsg is the
-// source reference for field order and version gates.
-func decodeBondContractData(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	symbol := r.ReadString()
-	secType := r.ReadString()
-	cusip := r.ReadString()
-	coupon := r.ReadDecimal()
-	maturity, lastTradeTime, _ := splitBondLastTradeDate(r.ReadString())
-	issueDate := r.ReadString()
-	ratings := r.ReadString()
-	bondType := r.ReadString()
-	couponType := r.ReadString()
-	convertible, _ := r.ReadBool()
-	callable, _ := r.ReadBool()
-	putable, _ := r.ReadBool()
-	descriptionAppend := r.ReadString()
-	exchange := r.ReadString()
-	currency := r.ReadString()
-	marketName := r.ReadString()
-	tradingClass := r.ReadString()
-	conID, _ := r.ReadInt()
-	minTick := r.ReadDecimal()
-	orderTypes := r.ReadString()
-	validExchanges := r.ReadString()
-	nextOptionDate := r.ReadString()
-	nextOptionType := r.ReadString()
-	nextOptionPartial, _ := r.ReadBool()
-	notes := r.ReadString()
-	longName := decodeUnicodeEscapes(r.ReadString())
-	timeZoneID := r.ReadString()
-	tradingHours := r.ReadString()
-	liquidHours := r.ReadString()
-	economicValueRule := r.ReadString()
-	economicValueMultiplier := r.ReadDecimal()
-
-	securityIDCount, err := r.ReadCount("bond contract security id count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("bond contract security ids", securityIDCount, 2, 5); err != nil {
-		return nil, err
-	}
-	var securityIDs []TagValue
-	if securityIDCount > 0 {
-		securityIDs = make([]TagValue, securityIDCount)
-	}
-	for i := range securityIDs {
-		securityIDs[i] = TagValue{Tag: r.ReadString(), Value: r.ReadString()}
-	}
-
-	aggGroup, _ := r.ReadInt()
-	marketRuleIDs := r.ReadString()
-	minSize := r.ReadDecimal()
-	sizeIncrement := r.ReadDecimal()
-	suggestedSizeIncrement := r.ReadDecimal()
-	if remaining := r.Remaining(); remaining != 0 {
-		return nil, fmt.Errorf("ibkr codec: bond contract details has %d trailing fields", remaining)
-	}
-
-	return []Message{BondContractDetails{
-		ContractDetails: ContractDetails{
-			ReqID: reqID,
-			Contract: Contract{
-				ConID: conID, Symbol: symbol, SecType: secType,
-				Exchange: exchange, Currency: currency, TradingClass: tradingClass,
-			},
-			MarketName: marketName, MinTick: minTick,
-			OrderTypes: orderTypes, ValidExchanges: validExchanges,
-			LongName: longName, TimeZoneID: timeZoneID,
-			TradingHours: tradingHours, LiquidHours: liquidHours,
-			EconomicValueRule: economicValueRule, EconomicValueMultiplier: economicValueMultiplier,
-			SecurityIDs: securityIDs, AggGroup: aggGroup,
-			MarketRuleIDs: marketRuleIDs, LastTradeTime: lastTradeTime,
-			MinSize: minSize, SizeIncrement: sizeIncrement, SuggestedSizeIncrement: suggestedSizeIncrement,
-		},
-		CUSIP: cusip, Coupon: coupon, Maturity: maturity, IssueDate: issueDate,
-		Ratings: ratings, BondType: bondType, CouponType: couponType,
-		Convertible: convertible, Callable: callable, Putable: putable,
-		DescriptionAppend: descriptionAppend,
-		NextOptionDate:    nextOptionDate, NextOptionType: nextOptionType,
-		NextOptionPartial: nextOptionPartial, Notes: notes,
-	}}, nil
-}
-
+// Contract-detail protobuf callbacks combine the last trade date and optional
+// time metadata into one string. Split only the components owned by the public
+// projection while preserving empty values.
 func splitLastTradeDate(value string) (date, tradeTime string) {
 	var fields []string
 	if strings.Contains(value, "-") {
@@ -497,57 +265,11 @@ func splitBondLastTradeDate(value string) (maturity, tradeTime, timeZone string)
 	return maturity, tradeTime, timeZone
 }
 
-// decodeUnicodeEscapes reverses the ASCII7 encoding used by IBKR for classic
-// string fields. The official clients decode each \uXXXX UTF-16 code unit; a
-// valid adjacent surrogate pair therefore becomes one Unicode code point.
-func decodeUnicodeEscapes(value string) string {
-	if !strings.Contains(value, `\u`) {
-		return value
-	}
-
-	var out strings.Builder
-	for len(value) > 0 {
-		escape := strings.Index(value, `\u`)
-		if escape < 0 || len(value)-escape < 6 {
-			out.WriteString(value)
-			break
-		}
-		out.WriteString(value[:escape])
-		first, err := strconv.ParseUint(value[escape+2:escape+6], 16, 16)
-		if err != nil {
-			out.WriteString(value[escape : escape+2])
-			value = value[escape+2:]
-			continue
-		}
-
-		r := rune(first)
-		consumed := escape + 6
-		if utf16.IsSurrogate(r) && len(value) >= escape+12 && value[escape+6:escape+8] == `\u` {
-			second, err := strconv.ParseUint(value[escape+8:escape+12], 16, 16)
-			if err == nil {
-				if decoded := utf16.DecodeRune(r, rune(second)); decoded != '\uFFFD' {
-					r = decoded
-					consumed = escape + 12
-				}
-			}
-		}
-		out.WriteRune(r)
-		value = value[consumed:]
-	}
-	return out.String()
-}
-
-// [52, version, reqID]
-func decodeContractDataEnd(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	reqID, _ := r.ReadInt()
-	return []Message{ContractDetailsEnd{ReqID: reqID}}, nil
-}
-
 // [75, reqID, exchange, underlyingConID, tradingClass, multiplier, expirationsCount, expirations..., strikesCount, strikes...] — no version
 func decodeSecDefOptParams(r *fieldReader, sv int) ([]Message, error) {
-	// Live server_version 200 frames carry the expiration count directly
-	// after the multiplier (capture 20260611T074417Z, sha fa7f3f46793d3277);
+	// Captured classic frames carry the expiration count directly after the
+	// multiplier (sv208 capture 20260825T195326Z-sv208_classic_boundary_families,
+	// events SHA-256 25aa15fdaeff68a48689bc70e68ddcc519783427a0fd835172c9aaad55246b08);
 	// a phantom marketRuleId skip here used to consume the count and kill
 	// the session on the first row.
 	reqID, _ := r.ReadInt()

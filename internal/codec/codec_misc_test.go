@@ -5,10 +5,9 @@ import (
 	"testing"
 )
 
-func TestScannerSubscriptionRequestMatchesLiveServer200Shape(t *testing.T) {
-	// captures/20260407T190657Z-scanner_subscription/events.jsonl,
-	// 2026-04-07T19:06:58.035817304Z. The accepted client payload has SHA-256
-	// f0cf2dab760c74ef107e07322055a6de352e2f621fe9eeefd8132f1ca906c519.
+func TestScannerSubscriptionRequestClassicShape(t *testing.T) {
+	// The classic scanner body remains reachable at supported versions 208 and
+	// 209. Its fields follow the official EClient request order.
 	const maxFloat = "1.7976931348623157E308"
 	const maxInt = "2147483647"
 	fields, err := (ScannerSubscriptionRequest{
@@ -25,7 +24,7 @@ func TestScannerSubscriptionRequestMatchesLiveServer200Shape(t *testing.T) {
 		CouponRateAbove:          maxFloat,
 		CouponRateBelow:          maxFloat,
 		AverageOptionVolumeAbove: maxInt,
-	}).encodeWire(200)
+	}).encodeWire(208)
 	if err != nil {
 		t.Fatalf("encodeWire() error = %v", err)
 	}
@@ -54,7 +53,7 @@ func TestScannerSubscriptionRequestEncodesOfficialGenericFilters(t *testing.T) {
 			{Tag: "optVolumeAbove", Value: "1000"},
 			{Tag: "avgVolumeAbove", Value: "100000000"},
 		},
-	}).encodeWire(200)
+	}).encodeWire(208)
 	if err != nil {
 		t.Fatalf("encodeWire() error = %v", err)
 	}
@@ -66,5 +65,30 @@ func TestScannerSubscriptionRequestEncodesOfficialGenericFilters(t *testing.T) {
 	}
 	if fields[24] != "" {
 		t.Fatalf("subscription options = %q, want empty", fields[24])
+	}
+}
+
+func TestUserInfoClassicSV208LiveVector(t *testing.T) {
+	t.Parallel()
+
+	// Exact request and response from capture 20260825T194619Z-sv208_user_info,
+	// events.jsonl SHA-256
+	// 672370162ad17e46cf045647775d1d6bc4480353b2f044392c43431a88717bd5.
+	// SDK 10.48.01 EClient::reqUserInfo independently confirms that the request
+	// is [msgID, reqID], with no version field.
+	request, err := Encode(208, UserInfoRequest{ReqID: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := decodeHex(t, "000000683100"); !slices.Equal(request, want) {
+		t.Fatalf("Encode(UserInfoRequest) = %x, want %x", request, want)
+	}
+
+	message, err := Decode(208, decodeHex(t, "0000006b310000"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (UserInfo{ReqID: 1}); message != want {
+		t.Fatalf("Decode(UserInfo) = %#v, want %#v", message, want)
 	}
 }

@@ -232,6 +232,9 @@ func interrupted(cause error) error {
 	if cause == nil {
 		return ErrInterrupted
 	}
+	if errors.Is(cause, ErrInterrupted) {
+		return cause
+	}
 	return fmt.Errorf("%w: %w", ErrInterrupted, cause)
 }
 

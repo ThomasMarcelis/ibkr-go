@@ -1,20 +1,7 @@
 package codec
 
-import (
-	"fmt"
-
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
-)
-
 type ConfigRequest struct {
 	ReqID int
-}
-
-func (m ConfigRequest) encodeWire(sv int) ([]string, error) {
-	if sv < protocol.MinServerVersionConfig {
-		return nil, fmt.Errorf("codec: config requires server_version %d", protocol.MinServerVersionConfig)
-	}
-	return []string{itoa(protocol.OutReqConfig)}, nil
 }
 
 func (m ConfigRequest) encodeProto(sv int) ([]byte, error) {

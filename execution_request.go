@@ -5,10 +5,9 @@ import (
 	"strconv"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 )
 
-func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.ExecutionsRequest, error) {
+func executionsRequest(req ExecutionsRequest) (codec.ExecutionsRequest, error) {
 	if req.Side != "" && req.Side != ExecutionFilterBuy && req.Side != ExecutionFilterSell {
 		return codec.ExecutionsRequest{}, &ValidationError{
 			Field: "ExecutionsRequest.Side", Value: string(req.Side), Message: "must be BUY or SELL",
@@ -19,13 +18,6 @@ func executionsRequest(req ExecutionsRequest, serverVersion int) (codec.Executio
 			Field: "ExecutionsRequest.LastDays", Value: strconv.Itoa(req.LastDays), Message: "must be between 0 and 7",
 		}
 	}
-	if (req.LastDays != 0 || len(req.SpecificDates) != 0) && serverVersion < protocol.MinServerVersionParametrizedDaysOfExecutions {
-		return codec.ExecutionsRequest{}, fmt.Errorf(
-			"ibkr: executions day filters require server_version %d, negotiated %d: %w",
-			protocol.MinServerVersionParametrizedDaysOfExecutions, serverVersion, ErrUnsupportedServerVersion,
-		)
-	}
-
 	wireReq := codec.ExecutionsRequest{
 		ClientID: int(req.ClientID),
 		Account:  req.Account,

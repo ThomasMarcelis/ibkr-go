@@ -1,10 +1,6 @@
 package codec
 
-import (
-	"strings"
-
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
-)
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 
 type StartAPI struct {
 	ClientID             int
@@ -27,10 +23,6 @@ type ManagedAccounts struct {
 // ManagedAccountsRequest is the outbound reqManagedAccts message (OUT 17).
 // The server answers with the same ManagedAccounts callback used at bootstrap.
 type ManagedAccountsRequest struct{}
-
-func (m ManagedAccountsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqManagedAccounts), "1"}, nil
-}
 
 type NextValidID struct {
 	OrderID int64
@@ -92,26 +84,12 @@ type UserInfoRequest struct {
 }
 
 func (m UserInfoRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqUserInfo), "1", itoa(m.ReqID)}, nil
+	return []string{itoa(protocol.OutReqUserInfo), itoa(m.ReqID)}, nil
 }
 
 type UserInfo struct {
 	ReqID           int
 	WhiteBrandingID string
-}
-
-// [4, reqId, code, message, advancedJson, errorTimeMs]
-func decodeErrMsg(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	code, _ := r.ReadInt()
-	message := r.ReadString()
-	advJSON := r.ReadString()
-	errTime := r.ReadString() // decoder.py:2380-2382
-	return []Message{APIError{ReqID: reqID, Code: code, Message: message, AdvancedOrderRejectJSON: advJSON, ErrorTimeMs: errTime}}, nil
-}
-
-func (m APIError) encodeLegacyServerWire() []string {
-	return []string{itoa(protocol.InErrMsg), itoa(m.ReqID), itoa(m.Code), m.Message, m.AdvancedOrderRejectJSON, m.ErrorTimeMs}
 }
 
 // [109, timeMs] — no version
@@ -127,25 +105,6 @@ func decodeNextValidID(r *fieldReader, sv int) ([]Message, error) {
 		return nil, err
 	}
 	return []Message{NextValidID{OrderID: orderID}}, nil
-}
-
-func (m NextValidID) encodeLegacyServerWire() []string {
-	return []string{itoa(protocol.InNextValidID), "1", i64toa(m.OrderID)}
-}
-
-// [15, version, accountsList]
-func decodeManagedAccounts(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	raw := r.ReadString()
-	accounts := []string{}
-	if raw != "" {
-		accounts = strings.Split(strings.TrimRight(raw, ","), ",")
-	}
-	return []Message{ManagedAccounts{Accounts: accounts}}, nil
-}
-
-func (m ManagedAccounts) encodeLegacyServerWire() []string {
-	return []string{itoa(protocol.InManagedAccounts), "1", strings.Join(m.Accounts, ",")}
 }
 
 // [49, version, time]

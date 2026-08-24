@@ -1,10 +1,6 @@
 package codec
 
-import (
-	"strings"
-
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
-)
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 
 type AccountSummaryRequest struct {
 	ReqID   int
@@ -12,16 +8,8 @@ type AccountSummaryRequest struct {
 	Tags    []string
 }
 
-func (m AccountSummaryRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqAccountSummary), "1", itoa(m.ReqID), m.Account, strings.Join(m.Tags, ",")}, nil
-}
-
 type CancelAccountSummary struct {
 	ReqID int
-}
-
-func (m CancelAccountSummary) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelAccountSummary), "1", itoa(m.ReqID)}, nil
 }
 
 type AccountSummaryValue struct {
@@ -38,15 +26,7 @@ type AccountSummaryEnd struct {
 
 type PositionsRequest struct{}
 
-func (m PositionsRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqPositions), "1"}, nil
-}
-
 type CancelPositions struct{}
-
-func (m CancelPositions) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelPositions), "1"}, nil
-}
 
 type Position struct {
 	Account  string
@@ -77,10 +57,6 @@ type FamilyCodeEntry struct {
 type AccountUpdatesRequest struct {
 	Subscribe bool
 	Account   string
-}
-
-func (m AccountUpdatesRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqAccountUpdates), "2", btoa(m.Subscribe), m.Account}, nil
 }
 
 type UpdateAccountValue struct {
@@ -118,20 +94,8 @@ type AccountUpdatesMultiRequest struct {
 	LedgerAndNLV bool
 }
 
-func (m AccountUpdatesMultiRequest) encodeWire(sv int) ([]string, error) {
-	ledgerAndNLV := "0"
-	if m.LedgerAndNLV {
-		ledgerAndNLV = "1"
-	}
-	return []string{itoa(protocol.OutReqAccountUpdatesMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode, ledgerAndNLV}, nil
-}
-
 type CancelAccountUpdatesMulti struct {
 	ReqID int
-}
-
-func (m CancelAccountUpdatesMulti) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelAccountUpdatesMulti), "1", itoa(m.ReqID)}, nil
 }
 
 type AccountUpdateMultiValue struct {
@@ -155,16 +119,8 @@ type PositionsMultiRequest struct {
 	ModelCode string
 }
 
-func (m PositionsMultiRequest) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutReqPositionsMulti), "1", itoa(m.ReqID), m.Account, m.ModelCode}, nil
-}
-
 type CancelPositionsMulti struct {
 	ReqID int
-}
-
-func (m CancelPositionsMulti) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelPositionsMulti), "1", itoa(m.ReqID)}, nil
 }
 
 type PositionMulti struct {
@@ -237,38 +193,6 @@ type PnLSingleValue struct {
 	Value         string
 }
 
-// [61, version, account, contract(11), position, avgCost]
-func decodePositionData(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	account := r.ReadString()
-	contract := readWireContract(r)
-	position := r.ReadString()
-	avgCost := r.ReadString()
-	return []Message{Position{Account: account, Contract: contract, Position: position, AvgCost: avgCost}}, nil
-}
-
-func decodePositionEnd(r *fieldReader, sv int) ([]Message, error) {
-	return []Message{PositionEnd{}}, nil
-}
-
-// [63, version, reqID, account, tag, value, currency]
-func decodeAccountSummary(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	reqID, _ := r.ReadInt()
-	account := r.ReadString()
-	tag := r.ReadString()
-	value := r.ReadString()
-	currency := r.ReadString()
-	return []Message{AccountSummaryValue{ReqID: reqID, Account: account, Tag: tag, Value: value, Currency: currency}}, nil
-}
-
-// [64, version, reqID]
-func decodeAccountSummaryEnd(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1)
-	reqID, _ := r.ReadInt()
-	return []Message{AccountSummaryEnd{ReqID: reqID}}, nil
-}
-
 // [78, count, repeated(accountID, familyCode)] — no version
 func decodeFamilyCodes(r *fieldReader, sv int) ([]Message, error) {
 	count, err := r.ReadCount("family code count")
@@ -283,102 +207,6 @@ func decodeFamilyCodes(r *fieldReader, sv int) ([]Message, error) {
 		entries[i] = FamilyCodeEntry{AccountID: r.ReadString(), FamilyCode: r.ReadString()}
 	}
 	return []Message{FamilyCodes{Codes: entries}}, nil
-}
-
-// [6, version=2, key, value, currency, accountName]
-func decodeUpdateAccountValue(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	key := r.ReadString()
-	value := r.ReadString()
-	currency := r.ReadString()
-	account := r.ReadString()
-	return []Message{UpdateAccountValue{Key: key, Value: value, Currency: currency, Account: account}}, nil
-}
-
-// [7, version=8, conID, symbol, secType, expiry, strike, right, multiplier, primaryExchange, currency, localSymbol, tradingClass, position, marketPrice, marketValue, avgCost, unrealizedPNL, realizedPNL, accountName]
-func decodeUpdatePortfolio(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	conID, _ := r.ReadInt()
-	symbol := r.ReadString()
-	secType := r.ReadString()
-	expiry := r.ReadString()
-	strike := r.ReadString()
-	right := r.ReadString()
-	multiplier := r.ReadString()
-	primaryExchange := r.ReadString()
-	currency := r.ReadString()
-	localSymbol := r.ReadString()
-	tradingClass := r.ReadString()
-	position := r.ReadString()
-	marketPrice := r.ReadString()
-	marketValue := r.ReadString()
-	avgCost := r.ReadString()
-	unrealizedPNL := r.ReadString()
-	realizedPNL := r.ReadString()
-	account := r.ReadString()
-	return []Message{UpdatePortfolio{
-		Contract: Contract{
-			ConID: conID, Symbol: symbol, SecType: secType,
-			Expiry: expiry, Strike: strike, Right: right,
-			Multiplier: multiplier, PrimaryExchange: primaryExchange,
-			Currency: currency, LocalSymbol: localSymbol, TradingClass: tradingClass,
-		},
-		Position: position, MarketPrice: marketPrice, MarketValue: marketValue,
-		AvgCost: avgCost, UnrealizedPNL: unrealizedPNL, RealizedPNL: realizedPNL,
-		Account: account,
-	}}, nil
-}
-
-// [8, version=1, timestamp]
-func decodeUpdateAccountTime(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	timestamp := r.ReadString()
-	return []Message{UpdateAccountTime{Timestamp: timestamp}}, nil
-}
-
-// [54, version=1, accountName]
-func decodeAccountDownloadEnd(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	account := r.ReadString()
-	return []Message{AccountDownloadEnd{Account: account}}, nil
-}
-
-// [71, version=1, reqID, account, contract(11), position, avgCost, modelCode]
-func decodePositionMulti(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	account := r.ReadString()
-	contract := readWireContract(r)
-	position := r.ReadString()
-	avgCost := r.ReadString()
-	modelCode := r.ReadString()
-	return []Message{PositionMulti{ReqID: reqID, Account: account, ModelCode: modelCode, Contract: contract, Position: position, AvgCost: avgCost}}, nil
-}
-
-// [72, version=1, reqID]
-func decodePositionMultiEnd(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	return []Message{PositionMultiEnd{ReqID: reqID}}, nil
-}
-
-// [73, version=1, reqID, account, modelCode, key, value, currency]
-func decodeAccountUpdateMulti(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	account := r.ReadString()
-	modelCode := r.ReadString()
-	key := r.ReadString()
-	value := r.ReadString()
-	currency := r.ReadString()
-	return []Message{AccountUpdateMultiValue{ReqID: reqID, Account: account, ModelCode: modelCode, Key: key, Value: value, Currency: currency}}, nil
-}
-
-// [74, version=1, reqID]
-func decodeAccountUpdateMultiEnd(r *fieldReader, sv int) ([]Message, error) {
-	r.Skip(1) // version
-	reqID, _ := r.ReadInt()
-	return []Message{AccountUpdateMultiEnd{ReqID: reqID}}, nil
 }
 
 // [94, reqID, dailyPnL, unrealizedPnL, realizedPnL] — no version

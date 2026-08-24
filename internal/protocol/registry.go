@@ -6,7 +6,7 @@ package protocol
 import "slices"
 
 const (
-	SupportedMinServerVersion = 200
+	SupportedMinServerVersion = 208
 	SupportedMaxServerVersion = 225
 )
 

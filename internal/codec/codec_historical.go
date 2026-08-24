@@ -1,11 +1,5 @@
 package codec
 
-import (
-	"fmt"
-
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
-)
-
 type HistoricalBarsRequest struct {
 	ReqID        int
 	Contract     Contract
@@ -15,33 +9,6 @@ type HistoricalBarsRequest struct {
 	WhatToShow   string
 	UseRTH       bool
 	KeepUpToDate bool
-}
-
-func (m HistoricalBarsRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqHistoricalData)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteBool(m.Contract.IncludeExpired)
-	w.WriteString(m.EndDateTime)
-	w.WriteString(m.BarSize)
-	w.WriteString(m.Duration)
-	w.WriteBool(m.UseRTH)
-	w.WriteString(m.WhatToShow)
-	w.WriteInt(1) // formatDate
-	if m.Contract.SecType == "BAG" {
-		w.WriteInt(len(m.Contract.ComboLegs))
-		for _, leg := range m.Contract.ComboLegs {
-			w.WriteInt(leg.ConID)
-			w.WriteInt(leg.Ratio)
-			w.WriteString(leg.Action)
-			w.WriteString(leg.Exchange)
-		}
-	}
-	w.WriteBool(m.KeepUpToDate)
-	w.WriteString("") // chartOptions
-	return w.Fields(), nil
 }
 
 type HistoricalBar struct {
@@ -68,28 +35,11 @@ type CancelHistoricalData struct {
 	ReqID int
 }
 
-func (m CancelHistoricalData) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelHistoricalData), "1", itoa(m.ReqID)}, nil
-}
-
 type HeadTimestampRequest struct {
 	ReqID      int
 	Contract   Contract
 	WhatToShow string
 	UseRTH     bool
-}
-
-func (m HeadTimestampRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqHeadTimestamp)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteBool(m.Contract.IncludeExpired)
-	w.WriteBool(m.UseRTH)
-	w.WriteString(m.WhatToShow)
-	w.WriteInt(1) // formatDate
-	return w.Fields(), nil
 }
 
 type HeadTimestamp struct {
@@ -101,10 +51,6 @@ type CancelHeadTimestamp struct {
 	ReqID int
 }
 
-func (m CancelHeadTimestamp) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelHeadTimestamp), itoa(m.ReqID)}, nil
-}
-
 // HistogramData (OUT 88 / cancel OUT 89 / IN 89)
 
 type HistogramDataRequest struct {
@@ -114,24 +60,8 @@ type HistogramDataRequest struct {
 	Period   string
 }
 
-func (m HistogramDataRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqHistogramData)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteBool(m.Contract.IncludeExpired)
-	w.WriteBool(m.UseRTH)
-	w.WriteString(m.Period)
-	return w.Fields(), nil
-}
-
 type CancelHistogramData struct {
 	ReqID int
-}
-
-func (m CancelHistogramData) encodeWire(sv int) ([]string, error) {
-	return []string{itoa(protocol.OutCancelHistogramData), itoa(m.ReqID)}, nil
 }
 
 type HistogramDataEntry struct {
@@ -155,23 +85,6 @@ type HistoricalTicksRequest struct {
 	WhatToShow    string
 	UseRTH        bool
 	IgnoreSize    bool
-}
-
-func (m HistoricalTicksRequest) encodeWire(sv int) ([]string, error) {
-	w := fieldWriter{}
-	w.WriteInt(protocol.OutReqHistoricalTicks)
-	w.WriteInt(m.ReqID)
-	w.WriteInt(m.Contract.ConID)
-	writeWireContract(&w, m.Contract)
-	w.WriteBool(m.Contract.IncludeExpired)
-	w.WriteString(m.StartDateTime)
-	w.WriteString(m.EndDateTime)
-	w.WriteInt(m.NumberOfTicks)
-	w.WriteString(m.WhatToShow)
-	w.WriteBool(m.UseRTH)
-	w.WriteBool(m.IgnoreSize)
-	w.WriteString("") // miscOptions
-	return w.Fields(), nil
 }
 
 type HistoricalTickEntry struct {
@@ -219,7 +132,7 @@ type HistoricalTicksLastResponse struct {
 // HistoricalScheduleResponse is the decoded inbound response to a
 // REQ_HISTORICAL_DATA request with whatToShow=SCHEDULE. Each session entry
 // describes one contiguous trading window inside the requested duration.
-// Live evidence: server_version 200 emits msg_id 106 with 5 header fields
+// The captured classic layout emits msg_id 106 with 5 header fields
 // (reqID, startDateTime, endDateTime, timeZone, sessionCount) followed by
 // 3 fields per session.
 type HistoricalScheduleResponse struct {
@@ -255,204 +168,24 @@ type HistoricalDataUpdate struct {
 	WAP      string
 }
 
-// [17, reqID, barCount, time, O, H, L, C, vol, wap, count, ...]
-func decodeHistoricalData(r *fieldReader, sv int) ([]Message, error) {
-	reqID, err := r.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	barCount, err := r.ReadCount("bar count")
-	if err != nil {
-		return nil, err
-	}
-	if barCount <= 0 {
-		return nil, nil
-	}
-	if err := r.RequireFixedEntryFields("historical data", barCount, 8, 0); err != nil {
-		return nil, err
-	}
-	msgs := make([]Message, 0, barCount+1)
-	for i := 0; i < barCount; i++ {
-		msgs = append(msgs, HistoricalBar{
-			ReqID: reqID, Time: r.ReadString(),
-			Open: r.ReadString(), High: r.ReadString(),
-			Low: r.ReadString(), Close: r.ReadString(),
-			Volume: r.ReadString(), WAP: r.ReadString(), Count: r.ReadString(),
-		})
-	}
-	return msgs, nil
-}
-
 // [88, reqId, headTimestamp] — no version
-func decodeHeadTimestamp(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	timestamp := r.ReadString()
-	return []Message{HeadTimestamp{ReqID: reqID, Timestamp: timestamp}}, nil
-}
 
 // [89, reqID, count, entries(price, size)] — no version
-func decodeHistogramData(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	count, err := r.ReadCount("histogram entry count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("histogram data", count, 2, 0); err != nil {
-		return nil, err
-	}
-	entries := make([]HistogramDataEntry, count)
-	for i := range entries {
-		entries[i] = HistogramDataEntry{Price: r.ReadString(), Size: r.ReadString()}
-	}
-	return []Message{HistogramDataResponse{ReqID: reqID, Entries: entries}}, nil
-}
 
 // [96, reqID, count, entries(time, unused, price, size), done] — MIDPOINT
-func decodeHistoricalTicks(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	count, err := r.ReadCount("historical midpoint tick count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("historical midpoint ticks", count, 4, 1); err != nil {
-		return nil, err
-	}
-	ticks := make([]HistoricalTickEntry, count)
-	for i := range ticks {
-		timeStr := r.ReadString()
-		r.Skip(1) // unused
-		price := r.ReadString()
-		size := r.ReadString()
-		ticks[i] = HistoricalTickEntry{Time: timeStr, Price: price, Size: size}
-	}
-	done, _ := r.ReadBool()
-	return []Message{HistoricalTicksResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
-}
 
 // [97, reqID, count, entries(time, attrib, bidPrice, askPrice, bidSize, askSize), done] — BID_ASK
-func decodeHistoricalTicksBidAsk(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	count, err := r.ReadCount("historical bid/ask tick count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("historical bid/ask ticks", count, 6, 1); err != nil {
-		return nil, err
-	}
-	ticks := make([]HistoricalTickBidAskEntry, count)
-	for i := range ticks {
-		timeStr := r.ReadString()
-		tickAttrib, _ := r.ReadInt()
-		bidPrice := r.ReadString()
-		askPrice := r.ReadString()
-		bidSize := r.ReadString()
-		askSize := r.ReadString()
-		ticks[i] = HistoricalTickBidAskEntry{Time: timeStr, TickAttrib: tickAttrib, BidPrice: bidPrice, AskPrice: askPrice, BidSize: bidSize, AskSize: askSize}
-	}
-	done, _ := r.ReadBool()
-	return []Message{HistoricalTicksBidAskResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
-}
 
 // [98, reqID, count, entries(time, attrib, price, size, exchange, specialConditions), done] — TRADES
-func decodeHistoricalTicksLast(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	count, err := r.ReadCount("historical trade tick count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("historical trade ticks", count, 6, 1); err != nil {
-		return nil, err
-	}
-	ticks := make([]HistoricalTickLastEntry, count)
-	for i := range ticks {
-		timeStr := r.ReadString()
-		tickAttrib, _ := r.ReadInt()
-		price := r.ReadString()
-		size := r.ReadString()
-		exchange := r.ReadString()
-		specialConditions := r.ReadString()
-		ticks[i] = HistoricalTickLastEntry{Time: timeStr, TickAttrib: tickAttrib, Price: price, Size: size, Exchange: exchange, SpecialConditions: specialConditions}
-	}
-	done, _ := r.ReadBool()
-	return []Message{HistoricalTicksLastResponse{ReqID: reqID, Ticks: ticks, Done: done}}, nil
-}
 
 // [90, reqID, barCount, time, open, close, high, low, WAP, volume]
 // Official HISTORICAL_DATA_UPDATE layout (note the open/close/high/low field
 // order, unlike the packed IN 17 bars). Source-referenced from the official
-// client library; live attestation against Gateway v200 keepUpToDate pending
-// (markets closed at time of writing — WIRE_TRUTH.md records the gap).
-func decodeHistoricalDataUpdate(r *fieldReader, sv int) ([]Message, error) {
-	reqID, err := r.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	barCount, err := r.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	if barCount < 0 {
-		return nil, fmt.Errorf("codec: negative historical data update bar count %d", barCount)
-	}
-	if err := r.RequireFixedEntryFields("historical data update", 1, 7, 0); err != nil {
-		return nil, err
-	}
-	update := HistoricalDataUpdate{ReqID: reqID, BarCount: barCount, Time: r.ReadString()}
-	update.Open = r.ReadString()
-	update.Close = r.ReadString()
-	update.High = r.ReadString()
-	update.Low = r.ReadString()
-	update.WAP = r.ReadString()
-	update.Volume = r.ReadString()
-	return []Message{update}, nil
-}
+// client library; an exact current protobuf callback remains pending.
 
 // [108, reqID, startDateTime, endDateTime]
-// Official HISTORICAL_DATA_END, live-attested against Gateway v200
-// (captures/v1/historical_bars_keepup.log). Sent after the packed IN 17 batch
-// after the packed IN 17 batch. Some captures have a 2-field
+// Official HISTORICAL_DATA_END. Sent after the packed IN 17 batch. Some
+// captures have a 2-field
 // [reqID, startDateTime] shape, so the end date stays optional.
-func decodeHistoricalDataEnd(r *fieldReader, sv int) ([]Message, error) {
-	reqID, err := r.ReadInt()
-	if err != nil {
-		return nil, err
-	}
-	startDate := r.ReadString()
-	endDate := ""
-	if r.Remaining() > 0 {
-		endDate = r.ReadString()
-	}
-	return []Message{HistoricalBarsEnd{
-		ReqID: reqID, StartDate: startDate, EndDate: endDate,
-	}}, nil
-}
 
 // [106, reqId, startDateTime, endDateTime, timeZone, sessionCount, (startDateTime,endDateTime,refDate)*count]
-func decodeHistoricalSchedule(r *fieldReader, sv int) ([]Message, error) {
-	reqID, _ := r.ReadInt()
-	startDateTime := r.ReadString()
-	endDateTime := r.ReadString()
-	timeZone := r.ReadString()
-	sessionCount, err := r.ReadCount("historical schedule session count")
-	if err != nil {
-		return nil, err
-	}
-	if err := r.RequireFixedEntryFields("historical schedule", sessionCount, 3, 0); err != nil {
-		return nil, err
-	}
-	sessions := make([]HistoricalScheduleSession, sessionCount)
-	for i := 0; i < sessionCount; i++ {
-		sessions[i] = HistoricalScheduleSession{
-			StartDateTime: r.ReadString(),
-			EndDateTime:   r.ReadString(),
-			RefDate:       r.ReadString(),
-		}
-	}
-	return []Message{HistoricalScheduleResponse{
-		ReqID:         reqID,
-		StartDateTime: startDateTime,
-		EndDateTime:   endDateTime,
-		TimeZone:      timeZone,
-		Sessions:      sessions,
-	}}, nil
-}

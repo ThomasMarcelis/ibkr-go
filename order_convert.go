@@ -30,7 +30,7 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		ParentID:                   strconv.FormatInt(req.Order.ParentID, 10),
 		TriggerMethod:              strconv.Itoa(req.Order.TriggerMethod),
 		OutsideRTH:                 boolToString(req.Order.OutsideRTH),
-		IncludeOvernight:           trueOrEmpty(req.Order.IncludeOvernight),
+		IncludeOvernight:           optBoolToString(req.Order.IncludeOvernight, ""),
 		DisplaySize:                strconv.Itoa(req.Order.DisplaySize),
 		OrderComboLegPrices:        comboLegPricesToCodec(req.Order.Combo.LegPrices),
 		SmartComboRoutingParams:    tagValuesToCodec(req.Order.Combo.SmartRouting),

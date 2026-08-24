@@ -1,5 +1,7 @@
 package ibkr
 
+import "github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+
 func (e *engine) run() {
 	for {
 		// Closed is absorbing. Once closeEngine closes done, do not let a fair
@@ -57,6 +59,25 @@ func (e *engine) drainIncoming() {
 func (e *engine) handleActorInput(msg any) {
 	if write, ok := msg.(transportWrite); ok {
 		e.handleTransportWrite(write)
+		return
+	}
+	if decoded, ok := msg.(decodedTransportInput); ok {
+		// A replacement transport may already be active when a stale actor input
+		// is injected by a test or arrives from a retiring pump. Generations are
+		// the route-ownership boundary; connection identity adds no second
+		// invariant.
+		if decoded.generation != e.transportGeneration {
+			return
+		}
+		if e.poisonedGeneration == decoded.generation {
+			return
+		}
+		if malformed, ok := decoded.message.(codec.MalformedInbound); ok {
+			e.poisonedGeneration = decoded.generation
+			e.handleMalformedInbound(malformed)
+			return
+		}
+		e.handleIncoming(decoded.message)
 		return
 	}
 	e.handleIncoming(msg)
