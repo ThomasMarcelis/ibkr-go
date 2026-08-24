@@ -48,7 +48,7 @@ scenario.
 | 6 | reqAccountUpdates | yes | yes | yes | |
 | 7 | reqExecutions | yes | yes | yes | filter variants |
 | 8 | reqIds | yes | yes | yes | |
-| 9 | reqContractDetails | yes | yes | yes | Classic plus exact-sv205 protobuf stock/bond/fund/option/issuer vectors and public stock+bond replay; BAG and delta-neutral contract-data responses remain unattested |
+| 9 | reqContractDetails | yes | yes | yes | Current sv225 protobuf stock/bond/fund/option/issuer vectors and public replays; positive BAG delta-neutral validation remains unattested |
 | 10 | reqMktDepth | yes | yes | yes | smart depth, entitlement error |
 | 11 | cancelMktDepth | yes | yes | yes | |
 | 12 | reqNewsBulletins | yes | yes | yes | |
@@ -58,7 +58,7 @@ scenario.
 | 17 | reqManagedAccounts | yes | yes | yes | bootstrap managed-account discovery |
 | 18 | requestFA | yes | yes | partial | non-FA error frozen; FA-account path missing |
 | 20 | reqHistoricalData | yes | yes | yes | schedule variant, more bar sizes |
-| 21 | exerciseOptions | yes | yes | yes | lapse, override, and successful clearing settlement |
+| 21 | exerciseOptions | partial | yes | no | no acceptable current lifecycle replay; lapse, override, and successful clearing settlement remain open |
 | 22 | reqScannerSubscription | yes | yes | yes | complete 25-field public request and ten-row result are live-captured |
 | 23 | cancelScannerSubscription | yes | yes | yes | clean cancel after live results plus rejected-request code 365 path |
 | 24 | reqScannerParameters | yes | yes | yes | |
@@ -66,10 +66,10 @@ scenario.
 | 49 | reqCurrentTime | yes | yes | yes | |
 | 50 | reqRealTimeBars | yes | yes | yes | BID_ASK, MIDPOINT variants |
 | 51 | cancelRealTimeBars | yes | yes | yes | |
-| 54 | reqCalcImpliedVolatility | yes | yes | yes | |
-| 55 | reqCalcOptionPrice | yes | yes | yes | |
-| 56 | cancelCalcImpliedVolatility | yes | yes | yes | |
-| 57 | cancelCalcOptionPrice | yes | yes | yes | |
+| 54 | reqCalcImpliedVolatility | partial | yes | no | current sv225 request timed out |
+| 55 | reqCalcOptionPrice | partial | yes | no | current sv225 result omitted the option-price value |
+| 56 | cancelCalcImpliedVolatility | partial | yes | no | complete result/cancel lifecycle remains open |
+| 57 | cancelCalcOptionPrice | partial | yes | no | complete result/cancel lifecycle remains open |
 | 58 | reqGlobalCancel | yes | yes | yes | with mixed bracket/OCA/conditional |
 | 59 | reqMarketDataType | yes | yes | partial | per-type live evidence |
 | 61 | reqPositions | yes | yes | yes | |
@@ -106,7 +106,7 @@ scenario.
 | 96 | reqHistoricalTicks | yes | yes | yes | |
 | 97 | reqTickByTickData | yes | yes | partial | AllLast, ignoreSize variants |
 | 98 | cancelTickByTickData | yes | yes | partial | |
-| 99 | reqCompletedOrders | yes | yes | partial | classic and exact-sv204 absent-false/present-true requests are live-frozen; nondefault advanced completed-order branches remain |
+| 99 | reqCompletedOrders | yes | yes | partial | current sv225 absent-false/present-true requests are frozen; nondefault advanced completed-order branches remain |
 | 100 | reqWSHMetaData | yes | yes | partial | entitlement error |
 | 101 | cancelWSHMetaData | partial | partial | yes | |
 | 102 | reqWSHEventData | yes | yes | partial | filter/date/portfolio variants |
@@ -127,32 +127,21 @@ All are exercised through the outbound scenarios above. Individual gaps:
 | 56 | deltaNeutralValidation | typed official layout; positive BAG callback not observed |
 | 110 | config | exact-sv219 SDK/live and public evidence |
 | 14 | newsBulletins | live capture exists; allMessages variant untested |
-| 21 | tickOptionComputation | live calc scenarios exist; streaming OPT tick untested |
+| 21 | tickOptionComputation | current sv225 calculation capture is partial; complete calculation and streaming OPT results remain unpromoted |
 | 83 | newsArticle | captured through `api_news_article_aapl`; invalid article/provider variants remain |
-| 101 | completedOrder | classic full-field and exact-sv204 protobuf projection landed; nondefault combo, scale, hedge, active delta-neutral, PEG BENCH, condition, and FA frames remain |
+| 101 | completedOrder | current protobuf projection landed; nondefault combo, scale, hedge, active delta-neutral, PEG BENCH, condition, and FA frames remain |
 | 90 | historicalDataUpdate | keep-up-to-date exists; edge cases untested |
 | 108 | historicalDataEnd | standalone end marker; edge cases untested |
 
 ### 1.3 Contract field-layout law
 
 Extended canonical fields are rejected before route installation unless the
-request's negotiated layout represents them:
-
-| Request family | Classic fields | Protobuf gate and fields |
-|---|---|---|
-| Quote | ComboLegs, DeltaNeutral | sv206: all |
-| Market depth | none | sv206: all |
-| Contract details | IncludeExpired, SecurityID, IssuerID | sv205: all |
-| Place/preview/modify/bracket | SecurityID, ComboLegs, DeltaNeutral | sv203: all |
-| Historical bars/schedule/stream | IncludeExpired, ComboLegs | no migration through sv206 |
-| Head/histogram/historical ticks | IncludeExpired | no migration through sv206 |
-| Real-time bars/tick-by-tick/calculations/exercise | none | no migration through sv206 |
-
-All classic rows above use the common identity block including
-PrimaryExchange except exercise, whose custom layout omits it. Classic quote
-and historical combo layouts carry only leg ConID, Ratio, Action, and Exchange;
-nondefault OpenClose, ShortSaleSlot, DesignatedLocation, or ExemptCode is
-rejected unless the request uses a full order/protobuf leg.
+request's negotiated layout represents them. Quote, depth, contract-detail,
+order, historical, real-time-bar, and tick-by-tick families are protobuf at
+the supported floor. Calculation and exercise requests retain their supported
+classic layouts through sv210, then migrate at sv211; validation must therefore
+remain version-aware inside the 208–225 range. Tests at each reachable layout
+boundary freeze accepted and rejected fields without using pre208 frames.
 
 Structural invariants are separate: negative conIDs, one-leg BAGs, non-BAG
 delta-neutral blocks, open/close values outside 0..3, negative explicit exempt
@@ -248,7 +237,7 @@ and the what-if flag are operation-owned and therefore are not `Order` fields.
 | TrailingPercent | decimal | TRAIL with percent instead of dollar |
 | TriggerMethod | int | explicit trigger method override |
 | OrderRef | string | custom ref string echo in OpenOrder |
-| IncludeOvernight | bool | eligible SMART-routed DAY placement/open echoes, plus protobuf completed-order presence |
+| IncludeOvernight | *bool | true is placed and echoed at sv225; a true-to-false replacement returns code 462 through both ibkr-go and SDK 10.48.01 and retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absence with `TIF=DAY` |
 | Scale.InitialLevelSize | int | scale order: initial level |
 | Scale.SubsequentLevelSize | int | scale order: subsequent levels |
 | Scale.PriceIncrement | decimal | scale order: price steps |
@@ -504,7 +493,7 @@ tests.
 | Reconnect multi-cycle | yes (transcript) | |
 | Reconnect with active order handle | replay promoted | GTC order survives reconnect; original in-memory handle emits Gap/RecoveryRequired and cancels after reconnect |
 | Reconnect with open-orders observer | partial | client/all open-orders after reconnect captured and replay promoted |
-| Server version negotiation edge | no | near-boundary version |
+| Server version negotiation edge | yes | exact 208–225 matrix plus rejected 207 and 226 |
 
 ### 10.3 Library API edge cases
 
@@ -527,11 +516,9 @@ tests.
 - [x] Fix cancel_order (CME_TAGGING_FIELDS)
 - [x] Add cancel regression tests
 - [x] Tighten live test cancel assertions
-- [x] Promote what-if, scale-in, forex lifecycle, OCA, and bracket transcripts
-  from live captures. The public `Orders().Preview` replay replaced the failed
-  2026-04-14 what-if attempts and was live-revalidated at server version 206
-  on 2026-07-10.
-- [x] Record focused public direct-cancel evidence at server version 206.
+- [x] Promote current sv225 what-if, scale-in, forex lifecycle, OCA, bracket,
+  and direct-cancel evidence where the current account produced an acceptable
+  lifecycle; keep blockers explicit where it did not.
 - [x] Freeze `PendingCancel` before terminal `Cancelled` in
   `api_order_direct_cancel_aapl`; retain only the grounded
   `direct_cancel_order.txt` focused replay.
@@ -609,13 +596,13 @@ rejections or no-status cleanup evidence.
 
 - [x] Duplicate same-contract quote subscriptions (`api_duplicate_quote_subscriptions_aapl` captured 2026-04-15, replay-promoted from `84f1e78a18616e0f`)
 - [x] Public generic-tick matrix preserves observed mark-price, shortable, volume-rate, and delayed-timestamp callbacks (`api_generic_tick_matrix_aapl`, 2026-07-09 raw `5c40260d783971d2`)
-- [x] Contract-specific BRFG `tickNews` callback through the public quote stream (`api_tick_news_aapl_probe`, exact server-version-201 decoder frame `e3e1901503f7d1dc` and exact server-version-207 public lifecycle `739f3c2caa3d5379`)
+- [x] Positive current contract-specific `tickNews` callback through the public quote stream (`api_tick_news_aapl_probe`, `1051f51ac8dd20cd3`), plus exact classic sv208 boundary evidence (`55b765c665166a3c`)
 - [ ] All historical bar sizes (1sec through 1month)
 - [ ] All whatToShow values
 - [ ] Real-time bars BID_ASK and MIDPOINT
 - [ ] Tick-by-tick AllLast
 - [ ] All generic tick families
-- [ ] Regulatory snapshot
+- [x] Single authorized regulatory snapshot attempt (`bca23abbf9e56274`) returned code 0; the attempt is permanently consumed and the later account snapshot reports `Billable=0.00 EUR`
 - [ ] Positive tickEFP callback (typed implementation is source-law frozen; `tick_efp_probe` needs an entitled active single-stock future)
 - [ ] Positive delta-neutral validation callback (typed implementation is source-law frozen; needs an accepted BAG request)
 - [ ] Positive odd-lot ticks 105-110 (generic tick 787 is exact-sv225 negative-live proven under the current entitlement)
@@ -633,7 +620,7 @@ rejections or no-status cleanup evidence.
 - [x] Transmit=false then transmit (modify to transmit)
 - [x] Two subscriptions same contract (independent delayed streams)
 - [x] Cross-client order observation (client_id=0)
-- [x] Supported server boundaries (199 rejected, 200 accepted, 207 accepted, 208 rejected)
+- [x] Supported server boundaries (208–225 accepted, 207 and 226 rejected)
 - [x] Bond contract details callback shape
 
 Progress: `api_transmit_false_then_transmit_aapl` was live-captured on
@@ -654,12 +641,11 @@ from `5ff9cdc0f6f9b500` and `fcb7e811624e4aa9`.
 - [ ] Full reconciliation (positions + executions + PnL match)
 - [ ] Options wheel (when OPT available)
 
-Progress: aggressive campaign defaults now use 500-share equity clips, 100-share
-standard probes, 5-lot option/BAG orders, and 100,000 EUR.USD forex notional.
-The 2026-04-15 aggressive pairs run exposed a live `reqExecutions` layout bug;
-server_version 200 requires `lastNDays=2147483647` and `specificDatesCount=0`,
-now frozen by codec/testhost regression coverage and a live one-share
-round-trip that returned 76 execution updates.
+Progress: current guarded campaigns use bounded quantities and reconcile their
+working orders and position deltas before promotion. Older pre208 campaigns do
+not count as active protocol evidence; current replacements and remaining
+blockers are tracked in `transcript-migration-v2.0.1.md` and the coverage
+matrix.
 
 ## 12. Blockers and Prerequisites
 

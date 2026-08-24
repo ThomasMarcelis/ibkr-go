@@ -2,20 +2,19 @@
 
 This matrix tracks the implemented message surface. The canonical
 `internal/protocol` registry owns numeric identities and version gates; the
-codec consumes aliases from it. Classic layouts are validated against
-server_version 200 captures; exact migrations and semantic gates are covered
-through server_version 225.
+codec consumes aliases from it. Runtime coverage begins at server_version 208;
+exact migrations and semantic gates are covered through server_version 225.
 
 ## Bootstrap
 
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
 | out | 71 | StartAPI | landed |
-| out | 17 | ManagedAccountsRequest | landed; classic through sv206 plus exact-sv207 protobuf |
+| out | 17 | ManagedAccountsRequest | landed; protobuf throughout the supported range |
 | out | 8 | ReqIds | landed |
 | out | 49 | ReqCurrentTime | landed |
 | in | — | server hello ack | landed |
-| in | 15 | ManagedAccounts | landed; classic through sv206 plus exact-sv207 protobuf bootstrap/refresh |
+| in | 15 | ManagedAccounts | landed; protobuf bootstrap/refresh throughout the supported range |
 | in | 9 | NextValidID | landed |
 | in | 49 | CurrentTime | landed |
 | out | 105 | ReqCurrentTimeInMillis | landed |
@@ -32,10 +31,10 @@ server version and managed-account bootstrap fields are known.
 
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
-| out | 9 | ContractDetailsRequest | landed; classic through sv204 plus exact-sv205 protobuf selectors |
-| in | 10 | ContractDetails | landed; complete classic v200 common/FUND shapes plus exact-sv205 protobuf |
-| in | 18 | BondContractDetails | landed; live-attested classic v200 and exact-sv205 protobuf bond shapes |
-| in | 52 | ContractDetailsEnd | landed; classic plus exact-sv205 protobuf terminator |
+| out | 9 | ContractDetailsRequest | landed; protobuf selectors throughout the supported range |
+| in | 10 | ContractDetails | landed; current protobuf common/FUND shapes |
+| in | 18 | BondContractDetails | landed; current protobuf bond shape |
+| in | 52 | ContractDetailsEnd | landed; protobuf terminator |
 | out | 81 | reqMatchingSymbols | landed |
 | in | 79 | SymbolSamples | landed |
 | out | 91 | reqMarketRule | landed |
@@ -47,44 +46,39 @@ server version and managed-account bootstrap fields are known.
 | in | 82 | SmartComponents | landed |
 | out | 106 | cancelContractDetails | landed at sv215+ |
 
-Canonical Contract fields fail closed against each request layout. Classic
-contract details carry IncludeExpired/SecurityID/IssuerID; classic quotes carry
-BAG legs/delta-neutral; classic depth carries none of those extended fields;
-classic place order carries SecurityID/BAG legs/delta-neutral. Historical bars
-carry IncludeExpired/BAG legs, while head/histogram/historical-tick requests
-carry only IncludeExpired. Real-time bars, tick-by-tick, calculations, and
-exercise carry none of these extended fields. Common classic layouts carry
-PrimaryExchange, but exercise does not. Classic quote/historical BAG legs carry
-only ConID/Ratio/Action/Exchange, so nondefault leg position/short-sale fields
-fail before send. Place-order, contract-data, and market-data protobuf
-migrations use the complete shared Contract schema at 203, 205, and 206
-respectively.
+Canonical Contract fields fail closed against each supported request layout.
+Quote, depth, contract-detail, order, historical, real-time-bar, and
+tick-by-tick requests are protobuf at the sv208 floor and use their current
+schemas. Calculation and exercise requests retain reachable classic layouts
+through sv210 before migrating at sv211, so their narrower field validation is
+still version-aware. Structural and field-presence tests cover every reachable
+layout without relying on pre208 frames.
 
 ## Accounts and Positions
 
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
-| out | 62 | AccountSummaryRequest | landed; classic through sv206 plus exact-sv207 protobuf |
-| out | 63 | CancelAccountSummary | landed; classic through sv206 plus exact-sv207 protobuf |
-| in | 63 | AccountSummaryValue | landed; classic plus exact-sv207 protobuf |
-| in | 64 | AccountSummaryEnd | landed; classic plus exact-sv207 protobuf |
-| out | 61 | PositionsRequest | landed; classic through sv206 plus exact-sv207 protobuf |
-| out | 64 | CancelPositions | landed; classic through sv206 plus exact-sv207 protobuf |
-| in | 61 | Position | landed; classic plus exact-sv207 protobuf |
-| in | 62 | PositionEnd | landed; classic plus exact-sv207 protobuf |
-| out | 6 | reqAccountUpdates | landed; classic through sv206 plus exact-sv207 protobuf |
-| in | 6 | UpdateAccountValue | landed; classic plus exact-sv207 protobuf |
-| in | 7 | UpdatePortfolio | landed; classic plus exact-sv207 protobuf |
-| in | 8 | UpdateAccountTime | landed; classic plus exact-sv207 protobuf |
-| in | 54 | AccountDownloadEnd | landed; classic plus exact-sv207 protobuf |
-| out | 76 | reqAccountUpdatesMulti | landed; classic through sv206 plus exact-sv207 protobuf |
-| out | 77 | cancelAccountUpdatesMulti | landed; classic through sv206 plus exact-sv207 protobuf |
-| in | 73 | AccountUpdateMulti | landed; classic plus exact-sv207 protobuf |
-| in | 74 | AccountUpdateMultiEnd | landed; classic plus exact-sv207 protobuf |
-| out | 74 | reqPositionsMulti | landed; classic through sv206 plus exact-sv207 protobuf |
-| out | 75 | cancelPositionsMulti | landed; classic through sv206 plus exact-sv207 protobuf |
-| in | 71 | PositionMulti | landed; classic plus exact-sv207 protobuf |
-| in | 72 | PositionMultiEnd | landed; classic plus exact-sv207 protobuf |
+| out | 62 | AccountSummaryRequest | landed; protobuf throughout the supported range |
+| out | 63 | CancelAccountSummary | landed; protobuf throughout the supported range |
+| in | 63 | AccountSummaryValue | landed; current protobuf callback |
+| in | 64 | AccountSummaryEnd | landed; current protobuf terminator |
+| out | 61 | PositionsRequest | landed; protobuf throughout the supported range |
+| out | 64 | CancelPositions | landed; protobuf throughout the supported range |
+| in | 61 | Position | landed; current protobuf callback |
+| in | 62 | PositionEnd | landed; current protobuf terminator |
+| out | 6 | reqAccountUpdates | landed; protobuf throughout the supported range |
+| in | 6 | UpdateAccountValue | landed; current protobuf callback |
+| in | 7 | UpdatePortfolio | landed; current protobuf callback |
+| in | 8 | UpdateAccountTime | landed; current protobuf callback |
+| in | 54 | AccountDownloadEnd | landed; current protobuf terminator |
+| out | 76 | reqAccountUpdatesMulti | landed; protobuf throughout the supported range |
+| out | 77 | cancelAccountUpdatesMulti | landed; protobuf throughout the supported range |
+| in | 73 | AccountUpdateMulti | landed; current protobuf callback |
+| in | 74 | AccountUpdateMultiEnd | landed; current protobuf terminator |
+| out | 74 | reqPositionsMulti | landed; protobuf throughout the supported range |
+| out | 75 | cancelPositionsMulti | landed; protobuf throughout the supported range |
+| in | 71 | PositionMulti | landed; current protobuf callback |
+| in | 72 | PositionMultiEnd | landed; current protobuf terminator |
 | out | 80 | reqFamilyCodes | landed |
 | in | 78 | FamilyCodes | landed |
 
@@ -126,29 +120,14 @@ respectively.
 `QuoteUpdate.Kind` publicly preserves every TickPrice and TickSize callback,
 including unmapped numeric tick types, the exact price-attribute mask, and an
 optional price-frame companion size, without expanding the normalized `Quote`
-snapshot. TickGeneric, TickString, TickReqParams, and TickOptionComputation are
-also distinct public payloads. The first generic/string/parameter frames and a
-companion size are attested by
-`captures/20260405T215752Z-quote_stream_genericticks`; mark-price tick 37,
-shortable ticks 46/89, volume-rate tick 56, delayed-timestamp string tick 88,
-and an omitted minimum tick are attested by
-`captures/20260709T223341Z-api_generic_tick_matrix_aapl`; a quote-subscription
-option computation is attested by
-`captures/20260611T080111Z-api_option_campaign_aapl`. Contract-specific BRFG
-TickNews is attested by the exact server-version-201 frames in
-`captures/20260709T230825Z-api_tick_news_aapl_probe` and frozen at the public
-API boundary by `tick_news_aapl_live.txt`.
-TickEFP and delta-neutral validation are distinct typed updates. Generic tick
-787 maps odd-lot tick IDs 105-110 into typed quote prices, sizes, and exchanges;
-the exact-sv225 public and SDK probes received ordinary delayed values but no
-odd-lot values under the current entitlement, so positive live evidence stays
-pending. Exact server-version-206 request/callback protobuf vectors, parameter
-precision, and transparent CFD reroutes at exact-sv206 classic and sv225
-protobuf boundaries are frozen by codec/engine
-tests backed by `protocol-audit-sv206.md`; the quote-focused
-`market_data_sv206_live.txt` replay covers the public quote path. Positive
-raw-213 L2 evidence remains pending because the capture account lacked
-entitlement.
+snapshot. TickGeneric, TickString, TickReqParams, TickOptionComputation,
+TickNews, TickEFP, and delta-neutral validation are distinct public payloads.
+Current supported-range captures attest ordinary delayed prices/sizes, generic
+and string ticks, request parameters, option computations, TickNews, and the
+complete IBM CFD reroute through positive delayed quote data. Positive TickEFP,
+delta-neutral, odd-lot 105-110, the depth-reroute callback, and L2 rows remain
+explicit evidence gaps; code 10089/10092 blockers do not count as positive
+data callbacks.
 
 ## Real-Time and Historical Bars
 
@@ -195,20 +174,21 @@ not reinterpret UTC instants in the login time zone.
 | out | 57 | cancelCalcOptionPrice | landed |
 | in | 21 | TickOptionComputation | landed |
 
-Both calculation requests and their successful result shapes are frozen
-byte-for-byte from a live-qualified AAPL option at exact server version 204.
-The public replay also checks which decimal fields were computed versus sent
-as IBKR's unavailable sentinels.
+Exact sv211 public capture
+`59056822b51af4a00caa28afb922b4f79ee7014668591392e8f4fae229ea7222`
+is replay-promoted: option-price availability is `247` and implied-volatility
+availability is `133`. A later sv225 partial result remains account/session
+evidence rather than overriding the positive boundary proof.
 
 ## Order Management
 
 | Direction | Msg ID | Name | Status | Notes |
 |-----------|--------|------|--------|-------|
-| out | 3 | PlaceOrder | landed | Complete public classic surface plus exact-sv203 `PlaceOrderRequest` protobuf. `IncludeOvernight=true` is encoded in the classic tail and as protobuf field 135; classic false retains the existing empty encoding and protobuf false is omitted. Existing live-derived classic placements establish that the empty value is accepted, but a positive true capture remains pending. `Contract.conId` is proto3 optional; official EClientUtils nevertheless emits zero because `Utils::isValidValue(0)` is true, and a fresh guarded paper lifecycle capture freezes that request. Combo-leg price tag 9 is source-law coverage, not claimed live priced-combo evidence. |
-| out | 4 | CancelOrder | landed | Classic plus exact-sv203 `CancelOrderRequest` protobuf, including compliance metadata. |
-| out | 58 | reqGlobalCancel | landed | Classic plus exact-sv203 `GlobalCancelRequest` protobuf, live-flushed before teardown. |
-| in | 5 | OpenOrder | landed | Strict sv200 classic walk plus exact-sv203 protobuf `OpenOrder`; both project the shared complete `OrderDetails` model, including classic and protobuf `IncludeOvernight` echoes, and carry no fill echo (fills are order_status truth). Existing live frames cover classic explicit false and protobuf omission; a positive true echo remains pending. |
-| in | 3 | OrderStatus | landed | Classic and exact-sv203 protobuf parse; authoritative fill data for all order types. |
+| out | 3 | PlaceOrder | landed | Protobuf throughout the supported range. Current sv225 campaigns freeze common and advanced fields. `IncludeOvernight=true` is field 135 and has a positive placement/echo; replacing it with false returned code 462 through both ibkr-go and SDK 10.48.01 and retained true. A fresh explicit-false placement was accepted and broker-canonicalized to absence with `TIF=DAY`. |
+| out | 4 | CancelOrder | landed | Protobuf throughout the supported range, including compliance metadata. |
+| out | 58 | reqGlobalCancel | landed | Protobuf throughout the supported range and live-flushed before teardown. |
+| in | 5 | OpenOrder | landed | Current protobuf callback projects complete `OrderDetails`, including presence-aware `IncludeOvernight`, and carries no fill echo. |
+| in | 3 | OrderStatus | landed | Current protobuf callback; authoritative fill data for all order types. |
 
 OpenOrder and OrderStatus are dual-dispatched to per-order handles and the
 singleton open-orders observer. Each OpenOrder consumer receives a deep-owned
@@ -216,8 +196,8 @@ Contract/OrderCombo payload, including decimal pointers. Strict canonical
 numeric conversion errors close those affected routes without closing the
 session.
 
-OpenOrder uses one strict sequential walk: the "None"-sentinel delta-neutral
-block, complete classic scale extensions, grounded combo, algo and condition
+OpenOrder uses one strict protobuf walk: the delta-neutral block, advanced
+scale extensions, grounded combo, algo and condition
 sections, PEG BENCH reference fields, and the official 32-field
 adjustedOrderType..imbalanceOnly tail. It never returns a partial result.
 Malformed canonical Contract/combo numerics or trailing layout drift close the
@@ -225,27 +205,27 @@ affected route. The testhost encoder emits the same layout, so replay fixtures
 exercise the production decode path. Public open and completed orders share
 `OrderDetails`, including `OrderCombo`, advanced scale, short-sale, auction,
 and pegged-benchmark echoes. `IncludeOvernight` preserves response presence:
-nil means the broker omitted it, and classic `CompletedOrder` always omits the
-field. `ComboDescription` remains response-only.
+nil means the broker omitted it, while explicit true and false remain distinct
+in decoded protobuf values. `ComboDescription` remains response-only.
 
 ## Order and Execution Observation
 
 | Direction | Msg ID | Name | Status | Notes |
 |-----------|--------|------|--------|-------|
-| out | 5 | ReqOpenOrders | landed | Classic plus exact-sv204 empty protobuf request. |
-| out | 15 | ReqAutoOpenOrders | landed | Classic plus exact-sv204 optional-true bind and absent-false unbind requests. |
-| out | 16 | ReqAllOpenOrders | landed | Classic plus exact-sv204 empty protobuf request. |
+| out | 5 | ReqOpenOrders | landed | protobuf throughout the supported range |
+| out | 15 | ReqAutoOpenOrders | landed | protobuf optional-true bind and absent-false unbind requests |
+| out | 16 | ReqAllOpenOrders | landed | protobuf throughout the supported range |
 | in | 5 | OpenOrder | landed | See Order Management notes |
-| in | 53 | OpenOrderEnd | landed | Classic plus exact-sv203 empty protobuf terminator after a still-classic `ReqAllOpenOrders`; live empty snapshot replay prevents request timeouts. |
+| in | 53 | OpenOrderEnd | landed | current protobuf terminator; live empty snapshot replay prevents request timeouts |
 | in | 3 | OrderStatus | landed | |
-| in | 100 | OrderBound | landed | Classic and protobuf binding callback for client-0 auto-open orders; positive raw paper-TWS capture remains pending. |
-| out | 7 | ExecutionsRequest | landed | Complete classic filter plus sv200 day/date tail; exact-sv201 protobuf empty-filter request is live-frozen and unchanged at the zero-strike-only sv202 boundary. Nondefault day filters await live attestation. |
-| in | 11 | ExecutionDetail | landed | Complete version-gated classic result plus sv201 protobuf decoder; a sanitized exact vector and public one-share paper round trip attest nonempty sv201 results. Exact sv202 adds a live vector with both Contract.conId and explicitly present strike=0. |
-| in | 55 | ExecutionsEnd | landed | Raw sv200 freeze, exact-sv201 protobuf live vector/public empty-query replay, and exact-sv202 nonempty replay. |
-| in | 59 | CommissionAndFeesReport | landed | Complete classic and sv201 protobuf decoders; the live sv201 round trip sent classic fee reports. Meaningful bond yield/redemption and a protobuf-encoded fee report remain unattested. |
-| out | 99 | reqCompletedOrders | landed | Classic plus exact-sv204 protobuf request; absent false and present true are exact-vector frozen. |
-| in | 101 | CompletedOrder | landed | Exact sequential classic decoder plus exact-sv204 protobuf Contract/Order/OrderState decode. Protobuf field 135 projects presence-aware `IncludeOvernight`; the classic message shape omits it. The public projection preserves presence-aware order/client/parent identities and observed completion commission/currency. A nondefault overnight completion remains unattested, as do other advanced branches without a nondefault live frame. |
-| in | 102 | CompletedOrdersEnd | landed | Classic plus exact-sv204 empty protobuf terminator. |
+| in | 100 | OrderBound | landed | Protobuf binding callback for client-0 auto-open orders; positive raw paper-TWS capture remains pending. |
+| out | 7 | ExecutionsRequest | landed | protobuf throughout the supported range; current empty and filtered requests are replayed; nondefault finite day/date filters await live attestation |
+| in | 11 | ExecutionDetail | landed | current protobuf result with presence-aware contract fields and complete public projection |
+| in | 55 | ExecutionsEnd | landed | current protobuf terminator with empty and nonempty replay coverage |
+| in | 59 | CommissionAndFeesReport | landed | current protobuf decoder and live fee reports; meaningful bond yield/redemption remains unattested |
+| out | 99 | reqCompletedOrders | landed | protobuf throughout the supported range; absent false and present true are frozen |
+| in | 101 | CompletedOrder | landed | current protobuf Contract/Order/OrderState decode with presence-aware `IncludeOvernight`, identities, commission, and currency |
+| in | 102 | CompletedOrdersEnd | landed | current protobuf terminator |
 
 ## News
 

@@ -1,22 +1,19 @@
 # Transcripts
 
 Behavioral scenarios use a canonical line-based script format. Exact raw
-frames are the executable protocol truth; symbolic steps remain only while
-older `server_version 200` fixtures are migrated.
+frames are the executable protocol truth. The tracked corpus contains only
+server_version 208–225 evidence and every fixture includes captured raw frames.
 
 Current state:
 
 - `internal/testhost` matches exact raw client frames and writes exact raw server
-  frames for migrated fixtures; remaining symbolic steps still use the
-  production codec in both directions
+  frames; the tracked corpus has no symbolic protocol steps
 - checked-in transcripts cover live-grounded scenarios plus deliberate
   transport fault-injection around real message shapes for disconnects,
   partial frames, lifecycle edges, and other protocol failures
-- live-grounded behavior includes the classic IB Gateway `server_version 200`
-  baseline, the exact-201 protobuf executions migration, and the exact-202
-  zero-strike execution-contract boundary, the exact-203 protobuf order
-  lifecycle, the exact-204 completed-order boundary, and the exact-205
-  contract-data boundary, frozen into replay artifacts
+- live-grounded behavior includes 95 current sv225 fixtures, exact positive
+  sv208 historical and sv211 option-calculation fixtures, plus one exact
+  sv208–225 handshake matrix, frozen into replay artifacts
 - raw capture logs record per-leg connect/disconnect events plus TCP chunks;
   normalized replay artifacts reconstruct framed payloads from those chunks
 
@@ -54,43 +51,34 @@ frame.
 
 ## Bindings
 
-String values that start with `$` are symbolic bindings.
-
-- In client expectation steps they bind on first match.
-- In later client steps they match the previously bound value.
-- In server steps they resolve to the bound value.
+Symbolic protocol bindings are unsupported. Request-ID correlation is frozen
+with exact captured client and server frames.
 
 ## Example
 
 These executable lines are verbatim from
 [`current_time_live.txt`](../testdata/transcripts/current_time_live.txt),
-derived from live capture `20260710T215126Z-current_time` at `server_version 206`
+derived from live capture `20260824T202747Z-current_time` at `server_version 225`
 (`events.jsonl` SHA-256
-`c4ad2ec73d6d2a92a645fefeeb2d4d74335262dec23813e9645732c878ff826d`):
+`a9029ff8e7cfed19cab1e3e2eccc4c36d7c91b95aa6aa03f75543bacac454a9e`):
 
 ```text
-handshake {"server_version":206,"connection_time":"20260710 23:51:25 Central European Standard Time"}
-raw server AAAAEAAAAA8xAERVOTAwMDAwMQA=
-raw server AAAACAAAAAkxADEA
-raw client AAAABgAAADExAA==
-raw server AAAAEQAAADExADE3ODM3MjAyODUA
+handshake {"server_version":225,"connection_time":"20260824 22:27:46 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABgAAANEIAQ==
+raw client AAAABAAAAPk=
+raw server AAAACgAAAPkIwtKy1AY=
 disconnect
 ```
 
 ## Testhost Contract
 
-`internal/testhost` uses the production codec to encode remaining symbolic
-server steps; symbolic client steps use the testhost's request decoder. It is
-replay tooling, not a place to define IBKR protocol semantics.
+`internal/testhost` accepts only the handshake plus exact raw/split-raw frames.
+It is replay tooling, not a place to define IBKR protocol semantics.
 
-- Raw client traffic is matched byte-for-byte. Remaining symbolic client
-  traffic is decoded and matched against the script.
-- Raw server traffic is written byte-for-byte. Remaining symbolic server
-  traffic is encoded from the script through the production codec.
-- Symbolic server encoding is frozen to the legacy `server_version 200` set:
-  `api_error`, `commission_report`, `completed_order`, `completed_order_end`,
-  `execution_detail`, `executions_end`, `managed_accounts`, `next_valid_id`,
-  `open_order`, `open_order_end`, and `order_status`.
+- Raw client traffic is matched byte-for-byte.
+- Raw server traffic is written byte-for-byte. Symbolic server and symbolic
+  split steps are rejected.
 - New server-message coverage must use sanitized, captured `raw server` frames
   (or `splitraw server` for transport chunking), not new symbolic builders.
 - Partial writes, malformed frames, delays, and disconnects are driven by the
@@ -144,6 +132,11 @@ public-API order lifecycle, and `driver_events.jsonl` records structured
 scenario/order/execution/commission checkpoints keyed by scenario run ID and
 order ref.
 
+The normalizer verifies raw framing, chronology, driver lifecycle, sanitization,
+and provenance. It is not a catalog-wide semantic oracle: promoted behavior is
+proved by the public replay or exact-vector test that consumes those frames,
+with targeted driver validators reserved for high-risk lifecycle campaigns.
+
 Useful scenario batches:
 
 ```bash
@@ -169,12 +162,10 @@ be downgraded to `readonly-live`. Use `IBKR_PAPER_UPSTREAM` or
 `IBKR_LIVE_PAPER_ADDR` for paper overrides; legacy `IBKR_UPSTREAM` applies only
 to read-only scenarios.
 
-For active-order reconnect captures, allow the recorder to accept multiple
-connection legs:
-
-```bash
-IBKR_RECORDER_MAX_LEGS=3 IBKR_CAPTURE_BATCH=trading-campaigns ./scripts/record-scenarios.sh
-```
+The batch workflow admits up to eight connection legs by default so deliberate
+reconnect scenarios and the independent paper-reconciliation generation remain
+inside one capture. Override `IBKR_RECORDER_MAX_LEGS` only when a reviewed
+scenario needs a different bound.
 
 `cmd/ibkr-normalize` can also emit a raw transcript skeleton for curation:
 
@@ -221,17 +212,11 @@ or derive a protocol timestamp from a recorder event time.
 
 ## Raw frames are the canonical server-side representation
 
-Server frames in transcripts at any version other than the default
-`server_version 200` MUST use `raw server` steps carrying live-captured bytes;
-the testhost rejects DSL-form server frames for such transcripts. DSL-form frames re-encode through the codec
-under test, so a version-gated layout bug would replay green and only fail
-live — the symmetric-codec-bug class. New captures land raw by default (the
-capture pipeline already produces the raw bytes); the JSON message form is a
-human-readable view, kept where a consistency check against the decoded raw
-frame exists or where the flow is low-risk and sv200-only. Existing sv200
-transcripts migrate opportunistically, orders and executions first. The
-legacy symbolic server set is closed; a new message shape requires a captured
-raw frame even at sv200.
+Every server frame MUST use a `raw server` or `splitraw server` step carrying
+live-captured bytes; the testhost rejects symbolic server frames. Re-encoding a
+server reply through the codec under test would allow a symmetric codec bug to
+replay green and fail only live. The capture pipeline therefore emits raw bytes
+by default, and a new message shape always requires a captured raw frame.
 
 Raw transcript files record the source capture hash and negotiated server
 version. Use `splitraw <server|client> <sizes> <base64-frame>` when a transport
@@ -242,15 +227,14 @@ the codec under test.
 ## Provenance gate
 
 Every transcript starts with an initial contiguous comment block that names at
-least one capture ID, exactly one negotiated server version, and either a full
-64-hex `events.jsonl` SHA-256 or an explicitly labelled 16-hex legacy prefix.
+least one capture ID, exactly one negotiated server version or exact range, and
+a full 64-hex `events.jsonl` SHA-256.
 Every recorded handshake must agree with the declared version. The structural
 parser ignores comments after the first executable line, so later scenario
 notes cannot satisfy provenance.
 
-`TestTranscriptProvenanceInventory` freezes the measured corpus and its sole
-legacy-prefix transcript. A legacy prefix remains honest historical evidence,
-but it can never satisfy a stable-release proof. Stable proof records must name
+`TestTranscriptProvenanceInventory` freezes the 99-file measured corpus and
+rejects legacy-prefix evidence. Stable proof records must name
 a regular-file basename directly under `testdata/transcripts`; their capture
 ID, server version, and full hash must agree exactly with the parsed header.
 Do not add a guessed source or rewrite captured evidence to satisfy the gate.

@@ -8,6 +8,19 @@ This guide covers the changes that normally require application edits. The
 [v2.0.0 release notes](https://github.com/ThomasMarcelis/ibkr-go/releases/tag/v2.0.0)
 contain a detailed change inventory and the disclosed evidence gaps.
 
+## v2.0.1 compatibility note
+
+v2.0.1 intentionally raises the minimum negotiated Gateway version from
+`server_version` 200 to 208. Gateways negotiating 200–207 no longer connect;
+upgrade TWS/IB Gateway before adopting v2.0.1, or remain on v2.0.0.
+
+`Order.IncludeOvernight` changes from `bool` to `*bool`. Use `nil` when the
+field is omitted, `new(true)` to request overnight routing, and `new(false)`
+for an explicit false request. Broker echoes remain presence-aware: the live
+sv225 Gateway accepted a fresh explicit-false order but canonicalized the echo
+to `nil` with `TIF=DAY`; it rejected replacing an existing true order with
+false using code 462.
+
 ## 1. Update the module path
 
 ```bash

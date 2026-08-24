@@ -6,6 +6,54 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Changed
+
+- The supported Gateway range is now exactly `server_version` 208–225.
+  Gateways negotiating 200–207 no longer connect. This compatibility break is
+  intentional: it removes unsupported legacy protocol paths and their replay
+  corpus. Users must upgrade TWS/IB Gateway or remain on v2.0.0.
+- Message families already protobuf-only at version 208 use one supported
+  implementation. Version branches remain only where versions 208–225 still
+  differ.
+- `Order.IncludeOvernight` is now `*bool`, preserving the difference between
+  an omitted broker value and explicit true or false. This is an intentional
+  source-compatibility break from v2.0.0.
+
+### Fixed
+
+- A malformed registered callback now poisons and retires its whole transport
+  generation. Later frames from that generation are discarded, incomplete
+  requests fail with an error matching both `ErrInterrupted` and
+  `*ProtocolError`, and resumable streams resume only on a fresh generation.
+  Unknown message IDs remain observable and nonfatal. The joined malformed
+  error is deliberately not retryable.
+- `ErrCodeHistoricalDataSubscriptionRequired` names live Gateway code 2188,
+  and `APIError.IsEntitlement` classifies it as an entitlement failure.
+- The positions live test consumes each `StreamEvent` once, so it cannot lose
+  `SnapshotComplete` by racing two receives on the same event channel.
+
+### Verification status
+
+- Current checked-in transcripts contain only sv208+ raw frames: 95 sv225
+  fixtures, exact sv208 historical and user-info fixtures, an exact positive
+  sv211 option-calculation fixture, and an exact 208–225 handshake matrix. The one explicitly
+  authorized v2.0.1 regulatory snapshot attempt is permanently non-retryable
+  campaign evidence; it returned code 0. A later account-update capture reports
+  `Billable=0.00 EUR`.
+- A current sv225 IBM CFD capture proves the complete public reroute lifecycle:
+  the initial symbolic request, protobuf reroute, conID request, delayed-data
+  notice, and positive high, low, volume, and close callbacks.
+- `IncludeOvernight=true` is placed and echoed. Replacing it with explicit
+  false is rejected with code 462 and retains true; a fresh explicit-false
+  placement succeeds and the broker canonicalizes it to an absent field with
+  `TIF=DAY`. SDK 10.48.01 reproduces the replacement rejection.
+- v2.0.1 is not yet release-ready. A guarded option-exercise campaign qualified
+  a live ITM AAPL call, but exact warning 399 deferred its zero-fill seed order
+  to the next options session; paper reconciliation proved no order, position,
+  or execution delta. Positive option-exercise and entitled depth evidence, 20
+  request-family decoder/layout attestations, and the seven-day unchanged soak
+  remain gates. No tag or release is implied by this changelog entry.
+
 ## v2.0.0 — 2026-08-23
 
 v2 is now the supported release line; v1 is deprecated. It uses the

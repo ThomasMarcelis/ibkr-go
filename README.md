@@ -73,9 +73,10 @@ adopting the supported v2 line requires changing imports to
   `EClient` callback surface.
 - **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
   order management, market depth, executions, options, scanners, news, FA
-  configuration, WSH, display groups, and more. The client negotiates
-  `server_version` 200..225: 200 is the classic-wire live baseline, with
-  implemented post-200 protocol migrations and semantics gated through 225.
+  configuration, WSH, display groups, and more. The client negotiates exactly
+  `server_version` 208..225, with protobuf migrations through 213 and later
+  semantics gated through 225. Gateways on 200..207 require v2.0.0 or an
+  upgrade.
   Remaining official branches are tracked explicitly in the roadmap and
   coverage matrix.
 - **Reconnects are explicit.** Subscription events preserve `Gap`, `Restored`,
@@ -461,9 +462,9 @@ stressed, and extended without guessing. For more on that approach, see
 ## Status
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
-domains through an idiomatic Go facade. It negotiates `server_version`
-200..225. Version 200 is the live-attested classic-wire baseline; exact
-raw-ID/protobuf migrations from 201 through 213 are implemented. Inbound sv214
+domains through an idiomatic Go facade. The unreleased v2.0.1 line negotiates
+exactly `server_version` 208..225; versions 200..207 are intentionally rejected.
+Protobuf migrations from 208 through 213 are implemented. Inbound sv214
 `Z` timestamps are accepted, but outbound sv214 suffix behavior remains
 unresolved and retains the existing format. Supported sv215..225 behavior and
 intentional exclusions are documented in the
@@ -471,11 +472,10 @@ intentional exclusions are documented in the
 entitlement-dependent callbacks and remaining advanced branches stay explicit
 in the coverage matrix rather than being overclaimed.
 
-The stable v2.0.0 release has explicit follow-up evidence gaps for signed
-message-90 updates, malformed-generation retirement, positive
-`IncludeOvernight` lifecycles, a successful regulatory snapshot, manual-TWS
-`orderBound`, and the previously planned soak. Their exact impact and follow-up
-are disclosed in the [v2.0.0 release evidence](docs/v2-release-readiness.md).
+The stable v2.0.0 release remains unchanged. The unreleased v2.0.1 work closes
+malformed-generation retirement and raises the minimum Gateway version while
+retaining explicit live-evidence and soak gates in the
+[v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full
@@ -502,7 +502,7 @@ Local live verification is opt-in:
 
 ```bash
 IBKR_LIVE=1 IBKR_LIVE_READONLY_ADDR=127.0.0.1:4001 go test ./... -run '^TestLive' -count=1
-IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 go test ./... -run '^TestLive(PlaceOrder|GlobalCancel|Trading)' -count=1
+IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 go test ./cmd/ibkr-capture -run '^TestLiveCapture' -count=1
 ```
 
 The maintainer lab uses two Gateway roles:

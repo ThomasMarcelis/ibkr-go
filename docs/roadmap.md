@@ -55,8 +55,9 @@ Current IBKR baseline and drift to check first:
   [IBKR API Software](https://interactivebrokers.github.io/) page lists API
   Latest 10.48, released 2026-07-07, and Stable 10.45, released 2026-03-30,
   and recommends TWS or IB Gateway 1045+ for comprehensive feature support.
-  `server_version 200` remains the classic-wire evidence baseline. Version
-  negotiation is implemented through 225 and protobuf migrations through 213.
+  The supported runtime range is exactly `server_version` 208..225. Current
+  captures use 225 and the exact handshake matrix covers every supported
+  version; protobuf migrations continue through 213.
   Inbound sv214 `Z` values are accepted, while its outbound suffix remains an
   explicit evidence gap; see
   [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
@@ -65,9 +66,10 @@ Current IBKR baseline and drift to check first:
   classic message IDs have been retired. A final 2026-07-09 probe sent all
   seven legacy report requests through both local roles; every request
   returned code 10358. The readonly-live capture has event hash prefix
-  `89db59e9e5abf7b7`, and paper-dev has `c326f314cbc4f1de`. Those captures and
-  earlier sv200 captures remain historical evidence only. WSH is a separate
-  API, not a replacement.
+  `89db59e9e5abf7b7`, and paper-dev has `c326f314cbc4f1de`. Tagged release
+  history records the earlier behavior. The pre208 raw corpus was removed by
+  exact path; all 286 retained captures verify and negotiate sv208 or later.
+  WSH is a separate API, not a replacement.
 - API 10.48 changes `reqOpenOrders` results to include de-activated orders.
   The result-set behavior still needs a live deactivated-order capture; the
   wire family itself is covered.
@@ -128,7 +130,7 @@ focused on the next slice and its completion criteria.
 
 ibkr-go covers the current public facade across the major Interactive Brokers
 TWS/Gateway socket protocol domains. The core protocol areas below are
-implemented across negotiated versions 200..225, but rare official callbacks,
+implemented across negotiated versions 208..225, but rare official callbacks,
 entitlement-dependent products, and some advanced order branches still need
 the live-evidence path described above.
 
@@ -164,14 +166,13 @@ subscriptions deliver generic, string, request-parameter, and option-
 computation, EFP, delta-neutral validation, and contract-specific news
 headlines as discriminated
 `QuoteUpdate` values while keeping the normalized `Quote` snapshot small.
-Every classic price and size callback is also preserved with its numeric tick
+Every price and size callback is also preserved with its numeric tick
 type, exact price-attribute mask, and optional companion size even when it has
 no normalized field. Live/delayed volume and matching companion sizes are
-normalized. The public path is frozen
-against exact server-version-200 frames from the April 5 generic-tick, June 11
-option campaign, July 9 generic-tick-matrix, and exact server-version-201 BRFG
-TickNews captures. TickEFP and delta-neutral validation are typed and source-
-law frozen; positive live callbacks remain entitlement/product-state gaps.
+normalized. Current sv225 quote replays freeze delayed prices, sizes, generic
+ticks, request parameters, option-computation rows, and disconnect behavior.
+TickEFP, contract-specific news, and delta-neutral validation remain typed,
+but need positive current callbacks before they count as promoted evidence.
 
 ### Historical data extensions
 
@@ -192,15 +193,14 @@ reqNewsProviders (msg 85), reqNewsBulletins (msg 12/13), reqNewsArticle
 ### Scanner
 
 reqScannerParameters (msg 24), reqScannerSubscription (msg 22/23). The public
-subscription request covers the complete classic field set and both generic
-option lists. A public-API server-version-200 capture freezes its exact request,
-ten ranked scanner-data rows, and clean cancellation. An older capture retains
-the real code 490 permission response and code 365 rejected-cancel path.
+subscription request covers both generic option lists. Current sv225 capture
+`20260824T202618Z-api_scanner_subscription` freezes the request, ten ranked
+HOT_BY_VOLUME rows, clean cancellation, and a `CurrentTime` fence.
 
 ### Order and execution observation
 
 Open orders snapshot and streaming (all three scopes), execution snapshots and
-late-fee subscriptions, and commission-and-fees reports. The classic sv200
+late-fee subscriptions, and commission-and-fees reports. Current sv225
 execution and fee payloads are fully projected; nondefault filters and
 meaningful bond yield/redemption remain live-attestation targets.
 
@@ -229,8 +229,8 @@ paid L2 market data subscription.
 IBKR API 10.47 removed the Reuters fundamental-data request, cancellation,
 callback, and fundamental-ratios tick type. ibkr-go no longer exposes that
 surface; classic outbound message IDs 52 and 53 and inbound message ID 51
-remain unused gaps. Earlier `server_version 200` captures document behavior
-before removal but are not current coverage targets. Final 2026-07-09 captures
+remain unused gaps. Tagged v2.0.0 history documents behavior before removal;
+it is not current evidence. Final 2026-07-09 captures
 against both local roles sent all seven legacy report requests and received
 code 10358 for every request (`89db59e9e5abf7b7` readonly-live,
 `c326f314cbc4f1de` paper-dev). WSH is a separate API, not a replacement.
@@ -273,16 +273,15 @@ against the local paper Gateway when applicable.
 - Order-side coverage promised by the public API but not yet exhaustively
   grounded: OCA group semantics, bracket parent/child sequencing, condition
   families (price, time, margin, execution, volume, percent-change), IB algo
-  parameter passthrough, hedging, and short-sale fields. Sequenced after the
-  protobuf decision (see below), since these are classic-branch fields.
-- ~~Server-version coverage through exactly `server_version 225`~~ **Done.**
-  The client negotiates `server_version` 200..225. Exact 201..207 retain their
-  individual protocol audits below. Exact 208..213 complete the protobuf
-  migration table, and 215..225 implement the source-grounded version gates in
-  API 10.48, including one-shot cancels and order fields, read-only TWS configuration,
-  share/fractional size semantics, precision metadata, and
-  odd-lot quote projection. Byte-exact SDK/live vectors and the remaining
-  positive-live entitlement boundaries are recorded in
+  parameter passthrough, hedging, and short-sale fields.
+- **Server-version coverage through exactly `server_version 225`.** The client
+  negotiates exactly `server_version` 208..225, and the handshake/current-time
+  matrix covers every accepted version plus rejected neighbors 207 and 226.
+  The production migration gates follow API 10.48 through order fields,
+  read-only TWS configuration, share/fractional-size semantics, precision
+  metadata, and odd-lot quote projection. The complete request-family
+  boundary campaign across 208..225 is still open, so this work is not marked
+  done. Current evidence and the remaining boundaries are recorded in
   [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
   Attached-preset wire support remains internal pending a native paper-order
   lifecycle.
@@ -291,70 +290,24 @@ against the local paper Gateway when applicable.
 [`docs/message-coverage.md`](message-coverage.md) are the authoritative gap
 trackers; new gaps land there first, then graduate here.
 
-## Protobuf era (sv 201+)
+## Supported protocol era (sv208–225)
 
-Exact `server_version 201` is implemented and live-attested. At this boundary
-every normal message uses a raw four-byte big-endian ID; IDs above 200 select a
-protobuf body and map back to base ID `wireID-200`. `reqExecutions` is the
-first migrated outbound family. Its request, `execDetails`,
-`execDetailsEnd`, commission-and-fees, and error protobuf schemas are owned by
-the Go codec through `protowire`, with no generated SDK artifact or runtime
-dependency. A sanitized public replay freezes the exact-201 empty query; a
-one-share paper round trip live-attests non-empty execution details and classic
-commission reports at the same negotiated version. The classic bootstrap,
-request, detail, and end bytes are exact-vector tested.
+Production supports exactly `server_version` 208 through 225. Families that
+migrated before 208 use one protobuf implementation throughout the supported
+range. Historical/data migrations start at the floor, followed by news at
+209, scanner/PnL at 210, FA/options at 211, auxiliary lookups at 212, and
+bootstrap/control/display/depth-exchange messages at 213. Later versions gate
+UTC date-time behavior, broker-side cancellation, order fields, read-only TWS
+configuration, volume and fractional-size semantics, hedge maximums,
+precision, and odd-lot fields.
 
-Exact `server_version 202` is also implemented and live-attested. It introduces
-the official `ZERO_STRIKE` capability but no new protobuf message migration.
-The exact-202 public probe resolved an AAPL conId-only classic contract request
-and decoded a real protobuf execution whose Contract carried conId 265598 and
-an explicitly present fixed64 strike of zero. A sanitized non-empty replay
-freezes that same field-presence vector. This proves the negotiated semantic
-and codec boundary, not trading support for a zero-strike derivative; no such
-live product was available in the local paper session.
-
-Exact `server_version 203` is implemented and live-attested. Place order,
-targeted cancel, and global cancel move to protobuf, as do the observed
-open-order and order-status replies. Order errors use the protobuf family
-already introduced at 201. The guarded paper scenario
-rested a one-share AAPL order far below market, cancelled it, issued global
-cancel, and completed an ordered round trip before disconnect. See
-[`protocol-audit-sv203.md`](protocol-audit-sv203.md).
-
-Exact `server_version 204` is implemented and live-attested. Client/all/auto
-open-order requests and the completed-order request/results migrate to
-protobuf. Completed results preserve optional order/client/parent identities
-and observed commission-and-fees amount/currency. The capture campaign left no
-working orders and a flat AAPL position. See
-[`protocol-audit-sv204.md`](protocol-audit-sv204.md).
-
-Exact `server_version 205` is implemented and live-attested. Contract-details
-request, regular response, bond response, and end marker migrate to protobuf.
-The shared Contract schema has one internal codec and the public `Contract`
-owns its selector and composition fields across request families and returned
-orders. Description and per-leg execution prices remain response/order
-metadata rather than contract identity. See
-[`protocol-audit-sv205.md`](protocol-audit-sv205.md).
-
-Exact `server_version 206` is implemented and live-attested. Quote, market-
-depth, their cancellations, and market-data-type requests move to protobuf,
-along with ten L1/depth callbacks. At exactly sv206, CFD reroute callbacks 91
-and 92 retain classic bodies. The current sv225 Gateway sends market-data
-reroute as protobuf raw ID 291; both encodings transparently replace the active
-request. See
-[`protocol-audit-sv206.md`](protocol-audit-sv206.md).
-
-Exact `server_version 207` is implemented and live-attested. Managed accounts,
-account updates, account summary, positions, and their multi-account variants
-move to protobuf together. Public routing and lifecycle semantics remain
-unchanged. See [`protocol-audit-sv207.md`](protocol-audit-sv207.md).
-
-Exact `server_version 208` through 225 are audited together in
-[`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md). The production
-ceiling is 225. Each later migration gate must add its encoder/decoder, live or
-official-SDK evidence, and deterministic coverage before the advertised
-maximum moves again. The migration table fails closed rather than sending a
-classic body after IBKR has retired it.
+The exact handshake/current-time matrix covers all 18 supported versions and
+rejects 207 and 226. It does not substitute for the still-open request-family
+boundary campaign. Each migration or semantic gate must retain deterministic
+coverage and live or official-source evidence; the migration table fails
+closed rather than sending a body from an obsolete layout. The earlier
+sv201–207 protocol-audit documents describe historical v2.0.0 development and
+are not active support claims or v2.0.1 evidence.
 
 ## Ongoing
 

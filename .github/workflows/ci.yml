@@ -34,8 +34,8 @@ jobs:
           go mod tidy -diff
           go mod verify
 
-      - name: Verify public API compatibility
-        run: ./scripts/check-api.sh
+      - name: Verify public API candidate
+        run: ./scripts/check-api.sh --exact
 
       - name: Verify fuzz target inventory
         run: ./scripts/fuzz-all.sh --check

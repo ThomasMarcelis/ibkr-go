@@ -30,9 +30,11 @@ The exact captured requests are:
 | option conID 728937835 | `000000d10898a001120d08ebeacadb024205534d415254` |
 | Apple issuer `e1432232` | `000000d10896a001120d08008201086531343332323332` |
 
-The request vectors, four response types, ineligibility reasons, and end
-markers are frozen in `codec_contracts_proto205_test.go`. The public replay in
-`contract_details_sv205_live.txt` retains one stock and one bond round trip.
+The v2.0.0 evidence froze the request vectors, four response types,
+ineligibility reasons, and end markers in `codec_contracts_proto205_test.go`.
+Its `contract_details_sv205_live.txt` replay retained one stock and one bond
+round trip. Those pre208 fixtures were removed from the active v2.0.1 tree when
+the supported floor rose to 208; tagged v2.0.0 history remains immutable.
 
 ## Official source evidence
 

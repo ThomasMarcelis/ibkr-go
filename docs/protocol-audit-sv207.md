@@ -92,11 +92,11 @@ positions multi; account updates was also run directly at exact 207.
 - `events.jsonl`: `951ea55770f30d410cf971a5bf7bbf94da0183017cac0984b6b5d0370ab7ad86`
 - `meta.json`: `335e205a424323310b4e410a28d4f6442e7fcb32d4b40f5f6bf4f022ddc432f4`
 
-The checked-in `managed_accounts_sv207_live.txt` replay retains the exact
-protobuf bootstrap and explicit refresh exchange with a deterministic,
-length-preserving account substitution. Codec tests retain one exact vector
-for every migrated request and callback family rather than copying the large
-account snapshots into the repository.
+The v2.0.0 `managed_accounts_sv207_live.txt` replay retained the exact protobuf
+bootstrap and explicit refresh exchange with a deterministic, length-preserving
+account substitution. That pre208 replay and its boundary-only codec tests were
+removed from the active v2.0.1 tree when the supported floor rose to 208;
+tagged v2.0.0 history remains unchanged.
 
 The exact-207 account-summary capture attests the `"All"` group. Explicit
 advisor-group selection is frozen by the official request schema and public
@@ -109,9 +109,8 @@ an evidence target rather than fabricated replay data.
   callback types.
 - A 206/207 boundary test proves classic versus protobuf selection.
 - Missing-Contract behavior is frozen against the official decoder law.
-- The public replay proves exact-207 negotiation, bootstrap, refresh routing,
-  and session-snapshot update.
-- `TestLiveManagedAccountsRefresh` requires exact 207 when live tests run.
+- The historical public replay proved exact-207 negotiation, bootstrap,
+  refresh routing, and session-snapshot update.
 - The full deterministic suite, race detector, vet, staticcheck, and repository
   lint remain release gates.
 

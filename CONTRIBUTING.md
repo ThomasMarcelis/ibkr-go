@@ -4,7 +4,7 @@ Contributions are welcome. Read this document first.
 
 ## Scope and direction
 
-`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The project targets the full free read-only surface plus order management, market depth (Level 2), and option exercise. The current official SDK baseline is API 10.48. The client negotiates `server_version` 200..225: 200 is the live-attested classic-wire baseline, while later versions add the raw-ID, protobuf, and semantic migrations. Implemented, partial, and blocked areas are distinguished in [`docs/roadmap.md`](docs/roadmap.md) and the coverage matrix.
+`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The project targets the full free read-only surface plus order management, market depth (Level 2), and option exercise. The current official SDK baseline is API 10.48. The client negotiates exactly `server_version` 208..225. Versions 200..207 are intentionally unsupported on the v2.0.1 line; use a current Gateway or remain on v2.0.0. Implemented, partial, and blocked areas are distinguished in [`docs/roadmap.md`](docs/roadmap.md) and the coverage matrix.
 
 ## Development loop
 
@@ -19,10 +19,11 @@ golangci-lint run
 go test ./...
 ```
 
-All six must pass locally before opening a pull request. The API check rejects
-incompatible changes from the v2.0.0 baseline while allowing
-additive APIs. Deliberately approved clean breaks are enumerated separately
-under `testdata/api`; the baseline itself is the frozen v2.0.0 public surface.
+All six must pass locally before opening a pull request. The default API check
+rejects incompatible changes from the frozen v2.0.0 baseline while allowing
+additive APIs and deliberately approved clean breaks enumerated under
+`testdata/api`. `./scripts/check-api.sh --exact` instead freezes the complete
+v2.0.1 candidate surface; the v2.0.0 baseline remains unchanged.
 CI also checks module tidiness and verification, fuzz-target inventory, a
 pure-Go 386 build, vulnerabilities, shuffled tests across supported host
 platforms, and the race detector. See `.github/workflows/ci.yml` for the exact

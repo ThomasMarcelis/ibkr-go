@@ -61,15 +61,24 @@ jobs:
           go mod verify
           unformatted=$(gofmt -l .)
           test -z "$unformatted"
-          if [ "$GITHUB_REF_NAME" = 'v2.0.0' ]; then
+          if [ "$GITHUB_REF_NAME" = 'v2.0.0' ] || [[ "$GITHUB_REF_NAME" == v2.0.1 || "$GITHUB_REF_NAME" == v2.0.1-* ]]; then
             ./scripts/check-api.sh --exact
           else
             ./scripts/check-api.sh
           fi
+          go build ./...
           go vet ./...
+          CGO_ENABLED=0 GOOS=linux GOARCH=386 go build ./...
+          go test -shuffle=on -count=1 ./...
           go test -race -shuffle=on -count=1 ./...
+          ./scripts/fuzz-all.sh --check
           ./scripts/fuzz-all.sh 30s
           go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+
+      - name: Lint release commit
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9
+        with:
+          version: v2.11.4
 
       - name: Extract required changelog section
         env:

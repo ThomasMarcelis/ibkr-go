@@ -1,7 +1,7 @@
 # Protocol Audit: Server Versions 208-225
 
-This audit records the API 10.48 protocol train above the former sv207 wall.
-The production client now negotiates `server_version` 200..225. The runtime is
+This audit records the API 10.48 protocol train beginning at the supported
+floor. The production client negotiates exactly `server_version` 208..225. The runtime is
 still pure Go; official SDK 10.48.01 was used only to produce exact live
 request/callback evidence against the local Gateway.
 
@@ -30,13 +30,21 @@ request/callback evidence against the local Gateway.
 
 Source-defined outbound fields with an implemented minimum fail before send on
 an older negotiated version. The sv214 outbound formatting boundary is the
-explicit unresolved exception. The lifecycle test accepts exactly 200..225
+explicit unresolved exception. The lifecycle test accepts exactly 208..225
 and rejects both neighboring values.
 
 ## Evidence ledger
 
 | Evidence | SHA-256 | What it proves |
 |----------|---------|----------------|
+| Native public sv208 historical bars | `fe2fa8c99197756bb7f3753a3c49ab51191efff2230c386c5ca9b8a9ca838849` | Exact request, three positive bars, end marker, and public result. |
+| Native public sv208 classic boundary families | `25aa15fdaeff68a48689bc70e68ddcc519783427a0fd835172c9aaad55246b08` | Exact classic scanner, news, options/reference, time, display-group-list, and control callbacks. |
+| Native public sv208 PnL | `dccee2ab425fca9c707dd682c7d9ffc0dafc1dfd1ce093050e425036a8fcb7d2` | Exact classic account and single-position PnL callbacks. |
+| Native public sv208 TickNews | `55b765c665166a3c54f791f316211d51ae45fb876e877a028863ca66a5a24dcd` | Exact classic contract-specific news callback through delayed market data. |
+| Native public sv208 UserInfo | `672370162ad17e46cf045647775d1d6bc4480353b2f044392c43431a88717bd5` | Exact classic request shape and callback at the supported floor. |
+| Native public sv208 DisplayGroupUpdated | `8f56c47cc04a67aead4e491d5549d14db323a00fa8e6ad26d0bb1b71e01cd78e` | Exact classic display-group update callback. |
+| Native public sv210 option calculations | `510dedb3be94ed96c3201807cc7d91e0fcd9756e9f98444efa0dbb66faea2289` | Exact last-classic option-price and implied-volatility requests plus positive results. |
+| Native public sv211 option calculations | `59056822b51af4a00caa28afb922b4f79ee7014668591392e8f4fae229ea7222` | Public option-price availability `247` and implied-volatility availability `133`. |
 | Native sv214 bootstrap | `75ecf971832226bf99ef30d0db75b8a9e3bb7831041e6b01adfede7ae6f79468` | The local Gateway negotiates the post-213 train. |
 | Native sv214 historical request | `9b462902a853e689979ed89b77f8ac5927518d608c6da538d406ae877c2fcd70` | Negative boundary evidence only: this request omitted `endDateTime`, so it does not attest the UTC `Z` suffix. |
 | SDK sv215 one-shot cancels | `b3515b46284970f338db6ede7b2864f4d63449027f9f48ff203a67f4fd34d019` | Exact contract-details and historical-ticks cancel protobuf bodies. |
@@ -48,11 +56,14 @@ and rejects both neighboring values.
 | SDK sv223 hedge maximum | `205f25d37f53daf6dcc0a7b2f93a58215dcf7e1091e5a3fbafb459f018764061` | Exact outbound field 144. The request then received the real missing-parent error, so this is wire proof rather than accepted-order proof. |
 | Native public sv225 odd-lot probe | `70500b2228dc29e81e8823fa6a626bf51597317a83da257e2e3e1e520b7b52a3` | Generic tick 787 is accepted and the ordinary delayed stream remains healthy; no odd-lot callback was available with this entitlement. |
 | SDK sv225 odd-lot probe | `85d0dba58ba9d80c029fac5b658d01ac48128d0513228c07f555dbac6fbff2b0` | The same entitlement boundary through the official client. |
-| Native public sv225 CFD reroute | `bd73e91139899a8c586856ab744269bce686bdab8bda597d00c2032f97d3952c` | Raw ID 291 carries protobuf request ID 1, CFD conid 8314, and exchange SMART. |
+| Native public sv225 CFD reroute | `ca8fbdf11d260066fb7cd1c3d60e6e44808a54bf6a8fc678f3597bd71a666f1c` | Initial CFD request, protobuf reroute, conID request, delayed-data notice, then positive high/low/volume/close callbacks. |
+| Native public sv225 IncludeOvernight lifecycle | `f3585ff96e9a0a936a559e52e9d69e860e6182e769418d987314ce9419c90e9c` | True placement/echo, code-462 false replacement rejection with true retained, fresh false canonicalized to absence with `TIF=DAY`, and terminal cleanup. SDK 10.48.01 reproduced the rejection. |
 
 The sv208-213 protobuf schemas have focused exact-vector and public routing
 tests in `internal/codec`. The sv215-225 rows above additionally retain live
 capture hashes in those tests where a byte-exact request or callback exists.
+The exact-version matrix itself proves only handshake and `CurrentTime`;
+20 supported decoder/layout pairs remain explicitly unattested.
 
 ## Explicit evidence boundaries
 
@@ -64,15 +75,14 @@ capture hashes in those tests where a byte-exact request or callback exists.
   are frozen, while positive live callbacks still require an entitled active
   single-stock future or successful delta-neutral BAG request.
 - Attached preset-order metadata has exact SDK wire evidence and remains
-  internal. A public facade requires a native paper-order lifecycle capture;
-  `IBKR_PAPER_ACCOUNT` was not configured and the safety guard was not bypassed.
+  internal. A public facade still requires its own native paper-order lifecycle
+  capture.
 - Inbound sv214 `Z` forms are parser-tested. The retained native request omitted
   `endDateTime`, so it does not establish outbound formatting; the client does
   not append `Z` until exact source/live evidence resolves that behavior.
-- The sv225 CFD capture proves the protobuf market-data reroute callback and
-  grounds the decoder regression. The Gateway became unavailable before the
-  post-fix end-to-end reroute could be recaptured; protobuf depth reroute also
-  remains without a positive live callback.
+- The sv225 CFD capture proves end-to-end protobuf market-data rerouting and
+  positive delayed quote data after the conID request. The protobuf
+  depth-reroute callback remains without positive live evidence.
 - `updateConfig` is not exposed. Reading configuration helps diagnose session
   behavior; changing operator-owned TWS/Gateway configuration is outside the
   client library's responsibility.

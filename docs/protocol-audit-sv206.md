@@ -144,11 +144,11 @@ invented. `MarketDepthL2.proto` and the official decoder dispatch establish the
 shared nested schema; a positive live raw-213 vector remains a named evidence
 gap. Raw 212 is live-attested and freezes nested-message behavior.
 
-The checked-in, quote-focused `market_data_sv206_live.txt` replay retains raw
-protobuf quote frames and exact quote/market-data-type request bodies with
-deterministic request/account substitutions. Depth remains frozen by byte-vector
-and engine tests backed by the capture hashes above. The replay trims farm
-notices and does not contain private capture data.
+The v2.0.0 `market_data_sv206_live.txt` replay retained raw protobuf quote
+frames and exact quote/market-data-type request bodies with deterministic
+request/account substitutions. That pre208 replay was removed from the active
+v2.0.1 tree when the supported floor rose to 208; tagged v2.0.0 history retains
+it. Current depth coverage is described in the sv208-225 audit.
 
 ## Regression gates
 

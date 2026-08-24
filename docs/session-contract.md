@@ -7,22 +7,13 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates `server_version` 200..225; answers outside that range
-are rejected during handshake. `sv200` is the classic live-validated layout;
-exact `sv201` adds the raw-ID envelope and
-protobuf executions family, while exact `sv202` adds zero-strike contract
-semantics without migrating another message family. Exact `sv203` migrates
-place order, targeted cancel, global cancel, and the corresponding
-open-order/status callbacks to protobuf. Order errors observed in that flow use
-the protobuf error family introduced at 201. Exact `sv204` migrates the three
-open-order requests, completed-order request, and completed-order result/end
-pair. Exact `sv205` migrates contract-details requests and regular, bond, and
-end responses to protobuf while retaining the same typed public operation.
-Exact `sv206` migrates market-data, market-depth, and market-data-type requests
-and their quote/depth callbacks. Exact `sv207` migrates managed accounts,
-account updates and summaries, positions, and their multi-account variants to
-protobuf without changing the public operations. Exact `sv208` through `sv213`
-complete the official protobuf migration train. Inbound sv214 `Z` timestamps
+The client negotiates exactly `server_version` 208..225; answers outside that
+range are rejected during handshake. Versions 200..207 are intentionally not
+supported on the v2.0.1 line. Version 208 is the floor and uses protobuf for
+the execution, order, contract, market-data, account, position, and historical
+families. Exact `sv209` through `sv213` complete the official protobuf migration
+train for news, scanner/PnL, FA/options, reference data, and bootstrap/control
+families. Inbound sv214 `Z` timestamps
 are accepted, while outbound suffix behavior remains unresolved. Versions
 215..225 add one-shot cancellation and order parameters,
 read-only TWS configuration, volume/fractional-size semantics, security-
@@ -184,6 +175,8 @@ Retryability:
   are terminal by default
 - caller context cancellation, protocol/validation failures,
   `ErrSlowConsumer`, and `ErrClosed` are not retryable
+- a malformed-generation error joined from `ErrInterrupted` and
+  `*ProtocolError` is not retryable
 - `ErrOrderRecoveryRequired` is not retryable, even when joined with a
   transient connection cause
 - `*SubscriptionCancelError` is not retryable even when it wraps

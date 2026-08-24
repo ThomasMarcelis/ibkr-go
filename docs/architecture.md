@@ -4,17 +4,10 @@
 not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
 The library currently exposes a broad read-only surface plus order management,
-market depth, and option exercise. Its classic baseline is live-attested at IB
-Gateway `server_version 200`; exact `server_version 201` adds the negotiated
-raw-ID envelope and protobuf executions flow. Exact `server_version 202` adds
-zero-strike contract semantics but no message migration. Exact 203 migrates the
-order placement/cancellation lifecycle to protobuf. Exact 204 migrates the
-open/completed-order query family and completed-order replies. Exact 205
-migrates contract-details requests and replies. Exact 206 migrates quote,
-market-depth, and market-data-type requests plus their L1/depth callbacks.
-Exact 207 migrates the accounts and positions request/callback family. The
-session handshake accepts 200..225. Exact 208..213 complete the staged
-protobuf migrations; inbound sv214 `Z` parsing is supported while outbound
+market depth, and option exercise. The session handshake accepts exactly
+`server_version` 208..225 and rejects 207 and 226. Version 208 is the floor;
+families migrated before it have one protobuf implementation. Exact 208..213
+complete the remaining staged protobuf migrations; inbound sv214 `Z` parsing is supported while outbound
 formatting remains unresolved, and 215..225 add cancellation, order,
 configuration, volume/precision, and odd-lot gates. See
 [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
@@ -61,11 +54,11 @@ configuration, volume/precision, and odd-lot gates. See
 
 ## Codec Dispatch
 
-- **Envelope.** Below server version 201, the message ID is the first classic
-  NUL-delimited ASCII field. At 201, every normal frame starts with a raw
-  four-byte big-endian wire ID. Wire IDs 1..200 have a classic field body;
-  wire IDs above 200 select protobuf and map to base ID `wireID-200`. The
-  pre-session server-info frame remains classic and has no message envelope.
+- **Envelope.** Every supported normal frame starts with a raw four-byte
+  big-endian wire ID. Wire IDs 1..200 have a classic field body; wire IDs
+  above 200 select protobuf and map to base ID `wireID-200`. The pre-session
+  server-info frame remains a NUL-delimited field sequence with no message
+  envelope.
 - **Decode.** `codec.DecodeBatch` separates this negotiated envelope before
   inspecting the body. Classic bodies go through `inboundDecoders`, an
   explicit `map[int]decodeFunc`; protobuf bodies go through the equally
@@ -74,10 +67,9 @@ configuration, volume/precision, and odd-lot gates. See
   interpreting embedded NUL bytes.
 - **Encode.** `Message` is the decode-result type and has no encoding
   capability. Client-to-Gateway structs implement the sealed `OutboundMessage`
-  capability accepted by production `Encode`. The 11 retained server fixture
-  types instead implement sealed `LegacyServerMessage` and are accepted only
-  by `EncodeLegacyServer` for retained legacy symbolic replays;
-  `UnknownInbound` is decode-only. Migrated requests additionally implement the
+  capability accepted by production `Encode`. Testhost server replies are exact
+  captured raw frames; there is no symbolic server encoder. `UnknownInbound`
+  is decode-only. Migrated requests additionally implement the
   local protobuf encoder capability. The protocol migration table rejects a
   request once its protobuf gate is reached unless that encoder exists; it
   never falls back to an invalid classic body.
@@ -157,14 +149,13 @@ both owners, while execution and commission messages are routed through
   captures it by value when it attaches a transport, so each reconnect
   decodes with its own freshly negotiated version even if the Gateway answers
   differently on redial.
-- The supported range is exactly 200..225. Version 200 owns one fixed classic
-  layout; versions 201..213 progressively switch the message families named in
-  `internal/protocol/version.go` to protobuf, and 215..225 gate later semantics.
-  Handshake rejects versions outside that range instead of carrying dead
-  classic-layout compatibility branches.
-- Classic OpenOrder decoding is strict: every supported field is consumed in
-  sequence and malformed or trailing layout drift fails the affected route.
-  It never returns a partially decoded broker echo.
+- The supported range is exactly 208..225. Families already migrated by 208
+  use protobuf throughout the supported range; versions 209..213 switch the
+  remaining families named in `internal/protocol/version.go`, and 215..225 gate
+  later semantics. Handshake rejects versions outside that range.
+- Protobuf OpenOrder decoding is strict: every supported canonical value must
+  decode completely, and malformed numerics or layout drift fail the affected
+  route. It never returns a partially decoded broker echo.
 - The advertised handshake maximum (`maxServerVersion`, currently 225) is a
   package-level override point used only by the version-matrix live tests to
   force a lower supported layout for verification; production
