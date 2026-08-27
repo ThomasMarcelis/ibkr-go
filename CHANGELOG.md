@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## v2.0.1
 
 ### Changed
 
@@ -43,16 +43,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 - A current sv225 IBM CFD capture proves the complete public reroute lifecycle:
   the initial symbolic request, protobuf reroute, conID request, delayed-data
   notice, and positive high, low, volume, and close callbacks.
+- The full build, vet, lint, shuffled, race, exact-API, fuzz, vulnerability,
+  capture, and transcript-provenance gates pass on the candidate tree. Both
+  sv225 role doctors and the explicitly non-mutating live suites pass; exact
+  entitlement, account, and market-state blockers remain skips rather than
+  positive proof. The fee-bearing regulatory path is permanently disabled and
+  was not repeated.
 - `IncludeOvernight=true` is placed and echoed. Replacing it with explicit
   false is rejected with code 462 and retains true; a fresh explicit-false
   placement succeeds and the broker canonicalizes it to an absent field with
-  `TIF=DAY`. SDK 10.48.01 reproduces the replacement rejection.
-- v2.0.1 is not yet release-ready. A guarded option-exercise campaign qualified
-  a live ITM AAPL call, but exact warning 399 deferred its zero-fill seed order
-  to the next options session; paper reconciliation proved no order, position,
-  or execution delta. Positive option-exercise and entitled depth evidence, 20
-  request-family decoder/layout attestations, and the seven-day unchanged soak
-  remain gates. No tag or release is implied by this changelog entry.
+  `TIF=DAY`. SDK 10.48.01 reproduces the replacement rejection. This does not
+  satisfy the required distinct false replacement echo, so the scenario
+  remains a candidate rather than positive completion evidence.
+- v2.0.1 is not yet release-ready. A guarded option-exercise campaign bought
+  one live-qualified ITM AAPL call, received exact preset warning 10349 and
+  `PreSubmitted` for the exercise instruction, but no terminal exercise status.
+  Targeted and global paper cleanup were fenced; the final direct cancel
+  returned code 10147 because order 8 was no longer found. Fresh raw snapshots
+  exactly match the pre-cleanup position and execution/fee rows and contain no
+  ordinary open order, but no terminal exercise callback was observed. This is
+  positive admission and reconciliation evidence, not completed exercise
+  proof. Entitled depth evidence, the false replacement echo, and 20 request-
+  family decoder/layout attestations remain gates. No tag or release is implied
+  by this entry.
 
 ## v2.0.0 — 2026-08-23
 

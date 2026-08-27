@@ -14,24 +14,12 @@ import (
 // codec test or in an exact raw public replay fixture; large frames should not
 // be duplicated merely to satisfy this ledger.
 //
-// Why this gate exists. This library once leaned on symmetric round-trip tests
-// (Encode → Decode). Those tests share a single msg_id constant on both sides,
-// so a wrong constant or a wrong field layout replays perfectly green and only
-// fails against live Gateway traffic — which, before unknown ids became
-// UnknownInbound, killed the whole session with ErrInterrupted. Two shipped
-// bugs proved the class:
-//
-//   - InMarketRule was 92; the live Gateway sends MarketRule on 93. Every live
-//     reply decoded as an unknown frame. Round-trip stayed green because Encode
-//     and Decode both used 92. Frozen by TestCaptureDecode_MarketRuleLive
-//     (raw "93\x00…" frame from captures/v1/market_rule.log).
-//   - msg 108 was decoded as the streaming historical-bar update; it is
-//     actually HISTORICAL_DATA_END. The real streaming update is msg 90. Frozen
-//     by TestCaptureDecode_HistoricalDataEndLive (raw "108\x00…" frame).
-//
-// A raw-frame test hardcodes the msg_id token on the wire, so it exercises the
-// real dispatch path and catches exactly this class. Round-trip tests and fuzz
-// tests do NOT count — they are the class that masked the bugs.
+// Why this gate exists. Symmetric round-trip tests share message IDs and field
+// layouts between encoder and decoder, so the same defect on both sides can
+// replay green while failing against a Gateway. A raw-frame test hardcodes the
+// live wire token and body, exercises real dispatch, and catches that class.
+// Round-trip and fuzz tests remain useful, but they do not count as live
+// attestation here.
 //
 // The two catalogs below partition every registered (msg_id, encoding) pair.
 // rawFrameAttested records pairs proven by a cited live frame.

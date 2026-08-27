@@ -68,7 +68,7 @@ Current IBKR baseline and drift to check first:
   returned code 10358. The readonly-live capture has event hash prefix
   `89db59e9e5abf7b7`, and paper-dev has `c326f314cbc4f1de`. Tagged release
   history records the earlier behavior. The pre208 raw corpus was removed by
-  exact path; all 286 retained captures verify and negotiate sv208 or later.
+  exact path; all 328 retained captures verify and negotiate sv208 or later.
   WSH is a separate API, not a replacement.
 - API 10.48 changes `reqOpenOrders` results to include de-activated orders.
   The result-set behavior still needs a live deactivated-order capture; the

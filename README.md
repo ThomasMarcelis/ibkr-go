@@ -472,9 +472,9 @@ intentional exclusions are documented in the
 entitlement-dependent callbacks and remaining advanced branches stay explicit
 in the coverage matrix rather than being overclaimed.
 
-The stable v2.0.0 release remains unchanged. The unreleased v2.0.1 work closes
+The stable v2.0.0 release remains unchanged. The v2.0.1 candidate closes
 malformed-generation retirement and raises the minimum Gateway version while
-retaining explicit live-evidence and soak gates in the
+retaining explicit live-evidence gates in the
 [v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`

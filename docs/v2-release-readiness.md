@@ -27,35 +27,50 @@ push, or publication is authorized by completing it.
 - A current sv225 IBM CFD capture and public replay freeze the initial request,
   protobuf reroute, conID request, delayed-data notice, and positive quote
   callbacks.
-- `IncludeOvernight=true` has a current placement and broker echo. The
-  true-to-false replacement returned exact code 462 through both ibkr-go and
-  SDK 10.48.01 and retained true. A fresh explicit-false placement was accepted
-  and broker-canonicalized to an absent field with `TIF=DAY`.
-- All 286 retained raw capture directories verify and negotiate sv208 or
+- All 328 retained raw capture directories verify and negotiate sv208 or
   later. The exact enumerated pre208 corpus and quarantine were removed.
 - The sole authorized regulatory attempt is permanently disabled in live
   tests. The post-attempt account-update capture reports `Billable=0.00 EUR`.
 - The v2.0.0 API manifest remains unchanged. `v2.0.1.api` separately freezes
   the candidate surface, including the intentional `IncludeOvernight` pointer
   break and the code-2188 constant.
+- The complete build, vet, lint, shuffled, race, exact-API, timed-fuzz,
+  vulnerability, capture, and transcript-provenance command gate passes. Both
+  sv225 role doctors and the explicitly non-mutating safe live suites pass.
+  The regulatory request was not repeated.
 
 ## Open evidence gates
 
-- Positive current market-depth and option-exercise replays remain
-  unavailable. The guarded sv225 option campaign qualified an ITM AAPL call,
-  but exact warning 399 deferred its zero-fill seed order to the next options
-  session; capture `a10ff5818916cad50192579a39ce046143a1123a5a26f51bf359f161a0b5ad2c`
-  also proves fresh-generation reconciliation without mutation. Exact sv208
-  historical bars and sv211 option calculations are replay-promoted; the
-  current sv225 historical account remains blocked by code 2188.
+- `IncludeOvernight=true` has a current placement and broker echo. The required
+  true-to-false replacement instead returned exact code 462 through both
+  ibkr-go and SDK 10.48.01 and retained true. A fresh explicit-false placement
+  was accepted and broker-canonicalized to an absent field with `TIF=DAY`.
+  This proves the wire distinction and broker blocker, but not a distinct false
+  replacement echo; the scenario remains a candidate.
+- Positive current market-depth evidence and a terminal option-exercise replay
+  remain unavailable. The guarded sv225 option campaign bought one qualified
+  ITM AAPL call and the exercise instruction reached `PreSubmitted` after exact
+  warning 10349, but it produced no terminal status. Capture
+  `37bfe1e3c3494f54e2f953936996086ecd31f9d7f2f0d6cb8ef2dd2a2323d4e2`
+  also proves fresh-generation reconciliation: cleanup sold only the campaign
+  option delta. Later cleanup capture
+  `f5ad48b54b8fc0867aeaa10931107b9850fb750ef1488fff245de11f43dd077c`
+  records exact code 10147 (`OrderId 8 ... is not found`) after targeted and
+  global cancellation attempts. The final open-order snapshot is empty, and
+  the final position plus execution/fee rows exactly match their pre-cleanup
+  snapshots. No terminal exercise status was observed, so settlement remains
+  unproven. Exact sv208 historical bars and sv211 option calculations are
+  replay-promoted; the current sv225 historical account remains blocked by
+  code 2188.
 - The complete request-family boundary campaign across sv208–225 is not done;
   the exact matrix currently proves handshake and `CurrentTime` reachability,
   while 20 decoder/layout pairs remain explicitly unattested. Exact classic
   sv208 boundary captures now cover the supported scanner, news, PnL,
   reference-data, time, display-group, and user-info callbacks that the
   available roles could produce.
-- Manual `orderBound` requires a paper TWS rather than either available
-  Gateway.
+- Manual `orderBound` remains unproven. Paper TWS is now online at `7497`, but
+  no manual TWS order was created while the API harness was armed; that action
+  requires explicit user participation and is not GUI-automated.
 - The single newly authorized regulatory snapshot attempt returned code 0
   (`Internal server error`). Capture
   `20260824T195855Z-regulatory_snapshot_aapl_v201_authorized_once`, events
@@ -65,7 +80,6 @@ push, or publication is authorized by completing it.
   `20260824T202345Z-account_updates` (events SHA-256
   `d7063b2455654c8aed9ecd6c9f395addf9f95a2bf70a08eff7af99bc28707f6c`)
   reports `Billable=0.00 EUR` and is replay-promoted.
-- The exact candidate has not completed the seven-day unchanged soak.
 
 ## Candidate command gate
 
@@ -91,12 +105,9 @@ Also verify every retained raw capture, transcript provenance, both role
 doctors, the safe live suites, and paper baseline reconciliation. Do not repeat
 the regulatory snapshot.
 
-## Unchanged soak
-
-After every evidence and command gate passes, commit one candidate tree and
-record its commit/tree hash only in ignored local evidence. Keep that tree
-unchanged for 168 consecutive hours, run the complete gate and safe live checks
-at the start and end, and run the ordinary deterministic suite plus
-non-mutating live smoke checks daily. Any tracked correctness change restarts
-the soak. A transient Gateway outage does not reset the unchanged-code clock,
-but its missed live check must be rerun.
+The command block, all 328 raw captures, transcript provenance, both doctors,
+and both safe role suites passed on 2026-08-27. Final paper snapshots contain no
+ordinary open order and match the reconciled position and execution/fee
+baseline. These results close the mechanical candidate gate; they do not turn
+the open entitlement, broker, and manual-interaction gaps above into positive
+evidence.

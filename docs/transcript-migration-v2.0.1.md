@@ -1,7 +1,7 @@
 # v2.0.1 transcript migration inventory
 
 This is the deletion and readiness gate for the move to `server_version`
-208–225. It records the working tree as of 2026-08-25. It does not claim that
+208–225. It records the working tree as of 2026-08-27. It does not claim that
 v2.0.1 is release-ready.
 
 ## Current tracked corpus
@@ -22,14 +22,15 @@ full `events.jsonl` SHA-256 provenance:
   prefix. `TestTranscriptProvenanceInventory` freezes those invariants and the
   count of 99.
 
-The parent corpus had 134 files. Eighty-eight retained names were replaced in place
+The parent corpus had 134 files. Eighty-seven retained names were replaced in place
 with verified supported-range captures; their migration mapping is identity by
 filename, and each initial comment block names the replacement capture and full hash.
-The remaining eleven current files are explicit additions or renames:
+The remaining twelve current files are explicit additions or renames:
 
 | Current fixture | Replaces or proves |
 |-----------------|--------------------|
 | `cfd_quote_reroute.txt` | current IBM CFD request, protobuf reroute, conID request, delayed-data notice, and positive quote callbacks |
+| `executions_concurrent_aapl.txt` | current simultaneous BUY- and SELL-filtered execution queries; replaces the derived `executions_correlated.txt` and `executions_overlapping.txt` fixtures |
 | `executions_empty.txt` | current empty execution snapshot; replaces `executions_empty_sv201_live.txt` |
 | `open_orders_empty.txt` | current empty open-order snapshot; replaces `open_orders_empty_sv203_live.txt` |
 | `historical_bars_subscription_required.txt` | exact sv225 historical code 2188 entitlement blocker |
@@ -64,6 +65,9 @@ covered by the named sv225 fixture or family:
   the current bracket fixtures.
 - `completed_orders_cancelled_system_live.txt` and `completed_orders_empty.txt`
   → `api_completed_orders_variants_aapl.txt`.
+- `executions_correlated.txt` and `executions_overlapping.txt` →
+  `executions_concurrent_aapl.txt`. The replacement is a real concurrent
+  public-API capture rather than a derived duplicate/rebound execution stream.
 - `historical_news_end_bound_sv206_live.txt` → `news_article.txt`.
 - `tick_news_aapl_live.txt` → `tick_news_aapl.txt`.
 - `place_order_fill_native_execution_time.txt`, `place_order_lmt_buy_aapl.txt`,
@@ -73,6 +77,10 @@ covered by the named sv225 fixture or family:
 - `place_order_invalid_type_live_error.txt` → `api_order_rejects_aapl.txt`.
 - `whatif_rejections.txt` and `whatif_tif_default_live.txt` →
   `api_whatif_margin_aapl.txt`.
+- `lifecycle_bootstrap_reordered.txt` was removed because it fabricated a
+  server callback order that was not observed live and is outside the allowed
+  fault transformations. Current bootstrap success and independently missing
+  callback failures remain frozen from exact sv225 frames.
 
 The following files proved only a deleted pre208 boundary and have no runtime
 counterpart after the floor increase:
@@ -126,6 +134,13 @@ coverage matrix and live tracker must keep these distinctions visible.
   reproduced the blocker, so it is not evidence for an encoding change and it
   does not prove a false replacement echo. A fresh explicit-false placement
   was accepted and broker-canonicalized to an absent field with `TIF=DAY`.
+  This does not prove the required distinct false replacement echo, so the
+  capture remains blocker evidence rather than completed positive proof.
+- The option exercise instruction reached `PreSubmitted` but never emitted a
+  terminal status. Fenced targeted/global cleanup was followed by exact code
+  10147 because order 8 was no longer found. Fresh open-order, position,
+  execution, and fee captures reconcile to the pre-cleanup state, but they do
+  not turn the missing terminal callback into settlement proof.
 - Exact sv211 public option calculations returned option-price availability
   `247` and implied-volatility availability `133` and are replay-promoted.
 - The sole newly authorized regulatory attempt is capture
@@ -136,8 +151,9 @@ coverage matrix and live tracker must keep these distinctions visible.
   Post-attempt capture `20260824T202345Z-account_updates` (events SHA-256
   `d7063b2455654c8aed9ecd6c9f395addf9f95a2bf70a08eff7af99bc28707f6c`)
   reports `Billable=0.00 EUR` and is replay-promoted.
-- Manual `orderBound` remains blocked because both available applications are
-  Gateways, not paper TWS.
+- Manual `orderBound` remains blocked because no manual paper-TWS order was
+  created while the API harness was armed. TWS is now reachable at `7497`, but
+  the required manual create/cancel action was not performed.
 - The exact-version transcript proves handshake and `CurrentTime` reachability,
   not the complete request-family boundary campaign.
 
@@ -145,9 +161,5 @@ coverage matrix and live tracker must keep these distinctions visible.
 
 The enumerated pre208 directories and quarantine were removed recoverably,
 without a broad glob or unresolved version predicate. The retained raw corpus
-contains 286 directories. `scripts/verify-captures.sh` passes for all of them,
+contains 328 directories. `scripts/verify-captures.sh` passes for all of them,
 and every retained handshake negotiates sv208 or later.
-
-The seven-day unchanged soak starts only after these gates and the complete
-release command set pass on one committed candidate tree. Soak observations
-stay in ignored local evidence so the candidate tree itself remains unchanged.

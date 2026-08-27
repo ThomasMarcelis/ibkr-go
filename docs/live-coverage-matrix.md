@@ -13,10 +13,10 @@ Supporting inventory:
 - `cmd/ibkr-capture -list-json` is the executable scenario catalog.
 - `testdata/transcripts` is the deterministic replay catalog.
 
-As of 2026-08-25 the tracked replay catalog contains only sv208+ evidence: 95
+As of 2026-08-27 the tracked replay catalog contains only sv208+ evidence: 95
 sv225 fixtures, exact sv208 historical and user-info fixtures, an exact positive
 sv211 option-calculation fixture, and one exact sv208–225 version matrix. The executable catalog has
-125 scenarios: 92 promoted, 24 candidates, and 9 blocked. Older version numbers in
+125 scenarios: 91 promoted, 26 candidates, and 8 blocked. Older version numbers in
 historical evidence notes explain prior observations; they are not active
 support claims or checked-in replay dependencies. Rows that lost a pre208
 positive fixture remain candidates or blocked until current positive evidence
@@ -105,7 +105,7 @@ handled through dimensions rather than duplicate rows:
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | HIST-001 | Historical bars | `History().Bars`, official `reqHistoricalData`, `cancelHistoricalData`, `historicalData`, `historicalDataEnd` | current historical scenarios, `historical_bars_sv208.txt`, `historical_bars_subscription_required.txt` | promoted | Exact sv208 capture `fe2fa8c99197756bb7f3753a3c49ab51191efff2230c386c5ca9b8a9ca838849` freezes three positive bars and the end boundary through the public API. Current sv225 requests separately return exact typed code 2188, frozen as an entitlement blocker and classified by `APIError.IsEntitlement`. |
 | HIST-002 | Historical keep-up bars | `History().SubscribeBars`, official keepUpToDate, `historicalDataUpdate` | `historical_bars_keepup` | blocked | The latest sv225 market-hours request returned exact typed code 162 before a positive initial batch or `historicalDataUpdate`. A successful update and reconnect behavior remain explicit targets. |
-| HIST-003 | Historical schedule | `History().Schedule`, official `whatToShow=SCHEDULE`, `historicalSchedule` | `historical_schedule_aapl`, `historical_schedule_aapl.txt`, `TestHistoricalSchedule`, `TestCaptureDecode_HistoricalSchedule` | promoted | The current sv225 raw replay freezes the AAPL request and complete schedule. Non-US exchanges remain open. |
+| HIST-003 | Historical schedule | `History().Schedule`, official `whatToShow=SCHEDULE`, `historicalSchedule` | `historical_schedule_aapl`, `historical_schedule_aapl.txt`, `TestHistoricalSchedule` | promoted | The current sv225 raw replay freezes the AAPL request and complete schedule. Non-US exchanges remain open. |
 | HIST-004 | Head timestamp and histogram | `History().HeadTimestamp`, `History().Histogram`, official head/histogram calls | `head_timestamp_aapl`, `histogram_data_aapl`, `head_timestamp.txt` | candidate | Current sv225 evidence promotes a positive head timestamp. Histogram currently ends at code 2188 and has no retained positive transcript. |
 | HIST-005 | Historical ticks | `History().Ticks`, official historical midpoint/bidask/last callbacks | current historical-tick scenarios; no retained positive transcript | candidate | Current sv225 requests end at the exact historical entitlement blocker. Successful TRADES, BID_ASK, and MIDPOINT callbacks remain open. |
 | HIST-006 | Historical news | `News().Historical`, official historical news callbacks | `api_news_article_aapl`, `news_article.txt` | promoted | Current sv225 capture freezes historical rows, end marker, `.0` time bounds, and article follow-up. Provider combinations and invalid-provider behavior remain open. |
@@ -144,7 +144,7 @@ handled through dimensions rather than duplicate rows:
 | ID | Capability | Public API / Official Surface | Current Scenarios / Replay | Status | Required Matrix Variants |
 |----|------------|-------------------------------|----------------------------|--------|--------------------------|
 | OPT-001 | Option calculations | `Options().ImpliedVolatility`, `Options().Price`, official calculate/cancel calls | `option_calculations_aapl.txt`, exact sv211 schema vectors | promoted | Exact sv211 public capture `59056822b51af4a00caa28afb922b4f79ee7014668591392e8f4fae229ea7222` returns option-price availability `247` and implied-volatility availability `133`. Invalid-contract and cancel-before-result variants remain open. |
-| OPT-002 | Option exercise/lapse | `Options().Exercise`, official `exerciseOptions` | current schema/validation tests; exact sv225 market-state blocker, no positive transcript | blocked | Capture `a10ff5818916cad50192579a39ce046143a1123a5a26f51bf359f161a0b5ad2c` qualified a live ITM AAPL call, then warning 399 deferred its zero-fill seed order to the next options session. Fresh-generation reconciliation proved no mutation; this is not proof of settlement or the pseudo-order lifecycle. |
+| OPT-002 | Option exercise/lapse | `Options().Exercise`, official `exerciseOptions` | current schema/validation tests; partial sv225 admission evidence, no terminal transcript | candidate | Capture `37bfe1e3c3494f54e2f953936996086ecd31f9d7f2f0d6cb8ef2dd2a2323d4e2` bought a live ITM AAPL call; the exercise instruction emitted exact preset warning 10349 and reached `PreSubmitted`, but produced no terminal status. Cleanup sold only the campaign option delta. Fenced targeted/global cleanup removed the later 2133 exclusion, and direct cancel capture `f5ad48b54b8fc0867aeaa10931107b9850fb750ef1488fff245de11f43dd077c` returned code 10147 because order 8 was not found. Fresh position and execution/fee rows match the baseline and ordinary open orders are empty. This proves admission and reconciliation, not exercise settlement or lapse. |
 | OPT-003 | Option order and data integration | `Orders().Place`, market data/history for OPT | current option details/calculation and combo captures | candidate | Current sv225 captures qualify real AAPL option contracts, return partial calculation data, and freeze an expired-contract BAG rejection. They do not prove an accepted option order, fill, completed/execution observation, or historical option ticks. |
 
 ## News, Scanner, FA, WSH, Display, And TWS
@@ -330,9 +330,6 @@ scenarios, active replays, or current coverage targets.
 
 These gaps block any claim that the matrix is fully executable:
 
-- `MarketData().SetType`: bare data types 1, 2, 3, and 4 are replay-promoted;
-  add stream callback replays, invalid type, and switch-while-streaming
-  behavior.
 - `Options().Exercise`: add a positive exercise/lapse completion scenario;
   current sv225 evidence has not produced an acceptable lifecycle replay.
 - Official callback gaps from `ibkr-api-inventory.md`: `tickEFP`; raw
