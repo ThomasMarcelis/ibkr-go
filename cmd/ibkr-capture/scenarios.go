@@ -386,7 +386,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHistoricalBarsKeepUp,
 	},
 	"news_bulletins": {
-		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"bounded typed bulletin observation, including a valid empty window, followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"at least one typed bulletin callback followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
 		description: "observe the live bulletin stream through the public API and close it cleanly",
 		run:         runAPINewsBulletins,
 	},
@@ -598,7 +598,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIBracketTrailingStopAAPL,
 	},
 	"api_option_exercise_aapl": {
-		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Details", "MarketData().Quote", "Orders().Place", "Options().Exercise", "Accounts().Positions", "Orders().Executions"}, []int{1, 2, 3, 5, 10, 11, 21, 52, 55, 57, 59, 61, 62, 75, 76}, "paper_marketable_order", []string{"paper_trading", "options_market_hours", "option_permissions", "safe_option_and_stock_reconciliation"}, []string{"one live-qualified ITM AAPL call fills, exercise reaches a terminal pseudo-order state, the option or stock position changes, and campaign deltas are reconciled; the current after-hours run is blocked by exact warning 399 before any fill and reconciles without mutation"}, 1, "blocked", []string{"OPT", "STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll),
+		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Details", "MarketData().Quote", "Orders().Place", "Options().Exercise", "Accounts().Positions", "Orders().Executions"}, []int{1, 2, 3, 5, 10, 11, 21, 52, 55, 57, 59, 61, 62, 75, 76}, "paper_marketable_order", []string{"paper_trading", "options_market_hours", "option_permissions", "safe_option_and_stock_reconciliation"}, []string{"one live-qualified ITM AAPL call fills; exercise reaches a terminal pseudo-order state or exact warning 10349 plus PreSubmitted records accepted-but-unsettled admission; campaign deltas are reconciled without claiming settlement"}, 1, "candidate", []string{"OPT", "STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll),
 		description: "buy and exercise one live-qualified ITM AAPL call with terminal option and stock reconciliation",
 		run:         runAPIOptionExerciseAAPL,
 	},
@@ -643,7 +643,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPITransmitFalseThenTransmitAAPL,
 	},
 	"api_include_overnight_lifecycle_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Client.CurrentTime"}, []int{3, 4, 5, 7, 11, 16, 49, 53, 55, 59, 61, 62, 63, 64}, "paper_order", []string{"paper_trading", "client_id_0", "overnight_session", "multi_leg_recorder"}, []string{"nonmarketable SMART AAPL DAY order echoes IncludeOvernight=true; explicit-false replacement records exact code 462 while the working order retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absent with TIF DAY; both orders cancel terminally and paper state reconciles to baseline"}, 0, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Client.CurrentTime"}, []int{3, 4, 5, 7, 11, 16, 49, 53, 55, 59, 61, 62, 63, 64}, "paper_order", []string{"paper_trading", "client_id_0", "overnight_session", "multi_leg_recorder"}, []string{"nonmarketable SMART AAPL DAY order echoes IncludeOvernight=true; explicit-false replacement records exact code 462 while the working order retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absent with TIF DAY; both orders cancel terminally and paper state reconciles to baseline"}, 0, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "guarded true-to-false IncludeOvernight placement, replacement, cancellation, and reconciliation",
 		run:         runAPIIncludeOvernightLifecycleAAPL,
 	},

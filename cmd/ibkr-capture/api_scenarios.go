@@ -424,7 +424,7 @@ func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout 
 			return err
 		}
 		label := currentScenarioName()
-		baseline, err := beginPaperCampaign(ctx, client, account, label)
+		baseline, err := snapshotPaperCampaignBaseline(ctx, client, account)
 		if err != nil {
 			return err
 		}
@@ -434,7 +434,6 @@ func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout 
 			// Cleanup starts on a new transport generation so scenario teardown
 			// cannot leave reconciliation dependent on a connection the scenario
 			// may already have damaged.
-			client.Close()
 			cleanupClient, err := paperCleanupClient(cleanupCtx, client, addr, clientID, label)
 			if err != nil {
 				err = fmt.Errorf("%s cleanup session: %w", label, err)
@@ -487,11 +486,6 @@ func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout 
 					runErr = errors.Join(runErr, reconnectErr)
 					return
 				}
-				if nextClient == cleanupClient {
-					recordPaperReconciliation(label, reconciliation, reconcileErr)
-					runErr = errors.Join(runErr, reconcileErr)
-					return
-				}
 				recordAPIEvent("paper_reconciliation_retry", label, func(event *apiDriverEvent) {
 					event.Count = attempt
 					event.Error = reconcileErr.Error()
@@ -499,22 +493,24 @@ func apiTradingScenario(ctx context.Context, addr string, clientID int, timeout 
 				cleanupClient = nextClient
 			}
 		}()
+
+		clearedOpenOrders, err := clearPaperOpenOrders(ctx, client, account, label+" baseline")
+		if err != nil {
+			return err
+		}
+		positions, err := snapshotPositions(ctx, client)
+		if err != nil {
+			return fmt.Errorf("%s post-cancel positions: %w", label, err)
+		}
+		if !samePositionInventory(baseline.positions, positions) {
+			return fmt.Errorf("%s stale-order cancellation changed the position inventory: before=%v after=%v", label, positionInventory(baseline.positions), positionInventory(positions))
+		}
+		recordPaperBaseline(label, baseline, clearedOpenOrders)
 		return run(ctx, client, account)
 	})
 }
 
 func paperCleanupClient(ctx context.Context, current *ibkr.Client, addr string, clientID int, label string) (*ibkr.Client, error) {
-	if current.Session().State == ibkr.StateReady {
-		probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		_, err := current.CurrentTime(probeCtx)
-		cancel()
-		if err == nil {
-			return current, nil
-		}
-		recordAPIEvent("paper_reconciliation_redial", label, func(event *apiDriverEvent) {
-			event.Error = fmt.Sprintf("existing session probe: %v", err)
-		})
-	}
 	current.Close()
 
 	dialCtx, cancel := context.WithTimeout(ctx, time.Minute)
@@ -728,6 +724,9 @@ func runAPINewsBulletins(ctx context.Context, addr string, clientID int) error {
 		}
 		if err := closeAndFenceSubscription(ctx, client, sub, "news bulletin cancellation"); err != nil {
 			return err
+		}
+		if count == 0 {
+			return errors.New("news bulletin observation window produced no callback")
 		}
 		recordAPIEvent("news_bulletins", "all_messages", func(event *apiDriverEvent) { event.Count = count })
 		return nil
@@ -1811,8 +1810,17 @@ func runAPIOddLotQuotesAAPL(ctx context.Context, addr string, clientID int) erro
 }
 
 func isExactOddLotEntitlementRefusal(err *ibkr.APIError) bool {
-	return err.OpKind == ibkr.OpQuotes && err.Code == ibkr.ErrCodeAdditionalSubscriptionRequired &&
-		strings.HasPrefix(err.Message, "Requested market data requires additional subscription for API")
+	if err.OpKind != ibkr.OpQuotes {
+		return false
+	}
+	switch err.Code {
+	case ibkr.ErrCodeAdditionalSubscriptionRequired:
+		return strings.HasPrefix(err.Message, "Requested market data requires additional subscription for API")
+	case 2186:
+		return strings.HasPrefix(err.Message, "Warning: Requested real-time market data requires additional subscription for API. You elected to receive delayed market data instead.")
+	default:
+		return false
+	}
 }
 
 func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
@@ -1869,6 +1877,7 @@ func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
 		defer timer.Stop()
 		firstEvents := probes[0].sub.Events()
 		secondEvents := probes[1].sub.Events()
+		var sawEFP, sawDeltaNeutral bool
 		observe := func(index int, event ibkr.StreamEvent[ibkr.QuoteUpdate]) bool {
 			if event.Kind != ibkr.StreamData {
 				return false
@@ -1878,10 +1887,12 @@ func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
 				return false
 			}
 			probes[index].targetTicks++
+			sawEFP = sawEFP || event.Value.Kind == ibkr.QuoteUpdateEFP
+			sawDeltaNeutral = sawDeltaNeutral || event.Value.Kind == ibkr.QuoteUpdateDeltaNeutralValidation
 			recordAPIEvent("tick_efp_callback", probes[index].label, func(driverEvent *apiDriverEvent) {
 				driverEvent.Values = quoteUpdateValues(event.Value)
 			})
-			return true
+			return sawEFP && sawDeltaNeutral
 		}
 		finished := false
 		for !finished && (firstEvents != nil || secondEvents != nil) {
@@ -1919,11 +1930,18 @@ func runAPITickEFPProbe(ctx context.Context, addr string, clientID int) error {
 			return err
 		}
 		targetTicks := probes[0].targetTicks + probes[1].targetTicks
-		label := "no_target_callback"
-		if targetTicks > 0 {
-			label = "typed_callback"
+		if !sawEFP || !sawDeltaNeutral {
+			return fmt.Errorf(
+				"EFP probes did not receive both TickEFP and delta-neutral validation callbacks: tick_efp=%t delta_neutral=%t %s=%d %s=%d",
+				sawEFP,
+				sawDeltaNeutral,
+				probes[0].label,
+				probes[0].updates,
+				probes[1].label,
+				probes[1].updates,
+			)
 		}
-		recordAPIEvent("tick_efp_probe", label, func(event *apiDriverEvent) {
+		recordAPIEvent("tick_efp_probe", "typed_callback", func(event *apiDriverEvent) {
 			event.Count = targetTicks
 			event.Values = map[string]string{
 				probes[0].label + "_updates":      strconv.Itoa(probes[0].updates),
@@ -5239,35 +5257,33 @@ type paperReconciliation struct {
 	accountValues string
 }
 
-func beginPaperCampaign(ctx context.Context, client *ibkr.Client, account, label string) (paperCampaignBaseline, error) {
-	clearedOpenOrders, err := clearPaperOpenOrders(ctx, client, account, label+" baseline")
-	if err != nil {
-		return paperCampaignBaseline{}, err
-	}
-
+func snapshotPaperCampaignBaseline(ctx context.Context, client *ibkr.Client, account string) (paperCampaignBaseline, error) {
 	positions, err := snapshotPositions(ctx, client)
 	if err != nil {
-		return paperCampaignBaseline{}, fmt.Errorf("%s baseline positions: %w", label, err)
+		return paperCampaignBaseline{}, fmt.Errorf("baseline positions: %w", err)
 	}
 	executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: account})
 	if err != nil {
-		return paperCampaignBaseline{}, fmt.Errorf("%s baseline executions: %w", label, err)
+		return paperCampaignBaseline{}, fmt.Errorf("baseline executions: %w", err)
 	}
 	accountValues, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
 		Group: "All", Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower"},
 	})
 	if err != nil {
-		return paperCampaignBaseline{}, fmt.Errorf("%s baseline account values: %w", label, err)
+		return paperCampaignBaseline{}, fmt.Errorf("baseline account values: %w", err)
 	}
+	return paperCampaignBaseline{positions: positions, executions: executions, accountValues: accountValues}, nil
+}
+
+func recordPaperBaseline(label string, baseline paperCampaignBaseline, clearedOpenOrders int) {
 	recordAPIEvent("paper_baseline", label, func(event *apiDriverEvent) {
 		event.Values = map[string]string{
 			"cleared_open_orders": strconv.Itoa(clearedOpenOrders),
-			"positions":           strconv.Itoa(len(positions)),
-			"executions":          strconv.Itoa(len(executions.Executions)),
-			"account_values":      strconv.Itoa(len(accountValues)),
+			"positions":           strconv.Itoa(len(baseline.positions)),
+			"executions":          strconv.Itoa(len(baseline.executions.Executions)),
+			"account_values":      strconv.Itoa(len(baseline.accountValues)),
 		}
 	})
-	return paperCampaignBaseline{positions: positions, executions: executions, accountValues: accountValues}, nil
 }
 
 func reconcilePaperCampaign(ctx context.Context, client *ibkr.Client, account, label string, baseline paperCampaignBaseline) (paperReconciliation, error) {

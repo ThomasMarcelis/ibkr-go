@@ -112,7 +112,7 @@ func runNormalize(out io.Writer, dir, rawOut, replayDir, transcriptOut string, v
 	return nil
 }
 
-func writeTranscriptSkeleton(path, captureDir string, meta capturelog.Meta, replayEvents []capturelog.ReplayEvent) error {
+func writeTranscriptSkeleton(path, captureDir string, meta capturelog.Meta, replayEvents []capturelog.ReplayEvent) (err error) {
 	eventsData, err := os.ReadFile(filepath.Join(captureDir, "events.jsonl")) // #nosec G304 -- captureDir is the operator-selected input.
 	if err != nil {
 		return fmt.Errorf("read events provenance: %w", err)
@@ -146,7 +146,11 @@ func writeTranscriptSkeleton(path, captureDir string, meta capturelog.Meta, repl
 	if err != nil {
 		return fmt.Errorf("create transcript skeleton: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if closeErr := file.Close(); closeErr != nil {
+			err = errors.Join(err, fmt.Errorf("close transcript skeleton: %w", closeErr))
+		}
+	}()
 
 	if _, err := fmt.Fprintf(file, "# Exact capture %s for %s at %s.\n", filepath.Base(captureDir), meta.Scenario, versionProvenance); err != nil {
 		return err
@@ -981,6 +985,15 @@ func (s *captureFrameState) describe(event capturelog.ReplayEvent, payload []byt
 		info, err := codec.DecodeServerInfo(payload)
 		if err != nil {
 			return frameDescription{}, fmt.Errorf("describe leg %d server-info frame: %w", event.Leg, err)
+		}
+		if info.ServerVersion < protocol.SupportedMinServerVersion || info.ServerVersion > protocol.SupportedMaxServerVersion {
+			return frameDescription{}, fmt.Errorf(
+				"describe leg %d: server version %d outside supported range %d..%d",
+				event.Leg,
+				info.ServerVersion,
+				protocol.SupportedMinServerVersion,
+				protocol.SupportedMaxServerVersion,
+			)
 		}
 		if info.ServerVersion < leg.minVersion || info.ServerVersion > leg.maxVersion {
 			return frameDescription{}, fmt.Errorf(

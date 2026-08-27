@@ -43,10 +43,34 @@ type proxyResult struct {
 func main() {
 	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
-	if err := run(ctx, os.Args[1:]); err != nil && !errors.Is(err, ctx.Err()) {
+	if err := run(ctx, os.Args[1:]); err != nil && !onlyContextError(err, ctx.Err()) {
 		log.Printf("ibkr-recorder: %v", err)
 		os.Exit(1)
 	}
+}
+
+func onlyContextError(err, cause error) bool {
+	if err == nil || cause == nil {
+		return false
+	}
+	if joined, ok := err.(interface{ Unwrap() []error }); ok {
+		children := joined.Unwrap()
+		if len(children) == 0 {
+			return false
+		}
+		for _, child := range children {
+			if !onlyContextError(child, cause) {
+				return false
+			}
+		}
+		return true
+	}
+	if wrapped, ok := err.(interface{ Unwrap() error }); ok {
+		if child := wrapped.Unwrap(); child != nil {
+			return onlyContextError(child, cause)
+		}
+	}
+	return err == cause
 }
 
 func run(ctx context.Context, args []string) error {

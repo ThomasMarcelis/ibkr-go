@@ -319,8 +319,10 @@ func TestNormalizeEventsRejectsTruncatedFrameOnDisconnect(t *testing.T) {
 func TestNormalizeEventsRejectsDeclaredChunkLengthMismatch(t *testing.T) {
 	t.Parallel()
 
-	// Handshake chunk from a live capture; only its declared-length mismatch is
-	// injected here.
+	// Handshake chunk from capture 20260827T185600Z-positions_snapshot,
+	// events.jsonl SHA-256
+	// f14068bfb87d8281917a43645e778b5ece1ee19acbc7e3dcebf7815472b1b7b6.
+	// Only its declared-length mismatch is injected here.
 	events := []Event{
 		{Kind: EventConnect, Leg: 1},
 		{
@@ -328,7 +330,7 @@ func TestNormalizeEventsRejectsDeclaredChunkLengthMismatch(t *testing.T) {
 			Leg:       1,
 			Direction: "client",
 			Length:    999,
-			Data:      "QVBJAAAAAAl2MTc2Li4yMDM=",
+			Data:      "QVBJAAAAAAl2MjA4Li4yMjU=",
 		},
 	}
 
@@ -341,15 +343,13 @@ func TestNormalizeEventsRejectsDeclaredChunkLengthMismatch(t *testing.T) {
 func TestNormalizeEventsSkipsClientHandshakePrefix(t *testing.T) {
 	t.Parallel()
 
-	versionFrame := mustFrame(t, []byte("v100..200"))
-	startFrame := mustFrame(t, wire.EncodeFields([]string{"71", "2", "1", ""}))
-	serverFrame := mustFrame(t, wire.EncodeFields([]string{"200", "20260405 23:49:26 Central European Standard Time"}))
-
+	// These are the exact handshake, sv225 server-info, and protobuf START_API
+	// chunks from capture 20260827T185600Z-positions_snapshot, hash cited above.
 	events := []Event{
 		{Kind: EventConnect, Leg: 1},
-		{Kind: EventChunk, Leg: 1, Direction: "client", Length: 4 + len(versionFrame), Data: encodeBase64(append([]byte("API\x00"), versionFrame...))},
-		{Kind: EventChunk, Leg: 1, Direction: "server", Length: len(serverFrame), Data: encodeBase64(serverFrame)},
-		{Kind: EventChunk, Leg: 1, Direction: "client", Length: len(startFrame), Data: encodeBase64(startFrame)},
+		{Kind: EventChunk, Leg: 1, Direction: "client", Length: 17, Data: "QVBJAAAAAAl2MjA4Li4yMjU="},
+		{Kind: EventChunk, Leg: 1, Direction: "server", Length: 30, Data: "AAAAGjIyNQAyMDI2MDgyNyAyMDo1NjowMCBDRVQA"},
+		{Kind: EventChunk, Leg: 1, Direction: "client", Length: 10, Data: "AAAABgAAAQ8IAQ=="},
 		{Kind: EventDisconnect, Leg: 1},
 	}
 
@@ -364,14 +364,14 @@ func TestNormalizeEventsSkipsClientHandshakePrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("base64Decoded(version) error = %v", err)
 	}
-	if string(gotVersion) != "v100..200" {
-		t.Fatalf("version payload = %q, want v100..200", string(gotVersion))
+	if string(gotVersion) != "v208..225" {
+		t.Fatalf("version payload = %q, want v208..225", string(gotVersion))
 	}
 	gotStart, err := base64Decoded(replayEvents[3].Data)
 	if err != nil {
 		t.Fatalf("base64Decoded(start) error = %v", err)
 	}
-	if !bytes.Equal(gotStart, wire.EncodeFields([]string{"71", "2", "1", ""})) {
+	if !bytes.Equal(gotStart, []byte{0x00, 0x00, 0x01, 0x0f, 0x08, 0x01}) {
 		t.Fatalf("start payload = %x, want START_API frame", gotStart)
 	}
 }

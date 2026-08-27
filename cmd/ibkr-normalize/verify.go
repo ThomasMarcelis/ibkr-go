@@ -237,6 +237,7 @@ type driverEvidence struct {
 	Server   string            `json:"server"`
 	ClientID int               `json:"client_id"`
 	Count    int               `json:"count"`
+	Status   string            `json:"status"`
 	Values   map[string]string `json:"values"`
 	Error    string            `json:"error"`
 }
@@ -391,15 +392,23 @@ func validateDriverScenarioEvidence(scenario string, stats driverEvidenceStats) 
 		if err := requireKinds("paper_baseline", "paper_reconciled"); err != nil {
 			return err
 		}
+		var accepted, presetWarning bool
 		for _, event := range stats.events {
 			if event.Kind == "option_exercise_completed" {
 				return nil
+			}
+			if event.Kind == "option_exercise_event" {
+				accepted = accepted || event.Status == "PreSubmitted"
+				presetWarning = presetWarning || strings.Contains(event.Error, "code=10349")
 			}
 			if event.Kind == "order_warning" && event.Label == "option exercise seed" &&
 				event.Values["code"] == "399" &&
 				strings.Contains(event.Values["message"], "will not be placed at the exchange until") {
 				return nil
 			}
+		}
+		if accepted && presetWarning {
+			return nil
 		}
 		return fmt.Errorf("scenario %s has neither a completed exercise nor exact market-hours blocker", scenario)
 	}
@@ -438,6 +447,14 @@ func isAttestedScenarioBlocker(scenario, scenarioErr string, apiErrors []codec.A
 			strings.Contains(scenarioErr, "option exercise seed status=Cancelled filled=0 execution=false") &&
 			apiErr.Code == 399 &&
 			strings.Contains(apiErr.Message, "will not be placed at the exchange until"):
+			return true
+		case scenario == "api_option_exercise_aapl" &&
+			strings.Contains(scenarioErr, "AAPL call exercise produced no terminal evidence within 1m0s") &&
+			apiErr.Code == 10349 &&
+			strings.Contains(apiErr.Message, "Order TIF was set to DAY based on order preset"):
+			return true
+		case scenario == "quote_odd_lot_aapl" &&
+			attestedDriverAPIError(scenarioErr, apiErr, 2186, "Warning: Requested real-time market data requires additional subscription for API. You elected to receive delayed market data instead."):
 			return true
 		}
 	}

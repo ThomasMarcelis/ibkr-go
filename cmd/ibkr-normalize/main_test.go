@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -49,6 +50,32 @@ func TestCaptureFrameStateServer225(t *testing.T) {
 		if got != tc.want {
 			t.Fatalf("describe(%s, %x) = %#v, want %#v", tc.direction, tc.payload, got, tc.want)
 		}
+	}
+}
+
+func TestCaptureFrameStateRejectsUnsupportedServerVersion(t *testing.T) {
+	t.Parallel()
+
+	for _, serverVersion := range []int{
+		protocol.SupportedMinServerVersion - 1,
+		protocol.SupportedMaxServerVersion + 1,
+	} {
+		t.Run(fmt.Sprintf("sv%d", serverVersion), func(t *testing.T) {
+			state := newCaptureFrameState()
+			if err := state.connect(1); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := state.describe(capturelog.ReplayEvent{Leg: 1, Direction: "client"}, []byte(fmt.Sprintf("v%d..%d", serverVersion, serverVersion))); err != nil {
+				t.Fatal(err)
+			}
+			_, err := state.describe(
+				capturelog.ReplayEvent{Leg: 1, Direction: "server"},
+				wire.EncodeFields([]string{strconv.Itoa(serverVersion), "20260825 00:44:27 CET"}),
+			)
+			if err == nil || !strings.Contains(err.Error(), "outside supported range 208..225") {
+				t.Fatalf("describe server version %d error = %v", serverVersion, err)
+			}
+		})
 	}
 }
 
@@ -736,7 +763,7 @@ func TestValidateDriverScenarioEvidenceIncludeOvernight(t *testing.T) {
 func TestValidateDriverScenarioEvidenceOptionExercise(t *testing.T) {
 	t.Parallel()
 
-	stats := driverEvidenceStats{
+	marketHoursBlocker := driverEvidenceStats{
 		kinds: map[string]int{"paper_baseline": 1, "paper_reconciled": 1},
 		events: []driverEvidence{{
 			Kind: "order_warning", Label: "option exercise seed",
@@ -746,12 +773,27 @@ func TestValidateDriverScenarioEvidenceOptionExercise(t *testing.T) {
 			},
 		}},
 	}
-	if err := validateDriverScenarioEvidence("api_option_exercise_aapl", stats); err != nil {
+	if err := validateDriverScenarioEvidence("api_option_exercise_aapl", marketHoursBlocker); err != nil {
 		t.Fatal(err)
 	}
-	stats.events[0].Values["code"] = "0"
-	if err := validateDriverScenarioEvidence("api_option_exercise_aapl", stats); err == nil {
+	marketHoursBlocker.events[0].Values["code"] = "0"
+	if err := validateDriverScenarioEvidence("api_option_exercise_aapl", marketHoursBlocker); err == nil {
 		t.Fatal("validator accepted a non-attested market-hours blocker")
+	}
+
+	acceptedUnsettled := driverEvidenceStats{
+		kinds: map[string]int{"paper_baseline": 1, "paper_reconciled": 1},
+		events: []driverEvidence{
+			{Kind: "option_exercise_event", Error: "ibkr: api exercise_options code=10349 conn=3: Order TIF was set to DAY based on order preset."},
+			{Kind: "option_exercise_event", Status: "PreSubmitted"},
+		},
+	}
+	if err := validateDriverScenarioEvidence("api_option_exercise_aapl", acceptedUnsettled); err != nil {
+		t.Fatal(err)
+	}
+	acceptedUnsettled.events[0].Error = ""
+	if err := validateDriverScenarioEvidence("api_option_exercise_aapl", acceptedUnsettled); err == nil {
+		t.Fatal("validator accepted an unsettled exercise without the exact preset warning")
 	}
 }
 
@@ -795,6 +837,16 @@ func TestAttestedScenarioBlockersRequireExactRawAPIEvidence(t *testing.T) {
 	optionErr.Code = 201
 	if isAttestedScenarioBlocker("api_option_exercise_aapl", optionScenarioErr, []codec.APIError{optionErr}) {
 		t.Fatal("mismatched option blocker was accepted")
+	}
+
+	acceptedErr := codec.APIError{ReqID: 8, Code: 10349, Message: "Order TIF was set to DAY based on order preset."}
+	acceptedScenarioErr := "AAPL call exercise produced no terminal evidence within 1m0s"
+	if !isAttestedScenarioBlocker("api_option_exercise_aapl", acceptedScenarioErr, []codec.APIError{acceptedErr}) {
+		t.Fatal("exact accepted-but-unsettled exercise was rejected")
+	}
+	acceptedErr.Message = "different"
+	if isAttestedScenarioBlocker("api_option_exercise_aapl", acceptedScenarioErr, []codec.APIError{acceptedErr}) {
+		t.Fatal("mismatched accepted-but-unsettled exercise was accepted")
 	}
 }
 

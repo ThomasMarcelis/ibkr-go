@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
@@ -16,6 +17,28 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/capturelog"
 )
+
+func TestOnlyContextErrorRequiresEveryLeafToBeTheContextCause(t *testing.T) {
+	t.Parallel()
+
+	closeErr := errors.New("forced close failure")
+	for _, test := range []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{name: "cause", err: context.Canceled, want: true},
+		{name: "wrapped cause", err: fmt.Errorf("capture context: %w", context.Canceled), want: true},
+		{name: "joined causes", err: errors.Join(context.Canceled, fmt.Errorf("capture context: %w", context.Canceled)), want: true},
+		{name: "joined operational failure", err: errors.Join(context.Canceled, closeErr)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := onlyContextError(test.err, context.Canceled); got != test.want {
+				t.Fatalf("onlyContextError() = %t, want %t", got, test.want)
+			}
+		})
+	}
+}
 
 func TestRecordFailureFlushesRedactionAndClosesResources(t *testing.T) {
 	listenAddr := reserveTCPAddress(t)

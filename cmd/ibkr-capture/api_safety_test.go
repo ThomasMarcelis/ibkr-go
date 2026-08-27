@@ -60,9 +60,10 @@ func TestOddLotEntitlementRefusalRequiresExactTypedError(t *testing.T) {
 		err  *ibkr.APIError
 		want bool
 	}{
-		{name: "exact", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpQuotes, Message: "Requested market data requires additional subscription for API. See link"}, want: true},
+		{name: "exact subscription required", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpQuotes, Message: "Requested market data requires additional subscription for API. See link"}, want: true},
+		{name: "exact delayed fallback", err: &ibkr.APIError{Code: 2186, OpKind: ibkr.OpQuotes, Message: "Warning: Requested real-time market data requires additional subscription for API. You elected to receive delayed market data instead. To subscribe, see link"}, want: true},
 		{name: "wrong operation", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpHistoricalBars, Message: "Requested market data requires additional subscription for API."}},
-		{name: "wrong code", err: &ibkr.APIError{Code: ibkr.ErrCodeDelayedMarketDataDisplayed, OpKind: ibkr.OpQuotes, Message: "Requested market data requires additional subscription for API."}},
+		{name: "wrong code", err: &ibkr.APIError{Code: ibkr.ErrCodeDelayedMarketDataDisplayed, OpKind: ibkr.OpQuotes, Message: "Warning: Requested real-time market data requires additional subscription for API. You elected to receive delayed market data instead."}},
 		{name: "wrong message", err: &ibkr.APIError{Code: ibkr.ErrCodeAdditionalSubscriptionRequired, OpKind: ibkr.OpQuotes, Message: "unrelated"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -102,9 +103,9 @@ func TestCaptureWSHResultRequiresValidDataOrExactBlocker(t *testing.T) {
 }
 
 // TestCancelsAllowedForRiskClass freezes the single source of truth for which
-// risk classes may mutate order state. Only the four paper-trading classes run
-// the pre/post global cancel; every other class (which may capture against the
-// real-money readonly-live role) must not.
+// risk classes may mutate order state. Only the four paper-trading classes may
+// use the globally gated cancel fallback; every other class (which may capture
+// against the real-money readonly-live role) must not.
 func TestCancelsAllowedForRiskClass(t *testing.T) {
 	t.Parallel()
 
