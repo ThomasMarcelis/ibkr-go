@@ -222,7 +222,7 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 	const feedReqID = 7
 	feedStop := make(chan struct{})
 	reinject := codec.TickPrice{ReqID: feedReqID}
-	e.keyed[feedReqID] = &route{handle: func(_ any, e *engine) {
+	e.keyed[feedReqID] = &route{opKind: OpQuotes, handle: func(_ any, e *engine) {
 		// Refill on the actor goroutine so e.incoming stays non-empty across
 		// drainIncoming iterations. The non-blocking send is a safety valve;
 		// the just-drained slot always has room in steady state.

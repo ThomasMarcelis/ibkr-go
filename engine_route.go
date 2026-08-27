@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
+	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 )
 
@@ -128,6 +129,17 @@ func (e *engine) handleIncoming(msg any) {
 
 	if keyed, ok := msg.(codec.ReqIDer); ok {
 		if route, found := e.keyed[keyed.RequestID()]; found {
+			if msgID, expected, valid := marketDataCallbackOwner(msg, route.opKind); !valid {
+				e.poisonedGeneration = e.transportGeneration
+				e.handleMalformedInbound(codec.MalformedInbound{
+					MsgID: msgID,
+					Err: fmt.Errorf(
+						"request id %d belongs to %s, but the callback belongs to %s",
+						keyed.RequestID(), route.opKind, expected,
+					),
+				})
+				return
+			}
 			route.handle(msg, e)
 			// ExecutionDetail needs dual dispatch: keyed subscription + order handle.
 			if m, ok := msg.(codec.ExecutionDetail); ok {
@@ -210,6 +222,49 @@ func (e *engine) handleIncoming(msg any) {
 		if rt, ok := e.singletons[singletonFA]; ok {
 			rt.handle(msg, e)
 		}
+	}
+}
+
+// marketDataCallbackOwner validates the two request-scoped callback families
+// whose stateful handlers cannot safely ignore each other's rows. A positive
+// request ID naming another active operation is protocol corruption, not a
+// late callback: accepting it would leave that operation open with missing
+// data and could let a later end marker report a partial result as complete.
+func marketDataCallbackOwner(msg any, owner OpKind) (msgID int, expected OpKind, valid bool) {
+	switch msg.(type) {
+	case codec.MarketDepthUpdate:
+		return protocol.InMarketDepth, OpMarketDepth, owner == OpMarketDepth
+	case codec.MarketDepthL2Update:
+		return protocol.InMarketDepthL2, OpMarketDepth, owner == OpMarketDepth
+	case codec.MarketDepthReroute:
+		return protocol.InMarketDepthReroute, OpMarketDepth, owner == OpMarketDepth
+	case codec.TickOptionComputation:
+		return protocol.InTickOptionComputation, OpQuotes,
+			owner == OpQuotes || owner == OpCalcImpliedVol || owner == OpCalcOptionPrice
+	case codec.TickPrice:
+		return protocol.InTickPrice, OpQuotes, owner == OpQuotes
+	case codec.TickSize:
+		return protocol.InTickSize, OpQuotes, owner == OpQuotes
+	case codec.TickGeneric:
+		return protocol.InTickGeneric, OpQuotes, owner == OpQuotes
+	case codec.TickString:
+		return protocol.InTickString, OpQuotes, owner == OpQuotes
+	case codec.TickEFP:
+		return protocol.InTickEFP, OpQuotes, owner == OpQuotes
+	case codec.DeltaNeutralValidation:
+		return protocol.InDeltaNeutralValidation, OpQuotes, owner == OpQuotes
+	case codec.TickSnapshotEnd:
+		return protocol.InTickSnapshotEnd, OpQuotes, owner == OpQuotes
+	case codec.MarketDataType:
+		return protocol.InMarketDataType, OpQuotes, owner == OpQuotes
+	case codec.TickReqParams:
+		return protocol.InTickReqParams, OpQuotes, owner == OpQuotes
+	case codec.TickNews:
+		return protocol.InTickNews, OpQuotes, owner == OpQuotes
+	case codec.MarketDataReroute:
+		return protocol.InMarketDataReroute, OpQuotes, owner == OpQuotes
+	default:
+		return 0, "", true
 	}
 }
 

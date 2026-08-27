@@ -199,6 +199,88 @@ func TestMalformedGenerationPumpDropsBufferedTail(t *testing.T) {
 
 }
 
+func TestMarketDataRouteCollisionPoisonsGeneration(t *testing.T) {
+	// Capture 20260825T201807Z-live_cfd_quote_reroute_v201_positive,
+	// events.jsonl SHA-256
+	// ca8fbdf11d260066fb7cd1c3d60e6e44808a54bf6a8fc678f3597bd71a666f1c.
+	// The unmodified sv225 callback claims request ID 1. Binding that ID to a
+	// depth route is deterministic ownership fault injection over the captured
+	// broker frame; no protocol payload is invented here.
+	// The second case changes only the registered envelope ID from market-data
+	// reroute (291) to market-depth reroute (292). That is deterministic
+	// malformed-input injection over the same captured body and proves the
+	// ownership boundary in both directions without fabricating a broker row.
+	for _, test := range []struct {
+		name    string
+		frame   string
+		owner   OpKind
+		message string
+	}{
+		{name: "quote callback on depth route", frame: "AAAADwAAASMIARD6QBoFU01BUlQ=", owner: OpMarketDepth, message: "msg_id 91"},
+		{name: "depth callback on quote route", frame: "AAAADwAAASQIARD6QBoFU01BUlQ=", owner: OpQuotes, message: "msg_id 92"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			message, err := codec.Decode(225, liveCapturedFrame(t, test.frame))
+			if err != nil {
+				t.Fatal(err)
+			}
+			keyed, ok := message.(codec.ReqIDer)
+			if !ok || keyed.RequestID() != 1 {
+				t.Fatalf("callback = %#v, want request-scoped reroute for request 1", message)
+			}
+
+			e, _ := newObservedMarketDataEngine(t)
+			e.cfg.reconnect = ReconnectOff
+			e.serverVersion = 225
+			e.transportGeneration = 7
+			oldTransport := e.transport
+
+			ownerHandled := false
+			ownerResult := make(chan error, 1)
+			siblingHandled := false
+			siblingResult := make(chan error, 1)
+			e.keyed[1] = &route{
+				opKind:     test.owner,
+				generation: e.transportGeneration,
+				handle:     func(any, *engine) { ownerHandled = true },
+				close:      func(err error) { ownerResult <- err },
+			}
+			e.keyed[2] = &route{
+				opKind:     OpQuotes,
+				generation: e.transportGeneration,
+				handle:     func(any, *engine) { siblingHandled = true },
+				close:      func(err error) { siblingResult <- err },
+			}
+
+			e.handleActorInput(decodedTransportInput{generation: 7, message: message})
+			e.handleActorInput(decodedTransportInput{
+				generation: 7,
+				message:    codec.TickPrice{ReqID: 2, TickType: 1, Price: "311.19"},
+			})
+			if ownerHandled || siblingHandled {
+				t.Fatalf("poisoned generation dispatched owner=%t sibling=%t callbacks", ownerHandled, siblingHandled)
+			}
+			e.handleTransportLoss(transportLoss{transport: oldTransport})
+
+			for name, routeErr := range map[string]error{
+				"owner route":   <-ownerResult,
+				"sibling route": <-siblingResult,
+			} {
+				if !errors.Is(routeErr, ErrInterrupted) {
+					t.Errorf("%s error = %v, want ErrInterrupted", name, routeErr)
+				}
+				protocolErr, ok := errors.AsType[*ProtocolError](routeErr)
+				if !ok || protocolErr.Direction != "inbound" || protocolErr.Message != test.message {
+					t.Errorf("%s error = %T %v, want inbound reroute ProtocolError", name, routeErr, routeErr)
+				}
+				if IsRetryable(routeErr) {
+					t.Errorf("IsRetryable(%s error) = true, want false", name)
+				}
+			}
+		})
+	}
+}
+
 func TestMalformedGenerationResumesStreamOnlyOnFreshTransport(t *testing.T) {
 	e, initialPeer := newObservedMarketDataEngine(t)
 	e.cfg.reconnect = ReconnectAuto

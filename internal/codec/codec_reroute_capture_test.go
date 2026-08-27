@@ -26,22 +26,32 @@ func TestCaptureDecodeMarketDataRerouteProto225Live(t *testing.T) {
 	}
 }
 
-func TestCapturedMarketDataRerouteWithoutRequestIDIsMalformed(t *testing.T) {
+func TestCapturedMarketDataRerouteWithoutUsableRequestIDIsMalformed(t *testing.T) {
 	t.Parallel()
 
-	// Remove protobuf field 1 from the exact live frame above. A registered
-	// callback without its route identity cannot be confined to one request.
-	payload := decodeHex(t, "00000123080110fa401a05534d415254")
-	payload = append(payload[:4:4], payload[6:]...)
-	messages, err := DecodeBatch(225, payload)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(messages) != 1 {
-		t.Fatalf("DecodeBatch() messages = %d, want 1", len(messages))
-	}
-	malformed, ok := messages[0].(MalformedInbound)
-	if !ok || malformed.MsgID != protocol.InMarketDataReroute || !strings.Contains(malformed.Err.Error(), "missing required request id") {
-		t.Fatalf("DecodeBatch() = %#v, want malformed market-data reroute", messages[0])
+	// Mutate only request-id field 1 in the exact live frame above. A registered
+	// callback without a positive route identity cannot be confined to one
+	// request and must poison its transport generation.
+	for _, test := range []struct {
+		name string
+		hex  string
+		want string
+	}{
+		{name: "missing", hex: "0000012310fa401a05534d415254", want: "missing required request id"},
+		{name: "zero", hex: "00000123080010fa401a05534d415254", want: "invalid request id 0"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			messages, err := DecodeBatch(225, decodeHex(t, test.hex))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(messages) != 1 {
+				t.Fatalf("DecodeBatch() messages = %d, want 1", len(messages))
+			}
+			malformed, ok := messages[0].(MalformedInbound)
+			if !ok || malformed.MsgID != protocol.InMarketDataReroute || !strings.Contains(malformed.Err.Error(), test.want) {
+				t.Fatalf("DecodeBatch() = %#v, want malformed market-data reroute containing %q", messages[0], test.want)
+			}
+		})
 	}
 }

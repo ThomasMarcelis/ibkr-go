@@ -354,6 +354,9 @@ func decodeMarketDataRerouteBodyProto(body []byte, label string) (int, int, stri
 			if !hasReqID {
 				return 0, 0, "", fmt.Errorf("%s missing required request id", label)
 			}
+			if reqID <= 0 {
+				return 0, 0, "", fmt.Errorf("%s invalid request id %d", label, reqID)
+			}
 			return reqID, conID, exchange, nil
 		}
 		switch number {
@@ -431,6 +434,9 @@ func decodeMarketDepthMessageProto(body []byte, label string) (int, protoMarketD
 			}
 			if !hasReqID {
 				return 0, protoMarketDepth{}, false, fmt.Errorf("%s missing required request id", label)
+			}
+			if reqID <= 0 {
+				return 0, protoMarketDepth{}, false, fmt.Errorf("%s invalid request id %d", label, reqID)
 			}
 			return reqID, depth, true, nil
 		}
