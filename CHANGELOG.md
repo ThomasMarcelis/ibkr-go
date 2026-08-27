@@ -98,59 +98,48 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## v2.0.0 — 2026-08-23
 
-v2 is now the supported release line; v1 is deprecated. It uses the
-`github.com/ThomasMarcelis/ibkr-go/v2` module path and requires Go 1.26.
+v2 is the supported release line; v1 is deprecated. This is a breaking release
+that requires Go 1.26 and the `github.com/ThomasMarcelis/ibkr-go/v2` module
+path.
 
-This major version deliberately breaks source compatibility to remove
-callback-shaped APIs and ambiguous lifecycles. Operations return typed Go
-results and surface cancellation, reconnection, and uncertainty, so
-applications can make recovery decisions instead of silently accepting
-partial state.
+### Changed
 
-### Highlights
+- The public API now uses typed Go operations and results instead of an
+  `EWrapper`-style callback model.
+- Subscriptions use one ordered `StreamEvent` stream. Connection loss,
+  recovery, snapshot completion, and errors are visible in that stream.
+- Order changes use `Replace`. Order handles remain open for late executions
+  and fee updates until the caller closes them.
+- The supported Gateway range is `server_version` 200–225.
+- Optional broker values use pointers where an omitted value differs from an
+  explicit zero.
 
-- Order handles retain the correct parent and permanent identity across
-  replacement, reconnect, and cross-client callbacks. Request, preview, and
-  order IDs can no longer be recycled into an unrelated operation.
-- Partial bracket admission returns `*OrderRecoveryError`, preserving every
-  admitted order ID and independent placement/cancellation causes while also
-  matching `ErrOrderRecoveryRequired` through `errors.Is`.
-- Subscriptions publish data and recovery boundaries through one ordered event
-  stream. Connectivity loss, restoration, slow consumers, and terminal errors
-  are visible and typed.
-- Supported Gateway versions now span 200–225. Classic and protobuf decoding
-  preserve substantially more broker data, including the difference between
-  an omitted value and an explicit zero.
-- `Order.IncludeOvernight` supports eligible SMART-routed DAY orders and
-  preserves presence in broker echoes.
+### Added
+
+- Partial bracket placement returns `*OrderRecoveryError` with the IDs that
+  reached IBKR, allowing the application to reconcile or cancel them.
+- `Order.IncludeOvernight` supports eligible SMART-routed DAY orders.
 
 ### Migration
 
-Adopting v2 requires changing imports to the `/v2` module path. Subscriptions
-use ordered `StreamEvent` values, `Close` is a command while `Wait`/`Err`
-report outcomes, and order `Modify` is now `Replace`. See
-[Migrating from v1 to v2](docs/migration-v2.md) for focused source changes.
+- Change imports to the `/v2` module path.
+- Read subscription data and lifecycle changes from `Events()`.
+- Treat `Close()` as a command; use `Wait()` or `Err()` for the outcome.
+- Replace calls to order `Modify` with `Replace`.
+- `News().HistoricalAll` was removed. `News().Historical` returns one page.
 
-`News().HistoricalAll` was removed because live evidence does not establish a
-safe pagination cursor. `News().Historical` remains the captured single-page
-operation.
+See [Migrating from v1 to v2](https://github.com/ThomasMarcelis/ibkr-go/blob/v2.0.0/docs/migration-v2.md)
+for examples.
 
-### Known limitations and follow-up
+### Known issues
 
-- A historical bar update whose signed count is `-1` is currently dropped by
-  the classic decoder.
-- A malformed registered callback followed by a buffered end marker can
-  complete a partial snapshot instead of retiring that connection generation.
+- Historical streams from older supported Gateways can miss an update when
+  IBKR reports a count of `-1`.
+- A malformed broker message can allow a partial snapshot to appear complete.
 
-Positive live validation is also still pending for `IncludeOvernight`, a
-successful fee-bearing regulatory snapshot, and manual paper-TWS `orderBound`;
-the planned seven-day soak was not run. These gaps are disclosed rather than
-presented as completed evidence.
-
-v2.0.0 gives deprecated v1 users a supported migration target now. Its
-deterministic, replay, race, API, fuzz, and vulnerability gates pass; the
-remaining compatible corrections will ship as v2.0.1. The v2.0.0 tag will not
-be moved or reused after publication.
+Both correctness issues are fixed in v2.0.1; use the latest v2 patch release.
+At v2.0.0 release time, live validation was still incomplete for
+`IncludeOvernight`, regulatory snapshots, and manual TWS `orderBound`.
 
 ## v2.0.0-rc.3 — 2026-07-16
 
