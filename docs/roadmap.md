@@ -7,8 +7,10 @@ TWS/Gateway socket protocol. The runtime stays pure Go: no cgo, no C++
 toolchain, no SDK dependency on the production import path. See
 [`CONTRIBUTING.md`](../CONTRIBUTING.md) for the public development policy and
 [`docs/architecture.md`](architecture.md) for the runtime model.
-The stable release's disclosed evidence gaps are tracked in
-[`v2-release-readiness.md`](v2-release-readiness.md).
+The stable release's disclosed evidence gaps are recorded in
+[`v2-release-readiness.md`](v2-release-readiness.md). Their ordered promotion
+work and acceptance gates are tracked in the
+[`v2.0.2 coverage plan`](v2.0.2-coverage-plan.md).
 
 The goal is end-to-end coverage of the IBKR TWS/Gateway socket surface that
 the official C++ SDK exposes for free entitlements — every request, every
@@ -30,7 +32,7 @@ capture tool, never as a runtime engine:
 Live Gateway behavior remains the source of truth. When SDK behavior and live
 behavior disagree, live wins.
 
-## Near-Term Verification Plan
+## Near-Term v2.0.2 Verification Plan
 
 The maintainer lab uses two local Gateway roles:
 
@@ -41,13 +43,16 @@ The maintainer lab uses two local Gateway roles:
   modification, cancellation, flattening, reconnect-with-active-order, and
   campaign evidence.
 
-Before the next release-quality sweep, run `cmd/ibkr-doctor` against both roles,
+Before each v2.0.2 release-quality sweep, run `cmd/ibkr-doctor` against both roles,
 refresh the executable capture catalog with `cmd/ibkr-capture -list-json`, and
 record market-open captures through `scripts/record-scenarios.sh`. The script
 derives each scenario's role from the catalog risk class, keeping the capture
 target in one place. Every promoted behavior must still follow the
 live-evidence path: live run, capture verification, sanitized transcript,
 public replay test, and updates to the coverage matrix and tracker.
+The coverage plan owns phase ordering, the 20-pair decoder attestation queue,
+and the exact v2.0.2 completion criteria; this roadmap owns the longer-lived
+project direction.
 
 Current IBKR baseline and drift to check first:
 

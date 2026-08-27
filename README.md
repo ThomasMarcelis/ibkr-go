@@ -475,7 +475,9 @@ in the coverage matrix rather than being overclaimed.
 The v2.0.0 release remains unchanged. v2.0.1 closes
 malformed-generation retirement and raises the minimum Gateway version while
 retaining explicit live-evidence limitations in the
-[v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md).
+[v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md). Descendant
+coverage work is organized by the evidence and safety gates in the
+[v2.0.2 coverage plan](docs/v2.0.2-coverage-plan.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full

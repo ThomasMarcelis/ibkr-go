@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Development
+
+- The default public-API check now uses the released v2.0.1 manifest as its
+  compatibility baseline. Additive v2.0.2 APIs may enter normal development,
+  while incompatible changes still fail; exact mode continues to freeze the
+  v2.0.1 surface.
+- Added an evidence-gated v2.0.2 coverage plan that inventories every current
+  candidate, blocker, and unattested decoder layout without changing the
+  released v2.0.1 evidence or retrying its one-shot regulatory request.
+
 ## v2.0.1 — 2026-08-27
 
 ### Changed

@@ -1,12 +1,24 @@
 # Live Test Execution Tracker
 
-Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). This file
-tracks only the current v2.0.1 campaign. Older server-version runs remain in
-repository history, not in the active support ledger.
+Companion to [`live-coverage-matrix.md`](live-coverage-matrix.md). New campaign
+work follows the [`v2.0.2 coverage plan`](v2.0.2-coverage-plan.md). The v2.0.1
+section below is the immutable starting baseline; older server-version runs
+remain in repository history, not in the active support ledger.
 
 Last updated: 2026-08-27.
 
-## v2.0.1 release status
+## v2.0.2 planning baseline
+
+- Start from 125 catalog scenarios: 91 promoted, 26 candidates, and 8 blocked.
+- Preserve 99 tracked sv208+ transcripts and 328 verifier-clean sv208+ raw
+  captures until a vertical promotion deliberately replaces an artifact.
+- Close or explicitly disposition all 20 pending decoder/layout attestations.
+- Expand the exact sv208–225 matrix from handshake/`CurrentTime` reachability
+  to the request family or field introduced at each boundary.
+- Never repeat the consumed regulatory snapshot, and never automate manual TWS
+  evidence through GUI/CUA tooling.
+
+## v2.0.1 release baseline
 
 - Production advertises and accepts exactly `server_version` 208–225.
 - The checked-in corpus has 99 raw-frame transcripts: 95 at sv225, exact
