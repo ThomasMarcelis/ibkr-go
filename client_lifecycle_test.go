@@ -9,6 +9,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -725,7 +726,7 @@ func TestSubscriptionCloseImmediatelyAfterCreate(t *testing.T) {
 		// Subscription creation owns transport admission, not a completed
 		// socket write. Immediate pre-snapshot retirement may therefore close
 		// before the test host observes the admitted request.
-		if err := host.Wait(); err != nil && !errors.Is(err, io.EOF) {
+		if err := host.Wait(); err != nil && !isImmediateReplayPeerClose(err) {
 			t.Fatalf("host.Wait() error = %v", err)
 		}
 	}()
@@ -742,6 +743,14 @@ func TestSubscriptionCloseImmediatelyAfterCreate(t *testing.T) {
 	if err := sub.Wait(); err != nil {
 		t.Fatalf("sub.Wait() error = %v", err)
 	}
+}
+
+func isImmediateReplayPeerClose(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrClosedPipe) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.EPIPE) ||
+		errors.Is(err, syscall.ECONNRESET)
 }
 
 // TestSingletonSubscriptionRejectsSecond verifies that a second positions
