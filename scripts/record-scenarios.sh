@@ -110,12 +110,14 @@ deduplicated=()
 for entry in "${SCENARIOS[@]}"; do
     scenario_name="${entry%|*}"
     previous_entry=""
-    for candidate in "${deduplicated[@]}"; do
-        if [ "${candidate%|*}" = "$scenario_name" ]; then
-            previous_entry="$candidate"
-            break
-        fi
-    done
+    if [ ${#deduplicated[@]} -gt 0 ]; then
+        for candidate in "${deduplicated[@]}"; do
+            if [ "${candidate%|*}" = "$scenario_name" ]; then
+                previous_entry="$candidate"
+                break
+            fi
+        done
+    fi
     if [ -n "$previous_entry" ]; then
         if [ "$previous_entry" != "$entry" ]; then
             echo "conflicting entries for scenario $scenario_name: $previous_entry and $entry" >&2
