@@ -6,7 +6,7 @@ repository history, not in the active support ledger.
 
 Last updated: 2026-08-27.
 
-## Candidate status
+## v2.0.1 release status
 
 - Production advertises and accepts exactly `server_version` 208–225.
 - The checked-in corpus has 99 raw-frame transcripts: 95 at sv225, exact
@@ -27,8 +27,8 @@ Last updated: 2026-08-27.
   API harness was armed.
 - The complete deterministic, shuffled, race, lint, exact-API, timed-fuzz,
   vulnerability, raw-capture, and transcript-provenance gate passes on the
-  candidate tree. v2.0.1 remains unready because the evidence gates below are
-  unresolved, not because a command gate is being treated as proof.
+  release tree. The remaining gaps below are accepted known limitations and
+  v2.0.2 coverage targets; they are not presented as positive proof.
 
 ## Current live roles
 
@@ -96,8 +96,8 @@ proves the behavior supported by the current Gateway:
 The public `*bool` remains necessary because explicit true and explicit false
 encode differently. The broker's fresh-false canonical absence is useful
 blocker evidence, but it does not prove that false survives a replacement and
-echoes distinctly. The scenario therefore remains a candidate and a v2.0.1
-acceptance gate; the SDK result gives no basis for a speculative codec change.
+echoes distinctly. The scenario remains a v2.0.2 evidence target; the SDK
+result gives no basis for a speculative codec change in v2.0.1.
 
 ## Regulatory snapshot no-retry record
 
@@ -114,7 +114,7 @@ SHA-256
 reports `Billable=0.00 EUR` and is replay-promoted. This is the recorded fee
 reconciliation for the attempt.
 
-## Remaining acceptance gates
+## v2.0.2 follow-up queue
 
 - Disposition all 20 pending supported decoder/layout attestations with live
   positive evidence or exact typed account/entitlement blockers.
@@ -122,8 +122,6 @@ reconciliation for the attempt.
   position delta remains, and both new executions have correlated fee reports.
 - Keep the regulatory-snapshot path permanently disabled; the sole authorized
   attempt is consumed and must never be repeated.
-- Preserve the exact verified tree in reviewable local changes. Any correctness
-  edit requires rerunning the proportional command gates before publication.
-
-No tag, push, release publication, or remote mutation is authorized by this
-tracker.
+- Add positive public replays only from verified current captures; exact
+  account, entitlement, market-state, and TWS-only blockers remain distinct
+  from successful callback evidence.

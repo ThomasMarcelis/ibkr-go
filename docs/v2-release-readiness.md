@@ -1,14 +1,14 @@
-# v2.0.1 release readiness
+# v2.0.1 release record
 
-v2.0.1 is the current correction line. It deliberately supports exactly
+v2.0.1 is the released correction line. It deliberately supports exactly
 `server_version` 208–225; Gateways negotiating 200–207 must upgrade or remain
 on v2.0.0. The tagged v2.0.0 history, API manifest, and release evidence stay
 immutable.
 
-This document is a readiness checklist, not a release announcement. No tag,
-push, or publication is authorized by completing it.
+This document records the evidence accepted for the release and distinguishes
+known limitations from positive proof.
 
-## Completed candidate work
+## Completed release work
 
 - Production handshake validation accepts 208–225 and rejects 207 and 226.
 - Protocol families already protobuf-only at the supported floor no longer
@@ -32,21 +32,22 @@ push, or publication is authorized by completing it.
 - The sole authorized regulatory attempt is permanently disabled in live
   tests. The post-attempt account-update capture reports `Billable=0.00 EUR`.
 - The v2.0.0 API manifest remains unchanged. `v2.0.1.api` separately freezes
-  the candidate surface, including the intentional `IncludeOvernight` pointer
+  the release surface, including the intentional `IncludeOvernight` pointer
   break and the code-2188 constant.
 - The complete build, vet, lint, shuffled, race, exact-API, timed-fuzz,
   vulnerability, capture, and transcript-provenance command gate passes. Both
   sv225 role doctors and the explicitly non-mutating safe live suites pass.
   The regulatory request was not repeated.
 
-## Open evidence gates
+## Known limitations and v2.0.2 evidence backlog
 
 - `IncludeOvernight=true` has a current placement and broker echo. The required
   true-to-false replacement instead returned exact code 462 through both
   ibkr-go and SDK 10.48.01 and retained true. A fresh explicit-false placement
   was accepted and broker-canonicalized to an absent field with `TIF=DAY`.
   This proves the wire distinction and broker blocker, but not a distinct false
-  replacement echo; the scenario remains a candidate.
+  replacement echo. v2.0.1 exposes the evidenced pointer semantics without
+  claiming broker acceptance of that replacement.
 - Positive current market-depth evidence and a terminal option-exercise replay
   remain unavailable. The guarded sv225 option campaign bought one qualified
   ITM AAPL call and the exercise instruction reached `PreSubmitted` after exact
@@ -81,9 +82,9 @@ push, or publication is authorized by completing it.
   `d7063b2455654c8aed9ecd6c9f395addf9f95a2bf70a08eff7af99bc28707f6c`)
   reports `Billable=0.00 EUR` and is replay-promoted.
 
-## Candidate command gate
+## Release command gate
 
-Run on the exact committed candidate tree:
+The exact release tree passed:
 
 ```bash
 go mod tidy -diff
@@ -108,6 +109,6 @@ the regulatory snapshot.
 The command block, all 328 raw captures, transcript provenance, both doctors,
 and both safe role suites passed on 2026-08-27. Final paper snapshots contain no
 ordinary open order and match the reconciled position and execution/fee
-baseline. These results close the mechanical candidate gate; they do not turn
+baseline. These results close the mechanical release gate; they do not turn
 the open entitlement, broker, and manual-interaction gaps above into positive
 evidence.

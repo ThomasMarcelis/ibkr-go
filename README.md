@@ -462,7 +462,7 @@ stressed, and extended without guessing. For more on that approach, see
 ## Status
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
-domains through an idiomatic Go facade. The unreleased v2.0.1 line negotiates
+domains through an idiomatic Go facade. The v2.0.1 release negotiates
 exactly `server_version` 208..225; versions 200..207 are intentionally rejected.
 Protobuf migrations from 208 through 213 are implemented. Inbound sv214
 `Z` timestamps are accepted, but outbound sv214 suffix behavior remains
@@ -472,9 +472,9 @@ intentional exclusions are documented in the
 entitlement-dependent callbacks and remaining advanced branches stay explicit
 in the coverage matrix rather than being overclaimed.
 
-The stable v2.0.0 release remains unchanged. The v2.0.1 candidate closes
+The v2.0.0 release remains unchanged. v2.0.1 closes
 malformed-generation retirement and raises the minimum Gateway version while
-retaining explicit live-evidence gates in the
+retaining explicit live-evidence limitations in the
 [v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`

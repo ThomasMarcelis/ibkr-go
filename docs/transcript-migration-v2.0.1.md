@@ -1,8 +1,7 @@
 # v2.0.1 transcript migration inventory
 
-This is the deletion and readiness gate for the move to `server_version`
-208–225. It records the working tree as of 2026-08-27. It does not claim that
-v2.0.1 is release-ready.
+This is the completed deletion and evidence inventory for the move to
+`server_version` 208–225. It records the v2.0.1 release tree as of 2026-08-27.
 
 ## Current tracked corpus
 
@@ -96,8 +95,8 @@ counterpart after the floor increase:
 
 These pre208 files were removed so the active test corpus cannot imply support
 from an unsupported protocol version. They are not counted as positive sv208+
-proof, and their absence keeps v2.0.1 unready where the behavior remains in
-scope:
+proof. Their positive replacements remain follow-up coverage work where the
+behavior stays in scope:
 
 - `api_open_orders_refresh_aapl.txt`
 - `api_option_exercise_not_itm_aapl.txt`

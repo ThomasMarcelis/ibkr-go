@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## v2.0.1
+## v2.0.1 — 2026-08-27
 
 ### Changed
 
@@ -44,7 +44,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   the initial symbolic request, protobuf reroute, conID request, delayed-data
   notice, and positive high, low, volume, and close callbacks.
 - The full build, vet, lint, shuffled, race, exact-API, fuzz, vulnerability,
-  capture, and transcript-provenance gates pass on the candidate tree. Both
+  capture, and transcript-provenance gates pass on the release tree. Both
   sv225 role doctors and the explicitly non-mutating live suites pass; exact
   entitlement, account, and market-state blockers remain skips rather than
   positive proof. The fee-bearing regulatory path is permanently disabled and
@@ -55,7 +55,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   `TIF=DAY`. SDK 10.48.01 reproduces the replacement rejection. This does not
   satisfy the required distinct false replacement echo, so the scenario
   remains a candidate rather than positive completion evidence.
-- v2.0.1 is not yet release-ready. A guarded option-exercise campaign bought
+- A guarded option-exercise campaign bought
   one live-qualified ITM AAPL call, received exact preset warning 10349 and
   `PreSubmitted` for the exercise instruction, but no terminal exercise status.
   Targeted and global paper cleanup were fenced; the final direct cancel
@@ -63,9 +63,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   exactly match the pre-cleanup position and execution/fee rows and contain no
   ordinary open order, but no terminal exercise callback was observed. This is
   positive admission and reconciliation evidence, not completed exercise
-  proof. Entitled depth evidence, the false replacement echo, and 20 request-
-  family decoder/layout attestations remain gates. No tag or release is implied
-  by this entry.
+  proof.
+
+### Known limitations
+
+- The broker rejects an `IncludeOvernight=true` to explicit-false replacement
+  with code 462. SDK 10.48.01 reproduces the rejection; v2.0.1 does not claim a
+  distinct false replacement echo.
+- Current accounts do not provide positive entitled market-depth callbacks,
+  and the option-exercise campaign did not produce a terminal settlement
+  callback. These are evidence gaps, not successful-path claims.
+- Twenty supported decoder/layout pairs remain without positive raw callback
+  attestation. The exact-version matrix proves negotiation and `CurrentTime`
+  at sv208–225, not every request-family transition.
+- Manual paper-TWS `orderBound` remains unproven because no manual TWS order
+  was submitted while the socket harness was armed.
 
 ## v2.0.0 — 2026-08-23
 
