@@ -4,9 +4,7 @@ set -euo pipefail
 readonly module=github.com/ThomasMarcelis/ibkr-go/v2
 readonly apidiff=golang.org/x/exp/cmd/apidiff@v0.0.0-20260709172345-9ea1abe57597
 readonly root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-readonly stable_baseline="$root/testdata/api/v2.0.0.api"
-readonly candidate_baseline="$root/testdata/api/v2.0.1.api"
-readonly approved_breaks="$root/testdata/api/approved-breaks-after-v2.0.0.txt"
+readonly baseline="$root/testdata/api/v2.0.1.api"
 current="$(mktemp)"
 trap 'rm -f "$current"' EXIT
 
@@ -26,20 +24,11 @@ fi
 cd "$root"
 go run "$apidiff" -w "$current" "$module"
 if "$exact"; then
-	baseline="$candidate_baseline"
 	changes="$(go run "$apidiff" "$baseline" "$current")"
-	message='public API differs from the v2.0.1 candidate manifest'
+	message='public API differs from the released v2.0.1 manifest'
 else
-	baseline="$stable_baseline"
-	incompatible="$(go run "$apidiff" -incompatible "$baseline" "$current")"
-	set +e
-	changes="$(printf '%s\n' "$incompatible" | grep -Fvx -f "$approved_breaks")"
-	grep_status=$?
-	set -e
-	if (( grep_status > 1 )); then
-		exit "$grep_status"
-	fi
-	message='incompatible public API changes since v2.0.0'
+	changes="$(go run "$apidiff" -incompatible "$baseline" "$current")"
+	message='incompatible public API changes since v2.0.1'
 fi
 if [[ -n "$changes" ]]; then
 	printf '%s:\n%s\n' "$message" "$changes" >&2

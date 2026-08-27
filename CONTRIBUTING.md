@@ -20,10 +20,10 @@ go test ./...
 ```
 
 All six must pass locally before opening a pull request. The default API check
-rejects incompatible changes from the frozen v2.0.0 baseline while allowing
-additive APIs and deliberately approved clean breaks enumerated under
-`testdata/api`. `./scripts/check-api.sh --exact` instead freezes the complete
-v2.0.1 candidate surface; the v2.0.0 baseline remains unchanged.
+rejects incompatible changes from the frozen v2.0.1 release baseline while
+allowing additive APIs for the next release. `./scripts/check-api.sh --exact`
+instead requires the complete public surface to equal v2.0.1 exactly. The
+historical v2.0.0 manifest remains unchanged.
 CI also checks module tidiness and verification, fuzz-target inventory, a
 pure-Go 386 build, vulnerabilities, shuffled tests across supported host
 platforms, and the race detector. See `.github/workflows/ci.yml` for the exact
