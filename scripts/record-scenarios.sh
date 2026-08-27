@@ -106,18 +106,23 @@ if [ ${#SCENARIOS[@]} -eq 0 ]; then
     exit 1
 fi
 
-declare -A scenario_entries=()
 deduplicated=()
 for entry in "${SCENARIOS[@]}"; do
     scenario_name="${entry%|*}"
-    if [ -n "${scenario_entries[$scenario_name]+set}" ]; then
-        if [ "${scenario_entries[$scenario_name]}" != "$entry" ]; then
-            echo "conflicting entries for scenario $scenario_name: ${scenario_entries[$scenario_name]} and $entry" >&2
+    previous_entry=""
+    for candidate in "${deduplicated[@]}"; do
+        if [ "${candidate%|*}" = "$scenario_name" ]; then
+            previous_entry="$candidate"
+            break
+        fi
+    done
+    if [ -n "$previous_entry" ]; then
+        if [ "$previous_entry" != "$entry" ]; then
+            echo "conflicting entries for scenario $scenario_name: $previous_entry and $entry" >&2
             exit 1
         fi
         continue
     fi
-    scenario_entries[$scenario_name]="$entry"
     deduplicated+=("$entry")
 done
 SCENARIOS=("${deduplicated[@]}")

@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ## Unreleased
 
+### Fixed
+
+- The recorder batch workflow no longer requires Bash 4 associative arrays,
+  so its deduplication and safety tests also run under macOS Bash 3.2.
+
 ### Development
 
 - The default public-API check now uses the released v2.0.1 manifest as its
