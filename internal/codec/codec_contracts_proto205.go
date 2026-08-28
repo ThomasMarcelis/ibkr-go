@@ -391,7 +391,7 @@ func decodeContractDetailsProto(body []byte) (BondContractDetails, error) {
 		case 1, 2, 3, 4, 7, 8, 9, 10, 11, 12, 13, 14, 15,
 			19, 20, 21, 22, 23, 24, 25, 26,
 			27, 28, 29, 30, 31, 32, 33, 37, 38, 39, 40, 41, 42, 43,
-			44, 45, 46, 47, 49, 53, 54, 55, 57, 59, 60, 61, 62, 63, 64:
+			44, 45, 46, 47, 49, 53, 54, 55, 57, 59, 60, 61, 62, 63, 64, 65:
 			value, err := consumeProtoBytes(&body, typ)
 			if err != nil {
 				return BondContractDetails{}, protoFieldError("contract details", number, err)
@@ -498,6 +498,8 @@ func decodeContractDetailsProto(body []byte) (BondContractDetails, error) {
 				m.LastPricePrecision = text
 			case 64:
 				m.LastSizePrecision = text
+			case 65:
+				m.SettlementMethod = text
 			}
 		default:
 			if err := skipProtoField(&body, number, typ); err != nil {

@@ -221,6 +221,7 @@ type ContractDetails struct {
 	LastTradeDate             string // explicit YYYYMMDD date supplied by the server
 	LastTradeTime             string // local HH:MM:SS component; use TimeZoneID for its zone
 	StockType                 string
+	SettlementMethod          string           // delivery or cash settlement method supplied by IBKR
 	MinSize                   *decimal.Decimal // nil when IBKR omits the size rule
 	SizeIncrement             *decimal.Decimal // nil when IBKR omits the size rule
 	SuggestedSizeIncrement    *decimal.Decimal // nil when IBKR omits the size rule

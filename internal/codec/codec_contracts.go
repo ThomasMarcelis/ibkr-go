@@ -70,6 +70,7 @@ type ContractDetails struct {
 	LastTradeDate             string
 	LastTradeTime             string
 	StockType                 string
+	SettlementMethod          string
 	MinSize                   string
 	SizeIncrement             string
 	SuggestedSizeIncrement    string

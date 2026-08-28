@@ -113,6 +113,42 @@ func TestContractDetailsAAPLOptionReplay(t *testing.T) {
 	}
 }
 
+func TestContractDetailsAAPLOptionSettlementReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "contract_details_settlement_aapl_opt.txt")
+	defer cleanupClientHost(t, client, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// The source campaign qualified the current option expiry before asking
+	// for its contract ladder, so retain that captured request sequence.
+	if _, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+		UnderlyingSymbol:  "AAPL",
+		UnderlyingSecType: ibkr.SecTypeStock,
+		UnderlyingConID:   265598,
+	}); err != nil {
+		t.Fatalf("SecDefOptParams() error = %v", err)
+	}
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol:   "AAPL",
+		SecType:  ibkr.SecTypeOption,
+		Expiry:   "20260828",
+		Exchange: "SMART",
+		Currency: "USD",
+	})
+	if err != nil {
+		t.Fatalf("ContractDetails() error = %v", err)
+	}
+	if len(details) != 1 {
+		t.Fatalf("details len = %d, want retained captured row", len(details))
+	}
+	if details[0].SecType != ibkr.SecTypeOption || details[0].SettlementMethod != "Physical Delivery" {
+		t.Fatalf("details = secType %q settlement %q, want OPT/Physical Delivery", details[0].SecType, details[0].SettlementMethod)
+	}
+}
+
 func TestContractDetailsAppleBondsReplay(t *testing.T) {
 	t.Parallel()
 
@@ -267,6 +303,32 @@ func TestContractDetailsESFutureReplay(t *testing.T) {
 		if d.MinTick.String() != "0.25" || d.TimeZoneID != "US/Central" {
 			t.Errorf("details[%d] terms = %s/%q, want 0.25/US/Central", i, d.MinTick.String(), d.TimeZoneID)
 		}
+	}
+}
+
+func TestContractDetailsESFutureSettlementReplay(t *testing.T) {
+	t.Parallel()
+
+	client, host := newClient(t, "contract_details_settlement_es_fut.txt")
+	defer cleanupClientHost(t, client, host)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol:   "ES",
+		SecType:  ibkr.SecTypeFuture,
+		Exchange: "CME",
+		Currency: "USD",
+	})
+	if err != nil {
+		t.Fatalf("ContractDetails() error = %v", err)
+	}
+	if len(details) != 1 {
+		t.Fatalf("details len = %d, want retained captured row", len(details))
+	}
+	if details[0].SecType != ibkr.SecTypeFuture || details[0].SettlementMethod != "Cash" {
+		t.Fatalf("details = secType %q settlement %q, want FUT/Cash", details[0].SecType, details[0].SettlementMethod)
 	}
 }
 

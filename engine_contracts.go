@@ -479,6 +479,7 @@ func fromCodecContractDetails(m codec.ContractDetails) (ContractDetails, error) 
 		LastTradeDate:             m.LastTradeDate,
 		LastTradeTime:             m.LastTradeTime,
 		StockType:                 m.StockType,
+		SettlementMethod:          m.SettlementMethod,
 		MinSize:                   minSize,
 		SizeIncrement:             sizeIncrement,
 		SuggestedSizeIncrement:    suggestedSizeIncrement,
