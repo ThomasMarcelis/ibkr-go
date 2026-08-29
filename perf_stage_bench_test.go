@@ -272,7 +272,7 @@ func BenchmarkActorQuoteDispatchDelivery(b *testing.B) {
 	if e.keyed[1] != ownedRoute {
 		b.Fatal("quote route ownership changed during delivery")
 	}
-	reportMessageMetrics(b, uint64(produced), before, after)
+	reportUpdateMetrics(b, uint64(produced), before, after)
 
 	// Use the production route-owned cancellation path outside timing.
 	sub.Close()
@@ -318,30 +318,34 @@ const (
 )
 
 type benchStreamServer struct {
-	addr   string
-	ready  chan struct{}
-	start  chan struct{}
-	credit chan struct{}
-	sentAt chan time.Time
-	result chan error
+	addr       string
+	ready      chan struct{}
+	start      chan int
+	credit     chan struct{}
+	sentAt     chan time.Time
+	result     chan error
+	creditSize int
+	latency    bool
 }
 
-func newBenchStreamServer(tb testing.TB, messagesPerOp, creditSize int, shape benchWriteShape, latency bool) *benchStreamServer {
+func newBenchStreamServer(tb testing.TB, creditSize int, shape benchWriteShape, latency bool) *benchStreamServer {
 	tb.Helper()
-	if messagesPerOp <= 0 || creditSize <= 0 || messagesPerOp%creditSize != 0 {
-		tb.Fatalf("invalid stream workload: messages=%d credit=%d", messagesPerOp, creditSize)
+	if creditSize <= 0 {
+		tb.Fatalf("invalid stream credit size %d", creditSize)
 	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		tb.Fatal(err)
 	}
 	server := &benchStreamServer{
-		addr:   ln.Addr().String(),
-		ready:  make(chan struct{}),
-		start:  make(chan struct{}),
-		credit: make(chan struct{}),
-		sentAt: make(chan time.Time, creditSize),
-		result: make(chan error, 1),
+		addr:       ln.Addr().String(),
+		ready:      make(chan struct{}),
+		start:      make(chan int),
+		credit:     make(chan struct{}),
+		sentAt:     make(chan time.Time, creditSize),
+		result:     make(chan error, 1),
+		creditSize: creditSize,
+		latency:    latency,
 	}
 	var coalesced []byte
 	if shape == benchWriteCoalesced {
@@ -351,12 +355,12 @@ func newBenchStreamServer(tb testing.TB, messagesPerOp, creditSize int, shape be
 		}
 	}
 	go func() {
-		server.result <- server.serve(ln, messagesPerOp, creditSize, shape, latency, coalesced)
+		server.result <- server.serve(ln, shape, coalesced)
 	}()
 	return server
 }
 
-func (s *benchStreamServer) serve(ln net.Listener, messagesPerOp, creditSize int, shape benchWriteShape, latency bool, coalesced []byte) error {
+func (s *benchStreamServer) serve(ln net.Listener, shape benchWriteShape, coalesced []byte) error {
 	defer ln.Close()
 
 	conn, err := ln.Accept()
@@ -395,10 +399,14 @@ func (s *benchStreamServer) serve(ln net.Listener, messagesPerOp, creditSize int
 	}
 	close(s.ready)
 
-	for range s.start {
-		for first := 0; first < messagesPerOp; first += creditSize {
-			if err := writeBenchFrames(conn, first, creditSize, shape, latency, s.sentAt, coalesced); err != nil {
-				return fmt.Errorf("write messages %d..%d: %w", first, first+creditSize, err)
+	for messageCount := range s.start {
+		if messageCount <= 0 {
+			return fmt.Errorf("invalid stream workload size %d", messageCount)
+		}
+		for first := 0; first < messageCount; first += s.creditSize {
+			count := min(s.creditSize, messageCount-first)
+			if err := writeBenchFrames(conn, first, count, shape, s.latency, s.sentAt, coalesced, s.creditSize); err != nil {
+				return fmt.Errorf("write messages %d..%d: %w", first, first+count, err)
 			}
 			<-s.credit
 		}
@@ -414,10 +422,19 @@ func (s *benchStreamServer) serve(ln net.Listener, messagesPerOp, creditSize int
 	return nil
 }
 
-func writeBenchFrames(conn net.Conn, first, count int, shape benchWriteShape, latency bool, sentAt chan<- time.Time, coalesced []byte) error {
+func writeBenchFrames(conn net.Conn, first, count int, shape benchWriteShape, latency bool, sentAt chan<- time.Time, coalesced []byte, coalescedCount int) error {
 	switch shape {
 	case benchWriteCoalesced:
-		return writeBenchBytes(conn, coalesced)
+		if count == coalescedCount {
+			return writeBenchBytes(conn, coalesced)
+		}
+		for i := range count {
+			frame := benchFramedTicks[(first+i)%len(benchFramedTicks)]
+			if err := writeBenchBytes(conn, frame); err != nil {
+				return err
+			}
+		}
+		return nil
 	case benchWriteFrames:
 		for i := range count {
 			if latency {
@@ -540,34 +557,58 @@ func closeBenchStream(tb testing.TB, stream benchStreamClient, server *benchStre
 	stream.cancel()
 }
 
-func reportMessageMetrics(b *testing.B, messages uint64, before, after runtime.MemStats) {
-	if messages == 0 {
+func preflightBenchStream(tb testing.TB, server *benchStreamServer, stream benchStreamClient) {
+	tb.Helper()
+	server.start <- len(benchQuoteSequence)
+	for i := range benchQuoteSequence {
+		event, ok := <-stream.sub.Events()
+		if !ok {
+			tb.Fatalf("preflight stream ended at update %d: %v", i, stream.sub.Err())
+		}
+		if server.latency {
+			<-server.sentAt
+		}
+		validateBenchQuoteEvent(tb, i, event)
+		if (i+1)%server.creditSize == 0 || i+1 == len(benchQuoteSequence) {
+			server.credit <- struct{}{}
+		}
+	}
+}
+
+func reportUpdateMetrics(b *testing.B, updates uint64, before, after runtime.MemStats) {
+	if updates == 0 {
 		return
 	}
 	elapsed := b.Elapsed()
-	b.ReportMetric(float64(elapsed.Nanoseconds())/float64(messages), "ns/msg")
-	b.ReportMetric(float64(messages)/elapsed.Seconds(), "msgs/sec")
-	b.ReportMetric(float64(after.TotalAlloc-before.TotalAlloc)/float64(messages), "B/msg")
-	b.ReportMetric(float64(after.Mallocs-before.Mallocs)/float64(messages), "allocs/msg")
+	b.ReportMetric(0, "ns/op")
+	b.ReportMetric(float64(elapsed.Nanoseconds())/1e3/float64(updates), "us/update")
+	b.ReportMetric(float64(updates)/elapsed.Seconds(), "updates/s")
+	b.ReportMetric(float64(after.TotalAlloc-before.TotalAlloc)/float64(updates), "B/update")
+	b.ReportMetric(float64(after.Mallocs-before.Mallocs)/float64(updates), "allocs/update")
 }
 
 func runBenchSteadyStream(b *testing.B, messagesPerOp, creditSize, queueSize int, shape benchWriteShape) {
-	server := newBenchStreamServer(b, messagesPerOp, creditSize, shape, false)
+	if messagesPerOp%len(benchQuoteSequence) != 0 {
+		b.Fatalf("stream workload %d is not a whole captured sequence", messagesPerOp)
+	}
+	server := newBenchStreamServer(b, creditSize, shape, false)
 	stream := dialBenchStream(b, server, queueSize)
+	preflightBenchStream(b, server, stream)
 
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
 	total := 0
+	var last StreamEvent[QuoteUpdate]
 	for b.Loop() {
-		server.start <- struct{}{}
+		server.start <- messagesPerOp
 		for i := range messagesPerOp {
 			event, ok := <-stream.sub.Events()
 			if !ok {
 				b.Fatalf("stream ended at message %d: %v", i, stream.sub.Err())
 			}
-			validateBenchQuoteEvent(b, total, event)
+			last = event
 			total++
-			if (i+1)%creditSize == 0 {
+			if (i+1)%creditSize == 0 || i+1 == messagesPerOp {
 				server.credit <- struct{}{}
 			}
 		}
@@ -579,48 +620,48 @@ func runBenchSteadyStream(b *testing.B, messagesPerOp, creditSize, queueSize int
 	if err := stream.sub.Err(); err != nil {
 		b.Fatalf("subscription error after stream: %v", err)
 	}
-	reportMessageMetrics(b, uint64(total), before, after)
+	validateBenchQuoteEvent(b, total-1, last)
+	reportUpdateMetrics(b, uint64(total), before, after)
 	closeBenchStream(b, stream, server)
 }
 
-// BenchmarkE2EQuoteStreamTCP keeps one real TCP session and quote subscription
-// alive for each benchmark process. One steady-state operation is exactly
-// 100,000 validated data frames.
-func BenchmarkE2EQuoteStreamTCP(b *testing.B) {
-	b.Run("steady/default_queue", func(b *testing.B) {
+// BenchmarkPublicQuoteStream measures the public client path over loopback TCP.
+// The steady-state and fragmentation operations contain exactly 100,000
+// capture-backed quote updates; the diagnostic cases stay out of README claims.
+func BenchmarkPublicQuoteStream(b *testing.B) {
+	b.Run("steady_state/default_queue", func(b *testing.B) {
 		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteCoalesced)
 	})
-	b.Run("latency/ack_each_frame", benchmarkQuoteDeliveryLatency)
-	b.Run("burst/queue_4096", func(b *testing.B) {
+	b.Run("delivery_latency/ack_each_frame", benchmarkQuoteDeliveryLatency)
+	b.Run("startup/dial_to_first_update", benchmarkQuoteDialToFirstUpdate)
+	b.Run("diagnostic/burst_queue_4096", func(b *testing.B) {
 		runBenchSteadyStream(b, 4096, 4096, 4096, benchWriteCoalesced)
 		b.ReportMetric(4096, "queue_events")
 	})
-	b.Run("cold_session", benchmarkQuoteColdSession)
-	b.Run("fragmentation/coalesced", func(b *testing.B) {
-		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteCoalesced)
-	})
-	b.Run("fragmentation/one_frame_per_write", func(b *testing.B) {
+	b.Run("diagnostic/one_frame_per_write", func(b *testing.B) {
 		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteFrames)
 	})
-	b.Run("fragmentation/header_body", func(b *testing.B) {
+	b.Run("diagnostic/header_body_fragmentation", func(b *testing.B) {
 		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteSplit)
 	})
 }
 
 func benchmarkQuoteDeliveryLatency(b *testing.B) {
 	const messagesPerOp = 10_000
-	server := newBenchStreamServer(b, messagesPerOp, 1, benchWriteFrames, true)
+	server := newBenchStreamServer(b, 1, benchWriteFrames, true)
 	stream := dialBenchStream(b, server, 0)
+	preflightBenchStream(b, server, stream)
 	latencies := make([]time.Duration, 0, messagesPerOp)
+	var last StreamEvent[QuoteUpdate]
 
 	for b.Loop() {
-		server.start <- struct{}{}
+		server.start <- messagesPerOp
 		for i := range messagesPerOp {
 			event, ok := <-stream.sub.Events()
 			if !ok {
 				b.Fatalf("latency stream ended at message %d: %v", i, stream.sub.Err())
 			}
-			validateBenchQuoteEvent(b, len(latencies), event)
+			last = event
 			latencies = append(latencies, time.Since(<-server.sentAt))
 			server.credit <- struct{}{}
 		}
@@ -628,33 +669,32 @@ func benchmarkQuoteDeliveryLatency(b *testing.B) {
 	if len(latencies) < messagesPerOp {
 		b.Fatalf("collected %d latency samples, want at least %d", len(latencies), messagesPerOp)
 	}
+	validateBenchQuoteEvent(b, len(latencies)-1, last)
 	slices.Sort(latencies)
-	b.ReportMetric(float64(latencies[len(latencies)*50/100].Nanoseconds()), "p50-ns")
-	b.ReportMetric(float64(latencies[len(latencies)*95/100].Nanoseconds()), "p95-ns")
-	b.ReportMetric(float64(latencies[len(latencies)*99/100].Nanoseconds()), "p99-ns")
-	b.ReportMetric(float64(latencies[len(latencies)-1].Nanoseconds()), "max-ns")
+	b.ReportMetric(0, "ns/op")
+	b.ReportMetric(float64(latencies[len(latencies)*50/100].Nanoseconds())/1e3, "p50-us")
+	b.ReportMetric(float64(latencies[len(latencies)*95/100].Nanoseconds())/1e3, "p95-us")
+	b.ReportMetric(float64(latencies[len(latencies)*99/100].Nanoseconds())/1e3, "p99-us")
 	closeBenchStream(b, stream, server)
 }
 
-func benchmarkQuoteColdSession(b *testing.B) {
-	const messages = 128
+func benchmarkQuoteDialToFirstUpdate(b *testing.B) {
 	for b.Loop() {
 		b.StopTimer()
-		server := newBenchStreamServer(b, messages, 32, benchWriteCoalesced, false)
+		server := newBenchStreamServer(b, 1, benchWriteCoalesced, false)
 		b.StartTimer()
 		stream := dialBenchStream(b, server, 0)
-		server.start <- struct{}{}
-		for i := range messages {
-			event, ok := <-stream.sub.Events()
-			if !ok {
-				b.Fatalf("cold stream ended at message %d: %v", i, stream.sub.Err())
-			}
-			validateBenchQuoteEvent(b, i, event)
-			if (i+1)%32 == 0 {
-				server.credit <- struct{}{}
-			}
+		server.start <- 1
+		event, ok := <-stream.sub.Events()
+		if !ok {
+			b.Fatalf("startup stream ended before first update: %v", stream.sub.Err())
 		}
+		b.StopTimer()
+		validateBenchQuoteEvent(b, 0, event)
+		server.credit <- struct{}{}
 		closeBenchStream(b, stream, server)
+		b.StartTimer()
 	}
-	b.ReportMetric(messages, "msgs/session")
+	b.ReportMetric(0, "ns/op")
+	b.ReportMetric(float64(b.Elapsed())/float64(b.N)/float64(time.Millisecond), "ms/session")
 }

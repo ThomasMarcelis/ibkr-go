@@ -65,6 +65,29 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
   Gateway, fuzzed framing and codec, and a deterministic CI that needs no
   broker credentials.
 
+## Performance
+
+The capture-backed public quote path has the following client-side overhead:
+
+| Metric | Result | Why it matters |
+|--------|-------:|----------------|
+| Sustained quote delivery | 1.26 million updates/s | Headroom before the client becomes the stream bottleneck |
+| Delivery latency | p50 5.34 µs, p95 8.59 µs, p99 11.8 µs | Delay added before an application receives an update |
+| Heap pressure | 240 B/update, 12 allocs/update | Allocation and GC cost for long-running feeds |
+| Cold dial to first quote | 20.3 ms | Connection and subscription startup before usable data |
+
+These are medians of ten runs on Linux/amd64 with Go 1.26.3,
+`GOMAXPROCS=16`, and an AMD Ryzen 7 9800X3D. Exact `server_version` 225
+frames travel through loopback TCP, framing, decoding, actor routing, quote
+projection, and the public subscription channel. The results isolate
+`ibkr-go`; they do not include Gateway or external network latency. Repeated
+frames measure client capacity, not expected Gateway data rates. The full run
+also covers a 4,096-update burst and TCP fragmentation:
+
+```bash
+go test -run '^$' -bench '^BenchmarkPublicQuoteStream$' -benchtime=1x -count=10 .
+```
+
 ## What's covered
 
 | Facade | One-shots and controls | Streams and handles |
