@@ -15,8 +15,9 @@ tag.
 
 ### Changed
 
-- Quote hot paths use concrete actor inputs, keep already canonical protobuf
-  fields in place, and skip max-float sentinel parsing for ordinary decimals.
+- Performance: concrete actor inputs avoid generic dispatch, ordered protobuf
+  fields bypass sorting and copying, and ordinary decimals bypass sentinel
+  float parsing.
 - Orders with an empty `TIF` are sent as `DAY`. Live sv225 rejects an omitted
   time in force with code 10052, so constructor-built orders and every
   `Orders().Preview` were refused unless the caller set `TIF` by hand.
