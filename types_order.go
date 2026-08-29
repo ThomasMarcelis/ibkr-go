@@ -332,7 +332,8 @@ type OrderOCA struct {
 }
 
 // OrderCombo holds per-leg prices and routing instructions for a BAG order.
-// The contract's leg definitions live in [Contract.ComboLegs].
+// LegPrices applies to LMT orders, contains one entry per [Contract.ComboLegs]
+// entry, and is mutually exclusive with [Order.LmtPrice].
 type OrderCombo struct {
 	LegPrices    []*decimal.Decimal
 	SmartRouting []TagValue
@@ -430,8 +431,9 @@ type OrderPeggedBenchmark struct {
 //
 //   - optional decimal fields are pointers: nil omits the value while a
 //     non-nil pointer sends it, including literal zero. Set the fields the
-//     [OrderType] requires (Quantity always; LmtPrice for LMT and STP LMT;
-//     AuxPrice for STP, STP LMT, and as the trailing amount for TRAIL).
+//     [OrderType] requires (Quantity always; LmtPrice for ordinary LMT and STP
+//     LMT; Combo.LegPrices instead for a per-leg-priced BAG LMT; AuxPrice for
+//     STP, STP LMT, and as the trailing amount for TRAIL).
 //   - *bool fields are tri-state: nil sends the server default, while a
 //     non-nil pointer forces true or false. Transmit is the exception — nil
 //     defaults to true (transmit immediately); set it to false to stage an
@@ -439,8 +441,9 @@ type OrderPeggedBenchmark struct {
 //   - int and string fields default to their empty value, which the Gateway
 //     reads as "not specified".
 //
-// A minimal market order needs only Action, OrderType, and Quantity. A limit
-// order additionally sets LmtPrice.
+// A minimal market order needs only Action, OrderType, and Quantity. An
+// ordinary limit order additionally sets LmtPrice; a per-leg-priced BAG limit
+// sets Combo.LegPrices instead.
 type Order struct {
 	Action     OrderAction      // BUY or SELL (required)
 	OrderType  OrderType        // execution instruction (required); selects which price fields apply

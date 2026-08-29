@@ -26,7 +26,7 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 	if err := validateOrderQuantity(order); err != nil {
 		return err
 	}
-	if err := validateOrderPrices(order); err != nil {
+	if err := validateOrderPrices(req.Contract, order); err != nil {
 		return err
 	}
 	if err := validateOrderTIF(order); err != nil {
@@ -44,7 +44,7 @@ func validateOrderRequest(req PlaceOrderRequest) error {
 	if err := validateOrderOCA(order.OCA); err != nil {
 		return err
 	}
-	if err := validateOrderCombo(req.Contract, order.Combo); err != nil {
+	if err := validateOrderCombo(req.Contract, order); err != nil {
 		return err
 	}
 	if err := validateOrderScale(order.Scale); err != nil {
@@ -224,7 +224,7 @@ func validateOrderQuantity(order Order) error {
 	return nil
 }
 
-func validateOrderPrices(order Order) error {
+func validateOrderPrices(contract Contract, order Order) error {
 	// Outright prices may legitimately be negative for some futures and
 	if order.TrailingPercent != nil && order.TrailingPercent.IsNegative() {
 		return invalidOrderField("Order.TrailingPercent", order.TrailingPercent, "must be >= 0")
@@ -234,7 +234,11 @@ func validateOrderPrices(order Order) error {
 	}
 
 	switch order.OrderType {
-	case OrderTypeLimit, OrderTypeLimitOnClose, OrderTypeLimitOnOpen:
+	case OrderTypeLimit:
+		if order.LmtPrice == nil && (contract.SecType != SecTypeCombo || len(order.Combo.LegPrices) == 0) {
+			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
+		}
+	case OrderTypeLimitOnClose, OrderTypeLimitOnOpen:
 		if order.LmtPrice == nil {
 			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
 		}
@@ -286,12 +290,19 @@ func validateOrderOCA(oca OrderOCA) error {
 	}
 }
 
-func validateOrderCombo(contract Contract, combo OrderCombo) error {
+func validateOrderCombo(contract Contract, order Order) error {
+	combo := order.Combo
 	if len(combo.SmartRouting) > 0 && contract.SecType != SecTypeCombo {
 		return invalidOrderField("Order.Combo.SmartRouting", len(combo.SmartRouting), "requires a BAG contract")
 	}
 	if len(combo.LegPrices) > 0 && len(combo.LegPrices) != len(contract.ComboLegs) {
 		return invalidOrderField("Order.Combo.LegPrices", len(combo.LegPrices), "must contain one price per leg")
+	}
+	if len(combo.LegPrices) > 0 && order.OrderType != OrderTypeLimit {
+		return invalidOrderField("Order.Combo.LegPrices", len(combo.LegPrices), "requires Order.OrderType LMT")
+	}
+	if len(combo.LegPrices) > 0 && order.LmtPrice != nil {
+		return invalidOrderField("Order.LmtPrice", order.LmtPrice, "cannot be combined with per-leg combo prices")
 	}
 	return validateTagValues("Order.Combo.SmartRouting", combo.SmartRouting)
 }

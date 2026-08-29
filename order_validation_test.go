@@ -108,6 +108,43 @@ func TestValidateOrderRequest(t *testing.T) {
 			field: "Order.ParentID",
 		},
 		{
+			name: "combo price with per-leg prices",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Contract = Contract{Symbol: "AAPL", SecType: SecTypeCombo, ComboLegs: []ComboLeg{
+					{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
+					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+				}}
+				req.Order.Combo.LegPrices = []*decimal.Decimal{new(decimal.RequireFromString("0.04")), new(decimal.RequireFromString("0.01"))}
+			},
+			field: "Order.LmtPrice",
+		},
+		{
+			name: "per-leg prices on limit-on-close",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Contract = Contract{Symbol: "AAPL", SecType: SecTypeCombo, ComboLegs: []ComboLeg{
+					{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
+					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+				}}
+				req.Order.OrderType = OrderTypeLimitOnClose
+				req.Order.LmtPrice = nil
+				req.Order.Combo.LegPrices = []*decimal.Decimal{new(decimal.RequireFromString("0.04")), new(decimal.RequireFromString("0.01"))}
+			},
+			field: "Order.LmtPrice",
+		},
+		{
+			name: "per-leg prices on market order",
+			mutate: func(req *PlaceOrderRequest) {
+				req.Contract = Contract{Symbol: "AAPL", SecType: SecTypeCombo, ComboLegs: []ComboLeg{
+					{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
+					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+				}}
+				req.Order.OrderType = OrderTypeMarket
+				req.Order.LmtPrice = nil
+				req.Order.Combo.LegPrices = []*decimal.Decimal{new(decimal.RequireFromString("0.04")), new(decimal.RequireFromString("0.01"))}
+			},
+			field: "Order.Combo.LegPrices",
+		},
+		{
 			name: "algo params without strategy",
 			mutate: func(req *PlaceOrderRequest) {
 				req.Order.Algorithm.Params = []TagValue{{Tag: "adaptivePriority", Value: "Normal"}}
@@ -237,6 +274,19 @@ func TestValidateOrderRequestAcceptsAdvancedShapes(t *testing.T) {
 				}},
 				Order: Order{
 					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1), LmtPrice: new(decimal.RequireFromString("0.05")),
+				},
+			},
+		},
+		{
+			name: "per-leg priced bag",
+			req: PlaceOrderRequest{
+				Contract: Contract{Symbol: "AAPL", SecType: SecTypeCombo, ComboLegs: []ComboLeg{
+					{ConID: 1, Ratio: 1, Action: ActionBuy, Exchange: "SMART"},
+					{ConID: 2, Ratio: 1, Action: ActionSell, Exchange: "SMART"},
+				}},
+				Order: Order{
+					Action: ActionBuy, OrderType: OrderTypeLimit, Quantity: decimal.NewFromInt(1),
+					Combo: OrderCombo{LegPrices: []*decimal.Decimal{new(decimal.RequireFromString("0.04")), new(decimal.RequireFromString("0.01"))}},
 				},
 			},
 		},
