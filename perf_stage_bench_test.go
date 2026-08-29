@@ -1,55 +1,66 @@
 package ibkr
 
-// Performance benchmarks for the inbound hot path:
+// Capture-backed performance benchmarks for the inbound quote path:
 //
-//	frame -> transport readLoop -> codec.DecodeBatch -> chan any
-//	      -> engine.handleIncoming -> route.handle -> Subscription.emit
+//	frame -> transport readLoop -> codec.DecodeBatch -> actor
+//	      -> keyed route -> quote projection -> subscription channel
 //
-// Two classes:
-//
-//   - Actor-stage benches drive engine.handleIncoming directly against a real
-//     production route (installed via the actual subscribe setup closure), so
-//     route.handle is the exact shipped code path with no scheduler noise.
-//   - BenchmarkE2EQuoteStreamTCP runs the whole pipeline over real TCP
-//     loopback: DialContext -> SubscribeQuotes -> N live tick frames -> count.
-//     It is the only bench that observes syscall-level read cost, so it is the
-//     one that moves when the transport read seam changes.
-//
-// Inputs are live IB Gateway server_version 225 frames captured in
-// 20260824T202345Z-api_duplicate_quote_subscriptions_aapl, events SHA-256
-// 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
-// Exact length-prefixed frames are decoded from the transcript literals below
-// so the benchmark runs independently of the ignored raw-capture tree.
+// Inputs are exact IB Gateway server_version 225 frames from capture
+// 20260824T202345Z-api_duplicate_quote_subscriptions_aapl, events.jsonl
+// SHA-256 1fbb60beec41483729e2f9e7c96b1bfdd89649810ffdc5e7e4a4077c1eb8b290.
+// Repetition and fragmentation below are controlled amplification; their
+// cadence and write boundaries are not claims about the source capture.
 
 import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
+	"runtime"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/transport"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/wire"
+	"github.com/shopspring/decimal"
 )
 
 // benchTickFrames holds exact live sv225 protobuf tick frames:
 //
-//	[0] tick_price field 68 (delayed last)
-//	[1] tick_price field 66 (delayed bid)
-//	[2] tick_size  field 74 (delayed volume)
-//
-// A tiny distinct set replayed in a loop stands in for a long stream: the
-// pipeline cost is per-frame, so looping three frames measures the same thing
-// as storing thousands.
+//	[0] tick_price field 68 (delayed last), price 310.55, companion size 141
+//	[1] tick_price field 66 (delayed bid), price 310.4, companion size 840
+//	[2] tick_size  field 74 (delayed volume), size 812254
 var benchTickFrames = [][]byte{
 	mustDecodeBenchFrame("AAAAGAAAAMkIARBEGc3MzMzMaHNAIgMxNDEoAA=="),
 	mustDecodeBenchFrame("AAAAGAAAAMkIARBCGWZmZmZmZnNAIgM4NDAoAA=="),
 	mustDecodeBenchFrame("AAAAEAAAAMoIARBKGgY4MTIyNTQ="),
 }
+
+var (
+	frameTickPriceLast = benchTickFrames[0]
+	frameTickPriceBid  = benchTickFrames[1]
+	frameTickSizeVol   = benchTickFrames[2]
+	benchFramedTicks   = [][]byte{
+		mustEncodeBenchFrame(frameTickPriceLast),
+		mustEncodeBenchFrame(frameTickPriceBid),
+		mustEncodeBenchFrame(frameTickPriceLast),
+		mustEncodeBenchFrame(frameTickSizeVol),
+	}
+
+	benchQuoteRequest = mustDecodeBenchFrame("AAAAIwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNE")
+	benchQuoteCancel  = mustDecodeBenchFrame("AAAABgAAAMoIAQ==")
+
+	benchLastPrice = decimal.RequireFromString("310.55")
+	benchLastSize  = decimal.RequireFromString("141")
+	benchBidPrice  = decimal.RequireFromString("310.4")
+	benchBidSize   = decimal.RequireFromString("840")
+	benchVolume    = decimal.RequireFromString("812254")
+)
 
 func mustDecodeBenchFrame(encoded string) []byte {
 	framed, err := base64.StdEncoding.DecodeString(encoded)
@@ -63,18 +74,19 @@ func mustDecodeBenchFrame(encoded string) []byte {
 	return payload
 }
 
-var (
-	frameTickPriceLast = benchTickFrames[0]
-	frameTickPriceBid  = benchTickFrames[1]
-	frameTickSizeVol   = benchTickFrames[2]
-)
+func mustEncodeBenchFrame(payload []byte) []byte {
+	framed, err := wire.EncodeFrame(payload)
+	if err != nil {
+		panic("perf bench: frame captured payload: " + err.Error())
+	}
+	return framed
+}
 
-var benchContract = Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"}
+var benchContract = Contract{ConID: 265598, Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"}
 
-// newBenchEngine builds an engine in StateReady with a live transport over a
-// loopback TCP pair whose peer discards everything. No actor goroutine runs:
-// benchmarks drive handleIncoming directly (single-goroutine, same as the
-// production actor).
+// newBenchEngine builds a ready engine with a live transport over a loopback
+// TCP pair. No actor goroutine runs: actor-stage benchmarks drive setup and
+// handleIncoming synchronously, preserving the production actor's ownership.
 func newBenchEngine(tb testing.TB) *engine {
 	tb.Helper()
 
@@ -85,10 +97,9 @@ func newBenchEngine(tb testing.TB) *engine {
 	accepted := make(chan net.Conn, 1)
 	go func() {
 		conn, err := ln.Accept()
-		if err != nil {
-			return
+		if err == nil {
+			accepted <- conn
 		}
-		accepted <- conn
 	}()
 	clientConn, err := net.Dial("tcp", ln.Addr().String())
 	if err != nil {
@@ -127,27 +138,26 @@ func newBenchEngine(tb testing.TB) *engine {
 	return e
 }
 
-// installQuoteRoute registers a real production quote route by running the
-// subscribeQuotes setup closure synchronously (the closure the actor would
-// run), so route.handle is the exact shipped code path.
+// installQuoteRoute runs the real subscribeQuotes setup closure synchronously,
+// exactly as the actor would, so the installed route uses the shipped handler.
 func installQuoteRoute(tb testing.TB, e *engine) *Subscription[QuoteUpdate] {
 	tb.Helper()
 	type result struct {
 		sub *Subscription[QuoteUpdate]
 		err error
 	}
-	res := make(chan result, 1)
+	resultCh := make(chan result, 1)
 	go func() {
 		sub, err := e.subscribeQuotes(context.Background(), QuoteRequest{Contract: benchContract}, false, false)
-		res <- result{sub, err}
+		resultCh <- result{sub, err}
 	}()
-	fn := <-e.cmds
-	fn()
-	r := <-res
-	if r.err != nil {
-		tb.Fatalf("subscribeQuotes: %v", r.err)
+	setup := <-e.cmds
+	setup()
+	out := <-resultCh
+	if out.err != nil {
+		tb.Fatalf("subscribeQuotes: %v", out.err)
 	}
-	return r.sub
+	return out.sub
 }
 
 func decodeOne(tb testing.TB, payload []byte) codec.Message {
@@ -162,160 +172,489 @@ func decodeOne(tb testing.TB, payload []byte) codec.Message {
 	return msgs[0]
 }
 
-// --- actor-side stage: handleIncoming with a live quote route ---
+var benchQuoteSequence = []codec.Message{
+	decodeBenchMessage(frameTickPriceLast),
+	decodeBenchMessage(frameTickPriceBid),
+	decodeBenchMessage(frameTickPriceLast),
+	decodeBenchMessage(frameTickSizeVol),
+}
 
-func benchActorTick(b *testing.B) {
-	e := newBenchEngine(b)
-	sub := installQuoteRoute(b, e)
-	go func() {
-		for range sub.Events() {
-		}
-	}()
-	msgLast := decodeOne(b, frameTickPriceLast)
-	msgVol := decodeOne(b, frameTickSizeVol)
-
-	e.handleIncoming(msgLast)
-	select {
-	case <-sub.Events():
-	default:
+func decodeBenchMessage(payload []byte) codec.Message {
+	msgs, err := codec.DecodeBatch(225, payload)
+	if err != nil || len(msgs) != 1 {
+		panic(fmt.Sprintf("perf bench: decode captured tick: messages=%d err=%v", len(msgs), err))
 	}
+	return msgs[0]
+}
 
-	b.ReportAllocs()
-	for i := 0; b.Loop(); i++ {
-		if i%4 == 3 {
-			e.handleIncoming(msgVol)
-		} else {
-			e.handleIncoming(msgLast)
+func validateBenchQuoteEvent(tb testing.TB, index int, event StreamEvent[QuoteUpdate]) {
+	tb.Helper()
+	if event.Kind != StreamData {
+		tb.Fatalf("event %d kind = %s, want %s", index, event.Kind, StreamData)
+	}
+	update := event.Value
+	switch index % len(benchQuoteSequence) {
+	case 0, 2:
+		if update.Kind != QuoteUpdatePriceTick || update.PriceTick == nil || update.SizeTick != nil {
+			tb.Fatalf("event %d = kind %s price=%+v size=%+v, want price tick", index, update.Kind, update.PriceTick, update.SizeTick)
+		}
+		if update.PriceTick.TickType != 68 || !update.PriceTick.Price.Equal(benchLastPrice) || update.PriceTick.Size == nil || !update.PriceTick.Size.Equal(benchLastSize) {
+			tb.Fatalf("event %d delayed-last tick = %+v", index, update.PriceTick)
+		}
+		if !update.Snapshot.Last.Equal(benchLastPrice) || !update.Snapshot.LastSize.Equal(benchLastSize) {
+			tb.Fatalf("event %d delayed-last snapshot = %+v", index, update.Snapshot)
+		}
+	case 1:
+		if update.Kind != QuoteUpdatePriceTick || update.PriceTick == nil || update.SizeTick != nil {
+			tb.Fatalf("event %d = kind %s price=%+v size=%+v, want price tick", index, update.Kind, update.PriceTick, update.SizeTick)
+		}
+		if update.PriceTick.TickType != 66 || !update.PriceTick.Price.Equal(benchBidPrice) || update.PriceTick.Size == nil || !update.PriceTick.Size.Equal(benchBidSize) {
+			tb.Fatalf("event %d delayed-bid tick = %+v", index, update.PriceTick)
+		}
+		if !update.Snapshot.Bid.Equal(benchBidPrice) || !update.Snapshot.BidSize.Equal(benchBidSize) {
+			tb.Fatalf("event %d delayed-bid snapshot = %+v", index, update.Snapshot)
+		}
+	case 3:
+		if update.Kind != QuoteUpdateSizeTick || update.SizeTick == nil || update.PriceTick != nil {
+			tb.Fatalf("event %d = kind %s price=%+v size=%+v, want size tick", index, update.Kind, update.PriceTick, update.SizeTick)
+		}
+		if update.SizeTick.TickType != 74 || update.SizeTick.Size == nil || !update.SizeTick.Size.Equal(benchVolume) {
+			tb.Fatalf("event %d delayed-volume tick = %+v", index, update.SizeTick)
+		}
+		if !update.Snapshot.Volume.Equal(benchVolume) {
+			tb.Fatalf("event %d delayed-volume snapshot = %+v", index, update.Snapshot)
 		}
 	}
 }
 
-// BenchmarkActorHandleTickQuote_Drained: actor cost with a spinning consumer.
-func BenchmarkActorHandleTickQuote_Drained(b *testing.B) { benchActorTick(b) }
+// BenchmarkActorQuoteDispatchDelivery includes keyed lookup, quote projection,
+// event construction, and synchronous delivery through the subscription
+// channel. Each timed operation is a 1,024-event batch so even -benchtime=1x
+// crosses the historical 64-event queue-failure boundary.
+func BenchmarkActorQuoteDispatchDelivery(b *testing.B) {
+	const deliveriesPerOp = 1024
+	e := newBenchEngine(b)
+	sub := installQuoteRoute(b, e)
+	started := <-sub.Events()
+	if started.Kind != StreamStarted {
+		b.Fatalf("first event = %s, want %s", started.Kind, StreamStarted)
+	}
+	ownedRoute := e.keyed[1]
+	if ownedRoute == nil {
+		b.Fatal("quote route 1 was not installed")
+	}
 
-// --- full pipeline over real TCP loopback ---
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	produced := 0
+	consumed := 0
+	for b.Loop() {
+		for range deliveriesPerOp {
+			message := benchQuoteSequence[produced%len(benchQuoteSequence)]
+			e.handleIncoming(message)
+			produced++
+			event, ok := <-sub.Events()
+			if !ok {
+				b.Fatalf("subscription closed after %d deliveries: %v", consumed, sub.Err())
+			}
+			validateBenchQuoteEvent(b, consumed, event)
+			consumed++
+		}
+	}
+	runtime.ReadMemStats(&after)
 
-// handshakeFrames are the sanitized sv225 bootstrap frames from the same
-// capture as benchTickFrames.
+	if produced != consumed || produced < deliveriesPerOp {
+		b.Fatalf("produced=%d consumed=%d, want equal and at least %d", produced, consumed, deliveriesPerOp)
+	}
+	if err := sub.Err(); err != nil {
+		b.Fatalf("subscription error after delivery: %v", err)
+	}
+	if e.keyed[1] != ownedRoute {
+		b.Fatal("quote route ownership changed during delivery")
+	}
+	reportMessageMetrics(b, uint64(produced), before, after)
+
+	// Use the production route-owned cancellation path outside timing.
+	sub.Close()
+	cancelRoute := <-e.cmds
+	cancelRoute()
+	if err := sub.Wait(); err != nil {
+		b.Fatalf("quote cancellation: %v", err)
+	}
+	if _, ok := e.keyed[1]; ok {
+		b.Fatal("quote route remained installed after cancellation")
+	}
+}
+
+// BenchmarkActorKeyedRouteLookupNoop isolates request-ID map dispatch and
+// callback ownership validation. Its route intentionally performs no
+// projection or channel delivery.
+func BenchmarkActorKeyedRouteLookupNoop(b *testing.B) {
+	e := newBenchEngine(b)
+	message := decodeOne(b, frameTickPriceLast)
+	ownedRoute := &route{opKind: OpQuotes, handle: func(any, *engine) {}}
+	e.keyed[1] = ownedRoute
+
+	for b.Loop() {
+		e.handleIncoming(message)
+	}
+	if e.keyed[1] != ownedRoute {
+		b.Fatal("route ownership changed during lookup benchmark")
+	}
+}
+
 var (
 	frameServerInfo      = []byte("225\x0020260824 22:23:45 CET\x00")
 	frameManagedAccounts = mustDecodeBenchFrame("AAAADwAAANcKCURVOTAwMDAwMQ==")
 	frameNextValidID     = mustDecodeBenchFrame("AAAABgAAANEIAQ==")
 )
 
-// benchTCPServer speaks the minimal real handshake, then blasts pre-encoded
-// frames in 64 KiB writes (the gateway coalesces frames the same way; see the
-// multi-frame chunks in the quote_stream capture).
-func benchTCPServer(tb testing.TB, stream []byte, nConns int) string {
+type benchWriteShape string
+
+const (
+	benchWriteCoalesced benchWriteShape = "coalesced"
+	benchWriteFrames    benchWriteShape = "one_frame_per_write"
+	benchWriteSplit     benchWriteShape = "header_body_fragmentation"
+)
+
+type benchStreamServer struct {
+	addr   string
+	ready  chan struct{}
+	start  chan struct{}
+	credit chan struct{}
+	sentAt chan time.Time
+	result chan error
+}
+
+func newBenchStreamServer(tb testing.TB, messagesPerOp, creditSize int, shape benchWriteShape, latency bool) *benchStreamServer {
 	tb.Helper()
+	if messagesPerOp <= 0 || creditSize <= 0 || messagesPerOp%creditSize != 0 {
+		tb.Fatalf("invalid stream workload: messages=%d credit=%d", messagesPerOp, creditSize)
+	}
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		tb.Fatal(err)
 	}
-	tb.Cleanup(func() { _ = ln.Close() })
-	go func() {
-		for range nConns {
-			conn, err := ln.Accept()
-			if err != nil {
-				return
-			}
-			go func(conn net.Conn) {
-				defer conn.Close()
-				prefix := make([]byte, 4) // "API\x00"
-				if _, err := io.ReadFull(conn, prefix); err != nil {
-					return
-				}
-				if _, err := wire.ReadFrame(conn); err != nil { // v208..225
-					return
-				}
-				if err := wire.WriteFrame(conn, frameServerInfo); err != nil {
-					return
-				}
-				if _, err := wire.ReadFrame(conn); err != nil { // startAPI
-					return
-				}
-				if err := wire.WriteFrame(conn, frameManagedAccounts); err != nil {
-					return
-				}
-				if err := wire.WriteFrame(conn, frameNextValidID); err != nil {
-					return
-				}
-				if _, err := wire.ReadFrame(conn); err != nil { // reqMktData
-					return
-				}
-				const chunk = 64 << 10
-				for off := 0; off < len(stream); off += chunk {
-					end := min(off+chunk, len(stream))
-					if _, err := conn.Write(stream[off:end]); err != nil {
-						return
-					}
-				}
-				// Hold the conn open until the client is done counting.
-				_, _ = io.Copy(io.Discard, conn)
-			}(conn)
+	server := &benchStreamServer{
+		addr:   ln.Addr().String(),
+		ready:  make(chan struct{}),
+		start:  make(chan struct{}),
+		credit: make(chan struct{}),
+		sentAt: make(chan time.Time, creditSize),
+		result: make(chan error, 1),
+	}
+	var coalesced []byte
+	if shape == benchWriteCoalesced {
+		coalesced = make([]byte, 0, creditSize*32)
+		for i := range creditSize {
+			coalesced = append(coalesced, benchFramedTicks[i%len(benchFramedTicks)]...)
 		}
+	}
+	go func() {
+		server.result <- server.serve(ln, messagesPerOp, creditSize, shape, latency, coalesced)
 	}()
-	return ln.Addr().String()
+	return server
 }
 
-// BenchmarkE2EQuoteStreamTCP: DialContext -> SubscribeQuotes -> N live tick
-// frames over loopback -> count N QuoteUpdates. The complete production
-// inbound path: transport readLoop, decode pump, actor, route, emit. This is
-// the bench that sees the buffered-read seam in internal/transport.
-func BenchmarkE2EQuoteStreamTCP(b *testing.B) {
-	const nMsgs = 100_000
-	var stream []byte
-	frames := [][]byte{frameTickPriceLast, frameTickPriceBid, frameTickPriceLast, frameTickSizeVol}
-	for i := range nMsgs {
-		f := frames[i%len(frames)]
-		var frame bytes.Buffer
-		if err := wire.WriteFrame(&frame, f); err != nil {
-			b.Fatalf("frame benchmark tick: %v", err)
+func (s *benchStreamServer) serve(ln net.Listener, messagesPerOp, creditSize int, shape benchWriteShape, latency bool, coalesced []byte) error {
+	defer ln.Close()
+
+	conn, err := ln.Accept()
+	if err != nil {
+		return fmt.Errorf("accept: %w", err)
+	}
+	defer conn.Close()
+	prefix := make([]byte, 4)
+	if _, err := io.ReadFull(conn, prefix); err != nil {
+		return fmt.Errorf("read handshake prefix: %w", err)
+	}
+	if !bytes.Equal(prefix, []byte("API\x00")) {
+		return fmt.Errorf("handshake prefix = %x, want API\\x00", prefix)
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read version range: %w", err)
+	}
+	if err := wire.WriteFrame(conn, frameServerInfo); err != nil {
+		return fmt.Errorf("write server info: %w", err)
+	}
+	if _, err := wire.ReadFrame(conn); err != nil {
+		return fmt.Errorf("read start API: %w", err)
+	}
+	if err := wire.WriteFrame(conn, frameManagedAccounts); err != nil {
+		return fmt.Errorf("write managed accounts: %w", err)
+	}
+	if err := wire.WriteFrame(conn, frameNextValidID); err != nil {
+		return fmt.Errorf("write next valid ID: %w", err)
+	}
+	request, err := wire.ReadFrame(conn)
+	if err != nil {
+		return fmt.Errorf("read quote request: %w", err)
+	}
+	if !bytes.Equal(request, benchQuoteRequest) {
+		return fmt.Errorf("quote request = %x, want captured %x", request, benchQuoteRequest)
+	}
+	close(s.ready)
+
+	for range s.start {
+		for first := 0; first < messagesPerOp; first += creditSize {
+			if err := writeBenchFrames(conn, first, creditSize, shape, latency, s.sentAt, coalesced); err != nil {
+				return fmt.Errorf("write messages %d..%d: %w", first, first+creditSize, err)
+			}
+			<-s.credit
 		}
-		stream = append(stream, frame.Bytes()...)
 	}
 
-	// ns/op includes dial+subscribe setup; the reported msgs/sec and ns/msg
-	// metrics cover only the streaming window (first to last update). Best
-	// iteration wins: external machine load only ever slows the pipeline.
-	bestRate := 0.0
-	b.ReportAllocs()
-	for b.Loop() {
-		addr := benchTCPServer(b, stream, 1)
-		host, port, _ := net.SplitHostPort(addr)
-		portN, _ := net.LookupPort("tcp", port)
-		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-		client, err := DialContext(ctx, WithHost(host), WithPort(portN), WithReconnectPolicy(ReconnectOff))
-		if err != nil {
-			cancel()
-			b.Fatal(err)
-		}
-		sub, err := client.MarketData().SubscribeQuotes(ctx, QuoteRequest{Contract: benchContract},
-			WithQueueSize(nMsgs+16))
-		if err != nil {
-			cancel()
-			b.Fatal(err)
-		}
+	cancel, err := wire.ReadFrame(conn)
+	if err != nil {
+		return fmt.Errorf("read quote cancel: %w", err)
+	}
+	if !bytes.Equal(cancel, benchQuoteCancel) {
+		return fmt.Errorf("quote cancel = %x, want captured %x", cancel, benchQuoteCancel)
+	}
+	return nil
+}
 
-		start := time.Now()
-		got := 0
-		for range sub.Events() {
-			got++
-			if got == nMsgs {
-				break
+func writeBenchFrames(conn net.Conn, first, count int, shape benchWriteShape, latency bool, sentAt chan<- time.Time, coalesced []byte) error {
+	switch shape {
+	case benchWriteCoalesced:
+		return writeBenchBytes(conn, coalesced)
+	case benchWriteFrames:
+		for i := range count {
+			if latency {
+				sentAt <- time.Now()
+			}
+			frame := benchFramedTicks[(first+i)%len(benchFramedTicks)]
+			if err := writeBenchBytes(conn, frame); err != nil {
+				return err
 			}
 		}
-		elapsed := time.Since(start)
-		if got != nMsgs {
-			b.Fatalf("stream ended early: got %d updates, want %d (err=%v)", got, nMsgs, sub.Err())
+		return nil
+	case benchWriteSplit:
+		for i := range count {
+			if latency {
+				sentAt <- time.Now()
+			}
+			frame := benchFramedTicks[(first+i)%len(benchFramedTicks)]
+			if err := writeBenchBytes(conn, frame[:4]); err != nil {
+				return err
+			}
+			if err := writeBenchBytes(conn, frame[4:]); err != nil {
+				return err
+			}
 		}
-		if rate := float64(nMsgs) / elapsed.Seconds(); rate > bestRate {
-			bestRate = rate
+		return nil
+	default:
+		return fmt.Errorf("unknown write shape %q", shape)
+	}
+}
+
+func writeBenchBytes(conn net.Conn, data []byte) error {
+	for len(data) != 0 {
+		n, err := conn.Write(data)
+		if err != nil {
+			return err
 		}
-		sub.Close()
+		data = data[n:]
+	}
+	return nil
+}
+
+func waitBenchReady(tb testing.TB, server *benchStreamServer) {
+	tb.Helper()
+	select {
+	case <-server.ready:
+		return
+	case err := <-server.result:
+		tb.Fatalf("benchmark server before readiness: %v", err)
+	case <-time.After(30 * time.Second):
+		tb.Fatal("timed out waiting for benchmark server readiness")
+	}
+}
+
+func waitBenchResult(tb testing.TB, server *benchStreamServer) {
+	tb.Helper()
+	select {
+	case err := <-server.result:
+		if err != nil {
+			tb.Fatalf("benchmark server: %v", err)
+		}
+	case <-time.After(30 * time.Second):
+		tb.Fatal("timed out waiting for benchmark server teardown")
+	}
+}
+
+type benchStreamClient struct {
+	client *Client
+	sub    *Subscription[QuoteUpdate]
+	cancel context.CancelFunc
+}
+
+func dialBenchStream(tb testing.TB, server *benchStreamServer, queueSize int) benchStreamClient {
+	tb.Helper()
+	host, portText, err := net.SplitHostPort(server.addr)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	port, err := net.LookupPort("tcp", portText)
+	if err != nil {
+		tb.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	client, err := DialContext(ctx, WithHost(host), WithPort(port), WithReconnectPolicy(ReconnectOff))
+	if err != nil {
+		cancel()
+		tb.Fatal(err)
+	}
+	var opts []SubscriptionOption
+	if queueSize != 0 {
+		opts = append(opts, WithQueueSize(queueSize))
+	}
+	sub, err := client.MarketData().SubscribeQuotes(ctx, QuoteRequest{Contract: benchContract}, opts...)
+	if err != nil {
 		client.Close()
 		cancel()
+		tb.Fatal(err)
 	}
-	b.ReportMetric(bestRate, "msgs/sec")
-	b.ReportMetric(1e9/bestRate, "ns/msg")
+	waitBenchReady(tb, server)
+	started, ok := <-sub.Events()
+	if !ok || started.Kind != StreamStarted {
+		tb.Fatalf("first quote event = %+v ok=%t, want Started", started, ok)
+	}
+	select {
+	case event := <-sub.Events():
+		tb.Fatalf("data was queued before start barrier: %+v", event)
+	default:
+	}
+	return benchStreamClient{client: client, sub: sub, cancel: cancel}
+}
+
+func closeBenchStream(tb testing.TB, stream benchStreamClient, server *benchStreamServer) {
+	tb.Helper()
+	close(server.start)
+	stream.sub.Close()
+	if err := stream.sub.Wait(); err != nil {
+		tb.Fatalf("quote cancellation: %v", err)
+	}
+	waitBenchResult(tb, server)
+	stream.client.Close()
+	stream.cancel()
+}
+
+func reportMessageMetrics(b *testing.B, messages uint64, before, after runtime.MemStats) {
+	if messages == 0 {
+		return
+	}
+	elapsed := b.Elapsed()
+	b.ReportMetric(float64(elapsed.Nanoseconds())/float64(messages), "ns/msg")
+	b.ReportMetric(float64(messages)/elapsed.Seconds(), "msgs/sec")
+	b.ReportMetric(float64(after.TotalAlloc-before.TotalAlloc)/float64(messages), "B/msg")
+	b.ReportMetric(float64(after.Mallocs-before.Mallocs)/float64(messages), "allocs/msg")
+}
+
+func runBenchSteadyStream(b *testing.B, messagesPerOp, creditSize, queueSize int, shape benchWriteShape) {
+	server := newBenchStreamServer(b, messagesPerOp, creditSize, shape, false)
+	stream := dialBenchStream(b, server, queueSize)
+
+	var before, after runtime.MemStats
+	runtime.ReadMemStats(&before)
+	total := 0
+	for b.Loop() {
+		server.start <- struct{}{}
+		for i := range messagesPerOp {
+			event, ok := <-stream.sub.Events()
+			if !ok {
+				b.Fatalf("stream ended at message %d: %v", i, stream.sub.Err())
+			}
+			validateBenchQuoteEvent(b, total, event)
+			total++
+			if (i+1)%creditSize == 0 {
+				server.credit <- struct{}{}
+			}
+		}
+	}
+	runtime.ReadMemStats(&after)
+	if want := b.N * messagesPerOp; total != want {
+		b.Fatalf("received %d messages, want %d", total, want)
+	}
+	if err := stream.sub.Err(); err != nil {
+		b.Fatalf("subscription error after stream: %v", err)
+	}
+	reportMessageMetrics(b, uint64(total), before, after)
+	closeBenchStream(b, stream, server)
+}
+
+// BenchmarkE2EQuoteStreamTCP keeps one real TCP session and quote subscription
+// alive for each benchmark process. One steady-state operation is exactly
+// 100,000 validated data frames.
+func BenchmarkE2EQuoteStreamTCP(b *testing.B) {
+	b.Run("steady/default_queue", func(b *testing.B) {
+		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteCoalesced)
+	})
+	b.Run("latency/ack_each_frame", benchmarkQuoteDeliveryLatency)
+	b.Run("burst/queue_4096", func(b *testing.B) {
+		runBenchSteadyStream(b, 4096, 4096, 4096, benchWriteCoalesced)
+		b.ReportMetric(4096, "queue_events")
+	})
+	b.Run("cold_session", benchmarkQuoteColdSession)
+	b.Run("fragmentation/coalesced", func(b *testing.B) {
+		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteCoalesced)
+	})
+	b.Run("fragmentation/one_frame_per_write", func(b *testing.B) {
+		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteFrames)
+	})
+	b.Run("fragmentation/header_body", func(b *testing.B) {
+		runBenchSteadyStream(b, 100_000, 32, 0, benchWriteSplit)
+	})
+}
+
+func benchmarkQuoteDeliveryLatency(b *testing.B) {
+	const messagesPerOp = 10_000
+	server := newBenchStreamServer(b, messagesPerOp, 1, benchWriteFrames, true)
+	stream := dialBenchStream(b, server, 0)
+	latencies := make([]time.Duration, 0, messagesPerOp)
+
+	for b.Loop() {
+		server.start <- struct{}{}
+		for i := range messagesPerOp {
+			event, ok := <-stream.sub.Events()
+			if !ok {
+				b.Fatalf("latency stream ended at message %d: %v", i, stream.sub.Err())
+			}
+			validateBenchQuoteEvent(b, len(latencies), event)
+			latencies = append(latencies, time.Since(<-server.sentAt))
+			server.credit <- struct{}{}
+		}
+	}
+	if len(latencies) < messagesPerOp {
+		b.Fatalf("collected %d latency samples, want at least %d", len(latencies), messagesPerOp)
+	}
+	slices.Sort(latencies)
+	b.ReportMetric(float64(latencies[len(latencies)*50/100].Nanoseconds()), "p50-ns")
+	b.ReportMetric(float64(latencies[len(latencies)*95/100].Nanoseconds()), "p95-ns")
+	b.ReportMetric(float64(latencies[len(latencies)*99/100].Nanoseconds()), "p99-ns")
+	b.ReportMetric(float64(latencies[len(latencies)-1].Nanoseconds()), "max-ns")
+	closeBenchStream(b, stream, server)
+}
+
+func benchmarkQuoteColdSession(b *testing.B) {
+	const messages = 128
+	for b.Loop() {
+		b.StopTimer()
+		server := newBenchStreamServer(b, messages, 32, benchWriteCoalesced, false)
+		b.StartTimer()
+		stream := dialBenchStream(b, server, 0)
+		server.start <- struct{}{}
+		for i := range messages {
+			event, ok := <-stream.sub.Events()
+			if !ok {
+				b.Fatalf("cold stream ended at message %d: %v", i, stream.sub.Err())
+			}
+			validateBenchQuoteEvent(b, i, event)
+			if (i+1)%32 == 0 {
+				server.credit <- struct{}{}
+			}
+		}
+		closeBenchStream(b, stream, server)
+	}
+	b.ReportMetric(messages, "msgs/session")
 }

@@ -3,6 +3,7 @@ package wire
 import (
 	"bytes"
 	"encoding/base64"
+	"runtime"
 	"testing"
 )
 
@@ -40,40 +41,76 @@ func mustBenchPayload(encoded string) []byte {
 }
 
 func BenchmarkReadFrame(b *testing.B) {
-	var streamBuf bytes.Buffer
 	for i, payload := range benchSessionPayloads {
-		if err := WriteFrame(&streamBuf, payload); err != nil {
-			b.Fatalf("WriteFrame() frame %d error = %v", i, err)
-		}
-	}
-	stream := streamBuf.Bytes()
-
-	r := bytes.NewReader(stream)
-	for i, want := range benchSessionPayloads {
-		got, err := ReadFrame(r)
+		name := []string{
+			"managed_accounts_sv225",
+			"next_valid_id_sv225",
+			"farm_status_sv225",
+			"tick_price_sv225",
+			"tick_size_sv225",
+			"open_order_sv225",
+		}[i]
+		framed, err := EncodeFrame(payload)
 		if err != nil {
-			b.Fatalf("ReadFrame() frame %d error = %v", i, err)
+			b.Fatalf("EncodeFrame() %s error = %v", name, err)
 		}
-		if !bytes.Equal(got, want) {
-			b.Fatalf("ReadFrame() frame %d differs from captured payload", i)
-		}
-	}
-	if r.Len() != 0 {
-		b.Fatalf("stream has %d trailing bytes after %d frames", r.Len(), len(benchSessionPayloads))
+		b.Run(name, func(b *testing.B) {
+			r := bytes.NewReader(framed)
+			got, err := ReadFrame(r)
+			if err != nil || !bytes.Equal(got, payload) || r.Len() != 0 {
+				b.Fatalf("ReadFrame() preflight: bytes_equal=%t trailing=%d err=%v", bytes.Equal(got, payload), r.Len(), err)
+			}
+
+			b.ReportAllocs()
+			b.SetBytes(int64(len(framed)))
+			for b.Loop() {
+				r.Reset(framed)
+				if _, err := ReadFrame(r); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 
-	b.ReportAllocs()
-	b.SetBytes(int64(len(stream)))
-	for b.Loop() {
-		r.Reset(stream)
-		for range benchSessionPayloads {
-			if _, err := ReadFrame(r); err != nil {
-				b.Fatal(err)
+	b.Run("session_mix_batch_6", func(b *testing.B) {
+		var streamBuf bytes.Buffer
+		for i, payload := range benchSessionPayloads {
+			if err := WriteFrame(&streamBuf, payload); err != nil {
+				b.Fatalf("WriteFrame() frame %d error = %v", i, err)
 			}
 		}
-	}
+		stream := streamBuf.Bytes()
+
+		r := bytes.NewReader(stream)
+		for i, want := range benchSessionPayloads {
+			got, err := ReadFrame(r)
+			if err != nil {
+				b.Fatalf("ReadFrame() frame %d error = %v", i, err)
+			}
+			if !bytes.Equal(got, want) {
+				b.Fatalf("ReadFrame() frame %d differs from captured payload", i)
+			}
+		}
+		if r.Len() != 0 {
+			b.Fatalf("stream has %d trailing bytes after %d frames", r.Len(), len(benchSessionPayloads))
+		}
+
+		b.ReportAllocs()
+		b.SetBytes(int64(len(stream)))
+		for b.Loop() {
+			r.Reset(stream)
+			for range benchSessionPayloads {
+				if _, err := ReadFrame(r); err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+	})
 }
 
+// BenchmarkParseFields is a wire-helper diagnostic for a captured classic
+// body. Production inbound classic decoding uses codec.fieldReader directly;
+// this result must not be cited as production decoder performance.
 func BenchmarkParseFields(b *testing.B) {
 	fields, err := ParseFields(benchClassicPayload)
 	if err != nil {
@@ -103,7 +140,10 @@ func BenchmarkEncodeFields(b *testing.B) {
 
 	b.ReportAllocs()
 	b.SetBytes(int64(len(benchClassicPayload)))
+	var checksum byte
 	for b.Loop() {
-		EncodeFields(fields)
+		encoded := EncodeFields(fields)
+		checksum ^= encoded[len(encoded)-1]
 	}
+	runtime.KeepAlive(checksum)
 }
