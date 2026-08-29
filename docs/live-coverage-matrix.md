@@ -313,16 +313,9 @@ one primary matrix row above.
 
 ### Retired Historical Evidence
 
-The `fundamental_data_aapl` and `api_fundamental_reports_aapl` scenarios and
-the `fundamental_data.txt` and `api_fundamental_report_errors_aapl.txt`
-replays covered live `server_version 200` behavior before IBKR API 10.47
-removed the feature. The 2026-04-15 report campaign remains traceable to
-capture hash prefix `02649216ff69f306`, including mixed XML success and real
-code 430 responses. Final 2026-07-09 captures sent all seven legacy reports
-through both local roles and received code 10358 for every request:
-readonly-live hash prefix `89db59e9e5abf7b7`, paper-dev hash prefix
-`c326f314cbc4f1de`. These artifacts are historical evidence, not executable
-scenarios, active replays, or current coverage targets.
+IBKR API 10.47 removed fundamental data. The scenarios and replays that
+covered it were retired with the v2.0.1 corpus migration and remain at
+that tag; they are not executable evidence for the supported range.
 
 ## External Evidence Boundaries
 

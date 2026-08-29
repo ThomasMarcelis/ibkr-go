@@ -51,9 +51,6 @@ jobs:
           git fetch origin main
           commit=$(git rev-list -n 1 "$TAG")
           git merge-base --is-ancestor "$commit" origin/main
-          if [ "$TAG" = 'v2.0.0' ]; then
-            echo "IBKR_RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
-          fi
 
       - name: Verify release commit
         run: |

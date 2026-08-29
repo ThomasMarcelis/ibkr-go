@@ -23,7 +23,8 @@ All six must pass locally before opening a pull request. The default API check
 rejects incompatible changes from the frozen v2.0.2 release baseline while
 allowing additive APIs for the next release. `./scripts/check-api.sh --exact`
 instead requires the complete public surface to equal v2.0.2 exactly.
-Historical manifests remain unchanged.
+The previous manifest is replaced at each release; older ones live at
+their tags.
 CI also checks module tidiness and verification, fuzz-target inventory, a
 pure-Go 386 build, vulnerabilities, shuffled tests across supported host
 platforms, and the race detector. See `.github/workflows/ci.yml` for the exact
@@ -102,7 +103,8 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 Then freeze the public surface: write the new `testdata/api/<version>.api`
 manifest, point `scripts/check-api.sh` at it, and confirm
-`./scripts/check-api.sh --exact` passes. Old manifests are never edited. Run
+`./scripts/check-api.sh --exact` passes. Replace the previous manifest rather than keeping a history; older ones live
+at their tags. Run
 the examples against the paper Gateway, write the CHANGELOG entry (link
 release-time documents at the tag, not at `main`), and tag. Pushing and
 publishing stay manual.

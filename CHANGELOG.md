@@ -99,36 +99,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
 ### Verification status
 
-- Current checked-in transcripts contain only sv208+ raw frames: 95 sv225
-  fixtures, exact sv208 historical and user-info fixtures, an exact positive
-  sv211 option-calculation fixture, and an exact 208–225 handshake matrix. The one explicitly
-  authorized v2.0.1 regulatory snapshot attempt is permanently non-retryable
-  campaign evidence; it returned code 0. A later account-update capture reports
-  `Billable=0.00 EUR`.
-- A current sv225 IBM CFD capture proves the complete public reroute lifecycle:
-  the initial symbolic request, protobuf reroute, conID request, delayed-data
-  notice, and positive high, low, volume, and close callbacks.
-- The full build, vet, lint, shuffled, race, exact-API, fuzz, vulnerability,
-  capture, and transcript-provenance gates pass on the release tree. Both
-  sv225 role doctors and the explicitly non-mutating live suites pass; exact
-  entitlement, account, and market-state blockers remain skips rather than
-  positive proof. The fee-bearing regulatory path is permanently disabled and
-  was not repeated.
-- `IncludeOvernight=true` is placed and echoed. Replacing it with explicit
-  false is rejected with code 462 and retains true; a fresh explicit-false
-  placement succeeds and the broker canonicalizes it to an absent field with
-  `TIF=DAY`. SDK 10.48.01 reproduces the replacement rejection. This does not
-  satisfy the required distinct false replacement echo, so the scenario
-  remains a candidate rather than positive completion evidence.
-- A guarded option-exercise campaign bought
-  one live-qualified ITM AAPL call, received exact preset warning 10349 and
-  `PreSubmitted` for the exercise instruction, but no terminal exercise status.
-  Targeted and global paper cleanup were fenced; the final direct cancel
-  returned code 10147 because order 8 was no longer found. Fresh raw snapshots
-  exactly match the pre-cleanup position and execution/fee rows and contain no
-  ordinary open order, but no terminal exercise callback was observed. This is
-  positive admission and reconciliation evidence, not completed exercise
-  proof.
+- The checked-in corpus holds only sv208+ raw frames (95 sv225 fixtures plus
+  exact sv208, sv211, and 208–225 handshake fixtures). Every gate passed on
+  the release tree, and the non-mutating live suites passed on both roles.
+- The one authorized regulatory snapshot returned code 0 and is permanently
+  non-retryable; a later account capture reports `Billable=0.00 EUR`.
+- IncludeOvernight, the IBM CFD reroute, and option-exercise admission were
+  captured live at sv225; the exercise capture proves admission only.
 
 ### Known limitations
 
@@ -189,77 +166,8 @@ Both correctness issues are fixed in v2.0.1; use the latest v2 patch release.
 At v2.0.0 release time, live validation was still incomplete for
 `IncludeOvernight`, regulatory snapshots, and manual TWS `orderBound`.
 
-## v2.0.0-rc.3 — 2026-07-16
-
-RC.3 continues the RC.2 hardening work. It extends the supported Gateway range
-from `server_version` 200–207 to 200–225, completes the API 10.48 protobuf and
-wire-layout migrations, and freezes the advanced order and broker-echo model.
-
-The candidate also tightens ownership and terminal-error behavior across
-disconnects, reconnects, cancellation, order placement, option exercise, and
-regulatory snapshots. Finite streams, passive execution events, TWS
-configuration, and odd-lot quote data round out the public API.
-
-All legacy transcript exceptions have been replaced or retired, and the full
-build, test, race, lint, vulnerability, capture, and 17-target fuzz gates pass.
-At RC.3 time, regulatory-snapshot, manual paper-TWS `orderBound`, and seven-day
-soak evidence were planned stable gates. v2.0.0 later disclosed them as
-nonblocking gaps when v1 was deprecated.
-
-## v2.0.0-rc.2 — 2026-07-11
-
-v2 is a clean-break release on the `github.com/ThomasMarcelis/ibkr-go/v2` module path. Existing v1 users remain on v1 until they explicitly change imports.
-
-### Highlights
-
-**Gateway coverage.** The supported range is exactly `server_version` 200–207. Protobuf support follows IBKR's migration boundaries: executions at 201, zero-strike contract presence at 202, orders at 203, open/completed orders at 204, contracts at 205, market data/depth at 206, and accounts/positions at 207.
-
-**Orders and executions.** Order handles preserve late executions and revised fee reports instead of closing at the first terminal-looking status. Execution snapshots include commission-and-fees reports, and `SubscribeExecutions` remains open for late corrections. What-if previews, completed orders, contract details, scanners, quotes, depth, and account callbacks retain substantially more of the Gateway payload.
-
-**New operations.** The release adds regulatory snapshots and client-0 `orderBound` routing. WSH requests validate JSON and cancel cleanly. Historical-news results remain single-page; v2 does not infer a safe pagination contract from `HasMore`.
-
-**Correctness.** Typed Gateway errors retain request IDs and advanced rejection details. Reconnects, slow consumers, cancellation uncertainty, bracket admission, warning events, malformed frames, unset decimals, and classic/protobuf version boundaries now fail or recover explicitly instead of silently losing state.
-
-**RC.2 failure-path hardening.** Admitted order frames are tracked until the
-socket write completes, singleton one-shots cannot wedge after context
-cancellation, resume transport loss retains resumable subscriptions, order
-errors use an attested terminal set, request/order IDs stay monotonic across
-Gateway reseeds, and reconnect dial/bootstrap work no longer stalls the actor.
-Subscription data and lifecycle boundaries now share one ordered event stream.
-
-### Breaking changes
-
-| Area | Migration |
-|---|---|
-| Module | Change imports to `github.com/ThomasMarcelis/ibkr-go/v2` |
-| Lifecycle | `Close()` returns no value; read `Wait()` or `Err()` for terminal outcomes |
-| Streams | `Subscription.Events()` now yields ordered `StreamEvent[T]`; use `All(ctx)` for data only; remove `Lifecycle()` handling |
-| Orders | `Modify` is now `Replace`; close handles explicitly after collecting late events |
-| Results | `Executions` returns `ExecutionSnapshot`; `HistoricalNews` returns `HistoricalNewsResult`; `Exercise` returns `ExerciseHandle` |
-| Presence | Contract strike, open-order prices, quote/depth sizes, snapshot permissions, and fee values use pointers where absence differs from zero |
-| Ownership | Order identity and preview mode moved out of `Order`; contract selection and composition moved onto `Contract` |
-| Names | `Buy`/`Sell` became `ActionBuy`/`ActionSell`; commission types use commission-and-fees terminology; P&L fields use `PnL`; `OrderStatusAPICancelled` follows Go initialism casing |
-| Accounts | Summary and position subscriptions emit direct values; account group and exact-account filtering are separate |
-| Resume | Remove `WithDefaultResumePolicy`; configure `ResumeAuto` per supported subscription |
-| Removed in v2 | Reuters fundamental data, FA mutation, `ibkr-probe`, and pre-200 compatibility |
-| Test infrastructure | Repository replay/live helpers moved under `internal/`; external tests use the public `Dialer` seam or their own fixtures |
-
-See [Migrating from v1 to v2](docs/migration-v2.md) for before-and-after examples and the complete source migration checklist.
-
-### Release-candidate validation
-
-The rc.1 baseline passed deterministic tests, race tests, lint, vulnerability
-scan, 386, and the fuzz battery. RC.2 reruns those gates after the changes
-above. With both Gateways restored on 2026-07-11, the isolated sv200/205/206
-matrix passed on its second complete run (one earlier sv205 bootstrap ended in
-EOF), keep-up-to-date bars, tick-by-tick midpoint, historical bid/ask and
-midpoint ticks, and PnLSingle completed. Real-time bars returned the expected
-10089 entitlement error; historical TRADES ticks received no Gateway reply in
-two isolated 20-second captures. On 2026-07-15, exactly one explicitly
-authorized fee-bearing regulatory request reached readonly-live at sv225 and
-received definitive restriction code 10213; it was not retried. A successful
-regulatory snapshot and a raw paper-TWS `orderBound` capture therefore remained
-planned validation targets. v2.0.0 discloses both as follow-up evidence gaps.
+Release candidates rc.2 (2026-07-11) and rc.3 (2026-07-16) preceded this
+release; their notes are at those tags.
 
 ## v1.5.1 — 2026-07-04
 
