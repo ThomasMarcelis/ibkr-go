@@ -118,7 +118,7 @@ func newBenchEngine(tb testing.TB) *engine {
 	e := &engine{
 		cfg:                      cfg,
 		cmds:                     make(chan func(), 256),
-		incoming:                 make(chan any, 256),
+		incoming:                 make(chan actorInput, 256),
 		transportErr:             make(chan transportLoss, 8),
 		ready:                    make(chan error, 1),
 		done:                     make(chan struct{}),

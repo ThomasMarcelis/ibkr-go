@@ -86,13 +86,7 @@ func TestUnwrittenPlaceOrderClosesItsHandle(t *testing.T) {
 	e.pendingOrderWrites[key] = 47
 	e.orders[47].pendingWrite = key
 
-	e.handleTransportWrite(transportWrite{
-		transport: tr,
-		result: transport.WriteResult{
-			ID:      3,
-			Outcome: transport.WriteUnwritten,
-		},
-	})
+	e.handleTransportWrite(key, transport.WriteUnwritten)
 
 	select {
 	case <-handle.Done():

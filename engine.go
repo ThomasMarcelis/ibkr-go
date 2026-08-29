@@ -16,7 +16,7 @@ type engine struct {
 	cfg config
 
 	cmds           chan func()
-	incoming       chan any
+	incoming       chan actorInput
 	transportErr   chan transportLoss
 	connectResults chan connectResult
 	ready          chan error
@@ -113,18 +113,23 @@ type transportWriteKey struct {
 	id        transport.WriteID
 }
 
-type transportWrite struct {
-	transport *transport.Conn
-	result    transport.WriteResult
-}
+type actorInputKind uint8
 
-// decodedTransportInput binds a decoded callback to the physical transport
-// generation that produced it. The actor uses that ownership to discard a
-// poisoned generation's buffered tail without discarding tracked write
-// completions from the same connection.
-type decodedTransportInput struct {
-	generation uint64
-	message    any
+const (
+	actorInputDecoded actorInputKind = iota
+	actorInputTransportWrite
+)
+
+// actorInput keeps decoded callbacks and tracked write completions on one FIFO
+// channel. generation binds decoded callbacks to their physical transport;
+// write completions remain actor-control input when that generation is
+// poisoned.
+type actorInput struct {
+	kind         actorInputKind
+	writeOutcome transport.WriteOutcome
+	generation   uint64
+	message      any
+	writeKey     transportWriteKey
 }
 
 type bootstrapState struct {
@@ -227,7 +232,7 @@ func dialEngine(ctx context.Context, opts ...Option) (*engine, error) {
 		cfg:                      cfg,
 		stopLogger:               stopLogger,
 		cmds:                     make(chan func(), 256),
-		incoming:                 make(chan any, 256),
+		incoming:                 make(chan actorInput, 256),
 		transportErr:             make(chan transportLoss, 8),
 		connectResults:           make(chan connectResult),
 		ready:                    make(chan error, 1),

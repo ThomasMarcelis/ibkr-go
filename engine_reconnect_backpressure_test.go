@@ -21,7 +21,7 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 	e := &engine{
 		cfg:            defaultConfig(),
 		cmds:           make(chan func(), 256),
-		incoming:       make(chan any, 1),
+		incoming:       make(chan actorInput, 1),
 		transportErr:   make(chan transportLoss, 1),
 		done:           make(chan struct{}),
 		events:         newObserver[Event](1),

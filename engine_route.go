@@ -588,8 +588,7 @@ func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 	}
 }
 
-func (e *engine) handleTransportWrite(write transportWrite) {
-	key := transportWriteKey{transport: write.transport, id: write.result.ID}
+func (e *engine) handleTransportWrite(key transportWriteKey, outcome transport.WriteOutcome) {
 	orderID, ok := e.pendingOrderWrites[key]
 	if !ok {
 		return
@@ -601,7 +600,7 @@ func (e *engine) handleTransportWrite(write transportWrite) {
 	}
 	or.pendingWrite = transportWriteKey{}
 
-	switch write.result.Outcome {
+	switch outcome {
 	case transport.WriteCompleteLocal:
 		if !or.handle.emitLifecycle(OrderStarted, e.connectionSeq(), nil) {
 			e.closeOrderRoute(orderID, or, ErrSlowConsumer)

@@ -268,7 +268,7 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 	cfg.logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	tr := transport.New(client, cfg.logger, 0)
 	e := &engine{
-		cfg: cfg, cmds: make(chan func(), 8), incoming: make(chan any, 8),
+		cfg: cfg, cmds: make(chan func(), 8), incoming: make(chan actorInput, 8),
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
 		events: newObserver[Event](cfg.eventBuffer), transport: tr,
 		transportGeneration: 1,

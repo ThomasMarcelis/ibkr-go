@@ -215,7 +215,7 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 			}
 			for _, msg := range msgs {
 				select {
-				case e.incoming <- decodedTransportInput{generation: generation, message: msg}:
+				case e.incoming <- actorInput{kind: actorInputDecoded, generation: generation, message: msg}:
 				case <-e.done:
 					return
 				}
@@ -232,7 +232,11 @@ func (e *engine) attachTransport(tr *transport.Conn) {
 				continue
 			}
 			select {
-			case e.incoming <- transportWrite{transport: tr, result: result}:
+			case e.incoming <- actorInput{
+				kind:         actorInputTransportWrite,
+				writeOutcome: result.Outcome,
+				writeKey:     transportWriteKey{transport: tr, id: result.ID},
+			}:
 			case <-e.done:
 				// The transport writer must remain able to publish every tracked
 				// outcome before it can close Done. Drain the source after engine

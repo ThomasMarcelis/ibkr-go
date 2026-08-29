@@ -56,29 +56,26 @@ func (e *engine) drainIncoming() {
 	}
 }
 
-func (e *engine) handleActorInput(msg any) {
-	if write, ok := msg.(transportWrite); ok {
-		e.handleTransportWrite(write)
-		return
-	}
-	if decoded, ok := msg.(decodedTransportInput); ok {
+func (e *engine) handleActorInput(input actorInput) {
+	switch input.kind {
+	case actorInputTransportWrite:
+		e.handleTransportWrite(input.writeKey, input.writeOutcome)
+	case actorInputDecoded:
 		// A replacement transport may already be active when a stale actor input
 		// is injected by a test or arrives from a retiring pump. Generations are
 		// the route-ownership boundary; connection identity adds no second
 		// invariant.
-		if decoded.generation != e.transportGeneration {
+		if input.generation != e.transportGeneration {
 			return
 		}
-		if e.poisonedGeneration == decoded.generation {
+		if e.poisonedGeneration == input.generation {
 			return
 		}
-		if malformed, ok := decoded.message.(codec.MalformedInbound); ok {
-			e.poisonedGeneration = decoded.generation
+		if malformed, ok := input.message.(codec.MalformedInbound); ok {
+			e.poisonedGeneration = input.generation
 			e.handleMalformedInbound(malformed)
 			return
 		}
-		e.handleIncoming(decoded.message)
-		return
+		e.handleIncoming(input.message)
 	}
-	e.handleIncoming(msg)
 }

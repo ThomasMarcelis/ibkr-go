@@ -268,7 +268,7 @@ func TestIdentifierFloorsSurviveReconnect(t *testing.T) {
 	e.previews = make(map[int64]*previewRoute)
 	e.snapshot = Snapshot{NextValidID: 70}
 	e.cmds = make(chan func(), 1)
-	e.incoming = make(chan any, 1)
+	e.incoming = make(chan actorInput, 1)
 	e.transportErr = make(chan transportLoss, 1)
 	e.done = make(chan struct{})
 	e.dirtySingletons = make(map[string]uint64)

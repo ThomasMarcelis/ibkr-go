@@ -26,7 +26,7 @@ func TestAutoOpenOrdersCloseDisablesBinding(t *testing.T) {
 	e := &engine{
 		cfg:            cfg,
 		cmds:           make(chan func(), 8),
-		incoming:       make(chan any, 8),
+		incoming:       make(chan actorInput, 8),
 		transportErr:   make(chan transportLoss, 1),
 		done:           make(chan struct{}),
 		events:         newObserver[Event](8),

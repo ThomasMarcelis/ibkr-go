@@ -72,29 +72,31 @@ func TestMalformedRegisteredCallbackPoisonsWholeGeneration(t *testing.T) {
 	writeKey := transportWriteKey{transport: oldTransport, id: 9}
 	e.trackOrderWrite(47, writeKey)
 
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: 7, message: capturedMalformedPosition(t),
 	})
 	// Write completions are actor-control input, not decoded broker input. A
 	// completion already queued behind the malformed callback must still drain
 	// so an admitted order is not misclassified as unwritten.
-	e.handleActorInput(transportWrite{
-		transport: oldTransport,
-		result: transport.WriteResult{
-			ID:      writeKey.id,
-			Outcome: transport.WriteCompleteLocal,
-		},
+	e.handleActorInput(actorInput{
+		kind:         actorInputTransportWrite,
+		writeKey:     writeKey,
+		writeOutcome: transport.WriteCompleteLocal,
 	})
 	// A valid row and snapshot end were already buffered behind the malformed
 	// callback. Neither may make a corrupt partial snapshot look complete.
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: 7,
 		message:    codec.Position{Account: "DU9000001", Contract: codec.Contract{Symbol: "MELI"}, Position: "1"},
 	})
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: 7, message: codec.PositionEnd{},
 	})
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: 7, message: codec.TickPrice{ReqID: 41, TickType: 1, Price: "311.19"},
 	})
 
@@ -252,8 +254,9 @@ func TestMarketDataRouteCollisionPoisonsGeneration(t *testing.T) {
 				close:      func(err error) { siblingResult <- err },
 			}
 
-			e.handleActorInput(decodedTransportInput{generation: 7, message: message})
-			e.handleActorInput(decodedTransportInput{
+			e.handleActorInput(actorInput{kind: actorInputDecoded, generation: 7, message: message})
+			e.handleActorInput(actorInput{
+				kind:       actorInputDecoded,
 				generation: 7,
 				message:    codec.TickPrice{ReqID: 2, TickType: 1, Price: "311.19"},
 			})
@@ -303,7 +306,8 @@ func TestMalformedGenerationResumesStreamOnlyOnFreshTransport(t *testing.T) {
 	oldTransport := e.transport
 	oldGeneration := e.transportGeneration
 
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: oldGeneration, message: capturedMalformedPosition(t),
 	})
 	e.handleTransportLoss(transportLoss{transport: oldTransport})
@@ -337,7 +341,8 @@ func TestMalformedGenerationResumesStreamOnlyOnFreshTransport(t *testing.T) {
 
 	// Even after the replacement route exists, a callback bound to the retired
 	// generation cannot reach it.
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: oldGeneration,
 		message:    codec.TickPrice{ReqID: 71, TickType: 1, Price: "310.00"},
 	})
@@ -347,7 +352,8 @@ func TestMalformedGenerationResumesStreamOnlyOnFreshTransport(t *testing.T) {
 	default:
 	}
 
-	e.handleActorInput(decodedTransportInput{
+	e.handleActorInput(actorInput{
+		kind:       actorInputDecoded,
 		generation: e.transportGeneration,
 		message:    codec.TickPrice{ReqID: 71, TickType: 1, Price: "311.19"},
 	})

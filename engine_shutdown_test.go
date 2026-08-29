@@ -25,7 +25,7 @@ func TestClientCloseWaitsCleanlyAndInterruptsActiveWork(t *testing.T) {
 		e := &engine{
 			cfg:          cfg,
 			cmds:         make(chan func(), 1),
-			incoming:     make(chan any),
+			incoming:     make(chan actorInput),
 			transportErr: make(chan transportLoss),
 			ready:        make(chan error, 1),
 			done:         make(chan struct{}),
@@ -71,7 +71,7 @@ func TestAttachTransportPumpUnblocksOnEngineShutdown(t *testing.T) {
 		tr := transport.New(clientConn, nil, 0)
 
 		e := &engine{
-			incoming:      make(chan any),           // unbuffered: no run loop, so one decode wedges the pump
+			incoming:      make(chan actorInput),    // unbuffered: no run loop, so one decode wedges the pump
 			transportErr:  make(chan transportLoss), // unbuffered: same for the error forwarder
 			done:          make(chan struct{}),
 			serverVersion: 225,
@@ -107,7 +107,7 @@ func TestCloseDrainsTrackedCompletionsWithoutActorDeadlock(t *testing.T) {
 	cfg := defaultConfig()
 	e := &engine{
 		cfg:            cfg,
-		incoming:       make(chan any),
+		incoming:       make(chan actorInput),
 		transportErr:   make(chan transportLoss, 1),
 		ready:          make(chan error, 1),
 		done:           make(chan struct{}),
@@ -163,7 +163,7 @@ func TestClosedStateIsAbsorbing(t *testing.T) {
 	t.Parallel()
 
 	e := &engine{
-		incoming:       make(chan any, 1),
+		incoming:       make(chan actorInput, 1),
 		ready:          make(chan error, 1),
 		done:           make(chan struct{}),
 		events:         newObserver[Event](1),
@@ -174,7 +174,7 @@ func TestClosedStateIsAbsorbing(t *testing.T) {
 		snapshot:       Snapshot{State: StateReady},
 	}
 	e.closeEngine(ErrClosed, ErrClosed, nil)
-	e.incoming <- codec.APIError{Code: 1102, Message: "Connectivity restored"}
+	e.incoming <- actorInput{kind: actorInputDecoded, message: codec.APIError{Code: 1102, Message: "Connectivity restored"}}
 	runReturned := make(chan struct{})
 	go func() {
 		e.run()
@@ -212,7 +212,7 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 	e := &engine{
 		cfg:          config{logger: slog.Default()},
 		cmds:         make(chan func(), 1),
-		incoming:     make(chan any, 256),
+		incoming:     make(chan actorInput, 256),
 		transportErr: make(chan transportLoss, 1),
 		done:         make(chan struct{}),
 		keyed:        make(map[int]*route),
@@ -228,12 +228,12 @@ func TestRunServicesCommandsUnderIncomingFlood(t *testing.T) {
 		// the just-drained slot always has room in steady state.
 		select {
 		case <-feedStop:
-		case e.incoming <- reinject:
+		case e.incoming <- actorInput{kind: actorInputDecoded, message: reinject}:
 		default:
 		}
 	}}
 	// Seed the self-sustaining feed before the loop starts.
-	e.incoming <- reinject
+	e.incoming <- actorInput{kind: actorInputDecoded, message: reinject}
 
 	go e.run()
 	defer close(e.done)
@@ -257,7 +257,7 @@ func TestPhysicalReconnectMarksOrderRecoveryBeforeBusinessEvents(t *testing.T) {
 	handle := newOrderHandle(546, 8)
 	e := &engine{
 		cfg:              cfg,
-		incoming:         make(chan any, 8),
+		incoming:         make(chan actorInput, 8),
 		transportErr:     make(chan transportLoss, 1),
 		done:             make(chan struct{}),
 		events:           newObserver[Event](cfg.eventBuffer),
@@ -426,7 +426,7 @@ func TestTerminalOrderRemainsObservedUntilClose(t *testing.T) {
 		e := &engine{
 			cfg:            config{logger: slog.Default()},
 			cmds:           make(chan func(), 8),
-			incoming:       make(chan any, 8),
+			incoming:       make(chan actorInput, 8),
 			transportErr:   make(chan transportLoss, 1),
 			done:           make(chan struct{}),
 			events:         newObserver[Event](8),

@@ -142,7 +142,7 @@ func TestCloseCancelsDialWithoutWaitingForConnectionSetup(t *testing.T) {
 	e := &engine{
 		cfg:                cfg,
 		cmds:               make(chan func(), 1),
-		incoming:           make(chan any, 1),
+		incoming:           make(chan actorInput, 1),
 		transportErr:       make(chan transportLoss, 1),
 		connectResults:     make(chan connectResult),
 		ready:              make(chan error, 1),
@@ -277,7 +277,7 @@ func TestAttachTransportTranslatesFrameLimitWithoutLosingDecodeFailure(t *testin
 
 	e := &engine{
 		serverVersion: 225,
-		incoming:      make(chan any, 1),
+		incoming:      make(chan actorInput, 1),
 		transportErr:  make(chan transportLoss, 1),
 		done:          make(chan struct{}),
 	}
