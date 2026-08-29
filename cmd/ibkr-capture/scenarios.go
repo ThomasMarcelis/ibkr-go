@@ -124,17 +124,17 @@ var scenarios = map[string]*scenario{
 		run:         runAPIHistoricalBars1Day1Hour,
 	},
 	"historical_bars_30d_1day": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd}, "read_only", []string{"historical_data"}, []string{"nonempty daily trade bars over a 30-day window"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd}, "read_only", []string{"historical_data"}, []string{"nonempty daily trade bars over a 30-day window"}, 1, "blocked", batchReadOnly),
 		description: "request and decode 30 days of daily AAPL trade bars through the public API",
 		run:         runAPIHistoricalBars30Days1Day,
 	},
 	"historical_bars_bidask": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty BID_ASK bars or exact historical-data permission error"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"nonempty BID_ASK bars or exact historical-data permission error"}, 1, "blocked", batchReadOnly),
 		description: "request and decode hourly AAPL BID_ASK bars or the typed live permission error through the public API",
 		run:         runAPIHistoricalBarsBidAsk,
 	},
 	"historical_bars_error": {
-		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"typed code 200 historical-bars contract-not-found error"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("history", []string{"History().Bars"}, []int{protocol.OutReqHistoricalData, protocol.InErrMsg}, "read_only", []string{"historical_data"}, []string{"typed code 200 historical-bars contract-not-found error"}, 1, "promoted", batchReadOnly),
 		description: "request historical bars for a nonexistent stock and require the typed not-found error through the public API",
 		run:         runAPIHistoricalBarsError,
 	},
@@ -185,12 +185,12 @@ var scenarios = map[string]*scenario{
 		run:         runAPIQuoteStreamAAPL,
 	},
 	"quote_stream_genericticks": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickGeneric, protocol.InTickString, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed quote parameters and a 233/236 value followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickGeneric, protocol.InTickString, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed quote parameters and a 233/236 value followed by fenced cancellation"}, 1, "promoted", batchReadOnly),
 		description: "observe generic ticks 233 and 236 on a delayed AAPL quote stream through the public API",
 		run:         runAPIQuoteStreamGenericTicksAAPL,
 	},
 	"quote_odd_lot_aapl": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickString, protocol.InTickReqParams, protocol.InErrMsg}, "entitlement_probe", []string{"market_hours", "live_market_data_for_odd_lots"}, []string{"generic tick 787 request with typed odd-lot fields or an exact entitlement/no-row boundary and fenced cancellation"}, 1, "candidate", batchNewV2, batchReadOnly, batchExhaustiveMarketHours),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickString, protocol.InTickReqParams, protocol.InErrMsg}, "entitlement_probe", []string{"market_hours", "live_market_data_for_odd_lots"}, []string{"generic tick 787 request with typed odd-lot fields or an exact entitlement/no-row boundary and fenced cancellation"}, 1, "blocked", batchNewV2, batchReadOnly, batchExhaustiveMarketHours),
 		description: "request and observe the v225 AAPL odd-lot quote family through the public API",
 		run:         runAPIOddLotQuotesAAPL,
 	},
@@ -328,12 +328,12 @@ var scenarios = map[string]*scenario{
 		run:         runAPICompletedOrders,
 	},
 	"tick_efp_probe": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InTickPrice, protocol.InTickSize, protocol.InTickEFP, protocol.InDeltaNeutralValidation, protocol.InErrMsg, protocol.OutReqCurrentTime}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"typed TickEFP or delta-neutral validation callback, or a real contract, entitlement, or no-data result with fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.InMarketDataType, protocol.InTickReqParams, protocol.InTickPrice, protocol.InTickSize, protocol.InTickEFP, protocol.InDeltaNeutralValidation, protocol.InErrMsg, protocol.OutReqCurrentTime}, "entitlement_probe", []string{"live_market_data", "active_single_stock_future", "matching_stock"}, []string{"typed TickEFP or delta-neutral validation callback, or a real contract, entitlement, or no-data result with fenced cancellation"}, 1, "blocked", batchReadOnly),
 		description: "live EFP market-data probe using DTE/EUREX and Tencent/HKFE single-stock-future BAGs",
 		run:         runAPITickEFPProbe,
 	},
 	"quote_stream_multi_asset": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickGeneric, protocol.InTickString}, "read_only", []string{"market_data_or_delayed_data"}, []string{"concurrent stock and FX quote streams with real price or size evidence and fenced cancellation"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqMktData, protocol.OutCancelMktData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InTickPrice, protocol.InTickSize, protocol.InTickGeneric, protocol.InTickString}, "read_only", []string{"market_data_or_delayed_data"}, []string{"concurrent stock and FX quote streams with real price or size evidence and fenced cancellation"}, 1, "promoted", batchNewV2, batchReadOnly),
 		description: "observe concurrent delayed AAPL and EUR.USD quote streams through the public API",
 		run:         runAPIQuoteStreamMultiAsset,
 	},
@@ -361,32 +361,32 @@ var scenarios = map[string]*scenario{
 		run:         runAPIPnL,
 	},
 	"pnl_single": {
-		metadata:    meta("accounts", []string{"Accounts().Updates", "Accounts().SubscribePnLSingle", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqAccountUpdates, protocol.InUpdatePortfolio, protocol.InAccountDownloadEnd, protocol.OutReqPnLSingle, protocol.InPnLSingle, protocol.OutCancelPnLSingle, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", nil, []string{"typed PnL update for a real held contract followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("accounts", []string{"Accounts().Updates", "Accounts().SubscribePnLSingle", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqAccountUpdates, protocol.InUpdatePortfolio, protocol.InAccountDownloadEnd, protocol.OutReqPnLSingle, protocol.InPnLSingle, protocol.OutCancelPnLSingle, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", nil, []string{"typed PnL update for a real held contract followed by fenced cancellation"}, 1, "promoted", batchReadOnly),
 		description: "derive a held contract and observe its single-position PnL through the public API",
 		run:         runAPIPnLSingle,
 	},
 	"tick_by_tick_last": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed Last tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed Last tick and fenced cancellation or exact live entitlement refusal"}, 1, "blocked", batchReadOnly),
 		description: "observe an AAPL Last tick or the exact live entitlement refusal through the public API",
 		run:         runAPITickByTickLastAAPL,
 	},
 	"tick_by_tick_bidask": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed BidAsk tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed BidAsk tick and fenced cancellation or exact live entitlement refusal"}, 1, "blocked", batchReadOnly),
 		description: "observe an AAPL BidAsk tick or the exact live entitlement refusal through the public API",
 		run:         runAPITickByTickBidAskAAPL,
 	},
 	"tick_by_tick_midpoint": {
-		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed MidPoint tick and fenced cancellation or exact live entitlement refusal"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SetType", "MarketData().SubscribeTickByTick", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMarketDataType, protocol.OutReqTickByTickData, protocol.OutCancelTickByTickData, protocol.OutReqCurrentTime, protocol.InTickByTick, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_data_or_delayed_data"}, []string{"typed MidPoint tick and fenced cancellation or exact live entitlement refusal"}, 1, "blocked", batchReadOnly),
 		description: "observe an AAPL MidPoint tick or the exact live entitlement refusal through the public API",
 		run:         runAPITickByTickMidPointAAPL,
 	},
 	"historical_bars_keepup": {
-		metadata:    meta("history", []string{"History().SubscribeBars", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InHistoricalDataUpdate, protocol.OutCancelHistoricalData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_hours", "historical_data"}, []string{"nonempty MIDPOINT, BID, and ASK one-minute snapshots, one real streaming update for each, and explicit protocol-fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("history", []string{"History().SubscribeBars", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqHistoricalData, protocol.InHistoricalData, protocol.InHistoricalDataEnd, protocol.InHistoricalDataUpdate, protocol.OutCancelHistoricalData, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "read_only", []string{"market_hours", "historical_data"}, []string{"nonempty MIDPOINT, BID, and ASK one-minute snapshots, one real streaming update for each, and explicit protocol-fenced cancellation"}, 1, "blocked", batchReadOnly),
 		description: "capture post-snapshot AAPL MIDPOINT, BID, and ASK historical-bar updates through the public API",
 		run:         runAPIHistoricalBarsKeepUp,
 	},
 	"news_bulletins": {
-		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"at least one typed bulletin callback followed by fenced cancellation"}, 1, "candidate", batchReadOnly),
+		metadata:    meta("news", []string{"News().SubscribeBulletins", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqNewsBulletins, protocol.InNewsBulletins, protocol.OutCancelNewsBulletins, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "read_only", []string{"news_or_bulletins"}, []string{"at least one typed bulletin callback followed by fenced cancellation"}, 1, "blocked", batchReadOnly),
 		description: "observe the live bulletin stream through the public API and close it cleanly",
 		run:         runAPINewsBulletins,
 	},
@@ -409,7 +409,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIMarketDepthAAPL,
 	},
 	"market_depth_aapl_smart": {
-		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth", "Client.SessionEvents", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMktDepth, protocol.OutCancelMktDepth, protocol.OutReqCurrentTime, protocol.InMarketDepth, protocol.InMarketDepthL2, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"typed smart depth row or exact no-available-depth notice, followed by fenced cancellation"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("market_data", []string{"MarketData().SubscribeDepth", "Client.SessionEvents", "Subscription.Close", "Client.CurrentTime"}, []int{protocol.OutReqMktDepth, protocol.OutCancelMktDepth, protocol.OutReqCurrentTime, protocol.InMarketDepth, protocol.InMarketDepthL2, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"l2_market_data_or_error"}, []string{"typed smart depth row or exact no-available-depth notice, followed by fenced cancellation"}, 1, "blocked", batchNewV2, batchReadOnly),
 		description: "observe an AAPL SMART depth row or the exact live no-available-depth notice through the public API",
 		run:         runAPIMarketDepthSmartAAPL,
 	},
@@ -437,12 +437,12 @@ var scenarios = map[string]*scenario{
 		run:         runAPIWSHMetaData,
 	},
 	"wsh_event_data_aapl": {
-		metadata:    meta("wsh", []string{"WSH().EventData"}, []int{protocol.OutReqWSHEventData, protocol.InWSHEventData, protocol.InErrMsg}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"valid WSH event JSON or exact entitlement error"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("wsh", []string{"WSH().EventData"}, []int{protocol.OutReqWSHEventData, protocol.InWSHEventData, protocol.InErrMsg}, "entitlement_probe", []string{"wsh_subscription_or_error"}, []string{"valid WSH event JSON or exact entitlement error"}, 1, "blocked", batchNewV2, batchReadOnly),
 		description: "request AAPL WSH events or their typed entitlement refusal through the public API",
 		run:         runAPIWSHEventDataAAPL,
 	},
 	"request_fa": {
-		metadata:    meta("advisors", []string{"Advisors().Config", "Client.CurrentTime"}, []int{protocol.OutRequestFA, protocol.InReceiveFA, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"typed FA groups XML or exact non-FA refusal"}, 1, "candidate", batchNewV2, batchReadOnly),
+		metadata:    meta("advisors", []string{"Advisors().Config", "Client.CurrentTime"}, []int{protocol.OutRequestFA, protocol.InReceiveFA, protocol.OutReqCurrentTime, protocol.InCurrentTime, protocol.InErrMsg}, "entitlement_probe", []string{"fa_account_or_error"}, []string{"typed FA groups XML or exact non-FA refusal"}, 1, "blocked", batchNewV2, batchReadOnly),
 		description: "request the FA groups document through the public API",
 		run:         runAPIFAConfigGroups,
 	},
@@ -483,7 +483,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIOrderDirectCancelAAPL,
 	},
 	"api_bracket_place_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().PlaceBracket", "Orders().CancelAll", "Orders().Open", "Client.CurrentTime"}, []int{protocol.OutPlaceOrder, protocol.InOpenOrder, protocol.InOrderStatus, protocol.OutReqGlobalCancel, protocol.OutReqOpenOrders, protocol.InOpenOrderEnd, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "paper_order", []string{"paper_trading"}, []string{"direct PlaceBracket allocates consecutive IDs, binds child parent IDs, stages false/false/true transmit frames, and cleans every leg"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().PlaceBracket", "Orders().CancelAll", "Orders().Open", "Client.CurrentTime"}, []int{protocol.OutPlaceOrder, protocol.InOpenOrder, protocol.InOrderStatus, protocol.OutReqGlobalCancel, protocol.OutReqOpenOrders, protocol.InOpenOrderEnd, protocol.OutReqCurrentTime, protocol.InCurrentTime}, "paper_order", []string{"paper_trading"}, []string{"direct PlaceBracket allocates consecutive IDs, binds child parent IDs, stages false/false/true transmit frames, and cleans every leg"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchReplayAll),
 		description: "place and clean up a nonmarketable AAPL bracket through Orders().PlaceBracket",
 		run:         runAPIBracketPlaceAAPL,
 	},
@@ -533,14 +533,9 @@ var scenarios = map[string]*scenario{
 		run:         runAPITIFAttributeMatrixAAPL,
 	},
 	"api_security_type_probe_matrix": {
-		metadata:    metaWithAssets("contracts", []string{"Contracts().Details"}, []int{9, 10, 52, 4}, "entitlement_probe", []string{"security_type_permissions_or_real_error"}, []string{"contract details or real rejection for STK/OPT/FUT/FOP/CASH/BOND/CFD/WAR/IND/CRYPTO/FUND/BILL/CMDTY/CONTFUT"}, 1, "candidate", []string{"STK", "OPT", "FUT", "FOP", "CASH", "BOND", "CFD", "WAR", "IND", "CRYPTO", "FUND", "BILL", "CMDTY", "CONTFUT"}, batchNewV2, batchReplayAll),
+		metadata:    metaWithAssets("contracts", []string{"Contracts().SecDefOptParams", "Contracts().Details"}, []int{protocol.OutReqContractData, protocol.InContractData, protocol.InContractDataEnd, protocol.OutReqSecDefOptParams, protocol.InSecDefOptParams, protocol.InSecDefOptParamsEnd, protocol.InErrMsg}, "entitlement_probe", []string{"security_type_permissions_or_real_error"}, []string{"SecDef-qualified OPT/FOP plus exact contract details or real rejection for STK/OPT/FUT/FOP/CASH/BOND/CFD/WAR/IND/CRYPTO/FUND/BILL/CMDTY/CONTFUT"}, 1, "promoted", []string{"STK", "OPT", "FUT", "FOP", "CASH", "BOND", "CFD", "WAR", "IND", "CRYPTO", "FUND", "BILL", "CMDTY", "CONTFUT"}, batchNewV2, batchReplayAll),
 		description: "public API probe matrix for real Gateway contract-details behavior across security types",
 		run:         runAPISecurityTypeProbeMatrix,
-	},
-	"api_market_data_completeness_aapl": {
-		metadata:    metaWithAssets("market_data", []string{"MarketData().SetType", "MarketData().Quote", "MarketData().SubscribeRealTimeBars", "MarketData().SubscribeTickByTick"}, []int{1, 2, 45, 46, 50, 51, 57, 58, 59, 97, 98, 99}, "entitlement_probe", []string{"market_data_or_delayed_data"}, []string{"market data type pushes, generic ticks, real-time TRADES/BID_ASK/MIDPOINT, and tick-by-tick variants or entitlement errors"}, 1, "candidate", []string{"STK"}, batchNewV2, batchReplayAll),
-		description: "public API campaign for market-data type, generic tick, real-time bar, and tick-by-tick variants",
-		run:         runAPIMarketDataCompletenessAAPL,
 	},
 	"api_generic_tick_matrix_aapl": {
 		metadata:    metaWithAssets("market_data", []string{"MarketData().SetType", "MarketData().SubscribeQuotes"}, []int{1, 2, 45, 46, 58, 59, 81}, "entitlement_probe", []string{"market_data_or_delayed_data"}, []string{"delayed AAPL stream preserves observed mark-price tick 37, shortable ticks 46/89, volume-rate tick 56, delayed timestamp tick 88, and omitted minimum-tick parameters"}, 1, "promoted", []string{"STK"}, batchNewV2, batchReadOnly, batchReplayAll),
@@ -558,7 +553,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIScannerSubscription,
 	},
 	"api_historical_matrix_aapl": {
-		metadata:    metaWithAssets("history", []string{"History().Bars"}, []int{20, 17, 4}, "read_only", []string{"historical_data"}, []string{"all planned historical bar-size probes and whatToShow variants return data or real Gateway errors"}, 1, "candidate", []string{"STK"}, batchNewV2, batchReplayAll),
+		metadata:    metaWithAssets("history", []string{"History().Bars"}, []int{20, 17, 4}, "read_only", []string{"historical_data"}, []string{"all planned historical bar-size probes and whatToShow variants return data or real Gateway errors"}, 1, "blocked", []string{"STK"}, batchNewV2, batchReplayAll),
 		description: "public API campaign for historical bar-size and whatToShow variants",
 		run:         runAPIHistoricalMatrixAAPL,
 	},
@@ -588,7 +583,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIDollarCostAveragingAAPL,
 	},
 	"api_stop_loss_management_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"market entry, protective stop placement, stop modification, cancellation, flatten, and execution reconciliation"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"filled entry, protective stop placement and repricing, zero-fill cancellation, exact flatten, and execution/fee reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for placing, moving, cancelling, and flattening a protective stop",
 		run:         runAPIStopLossManagementAAPL,
 	},
@@ -598,8 +593,8 @@ var scenarios = map[string]*scenario{
 		run:         runAPIBracketTrailingStopAAPL,
 	},
 	"api_option_exercise_aapl": {
-		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Details", "MarketData().Quote", "Orders().Place", "Options().Exercise", "Accounts().Positions", "Orders().Executions"}, []int{1, 2, 3, 5, 10, 11, 21, 52, 55, 57, 59, 61, 62, 75, 76}, "paper_marketable_order", []string{"paper_trading", "options_market_hours", "option_permissions", "safe_option_and_stock_reconciliation"}, []string{"one live-qualified ITM AAPL call fills; exercise reaches a terminal pseudo-order state or exact warning 10349 plus PreSubmitted records accepted-but-unsettled admission; campaign deltas are reconciled without claiming settlement"}, 1, "candidate", []string{"OPT", "STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll),
-		description: "buy and exercise one live-qualified ITM AAPL call with terminal option and stock reconciliation",
+		metadata:    metaWithAssets("options", []string{"Contracts().SecDefOptParams", "Contracts().Details", "MarketData().Quote", "Orders().Place", "Options().Exercise", "Accounts().Positions", "Orders().Executions"}, []int{1, 2, 3, 5, 10, 11, 21, 52, 55, 57, 59, 61, 62, 75, 76}, "paper_marketable_order", []string{"paper_trading", "options_market_hours", "option_permissions", "safe_option_and_stock_reconciliation"}, []string{"one live-qualified ITM AAPL call fills; exact warning 10349 plus PreSubmitted proves accepted-but-unsettled admission and captured disconnect produces an uncertain outcome without a settlement claim"}, 1, "promoted", []string{"OPT", "STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		description: "buy a live-qualified ITM AAPL call and attest accepted-but-unsettled exercise admission",
 		run:         runAPIOptionExerciseAAPL,
 	},
 	"api_hedge_order_aapl": {
@@ -623,12 +618,12 @@ var scenarios = map[string]*scenario{
 		run:         runAPIFutureCampaignMES,
 	},
 	"api_combo_option_vertical_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "Orders().Place", "Orders().Open", "Orders().CancelAll"}, []int{3, 4, 5, 16, 53, 58, 75, 76}, "paper_order", []string{"paper_trading", "option_permissions"}, []string{"live-qualified AAPL option BAG vertical accepted/cancelled or real combo rejection"}, 1, "candidate", []string{"BAG", "OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Contracts().SecDefOptParams", "Contracts().Qualify", "Orders().Place", "Orders().Open", "OrderHandle.Cancel"}, []int{3, 4, 5, 16, 53, 75, 76}, "paper_order", []string{"paper_trading", "option_permissions"}, []string{"live-qualified AAPL call vertical carries per-leg prices and NonGuaranteed=1, is accepted PreSubmitted without a combo-level limit, and cancels with zero fill"}, 1, "promoted", []string{"BAG", "OPT"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for live-qualified AAPL option vertical BAG order behavior",
 		run:         runAPIComboOptionVerticalAAPL,
 	},
 	"api_algorithmic_campaign_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribeUpdates", "Accounts().SubscribePnL", "Accounts().Positions", "MarketData().SubscribeQuotes", "Orders().SubscribeOpen", "Orders().Place", "OrderHandle.Replace", "Orders().Executions", "Orders().Completed", "Orders().CancelAll"}, []int{1, 2, 3, 5, 6, 7, 8, 11, 16, 53, 54, 58, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_destructive", []string{"paper_trading", "market_hours"}, []string{"multi-subscription algorithmic campaign with split fills, resting modifies, reconciliation, and cleanup"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribeUpdates", "Accounts().SubscribePnL", "Accounts().Positions", "MarketData().SubscribeQuotes", "Orders().SubscribeOpen", "Orders().Place", "OrderHandle.Replace", "Orders().Executions", "Orders().Completed", "Orders().CancelAll"}, []int{1, 2, 3, 5, 6, 7, 8, 11, 16, 53, 54, 58, 59, 61, 62, 63, 64, 92, 93, 99, 101, 102}, "paper_destructive", []string{"paper_trading", "market_hours"}, []string{"four correlated fills and fees across split entries, a resting-limit replacement, exact flatten, four concurrent observers, completed orders, and baseline reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign with concurrent market/account/order observers and multi-step trading",
 		run:         runAPIAlgorithmicCampaignAAPL,
 	},
@@ -643,7 +638,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPITransmitFalseThenTransmitAAPL,
 	},
 	"api_include_overnight_lifecycle_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Client.CurrentTime"}, []int{3, 4, 5, 7, 11, 16, 49, 53, 55, 59, 61, 62, 63, 64}, "paper_order", []string{"paper_trading", "client_id_0", "overnight_session", "multi_leg_recorder"}, []string{"nonmarketable SMART AAPL DAY order echoes IncludeOvernight=true; explicit-false replacement records exact code 462 while the working order retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absent with TIF DAY; both orders cancel terminally and paper state reconciles to baseline"}, 0, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Client.CurrentTime"}, []int{3, 4, 5, 7, 11, 16, 49, 53, 55, 59, 61, 62, 63, 64}, "paper_order", []string{"paper_trading", "client_id_0", "overnight_session", "multi_leg_recorder"}, []string{"nonmarketable SMART AAPL DAY order echoes IncludeOvernight=true; explicit-false replacement records exact code 462 while the working order retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absent with TIF DAY; both orders cancel terminally and paper state reconciles to baseline"}, 0, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "guarded true-to-false IncludeOvernight placement, replacement, cancellation, and reconciliation",
 		run:         runAPIIncludeOvernightLifecycleAAPL,
 	},
@@ -683,7 +678,7 @@ var scenarios = map[string]*scenario{
 		run:         runAPIStressRapidFireAAPL,
 	},
 	"api_scale_in_campaign_aapl": {
-		metadata:    metaWithAssets("orders", []string{"Orders().Place"}, []int{3, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"scale-in 2x MKT buy plus protective stop-loss PreSubmitted trigger; source capture tail timed out during cancel/flatten/execution query"}, 1, "candidate", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Cancel", "Orders().Executions"}, []int{3, 4, 5, 11, 59}, "paper_trigger", []string{"paper_trading", "market_hours"}, []string{"nondefault scale-field echo, two market fills, protective-stop cancellation, exact flatten, and execution/fee reconciliation"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingCampaigns, batchTradingAll, batchReplayAll),
 		description: "public API campaign for scale-in buy strategy with protective stop-loss and flatten",
 		run:         runAPIScaleInCampaignAAPL,
 	},

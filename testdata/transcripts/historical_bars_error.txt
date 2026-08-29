@@ -1,0 +1,21 @@
+# Exact capture 20260824T202751Z-historical_bars_error for historical_bars_error at server_version 225.
+# events.jsonl sha256: 6ea68aada9ee11c5eb74a664f4bc04c7ea6676489dd01bd645d40a1a13656771.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:27:50 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC1+dSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC1+dSrgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARC1+dSrgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARC1+dSrgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=20 encoding=protobuf payload_len=62
+raw client AAAAPgAAANwIARIdCAASCFpaWlpOT05FGgNTVEtCBVNNQVJUUgNVU0QiBjEgaG91cioDMSBEMAE6BlRSQURFU0AB
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=71
+raw server AAAARwAAAMwIARDv+tSrgzQYyAEiNU5vIHNlY3VyaXR5IGRlZmluaXRpb24gaGFzIGJlZW4gZm91bmQgZm9yIHRoZSByZXF1ZXN0
+disconnect

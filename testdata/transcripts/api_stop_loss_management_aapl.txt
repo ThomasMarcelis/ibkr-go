@@ -1,0 +1,398 @@
+# Exact capture 20260828T181852Z-api_stop_loss_management_aapl for api_stop_loss_management_aapl at server_version 225.
+# events.jsonl sha256: 147873593a5fd3e3975e6bf3e53aaac80985fd1839a4a5f50dafa4cd99c91993.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+#
+# The replay freezes the guarded baseline, delayed AAPL quote, filled entry,
+# protective-stop placement and repricing, zero-fill cancellation, exact
+# flatten, execution/fee reconciliation, CurrentTime fence, and the wrapper's
+# successful empty-open-order and flat-position reconciliation.
+handshake {"server_version":225,"connection_time":"20260828 20:18:51 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEImAU=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDsq+LMhDQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=107
+raw server AAAAawAAAMwI////////////ARDsq+LMhDQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgaW5hY3RpdmUgYnV0IHNob3VsZCBiZSBhdmFpbGFibGUgdXBvbiBkZW1hbmQudXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDsq+LMhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=61 encoding=protobuf payload_len=4
+raw client AAAABAAAAQU=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIzCPfVlJkBEgVBRFlFThoDU1RLKQAAAAAAAAAAQgNBRUJSA0VVUloFQURZRU5iBUFEWUVOGgMxMDAhpaDbSxqZjEA=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=79
+raw server AAAATwAAAQUKCURVOTAwMDAwMRIxCPibnDgSBEFTTUwaA1NUSykAAAAAAAAAAEIGTkFTREFRUgNVU0RaBEFTTUxiA05NUxoCMzAh9Ae5Qaf2lUA=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRItCIm50mESA05YRRoDU1RLKQAAAAAAAAAAQgROWVNFUgNVU0RaA05YRWIDTlhFGgQ4MTg4IQLYgAhx/ShA
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGgEwIQAAAAAAAAAA
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=81
+raw server AAAAUQAAAQUKCURVOTAwMDAwMRIyCOeZjIICEgRDUkRPGgNTVEspAAAAAAAAAABCBk5BU0RBUVIDVVNEWgRDUkRPYgNOTVMaAzc1MyFzhj1Iyr9mQA==
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIyCKDlhoYBEgRESEVSGgNTVEspAAAAAAAAAABCBElCSVNSA0VVUloEREhFUmIFWEVUUkEaBDE1NjghWqGjsObMNEA=
+# leg=1 direction=server msg_id=61 encoding=protobuf payload_len=80
+raw server AAAAUAAAAQUKCURVOTAwMDAwMRIwCKGAtNUBEgNIQUcaA1NUSykAAAAAAAAAAEIESUJJU1IDRVVSWgNIQUdiBVhFVFJBGgQxNTU2IcROZ901u1NA
+# leg=1 direction=server msg_id=62 encoding=protobuf payload_len=4
+raw server AAAABAAAAQY=
+# leg=1 direction=client msg_id=64 encoding=protobuf payload_len=4
+raw client AAAABAAAAQg=
+# leg=1 direction=client msg_id=7 encoding=protobuf payload_len=19
+raw client AAAAEwAAAM8IARILEglEVTkwMDAwMDE=
+# leg=1 direction=server msg_id=11 encoding=protobuf payload_len=226
+raw server AAAA4gAAANMIARIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGqcBCJEFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMxocMjAyNjA4MjggMTQ6MTE6MDIgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgZOQVNEQVEyA0JPVDoBMUFxPQrXowB0QEiRucTDIVABYgExaXE9CtejAHRAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTaQAQKoAf///////////wE=
+# leg=1 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiSBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDQaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9CtejAHRASJK5xMMhUAFiATFpcT0K16MAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxN5ABAqgB////////////AQ==
+# leg=1 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiUBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDUaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDU0xEOgEyQRSuR+F6AHRASJS5xMMhUAFiATJpFK5H4XoAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOJABAqgB////////////AQ==
+# leg=1 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiVBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDYaHDIwMjYwODI4IDE0OjE4OjE1IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9Ctej+HNASJW5xMMhUAFiATFpcT0K16P4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOZABAqgB////////////AQ==
+# leg=1 direction=server msg_id=11 encoding=protobuf payload_len=222
+raw server AAAA3gAAANMIARIuCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgRCQVRTUgNVU0RaBEFBUExiA05NUxqlAQiXBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDcaHDIwMjYwODI4IDE0OjE4OjE2IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoEQkFUUzIDU0xEOgExQRSuR+F6+HNASJe5xMMhUAFiATFpFK5H4Xr4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAyMJABAqgB////////////AQ==
+# leg=1 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAzESJuTiUDAPA/GgNVU0Q=
+# leg=1 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA0ESJuTiUDAPA/GgNVU0Q=
+# leg=1 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA1ETeN7bWgN/A/GgNVU0Qh5pDUQslECMA=
+# leg=1 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA2ESJuTiUDAPA/GgNVU0Q=
+# leg=1 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA3ESRFZFjFG/A/GgNVU0QhuAchIF8iAMA=
+# leg=1 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IAQ==
+# leg=1 direction=client msg_id=62 encoding=protobuf payload_len=54
+raw client AAAANgAAAQYIAhIDQWxsGilOZXRMaXF1aWRhdGlvbixUb3RhbENhc2hWYWx1ZSxCdXlpbmdQb3dlcg==
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=47
+raw server AAAALwAAAQcIAhIJRFU5MDAwMDAxGgtCdXlpbmdQb3dlciIKNjgzNDQzNS44MCoDRVVS
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=50
+raw server AAAAMgAAAQcIAhIJRFU5MDAwMDAxGg5OZXRMaXF1aWRhdGlvbiIKMTE3MzI1NS41NCoDRVVS
+# leg=1 direction=server msg_id=63 encoding=protobuf payload_len=49
+raw server AAAAMQAAAQcIAhIJRFU5MDAwMDAxGg5Ub3RhbENhc2hWYWx1ZSIJNTQzNDQ5LjAxKgNFVVI=
+# leg=1 direction=server msg_id=64 encoding=protobuf payload_len=6
+raw server AAAABgAAAQgIAg==
+# leg=1 direction=client msg_id=63 encoding=protobuf payload_len=6
+raw client AAAABgAAAQcIAg==
+# leg=1 direction=client msg_id=16 encoding=protobuf payload_len=4
+raw client AAAABAAAANg=
+# leg=1 direction=server msg_id=53 encoding=protobuf payload_len=4
+raw server AAAABAAAAP0=
+disconnect
+handshake {"server_version":225,"connection_time":"20260828 20:18:53 CET"}
+# leg=2 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=2 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEImAU=
+# leg=2 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDwteLMhDQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=2 direction=server msg_id=4 encoding=protobuf payload_len=107
+raw server AAAAawAAAMwI////////////ARDwteLMhDQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgaW5hY3RpdmUgYnV0IHNob3VsZCBiZSBhdmFpbGFibGUgdXBvbiBkZW1hbmQudXNobWRz
+# leg=2 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDwteLMhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=2 direction=client msg_id=61 encoding=protobuf payload_len=4
+raw client AAAABAAAAQU=
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIzCPfVlJkBEgVBRFlFThoDU1RLKQAAAAAAAAAAQgNBRUJSA0VVUloFQURZRU5iBUFEWUVOGgMxMDAhpaDbSxqZjEA=
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=79
+raw server AAAATwAAAQUKCURVOTAwMDAwMRIxCPibnDgSBEFTTUwaA1NUSykAAAAAAAAAAEIGTkFTREFRUgNVU0RaBEFTTUxiA05NUxoCMzAh9Ae5Qaf2lUA=
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRItCIm50mESA05YRRoDU1RLKQAAAAAAAAAAQgROWVNFUgNVU0RaA05YRWIDTlhFGgQ4MTg4IQLYgAhx/ShA
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGgEwIQAAAAAAAAAA
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=81
+raw server AAAAUQAAAQUKCURVOTAwMDAwMRIyCOeZjIICEgRDUkRPGgNTVEspAAAAAAAAAABCBk5BU0RBUVIDVVNEWgRDUkRPYgNOTVMaAzc1MyFzhj1Iyr9mQA==
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIyCKDlhoYBEgRESEVSGgNTVEspAAAAAAAAAABCBElCSVNSA0VVUloEREhFUmIFWEVUUkEaBDE1NjghWqGjsObMNEA=
+# leg=2 direction=server msg_id=61 encoding=protobuf payload_len=80
+raw server AAAAUAAAAQUKCURVOTAwMDAwMRIwCKGAtNUBEgNIQUcaA1NUSykAAAAAAAAAAEIESUJJU1IDRVVSWgNIQUdiBVhFVFJBGgQxNTU2IcROZ901u1NA
+# leg=2 direction=server msg_id=62 encoding=protobuf payload_len=4
+raw server AAAABAAAAQY=
+# leg=2 direction=client msg_id=64 encoding=protobuf payload_len=4
+raw client AAAABAAAAQg=
+# leg=2 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAQ==
+# leg=2 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIAxIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=2 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIAxIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=2 direction=server msg_id=4 encoding=protobuf payload_len=201
+raw server AAAAyQAAAMwIAxCnuOLMhDQY6U4itgFSZXF1ZXN0ZWQgbWFya2V0IGRhdGEgcmVxdWlyZXMgYWRkaXRpb25hbCBzdWJzY3JpcHRpb24gZm9yIEFQSS4gU2VlIGxpbmsgaW4gJ01hcmtldCBEYXRhIENvbm5lY3Rpb25zJyBkaWFsb2cgZm9yIG1vcmUgZGV0YWlscy5EZWxheWVkIG1hcmtldCBkYXRhIGlzIGF2YWlsYWJsZS5BQVBMIE5BU0RBUS5OTVMvVE9QL0FMTA==
+# leg=2 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAw==
+# leg=2 direction=client msg_id=1 encoding=protobuf payload_len=37
+raw client AAAAJQAAAMkIBBIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNEIAE=
+# leg=2 direction=server msg_id=58 encoding=protobuf payload_len=8
+raw server AAAACAAAAQIIBBAD
+# leg=2 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIBBIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIBBBMGaRwPQrXz3NAIgEwKAA=
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIBBBIGVK4HoXrJXRAIgEwKAA=
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIBBBJGTMzMzMzt3NAIgEwKAA=
+# leg=2 direction=server msg_id=2 encoding=protobuf payload_len=16
+raw server AAAAEAAAAMoIBBBKGgY1NDMxODg=
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIBBBLGeF6FK5HqXNAIgEwKAA=
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=23
+raw server AAAAFwAAAMkIBBBEGfYoXI/C/XNAIgI0MCgA
+# leg=2 direction=server msg_id=46 encoding=protobuf payload_len=20
+raw server AAAAFAAAAPYIBBBYGgoxNzg3OTQwMjI5
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=24
+raw server AAAAGAAAAMkIBBBCGZqZmZmZ/XNAIgMzNjAoAA==
+# leg=2 direction=server msg_id=1 encoding=protobuf payload_len=23
+raw server AAAAFwAAAMkIBBBDGa5H4XoU/nNAIgI0MCgA
+# leg=2 direction=server msg_id=57 encoding=protobuf payload_len=6
+raw server AAAABgAAAQEIBA==
+# leg=2 direction=client msg_id=7 encoding=protobuf payload_len=25
+raw client AAAAGQAAAM8IBRIREglEVTkwMDAwMDEiBEFBUEw=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=226
+raw server AAAA4gAAANMIBRIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGqcBCJEFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMxocMjAyNjA4MjggMTQ6MTE6MDIgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgZOQVNEQVEyA0JPVDoBMUFxPQrXowB0QEiRucTDIVABYgExaXE9CtejAHRAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTaQAQKoAf///////////wE=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBRIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiSBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDQaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9CtejAHRASJK5xMMhUAFiATFpcT0K16MAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxN5ABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBRIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiUBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDUaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDU0xEOgEyQRSuR+F6AHRASJS5xMMhUAFiATJpFK5H4XoAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOJABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBRIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiVBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDYaHDIwMjYwODI4IDE0OjE4OjE1IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9Ctej+HNASJW5xMMhUAFiATFpcT0K16P4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOZABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=222
+raw server AAAA3gAAANMIBRIuCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgRCQVRTUgNVU0RaBEFBUExiA05NUxqlAQiXBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDcaHDIwMjYwODI4IDE0OjE4OjE2IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoEQkFUUzIDU0xEOgExQRSuR+F6+HNASJe5xMMhUAFiATFpFK5H4Xr4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAyMJABAqgB////////////AQ==
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAzESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA0ESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA1ETeN7bWgN/A/GgNVU0Qh5pDUQslECMA=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA2ESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA3ESRFZFjFG/A/GgNVU0QhuAchIF8iAMA=
+# leg=2 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IBQ==
+# leg=2 direction=client msg_id=3 encoding=protobuf payload_len=142
+raw client AAAAjgAAAMsImAUSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpmIAAqA0JVWTIBMTgAQgNNS1RaA0RBWWIJRFU5MDAwMDAx4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDAx8AEA+AEAkAQBqAQAwAT///////////8BkAYAygYAIgA=
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=314
+raw server AAABOgAAAM0ImAUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGvIBCAEQmAUYmLnEwyEgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMLIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAgAhkiQh7FK5H4XqUP8oIDXBhcGVyLXVzZXItMDHwCAAiCwoJU3VibWl0dGVk
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=61
+raw server AAAAPQAAAMsImAUSCVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCYucTDITgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=237
+raw server AAAA7QAAANMI////////////ARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiYBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDEaHDIwMjYwODI4IDE0OjE4OjU0IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQQrXo3A9+nNASJi5xMMhUAFiATFpCtejcD36c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMZABAqgB////////////AQ==
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=359
+raw server AAABZwAAAM0ImAUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGvIBCAEQmAUYmLnEwyEgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMbIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAgAhkiQh7FK5H4XqUP8oIDXBhcGVyLXVzZXItMDHwCAAiOAoGRmlsbGVk6gEcMjAyNjA4MjggMTQ6MTg6NTQgVVMvRWFzdGVybvIBDkZpbGxlZCBTaXplOiAx
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=58
+raw server AAAAOgAAAMsImAUSBkZpbGxlZBoBMSIBMCkK16NwPfpzQDCYucTDITgAQQrXo3A9+nNASAFZAAAAAAAAAAA=
+# leg=2 direction=client msg_id=3 encoding=protobuf payload_len=152
+raw client AAAAmAAAAMsImQUSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpwIAAqBFNFTEwyATE4AEIDU1RQUXsUrkfh+i9AWgNEQVliCURVOTAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwNfABAPgBAJAEAagEAMAE////////////AZAGAMoGACIA
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=373
+raw server AAABdQAAAM0ImAUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGvIBCAEQmAUYmLnEwyEgACoDQlVZMgExQgNNS1RJAAAAAAAAAABRAAAAAAAAAABaA0RBWWIJRFU5MDAwMDAxegJJQuIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMfABA/gBALACAMACAMoCBE5vbmXwAgCoBACwBADABP///////////wHqBQROb25lkAYA+AYBmgcBMbIHKU5vdCBhbiBpbnNpZGVyIG9yIHN1YnN0YW50aWFsIHNoYXJlaG9sZGVywAcA0AcAgAhkiQh7FK5H4XqUP8oIDXBhcGVyLXVzZXItMDHwCAAiRgoGRmlsbGVkWSJuTiUDAPA/cgNVU0TqARwyMDI2MDgyOCAxNDoxODo1NCBVUy9FYXN0ZXJu8gEORmlsbGVkIFNpemU6IDE=
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=58
+raw server AAAAOgAAAMsImAUSBkZpbGxlZBoBMSIBMCkK16NwPfpzQDCYucTDITgAQQrXo3A9+nNASAFZAAAAAAAAAAA=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAxESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=328
+raw server AAABSAAAAM0ImQUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGv0BCAEQmQUYmbnEwyEgACoEU0VMTDIBMUIDU1RQSYXrUbgeBTBAUXsUrkfh+i9AWgNEQVliCURVOTAwMDAwMXoCSUK5AXsUrkfh+i9A4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDA18AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwEwsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwCACGSJCHsUrkfhepQ/yggNcGFwZXItdXNlci0wMfAIACIOCgxQcmVTdWJtaXR0ZWQ=
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=73
+raw server AAAASQAAAMsImQUSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCZucTDITgAQQAAAAAAAAAASAFSB3RyaWdnZXJZAAAAAAAAAAA=
+# leg=2 direction=client msg_id=3 encoding=protobuf payload_len=152
+raw client AAAAmAAAAMsImQUSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpwIAAqBFNFTEwyATE4AEIDU1RQUT0K16Nw/TBAWgNEQVliCURVOTAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwNfABAPgBAJAEAagEAMAE////////////AZAGAMoGACIA
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=329
+raw server AAABSQAAAM0ImQUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGv0BCAEQmQUYmbnEwyEgACoEU0VMTDIBMUIDU1RQSQAAAAAAAAAAUT0K16Nw/TBAWgNEQVliCURVOTAwMDAwMXoCSUK5AT0K16Nw/TBA4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDA18AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwEwsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwCACGSJCHsUrkfhepQ/yggNcGFwZXItdXNlci0wMfAIACIPCg1QZW5kaW5nU3VibWl0
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMsImQUSDVBlbmRpbmdTdWJtaXQaATAiATEpAAAAAAAAAAAwmbnEwyE4AEEAAAAAAAAAAEgBWQAAAAAAAAAA
+# leg=2 direction=client msg_id=4 encoding=protobuf payload_len=9
+raw client AAAACQAAAMwImQUSAA==
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=329
+raw server AAABSQAAAM0ImQUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGv0BCAEQmQUYmbnEwyEgACoEU0VMTDIBMUIDU1RQSQAAAAAAAAAAUT0K16Nw/TBAWgNEQVliCURVOTAwMDAwMXoCSUK5AT0K16Nw/TBA4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDA18AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwEwsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwCACGSJCHsUrkfhepQ/yggNcGFwZXItdXNlci0wMfAIACIPCg1QZW5kaW5nQ2FuY2Vs
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMsImQUSDVBlbmRpbmdDYW5jZWwaATAiATEpAAAAAAAAAAAwmbnEwyE4AEEAAAAAAAAAAEgBWQAAAAAAAAAA
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=329
+raw server AAABSQAAAM0ImQUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGv0BCAEQmQUYmbnEwyEgACoEU0VMTDIBMUIDU1RQSQAAAAAAAAAAUT0K16Nw/TBAWgNEQVliCURVOTAwMDAwMXoCSUK5AT0K16Nw/TBA4gEkc2FuaXRpemVkLW9yZGVyLXJlZi0wMDAwMDAwMDAwMDAwMDA18AED+AEAsAIAwAIAygIETm9uZfACAKgEALAEAMAE////////////AeoFBE5vbmWQBgD4BgGaBwEwsgcpTm90IGFuIGluc2lkZXIgb3Igc3Vic3RhbnRpYWwgc2hhcmVob2xkZXLABwDQBwCACGSJCHsUrkfhepQ/yggNcGFwZXItdXNlci0wMfAIACIPCg1QZW5kaW5nQ2FuY2Vs
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMsImQUSDVBlbmRpbmdDYW5jZWwaATAiATEpAAAAAAAAAAAwmbnEwyE4AEEAAAAAAAAAAEgBWQAAAAAAAAAA
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=61
+raw server AAAAPQAAAMsImQUSCUNhbmNlbGxlZBoBMCIBMSkAAAAAAAAAADCZucTDITgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=2 direction=server msg_id=4 encoding=protobuf payload_len=43
+raw server AAAAKwAAAMwImQUQmMXizIQ0GMoBIhhPcmRlciBDYW5jZWxlZCAtIHJlYXNvbjo=
+# leg=2 direction=client msg_id=3 encoding=protobuf payload_len=143
+raw client AAAAjwAAAMsImgUSGwj+mhASBEFBUEwaA1NUS0IFU01BUlRSA1VTRBpnIAAqBFNFTEwyATE4AEIDTUtUWgNEQVliCURVOTAwMDAwMeIBJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxMfABAPgBAJAEAagEAMAE////////////AZAGAMoGACIA
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=305
+raw server AAABMQAAAM0ImgUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuYBCAEQmgUYmrnEwyEgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsImgUSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCaucTDITgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=305
+raw server AAABMQAAAM0ImgUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuYBCAEQmgUYmrnEwyEgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATCyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiDgoMUHJlU3VibWl0dGVk
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=64
+raw server AAAAQAAAAMsImgUSDFByZVN1Ym1pdHRlZBoBMCIBMSkAAAAAAAAAADCaucTDITgAQQAAAAAAAAAASAFZAAAAAAAAAAA=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=229
+raw server AAAA5QAAANMI////////////ARItCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgNJRVhSA1VTRFoEQUFQTGIDTk1TGqQBCJoFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMhocMjAyNjA4MjggMTQ6MTg6NTUgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgNJRVgyA1NMRDoBMUGamZmZmflzQEiaucTDIVABYgExaZqZmZmZ+XNAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTGQAQKoAf///////////wE=
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=347
+raw server AAABWwAAAM0ImgUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuYBCAEQmgUYmrnEwyEgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATGyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiOAoGRmlsbGVk6gEcMjAyNjA4MjggMTQ6MTg6NTUgVVMvRWFzdGVybvIBDkZpbGxlZCBTaXplOiAx
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=58
+raw server AAAAOgAAAMsImgUSBkZpbGxlZBoBMSIBMCmamZmZmflzQDCaucTDITgAQZqZmZmZ+XNASAFZAAAAAAAAAAA=
+# leg=2 direction=client msg_id=7 encoding=protobuf payload_len=25
+raw client AAAAGQAAAM8IBhIREglEVTkwMDAwMDEiBEFBUEw=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=226
+raw server AAAA4gAAANMIBhIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGqcBCJEFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMxocMjAyNjA4MjggMTQ6MTE6MDIgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgZOQVNEQVEyA0JPVDoBMUFxPQrXowB0QEiRucTDIVABYgExaXE9CtejAHRAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTaQAQKoAf///////////wE=
+# leg=2 direction=server msg_id=5 encoding=protobuf payload_len=361
+raw server AAABaQAAAM0ImgUSLwj+mhASBEFBUEwaA1NUSykAAAAAAAAAAEIFU01BUlRSA1VTRFoEQUFQTGIDTk1TGuYBCAEQmgUYmrnEwyEgACoEU0VMTDIBMUIDTUtUSQAAAAAAAAAAUQAAAAAAAAAAWgNEQVliCURVOTAwMDAwMXoCSULiASRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTHwAQP4AQCwAgDAAgDKAgROb25l8AIAqAQAsAQAwAT///////////8B6gUETm9uZZAGAPgGAZoHATGyBylOb3QgYW4gaW5zaWRlciBvciBzdWJzdGFudGlhbCBzaGFyZWhvbGRlcsAHANAHAMoIDXBhcGVyLXVzZXItMDHwCAAiRgoGRmlsbGVkWTs5Q3HHG/A/cgNVU0TqARwyMDI2MDgyOCAxNDoxODo1NSBVUy9FYXN0ZXJu8gEORmlsbGVkIFNpemU6IDE=
+# leg=2 direction=server msg_id=3 encoding=protobuf payload_len=58
+raw server AAAAOgAAAMsImgUSBkZpbGxlZBoBMSIBMCmamZmZmflzQDCaucTDITgAQZqZmZmZ+XNASAFZAAAAAAAAAAA=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBhIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiSBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDQaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9CtejAHRASJK5xMMhUAFiATFpcT0K16MAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxN5ABAqgB////////////AQ==
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAyETs5Q3HHG/A/GgNVU0QhAIxn0NBfAMA=
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBhIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiUBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDUaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDU0xEOgEyQRSuR+F6AHRASJS5xMMhUAFiATJpFK5H4XoAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOJABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBhIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiVBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDYaHDIwMjYwODI4IDE0OjE4OjE1IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9Ctej+HNASJW5xMMhUAFiATFpcT0K16P4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOZABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=222
+raw server AAAA3gAAANMIBhIuCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgRCQVRTUgNVU0RaBEFBUExiA05NUxqlAQiXBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDcaHDIwMjYwODI4IDE0OjE4OjE2IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoEQkFUUzIDU0xEOgExQRSuR+F6+HNASJe5xMMhUAFiATFpFK5H4Xr4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAyMJABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIBhIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiYBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDEaHDIwMjYwODI4IDE0OjE4OjU0IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQQrXo3A9+nNASJi5xMMhUAFiATFpCtejcD36c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMZABAqgB////////////AQ==
+# leg=2 direction=server msg_id=11 encoding=protobuf payload_len=220
+raw server AAAA3AAAANMIBhItCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgNJRVhSA1VTRFoEQUFQTGIDTk1TGqQBCJoFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMhocMjAyNjA4MjggMTQ6MTg6NTUgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgNJRVgyA1NMRDoBMUGamZmZmflzQEiaucTDIVABYgExaZqZmZmZ+XNAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTGQAQKoAf///////////wE=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAzESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA0ESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA1ETeN7bWgN/A/GgNVU0Qh5pDUQslECMA=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA2ESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA3ESRFZFjFG/A/GgNVU0QhuAchIF8iAMA=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAxESJuTiUDAPA/GgNVU0Q=
+# leg=2 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAyETs5Q3HHG/A/GgNVU0QhAIxn0NBfAMA=
+# leg=2 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IBg==
+# leg=2 direction=client msg_id=49 encoding=protobuf payload_len=4
+raw client AAAABAAAAPk=
+# leg=2 direction=server msg_id=49 encoding=protobuf payload_len=10
+raw server AAAACgAAAPkIjqLH1AY=
+disconnect
+handshake {"server_version":225,"connection_time":"20260828 20:18:54 CET"}
+# leg=3 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=3 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEImwU=
+# leg=3 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARDuw+LMhDQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=3 direction=server msg_id=4 encoding=protobuf payload_len=107
+raw server AAAAawAAAMwI////////////ARDuw+LMhDQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgaW5hY3RpdmUgYnV0IHNob3VsZCBiZSBhdmFpbGFibGUgdXBvbiBkZW1hbmQudXNobWRz
+# leg=3 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARDuw+LMhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=3 direction=client msg_id=16 encoding=protobuf payload_len=4
+raw client AAAABAAAANg=
+# leg=3 direction=server msg_id=53 encoding=protobuf payload_len=4
+raw server AAAABAAAAP0=
+# leg=3 direction=client msg_id=61 encoding=protobuf payload_len=4
+raw client AAAABAAAAQU=
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIzCPfVlJkBEgVBRFlFThoDU1RLKQAAAAAAAAAAQgNBRUJSA0VVUloFQURZRU5iBUFEWUVOGgMxMDAhpaDbSxqZjEA=
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=79
+raw server AAAATwAAAQUKCURVOTAwMDAwMRIxCPibnDgSBEFTTUwaA1NUSykAAAAAAAAAAEIGTkFTREFRUgNVU0RaBEFTTUxiA05NUxoCMzAh9Ae5Qaf2lUA=
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRItCIm50mESA05YRRoDU1RLKQAAAAAAAAAAQgROWVNFUgNVU0RaA05YRWIDTlhFGgQ4MTg4IQLYgAhx/ShA
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGgEwIQAAAAAAAAAA
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=81
+raw server AAAAUQAAAQUKCURVOTAwMDAwMRIyCOeZjIICEgRDUkRPGgNTVEspAAAAAAAAAABCBk5BU0RBUVIDVVNEWgRDUkRPYgNOTVMaAzc1MyFzhj1Iyr9mQA==
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIyCKDlhoYBEgRESEVSGgNTVEspAAAAAAAAAABCBElCSVNSA0VVUloEREhFUmIFWEVUUkEaBDE1NjghWqGjsObMNEA=
+# leg=3 direction=server msg_id=61 encoding=protobuf payload_len=80
+raw server AAAAUAAAAQUKCURVOTAwMDAwMRIwCKGAtNUBEgNIQUcaA1NUSykAAAAAAAAAAEIESUJJU1IDRVVSWgNIQUdiBVhFVFJBGgQxNTU2IcROZ901u1NA
+# leg=3 direction=server msg_id=62 encoding=protobuf payload_len=4
+raw server AAAABAAAAQY=
+# leg=3 direction=client msg_id=64 encoding=protobuf payload_len=4
+raw client AAAABAAAAQg=
+disconnect
+handshake {"server_version":225,"connection_time":"20260828 20:18:55 CET"}
+# leg=4 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=4 direction=server msg_id=9 encoding=protobuf payload_len=7
+raw server AAAABwAAANEImwU=
+# leg=4 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC+zOLMhDQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=4 direction=server msg_id=4 encoding=protobuf payload_len=107
+raw server AAAAawAAAMwI////////////ARC+zOLMhDQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgaW5hY3RpdmUgYnV0IHNob3VsZCBiZSBhdmFpbGFibGUgdXBvbiBkZW1hbmQudXNobWRz
+# leg=4 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARC+zOLMhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=4 direction=client msg_id=16 encoding=protobuf payload_len=4
+raw client AAAABAAAANg=
+# leg=4 direction=server msg_id=53 encoding=protobuf payload_len=4
+raw server AAAABAAAAP0=
+# leg=4 direction=client msg_id=61 encoding=protobuf payload_len=4
+raw client AAAABAAAAQU=
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIzCPfVlJkBEgVBRFlFThoDU1RLKQAAAAAAAAAAQgNBRUJSA0VVUloFQURZRU5iBUFEWUVOGgMxMDAhpaDbSxqZjEA=
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=79
+raw server AAAATwAAAQUKCURVOTAwMDAwMRIxCPibnDgSBEFTTUwaA1NUSykAAAAAAAAAAEIGTkFTREFRUgNVU0RaBEFTTUxiA05NUxoCMzAh9Ae5Qaf2lUA=
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRItCIm50mESA05YRRoDU1RLKQAAAAAAAAAAQgROWVNFUgNVU0RaA05YRWIDTlhFGgQ4MTg4IQLYgAhx/ShA
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=77
+raw server AAAATQAAAQUKCURVOTAwMDAwMRIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGgEwIQAAAAAAAAAA
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=81
+raw server AAAAUQAAAQUKCURVOTAwMDAwMRIyCOeZjIICEgRDUkRPGgNTVEspAAAAAAAAAABCBk5BU0RBUVIDVVNEWgRDUkRPYgNOTVMaAzc1MyFzhj1Iyr9mQA==
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=82
+raw server AAAAUgAAAQUKCURVOTAwMDAwMRIyCKDlhoYBEgRESEVSGgNTVEspAAAAAAAAAABCBElCSVNSA0VVUloEREhFUmIFWEVUUkEaBDE1NjghWqGjsObMNEA=
+# leg=4 direction=server msg_id=61 encoding=protobuf payload_len=80
+raw server AAAAUAAAAQUKCURVOTAwMDAwMRIwCKGAtNUBEgNIQUcaA1NUSykAAAAAAAAAAEIESUJJU1IDRVVSWgNIQUdiBVhFVFJBGgQxNTU2IcROZ901u1NA
+# leg=4 direction=server msg_id=62 encoding=protobuf payload_len=4
+raw server AAAABAAAAQY=
+# leg=4 direction=client msg_id=64 encoding=protobuf payload_len=4
+raw client AAAABAAAAQg=
+# leg=4 direction=client msg_id=7 encoding=protobuf payload_len=19
+raw client AAAAEwAAAM8IARILEglEVTkwMDAwMDE=
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=226
+raw server AAAA4gAAANMIARIwCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgZOQVNEQVFSA1VTRFoEQUFQTGIDTk1TGqcBCJEFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMxocMjAyNjA4MjggMTQ6MTE6MDIgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgZOQVNEQVEyA0JPVDoBMUFxPQrXowB0QEiRucTDIVABYgExaXE9CtejAHRAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTaQAQKoAf///////////wE=
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiSBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDQaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9CtejAHRASJK5xMMhUAFiATFpcT0K16MAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxN5ABAqgB////////////AQ==
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiUBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDUaHDIwMjYwODI4IDE0OjExOjAyIFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDU0xEOgEyQRSuR+F6AHRASJS5xMMhUAFiATJpFK5H4XoAdEByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOJABAqgB////////////AQ==
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiVBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDYaHDIwMjYwODI4IDE0OjE4OjE1IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQXE9Ctej+HNASJW5xMMhUAFiATFpcT0K16P4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAxOZABAqgB////////////AQ==
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=222
+raw server AAAA3gAAANMIARIuCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgRCQVRTUgNVU0RaBEFBUExiA05NUxqlAQiXBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDcaHDIwMjYwODI4IDE0OjE4OjE2IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoEQkFUUzIDU0xEOgExQRSuR+F6+HNASJe5xMMhUAFiATFpFK5H4Xr4c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAyMJABAqgB////////////AQ==
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=228
+raw server AAAA5AAAANMIARIxCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgdJQktSQVRTUgNVU0RaBEFBUExiA05NUxqoAQiYBRIXc2FuaXRpemVkLWV4ZWMtMDAwMDAwMDEaHDIwMjYwODI4IDE0OjE4OjU0IFVTL0Vhc3Rlcm4iCURVOTAwMDAwMSoHSUJLUkFUUzIDQk9UOgExQQrXo3A9+nNASJi5xMMhUAFiATFpCtejcD36c0ByJHNhbml0aXplZC1vcmRlci1yZWYtMDAwMDAwMDAwMDAwMDAwMZABAqgB////////////AQ==
+# leg=4 direction=server msg_id=11 encoding=protobuf payload_len=220
+raw server AAAA3AAAANMIARItCP6aEBIEQUFQTBoDU1RLKQAAAAAAAAAAQgNJRVhSA1VTRFoEQUFQTGIDTk1TGqQBCJoFEhdzYW5pdGl6ZWQtZXhlYy0wMDAwMDAwMhocMjAyNjA4MjggMTQ6MTg6NTUgVVMvRWFzdGVybiIJRFU5MDAwMDAxKgNJRVgyA1NMRDoBMUGamZmZmflzQEiaucTDIVABYgExaZqZmZmZ+XNAciRzYW5pdGl6ZWQtb3JkZXItcmVmLTAwMDAwMDAwMDAwMDAwMTGQAQKoAf///////////wE=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAzESJuTiUDAPA/GgNVU0Q=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA0ESJuTiUDAPA/GgNVU0Q=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA1ETeN7bWgN/A/GgNVU0Qh5pDUQslECMA=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA2ESJuTiUDAPA/GgNVU0Q=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDA3ESRFZFjFG/A/GgNVU0QhuAchIF8iAMA=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=43
+raw server AAAAKwAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAxESJuTiUDAPA/GgNVU0Q=
+# leg=4 direction=server msg_id=59 encoding=protobuf payload_len=52
+raw server AAAANAAAAQMKF3Nhbml0aXplZC1leGVjLTAwMDAwMDAyETs5Q3HHG/A/GgNVU0QhAIxn0NBfAMA=
+# leg=4 direction=server msg_id=55 encoding=protobuf payload_len=6
+raw server AAAABgAAAP8IAQ==
+# leg=4 direction=client msg_id=62 encoding=protobuf payload_len=54
+raw client AAAANgAAAQYIAhIDQWxsGilOZXRMaXF1aWRhdGlvbixUb3RhbENhc2hWYWx1ZSxCdXlpbmdQb3dlcg==
+# leg=4 direction=server msg_id=63 encoding=protobuf payload_len=47
+raw server AAAALwAAAQcIAhIJRFU5MDAwMDAxGgtCdXlpbmdQb3dlciIKNjgzMzkwNy4yNioDRVVS
+# leg=4 direction=server msg_id=63 encoding=protobuf payload_len=50
+raw server AAAAMgAAAQcIAhIJRFU5MDAwMDAxGg5OZXRMaXF1aWRhdGlvbiIKMTE3MzE2MC45NCoDRVVS
+# leg=4 direction=server msg_id=63 encoding=protobuf payload_len=49
+raw server AAAAMQAAAQcIAhIJRFU5MDAwMDAxGg5Ub3RhbENhc2hWYWx1ZSIJNTQzNDQ3LjI1KgNFVVI=
+# leg=4 direction=server msg_id=64 encoding=protobuf payload_len=6
+raw server AAAABgAAAQgIAg==
+# leg=4 direction=client msg_id=63 encoding=protobuf payload_len=6
+raw client AAAABgAAAQcIAg==
+disconnect

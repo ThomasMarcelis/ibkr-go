@@ -3119,132 +3119,65 @@ func runAPITIFAttributeMatrixAAPL(ctx context.Context, addr string, clientID int
 }
 
 func runAPISecurityTypeProbeMatrix(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 6*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
-		_ = account
+	return apiScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, _ string) error {
+		option, err := qualifyAAPLCall(ctx, client, decimal.NewFromInt(300))
+		if err != nil {
+			return fmt.Errorf("qualify bounded AAPL option probe: %w", err)
+		}
+		futureOption, err := qualifyFrontFutureOption(ctx, client, "MES")
+		if err != nil {
+			return fmt.Errorf("qualify bounded MES future-option probe: %w", err)
+		}
 		probes := []struct {
-			label    string
-			contract ibkr.Contract
-			timeout  time.Duration
+			label         string
+			contract      ibkr.Contract
+			allowAPIError bool
 		}{
-			{label: "stk_aapl", contract: apiAAPL, timeout: 15 * time.Second},
-			{label: "opt_aapl_chain", contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeOption, Exchange: "SMART", Currency: "USD"}, timeout: 30 * time.Second},
-			{label: "fut_mes_front", contract: ibkr.Contract{Symbol: "MES", SecType: ibkr.SecTypeFuture, Exchange: "CME", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "fop_mes", contract: ibkr.Contract{Symbol: "MES", SecType: ibkr.SecTypeFutureOption, Exchange: "CME", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "cash_eurusd", contract: apiEURUSD, timeout: 15 * time.Second},
-			{label: "bond_probe", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBond, Exchange: "SMART", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "cfd_aapl", contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCFD, Exchange: "SMART", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "war_aapl", contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeWarrant, Exchange: "SMART", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "ind_spx", contract: ibkr.Contract{Symbol: "SPX", SecType: ibkr.SecTypeIndex, Exchange: "CBOE", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "crypto_btc", contract: ibkr.Contract{Symbol: "BTC", SecType: ibkr.SecTypeCrypto, Exchange: "PAXOS", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "fund_vtsax", contract: ibkr.Contract{Symbol: "VTSAX", SecType: ibkr.SecTypeFund, Exchange: "FUNDSERV", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "bill_probe", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBill, Exchange: "SMART", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "cmdty_xauusd", contract: ibkr.Contract{Symbol: "XAUUSD", SecType: ibkr.SecTypeCommodity, Exchange: "SMART", Currency: "USD"}, timeout: 20 * time.Second},
-			{label: "contfut_es", contract: ibkr.Contract{Symbol: "ES", SecType: ibkr.SecTypeContFuture, Exchange: "CME", Currency: "USD"}, timeout: 20 * time.Second},
+			{label: "stk_aapl", contract: apiAAPL},
+			{label: "opt_aapl", contract: option},
+			{label: "fut_mes_front", contract: ibkr.Contract{Symbol: "MES", SecType: ibkr.SecTypeFuture, Exchange: "CME", Currency: "USD"}},
+			{label: "fop_mes", contract: futureOption},
+			{label: "cash_eurusd", contract: apiEURUSD},
+			{label: "bond_probe", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBond, Exchange: "SMART", Currency: "USD"}, allowAPIError: true},
+			{label: "cfd_aapl", contract: ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCFD, Exchange: "SMART", Currency: "USD"}},
+			{label: "war_tencent", contract: ibkr.Contract{Symbol: "700", SecType: ibkr.SecTypeWarrant, Exchange: "SEHK", Currency: "HKD", Expiry: "202612", Strike: new(decimal.NewFromInt(700)), Right: ibkr.RightCall}},
+			{label: "ind_spx", contract: ibkr.Contract{Symbol: "SPX", SecType: ibkr.SecTypeIndex, Exchange: "CBOE", Currency: "USD"}},
+			{label: "crypto_btc", contract: ibkr.Contract{Symbol: "BTC", SecType: ibkr.SecTypeCrypto, Exchange: "PAXOS", Currency: "USD"}},
+			{label: "fund_vtsax", contract: ibkr.Contract{Symbol: "VTSAX", SecType: ibkr.SecTypeFund, Exchange: "FUNDSERV", Currency: "USD"}},
+			{label: "bill_probe", contract: ibkr.Contract{Symbol: "912797", SecType: ibkr.SecTypeBill, Exchange: "SMART", Currency: "USD"}, allowAPIError: true},
+			{label: "cmdty_xauusd", contract: ibkr.Contract{Symbol: "XAUUSD", SecType: ibkr.SecTypeCommodity, Exchange: "SMART", Currency: "USD"}},
+			{label: "contfut_es", contract: ibkr.Contract{Symbol: "ES", SecType: ibkr.SecTypeContFuture, Exchange: "CME", Currency: "USD"}},
 		}
 		for _, probe := range probes {
-			caseCtx, cancel := context.WithTimeout(ctx, probe.timeout)
+			caseCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 			details, err := client.Contracts().Details(caseCtx, probe.contract)
 			cancel()
 			if err != nil {
-				log.Printf("security probe %s error: %v", probe.label, err)
 				recordAPIEvent("contract_probe_error", probe.label, func(event *apiDriverEvent) {
 					event.Symbol = probe.contract.Symbol
 					event.SecType = string(probe.contract.SecType)
 					event.Error = err.Error()
 				})
-				continue
+				if _, ok := errors.AsType[*ibkr.APIError](err); probe.allowAPIError && ok {
+					continue
+				}
+				return fmt.Errorf("security probe %s: %w", probe.label, err)
 			}
-			log.Printf("security probe %s details=%d", probe.label, len(details))
+			if len(details) == 0 {
+				return fmt.Errorf("security probe %s returned no contract details", probe.label)
+			}
 			recordAPIEvent("contract_probe", probe.label, func(event *apiDriverEvent) {
 				event.Symbol = probe.contract.Symbol
 				event.SecType = string(probe.contract.SecType)
 				event.Count = len(details)
+				event.Values = map[string]string{
+					"con_id":        strconv.FormatInt(int64(details[0].ConID), 10),
+					"expiry":        details[0].Expiry,
+					"local_symbol":  details[0].LocalSymbol,
+					"trading_class": details[0].TradingClass,
+				}
 			})
 		}
-		return nil
-	})
-}
-
-func runAPIMarketDataCompletenessAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
-		_ = account
-		for _, dataType := range []ibkr.MarketDataType{
-			ibkr.MarketDataLive,
-			ibkr.MarketDataFrozen,
-			ibkr.MarketDataDelayed,
-			ibkr.MarketDataDelayedFrozen,
-		} {
-			caseCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			err := client.MarketData().SetType(caseCtx, dataType)
-			cancel()
-			recordProbeResult("market_data_type", dataType.String(), 0, err)
-			if err != nil {
-				log.Printf("set market data type %s: %v", dataType, err)
-			}
-		}
-
-		quoteCtx, quoteCancel := context.WithTimeout(ctx, 20*time.Second)
-		quote, err := client.MarketData().Quote(quoteCtx, ibkr.QuoteRequest{
-			Contract: apiAAPL,
-			GenericTicks: []ibkr.GenericTick{
-				"100", "101", "104", "106", "165", "221", "225", "233",
-				"236", "258", "293", "294", "295", "318", "411", "456", "588",
-			},
-		})
-		quoteCancel()
-		if err != nil {
-			log.Printf("generic tick quote: %v", err)
-			recordProbeResult("quote_generic_ticks", "aapl", 0, err)
-		} else {
-			recordAPIEvent("quote_generic_ticks", "aapl", func(event *apiDriverEvent) {
-				event.Symbol = apiAAPL.Symbol
-				event.SecType = string(apiAAPL.SecType)
-				event.Values = map[string]string{"available": strconv.FormatUint(uint64(quote.Available), 10), "market_data_type": quote.MarketDataType.String()}
-			})
-		}
-
-		for _, what := range []ibkr.WhatToShow{ibkr.ShowTrades, ibkr.ShowBidAsk, ibkr.ShowMidpoint} {
-			caseCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			sub, err := client.MarketData().SubscribeRealTimeBars(caseCtx, ibkr.RealTimeBarsRequest{Contract: apiAAPL, WhatToShow: what, UseRTH: false})
-			if err != nil {
-				cancel()
-				log.Printf("realtime bars %s: %v", what, err)
-				recordProbeResult("realtime_bars", string(what), 0, err)
-				continue
-			}
-			count := observeBars(caseCtx, sub, 12*time.Second)
-			sub.Close()
-			cancel()
-			recordProbeResult("realtime_bars", string(what), count, nil)
-		}
-
-		for _, tickCase := range []struct {
-			label      string
-			tickType   ibkr.TickByTickType
-			ignoreSize bool
-		}{
-			{label: "last", tickType: ibkr.TickByTickLast},
-			{label: "all_last", tickType: ibkr.TickByTickAllLast},
-			{label: "all_last_ignore_size", tickType: ibkr.TickByTickAllLast, ignoreSize: true},
-			{label: "bid_ask", tickType: ibkr.TickByTickBidAsk},
-			{label: "midpoint", tickType: ibkr.TickByTickMidPoint},
-		} {
-			caseCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			sub, err := client.MarketData().SubscribeTickByTick(caseCtx, ibkr.TickByTickRequest{
-				Contract: apiAAPL, TickType: tickCase.tickType, NumberOfTicks: 0, IgnoreSize: tickCase.ignoreSize,
-			})
-			if err != nil {
-				cancel()
-				log.Printf("tick-by-tick %s: %v", tickCase.label, err)
-				recordProbeResult("tick_by_tick", tickCase.label, 0, err)
-				continue
-			}
-			count := observeTicks(caseCtx, sub, 12*time.Second)
-			sub.Close()
-			cancel()
-			recordProbeResult("tick_by_tick", tickCase.label, count, nil)
-		}
-
 		return nil
 	})
 }
@@ -3610,6 +3543,9 @@ func runAPIHistoricalMatrixAAPL(ctx context.Context, addr string, clientID int) 
 			cancel()
 			recordProbeResult("historical_bar_size", barCase.label, len(bars), err)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					return fmt.Errorf("historical bar size %s timed out: %w", barCase.label, err)
+				}
 				log.Printf("historical bar size %s: %v", barCase.label, err)
 			}
 		}
@@ -3619,13 +3555,20 @@ func runAPIHistoricalMatrixAAPL(ctx context.Context, addr string, clientID int) 
 			ibkr.ShowHistoricalVolatility, ibkr.ShowOptionImpliedVolatility,
 		} {
 			caseCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-			bars, err := client.History().Bars(caseCtx, ibkr.HistoricalBarsRequest{
-				Contract: apiAAPL, EndTime: time.Now(), Duration: ibkr.Weeks(1),
+			request := ibkr.HistoricalBarsRequest{
+				Contract: apiAAPL, Duration: ibkr.Weeks(1),
 				BarSize: ibkr.Bar1Day, WhatToShow: what, UseRTH: true,
-			})
+			}
+			if what != ibkr.ShowAdjustedLast {
+				request.EndTime = time.Now()
+			}
+			bars, err := client.History().Bars(caseCtx, request)
 			cancel()
 			recordProbeResult("historical_what_to_show", string(what), len(bars), err)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					return fmt.Errorf("historical whatToShow %s timed out: %w", what, err)
+				}
 				log.Printf("historical whatToShow %s: %v", what, err)
 			}
 		}
@@ -3825,42 +3768,67 @@ func runAPIDollarCostAveragingAAPL(ctx context.Context, addr string, clientID in
 func runAPIStopLossManagementAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
+		baselineExecutions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: account, Symbol: "AAPL"})
+		if err != nil {
+			return fmt.Errorf("stop-management execution baseline: %w", err)
+		}
 		buyOrder := baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 		buy, err := placeAPIOrder(ctx, client, "stop-management buy", apiAAPL, buyOrder)
 		if err != nil {
-			log.Printf("stop-management buy: %v", err)
-			return fenceAPIWrites(ctx, client, "stop-management rejected entry")
+			return fmt.Errorf("place stop-management entry: %w", err)
 		}
 		buyObs := observeOrder(ctx, buy, "stop-management buy", 30*time.Second)
-		if !buyObs.AnyFill() {
+		if !buyObs.FullFill() || !buyObs.sawExecution || !buyObs.filledQty.Equal(apiStockOrderQuantity) {
 			if !handleDone(buy) {
 				cancelOrder(ctx, client, account, buy, "stop-management unfilled buy")
 				_ = observeOrder(ctx, buy, "stop-management unfilled buy cancel", 8*time.Second)
 			}
-			return fenceAPIWrites(ctx, client, "stop-management unfilled entry cleanup")
+			return fmt.Errorf("stop-management entry status=%s filled=%s execution=%t, want terminal fill", buyObs.lastStatus, buyObs.filledQty, buyObs.sawExecution)
 		}
 
 		stopOrder := withAux(baseAPIOrder(account, buyObs.filledQty, ibkr.ActionSell, ibkr.OrderTypeStop), farBuy(anchor))
 		stop, err := placeAPIOrder(ctx, client, "stop-management stop", apiAAPL, stopOrder)
 		if err != nil {
-			log.Printf("stop-management stop: %v", err)
 			flattenErr := flattenAAPL(ctx, client, account, "stop-management emergency", buyObs.filledQty)
-			return errors.Join(flattenErr, fenceAPIWrites(ctx, client, "stop-management emergency cleanup"))
+			return errors.Join(fmt.Errorf("place stop-management stop: %w", err), flattenErr, fenceAPIWrites(ctx, client, "stop-management emergency cleanup"))
 		}
-		_ = observeOrder(ctx, stop, "stop-management stop", 8*time.Second)
+		stopEcho, err := awaitOpenOrderEvidence(ctx, stop, "stop-management stop", 20*time.Second)
+		if err != nil {
+			return err
+		}
+		if stopEcho.Order.OrderType != ibkr.OrderTypeStop || !stopEcho.Order.Prices.AuxPrice.Equal(farBuy(anchor)) {
+			return fmt.Errorf("stop-management initial echo type=%s aux=%s, want STP %s", stopEcho.Order.OrderType, stopEcho.Order.Prices.AuxPrice, farBuy(anchor))
+		}
 
 		stopOrder.AuxPrice = new(farBuy(anchor).Add(decimal.NewFromInt(1)))
 		if err := modifyAPIOrder(ctx, client, stop, "stop-management moved stop", stopOrder); err != nil {
-			log.Printf("stop-management modify: %v", err)
+			return fmt.Errorf("replace stop-management stop: %w", err)
 		}
-		_ = observeOrder(ctx, stop, "stop-management moved stop", 8*time.Second)
+		movedEcho, err := awaitOpenOrderEvidence(ctx, stop, "stop-management moved stop", 20*time.Second)
+		if err != nil {
+			return err
+		}
+		if !movedEcho.Order.Prices.AuxPrice.Equal(*stopOrder.AuxPrice) {
+			return fmt.Errorf("stop-management replacement aux=%s, want %s", movedEcho.Order.Prices.AuxPrice, *stopOrder.AuxPrice)
+		}
 		cancelOrder(ctx, client, account, stop, "stop-management stop")
-		_ = observeOrder(ctx, stop, "stop-management stop cancel", 8*time.Second)
+		stopObservation := observeOrder(ctx, stop, "stop-management stop cancel", 20*time.Second)
+		if !stopObservation.terminal || stopObservation.AnyFill() {
+			return fmt.Errorf("stop-management cleanup status=%s filled=%s, want terminal zero fill", stopObservation.lastStatus, stopObservation.filledQty)
+		}
 		if err := flattenAAPL(ctx, client, account, "stop-management flatten", buyObs.filledQty); err != nil {
-			log.Printf("stop-management flatten: %v", err)
 			return errors.Join(err, fenceAPIWrites(ctx, client, "stop-management failed flatten"))
 		}
-		queryAAPLExecutions(client, account)
+		executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: account, Symbol: "AAPL"})
+		if err != nil {
+			return fmt.Errorf("stop-management executions: %w", err)
+		}
+		if countNewExecutions(baselineExecutions, executions) != 2 {
+			return fmt.Errorf("stop-management new executions=%d, want 2", countNewExecutions(baselineExecutions, executions))
+		}
+		if err := verifyNewExecutionFees(baselineExecutions, executions); err != nil {
+			return fmt.Errorf("stop-management execution fees: %w", err)
+		}
 		return fenceAPIWrites(ctx, client, "stop-management cleanup")
 	})
 }
@@ -4026,100 +3994,226 @@ func runAPIComboOptionVerticalAAPL(ctx context.Context, addr string, clientID in
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		lower, upper, err := qualifyAAPLCallVertical(ctx, client, anchor)
 		if err != nil {
-			log.Printf("qualify option vertical: %v", err)
 			recordAPIEvent("option_qualify_error", "aapl call vertical", func(event *apiDriverEvent) {
 				event.Symbol = "AAPL"
 				event.SecType = string(ibkr.SecTypeOption)
 				event.Error = err.Error()
 			})
-			return nil
+			return fmt.Errorf("qualify AAPL call vertical: %w", err)
+		}
+		if lower.Strike == nil || upper.Strike == nil {
+			return errors.New("qualified AAPL vertical has no strikes")
+		}
+		width := upper.Strike.Sub(*lower.Strike)
+		lowerPrice := decimal.RequireFromString("0.04")
+		upperPrice := decimal.RequireFromString("0.01")
+		netDebit := lowerPrice.Sub(upperPrice)
+		if !width.IsPositive() || !netDebit.IsPositive() || netDebit.GreaterThan(width) {
+			return fmt.Errorf("AAPL vertical width=%s cannot bound net per-leg debit %s", width, netDebit)
 		}
 		bag := ibkr.Contract{Symbol: "AAPL", SecType: ibkr.SecTypeCombo, Exchange: "SMART", Currency: "USD", ComboLegs: []ibkr.ComboLeg{
 			{ConID: lower.ConID, Ratio: 1, Action: "BUY", Exchange: "SMART", OpenClose: ibkr.ComboLegSame},
 			{ConID: upper.ConID, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: ibkr.ComboLegSame},
 		}}
-		order := withLimit(baseAPIOrder(account, apiOptionContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), decimal.RequireFromString("0.05"))
+		order := baseAPIOrder(account, apiOptionContractQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit)
 		order.Combo = ibkr.OrderCombo{
+			LegPrices:    []*decimal.Decimal{new(lowerPrice), new(upperPrice)},
 			SmartRouting: []ibkr.TagValue{{Tag: "NonGuaranteed", Value: "1"}},
 		}
 		handle, err := placeAPIOrder(ctx, client, "option vertical BAG", bag, order)
 		if err != nil {
-			log.Printf("option vertical BAG place error: %v", err)
-			return nil
+			return fmt.Errorf("place AAPL vertical BAG: %w", err)
 		}
-		_ = observeOrder(ctx, handle, "option vertical BAG", 15*time.Second)
+		echo, err := awaitOpenOrderEvidence(ctx, handle, "option vertical BAG", 30*time.Second)
+		if err != nil {
+			return err
+		}
+		if len(echo.Contract.ComboLegs) != 2 ||
+			echo.Contract.ComboLegs[0].ConID != lower.ConID || echo.Contract.ComboLegs[0].Action != ibkr.ActionBuy ||
+			echo.Contract.ComboLegs[1].ConID != upper.ConID || echo.Contract.ComboLegs[1].Action != ibkr.ActionSell {
+			return fmt.Errorf("AAPL vertical contract echo = %+v, want qualified buy/sell legs", echo.Contract.ComboLegs)
+		}
+		if echo.Order.Prices.LmtPrice != nil || len(echo.Order.Combo.LegPrices) != 2 ||
+			echo.Order.Combo.LegPrices[0] == nil || !echo.Order.Combo.LegPrices[0].Equal(lowerPrice) ||
+			echo.Order.Combo.LegPrices[1] == nil || !echo.Order.Combo.LegPrices[1].Equal(upperPrice) ||
+			len(echo.Order.Combo.SmartRouting) != 1 || echo.Order.Combo.SmartRouting[0] != (ibkr.TagValue{Tag: "NonGuaranteed", Value: "1"}) {
+			return fmt.Errorf("AAPL vertical order echo lmt=%s combo=%+v, want bounded price and per-leg routing", echo.Order.Prices.LmtPrice, echo.Order.Combo)
+		}
+		recordAPIEvent("combo_echo", "option vertical BAG", func(event *apiDriverEvent) {
+			event.OrderID = handle.OrderID()
+			event.Values = map[string]string{
+				"lower_con_id": strconv.FormatInt(int64(lower.ConID), 10),
+				"upper_con_id": strconv.FormatInt(int64(upper.ConID), 10),
+				"lower_strike": lower.Strike.String(),
+				"upper_strike": upper.Strike.String(),
+				"width":        width.String(),
+				"net_debit":    netDebit.String(),
+				"lower_price":  echo.Order.Combo.LegPrices[0].String(),
+				"upper_price":  echo.Order.Combo.LegPrices[1].String(),
+			}
+		})
 		cancelOrder(ctx, client, account, handle, "option vertical BAG")
-		_ = observeOrder(ctx, handle, "option vertical BAG cancel", 10*time.Second)
-		_, _ = client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
-		return nil
+		observation := observeOrder(ctx, handle, "option vertical BAG cancel", 30*time.Second)
+		if !observation.terminal || observation.AnyFill() {
+			return fmt.Errorf("AAPL vertical cleanup status=%s filled=%s, want terminal zero fill", observation.lastStatus, observation.filledQty)
+		}
+		openOrders, err := client.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
+		if err != nil {
+			return fmt.Errorf("AAPL vertical open-order reconciliation: %w", err)
+		}
+		if len(openOrders) != 0 {
+			return fmt.Errorf("AAPL vertical cleanup left %d open orders", len(openOrders))
+		}
+		return fenceAPIWrites(ctx, client, "option vertical cleanup")
 	})
 }
 
 func runAPIAlgorithmicCampaignAAPL(ctx context.Context, addr string, clientID int) error {
-	return apiTradingScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+	return apiTradingScenario(ctx, addr, clientID, 7*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) (runErr error) {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("algorithmic campaign anchor=%s", anchor)
-
-		quotes, _ := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiAAPL}, ibkr.WithResumePolicy(ibkr.ResumeNever))
-		if quotes != nil {
-			defer quotes.Close()
-		}
-		updates, _ := client.Accounts().SubscribeUpdates(ctx, account, ibkr.WithResumePolicy(ibkr.ResumeNever))
-		if updates != nil {
-			defer updates.Close()
-		}
-		pnl, _ := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: account}, ibkr.WithResumePolicy(ibkr.ResumeNever))
-		if pnl != nil {
-			defer pnl.Close()
-		}
-		openOrders, _ := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll, ibkr.WithResumePolicy(ibkr.ResumeNever))
-		if openOrders != nil {
-			defer openOrders.Close()
-		}
-		drainObservers(quotes, updates, pnl, openOrders)
-
 		if _, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{AccountFilter: account, Tags: []string{"NetLiquidation", "TotalCashValue", "BuyingPower", "ExcessLiquidity"}}); err != nil {
-			log.Printf("algorithmic summary: %v", err)
+			return fmt.Errorf("algorithmic account summary: %w", err)
 		}
-		_, _ = client.Accounts().Positions(ctx)
+		initialPositions, err := client.Accounts().Positions(ctx)
+		if err != nil {
+			return fmt.Errorf("algorithmic initial positions: %w", err)
+		}
+		baselineExecutions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: account, Symbol: "AAPL"})
+		if err != nil {
+			return fmt.Errorf("algorithmic execution baseline: %w", err)
+		}
+		if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+			return fmt.Errorf("algorithmic delayed market data: %w", err)
+		}
+
+		var observerClosers []func() error
+		closeObservers := func() error {
+			var err error
+			for i := len(observerClosers) - 1; i >= 0; i-- {
+				err = errors.Join(err, observerClosers[i]())
+			}
+			observerClosers = nil
+			return err
+		}
+		defer func() { runErr = errors.Join(runErr, closeObservers()) }()
+		quotes, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: apiAAPL}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("algorithmic quote observer: %w", err)
+		}
+		quotesDone := drainObserver(quotes)
+		observerClosers = append(observerClosers, func() error {
+			quotes.Close()
+			return <-quotesDone
+		})
+		updates, err := client.Accounts().SubscribeUpdates(ctx, account,
+			ibkr.WithQueueSize(512), ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("algorithmic account observer: %w", err)
+		}
+		updatesDone := drainObserver(updates)
+		observerClosers = append(observerClosers, func() error {
+			updates.Close()
+			return <-updatesDone
+		})
+		pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: account}, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("algorithmic PnL observer: %w", err)
+		}
+		pnlDone := drainObserver(pnl)
+		observerClosers = append(observerClosers, func() error {
+			pnl.Close()
+			return <-pnlDone
+		})
+		openOrders, err := client.Orders().SubscribeOpen(ctx, ibkr.OpenOrdersScopeAll, ibkr.WithResumePolicy(ibkr.ResumeNever))
+		if err != nil {
+			return fmt.Errorf("algorithmic open-order observer: %w", err)
+		}
+		openOrdersDone := drainObserver(openOrders.Subscription)
+		observerClosers = append(observerClosers, func() error {
+			openOrders.Close()
+			return <-openOrdersDone
+		})
 
 		filledQty := decimal.Zero
 		for i := 0; i < 2; i++ {
 			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 			handle, err := placeAPIOrder(ctx, client, fmt.Sprintf("algorithmic split buy[%d]", i), apiAAPL, order)
 			if err != nil {
-				log.Printf("algorithmic split buy[%d]: %v", i, err)
-				continue
+				return fmt.Errorf("algorithmic split buy[%d]: %w", i, err)
 			}
 			obs := observeOrder(ctx, handle, fmt.Sprintf("algorithmic split buy[%d]", i), 30*time.Second)
-			if obs.AnyFill() {
-				filledQty = filledQty.Add(obs.filledQty)
+			if !obs.FullFill() || !obs.sawExecution || !obs.filledQty.Equal(apiStockCampaignOrderQuantity) {
+				if !handleDone(handle) {
+					cancelOrder(ctx, client, account, handle, fmt.Sprintf("algorithmic split buy[%d] incomplete", i))
+					_ = observeOrder(ctx, handle, fmt.Sprintf("algorithmic split buy[%d] incomplete cancel", i), 10*time.Second)
+				}
+				return fmt.Errorf("algorithmic split buy[%d] status=%s filled=%s execution=%t, want terminal fill", i, obs.lastStatus, obs.filledQty, obs.sawExecution)
 			}
+			filledQty = filledQty.Add(obs.filledQty)
 		}
 
 		restingOrder := withLimit(baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor))
 		resting, err := placeAPIOrder(ctx, client, "algorithmic resting buy", apiAAPL, restingOrder)
 		if err != nil {
-			log.Printf("algorithmic resting buy: %v", err)
-		} else {
-			_ = observeOrder(ctx, resting, "algorithmic resting buy", 8*time.Second)
-			modified := withLimit(baseAPIOrder(account, restingOrder.Quantity, ibkr.ActionBuy, ibkr.OrderTypeLimit), marketableBuy(anchor))
-			if err := modifyAPIOrder(ctx, client, resting, "algorithmic resting modified", modified); err != nil {
-				log.Printf("algorithmic resting modify: %v", err)
-			} else if obs := observeOrder(ctx, resting, "algorithmic resting modified", 30*time.Second); obs.AnyFill() {
-				filledQty = filledQty.Add(obs.filledQty)
+			return fmt.Errorf("algorithmic resting buy: %w", err)
+		}
+		if _, err := awaitOpenOrderEvidence(ctx, resting, "algorithmic resting buy", 20*time.Second); err != nil {
+			return err
+		}
+		modified := baseAPIOrder(account, restingOrder.Quantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
+		if err := modifyAPIOrder(ctx, client, resting, "algorithmic resting modified", modified); err != nil {
+			return fmt.Errorf("algorithmic resting modify: %w", err)
+		}
+		modifiedObservation := observeOrder(ctx, resting, "algorithmic resting modified", 30*time.Second)
+		if !modifiedObservation.FullFill() || !modifiedObservation.sawExecution || !modifiedObservation.filledQty.Equal(apiStockCampaignOrderQuantity) {
+			if !handleDone(resting) {
+				cancelOrder(ctx, client, account, resting, "algorithmic resting modified incomplete")
+				_ = observeOrder(ctx, resting, "algorithmic resting modified incomplete cancel", 10*time.Second)
 			}
+			return fmt.Errorf("algorithmic modified order status=%s filled=%s execution=%t, want terminal fill", modifiedObservation.lastStatus, modifiedObservation.filledQty, modifiedObservation.sawExecution)
+		}
+		filledQty = filledQty.Add(modifiedObservation.filledQty)
+
+		if !filledQty.Equal(decimal.NewFromInt(3)) {
+			return fmt.Errorf("algorithmic entry quantity=%s, want 3", filledQty)
+		}
+		if err := flattenAAPL(ctx, client, account, "algorithmic flatten", filledQty); err != nil {
+			return errors.Join(err, fenceAPIWrites(ctx, client, "algorithmic failed flatten"))
+		}
+		if err := closeObservers(); err != nil {
+			return fmt.Errorf("algorithmic observers: %w", err)
 		}
 
-		queryAAPLExecutions(client, account)
-		if filledQty.IsPositive() {
-			if err := flattenAAPL(ctx, client, account, "algorithmic flatten", filledQty); err != nil {
-				log.Printf("algorithmic flatten: %v", err)
-			}
+		executions, err := client.Orders().Executions(ctx, ibkr.ExecutionsRequest{Account: account, Symbol: "AAPL"})
+		if err != nil {
+			return fmt.Errorf("algorithmic executions: %w", err)
 		}
-		_, _ = client.Accounts().Positions(ctx)
-		queryCompleted(client, "algorithmic completed orders")
-		return nil
+		if countNewExecutions(baselineExecutions, executions) != 4 {
+			return fmt.Errorf("algorithmic new executions=%d, want 4", countNewExecutions(baselineExecutions, executions))
+		}
+		if err := verifyNewExecutionFees(baselineExecutions, executions); err != nil {
+			return fmt.Errorf("algorithmic execution fees: %w", err)
+		}
+		positions, err := client.Accounts().Positions(ctx)
+		if err != nil {
+			return fmt.Errorf("algorithmic final positions: %w", err)
+		}
+		if !positionQuantity(positions, apiAAPL.ConID).Equal(positionQuantity(initialPositions, apiAAPL.ConID)) {
+			return fmt.Errorf("algorithmic AAPL position changed from %s to %s after flatten", positionQuantity(initialPositions, apiAAPL.ConID), positionQuantity(positions, apiAAPL.ConID))
+		}
+		completed, err := client.Orders().Completed(ctx, true)
+		if err != nil {
+			return fmt.Errorf("algorithmic completed orders: %w", err)
+		}
+		if len(completed) < 4 {
+			return fmt.Errorf("algorithmic completed orders=%d, want at least four campaign entries", len(completed))
+		}
+		recordAPIEvent("completed_orders_query", "algorithmic completed orders", func(event *apiDriverEvent) {
+			event.Count = len(completed)
+			event.Values = map[string]string{"api_only": "true"}
+		})
+		return fenceAPIWrites(ctx, client, "algorithmic cleanup")
 	})
 }
 
@@ -4532,18 +4626,6 @@ func baseAPIOrder(account string, quantity decimal.Decimal, action ibkr.OrderAct
 		Account:   account,
 		OrderRef:  apiOrderRef("capture"),
 	}
-}
-
-func placeObserveFlatten(ctx context.Context, client *ibkr.Client, account string, label string, order ibkr.Order, wait time.Duration) error {
-	handle, err := placeAPIOrder(ctx, client, label, apiAAPL, order)
-	if err != nil {
-		return err
-	}
-	obs := observeOrder(ctx, handle, label, wait)
-	if obs.AnyFill() && order.Action == ibkr.ActionBuy {
-		return flattenAAPL(ctx, client, account, label, obs.filledQty)
-	}
-	return nil
 }
 
 func placeAPIOrder(ctx context.Context, client *ibkr.Client, label string, contract ibkr.Contract, order ibkr.Order) (*ibkr.OrderHandle, error) {
@@ -5483,6 +5565,20 @@ func verifyNewExecutionFees(baseline, current ibkr.ExecutionSnapshot) error {
 	return nil
 }
 
+func countNewExecutions(baseline, current ibkr.ExecutionSnapshot) int {
+	known := make(map[string]struct{}, len(baseline.Executions))
+	for _, execution := range baseline.Executions {
+		known[execution.ExecID] = struct{}{}
+	}
+	var count int
+	for _, execution := range current.Executions {
+		if _, existed := known[execution.ExecID]; !existed {
+			count++
+		}
+	}
+	return count
+}
+
 func executionsWithReconciledFees(ctx context.Context, client *ibkr.Client, account string, baseline ibkr.ExecutionSnapshot) (ibkr.ExecutionSnapshot, error) {
 	deadline, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -5723,7 +5819,10 @@ func flattenAAPL(ctx context.Context, client *ibkr.Client, account string, label
 		event.SecType = string(apiAAPL.SecType)
 		event.Quantity = qty.String()
 	})
-	_ = observeOrder(ctx, handle, label+" flatten", 30*time.Second)
+	observation := observeOrder(ctx, handle, label+" flatten", 30*time.Second)
+	if !observation.FullFill() || !observation.sawExecution || !observation.filledQty.Equal(qty) {
+		return fmt.Errorf("%s flatten status=%s filled=%s execution=%t, want terminal fill of %s", label, observation.lastStatus, observation.filledQty, observation.sawExecution, qty)
+	}
 	return nil
 }
 
@@ -5762,7 +5861,10 @@ func flattenStockFill(ctx context.Context, client *ibkr.Client, account string, 
 		event.Action = string(action)
 		event.Quantity = qty.String()
 	})
-	_ = observeOrder(ctx, handle, label+" flatten", 30*time.Second)
+	observation := observeOrder(ctx, handle, label+" flatten", 30*time.Second)
+	if !observation.FullFill() || !observation.sawExecution || !observation.filledQty.Equal(qty) {
+		return fmt.Errorf("%s flatten status=%s filled=%s execution=%t, want terminal fill of %s", label, observation.lastStatus, observation.filledQty, observation.sawExecution, qty)
+	}
 	return nil
 }
 
@@ -6025,79 +6127,54 @@ func qualifyFrontFuture(ctx context.Context, client *ibkr.Client, symbol string)
 	return ibkr.Contract{}, fmt.Errorf("no %s future contract details", symbol)
 }
 
-func drainObservers(
-	quotes *ibkr.Subscription[ibkr.QuoteUpdate],
-	updates *ibkr.Subscription[ibkr.AccountUpdate],
-	pnl *ibkr.Subscription[ibkr.PnLUpdate],
-	openOrders *ibkr.OpenOrdersSubscription,
-) {
+func qualifyFrontFutureOption(ctx context.Context, client *ibkr.Client, symbol string) (ibkr.Contract, error) {
+	future, err := qualifyFrontFuture(ctx, client, symbol)
+	if err != nil {
+		return ibkr.Contract{}, err
+	}
+	params, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+		UnderlyingSymbol:  symbol,
+		FutFopExchange:    future.Exchange,
+		UnderlyingSecType: ibkr.SecTypeFuture,
+		UnderlyingConID:   future.ConID,
+	})
+	if err != nil {
+		return ibkr.Contract{}, err
+	}
+	param, ok := chooseOptionParams(params)
+	if !ok {
+		return ibkr.Contract{}, fmt.Errorf("no %s future-option parameters", symbol)
+	}
+	expiry, ok := chooseFutureExpiry(param.Expirations)
+	if !ok {
+		return ibkr.Contract{}, fmt.Errorf("no current %s future-option expiry", symbol)
+	}
+	strike, ok := chooseNearestStrike(param.Strikes, decimal.NewFromInt(6500))
+	if !ok {
+		return ibkr.Contract{}, fmt.Errorf("no %s future-option strike", symbol)
+	}
+	details, err := client.Contracts().Details(ctx, ibkr.Contract{
+		Symbol: symbol, SecType: ibkr.SecTypeFutureOption, Expiry: expiry, Strike: new(strike),
+		Right: ibkr.RightCall, Multiplier: param.Multiplier, Exchange: future.Exchange,
+		Currency: future.Currency, TradingClass: param.TradingClass,
+	})
+	if err != nil {
+		return ibkr.Contract{}, err
+	}
+	if len(details) == 0 {
+		return ibkr.Contract{}, fmt.Errorf("no %s future-option details for %s %s", symbol, expiry, strike)
+	}
+	return details[0].Contract, nil
+}
+
+func drainObserver[T any](sub *ibkr.Subscription[T]) <-chan error {
+	done := make(chan error, 1)
 	go func() {
-		deadline := time.After(45 * time.Second)
-		for {
-			select {
-			case evt, ok := <-quoteEvents(quotes):
-				if ok && evt.Kind == ibkr.StreamData {
-					value := evt.Value
-					log.Printf("observer quote changed=%d", value.Changed)
-				}
-			case evt, ok := <-accountEvents(updates):
-				if ok && evt.Kind == ibkr.StreamData {
-					value := evt.Value
-					if value.AccountValue != nil {
-						log.Printf("observer account key=%s", value.AccountValue.Key)
-					}
-					if value.Portfolio != nil {
-						log.Printf("observer portfolio symbol=%s position=%s market_price=%s", value.Portfolio.Contract.Symbol, value.Portfolio.Position, value.Portfolio.MarketPrice)
-					}
-				}
-			case evt, ok := <-pnlEvents(pnl):
-				if ok && evt.Kind == ibkr.StreamData {
-					value := evt.Value
-					log.Printf("observer pnl daily=%s unrealized=%s realized=%s", value.DailyPnL, value.UnrealizedPnL, value.RealizedPnL)
-				}
-			case evt, ok := <-openOrderEvents(openOrders):
-				if ok && evt.Kind == ibkr.StreamData {
-					value := evt.Value
-					if value.Order != nil {
-						log.Printf("observer open order_id=%d status=%s", *value.Order.Order.OrderID, value.Order.State.Status)
-					}
-					if value.Status != nil {
-						log.Printf("observer open status order_id=%d status=%s", value.Status.OrderID, value.Status.Status)
-					}
-				}
-			case <-deadline:
-				return
-			}
+		for range sub.Events() {
 		}
+		done <- sub.Wait()
 	}()
-}
-
-func quoteEvents(sub *ibkr.Subscription[ibkr.QuoteUpdate]) <-chan ibkr.StreamEvent[ibkr.QuoteUpdate] {
-	if sub == nil {
-		return nil
-	}
-	return sub.Events()
-}
-
-func accountEvents(sub *ibkr.Subscription[ibkr.AccountUpdate]) <-chan ibkr.StreamEvent[ibkr.AccountUpdate] {
-	if sub == nil {
-		return nil
-	}
-	return sub.Events()
-}
-
-func pnlEvents(sub *ibkr.Subscription[ibkr.PnLUpdate]) <-chan ibkr.StreamEvent[ibkr.PnLUpdate] {
-	if sub == nil {
-		return nil
-	}
-	return sub.Events()
-}
-
-func openOrderEvents(sub *ibkr.OpenOrdersSubscription) <-chan ibkr.StreamEvent[ibkr.OpenOrderUpdate] {
-	if sub == nil {
-		return nil
-	}
-	return sub.Events()
+	return done
 }
 
 // ---------------------------------------------------------------------------
@@ -6230,6 +6307,33 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 	return apiTradingScenario(ctx, addr, clientID, 4*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("200"))
 		log.Printf("AAPL scale-in anchor: %s", anchor)
+		scaleOrder := withScale(withLimit(baseAPIOrder(account, decimal.NewFromInt(3), ibkr.ActionBuy, ibkr.OrderTypeLimit), farBuy(anchor)))
+		scale, err := placeAPIOrder(ctx, client, "scale nondefault resting", apiAAPL, scaleOrder)
+		if err != nil {
+			return fmt.Errorf("place nondefault scale order: %w", err)
+		}
+		scaleEcho, err := awaitOpenOrderEvidence(ctx, scale, "scale nondefault resting", 20*time.Second)
+		if err != nil {
+			return err
+		}
+		if scaleEcho.Order.Scale.InitialLevelSize == nil || *scaleEcho.Order.Scale.InitialLevelSize != 1 ||
+			scaleEcho.Order.Scale.SubsequentLevelSize == nil || *scaleEcho.Order.Scale.SubsequentLevelSize != 1 ||
+			!scaleEcho.Order.Scale.PriceIncrement.Equal(decimal.RequireFromString("0.05")) {
+			return fmt.Errorf("scale echo = %+v, want initial/subsequent 1 and increment 0.05", scaleEcho.Order.Scale)
+		}
+		recordAPIEvent("scale_echo", "nondefault resting", func(event *apiDriverEvent) {
+			event.OrderID = scale.OrderID()
+			event.Values = map[string]string{
+				"initial_size":    strconv.Itoa(*scaleEcho.Order.Scale.InitialLevelSize),
+				"subsequent_size": strconv.Itoa(*scaleEcho.Order.Scale.SubsequentLevelSize),
+				"price_increment": scaleEcho.Order.Scale.PriceIncrement.String(),
+			}
+		})
+		cancelOrder(ctx, client, account, scale, "scale nondefault resting")
+		scaleObservation := observeOrder(ctx, scale, "scale nondefault resting cancel", 20*time.Second)
+		if !scaleObservation.terminal || scaleObservation.AnyFill() {
+			return fmt.Errorf("scale order cleanup status=%s filled=%s, want terminal zero fill", scaleObservation.lastStatus, scaleObservation.filledQty)
+		}
 
 		// 2x MKT buys.
 		filledQty := decimal.Zero
@@ -6237,21 +6341,17 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 			order := baseAPIOrder(account, apiStockCampaignOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarket)
 			handle, err := placeAPIOrder(ctx, client, fmt.Sprintf("scale buy[%d]", i), apiAAPL, order)
 			if err != nil {
-				log.Printf("scale buy[%d]: %v", i, err)
-				continue
+				return fmt.Errorf("scale buy[%d]: %w", i, err)
 			}
 			obs := observeOrder(ctx, handle, fmt.Sprintf("scale buy[%d]", i), 20*time.Second)
-			if obs.AnyFill() {
-				filledQty = filledQty.Add(obs.filledQty)
-			} else if !handleDone(handle) {
-				cancelOrder(ctx, client, account, handle, fmt.Sprintf("scale buy[%d] unfilled", i))
-				_ = observeOrder(ctx, handle, fmt.Sprintf("scale buy[%d] unfilled cancel", i), 8*time.Second)
+			if !obs.FullFill() || !obs.sawExecution || !obs.filledQty.Equal(apiStockCampaignOrderQuantity) {
+				if !handleDone(handle) {
+					cancelOrder(ctx, client, account, handle, fmt.Sprintf("scale buy[%d] unfilled", i))
+					_ = observeOrder(ctx, handle, fmt.Sprintf("scale buy[%d] unfilled cancel", i), 8*time.Second)
+				}
+				return fmt.Errorf("scale buy[%d] status=%s filled=%s execution=%t, want terminal fill", i, obs.lastStatus, obs.filledQty, obs.sawExecution)
 			}
-		}
-		if !filledQty.IsPositive() {
-			log.Printf("scale-in: no fills, market may be closed")
-			queryAAPLExecutions(client, account)
-			return fenceAPIWrites(ctx, client, "scale-in unfilled cleanup")
+			filledQty = filledQty.Add(obs.filledQty)
 		}
 
 		// Protective stop-loss.
@@ -6260,11 +6360,15 @@ func runAPIScaleInCampaignAAPL(ctx context.Context, addr string, clientID int) e
 		stopOrder.TIF = ibkr.TIFGTC
 		stopHandle, err := placeAPIOrder(ctx, client, "scale stop-loss", apiAAPL, stopOrder)
 		if err != nil {
-			log.Printf("scale stop-loss: %v", err)
-		} else {
-			_ = observeOrder(ctx, stopHandle, "scale stop-loss", 8*time.Second)
-			cancelOrder(ctx, client, account, stopHandle, "scale stop-loss")
-			_ = observeOrder(ctx, stopHandle, "scale stop-loss cancel", 8*time.Second)
+			return fmt.Errorf("place scale stop-loss: %w", err)
+		}
+		if _, err := awaitOpenOrderEvidence(ctx, stopHandle, "scale stop-loss", 20*time.Second); err != nil {
+			return err
+		}
+		cancelOrder(ctx, client, account, stopHandle, "scale stop-loss")
+		stopObservation := observeOrder(ctx, stopHandle, "scale stop-loss cancel", 20*time.Second)
+		if !stopObservation.terminal || stopObservation.AnyFill() {
+			return fmt.Errorf("scale stop cleanup status=%s filled=%s, want terminal zero fill", stopObservation.lastStatus, stopObservation.filledQty)
 		}
 
 		// Flatten.
@@ -6373,18 +6477,39 @@ func runAPIOptionExerciseAAPL(ctx context.Context, addr string, clientID int) er
 		if err != nil {
 			return fmt.Errorf("admit option exercise: %w", err)
 		}
-		status, err := observeExercise(ctx, handle, "AAPL call exercise", 60*time.Second)
+		exercise, err := observeExercise(ctx, handle, "AAPL call exercise", 60*time.Second)
 		if err != nil {
 			return err
 		}
-		if !ibkr.IsTerminalOrderStatus(status) {
-			return fmt.Errorf("option exercise status=%q, want terminal pseudo-order evidence", status)
+		if exercise.acceptedUnsettled {
+			after, err := snapshotPositions(ctx, client)
+			if err != nil {
+				return fmt.Errorf("accepted option exercise positions: %w", err)
+			}
+			optionDelta := positionQuantity(after, option.ConID).Sub(positionQuantity(before, option.ConID))
+			stockDelta := positionQuantity(after, apiAAPL.ConID).Sub(positionQuantity(before, apiAAPL.ConID))
+			if !optionDelta.Equal(apiOptionContractQuantity) || !stockDelta.IsZero() {
+				return fmt.Errorf("accepted-but-unsettled exercise option delta=%s stock delta=%s, want 1/0", optionDelta, stockDelta)
+			}
+			recordAPIEvent("option_exercise_accepted_unsettled", "AAPL call exercise", func(event *apiDriverEvent) {
+				event.Status = string(exercise.status)
+				event.Values = map[string]string{
+					"option_con_id": strconv.FormatInt(int64(option.ConID), 10),
+					"option_delta":  optionDelta.String(),
+					"stock_delta":   stockDelta.String(),
+					"warning_code":  strconv.Itoa(ibkr.ErrCodeOrderTIFSetFromPreset),
+				}
+			})
+			return nil
+		}
+		if !exercise.terminal {
+			return fmt.Errorf("option exercise observation ended at status %q without accepted or terminal evidence", exercise.status)
 		}
 		if err := waitForExercisePositionTransition(ctx, client, before, option.ConID, 90*time.Second); err != nil {
 			return err
 		}
 		recordAPIEvent("option_exercise_completed", "AAPL call exercise", func(event *apiDriverEvent) {
-			event.Status = string(status)
+			event.Status = string(exercise.status)
 			event.Values = map[string]string{"option_con_id": strconv.FormatInt(int64(option.ConID), 10)}
 		})
 		return nil
@@ -6448,15 +6573,22 @@ func chooseITMCallStrike(strikes []decimal.Decimal, anchor decimal.Decimal) (dec
 	return best, found
 }
 
-func observeExercise(ctx context.Context, handle *ibkr.ExerciseHandle, label string, wait time.Duration) (ibkr.OrderStatus, error) {
+type exerciseObservation struct {
+	status            ibkr.OrderStatus
+	terminal          bool
+	acceptedUnsettled bool
+}
+
+func observeExercise(ctx context.Context, handle *ibkr.ExerciseHandle, label string, wait time.Duration) (exerciseObservation, error) {
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
-	var lastStatus ibkr.OrderStatus
+	var observation exerciseObservation
+	var presetWarning bool
 	for {
 		select {
 		case event, ok := <-handle.Events():
 			if !ok {
-				return lastStatus, handle.Wait()
+				return observation, handle.Wait()
 			}
 			recordAPIEvent("option_exercise_event", label, func(driverEvent *apiDriverEvent) {
 				if event.Status != nil {
@@ -6467,27 +6599,39 @@ func observeExercise(ctx context.Context, handle *ibkr.ExerciseHandle, label str
 					driverEvent.Error = event.Warning.Error()
 				}
 			})
-			if event.Status == nil {
-				continue
+			if event.Warning != nil && event.Warning.Code == ibkr.ErrCodeOrderTIFSetFromPreset &&
+				strings.Contains(event.Warning.Message, "Order TIF was set to DAY based on order preset.") {
+				presetWarning = true
 			}
-			lastStatus = event.Status.Status
-			if ibkr.IsTerminalOrderStatus(lastStatus) {
+			if event.Status != nil {
+				observation.status = event.Status.Status
+				observation.terminal = ibkr.IsTerminalOrderStatus(observation.status)
+			}
+			if observation.terminal {
 				handle.Close()
 				if err := handle.Wait(); err != nil {
-					return lastStatus, err
+					return observation, err
 				}
-				return lastStatus, nil
+				return observation, nil
+			}
+			if presetWarning && observation.status == ibkr.OrderStatusPreSubmitted {
+				observation.acceptedUnsettled = true
+				handle.Close()
+				if err := handle.Wait(); err != nil {
+					return observation, err
+				}
+				return observation, nil
 			}
 		case <-handle.Done():
-			return lastStatus, handle.Wait()
+			return observation, handle.Wait()
 		case <-timer.C:
 			handle.Close()
 			if err := handle.Wait(); err != nil {
-				return lastStatus, err
+				return observation, err
 			}
-			return lastStatus, fmt.Errorf("%s produced no terminal evidence within %s", label, wait)
+			return observation, fmt.Errorf("%s produced neither terminal evidence nor exact accepted-but-unsettled admission within %s", label, wait)
 		case <-ctx.Done():
-			return lastStatus, context.Cause(ctx)
+			return observation, context.Cause(ctx)
 		}
 	}
 }

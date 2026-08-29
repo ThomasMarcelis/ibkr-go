@@ -30,7 +30,7 @@ type transcriptProvenance struct {
 
 func TestTranscriptProvenanceInventory(t *testing.T) {
 	t.Parallel()
-	const wantTranscripts = 99
+	const wantTranscripts = 113
 
 	files, err := filepath.Glob("testdata/transcripts/*.txt")
 	if err != nil {

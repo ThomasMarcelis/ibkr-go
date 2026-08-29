@@ -1,0 +1,91 @@
+# Exact capture 20260824T202842Z-quote_stream_multi_asset for quote_stream_multi_asset at server_version 225.
+# events.jsonl sha256: 2edbbf69bb790437f39e6e0e279519de670195647eaad6c9afa2821362f257ec.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260824 22:28:42 CET"}
+# leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+# leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
+raw server AAAABgAAANEIAQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC7jtirgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2JvbmQ=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARC7jtirgzQYuBAiK01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0ubmo=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=66
+raw server AAAAQgAAAMwI////////////ARC7jtirgzQYuBAiJ01hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpqZmFybQ==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=67
+raw server AAAAQwAAAMwI////////////ARC7jtirgzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=65
+raw server AAAAQQAAAMwI////////////ARC7jtirgzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=70
+raw server AAAARgAAAMwI////////////ARC7jtirgzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+# leg=1 direction=client msg_id=59 encoding=protobuf payload_len=6
+raw client AAAABgAAAQMIAw==
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=35
+raw client AAAAIwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNE
+# leg=1 direction=client msg_id=1 encoding=protobuf payload_len=36
+raw client AAAAJAAAAMkIAhIcCAASA0VVUhoEQ0FTSEIISURFQUxQUk9SA1VTRA==
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=66
+raw server AAAAQgAAAMwI////////////ARClkNirgzQYxxAiJ01hcmtldCBkYXRhIGZhcm0gaXMgY29ubmVjdGluZzpjYXNoZmFybQ==
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=42
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+# leg=1 direction=server msg_id=58 encoding=protobuf payload_len=8
+raw server AAAACAAAAQIIARAD
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=90
+raw server AAAAWgAAAMwIARCQidirgzQYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBIGfYoXI/ClXNAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBJGexRuB6FX3NAIgEwKAA=
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=16
+raw server AAAAEAAAAMoIARBKGgY4MTI2NzA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBLGZqZmZmZVXNAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=23
+raw server AAAAFwAAAMkIARBEGexRuB6FZ3NAIgI1NCgA
+# leg=1 direction=server msg_id=46 encoding=protobuf payload_len=20
+raw server AAAAFAAAAPYIARBYGgoxNzg3NjAyNDEx
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIARBMGexRuB6Fc3NAIgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=24
+raw server AAAAGAAAAMkIARBCGTMzMzMzZ3NAIgM0ODAoAA==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=23
+raw server AAAAFwAAAMkIARBDGexRuB6FZ3NAIgI0MCgA
+# leg=1 direction=server msg_id=4 encoding=protobuf payload_len=69
+raw server AAAARQAAAMwI////////////ARChldirgzQYuBAiKk1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzpjYXNoZmFybQ==
+# leg=1 direction=server msg_id=58 encoding=protobuf payload_len=8
+raw server AAAACAAAAQIIAhAB
+# leg=1 direction=server msg_id=81 encoding=protobuf payload_len=17
+raw server AAAAEQAAARkIAhIHMC4wMDAwMSAA
+# leg=1 direction=server msg_id=46 encoding=protobuf payload_len=20
+raw server AAAAFAAAAPYIAhAtGgoxNzg3NjAzMjMy
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhAEGWEyVTAqqfI/IgEwKAA=
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=11
+raw server AAAACwAAAMoIAhAFGgEw
+# leg=1 direction=client msg_id=2 encoding=protobuf payload_len=6
+raw client AAAABgAAAMoIAQ==
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=11
+raw server AAAACwAAAMoIAhAIGgEw
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhAGGTMzMzMzs/I/IgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhAHGdnO91PjpfI/IgEwKAA=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=22
+raw server AAAAFgAAAMkIAhAJGZCg+DHmrvI/IgEwKAA=
+# leg=1 direction=client msg_id=2 encoding=protobuf payload_len=6
+raw client AAAABgAAAMoIAg==
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=28
+raw server AAAAHAAAAMkIAhABGdP2r6w0qfI/IgczMDAwMDAwKAE=
+# leg=1 direction=server msg_id=1 encoding=protobuf payload_len=28
+raw server AAAAHAAAAMkIAhACGUW7Cik/qfI/IgcyMDAwMDAwKAE=
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=17
+raw server AAAAEQAAAMoIAhAAGgczMDAwMDAw
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=17
+raw server AAAAEQAAAMoIAhADGgcyMDAwMDAw
+# leg=1 direction=server msg_id=2 encoding=protobuf payload_len=17
+raw server AAAAEQAAAMoIAhAAGgc0MDAwMDAw
+# leg=1 direction=client msg_id=49 encoding=protobuf payload_len=4
+raw client AAAABAAAAPk=
+# leg=1 direction=server msg_id=49 encoding=protobuf payload_len=10
+raw server AAAACgAAAPkI+9Ky1AY=
+disconnect

@@ -18,7 +18,7 @@ independent protocol registry.
 
 | Source | What It Contributes |
 |--------|---------------------|
-| [IBKR API Software](https://interactivebrokers.github.io/) | Latest downloadable API package, current release, license, and recommended TWS/IB Gateway version. As of 2026-07-09 it lists Latest API 10.48, released 2026-07-07, Stable API 10.45, released 2026-03-30, and recommends TWS or IB Gateway 1045 or higher for comprehensive feature support. |
+| [IBKR API Software](https://interactivebrokers.github.io/) | Downloadable API package, license, and recommended TWS/IB Gateway version. The current source audit uses API 10.50.01. |
 | [IBKR Campus TWS API docs](https://www.interactivebrokers.com/campus/ibkr-api-page/twsapi-doc/) | Current documentation hub and warning that the official API source is distributed through IBKR's MSI/ZIP package, not package registries. |
 | [EClientSocket reference](https://interactivebrokers.github.io/tws-api/classIBApi_1_1EClientSocket.html) | Official client request/control method inventory. The page states this client class contains methods used to communicate with TWS/Gateway. |
 | [EWrapper reference](https://interactivebrokers.github.io/tws-api/interfaceIBApi_1_1EWrapper.html) | Official callback/event inventory. The page states almost every EClientSocket call results in at least one EWrapper event. |
@@ -42,6 +42,13 @@ after accepting IBKR's license. Do not vendor or redistribute it. For this repo,
 only derived method/callback names and public behavioral notes should be
 committed.
 
+API 10.50.01 was compared with the prior 10.48.01 source baseline. It adds
+`ContractDetails.settlementMethod` at protobuf field 65, now exposed from
+live sv225 option and future callbacks, and
+`Order.conditionsIncludeOvernight` at field 145. The order field requires
+`server_version` 226 and is intentionally absent while support remains
+exactly 208–225.
+
 ## Official EClient Request And Control Methods
 
 | Group | Official Methods | ibkr-go Status |
@@ -52,10 +59,10 @@ committed.
 | Tick-by-tick | `reqTickByTickData`, `cancelTickByTickData` | Implemented. Needs distinct Last, AllLast, BidAsk, MidPoint rows. |
 | Real-time and historical bars | `reqRealTimeBars`, `cancelRealTimeBars`, `reqHistoricalData`, `cancelHistoricalData`, `reqHeadTimestamp`, `cancelHeadTimestamp`, `reqHistogramData`, `cancelHistogramData`, `reqHistoricalTicks` | Implemented, including historical schedule support through `History().Schedule`. Needs separate rows for keep-up updates, schedule, time zones, and pacing/errors. |
 | Market depth | `reqMarketDepth`, `cancelMktDepth`, `reqMktDepthExchanges` | Implemented. Needs regular depth, L2, smart depth, entitlement error, cancel, and depth metadata rows. |
-| Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. `Contract` owns include-expired/external-ID selectors and BAG/delta-neutral composition; nil versus explicit zero is preserved for strike and leg exempt code. Current sv225 protobuf captures freeze stock, bond, fund, option, issuer, BAG, and selector shapes without adding unsupported fields. Bond issuer lookup and the distinct message-18 bond details shape are live-attested; empty coupon/maturity/rating fields remain unset rather than inferred. Positive BAG delta-neutral validation remains open. |
+| Contracts/reference | `reqContractDetails`, `reqMatchingSymbols`, `reqSecDefOptParams`, `reqSmartComponents`, `reqMarketRule` | Implemented. `Contract` owns include-expired/external-ID selectors and BAG/delta-neutral composition; nil versus explicit zero is preserved for strike and leg exempt code. Current sv225 protobuf captures freeze stock, bond, fund, option, issuer, BAG, and selector shapes. `ContractDetails.SettlementMethod` exposes API 10.50.01 field 65 from live option and future callbacks. Bond issuer lookup and the distinct message-18 bond details shape are live-attested; empty coupon/maturity/rating fields remain unset rather than inferred. Positive BAG delta-neutral validation remains externally blocked. |
 | Accounts/portfolio | `reqAccountSummary`, `cancelAccountSummary`, `reqAccountUpdates`, `reqPositions`, `cancelPositions`, `reqPositionsMulti`, `cancelPositionsMulti`, `reqAccountUpdatesMulti`, `cancelAccountUpdatesMulti`, `reqFamilyCodes`, `reqPnL`, `cancelPnL`, `reqPnLSingle`, `cancelPnLSingle` | Implemented, including distinct account-summary group selection and local result filtering. Needs FA named-group, account/model, concurrent, streaming, and trade-interaction rows. |
-| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Open and completed orders return BAG legs and delta-neutral composition on their canonical `Contract`; the shared order-level `OrderCombo` contains only prices and routing. Current sv225 completed-order, execution, and commission-and-fees results are projected. `SubscribeExecutionEvents` passively exposes every execution and fee callback without issuing a query or discarding unmatched fees. Current campaigns cover common and advanced order fields; attached preset-order metadata remains internal pending a native paper-order lifecycle. Nondefault execution filters, rare advanced-order branches, and meaningful bond yield/redemption still need live attestation. |
-| Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Implemented, but not fully promoted. Exact sv210 classic and sv211 protobuf calculation captures and public replay cover successful price and implied-volatility results; cancellation-before-first-result remains open. The guarded sv225 exercise campaign bought one qualified ITM AAPL call; exact warning 10349 preceded a `PreSubmitted` exercise instruction, but no terminal status arrived. Cleanup sold only the campaign delta. Later fenced cleanup removed the 2133 exclusion and a direct cancel returned code 10147 because the order was no longer found; fresh position, execution/fee, and ordinary-open-order snapshots reconcile to baseline. Terminal exercise, lapse, override, and clearing settlement remain matrix work. |
+| Orders/executions | `placeOrder`, `cancelOrder`, `reqGlobalCancel`, `reqOpenOrders`, `reqAllOpenOrders`, `reqAutoOpenOrders`, `reqCompletedOrders`, `reqExecutions` | Implemented. Open and completed orders return BAG legs and delta-neutral composition on their canonical `Contract`; the shared order-level `OrderCombo` contains only prices and routing. Current sv225 campaigns replay common and advanced fields, bracket, OCA, scale, algorithmic, protective-stop, and accepted per-leg-priced BAG lifecycles. `SubscribeExecutionEvents` passively exposes every execution and fee callback without issuing a query or discarding unmatched fees. Attached preset-order metadata remains internal pending a native paper-order lifecycle; rare account-specific echoes remain evidence gaps. |
+| Options | `calculateImpliedVolatility`, `cancelCalculateImpliedVolatility`, `calculateOptionPrice`, `cancelCalculateOptionPrice`, `exerciseOptions` | Implemented. Exact sv210 classic and sv211 protobuf captures cover successful price and implied-volatility results. The guarded sv225 exercise replay freezes the seed fill, exact warning 10349, `PreSubmitted` admission, and disconnect as `ExerciseUncertainError`; it makes no settlement or lapse claim. A broader terminal exercise campaign remains externally blocked and must not be retried without a new reconciliation plan. |
 | News | `reqNewsProviders`, `reqNewsBulletins`, `cancelNewsBulletins`, `reqNewsArticle`, `reqHistoricalNews` | Implemented. `api_news_article_aapl` captures the article follow-up path from a historical-news result; invalid article/provider variants remain matrix work. |
 | Scanner | `reqScannerParameters`, `reqScannerSubscription`, `cancelScannerSubscription` | Implemented across the sv210 protobuf migration, including every supported field and both generic option lists. A current sv225 public request, ten-row `scannerData` response, and clean cancel are replay-promoted. Additional rejection variants remain matrix work. |
 | FA/advisor | `requestFA`, `reqSoftDollarTiers` | Implemented. Mutating FA configuration is outside the library charter. |
@@ -72,7 +79,7 @@ evidence; WSH is a separate API, not a replacement.
 
 | Group | Official Callbacks | ibkr-go Status |
 |-------|--------------------|----------------|
-| Errors/session | `error`, `connectionClosed`, `currentTime`, `nextValidId`, `managedAccounts` | Error/managed/next valid/current time implemented. `connectionClosed` still needs an explicit matrix row. |
+| Errors/session | `error`, `connectionClosed`, `currentTime`, `nextValidId`, `managedAccounts` | Error, managed-account, next-valid-ID, and current-time callbacks are implemented. Transport closure is exposed through client/session/request lifecycle errors and replayed interruption scenarios rather than an `EWrapper` callback clone. |
 | Market data L1 | `tickPrice`, `tickSize`, `tickString`, `tickGeneric`, `tickEFP`, `tickOptionComputation`, `tickSnapshotEnd`, `marketDataType`, `tickReqParams`, `tickNews` | All are implemented as typed quote updates. `tickEFP` is official-layout frozen but awaits a positive entitled callback. `tickNews` is inbound message 84 and is delivered as `QuoteUpdateNewsTick`. |
 | Tick-by-tick | `tickByTickAllLast`, `tickByTickBidAsk`, `tickByTickMidPoint` | Implemented through unified tick-by-tick decode. Needs separate verification rows. |
 | Contracts/reference | `contractDetails`, `bondContractDetails`, `contractDetailsEnd`, `symbolSamples`, `securityDefinitionOptionParameter`, `securityDefinitionOptionParameterEnd`, `smartComponents`, `marketRule`, `mktDepthExchanges` | Current protobuf stock/bond/fund/option shapes are implemented. `bondContractDetails` is projected through `ContractDetails.Bond`; tagged CUSIP/ISIN values, size rules, algorithmic minimum, precision fields, and real ineligibility reasons are preserved without inference. |
@@ -267,7 +274,7 @@ and project scope decide whether to implement, defer, or mark out of scope.
 - Verification/auth callbacks and redirect callbacks.
 - Positive entitled `tickEFP`, `deltaNeutralValidation`, and odd-lot 105-110
   callbacks; all three public/codec paths are implemented.
-- Raw paper-TWS evidence for `orderBound`, plus rare non-empty OpenOrder and
-  what-if allocation/margin branches.
-- Scale, nondefault delta-neutral, pegged, adjusted, FA allocation, MiFID/manual
-  order, soft-dollar-on-order, and advanced-reject override order branches.
+- Raw paper-TWS evidence for `orderBound`, plus rare account-specific OpenOrder
+  and allocation/margin branches.
+- Nondefault delta-neutral, FA allocation, MiFID/manual-order, and
+  soft-dollar-on-order echoes that require unavailable products or accounts.

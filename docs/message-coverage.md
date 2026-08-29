@@ -4,6 +4,9 @@ This matrix tracks the implemented message surface. The canonical
 `internal/protocol` registry owns numeric identities and version gates; the
 codec consumes aliases from it. Runtime coverage begins at server_version 208;
 exact migrations and semantic gates are covered through server_version 225.
+The executable decoder ledger partitions all 106 registered layouts: 86 have
+positive raw-frame attestation and 20 are explicitly pending callbacks that
+require unavailable entitlements, account types, or paper-TWS interaction.
 
 ## Bootstrap
 
@@ -32,7 +35,7 @@ server version and managed-account bootstrap fields are known.
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
 | out | 9 | ContractDetailsRequest | landed; protobuf selectors throughout the supported range |
-| in | 10 | ContractDetails | landed; current protobuf common/FUND shapes |
+| in | 10 | ContractDetails | landed; current protobuf common/FUND shapes, including API 10.50.01 settlement method field 65 |
 | in | 18 | BondContractDetails | landed; current protobuf bond shape |
 | in | 52 | ContractDetailsEnd | landed; protobuf terminator |
 | out | 81 | reqMatchingSymbols | landed |
@@ -52,7 +55,9 @@ tick-by-tick requests are protobuf at the sv208 floor and use their current
 schemas. Calculation and exercise requests retain reachable classic layouts
 through sv210 before migrating at sv211, so their narrower field validation is
 still version-aware. Structural and field-presence tests cover every reachable
-layout without relying on pre208 frames.
+layout without relying on pre208 frames. API 10.50.01 also defines
+`Order.conditionsIncludeOvernight` at field 145 and minimum server version
+226. It is outside the supported 208–225 range and is not encoded or exposed.
 
 ## Accounts and Positions
 
@@ -207,6 +212,9 @@ exercise the production decode path. Public open and completed orders share
 and pegged-benchmark echoes. `IncludeOvernight` preserves response presence:
 nil means the broker omitted it, while explicit true and false remain distinct
 in decoded protobuf values. `ComboDescription` remains response-only.
+Per-leg-priced BAG limit orders use `OrderCombo.LegPrices` without a
+conflicting combo-level limit; the accepted sv225 AAPL vertical is replayed
+through zero-fill cancellation.
 
 ## Order and Execution Observation
 
@@ -278,6 +286,10 @@ recorded in [`live-test-tracker.md`](live-test-tracker.md).
 | Direction | Msg ID | Name | Status |
 |-----------|--------|------|--------|
 | out | 21 | ExerciseOptions | landed |
+
+The sv225 public replay freezes exact warning 10349, a `PreSubmitted`
+pseudo-order, and captured disconnect as an uncertain accepted instruction.
+It does not claim terminal exercise, lapse, or settlement.
 
 ## FA Configuration
 

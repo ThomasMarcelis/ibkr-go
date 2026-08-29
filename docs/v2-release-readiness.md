@@ -8,6 +8,14 @@ immutable.
 This document records the evidence accepted for the release and distinguishes
 known limitations from positive proof.
 
+Current descendant development is tracked separately in the
+[`v2.0.2 coverage plan`](v2.0.2-coverage-plan.md). It has 124 catalog
+scenarios—103 promoted, no candidates, and 21 externally blocked—plus 113
+tracked transcripts. Its decoder ledger remains an honest 106/86/20 partition:
+20 positive callbacks are externally unavailable rather than falsely attested
+by blocker replies. Its accepted-but-unsettled option-exercise replay and API
+10.50.01 settlement-method addition do not rewrite the v2.0.1 release facts.
+
 ## Completed release work
 
 - Production handshake validation accepts 208–225 and rejects 207 and 226.

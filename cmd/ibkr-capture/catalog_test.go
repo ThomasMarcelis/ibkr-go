@@ -150,7 +150,7 @@ func TestWriteScenarioRole(t *testing.T) {
 	}{
 		{
 			name:      "read only",
-			scenarios: []string{"api_market_data_completeness_aapl|1", "api_historical_matrix_aapl"},
+			scenarios: []string{"quote_stream_multi_asset|1", "api_historical_matrix_aapl"},
 			want:      captureRoleReadOnlyLive,
 		},
 		{
@@ -248,7 +248,6 @@ func TestExhaustivePlanScenariosAreCatalogued(t *testing.T) {
 	for _, name := range []string{
 		"api_tif_attribute_matrix_aapl",
 		"api_security_type_probe_matrix",
-		"api_market_data_completeness_aapl",
 		"api_generic_tick_matrix_aapl",
 		"api_tick_news_aapl_probe",
 		"api_scanner_subscription",

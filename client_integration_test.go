@@ -1554,7 +1554,7 @@ func TestAccountUpdatesSnapshot(t *testing.T) {
 func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 	t.Parallel()
 
-	client, host := newClient(t, "account_updates_multi.txt")
+	client, host := newClient(t, "account_updates_multi.txt", ibkr.WithSubscriptionBuffer(256))
 	defer cleanupClientHost(t, client, host)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -1574,13 +1574,30 @@ func TestAccountUpdatesMultiSnapshot(t *testing.T) {
 		t.Fatalf("ledger=false first account = %q, want DU9000001", allValues[0].Account)
 	}
 
-	values, err := client.Accounts().UpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
+	sub, err := client.Accounts().SubscribeUpdatesMulti(ctx, ibkr.AccountUpdatesMultiRequest{
 		Account:      "DU9000001",
 		ModelCode:    "",
 		LedgerAndNLV: true,
 	})
 	if err != nil {
-		t.Fatalf("AccountUpdatesMultiSnapshot() error = %v", err)
+		t.Fatalf("SubscribeUpdatesMulti() error = %v", err)
+	}
+	var values []ibkr.AccountUpdateMultiValue
+	for {
+		event := waitForEvent(t, sub.Events())
+		if event.Err != nil {
+			t.Fatalf("account updates multi event error = %v", event.Err)
+		}
+		if event.Kind == ibkr.StreamData {
+			values = append(values, event.Value)
+		}
+		if event.Kind == ibkr.StreamSnapshotComplete {
+			break
+		}
+	}
+	sub.Close()
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("SubscribeUpdatesMulti().Wait() error = %v", err)
 	}
 	if len(values) != 125 {
 		t.Fatalf("values len = %d, want 125", len(values))
@@ -1603,12 +1620,29 @@ func TestPositionsMultiSnapshot(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	values, err := client.Accounts().PositionsMulti(ctx, ibkr.PositionsMultiRequest{
+	sub, err := client.Accounts().SubscribePositionsMulti(ctx, ibkr.PositionsMultiRequest{
 		Account:   "DU9000001",
 		ModelCode: "",
 	})
 	if err != nil {
-		t.Fatalf("PositionsMulti() error = %v", err)
+		t.Fatalf("SubscribePositionsMulti() error = %v", err)
+	}
+	var values []ibkr.PositionMulti
+	for {
+		event := waitForEvent(t, sub.Events())
+		if event.Err != nil {
+			t.Fatalf("positions multi event error = %v", event.Err)
+		}
+		if event.Kind == ibkr.StreamData {
+			values = append(values, event.Value)
+		}
+		if event.Kind == ibkr.StreamSnapshotComplete {
+			break
+		}
+	}
+	sub.Close()
+	if err := sub.Wait(); err != nil {
+		t.Fatalf("SubscribePositionsMulti().Wait() error = %v", err)
 	}
 	if len(values) != 19 {
 		t.Fatalf("values len = %d, want 19", len(values))
@@ -2567,12 +2601,31 @@ func TestAPICompletedOrdersVariantsAAPLReplay(t *testing.T) {
 		t.Fatalf("Completed(false) len = %d, want 24", len(allCompleted))
 	}
 
-	apiCompleted, err := client.Orders().Completed(ctx, true)
+	completedSub, err := client.Orders().StreamCompleted(ctx, true)
 	if err != nil {
-		t.Fatalf("Completed(true): %v", err)
+		t.Fatalf("StreamCompleted(true): %v", err)
+	}
+	var apiCompleted []ibkr.CompletedOrderResult
+	var completedSnapshot bool
+	for event := range completedSub.Events() {
+		if event.Err != nil {
+			t.Fatalf("completed-order event error = %v", event.Err)
+		}
+		switch event.Kind {
+		case ibkr.StreamData:
+			apiCompleted = append(apiCompleted, event.Value)
+		case ibkr.StreamSnapshotComplete:
+			completedSnapshot = true
+		}
+	}
+	if err := completedSub.Wait(); err != nil {
+		t.Fatalf("StreamCompleted(true).Wait(): %v", err)
+	}
+	if !completedSnapshot {
+		t.Fatal("StreamCompleted(true) closed without SnapshotComplete")
 	}
 	if len(apiCompleted) != 24 {
-		t.Fatalf("Completed(true) len = %d, want 24", len(apiCompleted))
+		t.Fatalf("StreamCompleted(true) len = %d, want 24", len(apiCompleted))
 	}
 	for i, completed := range apiCompleted {
 		if completed.Contract.Symbol != "AAPL" || completed.Completion.Status == "" {

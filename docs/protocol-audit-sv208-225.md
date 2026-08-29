@@ -1,9 +1,24 @@
 # Protocol Audit: Server Versions 208-225
 
-This audit records the API 10.48 protocol train beginning at the supported
-floor. The production client negotiates exactly `server_version` 208..225. The runtime is
-still pure Go; official SDK 10.48.01 was used only to produce exact live
-request/callback evidence against the local Gateway.
+This audit records the protocol train beginning at the supported floor. The
+production client negotiates exactly `server_version` 208..225 and remains
+pure Go. Historical boundary vectors used official SDK 10.48.01; the current
+source audit uses API 10.50.01. Both SDKs are conformance oracles only.
+
+## Current official-source drift
+
+The API 10.50.01 archive adds two schema fields relative to 10.48.01:
+
+- `ContractDetails.settlementMethod` is protobuf field 65. Exact sv225 AAPL
+  option and ES future callbacks now replay `Physical Delivery` and `Cash`.
+- `Order.conditionsIncludeOvernight` is field 145 with minimum server version
+  226. It is intentionally outside the supported 208–225 range.
+
+The audited archive SHA-256 values are
+`0446c403cdfd3a059685c5e11814b32e0b811fdf5e1f68564f8e08b655e49547`
+for 10.48.01 and
+`aa065722ca732a41aab202c7bb72932e179b86e7ec51cefa063eb1983fe9f597`
+for 10.50.01. No SDK source or generated artifact is committed.
 
 ## Migration boundaries
 
@@ -57,13 +72,19 @@ and rejects both neighboring values.
 | Native public sv225 odd-lot probe | `70500b2228dc29e81e8823fa6a626bf51597317a83da257e2e3e1e520b7b52a3` | Generic tick 787 is accepted and the ordinary delayed stream remains healthy; no odd-lot callback was available with this entitlement. |
 | SDK sv225 odd-lot probe | `85d0dba58ba9d80c029fac5b658d01ac48128d0513228c07f555dbac6fbff2b0` | The same entitlement boundary through the official client. |
 | Native public sv225 CFD reroute | `ca8fbdf11d260066fb7cd1c3d60e6e44808a54bf6a8fc678f3597bd71a666f1c` | Initial CFD request, protobuf reroute, conID request, delayed-data notice, then positive high/low/volume/close callbacks. |
+| Native public sv225 settlement methods | `86b72d3b5bfbb3ff401753020627152b4b03f9af2d99cb20118b3455d435162f`, `f9092f15375af724a723b32907a717d5ae7ea2dd84bba2e67b2381d1b3a4714e` | API 10.50.01 field 65 decodes as `Physical Delivery` for an AAPL option and `Cash` for an ES future. |
 | Native public sv225 IncludeOvernight lifecycle | `f3585ff96e9a0a936a559e52e9d69e860e6182e769418d987314ce9419c90e9c` | True placement/echo, code-462 false replacement rejection with true retained, fresh false canonicalized to absence with `TIF=DAY`, and terminal cleanup. SDK 10.48.01 reproduced the rejection. |
 
 The sv208-213 protobuf schemas have focused exact-vector and public routing
 tests in `internal/codec`. The sv215-225 rows above additionally retain live
 capture hashes in those tests where a byte-exact request or callback exists.
-The exact-version matrix itself proves only handshake and `CurrentTime`;
-20 supported decoder/layout pairs remain explicitly unattested.
+The exact-version matrix proves handshake and `CurrentTime` at all 18
+supported versions; native or official-SDK vectors freeze each implemented
+migration boundary. Separately, the decoder ledger partitions all 106
+registered layouts into 86 raw-frame-attested and 20 explicitly pending
+positive callbacks. Those 20 require unavailable market-data entitlements,
+FA/WSH access, news events, market-hours data, or manual paper-TWS order
+binding; exact blocker responses do not count as decoder attestation.
 
 ## Explicit evidence boundaries
 

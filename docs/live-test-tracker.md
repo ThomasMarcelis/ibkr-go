@@ -5,16 +5,20 @@ work follows the [`v2.0.2 coverage plan`](v2.0.2-coverage-plan.md). The v2.0.1
 section below is the immutable starting baseline; older server-version runs
 remain in repository history, not in the active support ledger.
 
-Last updated: 2026-08-27.
+Last updated: 2026-08-28.
 
-## v2.0.2 planning baseline
+## v2.0.2 current disposition
 
-- Start from 125 catalog scenarios: 91 promoted, 26 candidates, and 8 blocked.
-- Preserve 99 tracked sv208+ transcripts and 328 verifier-clean sv208+ raw
-  captures until a vertical promotion deliberately replaces an artifact.
-- Close or explicitly disposition all 20 pending decoder/layout attestations.
-- Expand the exact sv208–225 matrix from handshake/`CurrentTime` reachability
-  to the request family or field introduced at each boundary.
+- The executable catalog has 124 scenarios: 103 promoted, no candidates, and
+  21 explicitly blocked by entitlements, account type, market state, or
+  TWS-only interaction.
+- The tracked corpus has 113 live-derived sv208+ transcripts. Every transcript
+  passes full-hash provenance validation.
+- The decoder ledger partitions all 106 registered layout pairs: 86 have
+  positive raw-frame attestation and 20 retain explicit external blockers.
+- The exact sv208–225 negotiation matrix and native/SDK boundary vectors cover
+  the supported protocol train. API 10.50.01's only supported-range addition,
+  contract settlement method field 65, is live-replayed at sv225.
 - Never repeat the consumed regulatory snapshot, and never automate manual TWS
   evidence through GUI/CUA tooling.
 
@@ -48,17 +52,18 @@ Last updated: 2026-08-27.
 |------|---------|-----------|---------------------|
 | `readonly-live` | `127.0.0.1:4001` | real-money, API read-only | sv225 |
 | `paper-dev` Gateway | `127.0.0.1:4002` | dedicated guarded trading | sv225 |
-| `paper-dev` TWS | `127.0.0.1:7497` | dedicated guarded trading and TWS-only evidence | sv225 |
 
 Run both role-aware doctors before a live sweep:
 
 ```bash
 go run ./cmd/ibkr-doctor -role readonly-live
-go run ./cmd/ibkr-doctor -role paper-dev -addr 127.0.0.1:7497
+go run ./cmd/ibkr-doctor -role paper-dev
 ```
 
-On 2026-08-27 both doctors passed at sv225. The explicitly enumerated safe
-live suite also passed against `readonly-live` and paper TWS. The regulatory,
+On 2026-08-28 both Gateway doctors passed at sv225. `readonly-live` returned
+the expected code-10089 market-data entitlement warning; `paper-dev` returned
+a delayed AAPL quote. The previously enumerated safe live suite also passed
+against `readonly-live` and paper TWS. The regulatory,
 manual-order, restart/outage, capture-campaign, and order-mutation tests were
 excluded. `SubscribePositions` reached `SnapshotComplete` on both roles, and
 the exact sv208–225 handshake matrix passed on both. Skips were limited to
@@ -81,12 +86,15 @@ client closes.
 | Scanner subscription | promoted | current sv225 HOT_BY_VOLUME rows and clean cancellation |
 | TickNews | promoted | current sv225 public quote-stream replay plus exact classic sv208 callback evidence |
 | CFD reroute | promoted | initial CFD request, protobuf reroute, conID request, delayed-data notice, and positive high/low/volume/close callbacks (`ca8fbdf11d260066fb7cd1c3d60e6e44808a54bf6a8fc678f3597bd71a666f1c`) |
+| PnL single | promoted | held-position selection, nonzero typed update, cancellation, and fence from `5c2be5fc5c73842b430c5644e69d5020ac45c41acd14d2a4349183b8355b0ab4` |
+| Multi-asset and generic quotes | promoted | concurrent AAPL/EUR.USD streams plus 233/236 generic ticks, typed parameters, cancellation, and fences |
+| Order campaigns | promoted | bracket, scale-in, per-leg-priced BAG, algorithmic, and protective-stop captures replay broker echoes, fills or zero-fill cancellation, fees, fences, and baseline reconciliation |
 | Odd-lot fields | blocked positive proof | request accepted; current role returns code 10089 and no positive odd-lot values |
 | Market depth | blocked positive proof | current account lacks an entitled depth venue |
-| Option exercise | partial positive proof | sv225 capture `37bfe1e3c3494f54e2f953936996086ecd31f9d7f2f0d6cb8ef2dd2a2323d4e2` bought one ITM AAPL call, received exact warning 10349 and `PreSubmitted`, then timed out without terminal evidence. Targeted/global cleanup was fenced; final direct cancel capture `f5ad48b54b8fc0867aeaa10931107b9850fb750ef1488fff245de11f43dd077c` returned exact code 10147 because order 8 was not found. Fresh open-order, position, execution, and fee snapshots match the reconciled baseline, but no terminal exercise callback was observed. |
-| Manual `orderBound` | blocked | paper TWS is online at `7497`, but positive evidence requires the user to create and cancel a manual TWS order while the API harness is armed; no such order was submitted |
+| Option exercise admission | promoted | sv225 capture `37bfe1e3c3494f54e2f953936996086ecd31f9d7f2f0d6cb8ef2dd2a2323d4e2` freezes the option seed fill, exact warning 10349, `PreSubmitted`, and captured EOF as `ExerciseUncertainError`. It proves accepted-but-unsettled admission only; no terminal exercise, lapse, or settlement is claimed. |
+| Manual `orderBound` | blocked | positive evidence requires paper TWS and a user-created manual order while the harness is armed; the available endpoints are Gateways |
 
-The coverage matrix contains the exhaustive 125-scenario catalog mapping and
+The coverage matrix contains the exhaustive 124-scenario catalog mapping and
 the protocol audit contains exact boundary hashes.
 
 ## IncludeOvernight disposition
@@ -106,10 +114,9 @@ proves the behavior supported by the current Gateway:
    paper-state reconciliation.
 
 The public `*bool` remains necessary because explicit true and explicit false
-encode differently. The broker's fresh-false canonical absence is useful
-blocker evidence, but it does not prove that false survives a replacement and
-echoes distinctly. The scenario remains a v2.0.2 evidence target; the SDK
-result gives no basis for a speculative codec change in v2.0.1.
+encode differently. The promoted replay records the broker's rejected
+replacement and canonical fresh-order behavior; no further retry or
+speculative codec change is warranted.
 
 ## Regulatory snapshot no-retry record
 
@@ -126,14 +133,14 @@ SHA-256
 reports `Billable=0.00 EUR` and is replay-promoted. This is the recorded fee
 reconciliation for the attempt.
 
-## v2.0.2 follow-up queue
+## Remaining external evidence
 
-- Disposition all 20 pending supported decoder/layout attestations with live
-  positive evidence or exact typed account/entitlement blockers.
+- The 20 pending decoder/layout rows require callbacks unavailable from the
+  current entitlements, account types, market state, or Gateway-only setup.
+  Exact blocker replies stay separate from positive decoder attestation.
 - Preserve the verified paper baseline: no campaign-owned working order or
-  position delta remains, and both new executions have correlated fee reports.
+  position delta remains, and campaign executions have correlated fee reports.
 - Keep the regulatory-snapshot path permanently disabled; the sole authorized
   attempt is consumed and must never be repeated.
-- Add positive public replays only from verified current captures; exact
-  account, entitlement, market-state, and TWS-only blockers remain distinct
-  from successful callback evidence.
+- Do not issue another live option-exercise instruction. The retained replay
+  deliberately stops at accepted-but-unsettled admission.

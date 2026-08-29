@@ -1062,15 +1062,6 @@ func decodeOuterFrame(t *testing.T, value string) []byte {
 	return payload
 }
 
-func decodeBase64Payload(t *testing.T, value string) []byte {
-	t.Helper()
-	payload, err := base64.StdEncoding.DecodeString(value)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return payload
-}
-
 func decodeHex(t *testing.T, value string) []byte {
 	t.Helper()
 	decoded, err := hex.DecodeString(value)
