@@ -4,6 +4,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
+## Unreleased
+
+### Changed
+
+- Orders with an empty `TIF` are sent as `DAY`. Live sv225 rejects an omitted
+  time in force with code 10052 (`Invalid time in force:Empty`), so every
+  order built with `LimitOrder`, `MarketOrder`, `StopOrder`, or
+  `StopLimitOrder`, and every `Orders().Preview`, was refused unless the
+  caller set `TIF` by hand. Set `TIF` explicitly to send any other value.
+- Code 10052 (`ErrCodeInvalidTimeInForce`) is an order rejection: a handle
+  that receives it before working evidence closes with an error for which
+  `APIError.IsOrderRejection` is true, instead of staying open with a warning.
+- Examples: new `bracket`; `quotes` waits for bid, ask, and last; `historical`
+  explains an entitlement refusal; `order` and `option-chain` are shorter; all
+  default to the paper port.
+- Docs: `docs/roadmap.md` lists next steps only. Release records, the live
+  test tracker, the exhaustive test plan, the per-message coverage table, and
+  the sv203–207 audits were removed; release-time evidence stays at each tag
+  and the coverage matrix owns current status. Live safety rules and the
+  release checklist moved to `CONTRIBUTING.md`.
+
+### Fixed
+
+- `cmd/ibkr-normalize` keeps protobuf varint width when it sanitizes a perm
+  ID, so captures from the current paper perm-ID range can be promoted.
+
+### Verification status
+
+- sv225 captures `20260829T142218Z-api_empty_tif_default_aapl` (rejection,
+  before the change) and `20260829T142318Z-api_empty_tif_default_aapl` (DAY
+  echo and cancellation, after); the latter is transcript
+  `empty_tif_default_aapl.txt`. The corpus is 114 transcripts and 125
+  scenarios.
+
 ## v2.0.2 — 2026-08-29
 
 ### Added
@@ -29,7 +63,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/).
   tick-by-tick, EFP, delta-neutral, and manual TWS order-binding callbacks
   remain unavailable in the current environment. No successful callback is
   claimed for those paths; details are in the
-  [v2.0.2 coverage plan](docs/v2.0.2-coverage-plan.md).
+  [v2.0.2 coverage plan](https://github.com/ThomasMarcelis/ibkr-go/blob/v2.0.2/docs/v2.0.2-coverage-plan.md).
 - The option-exercise replay proves admission, not final exercise, lapse, or
   settlement, and its live instruction must not be repeated for more evidence.
 - API 10.50.01's `Order.conditionsIncludeOvernight` requires server version

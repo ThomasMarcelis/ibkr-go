@@ -13,7 +13,7 @@ if err != nil {
 }
 defer client.Close()
 
-// One-shot get quote: a typed result, blocks until IBKR answers.
+// One-shot lookup: a typed result, blocks until IBKR answers.
 details, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
 if err != nil {
     return err
@@ -56,12 +56,12 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
   iterator. No `EWrapper` / `EClient` callback surface.
 - **Broad coverage.** Accounts, positions, quotes, historical data, orders,
   market depth, executions, options, scanners, news, FA, WSH, display groups.
-  Works with current TWS and IB Gateway builds (`server_version` 208–225);
+  Works with current TWS and IB Gateway builds (`server_version` 208–225).
 - **Reconnects are explicit.** Drops, gaps, and resumptions arrive as ordered
   events on the same stream as the data, so you always know what you missed.
 - **Exact financial values.** Prices, quantities, and money are
-  [`decimal.Decimal`](https://github.com/shopspring/decimal)
-- **Backed by live evidence.** 113 replay transcripts captured from a live IB
+  [`decimal.Decimal`](https://github.com/shopspring/decimal).
+- **Backed by live evidence.** 114 replay transcripts captured from a live IB
   Gateway, fuzzed framing and codec, and a deterministic CI that needs no
   broker credentials.
 
@@ -300,10 +300,10 @@ Cancellation and connection-retirement details are in
 
 ## Examples
 
-Nine runnable programs under [`examples/`](examples/), each one file against a
+Ten runnable programs under [`examples/`](examples/), each one file against a
 real Gateway. Start with `connect`, `quotes`, `historical`, `portfolio`, and
-`order`, then `option-chain`, `scanner`, `resilient-quotes`, and
-`margin-preview`. The two order-shaped ones refuse to run outside a paper
+`order`, then `bracket`, `option-chain`, `scanner`, `resilient-quotes`, and
+`margin-preview`. The order-shaped ones refuse to run outside a paper
 account.
 
 ## Status

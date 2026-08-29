@@ -63,6 +63,50 @@ go run ./cmd/ibkr-doctor -role readonly-live
 go run ./cmd/ibkr-doctor -role paper-dev
 ```
 
+## Live safety rules
+
+- Only `paper-dev` may place, replace, exercise, or cancel orders.
+  `readonly-live` is real money and API read-only.
+- Capture campaigns (`scripts/record-scenarios.sh`, see
+  [`docs/transcripts.md`](docs/transcripts.md)) need
+  `IBKR_PAPER_ACCOUNT=<the exact DU account>` and
+  `IBKR_CAPTURE_GLOBAL_CANCEL=1`. The driver refuses to trade otherwise, and
+  reconciles open orders, positions, executions, and account values to its
+  baseline afterwards.
+- The one authorized regulatory snapshot (fee-bearing) has been consumed.
+  Never repeat it from a batch, test, or manual command.
+- Do not issue another live option-exercise instruction; the retained replay
+  stops at accepted-but-unsettled admission on purpose.
+- Manual `orderBound` evidence needs paper TWS and a user-entered order. Do
+  not automate TWS or Gateway through GUI tooling, and do not change their
+  configuration.
+
+## Release checklist
+
+Run on the exact tree to be tagged:
+
+```text
+go mod tidy -diff
+go mod verify
+gofmt -l .
+go build ./...
+go vet ./...
+CGO_ENABLED=0 GOOS=linux GOARCH=386 go build ./...
+golangci-lint run
+go test -shuffle=on -count=1 ./...
+go test -race -shuffle=on -count=1 ./...
+./scripts/check-api.sh
+./scripts/fuzz-all.sh --check
+go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
+```
+
+Then freeze the public surface: write the new `testdata/api/<version>.api`
+manifest, point `scripts/check-api.sh` at it, and confirm
+`./scripts/check-api.sh --exact` passes. Old manifests are never edited. Run
+the examples against the paper Gateway, write the CHANGELOG entry (link
+release-time documents at the tag, not at `main`), and tag. Pushing and
+publishing stay manual.
+
 ## Reference policy
 
 Protocol-adjacent work should be grounded in the local live TWS or IB Gateway when available, plus official IBKR docs, official IBKR client-library source, captured traffic, and other IBKR library implementations where useful. The official IBKR C++ SDK may be used as an opt-in conformance oracle or capture tool, but production code remains pure Go on the default import path. The merged implementation must still follow `ibkr-go`'s typed public API and package philosophy rather than mirroring the official public surface mechanically.

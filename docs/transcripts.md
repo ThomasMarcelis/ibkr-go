@@ -233,7 +233,7 @@ Every recorded handshake must agree with the declared version. The structural
 parser ignores comments after the first executable line, so later scenario
 notes cannot satisfy provenance.
 
-`TestTranscriptProvenanceInventory` freezes the 99-file measured corpus and
+`TestTranscriptProvenanceInventory` freezes the measured corpus size and
 rejects legacy-prefix evidence. Stable proof records must name
 a regular-file basename directly under `testdata/transcripts`; their capture
 ID, server version, and full hash must agree exactly with the parsed header.
