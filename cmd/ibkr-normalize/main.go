@@ -433,27 +433,12 @@ func transcriptRedactionsForIdentities(identities []transcriptDriverIdentity) (t
 		}
 	}
 	for permID, orderID := range permOrderIDs {
-		digits := len(strconv.FormatInt(permID, 10))
-		sanitized := int64(9)
-		for range digits - 1 {
-			sanitized *= 10
-		}
-		sanitized += orderID
-		if len(strconv.FormatInt(sanitized, 10)) != digits {
-			return transcriptRedactions{}, fmt.Errorf("perm id %d cannot preserve decimal width for order id %d", permID, orderID)
+		sanitized, from, fromN, to, toN, err := sanitizedPermID(permID, orderID)
+		if err != nil {
+			return transcriptRedactions{}, err
 		}
 		if err := addString(transcriptPermID, strconv.FormatInt(permID, 10), strconv.FormatInt(sanitized, 10)); err != nil {
 			return transcriptRedactions{}, err
-		}
-		var from, to [binary.MaxVarintLen64]byte
-		// permOrderIDs is populated only from positive broker identities, and
-		// sanitized is constructed from positive decimal digits plus orderID.
-		// #nosec G115 -- both signed values are proven positive above.
-		fromN := binary.PutUvarint(from[:], uint64(permID))
-		// #nosec G115 -- both signed values are proven positive above.
-		toN := binary.PutUvarint(to[:], uint64(sanitized))
-		if fromN != toN {
-			return transcriptRedactions{}, fmt.Errorf("perm id %d -> %d changes protobuf varint width", permID, sanitized)
 		}
 		key := fmt.Sprintf("v:%d", permID)
 		if _, ok := seen[key]; !ok {
@@ -1061,4 +1046,34 @@ func frameBytes(payload []byte) ([]byte, error) {
 		return nil, err
 	}
 	return out.Bytes(), nil
+}
+
+// sanitizedPermID returns the deterministic replacement for a broker perm ID:
+// a leading digit, zero padding, and the order ID, occupying the same decimal
+// width and the same protobuf varint width as the original so both classic and
+// protobuf frames keep their length. The leading digit starts at 9 and steps
+// down because a 9-prefixed token can cross a varint boundary (for example
+// 223537024 fits four varint bytes while 900000684 needs five).
+func sanitizedPermID(permID, orderID int64) (sanitized int64, from [binary.MaxVarintLen64]byte, fromN int, to [binary.MaxVarintLen64]byte, toN int, err error) {
+	digits := len(strconv.FormatInt(permID, 10))
+	// permOrderIDs is populated only from positive broker identities.
+	// #nosec G115 -- permID is proven positive by the caller.
+	fromN = binary.PutUvarint(from[:], uint64(permID))
+	for lead := int64(9); lead >= 1; lead-- {
+		sanitized = lead
+		for range digits - 1 {
+			sanitized *= 10
+		}
+		sanitized += orderID
+		if len(strconv.FormatInt(sanitized, 10)) != digits {
+			return 0, from, 0, to, 0, fmt.Errorf("perm id %d cannot preserve decimal width for order id %d", permID, orderID)
+		}
+		// sanitized is constructed from positive decimal digits plus orderID.
+		// #nosec G115 -- proven positive above.
+		toN = binary.PutUvarint(to[:], uint64(sanitized))
+		if toN == fromN {
+			return sanitized, from, fromN, to, toN, nil
+		}
+	}
+	return 0, from, 0, to, 0, fmt.Errorf("perm id %d has no width-preserving sanitized form for order id %d", permID, orderID)
 }

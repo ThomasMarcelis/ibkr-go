@@ -1070,3 +1070,28 @@ func decodeHex(t *testing.T, value string) []byte {
 	}
 	return decoded
 }
+
+func TestSanitizedPermIDPreservesVarintWidth(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		permID, orderID, want int64
+	}{
+		{permID: 1841516325, orderID: 557, want: 9000000557},
+		// 223537024 uses four varint bytes; 900000684 would need five, so the
+		// token steps down to the first leading digit that keeps the width.
+		{permID: 223537024, orderID: 684, want: 200000684},
+	}
+	for _, tt := range tests {
+		got, _, fromN, _, toN, err := sanitizedPermID(tt.permID, tt.orderID)
+		if err != nil {
+			t.Fatalf("sanitizedPermID(%d, %d) error = %v", tt.permID, tt.orderID, err)
+		}
+		if got != tt.want || fromN != toN {
+			t.Fatalf("sanitizedPermID(%d, %d) = %d (varint %d -> %d), want %d with equal widths", tt.permID, tt.orderID, got, fromN, toN, tt.want)
+		}
+		if len(strconv.FormatInt(got, 10)) != len(strconv.FormatInt(tt.permID, 10)) {
+			t.Fatalf("sanitizedPermID(%d, %d) = %d changes decimal width", tt.permID, tt.orderID, got)
+		}
+	}
+}
