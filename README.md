@@ -2,15 +2,10 @@
 
 [![CI](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml/badge.svg)](https://github.com/ThomasMarcelis/ibkr-go/actions/workflows/ci.yml)
 [![Go Reference](https://pkg.go.dev/badge/github.com/ThomasMarcelis/ibkr-go/v2.svg)](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2)
-[![Go Report Card](https://goreportcard.com/badge/github.com/ThomasMarcelis/ibkr-go/v2)](https://goreportcard.com/report/github.com/ThomasMarcelis/ibkr-go/v2)
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An idiomatic Go client for the Interactive Brokers TWS and IB Gateway socket
-protocol. Typed methods for snapshots. Typed subscriptions for streams. Typed
-order lifecycle tracking across the currently implemented surface. Exact
-decimal arithmetic for prices, quantities, and money.
-
+An idiomatic, pure-Go client for the Interactive Brokers TWS and IB Gateway socket API. Typed methods for snapshots, typed subscriptions for streams, typed order lifecycle tracking. Exact decimal arithmetic for prices, quantities, and money. 
 ```go
 client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4002))
 if err != nil {
@@ -18,35 +13,29 @@ if err != nil {
 }
 defer client.Close()
 
-// one-shot — typed result, blocks until done
-positions, err := client.Accounts().Positions(ctx)
+// One-shot get quote: a typed result, blocks until IBKR answers.
+details, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
 if err != nil {
     return err
 }
-fmt.Println("positions:", len(positions))
+fmt.Println(details.LongName, details.MinTick) // APPLE INC 0.01
 
-// Use delayed data unless this login has real-time market-data entitlements.
+// Stream quotes: a typed subscription you range over. Delayed data needs no
+// market-data subscription.
 if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
     return err
 }
-
-// streaming — data, notices, and lifecycle boundaries stay ordered
-sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+quotes, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Stock("AAPL"),
 })
 if err != nil {
     return err
 }
-defer sub.Close()
-for event := range sub.Events() {
-    switch event.Kind {
-    case ibkr.StreamData:
-        fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
-    case ibkr.StreamNotice:
-        fmt.Println("quote notice:", event.Notice)
-    }
+for q := range quotes.All(ctx) {
+    fmt.Println(q.Snapshot.Bid, q.Snapshot.Ask)
 }
-return sub.Err()
+quotes.Close()
+return errors.Join(quotes.Wait(), context.Cause(ctx))
 ```
 
 ## Install
@@ -55,76 +44,85 @@ return sub.Err()
 go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.2
 ```
 
-Requires Go 1.26+. Direct dependencies are
+Requires Go 1.26+. Two dependencies:
 [shopspring/decimal](https://github.com/shopspring/decimal) for exact financial
-arithmetic and the official
-[protobuf runtime](https://pkg.go.dev/google.golang.org/protobuf).
-
+arithmetic and the [protobuf runtime](https://pkg.go.dev/google.golang.org/protobuf).
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
-v1 is deprecated. Go semantic import versioning prevents accidental upgrades;
-adopting the supported v2 line requires changing imports to
-`github.com/ThomasMarcelis/ibkr-go/v2` and following the
-[v2 migration guide](docs/migration-v2.md).
 
 ## Why ibkr-go
 
-- **Go-shaped API.** One-shots return typed results. Streams return typed
-  subscriptions with one ordered `Events()` stream plus `Done()`. No `EWrapper` /
-  `EClient` callback surface.
-- **Broad TWS/Gateway coverage.** Accounts, positions, quotes, historical data,
-  order management, market depth, executions, options, scanners, news, FA
-  configuration, WSH, display groups, and more. The client negotiates exactly
-  `server_version` 208..225, with protobuf migrations through 213 and later
-  semantics gated through 225. Gateways on 200..207 require v2.0.0 or an
-  upgrade.
-  Remaining official branches are tracked explicitly in the roadmap and
-  coverage matrix.
-- **Reconnects are explicit.** Subscription events preserve `Gap`, `Restored`,
-  `Resubscribed`, and `SnapshotComplete` in order with data. Channel close plus
-  `Err()` is the terminal signal.
-- **Exact financial values.** [`decimal.Decimal`](https://github.com/shopspring/decimal)
-  for typed prices, quantities, and money — no float64 rounding. Heterogeneous
-  IBKR values and extensible tag payloads remain strings where the protocol
-  does not define a single numeric meaning.
-- **Protocol work backed by evidence.** Replay scenarios derived from live IB
-  Gateway traffic, wire and codec fuzzing, and deterministic CI.
+- **Go-shaped API.** One-shots return typed results. Streams are
+  `*Subscription[T]` with one ordered `Events()` channel and an `All(ctx)`
+  iterator. No `EWrapper` / `EClient` callback surface.
+- **Broad coverage.** Accounts, positions, quotes, historical data, orders,
+  market depth, executions, options, scanners, news, FA, WSH, display groups.
+  Works with current TWS and IB Gateway builds (`server_version` 208–225);
+- **Reconnects are explicit.** Drops, gaps, and resumptions arrive as ordered
+  events on the same stream as the data, so you always know what you missed.
+- **Exact financial values.** Prices, quantities, and money are
+  [`decimal.Decimal`](https://github.com/shopspring/decimal)
+- **Backed by live evidence.** 113 replay transcripts captured from a live IB
+  Gateway, fuzzed framing and codec, and a deterministic CI that needs no
+  broker credentials.
 
-## Quick Start
+## What's covered
 
-The mental model: call a method for a snapshot, subscribe for a stream.
+| Facade | One-shots and controls | Streams and handles |
+|--------|------------------------|---------------------|
+| `client` | `ManagedAccounts`, `CurrentTime`, `Session` | `SessionEvents`, `Done`, `Wait` |
+| `client.Accounts()` | `Summary`, `Positions`, `Updates`, `UpdatesMulti`, `PositionsMulti`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribeUpdates`, `SubscribeUpdatesMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle` |
+| `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | `StreamDetails`, `StreamSecDefOptParams` |
+| `client.MarketData()` | `SetType`, `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
+| `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
+| `client.Orders()` | `RefreshOrderID`, `Preview`, `Cancel`, `CancelAll`, `Open`, `Completed`, `Executions` | `Place` → `OrderHandle`, `PlaceBracket`, `StreamCompleted`, `SubscribeOpen`, `SubscribeExecutions`, `SubscribeExecutionEvents` |
+| `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` → `ExerciseHandle` |
+| `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
+| `client.Scanner()` | `Parameters` | `SubscribeResults` |
+| `client.Advisors()` | `Config`, `SoftDollarTiers` | |
+| `client.WSH()` | `MetaData`, `EventData` | |
+| `client.TWS()` | `Config`, `UserInfo`, `DisplayGroups` | `SubscribeDisplayGroup` |
 
-### Connect and qualify a contract
+One-shots return `(T, error)` or `([]T, error)`. Subscriptions return
+`*Subscription[T]` with `Events()`, `All(ctx)`, `Done()`, and `Close()`. Order
+placement returns `*OrderHandle` with one ordered event stream plus `Cancel()`
+and `Replace()`.
+
+## Quick start
+
+`ibkr.Stock`, `ibkr.OptionContract`, `ibkr.Future`, and `ibkr.Forex` build the
+common contract shapes (SMART routing, USD, the 100-share option multiplier).
+Anything more exotic, such as a combo or a non-USD listing, is a `Contract{}`
+literal.
+
+### Account summary and positions
 
 ```go
-client, err := ibkr.DialContext(ctx,
-    ibkr.WithHost("127.0.0.1"),
-    ibkr.WithPort(4002),
-)
+values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
+    Group: "All",
+    Tags:  []string{"NetLiquidation", "TotalCashValue"},
+})
 if err != nil {
     return err
 }
-defer client.Close()
+for _, v := range values {
+    fmt.Println(v.Tag, v.Value, v.Currency)
+}
 
-details, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
+positions, err := client.Accounts().Positions(ctx)
 if err != nil {
     return err
 }
-fmt.Println(details.LongName, details.MinTick) // APPLE INC 0.01
+for _, p := range positions {
+    fmt.Println(p.Contract.Symbol, p.Position, p.AvgCost)
+}
 ```
 
-`ibkr.Stock`, `ibkr.OptionContract`, and `ibkr.Future` fill the common fields
-(SMART routing, USD, and the 100-share option multiplier) for their standard
-contract shapes. `ibkr.Forex` returns a contract and an error; it accepts
-exactly six uppercase ASCII letters such as `EURUSD` and configures IDEALPRO
-routing. Build a `Contract{}` literal directly for anything more exotic
-(combos, non-USD listings, a specific primary exchange).
+Every account call has a `Subscribe*` twin that streams updates instead, and
+`SubscribePnL` streams real-time P&L.
 
-### Stream quotes
+### Stream quotes with lifecycle events
 
 ```go
-if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
-    return err
-}
 sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
     Contract: ibkr.Stock("AAPL"),
 }, ibkr.WithResumePolicy(ibkr.ResumeAuto))
@@ -138,55 +136,27 @@ for event := range sub.Events() {
     case ibkr.StreamData:
         fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
     case ibkr.StreamNotice:
-        log.Printf("quote notice: %v", event.Notice)
+        log.Printf("notice: %v", event.Notice)
     case ibkr.StreamGap:
-        log.Printf("quote gap on connection %d: %v", event.ConnectionSeq, event.Err)
+        log.Printf("gap: %v", event.Err)
     case ibkr.StreamRestored, ibkr.StreamResubscribed:
-        log.Printf("quote stream recovered on connection %d", event.ConnectionSeq)
+        log.Println("stream recovered")
     }
 }
-if err := sub.Err(); err != nil {
-    return err
-}
+return sub.Err()
 ```
 
-`Events()` is the subscription's single ordered queue. Repeated calls return the
-same channel, so multiple readers divide events rather than each receiving a
-copy. After the channel closes, `sub.Err()` reports why: nil for a clean close,
-or e.g. `ibkr.ErrSlowConsumer` / `ibkr.ErrInterrupted` otherwise. Check
-`ibkr.IsRetryable(err)` to distinguish retry-with-backoff conditions from
-terminal failures.
+`All(ctx)` yields only data. `Events()` also carries notices (such as the
+delayed-data downgrade) and reconnect boundaries. Both drain the same queue, so
+pick one and read it from one goroutine. After the channel closes, `Err()` says
+why, nil for a clean close, and `ibkr.IsRetryable(err)` tells you whether to
+back off and try again.
 
-If only business data matters, replace the `Events()` loop with the data-only
-iterator:
-
-```go
-for update := range sub.All(ctx) {
-    fmt.Println(update.Snapshot.Bid, update.Snapshot.Ask)
-}
-return errors.Join(sub.Err(), context.Cause(ctx))
-```
-
-`All(ctx)` consumes and filters lifecycle and notice events. `Events()` and
-`All(ctx)` consume the same queue: choose one and have exactly one goroutine
-drain it. `AwaitSnapshot(ctx)` remains a durable initial snapshot boundary.
-
-Transport reconnection and request replay are separate policies. The client
-defaults to `ReconnectAuto`, which redials and handshakes after a dropped
-socket, while request-backed subscriptions default to `ResumeNever`.
-`ResumeAuto` is accepted only by streaming quotes and real-time bars. It
-reissues those requests after an automatic reconnect and after a data-lost
-restoration (code 1101), including when 1101 arrives on the existing socket.
-Other long-lived request-backed subscriptions end with `ErrResumeRequired`;
-finite streams end with `ErrInterrupted`. Create a replacement with a live
-context, which waits for the next `Ready` session when necessary.
-
-### Fetch historical bars
+### Historical bars
 
 ```go
 bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
     Contract:   ibkr.Stock("AAPL"),
-    EndTime:    time.Now(),
     Duration:   ibkr.Days(1),
     BarSize:    ibkr.Bar1Hour,
     WhatToShow: ibkr.ShowTrades,
@@ -200,18 +170,13 @@ for _, bar := range bars {
 }
 ```
 
-### Place an order and track its lifecycle
+### Place an order
 
-`Place` returns an `OrderHandle` whose `Events()` channel carries a typed
-union — exactly one of `Status`, `Execution`, `CommissionAndFees`, `OpenOrder`,
-`Warning`, `Binding`, or `Lifecycle` is non-nil per event. A terminal order status does not close the
-handle because IBKR can deliver executions and fees afterward. The caller ends
-its observation window explicitly after collecting the evidence it needs. This
-example stops at the first terminal status; applications that require trailing
-fees should use their own bounded post-terminal window. Ending observation does
-not cancel a working order. If the context expires first, the order remains
-potentially live at IBKR and its `OrderID` must be reconciled or cancelled with
-a fresh, non-cancelled context.
+`Place` returns an `OrderHandle`. Its `Events()` channel carries statuses,
+fills, commissions, and warnings in order. The handle stays open after a
+terminal status because IBKR can still send fills and fees afterwards; call
+`Close` when you have what you need. Closing stops watching, it does not cancel
+the order.
 
 ```go
 handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
@@ -221,82 +186,46 @@ handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 if err != nil {
     return err
 }
+defer handle.Close()
 
-for {
-    select {
-    case evt, ok := <-handle.Events():
-        if !ok {
-            return handle.Wait()
+for evt := range handle.Events() {
+    switch {
+    case evt.Status != nil:
+        fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
+        if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
+            return nil
         }
-        switch {
-        case evt.Status != nil:
-            fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
-            if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-                handle.Close()
-                return handle.Wait()
-            }
-        case evt.Execution != nil:
-            fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
-        case evt.CommissionAndFees != nil:
-            fmt.Println("commission and fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
-        case evt.OpenOrder != nil:
-            fmt.Println("open order:", evt.OpenOrder.Order.OrderType)
-        case evt.Warning != nil:
-            fmt.Println("order warning:", evt.Warning)
-        case evt.Binding != nil:
-            fmt.Println("order binding:", evt.Binding.OrderID, evt.Binding.PermID)
-        case evt.Lifecycle != nil:
-            fmt.Println("order lifecycle:", evt.Lifecycle.Kind, evt.Lifecycle.Err)
-        default:
-            return errors.New("received order event without a payload")
-        }
-    case <-ctx.Done():
-        orderID := handle.OrderID()
-        handle.Close() // Detach local observation; this does not cancel the order.
-        if err := handle.Wait(); err != nil {
-            return err
-        }
-        return fmt.Errorf("stopped observing order %d; it may still be live at IBKR: %w", orderID, ctx.Err())
+    case evt.Execution != nil:
+        fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
+    case evt.CommissionAndFees != nil:
+        fmt.Println("fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
     }
 }
+return handle.Wait()
 ```
 
-Order events use a bounded, lossless queue with a default capacity of 64;
-configure it for the client with `ibkr.WithOrderEventBuffer`. Events are never
-silently dropped while observation continues. If the queue fills, the handle
-closes and `Wait` returns `ibkr.ErrSlowConsumer`. That ends only this process's
-observation: the live order may keep executing at IBKR, and `handle.OrderID()`
-remains the coordinate for open-order reconciliation or direct cancellation.
-
-While the handle remains active, cancel or modify a working order:
+`Events()` stays open until you close the handle, so bound the loop with your
+own context or timeout if the order may rest. Cancel or amend while the handle
+is open:
 
 ```go
-if err := handle.Cancel(ctx); err != nil { // request cancellation
+if err := handle.Cancel(ctx); err != nil {
     return err
 }
-if err := handle.Replace(ctx, revisedOrder); err != nil { // amend price, quantity, etc.
+if err := handle.Replace(ctx, revisedOrder); err != nil {
     return err
 }
 ```
 
-A nil `Cancel` result means the cancellation request entered the client
-transport queue, not that IBKR acknowledged it. Keep draining order events
-until a terminal status or handle error establishes the observed outcome.
+Both return once the request is queued for IBKR, so keep reading events for
+the outcome. Order events are queued losslessly (64 by default, tune with
+`ibkr.WithOrderEventBuffer`). If you stop reading and the queue fills, the
+handle closes with `ErrSlowConsumer` while the order stays live at IBKR;
+`handle.OrderID()` is what you reconcile with. `Orders().Open` lists working
+orders after a restart, but only a handle from this process's `Place` can
+`Replace`.
 
-After `ErrSlowConsumer`, `Replace` returns `ErrClosed`; reconcile with the
-stable `OrderID` and cancel through `handle.Cancel` or
-`client.Orders().Cancel(ctx, handle.OrderID())` if the order is still working.
-
-The handle remains open after a terminal status so trailing executions and fees
-can arrive. Call `Close` when the application's observation window is complete.
-
-`Orders().Open` and `Orders().SubscribeOpen` can rediscover orders after a
-process restart, but neither creates an `OrderHandle` for an observed order.
-Cancellation by ID remains subject to IBKR client-ID ownership, and replacement
-is available only through an existing handle returned by this process's `Place`
-or `PlaceBracket` call.
-
-Place a bracket without managing IDs or transmit flags yourself:
+### Bracket orders
 
 ```go
 quantity := decimal.NewFromInt(1)
@@ -312,106 +241,29 @@ if err != nil {
 fmt.Println(bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.StopLoss.OrderID())
 ```
 
-`PlaceBracket` allocates all three IDs in one engine turn, links both children,
-and sends the required `Transmit=false`, `false`, `true` sequence. Each returned
-handle has the same ordered order-event API as a regular order.
-
-Transport-queue admission is the ownership boundary for both placement calls.
-After admission, a concurrent context cancellation does not replace a
-successful result: you receive the handle (or bracket) and own its lifecycle.
-If the admitted frame was still unwritten when the transport died, that handle
-closes with `ErrInterrupted`; IBKR never received that frame. Before admission,
-placement returns an error and no handle. If a
-bracket is only partially admitted, the zero bracket is returned with an
-`*ibkr.OrderRecoveryError`; its `OrderIDs` contain every admitted leg to
-reconcile through open orders. `CancelErr == nil` means every compensating
-cancel entered the transport queue, not that IBKR acknowledged it. Recovery
-errors are deliberately not retryable, because blind retry could duplicate a
-live leg. Only failure before the parent enters the queue returns the original
-placement error directly.
-
-### Account data
-
-```go
-// snapshot
-values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-    Group: "All",
-    Tags:  []string{"NetLiquidation", "TotalCashValue"},
-})
-if err != nil {
-    return err
-}
-fmt.Println("account values:", len(values))
-
-// streaming positions
-sub, err := client.Accounts().SubscribePositions(ctx)
-if err != nil {
-    return err
-}
-defer sub.Close()
-for pos := range sub.All(ctx) {
-    fmt.Println(pos.Contract.Symbol, pos.Position, pos.AvgCost)
-}
-if err := sub.Wait(); err != nil {
-    return err
-}
-
-// real-time P&L
-pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: "DU9000001"})
-if err != nil {
-    return err
-}
-defer pnl.Close()
-```
-
-## API Shape
-
-Every domain is accessed through a facade on the client:
-
-| Facade | One-shots and controls | Streams and handles |
-|--------|------------------------|---------------------|
-| `client.Accounts()` | `Summary`, `Positions`, `Updates`, `UpdatesMulti`, `PositionsMulti`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribeUpdates`, `SubscribeUpdatesMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle` |
-| `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | `StreamDetails`, `StreamSecDefOptParams` |
-| `client.MarketData()` | `SetType`, `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
-| `client.History()` | `Bars`, `HeadTimestamp`, `Histogram`, `Ticks`, `Schedule` | `SubscribeBars` |
-| `client.Orders()` | `RefreshOrderID`, `Preview`, `Cancel`, `CancelAll`, `Open`, `Completed`, `Executions` | `Place` → `OrderHandle`, `PlaceBracket`, `StreamCompleted`, `SubscribeOpen`, `SubscribeExecutions`, `SubscribeExecutionEvents` |
-| `client.Options()` | `ImpliedVolatility`, `Price` | `Exercise` → `ExerciseHandle` |
-| `client.News()` | `Providers`, `Article`, `Historical` | `SubscribeBulletins` |
-| `client.Scanner()` | `Parameters` | `SubscribeResults` |
-| `client.Advisors()` | `Config`, `SoftDollarTiers` | — |
-| `client.WSH()` | `MetaData`, `EventData` | — |
-| `client.TWS()` | `Config`, `UserInfo`, `DisplayGroups` | `SubscribeDisplayGroup` |
-
-One-shots return `(T, error)` or `([]T, error)`. Subscriptions return
-`*Subscription[T]` with `Events()`, `All(ctx)`, `Done()`, and `Close()`.
-Order placement returns `*OrderHandle` with one ordered event stream plus
-`Cancel()` and `Replace()`.
+`PlaceBracket` allocates the three IDs, links the children, and sets the
+transmit flags for you. Each handle has the same event API as a single order.
+If only some legs were accepted you get an `*OrderRecoveryError` listing them;
+reconcile through `Orders().Open` instead of retrying. The full placement and
+recovery rules are in the [session contract](docs/session-contract.md).
 
 ## Errors
 
-Errors are typed so callers can make a policy decision without parsing text:
-`*ConnectError` covers dial/bootstrap failures, `*ProtocolError` wire failures,
-`*ValidationError` rejected local input, and `*APIError` a Gateway response.
-`*InboundFrameTooLargeError` reports a raw frame rejected before body allocation.
-`*OrderRecoveryError`, `*ExerciseUncertainError`, and
-`*SubscriptionCancelError` mean remote state is uncertain and deliberately
-override any retryable wrapped cause. A
-`*RegulatorySnapshotUncertainError` identifies a fee-bearing snapshot whose
-completion evidence was lost. `ErrOrderRecoveryRequired` matches both a
-partially admitted bracket's `*OrderRecoveryError` and an order handle that
-crossed an unrecoverable observation gap: a physical reconnect or data-lost
-restoration (code 1101). Reconcile before taking another order action; that
-handle can no longer be used for replacement. A data-maintained 1100-to-1102
-gap instead emits `Restored` and preserves replacement. This is distinct from
-retryable subscription resumption.
+Errors are typed so you can decide policy without parsing text:
 
-`ibkr.IsRetryable(err)` is the single retry-with-backoff decision. It returns
-true for not-ready/session interruption, transient connection failures, and
-actual pacing violations. Ordinary API rejections, context cancellation,
-protocol/validation failures, slow consumers, execution-correlation overflow,
-and uncertain recovery errors are false. `SubscribeExecutions` retains at most
-4096 execution IDs and 4096 pre-execution fee-report versions by default; use
-`WithExecutionCorrelationLimit` to tune both finite bounds. For finer handling:
+- `*ConnectError`: dial or handshake failed.
+- `*APIError`: IBKR rejected or warned about a request. `IsPacingViolation`,
+  `IsEntitlement`, and `IsOrderRejection` classify it.
+- `*ValidationError`: the request was rejected locally before it was sent.
+- `*ProtocolError`: a malformed wire frame; the connection is retired.
+
+`ibkr.IsRetryable(err)` is the one retry decision. It is true for session
+interruptions, transient connection failures, and pacing violations. It is
+false for ordinary rejections, validation and protocol failures, slow
+consumers, and any error that leaves remote state uncertain
+(`*OrderRecoveryError`, `*ExerciseUncertainError`,
+`*SubscriptionCancelError`, `*RegulatorySnapshotUncertainError`), because a
+blind retry could duplicate a live order.
 
 ```go
 if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {
@@ -426,116 +278,65 @@ if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok {
 }
 ```
 
-`IsWarning`, `IsFarmStatus`, and `IsConnectivityTransition` classify
-informational codes. Delayed-data notice 10167 is a request-scoped
-`StreamNotice` on the quote subscription, so consumers that care about the
-downgrade must use `Events()` rather than the data-only `All()` iterator. See the
-[session contract](docs/session-contract.md) for the full terminal and recovery
-semantics and [operation control](docs/operation-control.md) for cancellation
-and connection-retirement behavior.
+The [session contract](docs/session-contract.md) lists every error type and
+its recovery rule.
+
+## Reconnects
+
+The client redials and handshakes after a dropped socket (`ReconnectAuto`, the
+default). What happens to your streams is explicit:
+
+- Quote and real-time-bar streams opened with `ResumeAuto` are re-requested
+  automatically; `Gap`, `Restored`, and `Resubscribed` events mark the boundary
+  in the stream itself.
+- Every other stream ends with `ErrResumeRequired` (finite ones with
+  `ErrInterrupted`). Open a new one; it waits for the next ready session.
+- An order handle that crosses a full reconnect can no longer replace its
+  order and reports `ErrOrderRecoveryRequired`. Reconcile with
+  `Orders().Open` before acting on that order again.
+
+Cancellation and connection-retirement details are in
+[operation control](docs/operation-control.md).
 
 ## Examples
 
-See the [`examples/` guide](examples/) for a short learning path from
-connection and snapshots through option discovery, scanners, reconnecting
-streams, paper order lifecycle, and margin previews.
-
-## Testing and Verification
-
-Supported behavior is frozen through deterministic tests; the coverage matrix
-distinguishes implementation, replay, live attestation, partial branches, and
-entitlement blockers rather than treating them as equivalent proof.
-
-- Checked-in replay transcripts under
-  [`testdata/transcripts`](testdata/transcripts)
-- Fuzz targets covering wire framing and codec round-trips
-- Deterministic CI for routine verification, without broker credentials
-- Separate live-gated tests for local verification against TWS or IB Gateway.
-  Read-only live checks default to `127.0.0.1:4001`; paper-trading checks
-  default to `127.0.0.1:4002`.
-
-The goal is a library whose protocol behavior can be frozen, replayed,
-stressed, and extended without guessing. For more on that approach, see
-[`docs/transcripts.md`](docs/transcripts.md) and
-[`docs/anti-patterns.md`](docs/anti-patterns.md).
+Nine runnable programs under [`examples/`](examples/), each one file against a
+real Gateway. Start with `connect`, `quotes`, `historical`, `portfolio`, and
+`order`, then `option-chain`, `scanner`, `resilient-quotes`, and
+`margin-preview`. The two order-shaped ones refuse to run outside a paper
+account.
 
 ## Status
 
-ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
-domains through an idiomatic Go facade. The v2.0.2 release negotiates
-exactly `server_version` 208..225; versions 200..207 are intentionally rejected.
-Protobuf migrations from 208 through 213 are implemented. Inbound sv214
-`Z` timestamps are accepted, but outbound sv214 suffix behavior remains
-unresolved and retains the existing format. Supported sv215..225 behavior and
-intentional exclusions are documented in the
-[sv208-225 protocol audit](docs/protocol-audit-sv208-225.md). Positive
-entitlement-dependent callbacks and remaining advanced branches stay explicit
-in the coverage matrix rather than being overclaimed.
-
-v2.0.2 exposes contract settlement methods, accepts live-evidenced per-leg
-pricing for BAG limit orders, and freezes 113 live-derived transcripts. The
-[v2.0.2 coverage plan](docs/v2.0.2-coverage-plan.md) records the promoted
-surface and the callbacks still blocked by external conditions. The v2.0.1
-release record remains in the
-[v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md).
-
-Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
-compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full
-charter.
+v2.0.2 covers the in-scope socket API against `server_version` 208–225.
+The [coverage matrix](docs/live-coverage-matrix.md) says which paths have live proof and which are blocked by entitlements or market state. Release notes are in the [CHANGELOG](CHANGELOG.md).
+Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient` compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Development
 
 ```bash
-go build ./...
-go vet ./...
-gofmt -l .           # must produce no output
-./scripts/check-api.sh
-golangci-lint run
 go test ./...
 ```
 
-These six checks are the local baseline before opening a pull request. CI also
-checks module tidiness and verification, fuzz-target inventory, a pure-Go 386
-build, vulnerabilities, shuffled tests across Linux/macOS/Windows, and the
-race detector; see [the workflow](.github/workflows/ci.yml) for the exact
-commands.
-
-Local live verification is opt-in:
+The full pre-PR checklist and the live-verification setup are in
+[`CONTRIBUTING.md`](CONTRIBUTING.md). Live tests are opt-in:
 
 ```bash
 IBKR_LIVE=1 IBKR_LIVE_READONLY_ADDR=127.0.0.1:4001 go test ./... -run '^TestLive' -count=1
-IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 go test ./cmd/ibkr-capture -run '^TestLiveCapture' -count=1
-```
-
-The maintainer lab uses two Gateway roles:
-
-- `IBKR_LIVE_READONLY_ADDR` points at the real-money, read-only Gateway with
-  live market data. Read-only tests and capture campaigns use this role.
-- `IBKR_LIVE_PAPER_ADDR` points at the throwaway paper Gateway. Tests that
-  place, modify, cancel, or flatten orders require both `IBKR_LIVE_TRADING=1`
-  and this paper role.
-
-Run the setup diagnostic before a live campaign:
-
-```bash
-go run ./cmd/ibkr-doctor -role readonly-live
-go run ./cmd/ibkr-doctor -role paper-dev
 ```
 
 ## Documentation
 
-- [`docs/session-contract.md`](docs/session-contract.md) — public API contract
-- [`docs/anti-patterns.md`](docs/anti-patterns.md) — design philosophy
-
-For contributors and maintainers:
-
-- [`docs/architecture.md`](docs/architecture.md) — internal layer design
-- [`docs/transcripts.md`](docs/transcripts.md) — test transcript format
-- [`docs/message-coverage.md`](docs/message-coverage.md) — protocol message matrix
-- [`docs/ibkr-api-inventory.md`](docs/ibkr-api-inventory.md) — official/repo surface inventory
-- [`docs/live-coverage-matrix.md`](docs/live-coverage-matrix.md) — capability coverage status
-- [`docs/live-test-tracker.md`](docs/live-test-tracker.md) — live run and capture evidence
-- [`docs/roadmap.md`](docs/roadmap.md) — project direction
+| Document | What it covers |
+|----------|----------------|
+| [`docs/session-contract.md`](docs/session-contract.md) | Public API contract: sessions, subscriptions, orders, errors |
+| [`docs/operation-control.md`](docs/operation-control.md) | Cancellation and connection retirement |
+| [`docs/migration-v2.md`](docs/migration-v2.md) | Upgrading from v1 |
+| [`docs/anti-patterns.md`](docs/anti-patterns.md) | Design philosophy |
+| [`docs/architecture.md`](docs/architecture.md) | Internal layer design |
+| [`docs/transcripts.md`](docs/transcripts.md) | Replay transcript format |
+| [`docs/live-coverage-matrix.md`](docs/live-coverage-matrix.md) | Capability coverage status |
+| [`docs/roadmap.md`](docs/roadmap.md) | Project direction |
 
 ## Contributing
 

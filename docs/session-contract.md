@@ -200,7 +200,9 @@ Default subscription behavior:
 
 Request-scoped warnings that do not terminate a stream are ordered with its
 data as `StreamNotice` events. Their full typed payload is in
-`StreamEvent.Notice`. They are not duplicated through `SessionEvents`, whose
+`StreamEvent.Notice`. The delayed-data downgrade (code 10167) is one such
+notice on the quote subscription, so consumers that care about it must read
+`Events()` rather than `All()`. They are not duplicated through `SessionEvents`, whose
 drop-oldest policy is reserved for session-scoped observation.
 
 `Orders().SubscribeOpen` returns an `OpenOrdersSubscription`. Its `Refresh`

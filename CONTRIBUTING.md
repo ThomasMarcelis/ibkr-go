@@ -39,11 +39,29 @@ Wire framing and codec round-trips are also fuzzed. The intent is not just to
 have broad coverage, but to keep the protocol surface diagnosable and safe to
 extend without a live broker in CI.
 
-Maintainer live campaigns use two local Gateway roles: `readonly-live` for
-real-money read-only evidence and `paper-dev` for any order placement,
-modification, cancellation, reconnect, or flattening scenario. Run
-`go run ./cmd/ibkr-doctor -role readonly-live` and
-`go run ./cmd/ibkr-doctor -role paper-dev` before recording captures.
+## Live verification
+
+Live tests are opt-in and never run in CI:
+
+```bash
+IBKR_LIVE=1 IBKR_LIVE_READONLY_ADDR=127.0.0.1:4001 go test ./... -run '^TestLive' -count=1
+IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 go test ./cmd/ibkr-capture -run '^TestLiveCapture' -count=1
+```
+
+The maintainer lab uses two Gateway roles:
+
+- `IBKR_LIVE_READONLY_ADDR` points at the real-money, read-only Gateway with
+  live market data. Read-only tests and capture campaigns use this role.
+- `IBKR_LIVE_PAPER_ADDR` points at the throwaway paper Gateway. Tests that
+  place, modify, cancel, or flatten orders require both `IBKR_LIVE_TRADING=1`
+  and this paper role.
+
+Run the setup diagnostic before a live campaign:
+
+```bash
+go run ./cmd/ibkr-doctor -role readonly-live
+go run ./cmd/ibkr-doctor -role paper-dev
+```
 
 ## Reference policy
 
