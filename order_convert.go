@@ -1,6 +1,7 @@
 package ibkr
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -20,7 +21,7 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		LmtPrice:      decimalPointerOrEmpty(req.Order.LmtPrice),
 		AuxPrice:      decimalPointerOrEmpty(req.Order.AuxPrice),
 
-		TIF:                        string(req.Order.TIF),
+		TIF:                        string(cmp.Or(req.Order.TIF, TIFDay)),
 		OcaGroup:                   req.Order.OCA.Group,
 		OcaType:                    strconv.Itoa(int(req.Order.OCA.Type)),
 		Account:                    req.Order.Account,

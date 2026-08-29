@@ -637,6 +637,11 @@ var scenarios = map[string]*scenario{
 		description: "public API campaign for staging Transmit=false then modifying to transmit and cancel",
 		run:         runAPITransmitFalseThenTransmitAAPL,
 	},
+	"api_empty_tif_default_aapl": {
+		metadata:    metaWithAssets("orders", []string{"Orders().Place", "OrderHandle.Cancel"}, []int{3, 4, 5}, "paper_order", []string{"paper_trading"}, []string{"a constructor-built limit order that sets no TIF is sent as DAY, echoed as DAY by the Gateway, and cancelled terminally with no fill"}, 1, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
+		description: "public API probe for the TIF the Gateway applies to a constructor-built order that sets none",
+		run:         runAPIEmptyTIFDefaultAAPL,
+	},
 	"api_include_overnight_lifecycle_aapl": {
 		metadata:    metaWithAssets("orders", []string{"Accounts().Summary", "Accounts().SubscribePositions", "Orders().SubscribeOpen", "Orders().Executions", "Orders().Place", "OrderHandle.Replace", "OrderHandle.Cancel", "Client.CurrentTime"}, []int{3, 4, 5, 7, 11, 16, 49, 53, 55, 59, 61, 62, 63, 64}, "paper_order", []string{"paper_trading", "client_id_0", "overnight_session", "multi_leg_recorder"}, []string{"nonmarketable SMART AAPL DAY order echoes IncludeOvernight=true; explicit-false replacement records exact code 462 while the working order retains true; a fresh explicit-false placement is accepted and broker-canonicalized to absent with TIF DAY; both orders cancel terminally and paper state reconciles to baseline"}, 0, "promoted", []string{"STK"}, batchNewV2, batchTrading, batchTradingAdvanced, batchTradingAll, batchExhaustiveTrading, batchReplayAll),
 		description: "guarded true-to-false IncludeOvernight placement, replacement, cancellation, and reconciliation",

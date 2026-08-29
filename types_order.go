@@ -450,7 +450,7 @@ type Order struct {
 	Quantity   decimal.Decimal  // order size (required); zero is treated as unset
 	LmtPrice   *decimal.Decimal // limit price for LMT / STP LMT
 	AuxPrice   *decimal.Decimal // stop trigger for STP / STP LMT, trailing amount for TRAIL
-	TIF        TimeInForce      // time in force; empty defaults to DAY at the server
+	TIF        TimeInForce      // time in force; empty is sent as DAY
 	Account    string           // account to place under; required only for multi-account logins
 	Transmit   *bool            // nil = transmit (true); false stages an untransmitted order
 	ParentID   int64            // parent order ID for a bracket child; 0 = no parent

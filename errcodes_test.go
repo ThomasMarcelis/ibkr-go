@@ -57,6 +57,7 @@ func TestAPIErrorClassification(t *testing.T) {
 		{code: ErrCodeNewsFeedNotAllowed, entitlement: true},
 		{code: ErrCodeImbalanceOnlyNotAllowed},
 		{code: ErrCodeOrderTIFSetFromPreset, warning: true},
+		{code: ErrCodeInvalidTimeInForce, orderReject: true},
 	}
 	for _, tt := range tests {
 		err := &APIError{Code: tt.code, Message: tt.message}

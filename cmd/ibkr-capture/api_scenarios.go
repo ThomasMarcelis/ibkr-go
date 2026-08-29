@@ -4259,6 +4259,56 @@ func runAPITransmitFalseThenTransmitAAPL(ctx context.Context, addr string, clien
 	})
 }
 
+func runAPIEmptyTIFDefaultAAPL(ctx context.Context, addr string, clientID int) error {
+	return apiTradingScenario(ctx, addr, clientID, 3*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
+		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("300"))
+		// Public constructors leave TIF empty. This scenario records what the
+		// Gateway does with that request shape instead of assuming a default.
+		order := ibkr.LimitOrder(ibkr.ActionBuy, apiStockOrderQuantity, farBuy(anchor))
+		order.Account = account
+		order.OrderRef = apiOrderRef("capture")
+		handle, err := placeAPIOrder(ctx, client, "empty tif placement", apiAAPL, order)
+		if err != nil {
+			return fmt.Errorf("place empty tif: %w", err)
+		}
+		echo, warning, err := awaitOpenOrderEvidenceAndWarning(ctx, handle, "empty tif placement", 20*time.Second)
+		if err != nil {
+			rejection, ok := errors.AsType[*ibkr.APIError](err)
+			if !ok {
+				rejection = warning
+			}
+			if rejection == nil || rejection.Code != 10052 {
+				return fmt.Errorf("empty tif placement produced neither an open-order echo nor exact code 10052: %w", err)
+			}
+			recordAPIEvent("empty_tif_rejected", "placement", func(event *apiDriverEvent) {
+				event.OrderID = handle.OrderID()
+				event.Values = map[string]string{
+					"code":    strconv.Itoa(rejection.Code),
+					"message": rejection.Message,
+				}
+			})
+			handle.Close()
+			return fenceAPIWrites(ctx, client, "empty tif rejection cleanup")
+		}
+		if echo.Order.TIF != ibkr.TIFDay {
+			return fmt.Errorf("empty tif echo = %q, want DAY", echo.Order.TIF)
+		}
+		recordAPIEvent("empty_tif_echo", "placement", func(event *apiDriverEvent) {
+			event.OrderID = handle.OrderID()
+			event.Values = map[string]string{"requested": "", "tif": string(echo.Order.TIF)}
+		})
+		cancelOrder(ctx, client, account, handle, "empty tif placement")
+		observation := observeOrder(ctx, handle, "empty tif placement cancel", 20*time.Second)
+		if !observation.terminal {
+			return fmt.Errorf("empty tif order %d did not reach a terminal state after targeted cancel; last status %q", handle.OrderID(), observation.lastStatus)
+		}
+		if observation.AnyFill() {
+			return fmt.Errorf("nonmarketable empty tif order %d unexpectedly filled %s", handle.OrderID(), observation.filledQty)
+		}
+		return fenceAPIWrites(ctx, client, "empty tif placement cleanup")
+	})
+}
+
 func runAPIIncludeOvernightLifecycleAAPL(ctx context.Context, addr string, clientID int) error {
 	return apiTradingScenario(ctx, addr, clientID, 5*time.Minute, func(ctx context.Context, client *ibkr.Client, account string) error {
 		anchor := quoteAnchor(ctx, client, apiAAPL, decimal.RequireFromString("300"))

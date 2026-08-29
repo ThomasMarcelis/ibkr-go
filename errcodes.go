@@ -142,6 +142,12 @@ const (
 	// capture received this code after malformed, tail-shifted requests and
 	// therefore does not attest correctly framed pegged-order behavior.
 	ErrCodeImbalanceOnlyNotAllowed = 10342
+	// ErrCodeInvalidTimeInForce: the Gateway rejected the order's time in
+	// force. Live paper sv225 (2026-08-29) returned it for an omitted TIF, so
+	// the client always sends DAY when Order.TIF is empty; an explicit
+	// unsupported value still draws this rejection.
+	ErrCodeInvalidTimeInForce = 10052
+
 	// ErrCodeOrderTIFSetFromPreset: notice that the Gateway set the
 	// instruction's TIF from an order preset ("Order TIF was set to DAY
 	// based on order preset."), live-attested acknowledging an option
@@ -242,7 +248,8 @@ func isOrderRejectionCode(code int) bool {
 		ErrCodeServerErrorReadingRequest, ErrCodeServerErrorValidatingRequest,
 		ErrCodeTrailingStopAttachRejected, ErrCodeUnsupportedOrderType,
 		ErrCodeAlgoDefinitionNotFound, ErrCodeUnknownAlgoAttribute,
-		ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed:
+		ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed,
+		ErrCodeInvalidTimeInForce:
 		return true
 	}
 	return false

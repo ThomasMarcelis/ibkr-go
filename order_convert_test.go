@@ -85,6 +85,25 @@ func TestFromCodecOrderDetailsRejectsMalformedIncludeOvernight(t *testing.T) {
 	}
 }
 
+// Live paper sv225 (2026-08-29) rejects an omitted TIF with code 10052
+// "Invalid time in force:Empty", so the client sends DAY unless the caller
+// chose otherwise. Capture 20260829T142218Z-api_empty_tif_default_aapl (events SHA-256
+// a6d1543d90a099e14011adc9a2e4fac984d7ac4f512a49ec391e86a0aab5859b) records
+// the rejection; the promoted replay records the DAY echo after this change.
+func TestToCodecPlaceOrderSendsDayWhenTIFEmpty(t *testing.T) {
+	t.Parallel()
+
+	contract := Contract{Symbol: "AAPL", SecType: SecTypeStock, Exchange: "SMART", Currency: "USD"}
+	if got := toCodecPlaceOrder(77, PlaceOrderRequest{Contract: contract, Order: LimitOrder(ActionBuy, decimal.NewFromInt(1), decimal.NewFromInt(150))}).TIF; got != "DAY" {
+		t.Fatalf("empty TIF encoded as %q, want DAY", got)
+	}
+	gtc := LimitOrder(ActionBuy, decimal.NewFromInt(1), decimal.NewFromInt(150))
+	gtc.TIF = TIFGTC
+	if got := toCodecPlaceOrder(77, PlaceOrderRequest{Contract: contract, Order: gtc}).TIF; got != "GTC" {
+		t.Fatalf("explicit TIF encoded as %q, want GTC", got)
+	}
+}
+
 func TestToCodecPlaceOrderMapsAdvancedOrderFields(t *testing.T) {
 	t.Parallel()
 
