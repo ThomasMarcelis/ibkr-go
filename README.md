@@ -5,7 +5,8 @@
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An idiomatic, pure-Go client for the Interactive Brokers TWS and IB Gateway socket API. Typed methods for snapshots, typed subscriptions for streams, typed order lifecycle tracking. Exact decimal arithmetic for prices, quantities, and money. 
+An idiomatic, pure-Go client for the Interactive Brokers TWS and IB Gateway socket API. Typed methods for snapshots, typed subscriptions for streams, typed order lifecycle tracking. Exact decimal arithmetic for prices, quantities, and money.
+
 ```go
 client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4002))
 if err != nil {
@@ -359,7 +360,9 @@ IBKR_LIVE=1 IBKR_LIVE_READONLY_ADDR=127.0.0.1:4001 go test ./... -run '^TestLive
 | [`docs/architecture.md`](docs/architecture.md) | Internal layer design |
 | [`docs/transcripts.md`](docs/transcripts.md) | Replay transcript format |
 | [`docs/live-coverage-matrix.md`](docs/live-coverage-matrix.md) | Capability coverage status |
-| [`docs/roadmap.md`](docs/roadmap.md) | Project direction |
+| [`docs/protocol-audit-sv208-225.md`](docs/protocol-audit-sv208-225.md) | What each server version 208–225 changes, with capture evidence |
+| [`docs/ibkr-api-inventory.md`](docs/ibkr-api-inventory.md) | Official TWS API surface mapped to ibkr-go |
+| [`docs/roadmap.md`](docs/roadmap.md) | Next steps |
 
 ## Contributing
 

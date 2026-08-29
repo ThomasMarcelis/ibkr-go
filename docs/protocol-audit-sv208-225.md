@@ -1,9 +1,9 @@
 # Protocol Audit: Server Versions 208-225
 
-This audit records the protocol train beginning at the supported floor. The
-production client negotiates exactly `server_version` 208..225 and remains
-pure Go. Historical boundary vectors used official SDK 10.48.01; the current
-source audit uses API 10.50.01. Both SDKs are conformance oracles only.
+What each supported server version changes, and the evidence behind it. The
+client negotiates exactly `server_version` 208..225. Boundary vectors were
+captured with official SDK 10.48.01; the current source audit uses API
+10.50.01. Both SDKs are conformance oracles only, never runtime dependencies.
 
 ## Current official-source drift
 

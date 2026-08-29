@@ -7,17 +7,9 @@ plumbing may change as long as this public surface and its semantics do not.
 
 `DialContext` returns only after transport connection, server-version
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
-The client negotiates exactly `server_version` 208..225; answers outside that
-range are rejected during handshake. Versions 200..207 are intentionally not
-supported on the v2 line. Version 208 is the floor and uses protobuf for
-the execution, order, contract, market-data, account, position, and historical
-families. Exact `sv209` through `sv213` complete the official protobuf migration
-train for news, scanner/PnL, FA/options, reference data, and bootstrap/control
-families. Inbound sv214 `Z` timestamps
-are accepted, while outbound suffix behavior remains unresolved. Versions
-215..225 add one-shot cancellation and order parameters,
-read-only TWS configuration, volume/fractional-size semantics, security-
-definition precision, and odd-lot quotes. See
+The client negotiates exactly `server_version` 208..225 and rejects a
+handshake outside that range. What each version adds, and the evidence
+behind it, is in
 [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 
 ```go
@@ -74,6 +66,10 @@ Contract qualification and option-chain metadata belong to `Contracts`;
 
 Managed accounts are loaded into `Snapshot` during bootstrap and can be
 refreshed explicitly with `Client.ManagedAccounts`.
+
+`TWS().Config` is a read-only configuration snapshot (server version 219+).
+Optional scalar pointers keep omitted values distinct from explicit zero or
+false. Changing configuration is operator-owned and not exposed.
 
 Operation methods are the canonical validation boundary; v2 intentionally has
 no separate public `Validate` facade. Static caller mistakes return
@@ -260,10 +256,6 @@ because the caller must reconcile open orders before deciding whether to place
 again. Only failure before the first place admission returns the original
 placement error directly.
 
-`TWS().Config(ctx)` is the read-only server-version-219 configuration snapshot.
-Optional scalar pointers preserve omitted values separately from explicit
-zero/false. Configuration mutation remains operator-owned and is not exposed.
-
 `Orders().Preview(ctx, req)` is the one-shot counterpart: it forces the
 what-if flag and returns the complete `OrderState` preview block, including
 status, margin currency, before/change/after margin both in and outside regular
@@ -351,7 +343,7 @@ An order-targeted api_error closes the handle only when
 failure and no working-order evidence has appeared. Unknown codes and every
 error after working evidence are delivered as non-terminal warnings: retaining
 an observable live order is safer than detaching it. Order-targeted 10xxx
-notices for live orders — cancel replies such as 10147/10148 — stay session
+notices for live orders, such as cancel replies 10147 and 10148, stay session
 events, because the handle already carries the order's real state.
 Cancellation replies 161 (the order is not in a cancellable state) and 202
 (the order was cancelled) follow the same rule even though they are below
@@ -359,8 +351,8 @@ Cancellation replies 161 (the order is not in a cancellable state) and 202
 ahead of the terminal status it describes, so it must not tear down the route;
 the subsequent `OrderStatus` still owns the handle result.
 
-Other order-targeted api_error values — notably code 399, the off-hours
-deferral, and code 404, an order held while shares are located — are delivered
+Other order-targeted api_error values, notably code 399 (the off-hours
+deferral) and code 404 (an order held while shares are located), are delivered
 non-terminally as `OrderEvent.Warning`. The order stays observable and the
 handle remains open; later status updates continue until the caller closes the
 observation window or an error ends it.

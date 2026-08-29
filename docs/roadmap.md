@@ -9,7 +9,7 @@ the [CHANGELOG](../CHANGELOG.md).
 1. **Release v2.0.3.** Ships the empty-TIF fix (constructor-built orders
    were rejected with code 10052 on sv225), the 10052 rejection
    classification, the width-preserving perm-ID sanitizer, the `bracket`
-   example, and this docs consolidation. Follow the release checklist in
+   example, and the docs cleanup. Follow the release checklist in
    [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 2. **Settle cross-client cancel.** The promoted captures show a second client
    ID cancelling a `Submitted` order; a 2026-07-04 probe outside regular hours
@@ -42,8 +42,6 @@ the [CHANGELOG](../CHANGELOG.md).
 
 From the August 2026 review; none of these change the public API.
 
-- Move the shared replay harness out of `client_integration_test.go` so the
-  black-box test files stop depending on a 3,000-line test file.
 - Replace the repeated hand-rolled "request ID plus repeated submessage"
   protowire loops in `internal/codec` with one helper.
 - Drop the `sv` parameter from codec functions that never gate on it, and the

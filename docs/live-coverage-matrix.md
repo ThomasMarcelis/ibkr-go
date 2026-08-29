@@ -7,9 +7,8 @@ capabilities.
 
 Supporting inventory:
 
-- [`ibkr-api-inventory.md`](ibkr-api-inventory.md) lists official sources,
-  official EClient/EWrapper families, current public facade methods, current
-  codec message IDs, and known official gaps.
+- [`ibkr-api-inventory.md`](ibkr-api-inventory.md) maps the official
+  EClient/EWrapper surface to what `ibkr-go` implements.
 - `cmd/ibkr-capture -list-json` is the executable scenario catalog.
 - `testdata/transcripts` is the deterministic replay catalog.
 

@@ -3,22 +3,18 @@
 `ibkr-go` is built as a session engine with a typed facade. The library does
 not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
-The library currently exposes a broad read-only surface plus order management,
-market depth, and option exercise. The session handshake accepts exactly
-`server_version` 208..225 and rejects 207 and 226. Version 208 is the floor;
-families migrated before it have one protobuf implementation. Exact 208..213
-complete the remaining staged protobuf migrations; inbound sv214 `Z` parsing is supported while outbound
-formatting remains unresolved, and 215..225 add cancellation, order,
-configuration, volume/precision, and odd-lot gates. See
+The public surface is a broad read-only API plus order management, market
+depth, and option exercise. The handshake accepts exactly `server_version`
+208..225 and rejects 207 and 226; what each version changes is in
 [`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
 
 ## Layers
 
 - module root: public typed facade plus the unexported session engine, split
-  by concern and domain — lifecycle, run loop, connect/reconnect, routing,
-  conversion, and one file per domain (`engine_account.go`,
-  `engine_orders.go`, `engine_marketdata.go`, etc.) — plus correlation and
-  subscription management
+  by concern and domain: lifecycle, run loop, connect/reconnect, routing,
+  conversion, one file per domain (`engine_account.go`, `engine_orders.go`,
+  `engine_marketdata.go`, and so on), plus correlation and subscription
+  management
 - `internal/transport/`: socket dial, buffered frame read loop, write loop,
   pacing
 - `internal/protocol/`: message identity, direction, negotiated
@@ -78,9 +74,8 @@ configuration, volume/precision, and odd-lot gates. See
   place through transient `unsafe.String` views handed to `strconv`; only
   fields a decoder actually retains (`ReadString`, `ReadDecimal`) copy into a
   new Go string. Retained strings are always copied, never aliased into the
-  transport buffer — aliasing would couple message lifetimes to buffer
-  reuse, the symmetric silent-corruption failure mode this codebase
-  deliberately avoids.
+  transport buffer, because aliasing would couple message lifetimes to buffer
+  reuse and corrupt messages silently.
 - **Request-ID routing.** Inbound messages that carry a request ID implement
   `codec.ReqIDer` (`RequestID() int`); the engine's keyed routing table type-
   asserts against this interface instead of maintaining a parallel switch.
@@ -99,34 +94,34 @@ configuration, volume/precision, and odd-lot gates. See
   a hardcoded live-derived frame or carries a concrete pending-capture reason.
 - `cmd/ibkr-capture -list-json` is the executable scenario ledger. Repository
   audits require every scenario message ID to exist in the protocol registry.
-- `docs/ibkr-api-inventory.md` records the official and public surfaces. Its
-  Markdown is descriptive, never an independent source for numeric message
-  identities.
+- `docs/ibkr-api-inventory.md` maps the official EClient/EWrapper surface to
+  what `ibkr-go` implements. It is descriptive, never an independent source
+  for numeric message identities.
 
 ## Routing Tables
 
 The engine maintains four route maps, each serving a different dispatch
 pattern, plus one passive execution observer:
 
-- **Keyed (`map[int]*route`)** — request-ID-correlated flows. One-shots and
+- **Keyed (`map[int]*route`).** Request-ID-correlated flows. One-shots and
   keyed subscriptions (account summary, quotes, historical bars, market depth,
   etc.) register a route keyed by `reqID`. Inbound messages
   carry the same `reqID` and dispatch directly to the registered handler.
 
-- **Singleton (`map[string]*route`)** — flows that have at most one active
+- **Singleton (`map[string]*route`).** Flows that have at most one active
   instance and no request-ID correlation. Positions, open orders, family codes,
   news bulletins, and other singleton flows are keyed by a string constant.
   Inbound messages dispatch by message type to the matching singleton key.
 
-- **Orders (`map[int64]*orderRoute`)** — per-order lifecycle tracking. Each
+- **Orders (`map[int64]*orderRoute`).** Per-order lifecycle tracking. Each
   placed order registers a route keyed by `orderID`. OpenOrder, OrderStatus,
   Execution, and commission-and-fees messages dispatch to the matching order route.
 
-- **Previews (`map[int64]*previewRoute`)** — isolated what-if requests keyed by
+- **Previews (`map[int64]*previewRoute`).** Isolated what-if requests keyed by
   their engine-owned order ID. The matching OpenOrder echo resolves the preview
   without creating or dispatching to a live order handle.
 
-- **Passive execution observer** — at most one client-wide
+- **Passive execution observer.** At most one client-wide
   `SubscribeExecutionEvents` route owns no request ID and sends no wire
   request. Every execution-detail and commission callback reaches it before
   query correlation or order-handle deduplication.
@@ -187,7 +182,7 @@ before retrying; `CancelErr` only records failures to admit those cancellations.
 
 - **Events()** delivers one ordered stream of `OrderEvent` values (union of
   OpenOrder, OrderStatus, Execution, CommissionAndFees, Warning, Binding, and
-  Lifecycle — exactly one field non-nil per event).
+  Lifecycle; exactly one field non-nil per event).
   A `Warning` is a non-terminal, order-targeted notice (e.g. code 399, the
   off-hours deferral): the order stays working at IB and the handle stays open.
 - **Lifecycle events** are part of that same stream: Started, Gap, Restored,

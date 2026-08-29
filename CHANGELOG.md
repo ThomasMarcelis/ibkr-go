@@ -16,15 +16,18 @@ tag.
   open with a warning.
 - Examples: new `bracket`; `quotes` waits for bid, ask, and last; `historical`
   explains an entitlement refusal; all default to the paper port.
-- Docs: `roadmap.md` lists next steps only. Release records, test trackers,
-  the exhaustive test plan, and the sv203–207 audits are gone; live safety
-  rules and the release checklist live in `CONTRIBUTING.md`.
+- Docs: `roadmap.md` lists next steps only; release records, test trackers,
+  the exhaustive test plan, and the sv203–207 audits are gone. Live safety
+  rules and the release checklist live in `CONTRIBUTING.md`. `SECURITY.md`
+  names the supported line, the issue templates no longer point at internal
+  packages, and the API inventory drops the message-ID tables that
+  duplicated `internal/protocol`.
 
 ### Fixed
 
 - `cmd/ibkr-normalize` keeps protobuf varint width when sanitizing perm IDs.
 
-## v2.0.2 — 2026-08-29
+## v2.0.2 - 2026-08-29
 
 ### Added
 
@@ -43,7 +46,7 @@ tag.
 - `Order.conditionsIncludeOvernight` (API 10.50.01) needs server version 226,
   outside the supported range.
 
-## v2.0.1 — 2026-08-27
+## v2.0.1 - 2026-08-27
 
 ### Changed
 
@@ -65,7 +68,7 @@ tag.
 - The broker rejects replacing `IncludeOvernight=true` with explicit false
   (code 462, reproduced with SDK 10.48.01).
 
-## v2.0.0 — 2026-08-23
+## v2.0.0 - 2026-08-23
 
 Breaking release on the `github.com/ThomasMarcelis/ibkr-go/v2` module path;
 requires Go 1.26. v1 is deprecated.

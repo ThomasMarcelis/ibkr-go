@@ -8,10 +8,10 @@ labels: enhancement
 What you are trying to do, and why existing capabilities fall short.
 
 **Proposed API shape**
-A rough sketch of the function, method, or type. Prefer typed one-shot methods or typed subscriptions over callback-heavy designs; see `docs/roadmap.md` for the public API direction.
+A rough sketch of the function, method, or type. Prefer typed one-shot methods or typed subscriptions over callback-heavy designs; see `docs/anti-patterns.md` for the shapes the project rejects.
 
 **Scope**
-Is this read-only? Does it belong in the v1 scope (full free read-only surface) or in a later milestone? Is it protocol-facing or ergonomic?
+Is this a new protocol capability or an ergonomic change to an existing one? Does it fit the project scope (socket API only; no Flex, Client Portal, or `EWrapper` bridge, see `docs/roadmap.md`)?
 
 **Alternatives considered**
 What else you tried, and why you landed on the proposed shape.

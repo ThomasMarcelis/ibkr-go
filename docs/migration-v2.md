@@ -8,7 +8,7 @@ This guide covers the changes that normally require application edits. The
 [v2.0.0 release notes](https://github.com/ThomasMarcelis/ibkr-go/releases/tag/v2.0.0)
 contain a detailed change inventory and the disclosed evidence gaps.
 
-## v2.0.1 compatibility note
+## v2.0.1 and later
 
 v2.0.1 intentionally raises the minimum negotiated Gateway version from
 `server_version` 200 to 208. Gateways negotiating 200–207 no longer connect;
@@ -24,7 +24,7 @@ false using code 462.
 ## 1. Update the module path
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.2
 ```
 
 ```go
@@ -38,7 +38,7 @@ import "github.com/ThomasMarcelis/ibkr-go/v2"
 A local replacement still needs a real v2 requirement:
 
 ```go
-require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.0
+require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.2
 
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```

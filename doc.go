@@ -1,10 +1,9 @@
 // Package ibkr is a Go client for the Interactive Brokers TWS/Gateway socket
-// protocol. It exposes broad account, contract, market-data, historical, order,
+// protocol. It exposes account, contract, market-data, historical, order,
 // option, news, scanner, advisor, and TWS functionality through typed methods
-// and generic subscriptions with explicit lifecycle semantics. The client
-// negotiates server_version 208 through 225. Versions below 208 are rejected;
-// the supported range covers the remaining staged protobuf boundaries and
-// semantic changes recorded in the project coverage matrix.
+// and typed subscriptions with explicit lifecycle events. The client
+// negotiates server_version 208 through 225 and rejects a Gateway outside
+// that range.
 //
 // # Connecting
 //
@@ -14,7 +13,7 @@
 //
 //	client, err := ibkr.DialContext(ctx,
 //	    ibkr.WithHost("127.0.0.1"),
-//	    ibkr.WithPort(7497),
+//	    ibkr.WithPort(4002),
 //	)
 //	if err != nil {
 //	    return err
@@ -146,7 +145,7 @@
 // [OrdersClient.Preview] runs a what-if order: a margin-and-commission preview,
 // not a trade. It forces the what-if flag, sends the same place_order frame,
 // and returns the [OrderState] the Gateway attaches to the single open_order
-// echo — the nine InitMargin*/MaintMargin*/EquityWithLoan* decimals plus the
+// echo: the nine InitMargin*/MaintMargin*/EquityWithLoan* decimals plus the
 // commission range and currency. Nothing rests on the server and no OrderHandle
 // is created; Preview blocks for the one reply and returns:
 //
@@ -197,15 +196,15 @@
 //
 // Nine structured error types cover the main failure modes:
 //
-//   - [*ConnectError] — connection or handshake failure
-//   - [*ProtocolError] — wire protocol violation
-//   - [*APIError] — server-side rejection (error code + message)
-//   - [*ValidationError] — caller-side request validation failure
-//   - [*OrderRecoveryError] — uncertain live IDs after partial bracket rollback
-//   - [*ExerciseUncertainError] — unresolved exercise or lapse after involuntary observation loss
-//   - [*RegulatorySnapshotUncertainError] — fee-bearing snapshot with unresolved completion evidence
-//   - [*SubscriptionCancelError] — uncertain remote stream after cancellation admission failure
-//   - [*InboundFrameTooLargeError] — raw frame rejected before body allocation
+//   - [*ConnectError]: connection or handshake failure
+//   - [*ProtocolError]: wire protocol violation
+//   - [*APIError]: server-side rejection (error code + message)
+//   - [*ValidationError]: caller-side request validation failure
+//   - [*OrderRecoveryError]: uncertain live IDs after partial bracket rollback
+//   - [*ExerciseUncertainError]: unresolved exercise or lapse after involuntary observation loss
+//   - [*RegulatorySnapshotUncertainError]: fee-bearing snapshot with unresolved completion evidence
+//   - [*SubscriptionCancelError]: uncertain remote stream after cancellation admission failure
+//   - [*InboundFrameTooLargeError]: raw frame rejected before body allocation
 //
 // IBKR codes attested in live captures have named ErrCode constants (e.g.
 // [ErrCodeOrderCanceled], [ErrCodeMarketDataNotSubscribed]) and [*APIError]

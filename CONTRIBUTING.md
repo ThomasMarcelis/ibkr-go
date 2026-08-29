@@ -4,11 +4,20 @@ Contributions are welcome. Read this document first.
 
 ## Scope and direction
 
-`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The project targets the full free read-only surface plus order management, market depth (Level 2), and option exercise. The current official source baseline is API 10.50.01. The client negotiates exactly `server_version` 208..225; API 10.50.01's `Order.conditionsIncludeOvernight` requires version 226 and is intentionally outside that range. Versions 200..207 are unsupported on the v2 line; use a current Gateway or remain on v2.0.0. Implemented and externally blocked areas are distinguished in [`docs/roadmap.md`](docs/roadmap.md) and the coverage matrix.
+`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway
+socket protocol. It targets the full free read-only surface plus order
+management, market depth (Level 2), and option exercise. The official source
+baseline is API 10.50.01. The client negotiates exactly `server_version`
+208..225; API 10.50.01's `Order.conditionsIncludeOvernight` needs version 226
+and is intentionally outside that range. Versions 200..207 are unsupported on
+the v2 line; use a current Gateway or stay on v2.0.0. What is proven and what
+is blocked is in [`docs/live-coverage-matrix.md`](docs/live-coverage-matrix.md);
+what is next is in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Development loop
 
-Prerequisites: Go 1.26+, `golangci-lint` (latest), and optionally `gofmt` and `goimports` integrated into your editor.
+Prerequisites: Go 1.26+ and `golangci-lint` (latest). `gofmt` and `goimports`
+in your editor help.
 
 ```
 go build ./...
@@ -19,26 +28,31 @@ golangci-lint run
 go test ./...
 ```
 
-All six must pass locally before opening a pull request. The default API check
-rejects incompatible changes from the frozen v2.0.2 release baseline while
-allowing additive APIs for the next release. `./scripts/check-api.sh --exact`
-instead requires the complete public surface to equal v2.0.2 exactly.
-The previous manifest is replaced at each release; older ones live at
-their tags.
-CI also checks module tidiness and verification, fuzz-target inventory, a
-pure-Go 386 build, vulnerabilities, shuffled tests across supported host
-platforms, and the race detector. See `.github/workflows/ci.yml` for the exact
+All six must pass locally before opening a pull request. The default API
+check rejects incompatible changes from the frozen v2.0.2 release baseline
+while allowing additive APIs for the next release; `./scripts/check-api.sh
+--exact` requires the public surface to equal v2.0.2 exactly. The manifest is
+replaced at each release; older ones live at their tags.
+
+CI also checks module tidiness and verification, the fuzz-target inventory, a
+pure-Go 386 build, vulnerabilities, shuffled tests on Linux, macOS, and
+Windows, and the race detector. See `.github/workflows/ci.yml` for the exact
 commands.
 
 ## Testing discipline
 
-The test suite is this library's primary asset. It is grown deliberately. Every test must improve confidence or diagnosis quality — tests that only prove the code was written are rejected. Every bug fix lands with the transcript or test that would have caught the bug; that test becomes a permanent regression freeze.
+The test suite is this library's primary asset and is grown deliberately.
+Every test must improve confidence or diagnosis quality; tests that only prove
+the code was written are rejected. Every bug fix lands with the transcript or
+test that would have caught the bug, and that test becomes a permanent
+regression freeze.
 
-Tests are organised in layers: invariants, state transitions, behavioral scenarios, stress and edge cases. Routine CI stays deterministic, but protocol-adjacent development is grounded in the local live TWS or IB Gateway when available. The `internal/testhost` package and checked-in fixtures are replay tools for live-derived behavior, not a source of truth for invented protocol semantics.
-
-Wire framing and codec round-trips are also fuzzed. The intent is not just to
-have broad coverage, but to keep the protocol surface diagnosable and safe to
-extend without a live broker in CI.
+Tests are organised in layers: invariants, state transitions, behavioral
+scenarios, and stress or edge cases. Routine CI stays deterministic, but
+protocol-adjacent development is grounded in the local live TWS or IB Gateway
+when one is available. `internal/testhost` and the checked-in fixtures replay
+live-derived behavior; they are not a place to invent protocol semantics.
+Wire framing and codec round-trips are also fuzzed.
 
 ## Live verification
 
@@ -103,29 +117,41 @@ go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 
 Then freeze the public surface: write the new `testdata/api/<version>.api`
 manifest, point `scripts/check-api.sh` at it, and confirm
-`./scripts/check-api.sh --exact` passes. Replace the previous manifest rather than keeping a history; older ones live
-at their tags. Run
-the examples against the paper Gateway, write the CHANGELOG entry (link
-release-time documents at the tag, not at `main`), and tag. Pushing and
-publishing stay manual.
+`./scripts/check-api.sh --exact` passes. Replace the previous manifest rather
+than keeping a history; older ones live at their tags. Run the examples
+against the paper Gateway, write the CHANGELOG entry (link release-time
+documents at the tag, not at `main`), and tag. Pushing and publishing stay
+manual.
 
 ## Reference policy
 
-Protocol-adjacent work should be grounded in the local live TWS or IB Gateway when available, plus official IBKR docs, official IBKR client-library source, captured traffic, and other IBKR library implementations where useful. The official IBKR C++ SDK may be used as an opt-in conformance oracle or capture tool, but production code remains pure Go on the default import path. The merged implementation must still follow `ibkr-go`'s typed public API and package philosophy rather than mirroring the official public surface mechanically.
+Ground protocol-adjacent work in the local live TWS or IB Gateway when
+available, plus official IBKR docs, official IBKR client-library source,
+captured traffic, and other IBKR library implementations where useful. The
+official IBKR C++ SDK may be used as an opt-in conformance oracle or capture
+tool, but production code stays pure Go on the default import path. The
+merged implementation must follow `ibkr-go`'s typed public API and package
+philosophy rather than mirroring the official surface mechanically.
 
 ## Commit convention
 
-- Subject line: ≤72 characters, imperative mood, concrete. Lowercase after any prefix. No trailing period.
-- Body (optional, only when the change earns one): focuses on **why**. What constraint, incident, or design pressure forced the change. The diff shows *what*; the body carries the context the diff cannot.
+- Subject line: at most 72 characters, imperative mood, concrete. Lowercase
+  after any prefix. No trailing period.
+- Body (optional, only when the change earns one): focuses on **why**. What
+  constraint, incident, or design pressure forced the change. The diff shows
+  *what*; the body carries the context the diff cannot.
 - One logical change per commit.
-- Protocol-adjacent commits should mention the live environment, captures, or source/docs references that justified the change when that context matters.
-- No WIP commits and no "fix typo" follow-ups in main history; squash before landing.
+- Protocol-adjacent commits should mention the live environment, captures, or
+  source and docs references that justified the change when that context
+  matters.
+- No WIP commits and no "fix typo" follow-ups in main history; squash before
+  landing.
 - No emoji, no marketing voice.
 
 ## Version control
 
 Jujutsu (`jj`) is the default workflow for this repository; Git remains the
-GitHub/interoperability layer and `origin` is canonical. Prefer `jj st`,
+GitHub and interoperability layer and `origin` is canonical. Prefer `jj st`,
 `jj diff --git`, `jj log`, `jj commit`, `jj split`, `jj squash`,
 `jj git fetch`, `jj rebase`, and `jj git push --dry-run` / `jj git push`.
 Raw Git is appropriate for read-only checks or explicit interoperability and
@@ -134,8 +160,12 @@ before publishing.
 
 ## Pull requests
 
-Keep pull requests tight. One logical change. Tests land alongside the code. The description follows the pull request template — what, why, tests, and protocol references/verification where relevant.
+Keep pull requests tight. One logical change. Tests land alongside the code.
+The description follows the pull request template: what, why, tests, and
+protocol references or verification where relevant.
 
 ## Reporting bugs and requesting features
 
-Use the issue templates at `.github/ISSUE_TEMPLATE/`. For security-sensitive reports, follow [`SECURITY.md`](SECURITY.md) — do not open public issues for vulnerabilities.
+Use the issue templates at `.github/ISSUE_TEMPLATE/`. For security-sensitive
+reports, follow [`SECURITY.md`](SECURITY.md) and do not open public issues for
+vulnerabilities.
