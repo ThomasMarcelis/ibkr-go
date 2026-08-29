@@ -4,7 +4,7 @@ Notable changes per release, following [Keep a Changelog](https://keepachangelog
 The evidence behind each release (captures, gate runs, coverage) lives at its
 tag.
 
-## Unreleased
+## v2.0.3 - 2026-08-29
 
 ### Changed
 

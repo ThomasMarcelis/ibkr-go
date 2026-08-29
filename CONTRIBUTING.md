@@ -29,9 +29,9 @@ go test ./...
 ```
 
 All six must pass locally before opening a pull request. The default API
-check rejects incompatible changes from the frozen v2.0.2 release baseline
+check rejects incompatible changes from the frozen v2.0.3 release baseline
 while allowing additive APIs for the next release; `./scripts/check-api.sh
---exact` requires the public surface to equal v2.0.2 exactly. The manifest is
+--exact` requires the public surface to equal v2.0.3 exactly. The manifest is
 replaced at each release; older ones live at their tags.
 
 CI also checks module tidiness and verification, the fuzz-target inventory, a

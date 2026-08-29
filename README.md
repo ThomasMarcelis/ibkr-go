@@ -42,7 +42,7 @@ return errors.Join(quotes.Wait(), context.Cause(ctx))
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.2
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.3
 ```
 
 Requires Go 1.26+. Two dependencies:
@@ -332,7 +332,7 @@ account.
 
 ## Status
 
-v2.0.2 covers the in-scope socket API against `server_version` 208–225.
+v2.0.3 covers the in-scope socket API against `server_version` 208–225.
 The [coverage matrix](docs/live-coverage-matrix.md) says which paths have live proof and which are blocked by entitlements or market state. Release notes are in the [CHANGELOG](CHANGELOG.md).
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient` compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md).
 

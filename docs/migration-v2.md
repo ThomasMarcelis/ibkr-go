@@ -24,7 +24,7 @@ false using code 462.
 ## 1. Update the module path
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.2
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.3
 ```
 
 ```go
@@ -38,7 +38,7 @@ import "github.com/ThomasMarcelis/ibkr-go/v2"
 A local replacement still needs a real v2 requirement:
 
 ```go
-require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.2
+require github.com/ThomasMarcelis/ibkr-go/v2 v2.0.3
 
 replace github.com/ThomasMarcelis/ibkr-go/v2 => ../ibkr-go
 ```
