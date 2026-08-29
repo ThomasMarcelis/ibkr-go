@@ -9,7 +9,7 @@ plumbing may change as long as this public surface and its semantics do not.
 negotiation, bootstrap, managed-account loading, and transition to `Ready`.
 The client negotiates exactly `server_version` 208..225; answers outside that
 range are rejected during handshake. Versions 200..207 are intentionally not
-supported on the v2.0.1 line. Version 208 is the floor and uses protobuf for
+supported on the v2 line. Version 208 is the floor and uses protobuf for
 the execution, order, contract, market-data, account, position, and historical
 families. Exact `sv209` through `sv213` complete the official protobuf migration
 train for news, scanner/PnL, FA/options, reference data, and bootstrap/control

@@ -4,7 +4,7 @@ Contributions are welcome. Read this document first.
 
 ## Scope and direction
 
-`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The project targets the full free read-only surface plus order management, market depth (Level 2), and option exercise. The current official SDK baseline is API 10.48. The client negotiates exactly `server_version` 208..225. Versions 200..207 are intentionally unsupported on the v2.0.1 line; use a current Gateway or remain on v2.0.0. Implemented, partial, and blocked areas are distinguished in [`docs/roadmap.md`](docs/roadmap.md) and the coverage matrix.
+`ibkr-go` is a Go client for the Interactive Brokers TWS and IB Gateway socket protocol. The project targets the full free read-only surface plus order management, market depth (Level 2), and option exercise. The current official source baseline is API 10.50.01. The client negotiates exactly `server_version` 208..225; API 10.50.01's `Order.conditionsIncludeOvernight` requires version 226 and is intentionally outside that range. Versions 200..207 are unsupported on the v2 line; use a current Gateway or remain on v2.0.0. Implemented and externally blocked areas are distinguished in [`docs/roadmap.md`](docs/roadmap.md) and the coverage matrix.
 
 ## Development loop
 
@@ -20,10 +20,10 @@ go test ./...
 ```
 
 All six must pass locally before opening a pull request. The default API check
-rejects incompatible changes from the frozen v2.0.1 release baseline while
+rejects incompatible changes from the frozen v2.0.2 release baseline while
 allowing additive APIs for the next release. `./scripts/check-api.sh --exact`
-instead requires the complete public surface to equal v2.0.1 exactly. The
-historical v2.0.0 manifest remains unchanged.
+instead requires the complete public surface to equal v2.0.2 exactly.
+Historical manifests remain unchanged.
 CI also checks module tidiness and verification, fuzz-target inventory, a
 pure-Go 386 build, vulnerabilities, shuffled tests across supported host
 platforms, and the race detector. See `.github/workflows/ci.yml` for the exact

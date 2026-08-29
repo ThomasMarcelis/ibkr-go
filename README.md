@@ -52,7 +52,7 @@ return sub.Err()
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.0
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.2
 ```
 
 Requires Go 1.26+. Direct dependencies are
@@ -462,7 +462,7 @@ stressed, and extended without guessing. For more on that approach, see
 ## Status
 
 ibkr-go covers the major Interactive Brokers TWS/Gateway socket protocol
-domains through an idiomatic Go facade. The v2.0.1 release negotiates
+domains through an idiomatic Go facade. The v2.0.2 release negotiates
 exactly `server_version` 208..225; versions 200..207 are intentionally rejected.
 Protobuf migrations from 208 through 213 are implemented. Inbound sv214
 `Z` timestamps are accepted, but outbound sv214 suffix behavior remains
@@ -472,12 +472,12 @@ intentional exclusions are documented in the
 entitlement-dependent callbacks and remaining advanced branches stay explicit
 in the coverage matrix rather than being overclaimed.
 
-The v2.0.0 release remains unchanged. v2.0.1 closes
-malformed-generation retirement and raises the minimum Gateway version while
-retaining explicit live-evidence limitations in the
-[v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md). Descendant
-coverage work is organized by the evidence and safety gates in the
-[v2.0.2 coverage plan](docs/v2.0.2-coverage-plan.md).
+v2.0.2 exposes contract settlement methods, accepts live-evidenced per-leg
+pricing for BAG limit orders, and freezes 113 live-derived transcripts. The
+[v2.0.2 coverage plan](docs/v2.0.2-coverage-plan.md) records the promoted
+surface and the callbacks still blocked by external conditions. The v2.0.1
+release record remains in the
+[v2.0.1 transcript inventory](docs/transcript-migration-v2.0.1.md).
 
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient`
 compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md) for the full

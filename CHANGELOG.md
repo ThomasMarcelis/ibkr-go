@@ -4,22 +4,36 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/).
 
-## Unreleased
+## v2.0.2 — 2026-08-29
+
+### Added
+
+- `ContractDetails.SettlementMethod` exposes API 10.50.01 field 65, verified
+  from sv225 option and future callbacks.
 
 ### Fixed
 
 - The recorder batch workflow no longer requires Bash 4 associative arrays,
   so its deduplication and safety tests also run under macOS Bash 3.2.
+- Per-leg-priced BAG limit orders no longer require or permit a conflicting
+  combo-level limit price.
 
-### Development
+### Verification status
 
-- The default public-API check now uses the released v2.0.1 manifest as its
-  compatibility baseline. Additive v2.0.2 APIs may enter normal development,
-  while incompatible changes still fail; exact mode continues to freeze the
-  v2.0.1 surface.
-- Added an evidence-gated v2.0.2 coverage plan that inventories every current
-  candidate, blocker, and unattested decoder layout without changing the
-  released v2.0.1 evidence or retrying its one-shot regulatory request.
+- The 113-transcript corpus replays 103 promoted scenarios; 21 scenarios are
+  explicitly blocked by external conditions and none remain unresolved.
+
+### Known limitations
+
+- Positive bulletin, FA, WSH, market-depth, real-time-bar, historical,
+  tick-by-tick, EFP, delta-neutral, and manual TWS order-binding callbacks
+  remain unavailable in the current environment. No successful callback is
+  claimed for those paths; details are in the
+  [v2.0.2 coverage plan](docs/v2.0.2-coverage-plan.md).
+- The option-exercise replay proves admission, not final exercise, lapse, or
+  settlement, and its live instruction must not be repeated for more evidence.
+- API 10.50.01's `Order.conditionsIncludeOvernight` requires server version
+  226 and is outside the supported 208–225 range.
 
 ## v2.0.1 — 2026-08-27
 
