@@ -6,8 +6,17 @@ tag.
 
 ## v2.0.3 - 2026-08-29
 
+### Added
+
+- `BenchmarkPublicQuoteStream` measures the capture-backed public quote path.
+  The published reference run sustains 1.26 million updates/s with 5.34 µs
+  p50 and 11.8 µs p99 delivery latency, 240 B and 12 allocations per update,
+  and 20.3 ms from cold dial to first quote.
+
 ### Changed
 
+- Quote hot paths use concrete actor inputs, keep already canonical protobuf
+  fields in place, and skip max-float sentinel parsing for ordinary decimals.
 - Orders with an empty `TIF` are sent as `DAY`. Live sv225 rejects an omitted
   time in force with code 10052, so constructor-built orders and every
   `Orders().Preview` were refused unless the caller set `TIF` by hand.
