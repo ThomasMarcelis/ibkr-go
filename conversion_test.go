@@ -2,6 +2,8 @@ package ibkr
 
 import (
 	"errors"
+	"math"
+	"strconv"
 	"testing"
 	"time"
 
@@ -354,6 +356,10 @@ func TestParseOptionalDecimalTreatsMaxDoubleSentinelAsAbsent(t *testing.T) {
 		{"canonical_uppercase", "1.7976931348623157E308"},
 		{"lowercase_exponent", "1.7976931348623157e308"},
 		{"protobuf_plus_exponent", "1.7976931348623157e+308"},
+		{"shortest_hexadecimal", "0x1fffffffffffffp971"},
+		{"shifted_decimal", "17976931348623157e292"},
+		{"rounds_to_max", "1.7976931348623158e308"},
+		{"full_fixed", strconv.FormatFloat(math.MaxFloat64, 'f', -1, 64)},
 		{"surrounding_whitespace", "  1.7976931348623157E308\t"},
 		{"official_unset_decimal", "-9223372036854775808"},
 	}
@@ -378,6 +384,7 @@ func TestParseOptionalDecimalPreservesValuesAroundMaxDouble(t *testing.T) {
 	for _, raw := range []string{
 		"-1.7976931348623157e+308",
 		"1.7976931348623156e+308",
+		"1234567890123456789",
 	} {
 		value, err := parseOptionalDecimalPointer(raw, "test field")
 		if err != nil {
@@ -388,10 +395,32 @@ func TestParseOptionalDecimalPreservesValuesAroundMaxDouble(t *testing.T) {
 		}
 	}
 
-	for _, raw := range []string{"NaN", "+Inf", "-Inf"} {
+	for _, raw := range []string{"NaN", "+Inf", "-Inf", "not-a-decimal"} {
 		if _, err := parseOptionalDecimalPointer(raw, "test field"); err == nil {
 			t.Fatalf("parseOptionalDecimalPointer(%q) error = nil, want malformed value", raw)
 		}
+	}
+}
+
+var optionalDecimalBenchmarkResult *decimal.Decimal
+
+func BenchmarkParseOptionalDecimalCapturedSizes(b *testing.B) {
+	for _, raw := range []string{"141", "840", "812254"} {
+		b.Run(raw, func(b *testing.B) {
+			value, err := parseOptionalDecimalPointer(raw, "captured quote size")
+			if err != nil || value == nil || value.String() != raw {
+				b.Fatalf("parseOptionalDecimalPointer(%q) = %v, %v", raw, value, err)
+			}
+
+			b.ReportAllocs()
+			b.ResetTimer()
+			for b.Loop() {
+				optionalDecimalBenchmarkResult, err = parseOptionalDecimalPointer(raw, "captured quote size")
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }
 

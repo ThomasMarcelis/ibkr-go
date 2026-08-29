@@ -9,7 +9,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-const unsetDecimalSentinel = "-9223372036854775808"
+const (
+	unsetDecimalSentinel    = "-9223372036854775808"
+	minMaxFloat64TextLength = len("0x1fffffffffffffp971")
+)
 
 func parseRequiredDecimal(raw string, field string) (decimal.Decimal, error) {
 	value, err := decimal.NewFromString(raw)
@@ -50,6 +53,11 @@ func parseOptionalDecimalPointer(raw string, field string) (*decimal.Decimal, er
 func optionalDecimalUnset(trimmed string) bool {
 	if trimmed == "" || trimmed == unsetDecimalSentinel {
 		return true
+	}
+	// The shortest ParseFloat spelling of MaxFloat64 is hexadecimal; ordinary
+	// shorter decimals cannot be the sentinel.
+	if len(trimmed) < minMaxFloat64TextLength {
+		return false
 	}
 	value, err := strconv.ParseFloat(trimmed, 64)
 	return err == nil && value == math.MaxFloat64
