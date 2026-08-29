@@ -1,12 +1,12 @@
-// Place a far-from-market limit order on AAPL, observe status updates, then
-// cancel it. Requires a paper trading account.
+// Place a far-from-market limit order on AAPL, watch its status, then cancel
+// it. Requires a paper trading account.
 //
 // Usage:
 //
 //	IBKR_ADDR=127.0.0.1:4002 IBKR_TRADING=paper go run ./examples/order
 //
-// The example also verifies that every managed account has IBKR's paper
-// account prefix before sending an order.
+// The example refuses to run unless every managed account has IBKR's paper
+// account prefix.
 package main
 
 import (
@@ -36,10 +36,7 @@ func run() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client, err := ibkr.DialContext(ctx,
-		ibkr.WithHost(host),
-		ibkr.WithPort(port),
-	)
+	client, err := ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port))
 	if err != nil {
 		return err
 	}
@@ -50,13 +47,9 @@ func run() (err error) {
 		return err
 	}
 
-	order := ibkr.LimitOrder(
-		ibkr.ActionBuy,
-		decimal.NewFromInt(1),
-		decimal.RequireFromString("1.00"), // deliberately far from market
-	)
+	// A $1 bid for AAPL never fills, so the order rests until we cancel it.
+	order := ibkr.LimitOrder(ibkr.ActionBuy, decimal.NewFromInt(1), decimal.RequireFromString("1.00"))
 	order.Account = account
-	order.TIF = ibkr.TIFDay
 
 	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Stock("AAPL"),
@@ -65,64 +58,52 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	cleanupNeeded := true
-	defer func() {
-		if cleanupNeeded {
-			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			err = errors.Join(err, handle.Cancel(cleanupCtx))
-		}
-		handle.Close()
-		err = errors.Join(err, handle.Wait())
-	}()
-
 	fmt.Println("placed order", handle.OrderID())
 
-	cancelSent := false
+	// If we leave early, cancel on a fresh context so nothing stays resting on
+	// the paper account. Closing the handle alone never cancels an order.
+	terminal := false
+	defer func() {
+		if !terminal {
+			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, handle.OrderID()))
+		}
+		handle.Close()
+	}()
+
+	cancelled := false
 	for {
 		select {
 		case evt, ok := <-handle.Events():
 			if !ok {
-				return errors.Join(handle.Wait(), errors.New("order observation ended before a terminal status"))
+				return errors.Join(handle.Wait(), errors.New("order events ended before a terminal status"))
 			}
 			switch {
 			case evt.Status != nil:
-				fmt.Printf("status: %s  filled=%s remaining=%s\n",
+				fmt.Printf("status: %-13s filled=%s remaining=%s\n",
 					evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
 				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-					cleanupNeeded = false
-					fmt.Println("order done")
+					terminal = true
 					return nil
 				}
-				if !cancelSent {
-					fmt.Println("cancelling order...")
+				// First acknowledgement from IBKR: it is resting, cancel it.
+				if !cancelled {
+					cancelled = true
+					fmt.Println("cancelling...")
 					if err := handle.Cancel(ctx); err != nil {
 						return err
 					}
-					cancelSent = true
 				}
-			case evt.OpenOrder != nil:
-				fmt.Printf("open order: %s %s %s @ %s\n",
-					evt.OpenOrder.Order.Action, evt.OpenOrder.Order.Quantity,
-					evt.OpenOrder.Order.OrderType, evt.OpenOrder.Order.Prices.LmtPrice)
 			case evt.Execution != nil:
-				fmt.Printf("execution: %s shares @ %s\n",
-					evt.Execution.Shares, evt.Execution.Price)
-			case evt.CommissionAndFees != nil:
-				fmt.Printf("commission: %s %s\n",
-					evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
+				fmt.Printf("fill: %s @ %s\n", evt.Execution.Shares, evt.Execution.Price)
 			case evt.Warning != nil:
 				fmt.Println("warning:", evt.Warning)
-			case evt.Binding != nil:
-				fmt.Printf("binding: order=%d perm=%d client=%d\n",
-					evt.Binding.OrderID, evt.Binding.PermID, evt.Binding.ClientID)
 			case evt.Lifecycle != nil:
-				fmt.Printf("lifecycle: %s err=%v\n", evt.Lifecycle.Kind, evt.Lifecycle.Err)
-			default:
-				return errors.New("received order event without a payload")
+				fmt.Println("lifecycle:", evt.Lifecycle.Kind)
 			}
 		case <-ctx.Done():
-			return context.Cause(ctx)
+			return fmt.Errorf("order %d may still be resting at IBKR: %w", handle.OrderID(), context.Cause(ctx))
 		}
 	}
 }

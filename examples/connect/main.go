@@ -18,7 +18,7 @@ func main() {
 	exampleutil.Run(run)
 }
 
-func run() (err error) {
+func run() error {
 	host, port, err := exampleutil.GatewayAddress()
 	if err != nil {
 		return err
@@ -27,10 +27,7 @@ func run() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	client, err := ibkr.DialContext(ctx,
-		ibkr.WithHost(host),
-		ibkr.WithPort(port),
-	)
+	client, err := ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port))
 	if err != nil {
 		return err
 	}

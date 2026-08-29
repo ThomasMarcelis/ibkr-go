@@ -1,4 +1,4 @@
-// Subscribe to delayed AAPL quotes and print the first complete bid/ask.
+// Subscribe to delayed AAPL quotes and print the first complete bid/ask/last.
 //
 // Usage:
 //
@@ -19,7 +19,7 @@ func main() {
 	exampleutil.Run(run)
 }
 
-func run() (err error) {
+func run() error {
 	host, port, err := exampleutil.GatewayAddress()
 	if err != nil {
 		return err
@@ -28,17 +28,14 @@ func run() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	client, err := ibkr.DialContext(ctx,
-		ibkr.WithHost(host),
-		ibkr.WithPort(port),
-	)
+	client, err := ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port))
 	if err != nil {
 		return err
 	}
 	defer client.Close()
 
-	// Request delayed data so the example works without a live market data
-	// subscription. Remove this line if you have real-time entitlements.
+	// Delayed data works without a market-data subscription. Remove this line
+	// if the login has real-time entitlements.
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
 		return err
 	}
@@ -50,17 +47,20 @@ func run() (err error) {
 		return err
 	}
 
-	want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
+	// Fields arrive one tick at a time, so wait until the ones we want are all
+	// populated. IBKR reports -1 for a side with no quote, for example outside
+	// market hours.
+	want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk | ibkr.QuoteFieldLast
 	for update := range sub.All(ctx) {
-		if update.Snapshot.Available&want == want {
-			fmt.Printf("AAPL  bid=%s  ask=%s  data=%s\n",
-				update.Snapshot.Bid, update.Snapshot.Ask,
-				update.Snapshot.MarketDataType)
-			sub.Close()
-			return sub.Wait()
+		q := update.Snapshot
+		if q.Available&want != want {
+			continue
 		}
+		fmt.Printf("AAPL  bid=%s  ask=%s  last=%s  data=%s\n", q.Bid, q.Ask, q.Last, q.MarketDataType)
+		sub.Close()
+		return sub.Wait()
 	}
 
 	sub.Close()
-	return errors.Join(context.Cause(ctx), sub.Wait(), errors.New("quote ended before a complete bid/ask"))
+	return errors.Join(context.Cause(ctx), sub.Wait(), errors.New("quote ended before bid, ask, and last were all available"))
 }

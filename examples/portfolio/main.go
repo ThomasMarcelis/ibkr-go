@@ -20,7 +20,7 @@ func main() {
 	exampleutil.Run(run)
 }
 
-func run() (err error) {
+func run() error {
 	host, port, err := exampleutil.GatewayAddress()
 	if err != nil {
 		return err
@@ -29,10 +29,7 @@ func run() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	client, err := ibkr.DialContext(ctx,
-		ibkr.WithHost(host),
-		ibkr.WithPort(port),
-	)
+	client, err := ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port))
 	if err != nil {
 		return err
 	}
@@ -68,17 +65,13 @@ func run() (err error) {
 			p.Contract.Symbol, p.Contract.SecType, p.Position, p.AvgCost)
 	}
 
-	pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{
-		Account: account,
-	})
+	// P&L is a stream; take the first update and stop.
+	pnl, err := client.Accounts().SubscribePnL(ctx, ibkr.PnLRequest{Account: account})
 	if err != nil {
 		return err
 	}
-
-	streamCtx, stop := context.WithTimeout(ctx, 10*time.Second)
-	defer stop()
 	fmt.Println("\n=== P&L ===")
-	for update := range pnl.All(streamCtx) {
+	for update := range pnl.All(ctx) {
 		fmt.Printf("  daily=%s unrealized=%s realized=%s\n",
 			optionalDecimal(update.DailyPnL),
 			optionalDecimal(update.UnrealizedPnL),
@@ -88,9 +81,10 @@ func run() (err error) {
 	}
 
 	pnl.Close()
-	return errors.Join(context.Cause(streamCtx), pnl.Wait(), errors.New("P&L stream ended before its first update"))
+	return errors.Join(context.Cause(ctx), pnl.Wait(), errors.New("P&L stream ended before its first update"))
 }
 
+// IBKR omits P&L values it has not computed yet; nil means "not reported".
 func optionalDecimal(value *decimal.Decimal) string {
 	if value == nil {
 		return "n/a"

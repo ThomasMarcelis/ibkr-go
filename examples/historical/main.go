@@ -7,6 +7,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,7 +19,7 @@ func main() {
 	exampleutil.Run(run)
 }
 
-func run() (err error) {
+func run() error {
 	host, port, err := exampleutil.GatewayAddress()
 	if err != nil {
 		return err
@@ -27,10 +28,7 @@ func run() (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	client, err := ibkr.DialContext(ctx,
-		ibkr.WithHost(host),
-		ibkr.WithPort(port),
-	)
+	client, err := ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port))
 	if err != nil {
 		return err
 	}
@@ -44,6 +42,11 @@ func run() (err error) {
 		UseRTH:     true,
 	})
 	if err != nil {
+		// Historical data is the one thing here that needs a market-data
+		// subscription on the login; the typed error says so without parsing.
+		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok && apiErr.IsEntitlement() {
+			return fmt.Errorf("this login has no historical-data entitlement for the API: %w", err)
+		}
 		return err
 	}
 

@@ -44,29 +44,25 @@ func run() error {
 		return err
 	}
 
+	// A scanner streams a fresh ranking every few seconds; one is enough here.
 	var results []ibkr.ScannerResult
-	for event := range sub.Events() {
-		if event.Kind != ibkr.StreamData {
-			continue
-		}
-		results = event.Value
+	for snapshot := range sub.All(ctx) {
+		results = snapshot
 		break
 	}
-	if results == nil {
-		return errors.Join(context.Cause(ctx), sub.Wait(), errors.New("scanner closed before its first result"))
-	}
 	sub.Close()
-	if err := sub.Wait(); err != nil {
+	if err := errors.Join(sub.Wait(), context.Cause(ctx)); err != nil {
 		return err
 	}
-
+	if results == nil {
+		return errors.New("scanner closed before its first result")
+	}
 	if len(results) == 0 {
 		fmt.Println("scanner returned no matching stocks")
 		return nil
 	}
 	for _, result := range results {
-		fmt.Printf("%2d  %-8s %s\n", result.Rank+1,
-			result.Contract.Symbol, result.MarketName)
+		fmt.Printf("%2d  %-8s %s\n", result.Rank+1, result.Contract.Symbol, result.MarketName)
 	}
 
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {

@@ -30,6 +30,7 @@ func run() error {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
 	client, err := ibkr.DialContext(ctx, ibkr.WithHost(host), ibkr.WithPort(port))
 	if err != nil {
 		return err
@@ -43,6 +44,7 @@ func run() error {
 	order := ibkr.MarketOrder(ibkr.ActionBuy, decimal.NewFromInt(100))
 	order.Account = account
 
+	// Preview runs IBKR's what-if check: same request as Place, no order.
 	state, err := client.Orders().Preview(ctx, ibkr.PlaceOrderRequest{
 		Contract: ibkr.Stock("AAPL"),
 		Order:    order,
@@ -68,6 +70,7 @@ func printMargin(name string, before, change, after *decimal.Decimal) {
 		optionalDecimal(before), optionalDecimal(change), optionalDecimal(after))
 }
 
+// IBKR omits values it did not compute; nil means "not reported".
 func optionalDecimal(value *decimal.Decimal) string {
 	if value == nil {
 		return "n/a"

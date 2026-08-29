@@ -6,6 +6,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
 	"github.com/ThomasMarcelis/ibkr-go/v2/examples/internal/exampleutil"
+	"github.com/shopspring/decimal"
 )
 
 func main() {
@@ -34,11 +36,15 @@ func run() error {
 	}
 	defer client.Close()
 
+	// 1. Qualify the underlying to get its contract ID.
 	underlying, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
 	if err != nil {
 		return err
 	}
-	parameters, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
+
+	// 2. Ask which chains exist: one row per exchange and trading class,
+	//    each with its expirations and strikes.
+	chains, err := client.Contracts().SecDefOptParams(ctx, ibkr.SecDefOptParamsRequest{
 		UnderlyingSymbol:  underlying.Symbol,
 		UnderlyingSecType: underlying.SecType,
 		UnderlyingConID:   underlying.ConID,
@@ -46,16 +52,16 @@ func run() error {
 	if err != nil {
 		return err
 	}
-
-	chain, ok := standardAAPLChain(parameters)
+	chain, ok := smartChain(chains, underlying.Symbol)
 	if !ok {
-		return fmt.Errorf("IBKR returned no SMART AAPL option chain with multiplier 100")
+		return fmt.Errorf("IBKR returned no SMART %s option chain with multiplier 100", underlying.Symbol)
 	}
 	expiry, ok := nearestExpiry(chain.Expirations)
 	if !ok {
-		return fmt.Errorf("SMART AAPL option chain returned no YYYYMMDD expiry")
+		return fmt.Errorf("chain returned no YYYYMMDD expiry")
 	}
 
+	// 3. Resolve every contract in that expiry.
 	details, err := client.Contracts().Details(ctx, ibkr.Contract{
 		Symbol:       underlying.Symbol,
 		SecType:      ibkr.SecTypeOption,
@@ -69,17 +75,15 @@ func run() error {
 		return err
 	}
 	if len(details) == 0 {
-		return fmt.Errorf("IBKR returned no AAPL option contracts for %s", expiry)
+		return fmt.Errorf("IBKR returned no %s option contracts for %s", underlying.Symbol, expiry)
 	}
 
-	slices.SortFunc(details, compareOptions)
-	fmt.Printf("AAPL %s: %d contracts\n", expiry, len(details))
+	slices.SortFunc(details, func(a, b ibkr.ContractDetails) int {
+		return cmp.Or(cmp.Compare(a.Right, b.Right), strike(a).Cmp(strike(b)))
+	})
+	fmt.Printf("%s %s: %d contracts\n", underlying.Symbol, expiry, len(details))
 	for _, detail := range details[:min(12, len(details))] {
-		strike := "n/a"
-		if detail.Strike != nil {
-			strike = detail.Strike.String()
-		}
-		fmt.Printf("  %s %8s  %s\n", detail.Right, strike, detail.LocalSymbol)
+		fmt.Printf("  %s %8s  %s\n", detail.Right, strike(detail), detail.LocalSymbol)
 	}
 	if len(details) > 12 {
 		fmt.Printf("  ... %d more\n", len(details)-12)
@@ -87,12 +91,12 @@ func run() error {
 	return nil
 }
 
-func standardAAPLChain(parameters []ibkr.SecDefOptParams) (ibkr.SecDefOptParams, bool) {
-	for _, parameter := range parameters {
-		if parameter.Exchange == "SMART" &&
-			parameter.TradingClass == "AAPL" &&
-			parameter.Multiplier == "100" {
-			return parameter, true
+// smartChain picks the standard SMART-routed, 100-multiplier chain whose
+// trading class is the symbol itself (weeklies and adjusted classes differ).
+func smartChain(chains []ibkr.SecDefOptParams, tradingClass string) (ibkr.SecDefOptParams, bool) {
+	for _, chain := range chains {
+		if chain.Exchange == "SMART" && chain.TradingClass == tradingClass && chain.Multiplier == "100" {
+			return chain, true
 		}
 	}
 	return ibkr.SecDefOptParams{}, false
@@ -101,29 +105,17 @@ func standardAAPLChain(parameters []ibkr.SecDefOptParams) (ibkr.SecDefOptParams,
 func nearestExpiry(expirations []string) (string, bool) {
 	nearest := ""
 	for _, expiry := range expirations {
-		if _, err := time.Parse("20060102", expiry); err == nil &&
-			(nearest == "" || expiry < nearest) {
+		if _, err := time.Parse("20060102", expiry); err == nil && (nearest == "" || expiry < nearest) {
 			nearest = expiry
 		}
 	}
 	return nearest, nearest != ""
 }
 
-func compareOptions(a, b ibkr.ContractDetails) int {
-	if a.Right < b.Right {
-		return -1
+// IBKR omits the strike on a few placeholder rows; treat those as zero.
+func strike(detail ibkr.ContractDetails) decimal.Decimal {
+	if detail.Strike == nil {
+		return decimal.Zero
 	}
-	if a.Right > b.Right {
-		return 1
-	}
-	if a.Strike == nil && b.Strike == nil {
-		return 0
-	}
-	if a.Strike == nil {
-		return -1
-	}
-	if b.Strike == nil {
-		return 1
-	}
-	return a.Strike.Cmp(*b.Strike)
+	return *detail.Strike
 }
