@@ -4,16 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"net"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/testhost"
 	"github.com/shopspring/decimal"
 )
 
@@ -1248,88 +1244,6 @@ func TestAPIOrderRestCancelAAPL(t *testing.T) {
 	}
 }
 
-func newClient(t *testing.T, script string, opts ...ibkr.Option) (*ibkr.Client, *testhost.Host) {
-	t.Helper()
-
-	host := newHost(t, script)
-	client := dialHostClient(t, host, opts...)
-	return client, host
-}
-
-func dialHostClient(t *testing.T, host *testhost.Host, opts ...ibkr.Option) *ibkr.Client {
-	t.Helper()
-
-	addrHost, addrPort, err := net.SplitHostPort(host.Addr())
-	if err != nil {
-		t.Fatalf("SplitHostPort() error = %v", err)
-	}
-	port, err := net.LookupPort("tcp", addrPort)
-	if err != nil {
-		t.Fatalf("LookupPort() error = %v", err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	dialOpts := []ibkr.Option{
-		ibkr.WithHost(addrHost),
-		ibkr.WithPort(port),
-		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
-	}
-	dialOpts = append(dialOpts, opts...)
-
-	client, err := ibkr.DialContext(ctx, dialOpts...)
-	if err != nil {
-		t.Fatalf("DialContext() error = %v", err)
-	}
-	return client
-}
-
-func newHost(t *testing.T, script string) *testhost.Host {
-	t.Helper()
-
-	path := filepath.Join("testdata", "transcripts", script)
-	host, err := testhost.NewFromFile(path)
-	if err != nil {
-		t.Fatalf("NewFromFile(%q) error = %v", path, err)
-	}
-	return host
-}
-
-func waitHost(t *testing.T, host *testhost.Host) {
-	t.Helper()
-	if err := host.Wait(); err != nil {
-		t.Fatalf("host.Wait() error = %v", err)
-	}
-}
-
-func cleanupClientHost(t *testing.T, client *ibkr.Client, host *testhost.Host) {
-	t.Helper()
-	defer client.Close()
-	if t.Failed() {
-		// A failed assertion can leave the scripted host waiting for a request
-		// the test will never send. Closing first unblocks that read.
-		client.Close()
-	}
-	waitHost(t, host)
-}
-
-func waitForEvent[T any](t *testing.T, ch <-chan T) T {
-	t.Helper()
-
-	select {
-	case value, ok := <-ch:
-		if !ok {
-			t.Fatal("event channel closed before value arrived")
-		}
-		return value
-	case <-time.After(5 * time.Second):
-		t.Fatal("timed out waiting for event")
-		var zero T
-		return zero
-	}
-}
-
 // Grounded fixture tests: real field values extracted from live IB Gateway captures.
 
 func TestGroundedBootstrap(t *testing.T) {
@@ -1686,28 +1600,6 @@ func TestSubscribePnL(t *testing.T) {
 	}
 
 	sub.Close()
-}
-
-func waitForStateKind[T any](t *testing.T, ch <-chan ibkr.StreamEvent[T], want ibkr.StreamEventKind) ibkr.StreamEvent[T] {
-	t.Helper()
-
-	for {
-		state := waitForEvent(t, ch)
-		if state.Kind == want {
-			return state
-		}
-	}
-}
-
-func waitForStreamData[T any](t *testing.T, ch <-chan ibkr.StreamEvent[T]) T {
-	t.Helper()
-
-	for {
-		event := waitForEvent(t, ch)
-		if event.Kind == ibkr.StreamData {
-			return event.Value
-		}
-	}
 }
 
 func TestSoftDollarTiersIntegration(t *testing.T) {
@@ -3015,14 +2907,6 @@ func TestAPITransmitFalseThenTransmitAAPLReplay(t *testing.T) {
 	}
 }
 
-func waitForOrderStatus(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle, want ibkr.OrderStatus) {
-	t.Helper()
-	waitOrderStatusUpdate(t, ctx, handle, want)
-	if ibkr.IsTerminalOrderStatus(want) && want != ibkr.OrderStatusInactive {
-		handle.Close()
-	}
-}
-
 func waitForOrderLifecycle(t *testing.T, ctx context.Context, events <-chan ibkr.OrderEvent, want ibkr.OrderLifecycleKind) ibkr.OrderLifecycleEvent {
 	t.Helper()
 	for {
@@ -3038,187 +2922,4 @@ func waitForOrderLifecycle(t *testing.T, ctx context.Context, events <-chan ibkr
 			t.Fatalf("waiting for order lifecycle %s: %v", want, context.Cause(ctx))
 		}
 	}
-}
-
-func waitForSessionReady(t *testing.T, ctx context.Context, events <-chan ibkr.Event, connectionSeq uint64) {
-	t.Helper()
-	for {
-		select {
-		case event, ok := <-events:
-			if !ok {
-				t.Fatalf("session events closed before Ready on connection %d", connectionSeq)
-			}
-			if event.State == ibkr.StateReady && event.ConnectionSeq >= connectionSeq {
-				return
-			}
-		case <-ctx.Done():
-			t.Fatalf("waiting for Ready on connection %d: %v", connectionSeq, context.Cause(ctx))
-		}
-	}
-}
-
-func waitForOpenOrder(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) ibkr.OpenOrder {
-	t.Helper()
-
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				t.Fatal("order events closed before OpenOrder")
-			}
-			if evt.OpenOrder != nil {
-				return *evt.OpenOrder
-			}
-		case <-handle.Done():
-			for {
-				select {
-				case evt, ok := <-handle.Events():
-					if !ok {
-						t.Fatal("order events closed before OpenOrder")
-					}
-					if evt.OpenOrder != nil {
-						return *evt.OpenOrder
-					}
-				default:
-					t.Fatal("order done before OpenOrder")
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for OpenOrder")
-		}
-	}
-}
-
-func waitOrderFillAndExecution(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) (bool, bool) {
-	t.Helper()
-
-	var filled bool
-	var execution bool
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				return filled, execution
-			}
-			if evt.Execution != nil {
-				execution = true
-			}
-			if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-				filled = true
-			}
-			if filled && execution {
-				handle.Close()
-				return filled, execution
-			}
-		case <-handle.Done():
-			for {
-				select {
-				case evt, ok := <-handle.Events():
-					if !ok {
-						return filled, execution
-					}
-					if evt.Execution != nil {
-						execution = true
-					}
-					if evt.Status != nil && evt.Status.Status == ibkr.OrderStatusFilled {
-						filled = true
-					}
-				default:
-					return filled, execution
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for order fill")
-		}
-	}
-}
-
-func waitOrderStatuses(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) []ibkr.OrderStatus {
-	t.Helper()
-
-	var statuses []ibkr.OrderStatus
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				return statuses
-			}
-			if evt.Status != nil {
-				statuses = append(statuses, evt.Status.Status)
-				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-					if evt.Status.Status != ibkr.OrderStatusInactive {
-						handle.Close()
-					}
-					return statuses
-				}
-			}
-		case <-handle.Done():
-			for {
-				select {
-				case evt, ok := <-handle.Events():
-					if !ok {
-						return statuses
-					}
-					if evt.Status != nil {
-						statuses = append(statuses, evt.Status.Status)
-					}
-				default:
-					return statuses
-				}
-			}
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for order terminal status")
-		}
-	}
-}
-
-func hasOrderStatus(statuses []ibkr.OrderStatus, want ibkr.OrderStatus) bool {
-	for _, status := range statuses {
-		if status == want {
-			return true
-		}
-	}
-	return false
-}
-
-func requireCloseOrCapturedDisconnect(t *testing.T, label string, err error) {
-	t.Helper()
-	if err == nil {
-		return
-	}
-	if errors.Is(err, ibkr.ErrOrderRecoveryRequired) && errors.Is(err, io.EOF) {
-		return
-	}
-	t.Fatalf("%s Close/Wait: %v", label, err)
-}
-
-func replayAAPLQuoteEntitlement(t *testing.T, ctx context.Context, client *ibkr.Client) {
-	t.Helper()
-
-	if err := client.MarketData().SetType(ctx, ibkr.MarketDataLive); err != nil {
-		t.Fatalf("SetType(live): %v", err)
-	}
-	_, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
-		ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
-	}})
-	apiErr, ok := errors.AsType[*ibkr.APIError](err)
-	if !ok || apiErr.Code != ibkr.ErrCodeAdditionalSubscriptionRequired || apiErr.OpKind != ibkr.OpQuotes {
-		t.Fatalf("live AAPL Quote error = %v, want typed quotes code %d", err, ibkr.ErrCodeAdditionalSubscriptionRequired)
-	}
-}
-
-func replayDelayedAAPLQuoteAnchor(t *testing.T, ctx context.Context, client *ibkr.Client) ibkr.Quote {
-	t.Helper()
-
-	replayAAPLQuoteEntitlement(t, ctx, client)
-	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
-		t.Fatalf("SetType(delayed): %v", err)
-	}
-	quote, err := client.MarketData().Quote(ctx, ibkr.QuoteRequest{Contract: ibkr.Contract{
-		ConID: 265598, Symbol: "AAPL", SecType: ibkr.SecTypeStock, Exchange: "SMART", Currency: "USD",
-	}})
-	if err != nil {
-		t.Fatalf("delayed AAPL Quote: %v", err)
-	}
-	return quote
 }

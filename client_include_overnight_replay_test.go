@@ -130,27 +130,3 @@ func nextOpenOrderEvent(t *testing.T, ctx context.Context, handle *ibkr.OrderHan
 		}
 	}
 }
-
-func cancelAndAwaitZeroFill(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) {
-	t.Helper()
-	if err := handle.Cancel(ctx); err != nil {
-		t.Fatalf("Cancel() error = %v", err)
-	}
-	for {
-		select {
-		case event, ok := <-handle.Events():
-			if !ok {
-				t.Fatalf("order events closed before cancellation: %v", handle.Wait())
-			}
-			if event.Status == nil || !ibkr.IsTerminalOrderStatus(event.Status.Status) {
-				continue
-			}
-			if event.Status.Status != ibkr.OrderStatusCancelled || !event.Status.Filled.IsZero() {
-				t.Fatalf("terminal status = %+v, want zero-fill Cancelled", event.Status)
-			}
-			return
-		case <-ctx.Done():
-			t.Fatalf("waiting for targeted cancellation: %v", ctx.Err())
-		}
-	}
-}

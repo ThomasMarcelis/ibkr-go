@@ -30,46 +30,6 @@ var orderReplayAAPL = ibkr.Contract{
 	Currency: "USD",
 }
 
-// waitForSessionEventCode drains the session events channel until an event
-// with the wanted code arrives.
-func waitForSessionEventCode(t *testing.T, ctx context.Context, events <-chan ibkr.Event, code int) ibkr.Event {
-	t.Helper()
-
-	for {
-		select {
-		case evt, ok := <-events:
-			if !ok {
-				t.Fatalf("session events closed before code %d", code)
-			}
-			if evt.Code == code {
-				return evt
-			}
-		case <-ctx.Done():
-			t.Fatalf("timeout waiting for session event code %d", code)
-		}
-	}
-}
-
-// waitOrderStatusUpdate consumes handle events until the wanted status
-// arrives and returns the full update for field-level assertions.
-func waitOrderStatusUpdate(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle, want ibkr.OrderStatus) ibkr.OrderStatusUpdate {
-	t.Helper()
-
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				t.Fatalf("order events closed before status %s", want)
-			}
-			if evt.Status != nil && evt.Status.Status == want {
-				return *evt.Status
-			}
-		case <-ctx.Done():
-			t.Fatalf("timeout waiting for order status %s", want)
-		}
-	}
-}
-
 // requireOrderAPIError asserts the handle terminated with an *ibkr.APIError
 // of the wanted code on the place-order op whose message carries fragment.
 func requireOrderAPIError(t *testing.T, name string, handle *ibkr.OrderHandle, code int, fragment string) {

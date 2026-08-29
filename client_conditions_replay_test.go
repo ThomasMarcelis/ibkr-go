@@ -10,29 +10,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// waitForOrderWarning drains a handle's events until a non-terminal Warning
-// arrives, failing if the handle closes first. It proves the warning is
-// delivered without tearing the handle down.
-func waitForOrderWarning(t *testing.T, ctx context.Context, handle *ibkr.OrderHandle) *ibkr.APIError {
-	t.Helper()
-
-	for {
-		select {
-		case evt, ok := <-handle.Events():
-			if !ok {
-				t.Fatal("order events closed before the warning arrived")
-			}
-			if evt.Warning != nil {
-				return evt.Warning
-			}
-		case <-handle.Done():
-			t.Fatal("handle closed before delivering the non-terminal warning")
-		case <-ctx.Done():
-			t.Fatal("timeout waiting for order warning")
-		}
-	}
-}
-
 // TestAPIConditionsMatrixAAPLReplay freezes the order-conditions matrix from
 // captures/20260824T204558Z-api_conditions_matrix_aapl, paper Gateway
 // server_version 225, events.jsonl SHA-256
