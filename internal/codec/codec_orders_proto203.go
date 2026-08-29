@@ -1,8 +1,10 @@
 package codec
 
 import (
+	"cmp"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 
@@ -942,23 +944,47 @@ func legPriceAt(prices []string, i int) string {
 }
 
 func canonicalProtoFields(body []byte) []byte {
-	type field struct {
-		number protowire.Number
-		bytes  []byte
+	if len(body) == 0 {
+		return body
 	}
-	fields := make([]field, 0, 16)
-	for len(body) != 0 {
-		number, _, n := protowire.ConsumeField(body)
+
+	fieldCount := 0
+	ordered := true
+	var previous protowire.Number
+	for remaining := body; len(remaining) != 0; {
+		number, _, n := protowire.ConsumeField(remaining)
 		if n < 0 {
 			panic(protowire.ParseError(n))
 		}
-		fields = append(fields, field{number: number, bytes: body[:n]})
-		body = body[n:]
+		if fieldCount != 0 && number < previous {
+			ordered = false
+		}
+		previous = number
+		fieldCount++
+		remaining = remaining[n:]
 	}
-	sort.SliceStable(fields, func(i, j int) bool { return fields[i].number < fields[j].number })
-	canonical := make([]byte, 0)
+	if ordered {
+		return body
+	}
+
+	type field struct {
+		number protowire.Number
+		start  int
+		end    int
+	}
+	fields := make([]field, 0, fieldCount)
+	for offset := 0; offset != len(body); {
+		number, _, n := protowire.ConsumeField(body[offset:])
+		if n < 0 {
+			panic(protowire.ParseError(n))
+		}
+		fields = append(fields, field{number: number, start: offset, end: offset + n})
+		offset += n
+	}
+	slices.SortStableFunc(fields, func(a, b field) int { return cmp.Compare(a.number, b.number) })
+	canonical := make([]byte, 0, len(body))
 	for _, field := range fields {
-		canonical = append(canonical, field.bytes...)
+		canonical = append(canonical, body[field.start:field.end]...)
 	}
 	return canonical
 }
