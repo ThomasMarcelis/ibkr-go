@@ -46,7 +46,7 @@ func run() (err error) {
 	}
 
 	// Anchor the prices on a delayed quote so every leg sits far from the
-	// market: the entry never fills and the children never activate.
+	// market. Placement and cancellation outcomes still require observation.
 	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
 		return err
 	}
@@ -90,18 +90,20 @@ func run() (err error) {
 		{"stop-loss", bracket.StopLoss},
 	}
 	for _, leg := range legs {
-		fmt.Printf("placed %-11s order %d\n", leg.name, leg.handle.OrderID())
+		fmt.Printf("locally queued %-11s order %d\n", leg.name, leg.handle.OrderID())
 		defer leg.handle.Close()
 	}
 
-	// If we leave early, cancel the entry on a fresh context; IBKR cancels the
-	// children with it.
+	// Early cleanup is best effort. Request parent cancellation, then retain
+	// every leg ID because queue admission does not confirm any cancellation.
 	done := false
 	defer func() {
 		if !done {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, bracket.Parent.OrderID()))
+			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, bracket.Parent.OrderID()),
+				fmt.Errorf("reconcile bracket orders %d, %d, %d: cancellation outcomes are unconfirmed",
+					bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.StopLoss.OrderID()))
 		}
 	}()
 
@@ -122,6 +124,7 @@ func run() (err error) {
 		fmt.Printf("%-11s ended %s\n", leg.name, status)
 	}
 	done = true
+	fmt.Println("status observation complete; reconcile later fills and fees using the leg IDs")
 	return nil
 }
 

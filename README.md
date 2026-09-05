@@ -203,7 +203,9 @@ terminal status because IBKR can still send fills and fees afterwards; call
 the order.
 
 ```go
-handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
+observationCtx, stopObserving := context.WithTimeout(ctx, 5*time.Minute)
+defer stopObserving()
+handle, err := client.Orders().Place(observationCtx, ibkr.PlaceOrderRequest{
     Contract: ibkr.Stock("AAPL"),
     Order:    ibkr.LimitOrder(ibkr.ActionBuy, decimal.NewFromInt(1), decimal.RequireFromString("150.00")),
 })
@@ -211,26 +213,28 @@ if err != nil {
     return err
 }
 defer handle.Close()
+stopClose := context.AfterFunc(observationCtx, handle.Close)
+defer stopClose()
+fmt.Println("reconcile order:", handle.OrderID())
 
 for evt := range handle.Events() {
     switch {
     case evt.Status != nil:
         fmt.Println(evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
-        if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
-            return nil
-        }
     case evt.Execution != nil:
         fmt.Println("fill:", evt.Execution.Shares, "@", evt.Execution.Price)
     case evt.CommissionAndFees != nil:
         fmt.Println("fees:", evt.CommissionAndFees.Amount, evt.CommissionAndFees.Currency)
     }
 }
-return handle.Wait()
+return errors.Join(handle.Wait(), context.Cause(observationCtx))
 ```
 
-`Events()` stays open until you close the handle, so bound the loop with your
-own context or timeout if the order may rest. Cancel or amend while the handle
-is open:
+The close callback bounds this loop, including after a terminal status.
+The context passed to `Place` alone only bounds placement admission.
+Its expiry stops local observation; it does not cancel the order or establish
+final accounting. Keep the order ID and reconcile executions and fees when
+needed. Cancel or amend while the handle is open:
 
 ```go
 if err := handle.Cancel(ctx); err != nil {
@@ -267,7 +271,7 @@ fmt.Println(bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.Stop
 
 `PlaceBracket` allocates the three IDs, links the children, and sets the
 transmit flags for you. Each handle has the same event API as a single order.
-If only some legs were accepted you get an `*OrderRecoveryError` listing them;
+If only some legs were locally queued you get an `*OrderRecoveryError` listing them;
 reconcile through `Orders().Open` instead of retrying. The full placement and
 recovery rules are in the [session contract](docs/session-contract.md).
 

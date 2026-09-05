@@ -252,14 +252,31 @@ func Example_awaitSnapshot() {
 	}
 	defer sub.Close()
 
-	// AwaitSnapshot remains reliable even when its lifecycle notification was
-	// dropped from a bounded channel.
+	// Start the single event consumer before waiting for snapshot completion.
+	// Call Accounts().Summary instead if you only need the initial snapshot.
+	consumed := make(chan int, 1)
+	go func() {
+		rows := 0
+		for event := range sub.Events() {
+			if event.Kind == ibkr.StreamData {
+				rows++
+			}
+		}
+		consumed <- rows
+	}()
 	if err := sub.AwaitSnapshot(ctx); err != nil {
 		panic(err)
 	}
+	// Completion is durable; it does not guarantee the stream remains healthy.
 	fmt.Println("snapshot complete")
+	sub.Close()
+	fmt.Println("snapshot rows:", <-consumed)
+	if err := sub.Wait(); err != nil {
+		panic(err)
+	}
 	// Output:
 	// snapshot complete
+	// snapshot rows: 4
 }
 
 func ExampleStock() {

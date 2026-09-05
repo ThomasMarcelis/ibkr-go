@@ -409,6 +409,8 @@ func capturedServerMessages(t *testing.T, path string) []codec.Message {
 	switch path {
 	case executionsCapturePath:
 		data, err = os.ReadFile(executionsCapturePath)
+	case "testdata/transcripts/api_hedge_order_aapl.txt":
+		data, err = os.ReadFile("testdata/transcripts/api_hedge_order_aapl.txt")
 	default:
 		t.Fatalf("unsupported execution capture %q", path)
 	}

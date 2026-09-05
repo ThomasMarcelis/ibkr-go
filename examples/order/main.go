@@ -47,7 +47,7 @@ func run() (err error) {
 		return err
 	}
 
-	// A $1 bid for AAPL never fills, so the order rests until we cancel it.
+	// A $1 bid is intended to rest far below the market until cancellation.
 	order := ibkr.LimitOrder(ibkr.ActionBuy, decimal.NewFromInt(1), decimal.RequireFromString("1.00"))
 	order.Account = account
 
@@ -58,16 +58,17 @@ func run() (err error) {
 	if err != nil {
 		return err
 	}
-	fmt.Println("placed order", handle.OrderID())
+	fmt.Println("locally queued order", handle.OrderID())
 
-	// If we leave early, cancel on a fresh context so nothing stays resting on
-	// the paper account. Closing the handle alone never cancels an order.
+	// Early cleanup is best effort: cancellation admission is not confirmation.
+	// Preserve the ID for reconciliation even if the cancellation was queued.
 	terminal := false
 	defer func() {
 		if !terminal {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, handle.OrderID()))
+			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, handle.OrderID()),
+				fmt.Errorf("reconcile order %d: cancellation outcome is unconfirmed", handle.OrderID()))
 		}
 		handle.Close()
 	}()
@@ -85,6 +86,7 @@ func run() (err error) {
 					evt.Status.Status, evt.Status.Filled, evt.Status.Remaining)
 				if ibkr.IsTerminalOrderStatus(evt.Status.Status) {
 					terminal = true
+					fmt.Println("status observation complete; reconcile later fills and fees for", handle.OrderID())
 					return nil
 				}
 				// First acknowledgement from IBKR: it is resting, cancel it.

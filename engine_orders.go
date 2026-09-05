@@ -684,11 +684,17 @@ func (e *engine) cancelAndCloseOrderRoutes(sentIDs, allIDs []int64, placementErr
 // called on the actor goroutine before the corresponding place_order is sent.
 func (e *engine) bindOrderHandle(orderID int64, contract Contract, parentID int64) *OrderHandle {
 	handle := newOrderHandle(orderID, e.cfg.orderEventBuffer)
-	or := &orderRoute{orderID: orderID, parentID: parentID, handle: handle}
+	or := &orderRoute{orderID: orderID, handle: handle}
 	handle.cancelFn = func(ctx context.Context, cfg cancelConfig) error {
 		return e.CancelOrder(ctx, orderID, cfg)
 	}
 	handle.replaceFn = func(ctx context.Context, order Order) error {
+		// Parent identity is immutable at placement. Resolve omission before
+		// structural validation, which requires a parent for hedge orders.
+		if order.ParentID != 0 && order.ParentID != parentID {
+			return invalidOrderField("Order.ParentID", order.ParentID, "cannot change the placement-time parent")
+		}
+		order.ParentID = parentID
 		if err := validateOrderRequest(PlaceOrderRequest{Contract: contract, Order: order}); err != nil {
 			return err
 		}
@@ -707,10 +713,6 @@ func (e *engine) bindOrderHandle(orderID int64, contract Contract, parentID int6
 			if or.recoveryRequired {
 				return ErrOrderRecoveryRequired
 			}
-			if order.ParentID != 0 && order.ParentID != or.parentID {
-				return invalidOrderField("Order.ParentID", order.ParentID, "cannot change the placement-time parent")
-			}
-			order.ParentID = or.parentID
 			return e.sendContext(ctx, toCodecPlaceOrder(orderID, PlaceOrderRequest{
 				Contract: contract,
 				Order:    order,
