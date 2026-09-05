@@ -15,6 +15,8 @@ tag.
 
 ### Fixed
 
+- Documentation examples use the public API; connection setup and cancellation guidance are clearer.
+- The reconnect example exits successfully on Ctrl-C while preserving stream failures.
 - Restore the selected market-data type before subscriptions and new work on reconnect.
 - Retain fees until their execution arrives or observation ends; remove the 750 ms expiry.
 - Preserve a hedge's bound parent when `Replace` omits `ParentID`.
@@ -134,6 +136,7 @@ candidates rc.2 and rc.3 preceded this release; their notes are at those tags.
 v1 lives on the `github.com/ThomasMarcelis/ibkr-go` import path against
 `server_version` 200. Full notes are at each tag.
 
+- **v1.5.2** (2026-08-23): marks v1 deprecated in Go module metadata and directs users to v2.
 - **v1.5.1** (2026-07-04): `Orders().RefreshOpen` resyncs an open-orders
   subscription ([#21](https://github.com/ThomasMarcelis/ibkr-go/issues/21)).
 - **v1.5.0** (2026-07-04): `OpenOrderUpdate` is a union of `Order` and

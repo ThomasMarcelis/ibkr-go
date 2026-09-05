@@ -16,8 +16,8 @@ what is next is in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Development loop
 
-Prerequisites: Go 1.26+ and `golangci-lint` (latest). `gofmt` and `goimports`
-in your editor help.
+Prerequisites: the latest Go 1.26 patch and `golangci-lint` v2.11.4, matching
+CI (currently Go 1.26.7). `gofmt` and `goimports` in your editor help.
 
 ```
 go build ./...
@@ -56,13 +56,16 @@ when one is available. `internal/testhost` and the checked-in fixtures replay
 live-derived behavior; they are not a place to invent protocol semantics.
 Wire framing and codec round-trips are also fuzzed.
 
+Documentation examples that need a Gateway compile in CI; constructor
+examples run there too. Captured responses belong in black-box replay tests,
+so the examples on pkg.go.dev remain copyable outside this repository.
+
 ## Live verification
 
 Live tests are opt-in and never run in CI:
 
 ```bash
 IBKR_LIVE=1 IBKR_LIVE_READONLY_ADDR=127.0.0.1:4001 go test ./... -run '^TestLive' -count=1
-IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 go test ./cmd/ibkr-capture -run '^TestLiveCapture' -count=1
 ```
 
 The maintainer lab uses two Gateway roles:
@@ -72,6 +75,16 @@ The maintainer lab uses two Gateway roles:
 - `IBKR_LIVE_PAPER_ADDR` points at the throwaway paper Gateway. Tests that
   place, modify, cancel, or flatten orders require both `IBKR_LIVE_TRADING=1`
   and this paper role.
+
+The paper capture suite places orders and reconciles the dedicated account.
+Set `IBKR_PAPER_ACCOUNT` to its exact account ID first, then run:
+
+```bash
+IBKR_LIVE=1 IBKR_LIVE_TRADING=1 IBKR_LIVE_PAPER_ADDR=127.0.0.1:4002 \
+IBKR_PAPER_ACCOUNT="${IBKR_PAPER_ACCOUNT:?set the dedicated paper account}" \
+IBKR_CAPTURE_GLOBAL_CANCEL=1 \
+go test ./cmd/ibkr-capture -run '^TestLiveCapture' -count=1 -timeout 90m
+```
 
 Run the setup diagnostic before a live campaign:
 
@@ -114,6 +127,7 @@ go test -shuffle=on -count=1 ./...
 go test -race -shuffle=on -count=1 ./...
 ./scripts/check-api.sh
 ./scripts/fuzz-all.sh --check
+./scripts/fuzz-all.sh 30s
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
 
@@ -127,8 +141,16 @@ The candidate's own tag and prerelease tags cannot become its baseline.
 Incompatible changes need a new major version; never rewrite release history.
 
 Run the examples against the paper Gateway, write the CHANGELOG entry (link
-release-time documents at the tag, not at `main`), and tag. Pushing and
-publishing stay manual.
+release-time documents at the tag), and update the README's release version
+and install commands. Preview the rendered README and Go documentation: check
+setup links, copyable code, method-attached examples, and version-specific claims.
+
+The maintainer creates and pushes an **annotated** tag. The release workflow
+checks that tag belongs to `main`, runs its gates, and publishes the GitHub
+release from the matching changelog section. Lightweight tags are rejected.
+After publication, verify the new version on
+[pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2), including
+the README links and examples; confirm v1 still points readers to v2.
 
 ## Reference policy
 

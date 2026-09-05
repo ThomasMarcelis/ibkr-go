@@ -1,6 +1,6 @@
 # Live Coverage Matrix
 
-This is the MECE target matrix for live IB Gateway/TWS evidence. It is broader
+This matrix tracks live IB Gateway/TWS evidence by capability. It is broader
 than the current replay suite and intentionally includes implemented,
 partially implemented, deferred, blocked, and official-but-not-yet-implemented
 capabilities.
@@ -33,8 +33,12 @@ claims.
 
 ## Coverage Dimensions
 
-Every matrix row has one primary capability owner. Cross-cutting behavior is
-handled through dimensions rather than duplicate rows:
+Capability rows describe positive behavior; a promoted refusal scenario does
+not promote the successful callback it blocks. Read a row's evidence and
+remaining variants alongside its status.
+
+Every matrix row has one primary capability owner. The following review
+dimensions help assess coverage; they are not fields of the executable catalog:
 
 - `source`: public_api, codec, official_eclient, official_ewrapper,
   live_capture, replay
@@ -180,10 +184,10 @@ handled through dimensions rather than duplicate rows:
 
 ## Executable Scenario Catalog Coverage
 
-Each executable `cmd/ibkr-capture` scenario must appear in this section and in
-one primary matrix row above.
+Each executable `cmd/ibkr-capture` scenario appears here with its owning matrix
+row or rows above.
 
-| Scenario | Primary Row |
+| Scenario | Matrix Row(s) |
 |----------|-------------|
 | `account_summary_snapshot` | ACCT-001 |
 | `account_summary_stream` | ACCT-001 |
@@ -203,6 +207,7 @@ one primary matrix row above.
 | `api_delayed_success_modify_aapl` | ORD-001 |
 | `api_dollar_cost_averaging_aapl` | ORD-009 |
 | `api_duplicate_quote_subscriptions_aapl` | MD1-003 |
+| `api_empty_tif_default_aapl` | ORD-001 |
 | `api_generic_tick_matrix_aapl` | MD1-003, MD1-004 |
 | `api_tick_news_aapl_probe` | MD1-003, MD1-004 |
 | `api_forex_lifecycle_eurusd` | ORD-001 |
@@ -268,7 +273,7 @@ one primary matrix row above.
 | `market_depth_aapl` | MD2-001 |
 | `market_depth_aapl_smart` | MD2-001 |
 | `market_rule` | REF-004 |
-| `managed_accounts_refresh` | SESS-001 |
+| `managed_accounts_refresh` | SESS-003 |
 | `matching_symbols_aapl` | REF-002 |
 | `matching_symbols_partial` | REF-002 |
 | `mkt_depth_exchanges` | REF-005 |

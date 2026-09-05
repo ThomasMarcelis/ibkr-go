@@ -128,15 +128,18 @@ Scenarios named `api_*` drive the public `ibkr.Client` rather than
 hand-written wire calls. The raw `events.jsonl` is still the protocol
 evidence.
 
-`ibkr-normalize -verify` checks framing, chronology, driver lifecycle,
-sanitization, and provenance. It does not judge protocol semantics; the
-replay or exact-vector test that consumes the frames does that.
+`ibkr-normalize -dir captures/<capture-dir> -verify` checks framing,
+handshake order, inbound decoding, and driver lifecycle, and prints the source
+capture hash. It writes no output artifact and does not sanitize the capture
+directory. Replay tests assert the scenario's behavior through the public API.
 
 ## Promoting a capture into CI
 
 1. Emit a transcript skeleton:
    `/tmp/ibkr-normalize -dir captures/<capture-dir> -transcript-out /tmp/<scenario>.txt`
-2. Sanitize. `DU9000001` is the canonical account token. Also replace
+2. Review and finish sanitization. The skeleton redacts supported protocol
+   fields; it still needs human review before sharing. `DU9000001` is the
+   canonical account token. Also replace
    execution IDs, order refs, perm IDs, and other account-specific
    identifiers, and say so in the header. Preserve every non-sensitive wire
    value exactly, including timestamp syntax and timezone suffixes.

@@ -336,6 +336,10 @@ func (c OrdersClient) RefreshOrderID(ctx context.Context) (int64, error) {
 // Once the request enters the transport queue, the handle and a nil error win
 // context-cancellation and session-close races. Before admission, Place returns
 // an error and no handle. Use [OrdersClient.Preview] for a margin preview.
+// The [paper order example] demonstrates bounded observation, cancellation,
+// and reconciliation; closing a handle does not cancel its order.
+//
+// [paper order example]: https://github.com/ThomasMarcelis/ibkr-go/blob/main/examples/order/main.go
 func (c OrdersClient) Place(ctx context.Context, req PlaceOrderRequest) (*OrderHandle, error) {
 	return c.engine.PlaceOrder(ctx, req)
 }

@@ -4,279 +4,283 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
+	"log"
 	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2"
-	"github.com/ThomasMarcelis/ibkr-go/v2/internal/testhost"
 	"github.com/shopspring/decimal"
 )
 
 func ExampleDialContext() {
-	client, cleanup := exampleClient("grounded_bootstrap.txt")
-	defer cleanup()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+		ibkr.WithClientID(1),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
 
 	snapshot := client.Session()
-	fmt.Println(snapshot.State, snapshot.ManagedAccounts)
-	// Output:
-	// Ready [DU9000001]
+	fmt.Println(snapshot.State, snapshot.ServerVersion, snapshot.ManagedAccounts)
 }
 
-func Example_contractDetails() {
-	client, cleanup := exampleClient("grounded_contract_details_aapl.txt")
-	defer cleanup()
+func ExampleContractsClient_Details() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
 
-	details, err := client.Contracts().Details(ctx, ibkr.Contract{
-		Symbol:   "AAPL",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
+	details, err := client.Contracts().Details(ctx, ibkr.Stock("AAPL"))
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	for _, detail := range details {
+		fmt.Println(detail.ConID, detail.LongName, detail.MinTick)
+	}
+}
+
+func ExampleContractsClient_Qualify() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
+
+	details, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	fmt.Println(details.ConID, details.LongName)
+}
+
+func ExampleAccountsClient_Summary() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
+
+	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "TotalCashValue"},
 	})
 	if err != nil {
-		panic(err)
+		log.Print(err)
+		return
 	}
-
-	fmt.Println(details[0].Symbol, details[0].MinTick)
-	// Output:
-	// AAPL 0.01
+	for _, value := range values {
+		fmt.Println(value.Tag, value.Value, value.Currency)
+	}
 }
 
-func Example_historicalBars() {
-	client, cleanup := exampleClient("historical_bars_subscription_required.txt")
-	defer cleanup()
+func ExampleAccountsClient_Positions() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
 
-	_, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+	positions, err := client.Accounts().Positions(ctx)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	for _, position := range positions {
+		fmt.Println(position.Contract.Symbol, position.Position, position.AvgCost)
+	}
+}
+
+func ExampleHistoryClient_Bars() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
+
+	bars, err := client.History().Bars(ctx, ibkr.HistoricalBarsRequest{
+		Contract:   ibkr.Stock("AAPL"),
 		Duration:   ibkr.Days(1),
 		BarSize:    ibkr.Bar1Hour,
 		WhatToShow: ibkr.ShowTrades,
 		UseRTH:     true,
 	})
-	apiErr, _ := errors.AsType[*ibkr.APIError](err)
-	fmt.Println(apiErr.Code, apiErr.IsEntitlement())
-	// Output:
-	// 2188 true
-}
-
-func Example_accountSummary() {
-	client, cleanup := exampleClient("grounded_account_summary.txt")
-	defer cleanup()
-
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
-
-	values, err := client.Accounts().Summary(ctx, ibkr.AccountSummaryRequest{
-		Group: "All",
-		Tags: []string{
-			"NetLiquidation",
-			"TotalCashValue",
-			"BuyingPower",
-			"ExcessLiquidity",
-		},
-	})
 	if err != nil {
-		panic(err)
-	}
-
-	for _, value := range values {
-		fmt.Println(value.Tag, value.Value, value.Currency)
-	}
-	// Output:
-	// BuyingPower 183875.22 EUR
-	// ExcessLiquidity 28591.69 EUR
-	// NetLiquidation 36992.49 EUR
-	// TotalCashValue -1441.67 EUR
-}
-
-func Example_positionsSnapshot() {
-	client, cleanup := exampleClient("grounded_positions.txt")
-	defer cleanup()
-
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
-
-	positions, err := client.Accounts().Positions(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	for _, position := range positions {
-		fmt.Println(position.Contract.Symbol, position.Position)
-	}
-	// Output:
-	// ASML 40
-	// ADYEN 100
-	// MES 0
-	// ASML 30
-	// NXE 8188
-	// CRDO 753
-	// DHER 1568
-	// HAG 1556
-}
-
-func Example_placeOrder() {
-	client, cleanup := exampleClient("direct_cancel_order.txt")
-	defer cleanup()
-
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
-
-	handle, err := client.Orders().Place(ctx, ibkr.PlaceOrderRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
-		Order: ibkr.Order{
-			Action:    ibkr.ActionBuy,
-			OrderType: ibkr.OrderTypeLimit,
-			Quantity:  decimal.RequireFromString("1"),
-			LmtPrice:  new(decimal.RequireFromString("10")),
-			TIF:       ibkr.TIFDay,
-			Account:   "DU9000001",
-			OrderRef:  "sanitized-order-ref-0000000000000001",
-		},
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	for event := range handle.Events() {
-		if event.Status != nil && event.Status.Status == ibkr.OrderStatusPreSubmitted {
-			break
+		if apiErr, ok := errors.AsType[*ibkr.APIError](err); ok && apiErr.IsEntitlement() {
+			log.Printf("historical data needs market-data permissions: %v", apiErr)
+		} else {
+			log.Print(err)
 		}
+		return
 	}
-	if err := handle.Cancel(ctx); err != nil {
-		panic(err)
+	for _, bar := range bars {
+		fmt.Println(bar.Time, bar.Open, bar.High, bar.Low, bar.Close, bar.Volume)
 	}
-	for event := range handle.Events() {
-		if event.Status != nil && event.Status.Status == ibkr.OrderStatusCancelled {
-			handle.Close()
-			break
-		}
-	}
-	if err := handle.Wait(); err != nil {
-		panic(err)
-	}
-	fmt.Println("order", handle.OrderID(), "cancelled")
-	// Output:
-	// order 506 cancelled
 }
 
-func Example_qualifyContract() {
-	client, cleanup := exampleClient("grounded_contract_details_aapl.txt")
-	defer cleanup()
+func ExampleHistoryClient_Schedule() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
-
-	details, err := client.Contracts().Qualify(ctx, ibkr.Contract{
-		Symbol:   "AAPL",
-		SecType:  ibkr.SecTypeStock,
-		Exchange: "SMART",
-		Currency: "USD",
-	})
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
 	if err != nil {
-		panic(err)
+		log.Print(err)
+		return
 	}
-
-	fmt.Println(details.ConID, details.LongName)
-	// Output:
-	// 265598 APPLE INC
-}
-
-func Example_historicalSchedule() {
-	client, cleanup := exampleClient("historical_schedule_aapl.txt")
-	defer cleanup()
-
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
+	defer client.Close()
 
 	schedule, err := client.History().Schedule(ctx, ibkr.HistoricalScheduleRequest{
-		Contract: ibkr.Contract{
-			ConID:    265598,
-			Symbol:   "AAPL",
-			SecType:  ibkr.SecTypeStock,
-			Exchange: "SMART",
-			Currency: "USD",
-		},
+		Contract: ibkr.Stock("AAPL"),
 		Duration: ibkr.Months(1),
 		BarSize:  ibkr.Bar1Day,
 		UseRTH:   true,
 	})
 	if err != nil {
-		panic(err)
+		log.Print(err)
+		return
 	}
-
-	first := schedule.Sessions[0]
-	last := schedule.Sessions[len(schedule.Sessions)-1]
-	fmt.Println(schedule.TimeZone, len(schedule.Sessions), "sessions")
-	fmt.Println(first.RefDate, "through", last.RefDate)
-	// Output:
-	// US/Eastern 21 sessions
-	// 20260727 through 20260824
+	fmt.Println("time zone:", schedule.TimeZone)
+	for _, session := range schedule.Sessions {
+		fmt.Println(session.RefDate, session.StartDateTime, session.EndDateTime)
+	}
 }
 
-func Example_awaitSnapshot() {
-	client, cleanup := exampleClient("grounded_account_summary.txt")
-	defer cleanup()
+func ExampleMarketDataClient_SubscribeQuotes() {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
 
-	ctx, stop := context.WithTimeout(context.Background(), 5*time.Second)
-	defer stop()
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
 
-	sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
-		Group: "All",
-		Tags: []string{
-			"NetLiquidation",
-			"TotalCashValue",
-			"BuyingPower",
-			"ExcessLiquidity",
-		},
+	// Request delayed data where available without a market-data subscription.
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		log.Print(err)
+		return
+	}
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
+		Contract: ibkr.Stock("AAPL"),
 	})
 	if err != nil {
-		panic(err)
+		log.Print(err)
+		return
 	}
 	defer sub.Close()
 
-	// Start the single event consumer before waiting for snapshot completion.
-	// Call Accounts().Summary instead if you only need the initial snapshot.
-	consumed := make(chan int, 1)
+	// Fields arrive separately. All yields data; use Events for notices and gaps.
+	want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
+	for update := range sub.All(ctx) {
+		q := update.Snapshot
+		if q.Available&want == want {
+			fmt.Println(q.Bid, q.Ask, q.MarketDataType)
+			break
+		}
+	}
+	sub.Close()
+	if err := errors.Join(sub.Wait(), context.Cause(ctx)); err != nil {
+		log.Print(err)
+	}
+}
+
+func ExampleSubscription_AwaitSnapshot() {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	client, err := ibkr.DialContext(ctx,
+		ibkr.WithHost("127.0.0.1"),
+		ibkr.WithPort(4002),
+	)
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer client.Close()
+
+	sub, err := client.Accounts().SubscribeSummary(ctx, ibkr.AccountSummaryRequest{
+		Group: "All",
+		Tags:  []string{"NetLiquidation", "TotalCashValue"},
+	})
+	if err != nil {
+		log.Print(err)
+		return
+	}
+	defer sub.Close()
+
+	// AwaitSnapshot does not drain events. Start the single consumer first.
+	// Use Accounts().Summary when only the initial snapshot is needed.
+	consumed := make(chan struct{})
 	go func() {
-		rows := 0
+		defer close(consumed)
 		for event := range sub.Events() {
 			if event.Kind == ibkr.StreamData {
-				rows++
+				fmt.Println(event.Value.Tag, event.Value.Value)
 			}
 		}
-		consumed <- rows
 	}()
 	if err := sub.AwaitSnapshot(ctx); err != nil {
-		panic(err)
+		log.Print(err)
+	} else {
+		fmt.Println("snapshot complete")
 	}
-	// Completion is durable; it does not guarantee the stream remains healthy.
-	fmt.Println("snapshot complete")
+
+	// Completion does not guarantee that the stream remains healthy.
 	sub.Close()
-	fmt.Println("snapshot rows:", <-consumed)
+	<-consumed
 	if err := sub.Wait(); err != nil {
-		panic(err)
+		log.Print(err)
 	}
-	// Output:
-	// snapshot complete
-	// snapshot rows: 4
 }
 
 func ExampleStock() {
@@ -296,6 +300,8 @@ func ExampleForex() {
 	// EUR USD CASH IDEALPRO
 }
 
+// The fixed expiry illustrates the fields; select a current expiry with
+// Contracts().SecDefOptParams for a live request.
 func ExampleOptionContract() {
 	c := ibkr.OptionContract("AAPL", "20260320", decimal.RequireFromString("150"), ibkr.RightCall)
 	fmt.Println(c.Symbol, c.Expiry, c.Strike, c.Right, c.Multiplier)
@@ -303,6 +309,8 @@ func ExampleOptionContract() {
 	// AAPL 20260320 150 C 100
 }
 
+// The fixed contract month illustrates the fields; qualify the contract
+// before requesting data for a current expiry.
 func ExampleFuture() {
 	c := ibkr.Future("ES", "202609", "CME")
 	fmt.Println(c.Symbol, c.Expiry, c.Exchange, c.Currency)
@@ -336,47 +344,4 @@ func ExampleStopLimitOrder() {
 	fmt.Println(o.Action, o.OrderType, o.Quantity, o.AuxPrice, o.LmtPrice)
 	// Output:
 	// SELL STP LMT 10 140 139.5
-}
-
-// exampleClient replays a sanitized transcript captured from a live Gateway.
-// Cleanup verifies that the example consumed the complete scenario.
-func exampleClient(transcript string) (*ibkr.Client, func()) {
-	host, err := testhost.NewFromFile("testdata/transcripts/" + transcript)
-	if err != nil {
-		panic(err)
-	}
-
-	addrHost, addrPort, err := net.SplitHostPort(host.Addr())
-	if err != nil {
-		panic(err)
-	}
-	port, err := net.LookupPort("tcp", addrPort)
-	if err != nil {
-		panic(err)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	client, err := ibkr.DialContext(ctx,
-		ibkr.WithHost(addrHost),
-		ibkr.WithPort(port),
-		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
-	)
-	if err != nil {
-		cancel()
-		_ = host.Close()
-		panic(err)
-	}
-
-	cleanup := func() {
-		if err := host.Wait(); err != nil {
-			client.Close()
-			cancel()
-			_ = host.Close()
-			panic(err)
-		}
-		client.Close()
-		cancel()
-		_ = host.Close()
-	}
-	return client, cleanup
 }

@@ -14,15 +14,14 @@ belong to [the version audit](protocol-audit-sv208-225.md).
   by concern and domain: lifecycle, run loop, connect/reconnect, routing,
   conversion, one file per domain (`engine_account.go`, `engine_orders.go`,
   `engine_marketdata.go`, and so on), plus correlation and subscription
-  management
-- `internal/transport/`: socket dial, buffered frame read loop, write loop,
-  pacing
+  management; the engine owns dialing and the handshake
+- `internal/transport/`: post-handshake buffered frame reads, writes, and pacing
 - `internal/protocol/`: message identity, direction, negotiated
   classic/protobuf envelope, migration gates, and supported-version bounds; the
   envelope reuses `internal/wire` frame sentinels
 - `internal/codec/`: typed message encode/decode, split into per-domain files
   (`codec_orders.go`, `codec_marketdata.go`, etc.), the inbound decode
-  registry, and protocol-owned version-gate aliases
+  registry, and direct use of protocol-owned version gates
 - `internal/wire/`: frame and field framing
 - `internal/testhost/`: deterministic replay and fault-injection harness for
   checked-in fixtures
@@ -40,8 +39,8 @@ belong to [the version audit](protocol-audit-sv208-225.md).
 - The reader checks the frame length before allocating its body. Handshake
   and steady-state reads share the configured limit.
 - One writer goroutine serializes outbound frames and applies global pacing.
-- Public methods talk to the actor through typed commands instead of sharing
-  mutable maps or callback registries.
+- Public methods enqueue closures on the actor's `chan func()`; the actor owns
+  mutable maps and callback registries.
 - Work submitted while an automatic reconnect is in progress is held in an
   actor-owned FIFO. A generation-specific barrier admits the retained market
   data selection first, then resumable routes in request-ID order, then new
@@ -64,8 +63,8 @@ belong to [the version audit](protocol-audit-sv208-225.md).
   interpreting embedded NUL bytes.
 - **Encode.** `Message` is the decode-result type and has no encoding
   capability. Client-to-Gateway structs implement the sealed `OutboundMessage`
-  capability accepted by production `Encode`. Testhost server replies are exact
-  captured raw frames; there is no symbolic server encoder. `UnknownInbound`
+  capability accepted by production `Encode`. Post-handshake testhost replies
+  are exact captured raw frames; there is no symbolic server encoder. `UnknownInbound`
   is decode-only. Migrated requests additionally implement the
   local protobuf encoder capability. The protocol migration table rejects a
   request once its protobuf gate is reached unless that encoder exists; it
@@ -74,9 +73,8 @@ belong to [the version audit](protocol-audit-sv208-225.md).
   byte slice, not a pre-split `[]string`. Numeric and boolean fields parse in
   place through transient `unsafe.String` views handed to `strconv`; only
   fields a decoder actually retains (`ReadString`, `ReadDecimal`) copy into a
-  new Go string. Retained strings are always copied, never aliased into the
-  transport buffer, because aliasing would couple message lifetimes to buffer
-  reuse and corrupt messages silently.
+  new Go string. Copying gives retained fields independent ownership without
+  keeping the entire frame allocation alive.
 - **Request-ID routing.** Inbound messages that carry a request ID implement
   `codec.ReqIDer` (`RequestID() int`); the engine's keyed routing table type-
   asserts against this interface instead of maintaining a parallel switch.
@@ -147,12 +145,12 @@ both owners, while execution and commission messages are routed through
   differently on redial.
 - The supported range is exactly 208..225. Families already migrated by 208
   use protobuf throughout the supported range; versions 209..213 switch the
-  remaining families named in `internal/protocol/version.go`, and 215..225 gate
+  remaining families named in `internal/protocol/version.go`, and 214..225 gate
   later semantics. Handshake rejects versions outside that range.
 - Protobuf OpenOrder decoding is strict: every supported canonical value must
   decode completely, and malformed numerics or layout drift fail the affected
   route. It never returns a partially decoded broker echo.
-- The advertised handshake maximum (`maxServerVersion`, currently 225) is a
+- The advertised handshake maximum (`advertisedServerVersionMax`, currently 225) is a
   package-level override point used only by the version-matrix live tests to
   force a lower supported layout for verification; production
   code always advertises the maximum.
@@ -161,7 +159,7 @@ both owners, while execution and commission messages are routed through
 
 The actor allocates order IDs from the bootstrap `NextValidID` and reserves a
 bracket's consecutive IDs in one turn. `pendingOrderWrites` maps each tracked
-transport write to its order route. The write-completion pump publishes all
+transport write to its order ID. The write-completion pump publishes all
 results before reporting transport loss; the actor drains them before applying
 the loss transition. This makes definitely-unwritten placement and complete
 local acceptance visible without treating either as a broker acknowledgement.

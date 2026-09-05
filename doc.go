@@ -1,11 +1,19 @@
-// Package ibkr is a Go client for the Interactive Brokers TWS/Gateway socket
-// protocol. It exposes account, contract, market-data, historical, order,
+// Package ibkr provides a pure-Go client for the Interactive Brokers (IBKR)
+// Trader Workstation (TWS) and IB Gateway socket API.
+// It exposes account, contract, market-data, historical, order,
 // option, news, scanner, advisor, and TWS functionality through typed methods
 // and typed subscriptions with explicit lifecycle events. The client
 // negotiates server_version 208 through 225 and rejects a Gateway outside
 // that range.
 //
 // # Connecting
+//
+// Log in to TWS or IB Gateway and enable socket clients in TWS's API settings.
+// The default paper ports are 7497 for TWS and 4002 for Gateway. Each concurrent
+// connection needs a distinct [WithClientID] (default 1). See the [setup guide]
+// and [runnable examples] for complete programs, including paper-only orders.
+// Gateway-dependent documentation examples are compiled by tests; they require
+// your local session to run. Constructor examples also run without a Gateway.
 //
 // [DialContext] establishes a connection and returns a ready [Client]. It blocks
 // until the handshake completes, the server version is negotiated, and managed
@@ -41,19 +49,14 @@
 // Most query methods follow a simple call-and-return pattern. Pass a context
 // for cancellation and a typed request; get back typed results:
 //
-//	details, err := client.Contracts().Qualify(ctx, ibkr.Contract{
-//	    Symbol:   "AAPL",
-//	    SecType:  ibkr.SecTypeStock,
-//	    Exchange: "SMART",
-//	    Currency: "USD",
-//	})
+//	details, err := client.Contracts().Qualify(ctx, ibkr.Stock("AAPL"))
 //	if err != nil {
 //	    return err
 //	}
 //	fmt.Println(details.LongName, details.MinTick)
 //
-// One-shots block until the server sends all result messages and the protocol
-// completion marker. They return [*APIError] when the server rejects the request.
+// One-shots wait for their response or protocol end marker. Request-scoped
+// broker rejections return [*APIError].
 //
 // # Subscriptions
 //
@@ -62,9 +65,9 @@
 // on a second channel. Event kinds are Started, Data, SnapshotComplete, Notice,
 // Gap, Restored (a request-backed stream was retained, or passive execution
 // observation resumed locally without sending a request), and Resubscribed
-// (the client physically sent the request again). [Subscription.Done] closes
-// when the subscription terminates; channel close plus Err or Wait is the
-// terminal signal, so there is no redundant Closed event.
+// (the replacement request entered the transport queue). [Subscription.Done]
+// closes when the subscription terminates; channel close plus Err or Wait is
+// the terminal signal, so there is no redundant Closed event.
 //
 // Read [Subscription.Events] when lifecycle continuity or request-scoped
 // notices matter:
@@ -79,7 +82,11 @@
 //	for event := range sub.Events() {
 //	    switch event.Kind {
 //	    case ibkr.StreamData:
-//	        fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
+//	        q := event.Value.Snapshot
+//	        want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
+//	        if q.Available&want == want {
+//	            fmt.Println(q.Bid, q.Ask)
+//	        }
 //	    case ibkr.StreamNotice:
 //	        log.Printf("quote notice: %v", event.Notice)
 //	    case ibkr.StreamGap:
@@ -92,23 +99,28 @@
 //	    return err
 //	}
 //
+// Quote fields arrive separately. [Quote.Available] distinguishes a populated
+// field from its initial zero value; IBKR's -1 price means no quote for that side.
+//
 // [Subscription.All] is the data-only convenience iterator. It consumes and
 // filters every non-data event from the same queue, including reconnect
 // boundaries and request-scoped [StreamNotice] warnings. Events and All are
 // alternative single consumers; use exactly one goroutine to drain one of them.
 //
-// Admission to the transport queue is the ownership boundary for a
+// Admission to the transport queue is the ownership boundary for a request-backed
 // subscription. Once admitted, the subscription result wins context-cancellation
 // and session-close races so a live remote stream is never hidden behind a
-// context error.
+// context error. [OrdersClient.SubscribeExecutionEvents] registers a local
+// observer and sends no request.
 //
 // Call Close to unsubscribe. Wait blocks until termination and returns the
 // final error, if any. A [*SubscriptionCancelError] means cancellation could
 // not enter the active transport queue; the client retires that connection
-// generation, so wait for a ready replacement before subscribing again. Err returns the
-// currently recorded terminal error without waiting for Done. If slow-consumer
-// shutdown also cannot admit its cancellation, the terminal
-// error preserves both [ErrSlowConsumer] and [*SubscriptionCancelError].
+// generation. With [ReconnectAuto], a new subscription call waits for a ready
+// replacement or its context to end. Err returns the currently recorded
+// terminal error without waiting for Done. If slow-consumer shutdown also
+// cannot admit its cancellation, the terminal error preserves both
+// [ErrSlowConsumer] and [*SubscriptionCancelError].
 // Use [IsRetryable] on the final error. Done is useful for coordinating other
 // goroutines, but consumers that need every event should drain Events (or All)
 // until it closes, then check Err or call Wait.
@@ -189,9 +201,9 @@
 // execution observer receive a Gap event on their ordered Events stream.
 // Recovery is Restored when IBKR retained a request-backed stream or passive
 // execution observation resumed locally without sending a request; it is
-// Resubscribed when the client sent the request again. Other long-lived
-// request-backed subscriptions terminate with [ErrResumeRequired], while finite
-// streams terminate with [ErrInterrupted]. Order handles report corresponding
+// Resubscribed when the replacement request entered the transport queue. Other
+// long-lived request-backed subscriptions terminate with [ErrResumeRequired],
+// while finite streams terminate with [ErrInterrupted]. Order handles report corresponding
 // lifecycle values inside OrderEvent. No reconnect boundary is inferred from
 // silence or split across a second channel.
 //
@@ -229,4 +241,7 @@
 // an exact decimal type that avoids the rounding errors inherent in float64
 // arithmetic. Construct values with decimal.NewFromString, decimal.NewFromInt,
 // or decimal.RequireFromString.
+//
+// [setup guide]: https://github.com/ThomasMarcelis/ibkr-go#connect
+// [runnable examples]: https://github.com/ThomasMarcelis/ibkr-go/tree/main/examples
 package ibkr

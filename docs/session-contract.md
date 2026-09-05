@@ -30,7 +30,7 @@ func (c *Client) ManagedAccounts(ctx context.Context) ([]string, error)
 Session states are `Disconnected`, `Connecting`, `Handshaking`, `Ready`,
 `Degraded`, `Reconnecting`, and `Closed`. `ConnectionSeq` increments each time a
 fresh handshake reaches `Ready`. `SessionEvents()` is bounded and observational:
-if unread, older queued events may be dropped in favor of the latest transition.
+if unread, older queued events may be dropped in favor of the latest event.
 `TransitionSeq` increments once per actual state change, so consumers can detect
 an evicted transition. Every `Event` carries the exact post-transition
 `Snapshot`, including that same sequence number; informational notices do not
@@ -88,17 +88,18 @@ compatibility tests should exercise the real operation through a deterministic
 
 ## Subscriptions
 
-```go
-type Subscription[T any] struct {
-    Events() <-chan StreamEvent[T]
-    All(ctx context.Context) iter.Seq[T]
-    AwaitSnapshot(ctx context.Context) error
-    Done() <-chan struct{}
-    Err() error
-    Wait() error
-    Close()
-}
-```
+[`Subscription[T]`](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2#Subscription)
+is a concrete handle with these methods:
+
+| Method | Result |
+|--------|--------|
+| `Events()` | One ordered `<-chan StreamEvent[T]` for data, notices, and lifecycle |
+| `All(ctx)` | An `iter.Seq[T]` over data from the same queue |
+| `AwaitSnapshot(ctx)` | Waits for the initial snapshot boundary; returns an error if unavailable |
+| `Done()` | A channel closed when the subscription terminates |
+| `Err()` | The recorded terminal error, without waiting |
+| `Wait()` | Waits for termination and returns the terminal error |
+| `Close()` | Initiates cancellation; returns no value |
 
 `Events()` is the single ordered queue for data, request-scoped notices, and
 lifecycle boundaries. Its event kinds are `Started`, `Data`,
@@ -135,7 +136,9 @@ waiting, then inspect `Wait()` when observation ends. Use the corresponding
 one-shot method if only the initial snapshot is needed. It returns
 `ErrNoSnapshot` for streams with no snapshot boundary.
 
-Transport-queue admission is the ownership boundary for subscription setup.
+Transport-queue admission is the ownership boundary for request-backed
+subscription setup. `SubscribeExecutionEvents` registers a local observer
+without sending a frame.
 Once the subscribe frame is admitted, its handle result wins caller-context and
 client-shutdown races; before admission, setup returns an error and no handle.
 The establishment context remains bound to the returned handle, so a context
@@ -145,11 +148,12 @@ handle. `Wait()` preserves the context's exact cancellation cause.
 `Close` initiates cancellation asynchronously and remains idempotent. `Wait`
 and `Err` report `*SubscriptionCancelError` when
 the cancel frame cannot enter the active transport queue. That error is
-non-retryable. The client retires that connection generation automatically, so
-with `ReconnectAuto` wait for the replacement session to become `Ready` before
-creating a replacement subscription. Unrelated `ResumeAuto` streams survive
-onto that replacement. With `ReconnectOff`, the client closes. A nil close
-result means the cancel frame entered the queue, not that IBKR acknowledged it.
+non-retryable. The client retires that connection generation automatically.
+With `ReconnectAuto`, a new subscription call waits for the replacement session
+to become `Ready` or its context to end. Unrelated `ResumeAuto` streams survive
+onto that replacement. With `ReconnectOff`, the client closes. A nil terminal
+error from `Wait` or `Err` means cancellation was locally admitted or detachment
+was safe; it is not an IBKR acknowledgement.
 Closing a route retained after transport loss, or before it was resumed on a
 replacement connection, is a clean local detach because no current connection
 hosts that remote stream.
@@ -158,39 +162,18 @@ Slow-consumer shutdown uses the same cancellation path. If cancellation enters
 the active transport queue, that transport is already dead, or another terminal
 teardown wins the race, `Wait` and `Err` report
 exactly `ErrSlowConsumer`. Only when the active transport refuses cancellation
-admission do all three report the same joined error:
+admission do both report the same joined error:
 `errors.Is(err, ErrSlowConsumer)` remains true and
 `errors.AsType[*SubscriptionCancelError](err)` exposes the uncertain remote
 stream. The joined result is not retryable.
 
-Ordered event kinds:
-
-- `Started`
-- `Data`
-- `SnapshotComplete`
-- `Notice`
-- `Gap`
-- `Restored`
-- `Resubscribed`
-
-Retryability:
-
-- `ErrNotReady`, `ErrInterrupted`, and `ErrResumeRequired` are retryable
-- absent another terminal cause, a `*ConnectError` is retryable unless it
-  contains `ErrUnsupportedServerVersion`
-- API pacing violations are retryable with backoff; other `*APIError` values
-  are terminal by default
-- caller context cancellation, protocol/validation failures,
-  `ErrSlowConsumer`, and `ErrClosed` are not retryable
-- a malformed-generation error joined from `ErrInterrupted` and
-  `*ProtocolError` is not retryable
-- `ErrOrderRecoveryRequired` is not retryable, even when joined with a
-  transient connection cause
-- `*SubscriptionCancelError` is not retryable even when it wraps
-  `ErrInterrupted`
-- `*ExerciseUncertainError` is not retryable even when it wraps a transient
-  connection cause
-- `*OrderRecoveryError` is not retryable even when it wraps a transient cause
+Use [`IsRetryable`](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2#IsRetryable)
+on the final error to decide whether to retry with backoff. It accepts
+`ErrNotReady`, `ErrInterrupted`, `ErrResumeRequired`, `*ConnectError` values
+without `ErrUnsupportedServerVersion`, and API pacing violations. Terminal causes take precedence
+when errors are joined: cancellation, validation/protocol failures, local data
+loss, and uncertain order, exercise, snapshot, or subscription state remain
+non-retryable. All other errors return false.
 
 Default subscription behavior:
 
@@ -202,8 +185,9 @@ Default subscription behavior:
 - `ResumeAuto` is accepted only for streaming quotes and real-time bars; it
   reissues those requests after an automatic transport reconnect or a
   data-lost restoration (code 1101) on the existing socket
-- account summary, positions, open orders, account updates, multi-account
-  snapshots, and live historical bars expose explicit snapshot boundaries
+- account summary, positions, account updates, multi-account snapshots, live
+  historical bars, and `Orders().SubscribeExecutions` expose snapshot boundaries;
+  open-order subscriptions do too except for `OpenOrdersScopeAuto`
 
 Request-scoped warnings that do not terminate a stream are ordered with its
 data as `StreamNotice` events. Their full typed payload is in
@@ -333,10 +317,11 @@ have hidden order changes; reconcile open orders, executions, and completed
 orders for business decisions. `Replace` remains permanently disabled on that
 handle because reconciliation cannot restore its lost event history. A
 data-maintained 1100-to-1102 gap instead emits `Restored` and preserves
-replacement. `ConnectionSeq` on the recovery-required lifecycle event names the
-prospective replacement generation so it agrees with a later `Ready`; the
-marker is emitted before replacement callbacks and does not itself prove that
-handshake reached `Ready`. Its lifecycle error and subsequent valid replacement
+replacement. On a physical reconnect, `ConnectionSeq` on the recovery-required
+event names the prospective replacement generation; the marker precedes
+replacement callbacks and does not prove that the handshake reached `Ready`.
+For code 1101 on the existing socket, it names the current generation and no
+new handshake occurs. Its lifecycle error and subsequent valid replacement
 calls match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the
 handle without cancelling the server-side order. `Cancel(ctx)` sends a cancel
 request; compliance workflows can attach the manual cancel time, external
@@ -380,12 +365,10 @@ An order-targeted api_error closes the handle only when
 `APIError.IsOrderRejection()` identifies a live-attested outright placement
 failure and no working-order evidence has appeared. Unknown codes and every
 error after working evidence are delivered as non-terminal warnings: retaining
-an observable live order is safer than detaching it. Order-targeted 10xxx
-notices for live orders, such as cancel replies 10147 and 10148, stay session
-events, because the handle already carries the order's real state.
-Cancellation replies 161 (the order is not in a cancellable state) and 202
-(the order was cancelled) follow the same rule even though they are below
-10000: they are session notices, never placement failures. A 161 may race
+an observable live order is safer than detaching it. Cancellation replies
+10147, 10148, 161 (not in a cancellable state), and 202 (cancelled) stay session
+notices, never placement failures. Other 10xxx codes follow ordinary request
+routing. A 161 may race
 ahead of the terminal status it describes, so it must not tear down the route;
 the subsequent `OrderStatus` still owns the handle result.
 
@@ -397,7 +380,7 @@ observation window or an error ends it.
 
 ## Completion and Reconnect
 
-- One-shots complete only on explicit protocol completion markers.
+- One-shots complete on their response or protocol end marker.
 - Snapshot-style subscriptions surface completion through the ordered event
   stream and `AwaitSnapshot`.
 - `Orders().Executions(ctx, filter)` returns an `ExecutionSnapshot` containing
@@ -444,9 +427,9 @@ observation window or an error ends it.
   order state emits `RecoveryRequired`; callers reconcile for business
   decisions, while Replace stays disabled on that handle. Orders rest at IB,
   not on the Gateway's data connection.
-- Historical bars and schedules use internal endpoint admission so rapid
-  repeated requests respect Gateway pacing before they are written to the
-  socket.
+- Historical bars and schedules share a two-second admission gap and a
+  fifteen-second gap for identical requests. These local gates reduce pacing
+  errors; IBKR can impose additional limits and still reject a request.
 
 ## Errors and Types
 

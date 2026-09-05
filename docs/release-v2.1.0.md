@@ -26,6 +26,10 @@ versions changed. User-visible changes are in the [changelog](../CHANGELOG.md).
   candidate exclusion, missing evidence, and exact mismatch. A separate run
   with the pinned real `apidiff` rejects a regenerated breaking candidate both
   before and after adding its tag.
+- Documentation: examples use the public API while existing captures retain
+  replay coverage. The reconnect example's Ctrl-C exit changed from 1 to 0
+  during handshake and streaming against paper Gateway sv225; a subprocess
+  regression covers interrupted setup. An invalid address still exits 1.
 
 Private source `events.jsonl` hashes (raw captures are not committed):
 
@@ -47,7 +51,10 @@ Passed with Go 1.26.7 on Linux/amd64:
 - API compatibility, exact candidate, and `--release v2.1.0` checks.
 - All five fuzz targets for five seconds each; vulnerability scan found no issues.
 - Capture normalization/verification and transcript provenance/lineage checks.
-- All eight README Go blocks compile; all executable examples build.
+- All 17 documentation examples, nine README blocks, and four package-overview
+  snippets compile in consumer modules against v2.0.3 and the candidate. Example
+  attachment, rendered pkgsite links, and the 125-scenario inventory check out.
+  All executable examples build.
 - Focused live read-only checks, including exact handshakes 208–225 and quote
   recovery through a forced outage, passed. The changed order and bracket
   examples ran on paper sv225 and observed cancellation of all four placed legs.
@@ -56,6 +63,10 @@ An existing logger test intermittently assumed a fatal diagnostic would reach
 its handler before shutdown discarded queued logs. It now uses the existing
 nonfatal diagnostic and clock exchange to control shutdown; 50 race-enabled
 repetitions and the final full suites pass. Production logging is unchanged.
+
+The backpressure test also raced a clock timeout that correctly retires the
+session. It now verifies local execution observation with the outbound queue
+full; the separate singleton-cancellation regression retains retirement coverage.
 
 ## Performance check
 
@@ -79,8 +90,8 @@ production optimization was added.
 
 Follow the [release checklist](../CONTRIBUTING.md) on the exact release tree,
 including platform CI and the release workflow's longer fuzz runs. Set the
-changelog date and published install target when releasing. No tag, push, or
-publication was performed during preparation.
+changelog date and published install target when releasing. The candidate
+remains untagged and unpublished.
 
 Signed cancellation remains excluded. It needs client-0 binding of a
 user-created, nonmarketable paper TWS order and capture of cancellation of that

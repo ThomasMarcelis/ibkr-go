@@ -1414,6 +1414,16 @@ func TestGroundedPositions(t *testing.T) {
 	if len(positions) != 8 {
 		t.Fatalf("positions len = %d, want 8", len(positions))
 	}
+	want := []struct{ symbol, quantity string }{
+		{"ASML", "40"}, {"ADYEN", "100"}, {"MES", "0"}, {"ASML", "30"},
+		{"NXE", "8188"}, {"CRDO", "753"}, {"DHER", "1568"}, {"HAG", "1556"},
+	}
+	for i, position := range positions {
+		if position.Contract.Symbol != want[i].symbol || position.Position.String() != want[i].quantity {
+			t.Errorf("position %d = %s %s, want %s %s", i,
+				position.Contract.Symbol, position.Position, want[i].symbol, want[i].quantity)
+		}
+	}
 	foundZeroMES := false
 	for _, position := range positions {
 		if position.Account != "DU9000001" {

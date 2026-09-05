@@ -23,10 +23,13 @@ request. After admission, the table below applies.
 | `Contracts.Details` / `StreamDetails` | request ID; `contractDetailsEnd` | `cancelContractData` at server version 215+ | cancel when supported, otherwise correlated local detach | retirement only if cancel admission fails |
 | `Contracts.SecDefOptParams` / `StreamSecDefOptParams` | request ID; `securityDefinitionOptionParameterEnd` | none | correlated local detach | none |
 | `Orders.Completed` / `StreamCompleted` | request-ID-less singleton; `completedOrdersEnd` | none | an unresolved stream cannot be detached | owning generation is retired before the end marker |
-| historical bars/schedule, head timestamp, histogram, historical ticks, implied volatility, option price | request ID; operation-specific result or end marker | operation-specific cancel; historical-tick cancel requires server version 215+ | route removed and supported cancel sent | retirement only where a cancel cannot be admitted safely |
+| historical bars/schedule, head timestamp, histogram, historical ticks | request ID; operation-specific result or end marker | operation-specific cancel; historical-tick cancel requires server version 215+ | route removed; supported cancel attempted asynchronously | no retirement guarantee; cancel admission failures are not returned by these one-shots |
+| implied volatility and option price | request ID; option computation | calculation-specific cancel | route removed and cancel attempted asynchronously | no retirement guarantee; cancel admission failures are not returned |
+| `MarketData.Quote` / `RegulatorySnapshot` | request ID; `tickSnapshotEnd` | `cancelMktData` on early stop | close the underlying quote route | failed cancel admission retires the generation; the context error may return before cleanup finishes |
+| `Orders.Preview` | allocated order ID; what-if `openOrder` echo | none; no resting order | detach the preview route | none |
 | WSH metadata and event data | request ID; one response | explicit WSH cancel | route removed and cancel sent | owning generation is retired if cancellation admission fails |
 | contract search, smart components, news article/page, soft-dollar tiers, display groups, user info, and TWS config | request ID; one response or explicit end | none | correlated local detach | none |
-| managed accounts, family codes, news providers, scanner parameters, market rule, current time, current time millis, FA config, and order-ID refresh | request-ID-less singleton; one response | none | unresolved ownership cannot be detached | owning generation is retired |
+| managed accounts, family codes, news providers, scanner parameters, market rule, depth exchanges, current time, current time millis, FA config, and order-ID refresh | request-ID-less singleton; one response | none | unresolved ownership cannot be detached | owning generation is retired |
 
 The slice-returning `Details`, `SecDefOptParams`, and `Completed` methods retain
 their full finite result before returning. Their `Stream...` counterparts use
@@ -34,6 +37,10 @@ the ordinary bounded subscription queue and close automatically after
 `SnapshotComplete`; use the streaming form when result cardinality can be
 large. `WithQueueSize` controls that bound. Finite streams do not support
 `ResumeAuto` because a partial result is not replay-safe.
+
+An admitted `RegulatorySnapshot` may incur a fee. Loss of observation before
+completion returns `*RegulatorySnapshotUncertainError`, unless IBKR sent a
+definitive `*APIError`; do not retry an uncertain result automatically.
 
 ## Subscription matrix
 

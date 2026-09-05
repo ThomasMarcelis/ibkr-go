@@ -4,11 +4,20 @@ Complete programs against a real TWS or IB Gateway session. Start with the
 five small ones; the advanced set adds one production concern at a time without
 hiding the public API behind example-only helpers.
 
-Enable the socket API in TWS or Gateway, then set `IBKR_ADDR`. The commands
-below use the paper Gateway's default port `4002`; a live Gateway usually
-listens on `4001`. Delayed quotes need no market-data subscription. Historical
-data and scanners may still depend on the login's permissions, and the examples
-say so when IBKR refuses.
+Follow the [connection setup](../README.md#connect), then run these commands
+from the repository root after cloning and entering `ibkr-go`. To try the
+published connection example without a checkout:
+
+```bash
+IBKR_ADDR=127.0.0.1:4002 go run github.com/ThomasMarcelis/ibkr-go/v2/examples/connect@v2.0.3
+```
+
+`IBKR_ADDR` configures the examples, which default to the paper Gateway at
+`127.0.0.1:4002`. TWS paper uses `7497`; live Gateway/TWS use `4001`/`7496`.
+All programs use client ID `1`, so run them sequentially with that ID free.
+Delayed quotes need no market-data subscription where IBKR offers them.
+Historical data and scanners may still require permissions; the examples
+explain an entitlement refusal.
 
 ## Start here
 

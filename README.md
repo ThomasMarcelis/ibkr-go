@@ -5,7 +5,9 @@
 [![Go Version](https://img.shields.io/badge/go-1.26-blue)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-An idiomatic, pure-Go client for the Interactive Brokers TWS and IB Gateway socket API. Typed methods for snapshots, typed subscriptions for streams, typed order lifecycle tracking. Exact decimal arithmetic for prices, quantities, and money.
+An idiomatic, pure-Go client for the Interactive Brokers (IBKR) TWS and IB Gateway socket API. Typed methods for snapshots, typed subscriptions for streams, typed order lifecycle tracking. Exact decimal arithmetic for prices, quantities, and money.
+
+[Connect](#connect) · [Runnable examples](examples/README.md) · [API reference](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2) · [Migrating from v1](docs/migration-v2.md)
 
 ```go
 client, err := ibkr.DialContext(ctx, ibkr.WithHost("127.0.0.1"), ibkr.WithPort(4002))
@@ -21,8 +23,8 @@ if err != nil {
 }
 fmt.Println(details.LongName, details.MinTick) // APPLE INC 0.01
 
-// Stream quotes: a typed subscription you range over. Delayed data needs no
-// market-data subscription.
+// Stream quotes: a typed subscription you range over. Request delayed data
+// where the exchange makes it available without a market-data subscription.
 if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
     return err
 }
@@ -33,7 +35,10 @@ if err != nil {
     return err
 }
 for q := range quotes.All(ctx) {
-    fmt.Println(q.Snapshot.Bid, q.Snapshot.Ask)
+    want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
+    if q.Snapshot.Available&want == want {
+        fmt.Println(q.Snapshot.Bid, q.Snapshot.Ask)
+    }
 }
 quotes.Close()
 return errors.Join(quotes.Wait(), context.Cause(ctx))
@@ -50,6 +55,37 @@ Requires Go 1.26+. Two dependencies:
 arithmetic and the [protobuf runtime](https://pkg.go.dev/google.golang.org/protobuf).
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
 
+Import it as `"github.com/ThomasMarcelis/ibkr-go/v2"`; the package name is
+`ibkr`. This README describes the v2.1.0 development tree. The install command
+and [published reference](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2@v2.0.3)
+use the current stable release, v2.0.3.
+
+### Connect
+
+Log in to TWS or IB Gateway. In TWS, enable **API → Settings → Enable ActiveX
+and Socket Clients**; Gateway enables socket clients automatically. Use the
+socket port shown in those settings:
+
+| Application | Paper port | Live port |
+|-------------|-----------:|----------:|
+| IB Gateway | 4002 | 4001 |
+| TWS | 7497 | 7496 |
+
+Run the connection example from any directory:
+
+```bash
+IBKR_ADDR=127.0.0.1:4002 go run github.com/ThomasMarcelis/ibkr-go/v2/examples/connect@v2.0.3
+```
+
+It prints the ready session and server time, then exits. The examples use
+client ID `1`; run them one at a time without another connection using that ID.
+In your application, set a distinct `ibkr.WithClientID` for each concurrent
+connection. `IBKR_ADDR` is an example setting; library callers use `WithHost`
+and `WithPort` (default `127.0.0.1:7497`). See
+[IBKR's setup guide](https://www.interactivebrokers.com/campus/trading-lessons/installing-configuring-tws-for-the-api/)
+for connection settings. Read-only API mode permits queries; order examples
+require API orders to be enabled on the paper session.
+
 ## Why ibkr-go
 
 - **Go-shaped API.** One-shots return typed results. Streams are
@@ -62,9 +98,9 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
   events on the same stream as the data, so you always know what you missed.
 - **Exact financial values.** Prices, quantities, and money are
   [`decimal.Decimal`](https://github.com/shopspring/decimal).
-- **Backed by live evidence.** 114 replay transcripts captured from a live IB
-  Gateway, fuzzed framing and codec, and a deterministic CI that needs no
-  broker credentials.
+- **Backed by live evidence.** Replay transcripts captured from a live IB
+  Gateway, fuzzed framing and codec, and deterministic CI without broker
+  credentials. The [coverage matrix](docs/live-coverage-matrix.md) records the evidence.
 
 ## Performance
 
@@ -96,7 +132,7 @@ go test -run '^$' -bench '^BenchmarkPublicQuoteStream$' -benchtime=1x -count=10 
 
 | Facade | One-shots and controls | Streams and handles |
 |--------|------------------------|---------------------|
-| `client` | `ManagedAccounts`, `CurrentTime`, `Session` | `SessionEvents`, `Done`, `Wait` |
+| `client` | `ManagedAccounts`, `CurrentTime`, `CurrentTimeMillis`, `Session` | `SessionEvents`, `Done`, `Wait` |
 | `client.Accounts()` | `Summary`, `Positions`, `Updates`, `UpdatesMulti`, `PositionsMulti`, `FamilyCodes` | `SubscribeSummary`, `SubscribePositions`, `SubscribeUpdates`, `SubscribeUpdatesMulti`, `SubscribePositionsMulti`, `SubscribePnL`, `SubscribePnLSingle` |
 | `client.Contracts()` | `Qualify`, `Details`, `Search`, `MarketRule`, `SecDefOptParams`, `SmartComponents`, `DepthExchanges` | `StreamDetails`, `StreamSecDefOptParams` |
 | `client.MarketData()` | `SetType`, `Quote`, `RegulatorySnapshot` | `SubscribeQuotes`, `SubscribeRealTimeBars`, `SubscribeTickByTick`, `SubscribeDepth` |
@@ -116,8 +152,9 @@ and `Replace()`.
 
 ## Quick start
 
-`ibkr.Stock`, `ibkr.OptionContract`, `ibkr.Future`, and `ibkr.Forex` build the
-common contract shapes (SMART routing, USD, the 100-share option multiplier).
+`ibkr.Stock`, `ibkr.OptionContract`, `ibkr.Future`, and `ibkr.Forex` build common
+contract shapes. Stocks and options default to SMART routing and USD; futures
+take an exchange, and forex pairs use IDEALPRO. Options default to a multiplier of 100.
 Anything more exotic, such as a combo or a non-USD listing, is a `Contract{}`
 literal.
 
@@ -144,8 +181,8 @@ for _, p := range positions {
 }
 ```
 
-Every account call has a `Subscribe*` twin that streams updates instead, and
-`SubscribePnL` streams real-time P&L.
+`Summary`, `Positions`, and account-update queries have `Subscribe*` twins
+that stream updates; `SubscribePnL` streams real-time P&L.
 
 ### Stream quotes with lifecycle events
 
@@ -161,7 +198,11 @@ defer sub.Close()
 for event := range sub.Events() {
     switch event.Kind {
     case ibkr.StreamData:
-        fmt.Println(event.Value.Snapshot.Bid, event.Value.Snapshot.Ask)
+        q := event.Value.Snapshot
+        want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
+        if q.Available&want == want {
+            fmt.Println(q.Bid, q.Ask)
+        }
     case ibkr.StreamNotice:
         log.Printf("notice: %v", event.Notice)
     case ibkr.StreamGap:
@@ -178,6 +219,11 @@ delayed-data downgrade) and reconnect boundaries. Both drain the same queue, so
 pick one and read it from one goroutine. After the channel closes, `Err()` says
 why, nil for a clean close, and `ibkr.IsRetryable(err)` tells you whether to
 back off and try again.
+
+Quote fields arrive separately. `Quote.Available` distinguishes a populated
+field from its initial zero value; IBKR's `-1` price means no quote for that
+side. Delayed data is available only for supported products and exchanges;
+historical data, depth, and other feeds can still require permissions.
 
 ### Historical bars
 
@@ -204,6 +250,9 @@ fills, commissions, and warnings in order. The handle stays open after a
 terminal status because IBKR can still send fills and fees afterwards; call
 `Close` when you have what you need. Closing stops watching, it does not cancel
 the order.
+
+Run this on a paper session; the [complete order example](examples/order/main.go)
+checks the account before placing an order.
 
 ```go
 observationCtx, stopObserving := context.WithTimeout(ctx, 5*time.Minute)
@@ -243,6 +292,11 @@ needed. Cancel or amend while the handle is open:
 if err := handle.Cancel(ctx); err != nil {
     return err
 }
+```
+
+Or amend it:
+
+```go
 if err := handle.Replace(ctx, revisedOrder); err != nil {
     return err
 }
@@ -327,8 +381,10 @@ streams is explicit:
 - Quote and real-time-bar streams opened with `ResumeAuto` are re-requested
   automatically; `Gap`, `Restored`, and `Resubscribed` events mark the boundary
   in the stream itself.
-- Every other stream ends with `ErrResumeRequired` (finite ones with
+- Other request-backed streams end with `ErrResumeRequired` (finite ones with
   `ErrInterrupted`). Open a new one; it waits for the next ready session.
+- `Orders().SubscribeExecutionEvents` follows the client across reconnects
+  with `Gap` and `Restored` events; it observes callbacks without sending a request.
 - An order handle that crosses a full reconnect can no longer replace its
   order and reports `ErrOrderRecoveryRequired`. Reconcile with
   `Orders().Open` before acting on that order again.
@@ -347,7 +403,6 @@ account.
 ## Status
 
 The v2 line covers the in-scope socket API against `server_version` 208–225.
-The working tree prepares v2.1.0; v2.0.3 remains the published install target.
 The [coverage matrix](docs/live-coverage-matrix.md) says which paths have live proof and which are blocked by entitlements or market state. Release notes are in the [CHANGELOG](CHANGELOG.md).
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient` compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md).
 
