@@ -28,9 +28,10 @@ func (h blockingLogHandler) WithAttrs([]slog.Attr) slog.Handler { return h }
 func (h blockingLogHandler) WithGroup(string) slog.Handler      { return h }
 
 func TestBlockingLoggerDoesNotBlockClientClose(t *testing.T) {
-	// newProtocolErrorGateway sends a structural malformed-frame diagnostic
-	// after an exact server-version-225 bootstrap.
-	gateway := newProtocolErrorGateway(t)
+	// A nonfatal diagnostic keeps the session alive until the handler enters.
+	// A fatal frame can close the client and stop its best-effort logger before
+	// queued diagnostics are consumed, making this synchronization unreliable.
+	gateway := newUnknownInboundGateway(t)
 	handler := blockingLogHandler{
 		entered: make(chan struct{}),
 		release: make(chan struct{}),
@@ -56,9 +57,14 @@ func TestBlockingLoggerDoesNotBlockClientClose(t *testing.T) {
 	select {
 	case <-handler.entered:
 	case <-time.After(2 * time.Second):
-		t.Fatal("malformed-frame diagnostic did not reach blocking logger")
+		t.Fatal("unknown-frame diagnostic did not reach blocking logger")
 	}
 
+	// Complete the captured clock exchange while logging is blocked. The
+	// Gateway then waits for Client.Close, keeping teardown caller-controlled.
+	if _, err := client.CurrentTime(ctx); err != nil {
+		t.Fatalf("CurrentTime with blocked logger: %v", err)
+	}
 	closed := make(chan struct{})
 	go func() {
 		client.Close()
