@@ -663,22 +663,9 @@ func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {
 	}
 	defer client.Close()
 
-	reqCtx, cancelReq := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancelReq()
-
-	reqErrCh := make(chan error, 1)
-	go func() {
-		_, err := client.CurrentTime(reqCtx)
-		reqErrCh <- err
-	}()
-
-	time.Sleep(50 * time.Millisecond)
-
 	backpressured := false
 	for i := 0; i < 512; i++ {
-		sendCtx, cancelSend := context.WithTimeout(context.Background(), 20*time.Millisecond)
-		err := client.MarketData().SetType(sendCtx, ibkr.MarketDataLive)
-		cancelSend()
+		err := client.MarketData().SetType(ctx, ibkr.MarketDataLive)
 		if err == nil {
 			continue
 		}
@@ -692,13 +679,15 @@ func TestTransportQueueBackpressureDoesNotCloseClient(t *testing.T) {
 		t.Fatal("MarketData().SetType() never hit transport backpressure")
 	}
 
-	select {
-	case err := <-reqErrCh:
-		if !errors.Is(err, context.DeadlineExceeded) {
-			t.Fatalf("CurrentTime() error = %v, want its own context deadline", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("CurrentTime() did not return after its context deadline")
+	// Local observation still works while the outbound queue is full. An
+	// unresolved clock request would instead retire the session on cancellation.
+	observer, err := client.Orders().SubscribeExecutionEvents(ctx)
+	if err != nil {
+		t.Fatalf("SubscribeExecutionEvents() after local backpressure = %v", err)
+	}
+	observer.Close()
+	if err := observer.Wait(); err != nil {
+		t.Fatalf("execution observer Wait() after local backpressure = %v", err)
 	}
 
 	select {
