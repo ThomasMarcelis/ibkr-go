@@ -7,7 +7,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os/signal"
 	"syscall"
@@ -21,7 +20,7 @@ func main() {
 	exampleutil.Run(run)
 }
 
-func run() error {
+func run() (err error) {
 	host, port, err := exampleutil.GatewayAddress()
 	if err != nil {
 		return err
@@ -29,6 +28,13 @@ func run() error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	defer func() {
+		// Ignore only the signal's exact cause. Joined stream or cancellation
+		// failures still need to reach the caller.
+		if err == context.Cause(ctx) {
+			err = nil
+		}
+	}()
 
 	dialCtx, cancelDial := context.WithTimeout(ctx, 15*time.Second)
 	client, err := ibkr.DialContext(dialCtx,
@@ -39,6 +45,10 @@ func run() error {
 	)
 	cancelDial()
 	if err != nil {
+		// DialContext may wrap the signal cause with connection diagnostics.
+		if ctx.Err() != nil {
+			return nil
+		}
 		return err
 	}
 	defer client.Close()
@@ -72,7 +82,7 @@ func run() error {
 			}
 		case <-ctx.Done():
 			sub.Close()
-			return errors.Join(context.Cause(ctx), sub.Wait())
+			return sub.Wait()
 		}
 	}
 }
