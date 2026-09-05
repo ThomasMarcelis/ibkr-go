@@ -12,7 +12,7 @@ Supporting inventory:
 - `cmd/ibkr-capture -list-json` is the executable scenario catalog.
 - `testdata/transcripts` is the deterministic replay catalog.
 
-As of 2026-08-29 the tracked replay corpus contains 114 live-derived sv208+
+As of 2026-09-05 the tracked replay corpus contains 115 live-derived sv208+
 transcripts. The executable catalog has 125 scenarios: 104 promoted, no
 candidates, and 21 explicitly blocked by entitlements, account type, market
 state, or TWS-only interaction. A blocked successful callback stays blocked

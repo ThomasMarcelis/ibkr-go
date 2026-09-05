@@ -96,6 +96,10 @@ type engine struct {
 	reconnectAttempt int
 	resumePending    []resumeRoute
 	resumeWaiting    bool
+
+	// The selection belongs to the client; its application belongs to a socket.
+	marketDataType           MarketDataType
+	marketDataTypeGeneration uint64
 }
 
 type resumeRoute struct {
@@ -600,7 +604,7 @@ func (e *engine) isReady() bool {
 	if !e.hasReadyTransport() {
 		return false
 	}
-	return len(e.resumePending) == 0 && !e.resumeWaiting
+	return !e.marketDataTypePending() && len(e.resumePending) == 0 && !e.resumeWaiting
 }
 
 // hasReadyTransport reports whether the current physical connection can

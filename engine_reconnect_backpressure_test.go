@@ -44,6 +44,8 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 		_ = peer.Close()
 	})
 
+	e.marketDataType = MarketDataDelayed
+	e.transportGeneration = 2
 	const routeCount = 300
 	resumed := make(chan int, routeCount)
 	for reqID := routeCount; reqID >= 1; reqID-- {
@@ -83,6 +85,12 @@ func TestResumeRoutesDrainBeyondTransportQueueInRequestOrder(t *testing.T) {
 
 	frames := make(chan []int, 1)
 	go func() {
+		selection, err := transport.ReadOneFrame(peer, time.Now().Add(5*time.Second))
+		wantSelection, encodeErr := codec.Encode(225, codec.ReqMarketDataType{DataType: 3})
+		if err != nil || encodeErr != nil || !bytes.Equal(selection, wantSelection) {
+			frames <- nil
+			return
+		}
 		ids := make([]int, 0, routeCount)
 		for reqID := 1; reqID <= routeCount; reqID++ {
 			payload, err := transport.ReadOneFrame(peer, time.Now().Add(5*time.Second))

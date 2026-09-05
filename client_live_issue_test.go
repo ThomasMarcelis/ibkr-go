@@ -85,9 +85,11 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 		ibkr.WithTCPKeepAlive(30*time.Second))
 	defer closeLiveIssueClient(t, client)
 
-	ctx, cancelReq := context.WithTimeout(context.Background(), 15*time.Second)
+	ctx, cancelReq := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancelReq()
-	_ = client.MarketData().SetType(ctx, ibkr.MarketDataDelayed)
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatal(err)
+	}
 
 	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 		Contract: aaplContract,
@@ -106,6 +108,7 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 		initialSeq = client.Session().ConnectionSeq
 	}
 
+	waitLiveQuoteData(t, ctx, sub, initialSeq)
 	proxy.Outage(t, 4*time.Second)
 
 	recoveryCtx, cancelRecovery := context.WithTimeout(context.Background(), 20*time.Second)
@@ -119,6 +122,26 @@ func TestLiveIssue9ReconnectsAfterRealGatewayProxyOutage(t *testing.T) {
 	}
 	if err := waitLiveReadySeq(recoveryCtx, client, initialSeq+1); err != nil {
 		t.Fatalf("wait ready after proxy outage: %v", err)
+	}
+
+	waitLiveQuoteData(t, recoveryCtx, sub, resumed.ConnectionSeq)
+}
+
+// Price or size data proves restoration; a market-data-type marker alone does not.
+func waitLiveQuoteData(t *testing.T, ctx context.Context, sub *ibkr.Subscription[ibkr.QuoteUpdate], seq uint64) {
+	t.Helper()
+	for {
+		select {
+		case event, ok := <-sub.Events():
+			if !ok {
+				t.Fatalf("quotes ended on connection %d: %v", seq, sub.Wait())
+			}
+			if event.Kind == ibkr.StreamData && event.ConnectionSeq >= seq && event.Value.Changed&^ibkr.QuoteFieldMarketDataType != 0 {
+				return
+			}
+		case <-ctx.Done():
+			t.Fatalf("no quote data on connection %d: %v", seq, context.Cause(ctx))
+		}
 	}
 }
 

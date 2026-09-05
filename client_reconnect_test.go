@@ -83,3 +83,27 @@ func TestReconnectPolicyOff(t *testing.T) {
 		t.Fatal("client.Wait() error = nil, want error on disconnect")
 	}
 }
+
+func TestReconnectRestoresDelayedQuoteData(t *testing.T) {
+	t.Parallel()
+	// Exact sv225 capture 20260905T185320Z-delayed_quote_reconnect;
+	// events.jsonl sha256: 70f830c4e934dc9acc7be03a3e0ac23e00b1e46f84082c7e930a8f069cfdf7aa.
+	client, host := newClient(t, "delayed_quote_reconnect.txt", ibkr.WithReconnectPolicy(ibkr.ReconnectAuto))
+	defer cleanupClientHost(t, client, host)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := client.MarketData().SetType(ctx, ibkr.MarketDataDelayed); err != nil {
+		t.Fatal(err)
+	}
+	sub, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{Contract: aaplContract}, ibkr.WithResumePolicy(ibkr.ResumeAuto))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sub.Close()
+	waitLiveQuoteData(t, ctx, sub, 1)
+	resumed := waitForStateKind(t, sub.Events(), ibkr.StreamResubscribed)
+	if resumed.ConnectionSeq != 2 {
+		t.Fatalf("resumed sequence = %d", resumed.ConnectionSeq)
+	}
+	waitLiveQuoteData(t, ctx, sub, 2)
+}

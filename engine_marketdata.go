@@ -22,7 +22,12 @@ func (e *engine) SetMarketDataType(ctx context.Context, dataType MarketDataType)
 		}
 	}
 	return awaitFireAndForget(ctx, e, func(ctx context.Context) error {
-		return e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(dataType)})
+		if err := e.sendContext(ctx, codec.ReqMarketDataType{DataType: int(dataType)}); err != nil {
+			return err
+		}
+		e.marketDataType = dataType
+		e.marketDataTypeGeneration = e.transportGeneration
+		return nil
 	})
 }
 

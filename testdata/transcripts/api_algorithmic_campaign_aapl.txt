@@ -6,6 +6,10 @@
 # subscriptions, two split fills, resting-limit-to-market replacement, strict
 # three-share flatten, observer cancellation, execution/fee reconciliation,
 # restored position, completed orders, and CurrentTime fence.
+# Reconnect selection frames are projected from the live sv225 capture
+# 20260905T185320Z-delayed_quote_reconnect;
+# events.jsonl sha256: 70f830c4e934dc9acc7be03a3e0ac23e00b1e46f84082c7e930a8f069cfdf7aa.
+# Other client and server frames retain their original capture provenance.
 handshake {"server_version":225,"connection_time":"20260828 20:31:40 CET"}
 # leg=1 direction=server msg_id=15 encoding=protobuf payload_len=15
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
@@ -236,6 +240,8 @@ raw server AAAAawAAAMwI////////////ARD/w5HNhDQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY
 # leg=3 direction=server msg_id=4 encoding=protobuf payload_len=70
 raw server AAAARgAAAMwI////////////ARD/w5HNhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
 # leg=3 direction=client msg_id=61 encoding=protobuf payload_len=4
+# Restore the admitted client selection on this new physical connection.
+raw client AAAABgAAAQMIAw==
 raw client AAAABAAAAQU=
 # leg=3 direction=server msg_id=61 encoding=protobuf payload_len=77
 raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
@@ -1014,6 +1020,8 @@ raw server AAAAawAAAMwI////////////ARDX85HNhDQYuxAiUEhNRFMgZGF0YSBmYXJtIGNvbm5lY
 # leg=4 direction=server msg_id=4 encoding=protobuf payload_len=70
 raw server AAAARgAAAMwI////////////ARDX85HNhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
 # leg=4 direction=client msg_id=61 encoding=protobuf payload_len=4
+# Restore the admitted client selection on this new physical connection.
+raw client AAAABgAAAQMIAw==
 raw client AAAABAAAAQU=
 # leg=4 direction=server msg_id=61 encoding=protobuf payload_len=77
 raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA

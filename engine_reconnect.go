@@ -207,7 +207,30 @@ func (e *engine) resumeRoutes() {
 	e.continueResumeRoutes()
 }
 
+func (e *engine) marketDataTypePending() bool {
+	return e.marketDataType != 0 && e.marketDataTypeGeneration != e.transportGeneration
+}
+
 func (e *engine) continueResumeRoutes() {
+	if e.marketDataTypePending() {
+		tr := e.transport
+		if tr == nil {
+			return
+		}
+		payload, err := codec.Encode(e.serverVersion, codec.ReqMarketDataType{DataType: int(e.marketDataType)})
+		if err != nil {
+			e.retireTransport(err)
+			return
+		}
+		if err := tr.Send(context.Background(), payload); err != nil {
+			if errors.Is(err, transport.ErrSendQueueFull) {
+				e.waitForResumeCapacity(tr)
+			}
+			return
+		}
+		e.marketDataTypeGeneration = e.transportGeneration
+	}
+
 	for len(e.resumePending) > 0 {
 		pending := e.resumePending[0]
 		if e.keyed[pending.reqID] != pending.route {

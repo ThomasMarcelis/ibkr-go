@@ -1,0 +1,43 @@
+# Exact capture 20260905T185320Z-delayed_quote_reconnect for delayed_quote_reconnect at server_version 225.
+# events.jsonl sha256: 70f830c4e934dc9acc7be03a3e0ac23e00b1e46f84082c7e930a8f069cfdf7aa.
+# Account, order-reference, execution-ID, OCA-group, permanent-ID, and submitter values are deterministically sanitized.
+handshake {"server_version":225,"connection_time":"20260905 20:53:29 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABgAAANEIAQ==
+raw server AAAAQwAAAMwI////////////ARCp1KyXhzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAQQAAAMwI////////////ARCp1KyXhzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6ZXVobWRz
+raw server AAAAQwAAAMwI////////////ARCp1KyXhzQYuhAiKEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6Y2FzaGhtZHM=
+raw server AAAAQQAAAMwI////////////ARCp1KyXhzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+raw server AAAARgAAAMwI////////////ARCp1KyXhzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAABgAAAQMIAw==
+raw client AAAAIQAAAMkIARIZCAASBEFBUEwaA1NUS0IFU01BUlRSA1VTRA==
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw server AAAACAAAAQIIARAD
+raw server AAAAWgAAAMwIARCQ2KyXhzQYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+raw server AAAAFgAAAMkIARBIGXsUrkfhjnRAIgEwKAA=
+raw server AAAAFgAAAMkIARBJGfYoXI/C3XNAIgEwKAA=
+raw server AAAAEAAAAMoIARBKGgY5OTAxODA=
+raw server AAAAFgAAAMkIARBLGY/C9Shcg3RAIgEwKAA=
+raw server AAAAGAAAAMkIARBEGVyPwvUoAHRAIgMzNzAoAA==
+raw server AAAAFAAAAPYIARBYGgoxNzg4NTY2Mzk4
+disconnect
+handshake {"server_version":225,"connection_time":"20260905 20:53:37 CET"}
+raw server AAAADwAAANcKCURVOTAwMDAwMQ==
+raw server AAAABgAAANEIAQ==
+raw server AAAAQwAAAMwI////////////ARC9kK2XhzQYuBAiKE1hcmtldCBkYXRhIGZhcm0gY29ubmVjdGlvbiBpcyBPSzp1c2Zhcm0=
+raw server AAAAQQAAAMwI////////////ARC9kK2XhzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6ZXVobWRz
+raw server AAAAQwAAAMwI////////////ARC9kK2XhzQYuhAiKEhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6Y2FzaGhtZHM=
+raw server AAAAQQAAAMwI////////////ARC9kK2XhzQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6dXNobWRz
+raw server AAAARgAAAMwI////////////ARC9kK2XhzQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
+raw client AAAABgAAAQMIAw==
+raw client AAAAIQAAAMkIARIZCAASBEFBUEwaA1NUS0IFU01BUlRSA1VTRA==
+raw server AAAAKgAAARkIARIEMC4wMRoGOWMwMDAxIAQqCDAuMDAwMDAxMggwLjAwMDAwMQ==
+raw server AAAACAAAAQIIARAD
+raw server AAAAWgAAAMwIARDQlq2XhzQYt08iSFJlcXVlc3RlZCBtYXJrZXQgZGF0YSBpcyBub3Qgc3Vic2NyaWJlZC4gRGlzcGxheWluZyBkZWxheWVkIG1hcmtldCBkYXRhLg==
+raw server AAAAFgAAAMkIARBIGXsUrkfhjnRAIgEwKAA=
+raw server AAAAFgAAAMkIARBJGfYoXI/C3XNAIgEwKAA=
+raw server AAAAEAAAAMoIARBKGgY5OTAxODA=
+raw server AAAAFgAAAMkIARBLGY/C9Shcg3RAIgEwKAA=
+raw server AAAAGAAAAMkIARBEGVyPwvUoAHRAIgMzNzAoAA==
+raw server AAAAFAAAAPYIARBYGgoxNzg4NTY2Mzk4
+disconnect

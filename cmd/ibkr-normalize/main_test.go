@@ -199,8 +199,30 @@ func TestTrackedTranscriptFramesDeriveFromDeclaredCaptures(t *testing.T) {
 
 			var transcriptSequence []string
 			transcriptLegs := [][]string{{}}
+			// These four older replays retain their original callback order but
+			// insert the exact delayed-selection frame from the new reconnect
+			// capture before replacement work. Exclude only those declared
+			// insertions from the original subsequence check, with exact counts.
+			wantRestorations := map[string]int{
+				"quote_stream_reconnect.txt":          1,
+				"api_reconnect_active_order_aapl.txt": 1,
+				"api_algorithmic_campaign_aapl.txt":   2,
+				"api_option_exercise_aapl.txt":        2,
+			}[name]
+			restorations := 0
+			restoreNext, clientSeen := false, false
 			for line := range strings.Lines(string(data)) {
 				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "handshake ") {
+					clientSeen = false
+				}
+				if line == "# Restore the admitted client selection on this new physical connection." {
+					if wantRestorations == 0 || restoreNext {
+						t.Fatal("undeclared or duplicate selection restoration")
+					}
+					restoreNext = true
+					continue
+				}
 				if line == "disconnect" {
 					if len(transcriptLegs[len(transcriptLegs)-1]) > 0 {
 						transcriptLegs = append(transcriptLegs, nil)
@@ -218,8 +240,22 @@ func TestTrackedTranscriptFramesDeriveFromDeclaredCaptures(t *testing.T) {
 				if _, ok := sourceFrames[key]; !ok {
 					t.Fatalf("%s frame is not a field-aware sanitized frame from its declared capture", fields[1])
 				}
+				if restoreNext {
+					if len(transcriptLegs) < 2 || clientSeen || key != "client\x00AAAABgAAAQMIAw==" {
+						t.Fatal("restoration must be the captured delayed selection before new-connection work")
+					}
+					restorations++
+					restoreNext, clientSeen = false, true
+					continue
+				}
+				if fields[1] == "client" {
+					clientSeen = true
+				}
 				transcriptSequence = append(transcriptSequence, key)
 				transcriptLegs[len(transcriptLegs)-1] = append(transcriptLegs[len(transcriptLegs)-1], key)
+			}
+			if restorations != wantRestorations || restoreNext {
+				t.Fatalf("restoration insertions = %d, want %d complete insertions", restorations, wantRestorations)
 			}
 			if len(transcriptLegs[len(transcriptLegs)-1]) == 0 {
 				transcriptLegs = transcriptLegs[:len(transcriptLegs)-1]

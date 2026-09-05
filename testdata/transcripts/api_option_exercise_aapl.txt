@@ -6,6 +6,10 @@
 # The replay stops at exact code 10349 plus the PreSubmitted pseudo-order.
 # This proves Gateway admission as a working DAY instruction, not settlement;
 # no terminal exercise, lapse, option-position, or stock-position outcome is claimed.
+# Reconnect selection frames are projected from the live sv225 capture
+# 20260905T185320Z-delayed_quote_reconnect;
+# events.jsonl sha256: 70f830c4e934dc9acc7be03a3e0ac23e00b1e46f84082c7e930a8f069cfdf7aa.
+# Other client and server frames retain their original capture provenance.
 handshake {"server_version":225,"connection_time":"20260827 20:47:15 CET"}
 # leg=1 direction=server msg_id=9 encoding=protobuf payload_len=6
 raw server AAAABgAAANEIAQ==
@@ -230,6 +234,8 @@ raw server AAAAQQAAAMwI////////////ARDYirGkhDQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY
 # leg=2 direction=server msg_id=4 encoding=protobuf payload_len=70
 raw server AAAARgAAAMwI////////////ARDYirGkhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
 # leg=2 direction=client msg_id=61 encoding=protobuf payload_len=4
+# Restore the admitted client selection on this new physical connection.
+raw client AAAABgAAAQMIAw==
 raw client AAAABAAAAQU=
 # leg=2 direction=server msg_id=61 encoding=protobuf payload_len=77
 raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA
@@ -296,6 +302,8 @@ raw server AAAAQQAAAMwI////////////ARCK3bGkhDQYuhAiJkhNRFMgZGF0YSBmYXJtIGNvbm5lY
 # leg=3 direction=server msg_id=4 encoding=protobuf payload_len=70
 raw server AAAARgAAAMwI////////////ARCK3bGkhDQY7hAiK1NlYy1kZWYgZGF0YSBmYXJtIGNvbm5lY3Rpb24gaXMgT0s6c2VjZGVmbmo=
 # leg=3 direction=client msg_id=61 encoding=protobuf payload_len=4
+# Restore the admitted client selection on this new physical connection.
+raw client AAAABgAAAQMIAw==
 raw client AAAABAAAAQU=
 # leg=3 direction=server msg_id=61 encoding=protobuf payload_len=77
 raw server AAAATQAAAQUKCURVOTAwMDAwMRIvCJeLiTgSBEFTTUwaA1NUSykAAAAAAAAAAEIDQUVCUgNFVVJaBEFTTUxiBEFTTUwaAjQwIYv9ZfdkR5RA

@@ -6,6 +6,10 @@
 # first closes after its captured high tick; the second retains the captured low
 # tick and cancellation. This changes only transport boundaries and omits
 # unrelated rows; every retained frame is exact captured evidence.
+# Reconnect selection frames are projected from the live sv225 capture
+# 20260905T185320Z-delayed_quote_reconnect;
+# events.jsonl sha256: 70f830c4e934dc9acc7be03a3e0ac23e00b1e46f84082c7e930a8f069cfdf7aa.
+# Other client and server frames retain their original capture provenance.
 handshake {"server_version":225,"connection_time":"20260824 22:23:45 CET"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
 raw server AAAABgAAANEIAQ==
@@ -17,6 +21,8 @@ disconnect
 handshake {"server_version":225,"connection_time":"20260824 22:23:45 CET"}
 raw server AAAADwAAANcKCURVOTAwMDAwMQ==
 raw server AAAABgAAANEIAQ==
+# Restore the admitted client selection on this new physical connection.
+raw client AAAABgAAAQMIAw==
 raw client AAAAIwAAAMkIARIbCP6aEBIEQUFQTBoDU1RLQgVTTUFSVFIDVVNE
 raw server AAAACAAAAQIIARAD
 raw server AAAAFgAAAMkIARBJGexRuB6FX3NAIgEwKAA=
