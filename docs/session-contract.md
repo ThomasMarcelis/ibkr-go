@@ -39,8 +39,15 @@ readers divide events rather than each receiving a copy.
 
 The default reconnect policy is `ReconnectAuto`. Applications that require a
 connection loss to terminate the client set `WithReconnectPolicy(ReconnectOff)`
-explicitly. Reconnection controls the transport only; it does not implicitly
-replay requests or subscriptions.
+explicitly. Request replay follows each operation's resume policy below.
+
+`MarketData().SetType` returns after local queue admission. The client retains
+the last successfully admitted selection and restores it on every new physical
+connection before resumed subscriptions and new work, even when no subscription
+survives. A failed admission leaves the previous selection in force. Clients
+that never select a type retain the Gateway default. Codes 1101 and 1102 on the
+same socket do not resend the selection. `Ready` marks bootstrap completion;
+new work also waits for selection and subscription restoration to be admitted.
 
 Inbound raw frames are bounded before body allocation by
 `WithMaxInboundFrameBytes`. The default and hard maximum are 64 MiB, and the
@@ -98,7 +105,8 @@ lifecycle boundaries. Its event kinds are `Started`, `Data`,
 `SnapshotComplete`, `Notice`, `Gap`, `Restored`, and `Resubscribed`. For a
 request-backed stream, `Restored` means the Gateway retained it; for the passive
 execution observer, it means local observation resumed without sending a
-request. `Resubscribed` means the client physically sent the request again.
+request. `Resubscribed` means the replacement request entered the transport
+queue; subsequent data provides evidence of delivery.
 Channel close is terminal; inspect `Err()` or `Wait()` for its cause. There is
 no redundant `Closed` event. Every event's `At` is the UTC time the client
 enqueued it; this is local observation time, not Gateway event time.
@@ -120,9 +128,12 @@ event must drain `Events()` until it closes, then call `Wait()`. `Done()` is for
 completion coordination and must not replace event draining.
 
 `AwaitSnapshot(ctx)` is durable for snapshot-style subscriptions. It returns
-`nil` once `SnapshotComplete` has occurred, even if the lifecycle event was
-dropped from the bounded channel. It returns `ErrNoSnapshot` for streams with no
-snapshot boundary.
+`nil` once `SnapshotComplete` has occurred, even if another consumer already
+read that event or the stream subsequently ended. It does not drain `Events()`
+or guarantee the stream is still healthy: start its single consumer before
+waiting, then inspect `Wait()` when observation ends. Use the corresponding
+one-shot method if only the initial snapshot is needed. It returns
+`ErrNoSnapshot` for streams with no snapshot boundary.
 
 Transport-queue admission is the ownership boundary for subscription setup.
 Once the subscribe frame is admitted, its handle result wins caller-context and
@@ -239,6 +250,11 @@ and no handle. This keeps the result unambiguous; a live order is never hidden
 behind a context error. The transport tracks each admitted order frame until
 the socket write completes. If the connection dies while that frame is still
 unwritten, the handle closes with `ErrInterrupted`: IBKR never received it.
+A full frame accepted by the local socket emits `OrderStarted`, even when that
+write also reports an error. The connection still retires and the order outcome
+requires reconciliation; local acceptance is not a Gateway acknowledgement.
+The placement context only bounds admission. It does not close the returned
+order handle; callers must bound observation separately.
 
 `Orders().PlaceBracket(ctx, req)` allocates the parent, take-profit, and
 stop-loss IDs in one actor turn and owns their `ParentID` and `Transmit`
@@ -291,6 +307,25 @@ continuing to observe. If the queue fills, the handle closes with
 IBKR stopped or cancelled the live order. `OrderID()` remains available as the
 stable coordinate for open-order reconciliation and direct cancellation.
 
+Execution and fee correlation has a separate client-wide limit, configured by
+`WithOrderExecutionCorrelationLimit` (positive, default 4096). It bounds both
+retained execution IDs and total pending fee-report versions across all order
+and exercise handles. A fee that arrives before its execution waits without a
+time limit; the execution is delivered first, followed by its pending fees.
+Consecutive identical reports are deduplicated; changed versions are retained.
+Correlation survives reconnects while the handles survive. Closing a handle
+releases its claimed IDs; closing the last one releases all unmatched fees.
+Unmatched fees are ignored when there are no order handles.
+
+Overflow ends observation with both `ErrExecutionCorrelationOverflow` and
+`ErrOrderRecoveryRequired` (non-retryable). An attributable execution closes
+only its owning handle. An unmatched fee can belong to any active order, so
+its overflow closes all order and exercise handles. This sends no broker
+cancellation and leaves the connection, execution queries, and passive execution
+observer available for reconciliation. Exercise errors retain their
+`ExerciseUncertainError` wrapper. Query limits remain independently configured
+by `WithExecutionCorrelationLimit`.
+
 `OrderEvent.Lifecycle` carries `Started`, `Gap`, `Restored`, and
 `RecoveryRequired` in order with business events. A physical reconnect or
 data-lost restoration (code 1101) emits `RecoveryRequired` because the gap may
@@ -306,7 +341,10 @@ calls match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the
 handle without cancelling the server-side order. `Cancel(ctx)` sends a cancel
 request; compliance workflows can attach the manual cancel time, external
 operator, and manual-order indicator through `CancelOption`.
-`Replace(ctx, order)` sends a modified order with the same OrderID.
+`Replace(ctx, order)` sends a modified order with the same OrderID. Its contract
+and parent are fixed at placement: an omitted `ParentID` preserves that parent
+before structural validation, including for hedges; a conflicting nonzero
+parent is rejected. Other omitted order fields reset to defaults.
 
 `Options().Exercise` returns an `ExerciseHandle` once the request enters the
 client transport queue. The handle correlates request warnings, errors, and any

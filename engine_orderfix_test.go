@@ -586,10 +586,8 @@ func TestExerciseRouteClientShutdownIsUncertain(t *testing.T) {
 }
 
 // TestHandleAPIErrorRejectionDropsOrderRoute freezes the rejection-path half
-// of the retention fix: a terminal placement rejection (code 201) must close
-// the handle AND drop the route and its execution correlations. Pre-fix only
-// status-terminal closes (via the drain window) deleted the route, so every
-// rejected order leaked a route until reconnect.
+// of the retention contract: placement rejection (code 201) closes the
+// handle and releases its route and execution correlations.
 func TestHandleAPIErrorRejectionDropsOrderRoute(t *testing.T) {
 	t.Parallel()
 

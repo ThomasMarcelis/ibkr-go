@@ -252,7 +252,12 @@ Both return once the request is queued for IBKR, so keep reading events for
 the outcome. Order events are queued losslessly (64 by default, tune with
 `ibkr.WithOrderEventBuffer`). If you stop reading and the queue fills, the
 handle closes with `ErrSlowConsumer` while the order stays live at IBKR;
-`handle.OrderID()` is what you reconcile with. `Orders().Open` lists working
+`handle.OrderID()` is what you reconcile with. Execution and fee correlation
+also has a separate default limit of 4096 IDs and 4096 pending fee versions
+across order handles (`WithOrderExecutionCorrelationLimit`). Overflow ends
+affected observation with `ErrExecutionCorrelationOverflow` and
+`ErrOrderRecoveryRequired`; unmatched-fee overflow ends all local order
+observation. `Orders().Open` lists working
 orders after a restart, but only a handle from this process's `Place` can
 `Replace`.
 
@@ -315,7 +320,9 @@ its recovery rule.
 ## Reconnects
 
 The client redials and handshakes after a dropped socket (`ReconnectAuto`, the
-default). What happens to your streams is explicit:
+default). It restores the last successfully queued `MarketData().SetType`
+selection before resumed subscriptions and new requests. What happens to your
+streams is explicit:
 
 - Quote and real-time-bar streams opened with `ResumeAuto` are re-requested
   automatically; `Gap`, `Restored`, and `Resubscribed` events mark the boundary
@@ -339,7 +346,8 @@ account.
 
 ## Status
 
-v2.0.3 covers the in-scope socket API against `server_version` 208–225.
+The v2 line covers the in-scope socket API against `server_version` 208–225.
+The working tree prepares v2.1.0; v2.0.3 remains the published install target.
 The [coverage matrix](docs/live-coverage-matrix.md) says which paths have live proof and which are blocked by entitlements or market state. Release notes are in the [CHANGELOG](CHANGELOG.md).
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient` compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md).
 

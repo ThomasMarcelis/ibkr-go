@@ -234,7 +234,9 @@ func (c ContractsClient) DepthExchanges(ctx context.Context) ([]DepthExchange, e
 // one from [Client.MarketData].
 type MarketDataClient struct{ engine *engine }
 
-// SetType sets the market data type (live, frozen, delayed) for this session.
+// SetType selects live, frozen, delayed, or delayed-frozen market data.
+// It returns after local queue admission. The last admitted selection is
+// restored before subscriptions and new work on each physical reconnect.
 func (c MarketDataClient) SetType(ctx context.Context, dataType MarketDataType) error {
 	return c.engine.SetMarketDataType(ctx, dataType)
 }

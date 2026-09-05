@@ -15,6 +15,9 @@ import (
 //
 // A terminal order status does not close the handle: executions and fee reports
 // can arrive later. Call Close when observation is no longer needed.
+// Execution and fee correlation is bounded separately by
+// [WithOrderExecutionCorrelationLimit]; overflow ends affected observation
+// with both [ErrExecutionCorrelationOverflow] and [ErrOrderRecoveryRequired].
 type OrderHandle struct {
 	orderID int64
 	events  chan OrderEvent

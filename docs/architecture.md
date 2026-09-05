@@ -3,10 +3,10 @@
 `ibkr-go` is built as a session engine with a typed facade. The library does
 not expose an `EWrapper` / `EClient` callback surface as its primary model.
 
-The public surface is a broad read-only API plus order management, market
-depth, and option exercise. The handshake accepts exactly `server_version`
-208..225 and rejects 207 and 226; what each version changes is in
-[`protocol-audit-sv208-225.md`](protocol-audit-sv208-225.md).
+This document explains internal ownership and data flow. Public lifecycle,
+queue limits, and recovery behavior belong to the
+[session contract](session-contract.md); protocol boundaries and their evidence
+belong to [the version audit](protocol-audit-sv208-225.md).
 
 ## Layers
 
@@ -30,22 +30,23 @@ depth, and option exercise. The handshake accepts exactly `server_version`
 ## Runtime Model
 
 - One session actor goroutine owns mutable state.
-- One reader goroutine reads frames and forwards decoded messages to the actor.
-  It reads through a 64 KiB `bufio.Reader` rather than issuing the raw
+- The transport reader owns socket reads and publishes complete frames. The
+  engine's decode pump converts them and forwards typed messages to the actor.
+  The transport reads through a 64 KiB `bufio.Reader` rather than issuing the raw
   length-prefix-then-payload read pair directly on the socket, collapsing two
   syscalls per frame into roughly one per buffer fill; the reader goroutine
   owns every post-handshake read, so this is safe without extra
   synchronization.
-- The reader rejects a frame from its four-byte length header before allocating
-  or reading the body when it exceeds `WithMaxInboundFrameBytes`. The default
-  and hard ceiling are 64 MiB; the same limit covers the handshake and steady
-  state.
+- The reader checks the frame length before allocating its body. Handshake
+  and steady-state reads share the configured limit.
 - One writer goroutine serializes outbound frames and applies global pacing.
 - Public methods talk to the actor through typed commands instead of sharing
   mutable maps or callback registries.
 - Work submitted while an automatic reconnect is in progress is held in an
-  actor-owned FIFO and released immediately after existing resumable routes are
-  restored. Context cancellation removes pending work through
+  actor-owned FIFO. A generation-specific barrier admits the retained market
+  data selection first, then resumable routes in request-ID order, then new
+  work. A full transport queue uses its writable edge to continue the barrier.
+  Context cancellation removes pending work through
   `context.AfterFunc`; readiness uses no polling loop or retry timer.
 
 ## Codec Dispatch
@@ -156,102 +157,40 @@ both owners, while execution and commission messages are routed through
   force a lower supported layout for verification; production
   code always advertises the maximum.
 
-## Order ID Management
+## Order ownership
 
-Order IDs are auto-allocated from `NextValidID`, which is received during
-bootstrap and tracked on `Snapshot`. Each `Orders().Place` call increments
-the counter atomically within the actor goroutine. Callers never need to manage
-order IDs manually. The engine rejects values outside the protocol's signed
-32-bit range before encoding and does not accept an out-of-range
-`nextValidId` as bootstrap evidence. `Orders().PlaceBracket` reserves three consecutive IDs in
-one actor turn and sends all three frames without interleaving another request;
-the final child is the only frame with `Transmit=true`.
+The actor allocates order IDs from the bootstrap `NextValidID` and reserves a
+bracket's consecutive IDs in one turn. `pendingOrderWrites` maps each tracked
+transport write to its order route. The write-completion pump publishes all
+results before reporting transport loss; the actor drains them before applying
+the loss transition. This makes definitely-unwritten placement and complete
+local acceptance visible without treating either as a broker acknowledgement.
 
-Admission to the transport queue transfers placement ownership to the caller.
-The buffered handle result therefore wins context and shutdown races after
-admission. The transport retains a pending-write marker until each order frame
-is written; transport loss closes any definitely-unwritten handle with
-`ErrInterrupted`. A partially admitted bracket cancels only admitted IDs and always
-returns an `OrderRecoveryError` containing every one of those IDs. Even a
-queue-admitted cancellation is unacknowledged, so callers reconcile open orders
-before retrying; `CancelErr` only records failures to admit those cancellations.
+Each order route owns one handle, its established permanent identity, pending
+write, and recovery state. The replacement closure captures the immutable
+contract and parent at placement. Exercise observation uses an order route plus
+a keyed route whose shared cleanup removes both registrations. Preview routes
+remain separate and resolve on their matching open-order echo.
 
-## OrderHandle Lifecycle
+`execDeliveries` is actor-owned correlation for order handles. Each entry
+retains an execution's owner, last delivered fee, and any fees waiting for the
+execution. The map size and pending-report count enforce the configured limits.
+`closeOrderRoute` releases claimed entries; closing the final route clears the
+map. Query correlation and the passive execution observer have independent
+ownership. The [session contract](session-contract.md#orderhandle) defines
+closure, overflow scope, late fees, and recovery consequences.
 
-`Orders().Place` returns an `OrderHandle` that tracks a single order's lifecycle:
+## Reconnect and teardown
 
-- **Events()** delivers one ordered stream of `OrderEvent` values (union of
-  OpenOrder, OrderStatus, Execution, CommissionAndFees, Warning, Binding, and
-  Lifecycle; exactly one field non-nil per event).
-  A `Warning` is a non-terminal, order-targeted notice (e.g. code 399, the
-  off-hours deferral): the order stays working at IB and the handle stays open.
-- **Lifecycle events** are part of that same stream: Started, Gap, Restored,
-  and RecoveryRequired cannot race past business events on another channel.
-- **Event backpressure.** Each handle has a bounded, lossless event queue
-  (default 64, configured by `WithOrderEventBuffer`). Overflow closes local
-  observation with `ErrSlowConsumer` rather than dropping and continuing. It
-  does not change the live order; its OrderID remains available for
-  reconciliation or cancellation.
-- **Terminal order states.** Filled, Cancelled, APICancelled, and Inactive are
-  business events, not local observation boundaries. Execution and fee
-  callbacks may follow them, so the caller closes the handle when its evidence
-  requirements are satisfied. Cancellation replies 161 and 202 remain session
-  notices and do not close the handle.
-- **Disconnect.** Code 1100 or a socket disconnect gives active order handles
-  `Gap`. A data-maintained 1100-to-1102 restoration yields `Restored` and
-  preserves replacement. A socket reconnect or data-lost restoration (code
-  1101) yields `RecoveryRequired` because fills or status changes may have
-  occurred during the gap. Handles stay open, but replacement is permanently
-  unavailable on that handle and reports non-retryable
-  `ErrOrderRecoveryRequired`.
-- **Close()** detaches the handle from the engine. The order continues
-  executing on the server; the caller simply stops receiving events.
-- **Cancel(ctx)** sends a CancelOrder request for this order.
-- **Replace(order)** sends a modified PlaceOrder with the same OrderID.
+A physical reconnect captures a new negotiated version and transport generation.
+Decode and write-result pumps preserve their originating connection identity so
+stale work cannot mutate a replacement connection. `marketDataTypeGeneration`
+records where the client's retained selection was admitted; same-socket
+restoration therefore does not resend it. The resume-capacity waiter belongs to
+one transport and cannot release another transport's barrier.
 
-## Protocol Realities
-
-- Request correlation is split between keyed flows, singleton flows, and
-  order flows. Not all protocol areas route cleanly through one
-  `reqID -> channel` map.
-- Snapshot completion is driven by explicit protocol end markers, never by
-  silence or timeouts.
-- Global pacing belongs in the write path. Endpoint-specific admission limits
-  belong at the session layer.
-- Public request setup waits for a usable session. Reconnect backoff and
-  endpoint pacing are internal engine concerns, bounded by the caller context.
-- Managed accounts, negotiated server version, and next valid id are bootstrap
-  state, not ordinary request/response calls.
-
-## Public Direction
-
-- `DialContext` returns a ready session, not a raw TCP socket.
-- Managed accounts are bootstrap state on the session snapshot.
-- One-shots, subscriptions, and order handles are separate public contracts.
-- Subscriptions expose data and lifecycle boundaries through one ordered
-  `Events()` stream. `All(ctx)` is the data-only view over that same queue.
-  It also consumes and discards request-scoped `StreamNotice` values, so
-  consumers that need warnings use `Events()` directly.
-  Channel close plus `Err()`/`Wait()` is terminal. OrderHandle uses the same
-  single-stream principle with order-specific events.
-
-These public contracts are intended to survive the remaining protocol work.
-
-## Reconnect
-
-- Reconnect policy is a client policy; the default remains `ReconnectAuto`.
-- Resume policy is separate and defaults to `ResumeNever` for request-backed
-  subscriptions. `ResumeAuto` is accepted only for streaming quotes and
-  real-time bars; it reissues them after an automatic transport reconnect or a
-  data-lost restoration (1101) on the existing socket.
-- One-shots are never replayed automatically.
-- Order handles survive disconnects. Physical reconnects and code 1101 require
-  explicit reconciliation; a data-maintained 1100-to-1102 gap does not disable
-  replacement.
-- Session reconnect boundaries are surfaced via `ConnectionSeq`.
-- `SessionEvents` is bounded and drop-oldest, but each actual state transition
-  increments `TransitionSeq`; gaps are therefore detectable, and every event
-  carries its exact resulting `Snapshot`.
-
-See [`operation-control.md`](operation-control.md) for the per-operation
-request-ID, cancellation, detach, and connection-retirement matrix.
+`closeOrderRoute` and `deleteKeyedRoute` own route cleanup; `closeEngine` owns
+client shutdown. Subscription cancellation may retire a connection when local
+admission fails or a late request-ID-less response cannot safely be separated
+from a replacement request. See [operation control](operation-control.md) for
+the per-operation cancellation and retirement matrix.

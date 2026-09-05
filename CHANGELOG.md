@@ -4,6 +4,23 @@ Notable changes per release, following [Keep a Changelog](https://keepachangelog
 The evidence behind each release (captures, gate runs, coverage) lives at its
 tag.
 
+## v2.1.0 - Unreleased
+
+### Added
+
+- `WithOrderExecutionCorrelationLimit` bounds retained execution IDs and pending
+  fee versions across order handles (default 4096 each). Overflow ends affected
+  observation with `ErrExecutionCorrelationOverflow` and `ErrOrderRecoveryRequired`;
+  unmatched-fee overflow ends all local order observation without cancelling orders.
+
+### Fixed
+
+- Restore the selected market-data type before subscriptions and new work on reconnect.
+- Retain fees until their execution arrives or observation ends; remove the 750 ms expiry.
+- Preserve a hedge's bound parent when `Replace` omits `ParentID`.
+- Report complete local order writes even when the socket also returns an error.
+- Release checks compare against immutable prior tags, so regenerated manifests cannot hide breaking changes.
+
 ## v2.0.3 - 2026-08-29
 
 ### Added

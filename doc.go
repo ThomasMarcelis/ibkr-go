@@ -127,7 +127,10 @@
 // it fills, the handle closes with [ErrSlowConsumer] instead of silently
 // dropping events. Only local observation ends: the order may remain live at
 // IBKR, and [OrderHandle.OrderID] remains the cancellation and reconciliation
-// coordinate.
+// coordinate. [WithOrderExecutionCorrelationLimit] separately bounds retained
+// execution IDs and pending fee versions across order handles. Exceeding it
+// ends affected observation with [ErrExecutionCorrelationOverflow] and
+// [ErrOrderRecoveryRequired]; unmatched-fee overflow ends all order observation.
 //
 // [OrderHandle.Close] detaches the handle without cancelling the order.
 // [OrderHandle.Cancel] sends a cancel request. [OrderHandle.Replace] sends a
