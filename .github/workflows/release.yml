@@ -53,13 +53,14 @@ jobs:
           git merge-base --is-ancestor "$commit" origin/main
 
       - name: Verify release commit
+        env:
+          TAG: ${{ github.ref_name }}
         run: |
           go mod tidy -diff
           go mod verify
           unformatted=$(gofmt -l .)
           test -z "$unformatted"
-          ./scripts/check-api.sh
-          ./scripts/check-api.sh --exact
+          ./scripts/check-api.sh --release "$TAG"
           go build ./...
           go vet ./...
           CGO_ENABLED=0 GOOS=linux GOARCH=386 go build ./...

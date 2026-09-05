@@ -29,10 +29,12 @@ go test ./...
 ```
 
 All six must pass locally before opening a pull request. The default API
-check rejects incompatible changes from the frozen v2.0.3 release baseline
-while allowing additive APIs for the next release; `./scripts/check-api.sh
---exact` requires the public surface to equal v2.0.3 exactly. The manifest is
-replaced at each release; older ones live at their tags.
+check compares against the highest stable same-major tag reachable from HEAD,
+reading its manifest directly from that tag. It allows additions but rejects
+incompatible changes even if the working-tree manifest was regenerated.
+`./scripts/check-api.sh --exact` compares against the single candidate manifest
+in `testdata/api`. Fetch full history and tags before compatibility checks;
+missing release evidence is an error.
 
 CI also checks module tidiness and verification, the fuzz-target inventory, a
 pure-Go 386 build, vulnerabilities, shuffled tests on Linux, macOS, and
@@ -115,13 +117,18 @@ go test -race -shuffle=on -count=1 ./...
 go run golang.org/x/vuln/cmd/govulncheck@v1.6.0 ./...
 ```
 
-Then freeze the public surface: write the new `testdata/api/<version>.api`
-manifest, point `scripts/check-api.sh` at it, and confirm
-`./scripts/check-api.sh --exact` passes. Replace the previous manifest rather
-than keeping a history; older ones live at their tags. Run the examples
-against the paper Gateway, write the CHANGELOG entry (link release-time
-documents at the tag, not at `main`), and tag. Pushing and publishing stay
-manual.
+Then freeze the public surface with the pinned `apidiff` version in
+`scripts/check-api.sh`: `go run <apidiff-version> -w testdata/api/<version>.api
+$(go list -m)`. Replace the previous manifest; older ones live at their tags.
+Run `./scripts/check-api.sh --release <version>` on the candidate tree. It
+requires exact agreement with that candidate manifest and compatibility with
+the highest reachable stable same-major tag strictly older than the candidate.
+The candidate's own tag and prerelease tags cannot become its baseline.
+Incompatible changes need a new major version; never rewrite release history.
+
+Run the examples against the paper Gateway, write the CHANGELOG entry (link
+release-time documents at the tag, not at `main`), and tag. Pushing and
+publishing stay manual.
 
 ## Reference policy
 
