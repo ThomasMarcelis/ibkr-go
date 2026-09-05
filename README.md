@@ -68,22 +68,25 @@ Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/
 
 ## Performance
 
-The capture-backed public quote path has the following client-side overhead:
+Historical reference results for the public quote path over loopback TCP:
 
 | Metric | Result | Why it matters |
 |--------|-------:|----------------|
-| Sustained quote delivery | 1.26 million updates/s | Headroom before the client becomes the stream bottleneck |
-| Delivery latency | p50 5.34 µs, p95 8.59 µs, p99 11.8 µs | Delay added before an application receives an update |
+| Throughput, 32-frame batches | 1.26 million updates/s | Capacity with consumer credits every 32 updates |
+| Unloaded delivery latency | p50 5.34 µs, p95 8.59 µs, p99 11.8 µs | One outstanding frame, acknowledged after delivery |
 | Heap pressure | 240 B/update, 12 allocs/update | Allocation and GC cost for long-running feeds |
-| Cold dial to first quote | 20.3 ms | Connection and subscription startup before usable data |
+| Cold dial to first quote | 20.3 ms | Includes the default 50-message/s outbound pacing |
 
 These are medians of ten runs on Linux/amd64 with Go 1.26.3,
 `GOMAXPROCS=16`, and an AMD Ryzen 7 9800X3D. Exact `server_version` 225
 frames travel through loopback TCP, framing, decoding, actor routing, quote
-projection, and the public subscription channel. The results isolate
-`ibkr-go`; they do not include Gateway or external network latency. Repeated
-frames measure client capacity, not expected Gateway data rates. The full run
-also covers a 4,096-update burst and TCP fragmentation:
+projection, and the public subscription channel. Measurements include TCP,
+the replay harness, and Go scheduling; they exclude Gateway and external
+network latency. Throughput uses coalesced 32-frame batches and consumer
+credits, while latency uses one outstanding frame. The latency percentiles
+therefore describe an unloaded stream, not delivery at the reported throughput.
+Repeated frames measure this workload's capacity, not expected Gateway rates.
+The full run also covers a 4,096-update burst and TCP fragmentation:
 
 ```bash
 go test -run '^$' -bench '^BenchmarkPublicQuoteStream$' -benchtime=1x -count=10 .

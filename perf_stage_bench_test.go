@@ -244,6 +244,13 @@ func BenchmarkActorQuoteDispatchDelivery(b *testing.B) {
 		b.Fatal("quote route 1 was not installed")
 	}
 
+	// Validate a full captured sequence before timing. Repeating expensive
+	// assertions per delivery would measure the test harness in the hot path.
+	for i, message := range benchQuoteSequence {
+		e.handleIncoming(message)
+		validateBenchQuoteEvent(b, i, <-sub.Events())
+	}
+	var last StreamEvent[QuoteUpdate]
 	var before, after runtime.MemStats
 	runtime.ReadMemStats(&before)
 	produced := 0
@@ -257,12 +264,16 @@ func BenchmarkActorQuoteDispatchDelivery(b *testing.B) {
 			if !ok {
 				b.Fatalf("subscription closed after %d deliveries: %v", consumed, sub.Err())
 			}
-			validateBenchQuoteEvent(b, consumed, event)
+			if event.Kind != StreamData {
+				b.Fatalf("event %d kind = %s, want Data", consumed, event.Kind)
+			}
+			last = event
 			consumed++
 		}
 	}
 	runtime.ReadMemStats(&after)
 
+	validateBenchQuoteEvent(b, consumed-1, last)
 	if produced != consumed || produced < deliveriesPerOp {
 		b.Fatalf("produced=%d consumed=%d, want equal and at least %d", produced, consumed, deliveriesPerOp)
 	}
