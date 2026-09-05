@@ -1,9 +1,9 @@
 package ibkr
 
 import (
+	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/codec"
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
@@ -563,13 +563,8 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	}
 }
 
-// closeOrderRoute finishes an order route outside the terminal drain window:
-// rejection, decode-failure, and slow-consumer paths where no further
-// legitimate traffic can reach the handle. It closes the handle (idempotent),
-// drops the route, and forgets the order's execution correlations — without
-// this, rejected orders accumulated routes for the connection lifetime the
-// same way filled ones once did. Frames that straggle in after the deletion
-// drop at the missing-route check, identical to the closed-route behavior.
+// closeOrderRoute ends local observation and releases its routing state.
+// It never cancels the order at IBKR.
 func (e *engine) closeOrderRoute(orderID int64, or *orderRoute, err error) {
 	or.closed = true
 	if or.pendingWrite.id != 0 {
@@ -622,8 +617,6 @@ func (e *engine) ensureOrderStarted(or *orderRoute) bool {
 	return or.handle.emitLifecycle(OrderStarted, e.connectionSeq(), nil)
 }
 
-const unclaimedCommissionTTL = 750 * time.Millisecond
-
 // execDelivery is the order-handle leg's delivery record for one ExecID.
 // See the engine.execDeliveries field comment for the full contract.
 type execDelivery struct {
@@ -632,31 +625,32 @@ type execDelivery struct {
 	pending   []codec.CommissionReport
 }
 
-// forgetOrderExecutions drops every execution correlation owned by orderID.
-// It runs once per terminal order (after the drain window), so the linear
-// scan is bounded by the session's fills. Pending-only entries (orderID 0)
-// are not touched; their eviction timer owns them.
+// forgetOrderExecutions releases claimed entries with their handle. Unmatched
+// fees can still belong to another active handle, so retain them until the
+// last handle closes. The scan is bounded by the configured correlation limit.
 func (e *engine) forgetOrderExecutions(orderID int64) {
+	if len(e.orders) == 0 {
+		e.execDeliveries = make(map[string]*execDelivery)
+		e.pendingOrderFees = 0
+		return
+	}
 	for execID, st := range e.execDeliveries {
 		if st.orderID == orderID {
+			e.pendingOrderFees -= len(st.pending)
 			delete(e.execDeliveries, execID)
 		}
 	}
 }
 
-// scheduleUnclaimedExecEviction drops a pending-only delivery record that no
-// execution detail claimed within the drain window. Commissions for fills
-// owned by other clients (or orders this client never tracked) arrive with no
-// claiming execution, so without the timer they would accumulate for the
-// connection lifetime.
-func (e *engine) scheduleUnclaimedExecEviction(execID string) {
-	time.AfterFunc(unclaimedCommissionTTL, func() {
-		e.enqueue(func() {
-			if st, ok := e.execDeliveries[execID]; ok && st.orderID == 0 {
-				delete(e.execDeliveries, execID)
-			}
-		})
-	})
+func (e *engine) orderCorrelationOverflow(resource string) error {
+	return errors.Join(executionCorrelationOverflow(resource, e.cfg.orderExecutionCorrelationLimit), ErrOrderRecoveryRequired)
+}
+
+func (e *engine) closeOrdersForCorrelationOverflow(resource string) {
+	err := e.orderCorrelationOverflow(resource)
+	for id, or := range e.orders {
+		e.closeOrderRoute(id, or, err)
+	}
 }
 
 func (e *engine) activeAccountSummarySubscriptions() int {
@@ -683,22 +677,31 @@ func (e *engine) deleteKeyedRoute(reqID int) {
 }
 
 func (e *engine) routeCommissionReport(report codec.CommissionReport) {
-	st, ok := e.execDeliveries[report.ExecID]
-	if !ok {
-		// No execution detail has claimed this ExecID yet: the Gateway can
-		// send the commission ahead of the execution (the keyed leg buffers
-		// the same race in the correlator). Buffer it for the claim; the
-		// eviction timer reclaims entries no execution ever claims.
-		st = &execDelivery{pending: []codec.CommissionReport{report}}
+	if len(e.orders) == 0 {
+		return
+	}
+	st := e.execDeliveries[report.ExecID]
+	if st == nil {
+		if len(e.execDeliveries) >= e.cfg.orderExecutionCorrelationLimit {
+			e.closeOrdersForCorrelationOverflow("distinct execution IDs")
+			return
+		}
+		st = &execDelivery{}
 		e.execDeliveries[report.ExecID] = st
-		e.scheduleUnclaimedExecEviction(report.ExecID)
+	}
+	if st.orderID != 0 {
+		e.deliverCommissionToOrder(st, report)
 		return
 	}
-	if st.orderID == 0 {
-		st.pending = append(st.pending, report)
+	if len(st.pending) > 0 && st.pending[len(st.pending)-1] == report {
 		return
 	}
-	e.deliverCommissionToOrder(st, report)
+	if e.pendingOrderFees >= e.cfg.orderExecutionCorrelationLimit {
+		e.closeOrdersForCorrelationOverflow("pending fee-report versions")
+		return
+	}
+	st.pending = append(st.pending, report)
+	e.pendingOrderFees++
 }
 
 // deliverCommissionToOrder emits one commission report to the handle that owns
@@ -756,6 +759,10 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	if st != nil && st.orderID != 0 {
 		return
 	}
+	if st == nil && len(e.execDeliveries) >= e.cfg.orderExecutionCorrelationLimit {
+		e.closeOrderRoute(m.OrderID, or, e.orderCorrelationOverflow("distinct execution IDs"))
+		return
+	}
 	// Per-order dispatch: a decode failure terminates only local observation;
 	// the order remains live and no cancellation frame is sent.
 	exec, err := fromCodecExecution(m)
@@ -780,6 +787,7 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	// claim they had no owning handle and would otherwise be lost.
 	pending := st.pending
 	st.pending = nil
+	e.pendingOrderFees -= len(pending)
 	for _, buffered := range pending {
 		e.deliverCommissionToOrder(st, buffered)
 	}

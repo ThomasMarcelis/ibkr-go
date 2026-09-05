@@ -26,18 +26,19 @@ type Dialer interface {
 }
 
 type config struct {
-	host                 string
-	port                 int
-	clientID             ClientID
-	dialer               Dialer
-	logger               *slog.Logger
-	reconnect            ReconnectPolicy
-	tcpKeepAlive         time.Duration
-	sendRate             int
-	eventBuffer          int
-	subscriptionBuffer   int
-	orderEventBuffer     int
-	maxInboundFrameBytes int
+	host                           string
+	port                           int
+	clientID                       ClientID
+	dialer                         Dialer
+	logger                         *slog.Logger
+	reconnect                      ReconnectPolicy
+	tcpKeepAlive                   time.Duration
+	sendRate                       int
+	eventBuffer                    int
+	subscriptionBuffer             int
+	orderEventBuffer               int
+	orderExecutionCorrelationLimit int
+	maxInboundFrameBytes           int
 }
 
 type subscriptionConfig struct {
@@ -55,18 +56,19 @@ const defaultExecutionCorrelationLimit = 1 << 12
 
 func defaultConfig() config {
 	return config{
-		host:                 "127.0.0.1",
-		port:                 7497,
-		clientID:             1,
-		dialer:               &net.Dialer{},
-		logger:               slog.New(slog.NewTextHandler(io.Discard, nil)),
-		reconnect:            ReconnectAuto,
-		tcpKeepAlive:         30 * time.Second,
-		sendRate:             50,
-		eventBuffer:          64,
-		subscriptionBuffer:   64,
-		orderEventBuffer:     64,
-		maxInboundFrameBytes: 64 << 20,
+		host:                           "127.0.0.1",
+		port:                           7497,
+		clientID:                       1,
+		dialer:                         &net.Dialer{},
+		logger:                         slog.New(slog.NewTextHandler(io.Discard, nil)),
+		reconnect:                      ReconnectAuto,
+		tcpKeepAlive:                   30 * time.Second,
+		sendRate:                       50,
+		eventBuffer:                    64,
+		subscriptionBuffer:             64,
+		orderEventBuffer:               64,
+		orderExecutionCorrelationLimit: defaultExecutionCorrelationLimit,
+		maxInboundFrameBytes:           64 << 20,
 	}
 }
 
@@ -110,6 +112,9 @@ func validateConfig(cfg config) error {
 	}
 	if cfg.orderEventBuffer < 1 {
 		return &ValidationError{Field: "OrderEventBuffer", Value: strconv.Itoa(cfg.orderEventBuffer), Message: "must be >= 1"}
+	}
+	if cfg.orderExecutionCorrelationLimit < 1 {
+		return &ValidationError{Field: "OrderExecutionCorrelationLimit", Value: strconv.Itoa(cfg.orderExecutionCorrelationLimit), Message: "must be >= 1"}
 	}
 	if cfg.maxInboundFrameBytes < 1 || cfg.maxInboundFrameBytes > 64<<20 {
 		return &ValidationError{Field: "MaxInboundFrameBytes", Value: strconv.Itoa(cfg.maxInboundFrameBytes), Message: "must be between 1 and 67108864"}
@@ -263,6 +268,19 @@ func WithOrderEventBuffer(size int) Option {
 	return func(cfg *config) {
 		cfg.orderEventBuffer = size
 	}
+}
+
+// WithOrderExecutionCorrelationLimit bounds retained execution IDs and, separately,
+// pending fee-report versions across all local order and exercise handles.
+// Default: 4096; limit must be positive. Identical consecutive fees consume no
+// additional capacity. Correlation survives reconnects while handles remain open.
+// Overflow ends affected observation with both [ErrExecutionCorrelationOverflow]
+// and [ErrOrderRecoveryRequired]. An unmatched fee can belong to any handle, so
+// its overflow ends all order observation. Orders at IBKR are not cancelled;
+// execution queries and [OrdersClient.SubscribeExecutionEvents] remain available
+// for reconciliation. This limit is independent of [WithExecutionCorrelationLimit].
+func WithOrderExecutionCorrelationLimit(limit int) Option {
+	return func(cfg *config) { cfg.orderExecutionCorrelationLimit = limit }
 }
 
 // WithResumePolicy overrides the [ResumePolicy] for a single subscription. The

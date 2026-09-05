@@ -395,7 +395,7 @@ func TestExecutionProjectionFailureClosesLocalOrderHandle(t *testing.T) {
 
 	handle := newOrderHandle(91, 4)
 	e := &engine{
-		cfg:            config{logger: slog.Default()},
+		cfg:            config{logger: slog.Default(), orderExecutionCorrelationLimit: defaultExecutionCorrelationLimit},
 		orders:         map[int64]*orderRoute{91: {orderID: 91, handle: handle}},
 		execDeliveries: make(map[string]*execDelivery),
 	}
@@ -445,6 +445,7 @@ func TestTerminalOrderRemainsObservedUntilClose(t *testing.T) {
 		}
 		e.enqueue(func() {
 			e.orders[50] = route
+			e.orders[99] = &orderRoute{orderID: 99, handle: newOrderHandle(99, 1)}
 			e.execDeliveries["exec-a"] = &execDelivery{orderID: 50, delivered: &codec.CommissionReport{ExecID: "exec-a"}}
 			e.execDeliveries["exec-b"] = &execDelivery{orderID: 50}
 			e.execDeliveries["exec-other"] = &execDelivery{orderID: 99}

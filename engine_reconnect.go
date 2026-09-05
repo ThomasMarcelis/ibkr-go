@@ -358,6 +358,7 @@ func (e *engine) closeEngine(workErr, sessionErr, waitErr error) {
 		delete(e.orders, id)
 	}
 	e.execDeliveries = make(map[string]*execDelivery)
+	e.pendingOrderFees = 0
 	e.setState(StateClosed, 0, "", sessionErr)
 	e.reportReady(sessionErr)
 	e.waitMu.Lock()

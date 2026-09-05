@@ -51,17 +51,11 @@ type engine struct {
 	// Completion is handled on the actor before transport loss, so an
 	// unwritten order cannot be mistaken for one IBKR received.
 	pendingOrderWrites map[transportWriteKey]int64
-	// execDeliveries is the order-handle leg's per-ExecID delivery record.
-	// orderID routes commissions to the owning handle and its presence dedupes
-	// an Executions() snapshot replaying a fill the handle already saw live.
-	// delivered dedupes an identical commission re-send while letting a
-	// re-send with changed content (e.g. a realizedPNL update) through.
-	// pending buffers commissions that arrived before their execution detail;
-	// they flush when the execution claims the ExecID, and an entry no
-	// execution ever claims (another client's fill) evicts itself after the
-	// drain window. Entries are dropped with their order's route
-	// (forgetOrderExecutions).
-	execDeliveries map[string]*execDelivery
+	// execDeliveries retains order-owned fills and unmatched fees until their
+	// handle closes. Both IDs and pending versions have client-wide caps;
+	// no timer can determine when a fee has become irrelevant.
+	execDeliveries   map[string]*execDelivery
+	pendingOrderFees int
 	// executionEvents is a passive, client-wide observer. It owns no Gateway
 	// request and sees each execution-detail and commission callback before
 	// query correlation or per-order deduplication.

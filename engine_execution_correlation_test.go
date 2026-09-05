@@ -28,7 +28,7 @@ const (
 )
 
 func TestExecutionSubscriptionAcceptsCorrelationBoundaryAndRejectsNextID(t *testing.T) {
-	executions := capturedExecutions(t, executionsCapturePath)
+	executions := capturedExecutions(t)
 	if len(executions) < 2 {
 		t.Fatalf("captured executions = %d, want at least two", len(executions))
 	}
@@ -207,7 +207,7 @@ func TestExecutionSubscriptionIgnoresUnknownFeesAfterSnapshotAndKeepsKnownLateFe
 
 func TestExecutionCorrelationSnapshotCompletionDropsUnmatchedPendingReports(t *testing.T) {
 	reports := capturedCommissionsFrom(capturedServerMessages(t, executionsCapturePath))
-	executions := executionByID(capturedExecutions(t, executionsCapturePath))
+	executions := executionByID(capturedExecutions(t))
 	if len(reports) < 2 {
 		t.Fatalf("captured commissions = %d, want at least two", len(reports))
 	}
@@ -291,15 +291,12 @@ func TestUnrelatedCommissionBroadcastOverflowClosesOnlyBoundedRoute(t *testing.T
 	_ = readObservedFrame(t, peer)
 
 	for _, report := range reports {
-		execution, ok := executions[report.ExecID]
+		_, ok := executions[report.ExecID]
 		if !ok {
 			t.Fatalf("capture has fee %q without execution detail", report.ExecID)
 		}
-		// Structural routing fault injection broadcasts these exact captured
-		// fees before their matching details reach either execution route. The
-		// capture's live execution already claimed each fee for its order handle;
-		// seed that ownership to isolate correlation without unclaimed-fee timers.
-		e.execDeliveries[report.ExecID] = &execDelivery{orderID: execution.OrderID}
+		// Broadcast exact captured fees before their execution details reach
+		// either query. There are no local order handles to correlate.
 		e.handleIncoming(report)
 	}
 
@@ -334,7 +331,7 @@ func TestUnrelatedCommissionBroadcastOverflowClosesOnlyBoundedRoute(t *testing.T
 
 func TestExecutionSnapshotCollectorUsesCorrelationLimit(t *testing.T) {
 	var replayed []codec.ExecutionDetail
-	for _, execution := range capturedExecutions(t, executionsCapturePath) {
+	for _, execution := range capturedExecutions(t) {
 		if execution.ExecID == capturedReplayExecID {
 			replayed = append(replayed, execution)
 		}
@@ -446,9 +443,9 @@ func capturedServerMessages(t *testing.T, path string) []codec.Message {
 	return messages
 }
 
-func capturedExecutions(t *testing.T, path string) []codec.ExecutionDetail {
+func capturedExecutions(t *testing.T) []codec.ExecutionDetail {
 	t.Helper()
-	return capturedExecutionsFrom(capturedServerMessages(t, path))
+	return capturedExecutionsFrom(capturedServerMessages(t, executionsCapturePath))
 }
 
 func capturedExecutionsFrom(messages []codec.Message) []codec.ExecutionDetail {

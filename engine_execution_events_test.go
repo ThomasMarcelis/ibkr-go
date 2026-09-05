@@ -30,11 +30,6 @@ func TestExecutionEventObserverSeesEveryCapturedCallback(t *testing.T) {
 	e, _ := newEngineForDispatchTest()
 	sub := newSubscription[ExecutionEvent](subscriptionConfig{buffer: wantExecutions + wantFees}, nil)
 	e.executionEvents = &executionEventRoute{sub: sub}
-	// Prevent the order-handle correlator's unrelated unmatched-report timer
-	// from entering this observer-only test.
-	for _, report := range capturedCommissionsFrom(messages) {
-		e.execDeliveries[report.ExecID] = &execDelivery{orderID: -1}
-	}
 	for _, message := range messages {
 		switch message.(type) {
 		case codec.ExecutionDetail, codec.CommissionReport:
@@ -81,7 +76,6 @@ func TestExecutionEventObserverRunsBeforeQueryCorrelation(t *testing.T) {
 	e, _ := newEngineForDispatchTest()
 	sub := newSubscription[ExecutionEvent](subscriptionConfig{buffer: 2}, nil)
 	e.executionEvents = &executionEventRoute{sub: sub}
-	e.execDeliveries[reports[0].ExecID] = &execDelivery{orderID: -1}
 	e.keyed[executions[0].ReqID] = &route{
 		opKind: OpExecutions,
 		handle: func(any, *engine) {
