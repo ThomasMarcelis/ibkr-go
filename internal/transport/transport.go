@@ -299,24 +299,25 @@ func (c *Conn) writeLoop() {
 		c.queueMu.Unlock()
 
 		n, err := writeAll(c.conn, item.frame)
+		outcome := WriteUnwritten
+		if n == len(item.frame) {
+			outcome = WriteCompleteLocal
+		} else if n > 0 {
+			outcome = WriteIncomplete
+		}
 		if err != nil {
 			c.stop(err)
-			if item.id != 0 {
-				outcome := WriteUnwritten
-				if n > 0 {
-					outcome = WriteIncomplete
-				}
-				c.completed <- WriteResult{ID: item.id, Outcome: outcome, Err: err}
-			}
+		}
+		if item.id != 0 {
+			c.completed <- WriteResult{ID: item.id, Outcome: outcome, Err: err}
+		}
+		if err != nil {
 			c.queueMu.Lock()
 			unwritten := c.takeQueuedLocked()
 			c.queueMu.Unlock()
 			c.reportUnwritten(unwritten)
 			c.finishWriter()
 			return
-		}
-		if item.id != 0 {
-			c.completed <- WriteResult{ID: item.id, Outcome: WriteCompleteLocal}
 		}
 	}
 }

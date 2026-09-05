@@ -405,3 +405,48 @@ func assertBracketPlacementFailure(t *testing.T, resultErr, wantErr error) {
 		t.Fatalf("failed bracket error = %v, want %v", err, wantErr)
 	}
 }
+
+// Full acceptance plus an error is a local socket fault. The request bytes
+// are the sv225 current_time_live.txt capture (events.jsonl SHA-256
+// a9029ff8e7cfed19cab1e3e2eccc4c36d7c91b95aa6aa03f75543bacac454a9e).
+// Associate its tracked write with a local order route to isolate actor
+// sequencing; this does not claim a clock request places an order.
+type fullWriteErrorConn struct{ net.Conn }
+
+func (c fullWriteErrorConn) Write(p []byte) (int, error) {
+	return len(p), errors.New("injected failure after full local acceptance")
+}
+
+func TestCompleteWriteErrorStartsOrderBeforeTransportInterruption(t *testing.T) {
+	e, _ := newObservedMarketDataEngine(t)
+	_ = e.transport.Close()
+	peer, client := net.Pipe()
+	defer peer.Close()
+	tr := transport.New(fullWriteErrorConn{client}, nil, 0)
+	defer tr.Close()
+	e.transport = tr
+	e.cfg.reconnect = ReconnectOff
+	h := e.bindOrderHandle(47, Stock("AAPL"), 0)
+	id, err := tr.SendTracked(context.Background(), []byte{0, 0, 0, 249})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.trackOrderWrite(47, transportWriteKey{transport: tr, id: id})
+	e.attachTransport(tr)
+	go e.run()
+	select {
+	case <-e.Done():
+	case <-time.After(time.Second):
+		t.Fatal("transport error did not close engine")
+	}
+	event, ok := <-h.Events()
+	if !ok || event.Lifecycle == nil || event.Lifecycle.Kind != OrderStarted {
+		t.Fatalf("first event = %+v, want Started", event)
+	}
+	if err := h.Wait(); !errors.Is(err, ErrOrderRecoveryRequired) {
+		t.Fatalf("Wait: %v", err)
+	}
+	if len(e.pendingOrderWrites) != 0 {
+		t.Fatal("write completion was not handled before loss")
+	}
+}
