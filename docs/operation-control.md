@@ -12,9 +12,11 @@ the operation owns:
 - Orders and option exercises can have external effects. Ending local
   observation never implies that the server-side action was cancelled.
 
-The context passed to an operation controls admission and observation; it does
-not change these ownership facts. A context ending before admission sends no
-request. After admission, the table below applies.
+Query and subscription contexts control admission and observation. Placement,
+bracket, cancellation, replacement, and exercise contexts bound admission only;
+returned order and exercise handles have independent observation lifetimes.
+A context ending before admission sends no request. After admission, the table
+below applies.
 
 ## Query and finite-stream matrix
 
@@ -40,7 +42,7 @@ large. `WithQueueSize` controls that bound. Finite streams do not support
 
 An admitted `RegulatorySnapshot` may incur a fee. Loss of observation before
 completion returns `*RegulatorySnapshotUncertainError`, unless IBKR sent a
-definitive `*APIError`; do not retry an uncertain result automatically.
+definitive nonzero `*APIError`; do not retry an uncertain result automatically.
 
 ## Subscription matrix
 
@@ -77,3 +79,60 @@ send no order cancel and do not reverse an exercise instruction.
 operations; `Orders.CancelAll` is the explicit global cancel. Placement and
 exercise admission can leave externally visible work even if observation is
 later lost, so their recovery errors are intentionally non-retryable.
+
+## Waiting for readiness without ending a stream
+
+Give Subscribe the context that owns the stream. Bound the snapshot wait
+separately, and start exactly one Events reader before waiting:
+
+```go
+streamCtx, stopStream := context.WithCancel(serviceCtx)
+defer stopStream()
+sub, err := client.Accounts().SubscribePositions(streamCtx)
+if err != nil {
+    return err
+}
+defer sub.Close()
+go func() {
+    for event := range sub.Events() {
+        consumePositionEvent(event) // handle data, notices, and continuity
+    }
+}()
+snapshotCtx, cancelSnapshot := context.WithTimeout(serviceCtx, 20*time.Second)
+err = sub.AwaitSnapshot(snapshotCtx)
+cancelSnapshot() // does not cancel streamCtx
+if err != nil {
+    return err
+}
+// Keep this owner alive after the snapshot; deferred cleanup runs on exit.
+select {
+case <-serviceCtx.Done():
+    return serviceCtx.Err()
+case <-sub.Done():
+    return sub.Err()
+}
+```
+
+`HasSnapshot` reports capability, not health or completion. PnL, streaming
+quotes, real-time bars, tick-by-tick, depth, scanner results, display groups,
+bulletins, auto-open-orders, and the passive execution observer have no initial
+snapshot boundary. `AwaitSnapshot` returns `ErrNoSnapshot` for them; a first
+value or application-specific readiness condition is a different observation.
+
+The local historical bars/schedule admission gates spend the caller's context
+budget (two seconds between requests, fifteen seconds for identical requests).
+Cancellation before admission wakes promptly and sends nothing. These gates do
+not implement every IBKR pacing rule. `ErrInterrupted` can also mean local
+outbound queue backpressure without any physical connection loss.
+
+All-scope open orders is a snapshot per request/Refresh. Later cross-client
+pushes depend on the Gateway's master-client configuration. Client-0 auto scope
+binds future manual TWS orders; it is not an all-client push switch. Keep one
+open-order owner and schedule Refresh according to the application's
+reconciliation needs. A missing row in one snapshot alone is not a confirmed
+cancellation.
+
+An order's `Acknowledged` signal means an attributed broker callback was
+observed. Neither that signal, an open handle, nor nil from Cancel/Replace proves
+a currently working order or successful modification. Use events and snapshots
+to reconcile the actual broker state.

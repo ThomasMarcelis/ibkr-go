@@ -128,6 +128,9 @@ a terminal close reason is known.
 event must drain `Events()` until it closes, then call `Wait()`. `Done()` is for
 completion coordination and must not replace event draining.
 
+`HasSnapshot()` reports an immutable initial-boundary capability, including
+after closure. It is independent of readiness and health.
+
 `AwaitSnapshot(ctx)` is durable for snapshot-style subscriptions. It returns
 `nil` once `SnapshotComplete` has occurred, even if another consumer already
 read that event or the stream subsequently ended. It does not drain `Events()`
@@ -269,6 +272,7 @@ resting on the server.
 type OrderHandle struct{ /* opaque */ }
 
 func (h *OrderHandle) OrderID() int64
+func (h *OrderHandle) Acknowledged() <-chan struct{}
 func (h *OrderHandle) Events() <-chan OrderEvent
 func (h *OrderHandle) Done() <-chan struct{}
 func (h *OrderHandle) Wait() error
@@ -299,7 +303,11 @@ time limit; the execution is delivered first, followed by its pending fees.
 Consecutive identical reports are deduplicated; changed versions are retained.
 Correlation survives reconnects while the handles survive. Closing a handle
 releases its claimed IDs; closing the last one releases all unmatched fees.
-Unmatched fees are ignored when there are no order handles.
+Unmatched fees are ignored when there are no order handles. Fees for executions
+proven to have no local handle are released. A separate eviction-only FIFO
+retains up to the configured limit of excluded IDs so later fees can be ignored;
+eviction makes those IDs unknown again and never closes a handle. Existing
+positive ownership takes precedence; missing identity is not proof of exclusion.
 
 Overflow ends observation with both `ErrExecutionCorrelationOverflow` and
 `ErrOrderRecoveryRequired` (non-retryable). An attributable execution closes
@@ -309,6 +317,12 @@ cancellation and leaves the connection, execution queries, and passive execution
 observer available for reconciliation. Exercise errors retain their
 `ExerciseUncertainError` wrapper. Query limits remain independently configured
 by `WithExecutionCorrelationLimit`.
+
+`Acknowledged()` closes on the first successfully decoded, attributed open-order,
+status, or execution callback, before queue delivery. It records past broker
+observation, not a working order or current replacement safety. Writes, warnings,
+and Close never acknowledge; wait with Done and a deadline and keep draining
+Events. Missing client identity alone cannot establish client-0 ownership.
 
 `OrderEvent.Lifecycle` carries `Started`, `Gap`, `Restored`, and
 `RecoveryRequired` in order with business events. A physical reconnect or
@@ -326,6 +340,9 @@ calls match non-retryable `ErrOrderRecoveryRequired`. `Close()` detaches the
 handle without cancelling the server-side order. `Cancel(ctx)` sends a cancel
 request; compliance workflows can attach the manual cancel time, external
 operator, and manual-order indicator through `CancelOption`.
+Nil from Cancel or Replace reports queue admission, not broker confirmation.
+Direct cancellation uses `Orders().Cancel(ctx, OrderTarget{ClientID, OrderID})`;
+preserve both observed identities, including after a process restart.
 `Replace(ctx, order)` sends a modified order with the same OrderID. Its contract
 and parent are fixed at placement: an omitted `ParentID` preserves that parent
 before structural validation, including for hedges; a conflicting nonzero
@@ -409,6 +426,8 @@ observation window or an error ends it.
 - Calls submitted while the session is reconnecting wait for the next `Ready`
   transition or for their context to end; callers do not need to add their own
   client-wide mutex for bursty request sequences.
+- `ErrInterrupted` also reports local outbound queue backpressure before
+  admission; it does not by itself prove a physical connection loss.
 - One-shots are interrupted by connection loss and are not replayed
   automatically.
 - A data-lost restoration (code 1101) is a continuity loss even when the socket
@@ -474,3 +493,15 @@ Numeric and payload types:
 - Raw external XML/JSON boundaries use `XMLDocument` and `JSONDocument`.
 - Stable protocol vocabularies use named types and constants instead of
   anonymous strings or ints where the vocabulary is stable.
+
+## Account P&L sources
+
+Account-window P&L from SubscribeUpdates and dedicated SubscribePnL/PnLSingle
+are different IBKR feeds. Account updates can refresh on a trade or at roughly
+three-minute intervals; dedicated P&L updates are roughly once per second and
+follow the Gateway's P&L reset settings, with instrument-specific daily reset
+rules. Scope, currency, timing, and reset boundaries can differ. Choose the feed
+matching the view, retain timestamps/currency, and do not treat either as a
+universal reconciliation authority. See the official
+[TWS API reference](https://ibkrcampus.com/campus/ibkr-api-page/twsapi-doc/)
+sections on account updates and P&L; intervals are not delivery guarantees.

@@ -21,8 +21,8 @@ disconnect
 ```
 
 - `handshake` supplies the negotiated `server_version` and the wire-format
-  `connection_time`. An optional `"client_id":"$client"` binds the client ID
-  the testhost decodes from `START_API`.
+  `connection_time`. The host consumes `START_API`; there are no symbolic
+  client-ID bindings.
 - `raw` carries one complete length-prefixed frame. Client frames are matched
   byte for byte; server frames are written byte for byte.
 - `splitraw` delivers the same frame in the listed comma-separated chunk

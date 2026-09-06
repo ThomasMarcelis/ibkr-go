@@ -9,7 +9,7 @@ from the repository root after cloning and entering `ibkr-go`. To try the
 published connection example without a checkout:
 
 ```bash
-IBKR_ADDR=127.0.0.1:4002 go run github.com/ThomasMarcelis/ibkr-go/v2/examples/connect@v2.0.3
+IBKR_ADDR=127.0.0.1:4002 go run github.com/ThomasMarcelis/ibkr-go/v2/examples/connect@v2.1.0
 ```
 
 `IBKR_ADDR` configures the examples, which default to the paper Gateway at

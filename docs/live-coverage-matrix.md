@@ -60,7 +60,7 @@ dimensions help assess coverage; they are not fields of the executable catalog:
 | SESS-004 | Server control and old auth/redirect hooks | official `setServerLogLevel`, redirect, verify/auth, connectAck | none | out_of_scope | Classified 2026-06-11: no verify/auth, redirect, or connectAck callback was observed across the campaign's capture corpus, and the official client documents the verify/auth family as internal. `setServerLogLevel` controls server-side TWS log verbosity, an operator concern owned by the Gateway UI rather than a client library; callers control their own logging through the configured logger. Market-data reroutes are tracked under MD1/MD2 and are no longer part of this row. |
 | SESS-005 | Reconnect and interruption | reconnect policy, transport loss, API 1100/1101/1102 | `api_reconnect_active_order_aapl`, `api_reconnect_active_order_aapl.txt`, `reconnect_oneshot_interrupted.txt`, `quote_stream_reconnect.txt`, `delayed_quote_reconnect.txt`, direct engine fault tests | promoted | Active GTC order reconnect, order-handle recovery, one-shot interruption, and quote transport replacement use current sv225 frames. A September sv225 proxy-outage capture proves delayed quote data returns after restoring selection. Data-lost/data-maintained connectivity behavior is frozen by direct engine fault injection around captured message shapes. |
 | SESS-006 | Lifecycle edge contracts | subscription close, context cancel, singleton limits, slow consumer, concurrent one-shots | lifecycle fixtures, including `lifecycle_concurrent_oneshots.txt` | promoted | Current sv225 AAPL and EURUSD frames are rebound and deliberately reordered to freeze concurrent demultiplexing. Malformed registered callbacks retire their entire generation; buffered later rows are dropped and incomplete requests match both `ErrInterrupted` and `*ProtocolError`. Unknown IDs remain nonfatal. |
-| SESS-007 | Negotiated protocol train | version gates 208..225, official API 10.50.01 schemas | `supported_version_matrix.txt`, codec exact vectors, public routing tests, `protocol-audit-sv208-225.md` | promoted | The exact matrix negotiates all 18 supported versions and rejects 207/226. Native or official-SDK vectors freeze every implemented migration boundary through 225. API 10.50.01 settlement field 65 is live-replayed; its order field 145 requires sv226 and is outside support. |
+| SESS-007 | Negotiated protocol train | version gates 208..225, official API 10.50.01 schemas | `supported_version_matrix.txt`, codec exact vectors, public routing tests, `protocol-audit-sv208-225.md` | promoted | The exact matrix negotiates all 18 supported versions and rejects 207/226. Handshake and current-time requests are frozen at every supported version. Native/SDK message vectors cover selected layouts at 208, 209, 210, 211, 212, 213, 215, 219, and 225; source-gate tests cover additional boundaries. This is not every operation at every version. API 10.50.01 settlement field 65 is live-replayed; its order field 145 requires sv226 and is outside support. |
 
 ## Accounts, Positions, Portfolio, And PnL
 
@@ -329,3 +329,34 @@ paper-TWS interaction unavailable in the current Gateway setup. The retained
 option-exercise replay proves accepted-but-unsettled admission and must not be
 repeated merely to seek settlement. Verification callbacks are
 official-internal and outside the public charter.
+
+## September consumer observations and evidence limits
+
+The ibkr-mobile measurements (2026-08-29 through 2026-09-05, sv225) use one
+paper account with delayed data. They supplement the retained captures; they
+are not promoted replay fixtures or universal entitlement rules.
+
+| Operation | Consumer observation | Interpretation |
+|---|---|---|
+| Keep-up bars | 2188 refusal | This login could not prove positive live bar updates. |
+| Tick-by-tick | 10089 refusal | Other retained sessions returned 10189; both are entitlement observations. |
+| SMART depth | Notice 2152 followed by no rows within 15 seconds | The notice alone does not prove permanent unavailability. |
+| Option quote | Intermittent 10091 despite earlier data for the same tier/contracts | Preserve the code and caller policy; do not infer a permanent entitlement state or universal retry permission. |
+| News article | 10172, no data available | That request failed; future availability is not proven impossible. |
+| Option computations | 10–13 seen; 80–83 not seen; model tick 13 carried greeks while other ticks carried price/dividend fields | Field presence and negotiated data type matter more than assuming a callback family. Type 4 did not work on this login. |
+| Option calculation | ConID-only got 321 “Please enter exchange”; qualified requests worked | Price-from-volatility included greeks; volatility-from-price returned IV. Both requests now validate Exchange. |
+| Generic ticks | RTVolume absent with 233 requested; delayed volume differed markedly from consolidated-volume observations | No scaling or invented RTVolume result. Volume feeds and measurement windows are not interchangeable. |
+| P&L | Account-updates and dedicated reqPnL differed in the same second | Sources have different update/reset schedules and scope; this is not sufficient evidence of a codec bug. |
+| All-scope open orders | Another client's newly placed order appeared on Refresh, not as an unsolicited push | All is a snapshot request. Gateway master-client configuration governs broader push delivery; client-0 auto-binding is a separate feature. |
+
+The retained scanner XML (1,801,494 bytes) and the consumer's later XML
+(1,801,525 bytes) are different captures. `TestScannerParametersPublicCaptured`
+proves the retained document's public collector; it does not freeze the changing
+catalog's counts. `TestPositionsMultiOneShotCaptured` proves the multi-position
+collector. `TestHistoricalLastTicksPublicProjectionCaptured` proves positive
+TRADES projection at sv215; MIDPOINT/BID_ASK success remains unproven here.
+
+`TestEncodeRetainedClassicRequests` adds 23 outbound request types using retained
+sv208/210/211 client bytes. Request encoding, handshake negotiation, positive
+decoder layout, and a complete public operation are separate evidence levels.
+The decoder ledger still records 86 attested layouts and 20 pending positives.

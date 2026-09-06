@@ -34,10 +34,12 @@ quotes, err := client.MarketData().SubscribeQuotes(ctx, ibkr.QuoteRequest{
 if err != nil {
     return err
 }
+defer quotes.Close()
 for q := range quotes.All(ctx) {
     want := ibkr.QuoteFieldBid | ibkr.QuoteFieldAsk
     if q.Snapshot.Available&want == want {
         fmt.Println(q.Snapshot.Bid, q.Snapshot.Ask)
+        break
     }
 }
 quotes.Close()
@@ -47,7 +49,7 @@ return errors.Join(quotes.Wait(), context.Cause(ctx))
 ## Install
 
 ```bash
-go get github.com/ThomasMarcelis/ibkr-go/v2@v2.0.3
+go get github.com/ThomasMarcelis/ibkr-go/v2@v2.1.0
 ```
 
 Requires Go 1.26+. Two dependencies:
@@ -56,9 +58,10 @@ arithmetic and the [protobuf runtime](https://pkg.go.dev/google.golang.org/proto
 Full API reference on [pkg.go.dev](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2).
 
 Import it as `"github.com/ThomasMarcelis/ibkr-go/v2"`; the package name is
-`ibkr`. This README describes the v2.1.0 development tree. The install command
-and [published reference](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2@v2.0.3)
-use the current stable release, v2.0.3.
+`ibkr`. The install command and
+[published reference](https://pkg.go.dev/github.com/ThomasMarcelis/ibkr-go/v2@v2.1.0)
+target v2.1.0. Upgrading from v2.0? See the
+[v2.1 migration guide](docs/migration-v2.1.md) for the deliberate API changes.
 
 ### Connect
 
@@ -74,7 +77,7 @@ socket port shown in those settings:
 Run the connection example from any directory:
 
 ```bash
-IBKR_ADDR=127.0.0.1:4002 go run github.com/ThomasMarcelis/ibkr-go/v2/examples/connect@v2.0.3
+IBKR_ADDR=127.0.0.1:4002 go run github.com/ThomasMarcelis/ibkr-go/v2/examples/connect@v2.1.0
 ```
 
 It prints the ready session and server time, then exits. The examples use
@@ -221,9 +224,11 @@ why, nil for a clean close, and `ibkr.IsRetryable(err)` tells you whether to
 back off and try again.
 
 Quote fields arrive separately. `Quote.Available` distinguishes a populated
-field from its initial zero value; IBKR's `-1` price means no quote for that
-side. Delayed data is available only for supported products and exchanges;
-historical data, depth, and other feeds can still require permissions.
+field from its initial zero value. Bid/ask/last prices of `-1` or `0` with
+zero companion size can signal no quote. Raw values stay intact: negative
+prices can be legitimate, and zero sizes on OHLC fields have other meanings.
+Delayed data is available only for supported products and exchanges; historical
+data, depth, and other feeds can still require permissions.
 
 ### Historical bars
 
@@ -394,7 +399,7 @@ Cancellation and connection-retirement details are in
 
 ## Examples
 
-Ten runnable programs under [`examples/`](examples/), each one file against a
+Ten runnable programs under [`examples/`](examples/), using a
 real Gateway. Start with `connect`, `quotes`, `historical`, `portfolio`, and
 `order`, then `bracket`, `option-chain`, `scanner`, `resilient-quotes`, and
 `margin-preview`. The order-shaped ones refuse to run outside a paper
@@ -402,7 +407,10 @@ account.
 
 ## Status
 
-The v2 line covers the in-scope socket API against `server_version` 208–225.
+The v2 line negotiates `server_version` 208–225. Each version has captured
+handshake and current-time evidence; most positive operation replays use 225.
+Message-layout vectors cover selected versions, not every operation at every
+version.
 The [coverage matrix](docs/live-coverage-matrix.md) says which paths have live proof and which are blocked by entitlements or market state. Release notes are in the [CHANGELOG](CHANGELOG.md).
 Not planned: Flex, Client Portal Web API, or an `EWrapper` / `EClient` compatibility bridge. See [`docs/roadmap.md`](docs/roadmap.md).
 

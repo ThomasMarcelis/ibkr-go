@@ -1,11 +1,37 @@
-# v2.1.0 candidate
+# v2.1.0 release record
 
-Prepared on 2026-09-05. This is an untagged candidate; v2.0.3 remains the
-published install target. The only public API addition is
-`WithOrderExecutionCorrelationLimit`. No dependencies or supported Gateway
-versions changed. User-visible changes are in the [changelog](../CHANGELOG.md).
+Prepared for release on 2026-09-06 after the maintainer review. It adds explicit
+cancellation identity, order acknowledgement and snapshot-capability signals, and bounded
+execution correlation. Seven deliberate source breaks and the behavior changes
+are documented in [migration-v2.1](migration-v2.1.md). No dependencies or
+supported Gateway versions changed. User-visible changes are in the
+[changelog](../CHANGELOG.md); accepted, rejected and deferred findings are in
+the [decision ledger](review-decisions-2026-09-06.md).
 
-## Evidence
+## Review evidence, 2026-09-06
+
+Retained sv225 callbacks freeze independent handle/observer fanout,
+acknowledgement, rejection 10315, and execution/fee attribution. Actor tests
+cover canceled historical waits, bootstrap timeout under both reconnect
+policies, partial writes, data-maintained restoration, and shutdown ordering.
+Reordering, omitted callbacks, constrained queues and partial writes are local
+fault injection, identified beside the tests. Regulatory uncertainty uses the
+existing capture; no new fee-bearing request was made.
+
+Public scanner XML, PositionsMulti and historical LAST collectors now have
+retained-frame regressions. Classic request tests promote 23 request types from
+sv208/210/211 captures. This does not complete classic encoder evidence or the
+decoder ledger: 86/106 layouts have positive attestation, with 20 still pending.
+The [coverage matrix](live-coverage-matrix.md) separates request bytes, positive
+callbacks, public replay and per-login entitlement observations.
+
+The API gate reads the immutable highest reachable stable same-major baseline.
+`v2.0.3-v2.1.0.breaks` records exactly seven incompatible differences and names
+the migration guide. Isolated-history regressions reject missing, stale, extra
+and wrong-pair allowances. The candidate manifest and candidate-tag exclusion
+checks remain mandatory; no general compatibility bypass was added.
+
+## Earlier candidate evidence, 2026-09-05
 
 - Reconnect: local Gateway sv225 returned code 10089 after a proxy outage before
   the fix. The same test receives quote data before and after recovery with
@@ -42,22 +68,35 @@ MES, hedge, and clock provenance remains in their existing transcript headers
 and regression comments. The corpus now contains 115 transcripts. The capture
 catalog remains 125 scenarios: 104 promoted and 21 blocked.
 
-## Verification
+## Verification, 2026-09-06
 
 Passed with Go 1.26.7 on Linux/amd64:
 
 - Module tidy/verify, formatting, build, vet, lint, pure-Go linux/386 build.
-- All packages with `CGO_ENABLED=0`, shuffled tests, and race detection.
+- All packages, shuffled tests, and shuffled race tests.
 - API compatibility, exact candidate, and `--release v2.1.0` checks.
-- All five fuzz targets for five seconds each; vulnerability scan found no issues.
-- Capture normalization/verification and transcript provenance/lineage checks.
-- All 17 documentation examples, nine README blocks, and four package-overview
-  snippets compile in consumer modules against v2.0.3 and the candidate. Example
-  attachment, rendered pkgsite links, and the 125-scenario inventory check out.
-  All executable examples build.
-- Focused live read-only checks, including exact handshakes 208–225 and quote
-  recovery through a forced outage, passed. The changed order and bracket
-  examples ran on paper sv225 and observed cancellation of all four placed legs.
+- Fuzz inventory and all five targets for 30 seconds each; govulncheck v1.6.0
+  found no vulnerabilities.
+- Capture normalization, transcript provenance/lineage, codec vectors and
+  attestation-test citations through the deterministic suite.
+- Successful and failed raw replays repeated 300 times under `ulimit -n 256`.
+- Live read-only handshake/current-time checks for every supported version
+  208–225 against `127.0.0.1:4002`, client ID 19207. These verify negotiation and
+  clock behavior, not every operation at every version.
+- Rendered pkgsite HTML verifies the release install commands, new API anchors
+  and documentation links. The browser preview tool could not initialize in
+  this environment, so this revision has no fresh screenshot inspection.
+
+The final paper sv225 example run on September 6 exercised all ten programs.
+Nine exited successfully, including Ctrl-C for resilient quotes. Historical
+bars returned the expected typed code-2188 entitlement refusal. Order 702 and
+bracket legs 703–705 all reached Cancelled. No regulatory snapshot or option
+exercise was issued. The deliberately changed examples now require v2.1.
+
+On September 5, before these review changes, the candidate also passed
+pure-Go tests, documentation snippet compilation against v2.0.3 and that
+candidate, rendered pkgsite checks, and live quote recovery. That forced-outage
+run was not repeated for this revision.
 
 An existing logger test intermittently assumed a fatal diagnostic would reach
 its handler before shutdown discarded queued logs. It now uses the existing
@@ -68,7 +107,34 @@ The backpressure test also raced a clock timeout that correctly retires the
 session. It now verifies local execution observation with the outbound queue
 full; the separate singleton-cancellation regression retains retirement coverage.
 
-## Performance check
+## Consumer migration check, 2026-09-06
+
+An isolated copy of the ibkr-mobile hub was migrated from its v2.0.2 pin using
+a temporary module replacement. The real consumer checkout and dependency pin
+were left unchanged. The edits propagate OrderTarget through the broker port,
+live adapter, fake, simulator and recovered-order cancellation, and classify
+opening orders using Market/Limit plus OPG. Targeted regressions cover that
+classification and foreign-target refusal.
+
+`go build -buildvcs=false ./...` and
+`go test -race ./internal/orders ./internal/broker/... -count=1 -timeout=60s`
+passed. VCS stamping was disabled only because this temporary copy has no
+repository metadata. The full hub suite compiled but did not pass:
+
+- `TestE2E_SimBarsCarryTheSessionsTheyFallIn/TIMEFRAME_1D` returned NO_DATA/404.
+  The same failure reproduced in all three runs against the original v2.0.2
+  dependency, establishing that it predates this migration.
+- `TestSub_AnIdleScanIsGivenUpToMakeRoomForANewOne` observed four subscriptions
+  while expecting five. Twenty isolated race runs passed on each dependency.
+  Its immediate-close/asynchronous-open ordering remains an unresolved test
+  limitation; this run does not establish the cause or a migration regression.
+
+The reusable migration steps are in [migration-v2.1](migration-v2.1.md). The
+temporary audit also produced an 11-file hub patch, excluding dependency pins
+and local replacement paths. This checks compilation and affected behavior;
+it does not claim a mobile rollout, GUI verification or live trading migration.
+
+## Earlier performance check, 2026-09-05
 
 Ten runs of `BenchmarkPublicQuoteStream`, `-benchtime=1x`, on Go 1.26.7,
 Linux/amd64, Ryzen 7 9800X3D, `GOMAXPROCS=16` produced these medians:
@@ -86,12 +152,11 @@ establish a regression against them. The three-second actor profile no longer
 samples per-event validation or `testing.Helper` in its timed path. No
 production optimization was added.
 
-## Remaining work before publication
+## Publication checks and evidence limits
 
-Follow the [release checklist](../CONTRIBUTING.md) on the exact release tree,
-including platform CI and the release workflow's longer fuzz runs. Set the
-changelog date and published install target when releasing. The candidate
-remains untagged and unpublished.
+Publication requires the [release checklist](../CONTRIBUTING.md) on the exact
+release tree, platform CI, and the annotated-tag workflow. GitHub's workflow
+runs record the final remote checks and publication outcome.
 
 Signed cancellation remains excluded. It needs client-0 binding of a
 user-created, nonmarketable paper TWS order and capture of cancellation of that

@@ -192,3 +192,16 @@ client shutdown. Subscription cancellation may retire a connection when local
 admission fails or a late request-ID-less response cannot safely be separated
 from a replacement request. See [operation control](operation-control.md) for
 the per-operation cancellation and retirement matrix.
+
+## Request and order identity
+
+Request IDs and order IDs share the Gateway error-correlation namespace. The
+actor allocates positive request IDs while avoiding active orders, previews,
+and routes. Order allocation also respects the Gateway's next-valid-ID floor
+and IDs observed from other clients before avoiding active collisions. These
+are different allocation rules within one namespace; an error's numeric ID
+alone cannot identify a safe order action.
+
+Direct cancellation therefore requires `OrderTarget{ClientID, OrderID}`. A
+caller can use an observed same-client identity after a process restart;
+process-local allocation history is not the source of broker ownership.

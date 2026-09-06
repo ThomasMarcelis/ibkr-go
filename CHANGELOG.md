@@ -4,24 +4,41 @@ Notable changes per release, following [Keep a Changelog](https://keepachangelog
 The evidence behind each release (captures, gate runs, coverage) lives at its
 tag.
 
-## v2.1.0 - Unreleased
+## v2.1.0 - 2026-09-06
 
 ### Added
 
-- `WithOrderExecutionCorrelationLimit` bounds retained execution IDs and pending
-  fee versions across order handles (default 4096 each). Overflow ends affected
-  observation with `ErrExecutionCorrelationOverflow` and `ErrOrderRecoveryRequired`;
-  unmatched-fee overflow ends all local order observation without cancelling orders.
+- `OrderHandle.Acknowledged` reports the first attributed broker callback;
+  `Subscription.HasSnapshot` reports whether an initial boundary exists.
+- `WithOrderExecutionCorrelationLimit` bounds retained order execution IDs
+  and pending fee versions (default 4096 each).
+- Named error codes for invalid active start time (10315), partial market-data
+  subscription requirements (10091), and failed news articles (10172).
+
+### Changed
+
+- Direct cancellation requires `OrderTarget{ClientID, OrderID}` and rejects
+  foreign client IDs locally; recovered same-client orders remain cancellable.
+- Remove unsupported auction strategy fields, MOO/LOO/PEG PRI order constants,
+  and `FADataProfiles`. See the [v2.1 migration guide](https://github.com/ThomasMarcelis/ibkr-go/blob/v2.1.0/docs/migration-v2.1.md).
+- Historical tick/news bounds serialize in UTC; option calculations require
+  Exchange, and market-rule lookups require a positive ID.
 
 ### Fixed
 
-- Documentation examples use the public API; connection setup and cancellation guidance are clearer.
-- The reconnect example exits successfully on Ctrl-C while preserving stream failures.
-- Restore the selected market-data type before subscriptions and new work on reconnect.
-- Retain fees until their execution arrives or observation ends; remove the 750 ms expiry.
-- Preserve a hedge's bound parent when `Replace` omits `ParentID`.
-- Report complete local order writes even when the socket also returns an error.
-- Release checks compare against immutable prior tags, so regenerated manifests cannot hide breaking changes.
+- Preserve healthy open-order observers when one handle overflows.
+- Release fees for executions proven unrelated to local handles; retain
+  possible owned fees until attribution or observation ends.
+- Terminate order observation on captured rejection 10315; preserve uncertainty
+  for code-0 regulatory snapshot failures and incomplete bootstrap errors.
+- Wake canceled historical admission waits promptly and close SessionEvents
+  before Client.Done.
+- Restore selected market-data type before reconnect work and preserve a
+  hedge's bound parent when Replace omits ParentID.
+- Report a complete local order write before reporting connection loss.
+- Close replay listeners deterministically; clarify per-method lifecycle,
+  cancellation, snapshot, and financial-data interpretation documentation.
+- Keep examples copyable and exit successfully on Ctrl-C during connection setup.
 
 ## v2.0.3 - 2026-08-29
 
