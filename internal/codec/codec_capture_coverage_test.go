@@ -1,6 +1,10 @@
 package codec
 
 import (
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
 	"testing"
 
 	"github.com/ThomasMarcelis/ibkr-go/v2/internal/protocol"
@@ -235,6 +239,34 @@ func TestInboundDecoderRawFrameCoverage(t *testing.T) {
 	for key := range pendingLiveAttestation {
 		if _, ok := registered[key]; !ok {
 			t.Errorf("pendingLiveAttestation names unregistered decoder pair (%d, %v)", key.msgID, key.encoding)
+		}
+	}
+}
+
+// Keep the navigation ledger executable: renamed or deleted attestation tests
+// must update the entry, including references to public replay tests.
+func TestAttestationTestNamesExist(t *testing.T) {
+	names := make(map[string]bool)
+	for _, pattern := range []string{"*_test.go", "../../*_test.go"} {
+		paths, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, path := range paths {
+			file, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, decl := range file.Decls {
+				if fn, ok := decl.(*ast.FuncDecl); ok && fn.Recv == nil {
+					names[fn.Name.Name] = true
+				}
+			}
+		}
+	}
+	for key, name := range rawFrameAttested {
+		if !names[name] {
+			t.Errorf("attestation %+v cites missing test %s", key, name)
 		}
 	}
 }

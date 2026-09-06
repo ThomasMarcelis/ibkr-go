@@ -16,7 +16,7 @@ func TestDecodeHistoricalTicksLastProto215LiveFrame(t *testing.T) {
 	// Capture 20260713T164153Z-sdk_sv215_request_cancels, events.jsonl SHA-256
 	// b3515b46284970f338db6ede7b2864f4d63449027f9f48ff203a67f4fd34d019.
 	// API 10.48.01 requested the data from a live server_version 215 Gateway.
-	frame := decodeGzipBase64(t, "H4sIAAAAAAACA9WYT2gTQRTGd5O1Tb0oxYO51E1MWrNg2dmsaYoIbpukBm0hacEeKnrwIChY8ZZ7D6Vie1IUBLWCCuKhB6kHLz148Q/JVmgbReiphx5ERFFK0U2a7s6bzGTHkNi65x/fvPd9b2YyEQRR8c0dbw/7lmY/mC3tkk/YL/p/HBmbXihcPxn0oKgi9Rkjw5okp+Q0E9NURTKy/QYV6565/xOZFiYiZU8qPZQtYXIVZgqfPW3uWOt7f6ZY2J1qnBinIYmpK2sbhUa1wIk9Gj+xd8kdS3f/Dmy6YxfPfUp5zUapvXmQfPHtf6stgGGC3zJ3dryEeTVVrYAEcmo1d+B5eVfpqtIyZAwnjAwPEqQjXoQcBta8tvH0q+leM0dBTlsoZrcV9i3z+dg8rMbQ16FmGyHGIBbEMMGfne+YWC9hElJVhhtM63dBm5xqnJhj2j9clGnvIZAUmOzyBUZEie0iFZ/9ZbftwVl1J90qD9L4LD3Gh2l1BcQqTtNreXr3jvWVubi69dthZ5KGmL0nq7EVPrUVvtoaiXUBzDEWoe05s5OigiIvFye4MFPPrk9vuHewuHdvrW+xsquwVc/W5zFncc+mPl4SFoktU90qc8vIGIafDDHkXAPNmhDsFvboePIpWSZGyQGjvUT0EYaitZl9iWz/SDIxkKxohlmLq9ibQWYqWp6QihFGlaiXQMlpwRqKQ4dCdM4yEj5Y6JRWKxVcbOcPC4g9eX26Z5I+MUUsjdKADhB3lz0xRUzPATUIlhZmKuJjEKLrVQXBXJWNnemZNC7QPcGxifXMfAft2uyiYx4tRrTKBElPQsyF8dc0i4KWyMBfZ1H7XOQgoBGvsrcCN938EraO4DwlSqjmYCgO2uukq3lRVFekweTgqIsckXmIjmFuVUfO7DQAarOmbDWXJ15lUOmh9bzbzLvO2I2Xl9t+lR+VOnmB4JhsXj3f6j6xnNjtmX25WMPUmBgM4Frp+NsOAPxF1LxGI2PTC9/dQ+DMCh8hgB0G2NG5e18eVzBvX3L0rxo4KP4BL3chDGITAAA=")
+	frame := readCapturedGzip(t, "testdata/historical_ticks_last_sv215.gz")
 	decoded, err := Decode(215, frame)
 	if err != nil {
 		t.Fatal(err)
@@ -222,6 +222,20 @@ func TestHistoricalProto208MissingNestedCallbackIsDropped(t *testing.T) {
 		}
 		if len(got) != 0 {
 			t.Fatalf("DecodeBatch(base id %d) = %#v, want no callback", tc.id, got)
+		}
+	}
+}
+
+func TestCapturedProtobufTruncation(t *testing.T) {
+	// Each slice removes bytes from the exact sv215 positive LAST callback
+	// above. Empty protobuf messages can be valid; these cuts end inside the
+	// captured length-delimited payload or its final scalar value.
+	frame := readCapturedGzip(t, "testdata/historical_ticks_last_sv215.gz")
+	for _, cut := range []int{5, 8, 10, len(frame) - 1} {
+		messages, err := DecodeBatch(215, frame[:cut])
+		malformed := requireMalformedInbound(t, messages, err)
+		if malformed.MsgID != protocol.InHistoricalTicksLast || malformed.Err == nil {
+			t.Fatalf("truncation at %d = %+v", cut, malformed)
 		}
 	}
 }
