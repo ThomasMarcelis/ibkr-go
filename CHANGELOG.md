@@ -6,39 +6,59 @@ tag.
 
 ## v2.1.0 - 2026-09-06
 
+This release includes **breaking API changes**. Read the [v2.1 migration guide](https://github.com/ThomasMarcelis/ibkr-go/blob/main/docs/migration-v2.1.md) before upgrading.
+
 ### Added
 
-- `OrderHandle.Acknowledged` reports the first attributed broker callback;
-  `Subscription.HasSnapshot` reports whether an initial boundary exists.
-- `WithOrderExecutionCorrelationLimit` bounds retained order execution IDs
-  and pending fee versions (default 4096 each).
-- Named error codes for invalid active start time (10315), partial market-data
-  subscription requirements (10091), and failed news articles (10172).
+- Detect IBKR’s first update about your order with `OrderHandle.Acknowledged`.
+  Acceptance and fills still require checking the order’s status.
+- Check whether a subscription signals when its initial data is complete with
+  `Subscription.HasSnapshot`. Use `AwaitSnapshot` to wait for that point.
+- Configure how much information is retained to match trade executions with
+  their fees using `WithOrderExecutionCorrelationLimit`. Defaults to 4,096
+  execution IDs and 4,096 pending fee reports.
+- Handle three more IBKR errors using named constants: invalid order start
+  times (10315), partially unavailable market data (10091), and failed news
+  article requests (10172).
 
 ### Changed
 
-- Direct cancellation requires `OrderTarget{ClientID, OrderID}` and rejects
-  foreign client IDs locally; recovered same-client orders remain cancellable.
-- Remove unsupported auction strategy fields, MOO/LOO/PEG PRI order constants,
-  and `FADataProfiles`. See the [v2.1 migration guide](https://github.com/ThomasMarcelis/ibkr-go/blob/v2.1.0/docs/migration-v2.1.md).
-- Historical tick/news bounds serialize in UTC; option calculations require
-  Exchange, and market-rule lookups require a positive ID.
+- Cancel orders using both their client ID and order ID via `OrderTarget`.
+  Requests targeting another API client are rejected locally; orders recovered
+  after restarting with the same client ID remain cancellable.
+- Removed unsupported order-type constants (`MOO`, `LOO`, `PEG PRI`),
+  auction-strategy fields, and financial-adviser profiles (`FADataProfiles`).
+  The migration guide explains replacements where available.
+- Historical tick and news requests now send start and end times in UTC,
+  avoiding ambiguity when clocks change.
+- Option price and implied-volatility calculations now require
+  `Contract.Exchange`, even when a contract ID is supplied.
+- Market-rule lookups now reject zero or negative IDs before contacting IBKR.
 
 ### Fixed
 
-- Preserve healthy open-order observers when one handle overflows.
-- Release fees for executions proven unrelated to local handles; retain
-  possible owned fees until attribution or observation ends.
-- Terminate order observation on captured rejection 10315; preserve uncertainty
-  for code-0 regulatory snapshot failures and incomplete bootstrap errors.
-- Wake canceled historical admission waits promptly and close SessionEvents
-  before Client.Done.
-- Restore selected market-data type before reconnect work and preserve a
-  hedge's bound parent when Replace omits ParentID.
-- Report a complete local order write before reporting connection loss.
-- Close replay listeners deterministically; clarify per-method lifecycle,
-  cancellation, snapshot, and financial-data interpretation documentation.
-- Keep examples copyable and exit successfully on Ctrl-C during connection setup.
+- A full event queue for one order no longer interrupts separate subscriptions
+  watching open orders.
+- Fee reports arriving before their matching trade execution are retained for
+  matching. Unrelated trades no longer consume the capacity reserved for
+  tracking your orders.
+- Orders rejected for an invalid start time now report the rejection and close
+  their update stream.
+- IBKR code-0 failures on fee-bearing quote snapshots now explicitly flag
+  uncertain billing; do not retry these automatically.
+- Connection failures during startup now preserve the underlying cause.
+- Canceling a historical-data request waiting for permission to send now takes
+  effect promptly.
+- `SessionEvents` now closes before `Client.Done`, so shutdown consistently
+  signals the end of session events.
+- Reconnecting restores your selected market-data type before resuming requests.
+- Replacing a hedge order preserves its parent order when `ParentID` is omitted.
+- A completed order write is still reported if the connection fails immediately
+  afterward.
+- Replay tests now reliably release listening sockets.
+- Documentation clarifies subscription lifetimes, cancellation, initial data,
+  and financial values. Examples remain copyable and exit cleanly on Ctrl-C
+  during connection setup.
 
 ## v2.0.3 - 2026-08-29
 
