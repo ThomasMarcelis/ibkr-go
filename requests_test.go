@@ -319,8 +319,8 @@ func TestFormatHistoricalTickTime(t *testing.T) {
 		t.Fatalf("LoadLocation() error = %v", err)
 	}
 	timestamp = time.Date(2026, 4, 5, 8, 0, 0, 0, newYork)
-	if got := formatHistoricalTickTime(timestamp); got != "20260405 08:00:00 America/New_York" {
-		t.Fatalf("formatHistoricalTickTime() = %q, want %q", got, "20260405 08:00:00 America/New_York")
+	if got := formatHistoricalTickTime(timestamp); got != "20260405 12:00:00 UTC" {
+		t.Fatalf("formatHistoricalTickTime() = %q, want %q", got, "20260405 12:00:00 UTC")
 	}
 }
 
@@ -383,8 +383,8 @@ func TestFormatHistoricalNewsTime(t *testing.T) {
 		t.Fatalf("LoadLocation() error = %v", err)
 	}
 	timestamp = time.Date(2026, 4, 5, 14, 0, 0, 0, amsterdam)
-	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 14:00:00.0 Europe/Amsterdam" {
-		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 14:00:00.0 Europe/Amsterdam")
+	if got := formatHistoricalNewsTime(timestamp); got != "2026-04-05 12:00:00.0 UTC" {
+		t.Fatalf("formatHistoricalNewsTime() = %q, want %q", got, "2026-04-05 12:00:00.0 UTC")
 	}
 }
 
@@ -501,5 +501,27 @@ func TestValidateResumePolicy(t *testing.T) {
 	}
 	if err := validateResumePolicy(OpExecutions, ResumeAuto); !isValidationField(err, "ResumePolicy") {
 		t.Fatalf("validateResumePolicy() error = %v, want ResumePolicy validation", err)
+	}
+}
+
+// Absolute request bounds must distinguish the two occurrences of a repeated
+// DST hour. The accepted explicit UTC spellings are retained by the historical
+// tick and news captures; this test varies only the local time representation.
+func TestHistoricalBoundsPreserveRepeatedDSTHour(t *testing.T) {
+	zone, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := time.Date(2026, 11, 1, 5, 30, 0, 0, time.UTC)
+	second := first.Add(time.Hour)
+	for _, format := range []func(time.Time) string{formatHistoricalTickTime, formatHistoricalNewsTime} {
+		if format(first.In(zone)) == format(second.In(zone)) {
+			t.Fatal("distinct DST instants became one request")
+		}
+		for _, instant := range []time.Time{first, second} {
+			if format(instant) != format(instant.In(zone)) {
+				t.Fatal("equivalent instants became different requests")
+			}
+		}
 	}
 }

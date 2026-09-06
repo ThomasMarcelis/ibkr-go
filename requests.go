@@ -295,8 +295,7 @@ func formatHistoricalTickTime(t time.Time) string {
 }
 
 // The Gateway requires the documented fractional-second suffix on historical
-// news bounds. Preserve the caller's explicit zone so login zones cannot shift
-// the window.
+// news bounds. UTC preserves the instant even inside a repeated DST hour.
 func formatHistoricalNewsTime(t time.Time) string {
 	if t.IsZero() {
 		return ""
@@ -305,12 +304,7 @@ func formatHistoricalNewsTime(t time.Time) string {
 }
 
 func formatTimeWithZone(t time.Time, layout string) string {
-	zone := t.Location().String()
-	if zone == "" || zone == "Local" {
-		t = t.UTC()
-		zone = "UTC"
-	}
-	return t.Format(layout) + " " + zone
+	return t.UTC().Format(layout) + " UTC"
 }
 
 func formatWSHDate(t time.Time) string {
