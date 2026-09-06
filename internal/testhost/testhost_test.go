@@ -129,3 +129,56 @@ func TestSplitClientDirection(t *testing.T) {
 		t.Fatalf("host.Wait() error = %v", err)
 	}
 }
+
+func TestRunClosesListenerOnSuccessAndReadFailure(t *testing.T) {
+	// Exact sv225 current-time request from supported_version_matrix.txt.
+	frame, err := base64.StdEncoding.DecodeString("AAAABAAAAPk=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, failRead := range []bool{false, true} {
+		host, err := New("raw client AAAABAAAAPk=")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = host.Close() })
+		conn, err := net.Dial("tcp", host.Addr())
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = conn.Close() })
+		outgoing := frame
+		if failRead {
+			outgoing = frame[:1]
+		} // Fault injection: cut the captured write short.
+		if _, err := conn.Write(outgoing); err != nil {
+			t.Fatal(err)
+		}
+		if failRead {
+			_ = conn.Close()
+		}
+		if err := host.Wait(); (err != nil) != failRead {
+			t.Fatalf("Wait = %v, failed read = %t", err, failRead)
+		}
+		if _, err := host.listener.Accept(); !errors.Is(err, net.ErrClosed) {
+			t.Fatalf("completed host listener = %v", err)
+		}
+	}
+}
+
+func TestCloseInterruptsReplaySleep(t *testing.T) {
+	host, err := New("sleep 1h") // Local scheduling instruction; no protocol data.
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = host.Close() })
+	_ = host.Close()
+	select {
+	case <-host.done:
+	case <-time.After(time.Second):
+		t.Fatal("Close left replay sleeping")
+	}
+	if !errors.Is(host.Wait(), net.ErrClosed) {
+		t.Fatalf("interrupted replay = %v", host.Wait())
+	}
+}

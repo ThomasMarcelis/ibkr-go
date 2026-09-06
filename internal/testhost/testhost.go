@@ -23,9 +23,12 @@ type Host struct {
 	steps    []step
 
 	done chan struct{}
+	stop chan struct{}
 
-	mu  sync.Mutex
-	err error
+	mu     sync.Mutex
+	err    error
+	conn   net.Conn
+	closed bool
 }
 
 type step struct {
@@ -51,6 +54,7 @@ func New(script string) (*Host, error) {
 		addr:     listener.Addr().String(),
 		steps:    steps,
 		done:     make(chan struct{}),
+		stop:     make(chan struct{}),
 	}
 	go h.run()
 	return h, nil
@@ -70,7 +74,32 @@ func (h *Host) Addr() string {
 }
 
 func (h *Host) Close() error {
+	h.mu.Lock()
+	if !h.closed {
+		h.closed = true
+		close(h.stop)
+	}
+	conn := h.conn
+	h.mu.Unlock()
+	if conn != nil {
+		_ = conn.Close()
+	}
 	return h.listener.Close()
+}
+
+func (h *Host) accept() (net.Conn, error) {
+	conn, err := h.listener.Accept()
+	if err != nil {
+		return nil, err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.closed {
+		_ = conn.Close()
+		return nil, net.ErrClosed
+	}
+	h.conn = conn
+	return conn, nil
 }
 
 func (h *Host) Wait() error {
@@ -82,6 +111,7 @@ func (h *Host) Wait() error {
 
 func (h *Host) run() {
 	defer close(h.done)
+	defer func() { _ = h.Close() }()
 
 	var conn net.Conn
 	defer func() {
@@ -95,11 +125,18 @@ func (h *Host) run() {
 		cur := h.steps[i]
 		switch cur.kind {
 		case "sleep":
-			time.Sleep(cur.duration)
+			timer := time.NewTimer(cur.duration)
+			select {
+			case <-timer.C:
+			case <-h.stop:
+				timer.Stop()
+				h.finish(net.ErrClosed)
+				return
+			}
 		case "handshake":
 			if conn == nil {
 				var err error
-				conn, err = h.listener.Accept()
+				conn, err = h.accept()
 				if err != nil {
 					h.finish(err)
 					return
@@ -158,7 +195,7 @@ func (h *Host) run() {
 		case "raw", "splitraw":
 			if conn == nil {
 				var err error
-				conn, err = h.listener.Accept()
+				conn, err = h.accept()
 				if err != nil {
 					h.finish(err)
 					return
