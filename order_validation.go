@@ -238,7 +238,7 @@ func validateOrderPrices(contract Contract, order Order) error {
 		if order.LmtPrice == nil && (contract.SecType != SecTypeCombo || len(order.Combo.LegPrices) == 0) {
 			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
 		}
-	case OrderTypeLimitOnClose, OrderTypeLimitOnOpen:
+	case OrderTypeLimitOnClose:
 		if order.LmtPrice == nil {
 			return invalidOrderField("Order.LmtPrice", order.LmtPrice, "is required for this order type")
 		}
@@ -373,9 +373,6 @@ func validateOrderShortSale(order Order) error {
 }
 
 func validateOrderAuction(auction OrderAuction) error {
-	if auction.Strategy < 0 || auction.Strategy > 3 {
-		return invalidOrderField("Order.Auction.Strategy", auction.Strategy, "must be 0, 1, 2, or 3")
-	}
 	if auction.StockRangeLower != nil && auction.StockRangeUpper != nil && auction.StockRangeLower.GreaterThan(*auction.StockRangeUpper) {
 		return invalidOrderField("Order.Auction.StockRangeLower", auction.StockRangeLower, "must not exceed StockRangeUpper")
 	}

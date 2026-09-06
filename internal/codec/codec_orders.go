@@ -196,7 +196,6 @@ type OrderDetails struct {
 	ShortSaleSlot      string
 	DesignatedLocation string
 	ExemptCode         string
-	AuctionStrategy    string
 	StartingPrice      string
 	StockRefPrice      string
 	Delta              string
@@ -389,7 +388,6 @@ type PlaceOrderRequest struct {
 	AllOrNone                     string
 	MinQty                        string // empty = UNSET
 	PercentOffset                 string // empty = UNSET
-	AuctionStrategy               string
 	StartingPrice                 string // empty = UNSET
 	StockRefPrice                 string // empty = UNSET
 	Delta                         string // empty = UNSET

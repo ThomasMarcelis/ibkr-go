@@ -36,7 +36,7 @@ func (e *engine) CurrentTime(ctx context.Context) (time.Time, error) {
 				delete(eng.singletons, singletonCurrentTime)
 				ts, parseErr := parseEpochSeconds(m.Time)
 				if parseErr != nil {
-					resp <- result{err: fmt.Errorf("ibkr: current time: %w", parseErr)}
+					resp <- result{err: inboundProtocolError("current time", parseErr)}
 					return
 				}
 				resp <- result{ts: ts}
@@ -88,7 +88,7 @@ func (e *engine) CurrentTimeMillis(ctx context.Context) (time.Time, error) {
 				delete(eng.singletons, singletonCurrentTimeMillis)
 				ts, parseErr := parseEpochMilliseconds(m.TimeMs)
 				if parseErr != nil {
-					resp <- result{err: fmt.Errorf("ibkr: current time millis: %w", parseErr)}
+					resp <- result{err: inboundProtocolError("current time millis", parseErr)}
 					return
 				}
 				resp <- result{ts: ts}

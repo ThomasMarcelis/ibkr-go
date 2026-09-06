@@ -19,9 +19,10 @@ import (
 // [WithOrderExecutionCorrelationLimit]; overflow ends affected observation
 // with both [ErrExecutionCorrelationOverflow] and [ErrOrderRecoveryRequired].
 type OrderHandle struct {
-	orderID int64
-	events  chan OrderEvent
-	done    chan struct{}
+	orderID      int64
+	events       chan OrderEvent
+	done         chan struct{}
+	acknowledged chan struct{}
 
 	closeOnce sync.Once
 	err       error
@@ -34,14 +35,35 @@ type OrderHandle struct {
 
 func newOrderHandle(orderID int64, eventCapacity int) *OrderHandle {
 	return &OrderHandle{
-		orderID: orderID,
-		events:  make(chan OrderEvent, eventCapacity),
-		done:    make(chan struct{}),
+		orderID:      orderID,
+		events:       make(chan OrderEvent, eventCapacity),
+		done:         make(chan struct{}),
+		acknowledged: make(chan struct{}),
 	}
 }
 
 // OrderID returns the order ID bound to this handle.
 func (h *OrderHandle) OrderID() int64 { return h.orderID }
+
+// Acknowledged closes once the Gateway supplies a successfully decoded and
+// attributed open-order echo, status, or execution for this order. It records
+// broker observation, not acceptance or current working state. Local writes
+// and API warnings do not acknowledge an order. The signal survives reconnect
+// but does not restore replacement after lost continuity.
+//
+// If observation ends first, this channel stays open: wait alongside Done and
+// an observation deadline. Waiting here does not consume Events, which still
+// needs a single reader to prevent queue overflow.
+func (h *OrderHandle) Acknowledged() <-chan struct{} { return h.acknowledged }
+
+// Only the actor records broker evidence, independently of queue delivery.
+func (h *OrderHandle) acknowledge() {
+	select {
+	case <-h.acknowledged:
+	default:
+		close(h.acknowledged)
+	}
+}
 
 // Events returns the channel of order events: open-order echoes, status
 // updates, executions, commission-and-fees reports, warnings, bindings, and
@@ -78,7 +100,8 @@ func (h *OrderHandle) Close() {
 }
 
 // Cancel sends a cancel request for this order to the server. Options are only
-// needed for operator-entered compliance metadata.
+// needed for operator-entered compliance metadata. The context bounds admission;
+// nil reports local queue admission, not broker cancellation.
 func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 	if h.cancelFn == nil {
 		return fmt.Errorf("ibkr: order handle not connected")
@@ -93,7 +116,8 @@ func (h *OrderHandle) Cancel(ctx context.Context, opts ...CancelOption) error {
 // Replace re-sends the complete order with the handle's bound order ID. The
 // contract and parent are fixed at placement time; a conflicting nonzero
 // ParentID is rejected, while omission preserves the placement-time parent.
-// Other omitted order fields reset to defaults.
+// Other omitted order fields reset to defaults. The context bounds admission;
+// nil reports local queue admission, not broker acceptance of the replacement.
 // After a physical reconnect or data-lost restoration (code 1101), it
 // permanently returns [ErrOrderRecoveryRequired] because account reconciliation
 // cannot restore the handle's lost event history. A data-maintained 1100-to-1102

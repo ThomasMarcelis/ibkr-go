@@ -175,7 +175,7 @@ func cloneOrderDetails(order OrderDetails) OrderDetails {
 		}
 	}
 	for _, field := range []**int{
-		&order.Routing.ExemptCode, &order.Auction.Strategy,
+		&order.Routing.ExemptCode,
 		&order.Execution.DisplaySize, &order.Execution.MinQty,
 		&order.Execution.MinTradeQty, &order.Execution.MinCompeteSize, &order.Volatility.Type,
 		&order.Volatility.ReferencePriceType, &order.Scale.InitialLevelSize,

@@ -102,6 +102,15 @@ func (s *Subscription[T]) All(ctx context.Context) iter.Seq[T] {
 // is closed, [Subscription.Wait] and [Subscription.Err] report the terminal error.
 func (s *Subscription[T]) Done() <-chan struct{} { return s.done }
 
+// HasSnapshot reports whether this stream has an initial snapshot boundary.
+// It is a capability, not a readiness check, and does not change after the
+// boundary, Refresh, reconnect, or closure. Use AwaitSnapshot to await it.
+func (s *Subscription[T]) HasSnapshot() bool {
+	s.snapshotMu.Lock()
+	defer s.snapshotMu.Unlock()
+	return s.snapshotWant
+}
+
 // AwaitSnapshot blocks until the subscription's initial snapshot boundary is
 // reached, then returns nil. It returns [ErrNoSnapshot] for streams that have
 // no snapshot phase, the terminal error (or [ErrInterrupted]) if the

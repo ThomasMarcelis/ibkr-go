@@ -67,7 +67,7 @@ func run() (err error) {
 		if !terminal {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, handle.OrderID()),
+			err = errors.Join(err, handle.Cancel(cleanupCtx),
 				fmt.Errorf("reconcile order %d: cancellation outcome is unconfirmed", handle.OrderID()))
 		}
 		handle.Close()

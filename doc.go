@@ -100,7 +100,9 @@
 //	}
 //
 // Quote fields arrive separately. [Quote.Available] distinguishes a populated
-// field from its initial zero value; IBKR's -1 price means no quote for that side.
+// field from its initial zero value. Bid/ask/last -1 or 0 with zero companion
+// size can mean no quote; raw prices remain intact because negative prices
+// can be legitimate. OHLC fields have different size semantics.
 //
 // [Subscription.All] is the data-only convenience iterator. It consumes and
 // filters every non-data event from the same queue, including reconnect

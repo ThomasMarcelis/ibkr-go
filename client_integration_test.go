@@ -1140,7 +1140,7 @@ func TestDirectCancelOrder(t *testing.T) {
 	// Direct-by-ID cancel path: skip OrderHandle.Cancel and call the
 	// top-level facade with the handle's order ID. This proves Orders().Cancel
 	// reaches the same wire message without holding the handle.
-	if err := client.Orders().Cancel(ctx, handle.OrderID()); err != nil {
+	if err := client.Orders().Cancel(ctx, ibkr.OrderTarget{ClientID: 1, OrderID: handle.OrderID()}); err != nil {
 		t.Fatalf("Orders().Cancel(%d): %v", handle.OrderID(), err)
 	}
 
@@ -1551,6 +1551,9 @@ func TestPositionsMultiSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SubscribePositionsMulti() error = %v", err)
 	}
+	if !sub.HasSnapshot() {
+		t.Fatal("positions multi lacks snapshot capability")
+	}
 	var values []ibkr.PositionMulti
 	for {
 		event := waitForEvent(t, sub.Events())
@@ -1594,6 +1597,10 @@ func TestSubscribePnL(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("SubscribePnL() error = %v", err)
+	}
+
+	if sub.HasSnapshot() || !errors.Is(sub.AwaitSnapshot(ctx), ibkr.ErrNoSnapshot) {
+		t.Fatal("PnL advertised a nonexistent snapshot")
 	}
 
 	waitForStateKind(t, sub.Events(), ibkr.StreamStarted)
@@ -1929,6 +1936,18 @@ func TestAPITIFAttributeMatrixAAPLReplay(t *testing.T) {
 		t.Fatalf("TIF matrix executions/fees = %d/%d, want 0/0", len(executions.Executions), len(executions.CommissionAndFees))
 	}
 	for i, handle := range handles {
+		if cases[i].name == "active-window" {
+			select {
+			case <-handle.Done():
+				apiErr, ok := errors.AsType[*ibkr.APIError](handle.Wait())
+				if !ok || apiErr.Code != ibkr.ErrCodeActiveStartTimeInvalid || !apiErr.IsOrderRejection() {
+					t.Fatalf("active-window rejection = %v", handle.Wait())
+				}
+			case <-ctx.Done():
+				t.Fatal("active-window rejection did not terminate its handle")
+			}
+			continue
+		}
 		handle.Close()
 		requireCloseOrCapturedDisconnect(t, cases[i].name, handle.Wait())
 	}
@@ -2763,7 +2782,7 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 	}
 	placer.Close()
 
-	observer := dialHostClient(t, host, ibkr.WithClientID(0))
+	observer, rawObserver := dialRawHostClient(t, host, ibkr.WithClientID(0))
 	defer observer.Close()
 
 	orders, err := observer.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
@@ -2776,9 +2795,9 @@ func TestAPIClientID0OrderObservationAAPLReplay(t *testing.T) {
 	if *orders[0].Order.OrderID != handle.OrderID() || *orders[0].Order.ClientID != 1 {
 		t.Fatalf("client0 open order = %+v, want original client order %d", orders[0], handle.OrderID())
 	}
-	if err := observer.Orders().Cancel(ctx, handle.OrderID()); err != nil {
-		t.Fatalf("client0 Cancel: %v", err)
-	}
+	replayRefusedForeignCancel(t, ctx, observer, rawObserver,
+		ibkr.OrderTarget{ClientID: *orders[0].Order.ClientID, OrderID: *orders[0].Order.OrderID},
+		"AAAACQAAAMwI4QMSAA==")
 	waitHost(t, host)
 }
 
@@ -2823,7 +2842,7 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 	}
 	placer.Close()
 
-	canceller := dialHostClient(t, host, ibkr.WithClientID(2))
+	canceller, rawCanceller := dialRawHostClient(t, host, ibkr.WithClientID(2))
 	defer canceller.Close()
 
 	orders, err := canceller.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
@@ -2836,9 +2855,9 @@ func TestAPICrossClientCancelAAPLReplay(t *testing.T) {
 	if *orders[0].Order.OrderID != handle.OrderID() || *orders[0].Order.ClientID != 1 {
 		t.Fatalf("client2 open order = %+v, want original client order %d", orders[0], handle.OrderID())
 	}
-	if err := canceller.Orders().Cancel(ctx, handle.OrderID()); err != nil {
-		t.Fatalf("client2 Cancel: %v", err)
-	}
+	replayRefusedForeignCancel(t, ctx, canceller, rawCanceller,
+		ibkr.OrderTarget{ClientID: *orders[0].Order.ClientID, OrderID: *orders[0].Order.OrderID},
+		"AAAACQAAAMwI7QMSAA==")
 	waitHost(t, host)
 }
 

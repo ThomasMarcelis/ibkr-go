@@ -10,7 +10,7 @@ import (
 // Sentinel errors returned across the package. Match them with [errors.Is].
 var (
 	ErrNotReady                     = errors.New("ibkr: session not ready")                      // request issued before the session reached Ready
-	ErrInterrupted                  = errors.New("ibkr: request interrupted")                    // in-flight request cut short by a connection loss; retryable
+	ErrInterrupted                  = errors.New("ibkr: request interrupted")                    // interrupted by connection loss or local outbound queue backpressure; retryable
 	ErrResumeRequired               = errors.New("ibkr: subscription resume required")           // subscription needs re-establishment after a gap; retryable
 	ErrOrderRecoveryRequired        = errors.New("ibkr: order recovery required")                // live order state is uncertain; reconcile before a new retry, but the affected handle cannot replace again
 	ErrRegulatorySnapshotUncertain  = errors.New("ibkr: regulatory snapshot outcome uncertain")  // admitted fee-bearing request lost its completion evidence; do not retry blindly
@@ -38,8 +38,10 @@ func (e *InboundFrameTooLargeError) Error() string {
 
 func (e *InboundFrameTooLargeError) Unwrap() error { return ErrInboundFrameTooLarge }
 
-// ConnectError wraps a failure during the connection phase (dial, TLS
-// negotiation, or protocol handshake).
+var errBootstrapIncomplete = errors.New("session bootstrap ended before readiness")
+
+// ConnectError wraps a failure during dial, TLS negotiation, protocol
+// handshake, or post-handshake session bootstrap.
 type ConnectError struct {
 	Op  string
 	Err error
@@ -90,7 +92,11 @@ type APIError struct {
 }
 
 func (e *APIError) Error() string {
-	return fmt.Sprintf("ibkr: api %s code=%d conn=%d: %s", e.OpKind, e.Code, e.ConnectionSeq, e.Message)
+	op := ""
+	if e.OpKind != "" {
+		op = " " + string(e.OpKind)
+	}
+	return fmt.Sprintf("ibkr: api%s code=%d conn=%d: %s", op, e.Code, e.ConnectionSeq, e.Message)
 }
 
 // OrderRecoveryError reports a bracket placement failure after at least one

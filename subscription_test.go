@@ -117,3 +117,30 @@ func TestAllEarlyBreakLeavesSubscriptionUsable(t *testing.T) {
 		t.Fatalf("Events() after break = %+v, want data 2", event)
 	}
 }
+
+func TestSnapshotCapabilitySurvivesBoundaryAndClosure(t *testing.T) {
+	for _, snapshot := range []bool{false, true} {
+		sub := newSubscription[int](subscriptionConfig{buffer: 4}, nil)
+		if snapshot {
+			sub.expectSnapshot()
+		}
+		if sub.HasSnapshot() != snapshot {
+			t.Fatal("wrong initial snapshot capability")
+		}
+		if snapshot {
+			sub.emitState(StreamSnapshotComplete, 1, nil)
+			if err := sub.AwaitSnapshot(t.Context()); err != nil {
+				t.Fatal(err)
+			}
+		} else if err := sub.AwaitSnapshot(t.Context()); !errors.Is(err, ErrNoSnapshot) {
+			t.Fatalf("no-snapshot await = %v", err)
+		}
+		sub.closeWithErr(nil)
+		if sub.HasSnapshot() != snapshot {
+			t.Fatal("closure changed snapshot capability")
+		}
+		if !snapshot && !errors.Is(sub.AwaitSnapshot(t.Context()), ErrNoSnapshot) {
+			t.Fatal("closure invented a snapshot")
+		}
+	}
+}

@@ -69,15 +69,16 @@ if [[ "$mode" != exact ]]; then
         fail "tag $baseline lacks testdata/api/$baseline.api; restore the release evidence before checking compatibility"
 fi
 
-if [[ "$mode" != compatibility ]]; then
-    shopt -s nullglob
-    manifests=(testdata/api/*.api)
-    (( ${#manifests[@]} == 1 )) || fail 'keep exactly one candidate manifest in testdata/api'
-    candidate=${manifests[0]}
-    if [[ "$mode" == release && "$candidate" != "testdata/api/$release.api" ]]; then
-        fail "release $release requires testdata/api/$release.api; found $candidate"
-    fi
+shopt -s nullglob
+manifests=(testdata/api/*.api)
+(( ${#manifests[@]} == 1 )) || fail 'keep exactly one candidate manifest in testdata/api'
+candidate=${manifests[0]}
+if [[ "$mode" == release && "$candidate" != "testdata/api/$release.api" ]]; then
+    fail "release $release requires testdata/api/$release.api; found $candidate"
 fi
+candidate_version=${candidate##*/}
+candidate_version=${candidate_version%.api}
+[[ "$candidate_version" =~ $version && "$candidate_version" == "v$major."* ]] || fail "invalid candidate version: $candidate_version"
 
 go run "$apidiff" -w "$work/current.api" "$module"
 if [[ "$mode" != compatibility ]]; then
@@ -87,6 +88,22 @@ $changes"
 fi
 if [[ "$mode" != exact ]]; then
     changes="$(go run "$apidiff" -incompatible "$work/baseline.api" "$work/current.api")"
-    [[ -z "$changes" ]] || fail "incompatible public API changes since $baseline:
+    # A minor release may document a deliberate clean break. The complete
+    # incompatible diff is frozen for this exact immutable baseline/candidate
+    # pair; additions still flow freely. Historical records are inapplicable
+    # once a newer tag becomes the baseline.
+    record="testdata/api/$baseline-$candidate_version.breaks"
+    if [[ -f "$record" ]]; then
+        IFS= read -r migration < "$record" || fail "empty break record: $record"
+        [[ "$migration" == "docs/migration-v$major."*.md && -s "$migration" ]] ||
+            fail "break record $record lacks migration evidence: $migration"
+        expected="$(tail -n +2 "$record")"
+        [[ -n "$expected" && "$changes" == "$expected" ]] ||
+            fail "incompatible diff does not exactly match $record:
 $changes"
+        printf 'API check: documented breaks since %s match %s; see %s\n' "$baseline" "$record" "$migration"
+    else
+        [[ -z "$changes" ]] || fail "incompatible public API changes since $baseline; missing $record:
+$changes"
+    fi
 fi

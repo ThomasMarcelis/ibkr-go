@@ -42,7 +42,6 @@ func toCodecPlaceOrder(orderID int64, req PlaceOrderRequest) codec.PlaceOrderReq
 		GoodTillDate:               req.Order.GoodTillDate,
 		AllOrNone:                  optBoolToString(req.Order.AllOrNone, ""),
 		MinQty:                     intPointerOrEmpty(req.Order.MinQty),
-		AuctionStrategy:            scaleSizeOrEmpty(req.Order.Auction.Strategy),
 		StartingPrice:              decimalPointerOrEmpty(req.Order.Auction.StartingPrice),
 		StockRefPrice:              decimalPointerOrEmpty(req.Order.Auction.StockRefPrice),
 		Delta:                      decimalPointerOrEmpty(req.Order.Auction.Delta),
@@ -571,7 +570,6 @@ func fromCodecOrderDetails(m codec.OrderDetails, label string) (CompletedOrderRe
 				RouteMarketableToBBO: boolPointer(m.RouteMarketableToBBO, "route marketable to BBO"),
 			},
 			Auction: OrderAuctionDetails{
-				Strategy:        intPointer(m.AuctionStrategy, "auction strategy"),
 				StartingPrice:   decimalPointer(m.StartingPrice, "starting price"),
 				StockRefPrice:   decimalPointer(m.StockRefPrice, "stock reference price"),
 				Delta:           decimalPointer(m.Delta, "delta"),

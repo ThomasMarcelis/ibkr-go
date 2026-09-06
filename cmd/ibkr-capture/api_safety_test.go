@@ -267,7 +267,7 @@ func TestVerifyNewExecutionFees(t *testing.T) {
 func TestGuardedCancelOrderRefusesNonPaperAccountBeforeMutating(t *testing.T) {
 	t.Parallel()
 
-	err := guardedCancelOrder(context.Background(), nil, "U123456", 99, "direct cancel")
+	err := guardedCancelOrder(context.Background(), nil, "U123456", 1, 99, "direct cancel")
 	if err == nil {
 		t.Fatal("guardedCancelOrder on a non-paper account returned nil, want refusal")
 	}

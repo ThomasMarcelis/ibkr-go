@@ -116,7 +116,7 @@ type Snapshot struct {
 	ServerVersion   int       // negotiated TWS API server version
 	ManagedAccounts []string  // account IDs this login controls
 	NextValidID     int64     // conservative order-ID floor advanced past allocated and observed order IDs
-	CurrentTime     time.Time // server time captured at connect, in UTC
+	CurrentTime     time.Time // most recent clock reply, in UTC; zero until a clock request completes
 }
 
 // StreamEventKind classifies one item in a subscription's ordered event stream.

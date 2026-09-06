@@ -92,7 +92,7 @@ func regulatorySnapshotError(requestID RequestID, connectionSeq uint64, err erro
 	if err == nil {
 		return nil
 	}
-	if _, definitive := errors.AsType[*APIError](err); definitive {
+	if apiErr, definitive := errors.AsType[*APIError](err); definitive && apiErr.Code != 0 {
 		return err
 	}
 	return &RegulatorySnapshotUncertainError{
@@ -850,6 +850,9 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 	if err := validateContract(req.Contract); err != nil {
 		return OptionComputation{}, err
 	}
+	if req.Contract.Exchange == "" {
+		return OptionComputation{}, invalidOrderField("Contract.Exchange", "", "is required for option calculations")
+	}
 	req.Contract = cloneContract(req.Contract)
 	type result struct {
 		value OptionComputation
@@ -911,6 +914,9 @@ func (e *engine) CalcImpliedVolatility(ctx context.Context, req CalcImpliedVolat
 func (e *engine) CalcOptionPrice(ctx context.Context, req CalcOptionPriceRequest) (OptionComputation, error) {
 	if err := validateContract(req.Contract); err != nil {
 		return OptionComputation{}, err
+	}
+	if req.Contract.Exchange == "" {
+		return OptionComputation{}, invalidOrderField("Contract.Exchange", "", "is required for option calculations")
 	}
 	req.Contract = cloneContract(req.Contract)
 	type result struct {

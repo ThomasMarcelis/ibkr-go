@@ -409,8 +409,12 @@ func capturedServerMessages(t *testing.T, path string) []codec.Message {
 	switch path {
 	case executionsCapturePath:
 		data, err = os.ReadFile(executionsCapturePath)
-	case "testdata/transcripts/api_hedge_order_aapl.txt":
-		data, err = os.ReadFile("testdata/transcripts/api_hedge_order_aapl.txt")
+	case "testdata/transcripts/api_hedge_order_aapl.txt",
+		"testdata/transcripts/api_reconnect_active_order_aapl.txt",
+		"testdata/transcripts/api_tif_attribute_matrix_aapl.txt",
+		"testdata/transcripts/api_order_stop_cancel_aapl.txt":
+		// #nosec G304 -- only the fixed capture paths above are accepted.
+		data, err = os.ReadFile(path)
 	default:
 		t.Fatalf("unsupported execution capture %q", path)
 	}

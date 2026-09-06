@@ -149,3 +149,15 @@ func TestSessionTransitionSequenceIgnoresSameStateAndNotices(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionTransitionGapSurvivesEviction(t *testing.T) {
+	e := &engine{events: newObserver[Event](1), snapshot: Snapshot{State: StateReady}}
+	e.setState(StateDegraded, 0, "", nil)
+	first := <-e.SessionEvents()
+	e.setState(StateReconnecting, 0, "", nil)
+	e.setState(StateHandshaking, 0, "", nil)
+	newest := <-e.SessionEvents()
+	if newest.TransitionSeq != first.TransitionSeq+2 || newest.Snapshot.TransitionSeq != newest.TransitionSeq || newest.Snapshot.State != StateHandshaking {
+		t.Fatalf("evicted transition lost detectable revision: first=%+v newest=%+v", first, newest)
+	}
+}

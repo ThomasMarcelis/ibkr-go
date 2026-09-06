@@ -375,8 +375,8 @@ func TestBootstrapNoManagedAccounts(t *testing.T) {
 		ibkr.WithPort(port),
 		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
 	)
-	if err == nil {
-		t.Fatal("expected error from DialContext, got nil")
+	if !errors.Is(err, context.DeadlineExceeded) || ibkr.IsRetryable(err) {
+		t.Fatalf("DialContext = %v, want non-retryable caller deadline", err)
 	}
 	// Script is still sleeping; do not waitHost.
 	_ = host.Close()
@@ -499,8 +499,8 @@ func TestBootstrapNoNextValidID(t *testing.T) {
 		ibkr.WithPort(port),
 		ibkr.WithReconnectPolicy(ibkr.ReconnectOff),
 	)
-	if err == nil {
-		t.Fatal("expected error from DialContext, got nil")
+	if !errors.Is(err, context.DeadlineExceeded) || ibkr.IsRetryable(err) {
+		t.Fatalf("DialContext = %v, want non-retryable caller deadline", err)
 	}
 	_ = host.Close()
 }

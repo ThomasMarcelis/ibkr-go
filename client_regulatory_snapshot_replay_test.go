@@ -9,7 +9,7 @@ import (
 	ibkr "github.com/ThomasMarcelis/ibkr-go/v2"
 )
 
-func TestRegulatorySnapshotDefinitiveErrorReplay(t *testing.T) {
+func TestRegulatorySnapshotServerFailureUncertainReplay(t *testing.T) {
 	t.Parallel()
 
 	// This is the sole authorized fee-bearing regulatory request. Replay its
@@ -37,7 +37,7 @@ func TestRegulatorySnapshotDefinitiveErrorReplay(t *testing.T) {
 	if apiErr.RequestID != 2 || apiErr.Code != 0 || apiErr.Message != "Internal server error" || apiErr.OpKind != ibkr.OpQuotes {
 		t.Fatalf("RegulatorySnapshot() error = %+v, want request 2 code 0 Internal server error", apiErr)
 	}
-	if errors.Is(err, ibkr.ErrRegulatorySnapshotUncertain) {
-		t.Fatalf("RegulatorySnapshot() error = %v, want definitive rejection", err)
+	if !errors.Is(err, ibkr.ErrRegulatorySnapshotUncertain) || ibkr.IsRetryable(err) {
+		t.Fatalf("RegulatorySnapshot() error = %v, want non-retryable uncertainty with the API cause", err)
 	}
 }

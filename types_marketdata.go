@@ -117,7 +117,7 @@ type Bar struct {
 // HistoricalScheduleRequest asks the Gateway to return the session schedule
 // that would cover a bar request for the given contract and duration. The
 // request reuses REQ_HISTORICAL_DATA under the hood with whatToShow=SCHEDULE,
-// so Duration and BarSize behave the same as for [History.Bars]. UseRTH is
+// so Duration and BarSize behave the same as for [HistoryClient.Bars]. UseRTH is
 // respected by the Gateway but the schedule response already encodes the
 // regular-hours boundaries per session.
 type HistoricalScheduleRequest struct {
@@ -128,7 +128,7 @@ type HistoricalScheduleRequest struct {
 	UseRTH   bool
 }
 
-// HistoricalSchedule is the result of [History.Schedule]. StartDateTime,
+// HistoricalSchedule is the result of [HistoryClient.Schedule]. StartDateTime,
 // EndDateTime, and TimeZone describe the overall window returned by the
 // Gateway; Sessions lists the contiguous trading windows inside it.
 type HistoricalSchedule struct {

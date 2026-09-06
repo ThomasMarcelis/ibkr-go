@@ -265,6 +265,12 @@ func TestEncodeAdditionalOrderParameterBoundaries(t *testing.T) {
 		if _, err := Encode(tc.sv, tc.msg); err == nil {
 			t.Fatalf("Encode(%d, %+v) accepted fields before their server-version boundary", tc.sv, tc.msg)
 		}
+		// This exercises the public encoder's admission gate, unlike the
+		// inner protobuf vectors. It is source-derived boundary evidence,
+		// not a claim of a live capture at this exact server version.
+		if _, err := Encode(tc.sv+1, tc.msg); err != nil {
+			t.Fatalf("Encode(%d, %+v) rejected fields at their boundary: %v", tc.sv+1, tc.msg, err)
+		}
 	}
 }
 

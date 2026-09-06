@@ -35,7 +35,7 @@ func TestObservedOpenOrderOwnsEachConsumerPayload(t *testing.T) {
 	}
 	e.dispatchObservedOpenOrder(codec.OpenOrder{
 		OrderID: 485,
-		OrderDetails: codec.OrderDetails{Contract: codec.Contract{
+		OrderDetails: codec.OrderDetails{ClientID: "0", Contract: codec.Contract{
 			Symbol: "AAPL", SecType: "BAG", Exchange: "SMART", Currency: "USD",
 			ComboLegs: []codec.ComboLeg{
 				{ConID: 909446204, Ratio: 1, Action: "SELL", Exchange: "SMART", OpenClose: "0", ShortSaleSlot: "0", ExemptCode: "-1"},

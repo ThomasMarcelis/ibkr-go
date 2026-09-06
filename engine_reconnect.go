@@ -32,7 +32,15 @@ func (e *engine) handleTransportLoss(loss transportLoss) {
 	routeErr := normalizeTransportErr(routeLoss)
 	e.invalidateReconnectStability()
 	if !e.bootstrap.readyReported {
-		e.rememberConnectionError(&ConnectError{Op: "bootstrap", Err: err})
+		if err == nil {
+			err = errBootstrapIncomplete
+		}
+		err = &ConnectError{Op: "bootstrap", Err: err}
+		if routeErr == nil {
+			routeErr = errBootstrapIncomplete
+		}
+		routeErr = &ConnectError{Op: "bootstrap", Err: routeErr}
+		e.rememberConnectionError(err)
 	}
 	// A capacity waiter belongs to this validated transport generation. Its
 	// Done arm cannot safely touch actor state, so transport loss owns reset.
@@ -327,6 +335,7 @@ func (e *engine) closeEngine(workErr, sessionErr, waitErr error) {
 		e.cancelLifetime()
 	}
 	e.clearReadySetups()
+	e.clearHistoricalWaits()
 	if e.transport != nil {
 		_ = e.transport.Close()
 	}
@@ -357,8 +366,7 @@ func (e *engine) closeEngine(workErr, sessionErr, waitErr error) {
 		}
 		delete(e.orders, id)
 	}
-	e.execDeliveries = make(map[string]*execDelivery)
-	e.pendingOrderFees = 0
+	e.clearOrderCorrelations()
 	e.setState(StateClosed, 0, "", sessionErr)
 	e.reportReady(sessionErr)
 	e.waitMu.Lock()
@@ -368,8 +376,8 @@ func (e *engine) closeEngine(workErr, sessionErr, waitErr error) {
 		e.stopLogger()
 		e.stopLogger = nil
 	}
-	close(e.done)
 	e.events.Close()
+	close(e.done)
 }
 
 func (e *engine) invalidateReconnectStability() {

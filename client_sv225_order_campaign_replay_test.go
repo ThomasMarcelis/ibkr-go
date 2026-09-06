@@ -182,10 +182,10 @@ func TestAPIOrderTypeMatrixReplay(t *testing.T) {
 		lmt  *decimal.Decimal
 		code int
 	}{
-		{"market-on-open", 534, ibkr.OrderTypeMarketOnOpen, nil, ibkr.ErrCodeServerErrorValidatingRequest},
-		{"limit-on-open", 535, ibkr.OrderTypeLimitOnOpen, new(decimal.NewFromInt(240)), ibkr.ErrCodeServerErrorValidatingRequest},
+		{"market-on-open", 534, ibkr.OrderType("MOO"), nil, ibkr.ErrCodeServerErrorValidatingRequest},
+		{"limit-on-open", 535, ibkr.OrderType("LOO"), new(decimal.NewFromInt(240)), ibkr.ErrCodeServerErrorValidatingRequest},
 		{"pegged-market", 536, ibkr.OrderTypePeggedToMarket, new(decimal.NewFromInt(10)), ibkr.ErrCodeUnsupportedOrderType},
-		{"pegged-primary", 537, ibkr.OrderTypePeggedToPrimary, new(decimal.NewFromInt(10)), ibkr.ErrCodeServerErrorValidatingRequest},
+		{"pegged-primary", 537, ibkr.OrderType("PEG PRI"), new(decimal.NewFromInt(10)), ibkr.ErrCodeServerErrorValidatingRequest},
 	} {
 		handle := place(tc.name, ibkr.Order{Action: ibkr.ActionBuy, OrderType: tc.typ, LmtPrice: tc.lmt}, tc.id)
 		requireOrderAPIError(t, tc.name, handle, tc.code, "")

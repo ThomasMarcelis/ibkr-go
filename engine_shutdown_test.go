@@ -378,7 +378,7 @@ func TestOrderBusinessEventOverflowReportsSlowConsumer(t *testing.T) {
 		execDeliveries: make(map[string]*execDelivery),
 	}
 	e.dispatchObservedOrderStatus(codec.OrderStatus{
-		OrderID: 51, Status: string(OrderStatusSubmitted), Filled: "0", Remaining: "1",
+		ClientID: "0", OrderID: 51, Status: string(OrderStatusSubmitted), Filled: "0", Remaining: "1",
 		AvgFillPrice: "0", LastFillPrice: "0",
 	})
 
@@ -400,11 +400,11 @@ func TestExecutionProjectionFailureClosesLocalOrderHandle(t *testing.T) {
 		execDeliveries: make(map[string]*execDelivery),
 	}
 	e.dispatchExecutionToOrder(codec.ExecutionDetail{
-		OrderID: 91,
-		ExecID:  "bad-exec",
-		Shares:  "not-a-decimal",
-		Price:   "1",
-		Time:    "20260713-16:00:00",
+		ClientID: "0", OrderID: 91,
+		ExecID: "bad-exec",
+		Shares: "not-a-decimal",
+		Price:  "1",
+		Time:   "20260713-16:00:00",
 	})
 
 	if _, ok := e.orders[91]; ok {

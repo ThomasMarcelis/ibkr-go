@@ -282,7 +282,12 @@ func TestEnqueueHistoricalSetupForwardsCancelDuringPacing(t *testing.T) {
 
 		cancel()
 		synctest.Wait()
-		(<-e.cmds)()
+		select {
+		case fn := <-e.cmds:
+			fn()
+		default:
+			t.Fatal("cancellation did not wake the pacing waiter")
+		}
 
 		select {
 		case got := <-resp:

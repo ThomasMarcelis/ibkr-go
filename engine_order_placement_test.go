@@ -450,3 +450,64 @@ func TestCompleteWriteErrorStartsOrderBeforeTransportInterruption(t *testing.T) 
 		t.Fatal("write completion was not handled before loss")
 	}
 }
+
+// Fault injection shares the captured clock payload and tracked-order binding
+// used above. It changes only the number of locally accepted frame bytes.
+type incompleteWriteErrorConn struct{ net.Conn }
+
+func (c incompleteWriteErrorConn) Write(p []byte) (int, error) {
+	return len(p) / 2, io.ErrUnexpectedEOF
+}
+
+func TestIncompleteOrderWritePreservesUncertainty(t *testing.T) {
+	for _, policy := range []ReconnectPolicy{ReconnectOff, ReconnectAuto} {
+		t.Run(string(policy), func(t *testing.T) {
+			e, _ := newObservedMarketDataEngine(t)
+			_ = e.transport.Close()
+			peer, client := net.Pipe()
+			defer peer.Close()
+			tr := transport.New(incompleteWriteErrorConn{client}, nil, 0)
+			defer tr.Close()
+			e.transport, e.cfg.reconnect = tr, policy
+			h := e.bindOrderHandle(47, Stock("AAPL"), 0)
+			id, err := tr.SendTracked(t.Context(), []byte{0, 0, 0, 249})
+			if err != nil {
+				t.Fatal(err)
+			}
+			e.trackOrderWrite(47, transportWriteKey{transport: tr, id: id})
+			e.attachTransport(tr)
+			go e.run()
+			if policy == ReconnectAuto {
+				select {
+				case event := <-h.Events():
+					if event.Lifecycle == nil || event.Lifecycle.Kind != OrderGap {
+						t.Fatalf("partial write event = %+v", event)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("partial write did not report gap")
+				}
+				e.Close()
+			}
+			<-e.Done()
+			if len(e.pendingOrderWrites) != 0 {
+				t.Fatal("partial outcome was not drained before loss")
+			}
+			for event := range h.Events() {
+				if event.Lifecycle != nil && event.Lifecycle.Kind == OrderStarted {
+					t.Fatal("partial write claimed complete local write")
+				}
+			}
+			select {
+			case <-h.Acknowledged():
+				t.Fatal("partial write fabricated broker acknowledgement")
+			default:
+			}
+			if IsRetryable(h.Wait()) {
+				t.Fatalf("partial write safely retryable: %v", h.Wait())
+			}
+			if policy == ReconnectOff && (!errors.Is(h.Wait(), ErrOrderRecoveryRequired) || !errors.Is(h.Wait(), io.ErrUnexpectedEOF)) {
+				t.Fatalf("lost partial-write cause: %v", h.Wait())
+			}
+		})
+	}
+}

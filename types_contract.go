@@ -260,6 +260,7 @@ type BondDetails struct {
 // ContractExchange is a venue on which a contract is valid and the market
 // rule that defines its price increments. Pass MarketRuleID to
 // [ContractsClient.MarketRule] to resolve the complete tick-size schedule.
+// A zero MarketRuleID means the venue has no supplied rule; do not request it.
 type ContractExchange struct {
 	Exchange     string
 	MarketRuleID MarketRuleID

@@ -11,7 +11,7 @@ import (
 type AccountSummaryRequest struct {
 	Group         string   // IBKR account group; empty requests "All"
 	AccountFilter string   // exact returned account to accept; empty accepts all
-	Tags          []string // summary tag names, e.g. "NetLiquidation"; empty requests all
+	Tags          []string // summary tag names, e.g. "NetLiquidation"; at least one explicit tag is required
 }
 
 // AccountValue is one account summary tag/value pair. Value is always a string

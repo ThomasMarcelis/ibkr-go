@@ -2,6 +2,7 @@ package ibkr_test
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"io"
 	"net"
@@ -29,6 +30,7 @@ func newHost(t *testing.T, script string) *testhost.Host {
 	if err != nil {
 		t.Fatalf("NewFromFile(%q) error = %v", path, err)
 	}
+	t.Cleanup(func() { _ = host.Close() })
 	return host
 }
 
@@ -58,7 +60,38 @@ func dialHostClient(t *testing.T, host *testhost.Host, opts ...ibkr.Option) *ibk
 	if err != nil {
 		t.Fatalf("DialContext() error = %v", err)
 	}
+	t.Cleanup(client.Close)
 	return client
+}
+
+// Raw access is restricted to replaying captured requests that the public API
+// now correctly refuses. It is not an alternative production cancel path.
+func dialRawHostClient(t *testing.T, host *testhost.Host, opts ...ibkr.Option) (*ibkr.Client, net.Conn) {
+	t.Helper()
+	conn, err := net.Dial("tcp", host.Addr())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	opts = append(opts, ibkr.WithDialer(&pipeDialer{conn: conn}))
+	return dialHostClient(t, host, opts...), conn
+}
+
+func replayRefusedForeignCancel(t *testing.T, ctx context.Context, client *ibkr.Client, conn net.Conn, target ibkr.OrderTarget, captured string) {
+	t.Helper()
+	err := client.Orders().Cancel(ctx, target)
+	validation, ok := errors.AsType[*ibkr.ValidationError](err)
+	if !ok || validation.Field != "ClientID" {
+		t.Fatalf("foreign Cancel = %v, want local ClientID validation", err)
+	}
+	frame, err := base64.StdEncoding.DecodeString(captured)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Write(frame); err != nil {
+		t.Fatal(err)
+	}
+	waitForSessionEventCode(t, ctx, client.SessionEvents(), ibkr.ErrCodeOrderToCancelNotFound)
 }
 
 func waitHost(t *testing.T, host *testhost.Host) {

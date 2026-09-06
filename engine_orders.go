@@ -33,7 +33,7 @@ func (e *engine) RefreshOrderID(ctx context.Context) (int64, error) {
 				}
 				delete(eng.singletons, singletonOrderID)
 				if m.OrderID <= 0 {
-					resp <- result{err: fmt.Errorf("ibkr: invalid next valid order ID %d", m.OrderID)}
+					resp <- result{err: inboundProtocolError(fmt.Sprintf("invalid next valid order ID %d", m.OrderID), nil)}
 					return
 				}
 				resp <- result{orderID: eng.snapshot.NextValidID}

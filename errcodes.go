@@ -114,6 +114,10 @@ const (
 	// ErrCodeDeepMarketDataNotSupported: deep (Level 2) market data is not
 	// supported for this combination of security type and exchange.
 	ErrCodeDeepMarketDataNotSupported = 10092
+	// ErrCodePartialMarketDataSubscriptionRequired reports an unavailable part
+	// of a requested feed. Delayed logins have observed it intermittently; it
+	// does not establish a permanent entitlement state for the whole login.
+	ErrCodePartialMarketDataSubscriptionRequired = 10091
 	// ErrCodeOrderToCancelNotFound: the order id named in a cancel request
 	// is not known to the Gateway.
 	ErrCodeOrderToCancelNotFound = 10147
@@ -125,6 +129,10 @@ const (
 	// subscribed; delayed market data is displayed and the stream continues
 	// with delayed ticks.
 	ErrCodeDelayedMarketDataDisplayed = 10167
+	// ErrCodeNewsArticleRequestFailed ends an article request. The message
+	// distinguishes causes such as "No data available"; the code alone does
+	// not prove that every future request for the article must fail.
+	ErrCodeNewsArticleRequestFailed = 10172
 	// ErrCodeTickByTickDataNotAllowed: a tick-by-tick request lacks the
 	// market-data permission required for the contract. Unlike delayed quote
 	// code 10167, this response terminates the tick-by-tick subscription.
@@ -137,6 +145,10 @@ const (
 	// ErrCodeNewsFeedNotAllowed: the API client is not permissioned for the
 	// requested (WSH) news feed.
 	ErrCodeNewsFeedNotAllowed = 10276
+	// ErrCodeActiveStartTimeInvalid rejects an invalid active start time.
+	// Paper sv225 api_tif_attribute_matrix_aapl.txt records outright refusal
+	// of order 591, followed by 10147 when that discarded order is cancelled.
+	ErrCodeActiveStartTimeInvalid = 10315
 	// ErrCodeImbalanceOnlyNotAllowed: the 'ImbalanceOnly' order attribute may
 	// not be specified for this order. The retained PEG MID / PEG BEST
 	// capture received this code after malformed, tail-shifted requests and
@@ -249,7 +261,7 @@ func isOrderRejectionCode(code int) bool {
 		ErrCodeTrailingStopAttachRejected, ErrCodeUnsupportedOrderType,
 		ErrCodeAlgoDefinitionNotFound, ErrCodeUnknownAlgoAttribute,
 		ErrCodeInvalidFXHedgeOrder, ErrCodeDisplaySizeNotAllowed,
-		ErrCodeInvalidTimeInForce:
+		ErrCodeInvalidTimeInForce, ErrCodeActiveStartTimeInvalid:
 		return true
 	}
 	return false

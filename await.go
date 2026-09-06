@@ -12,6 +12,11 @@ type readySetup struct {
 	stop       func() bool
 }
 
+type historicalWait struct {
+	timer *time.Timer
+	stop  func() bool
+}
+
 func enqueueContextSetup(ctx context.Context, e *engine, onCanceled func(), fn func()) {
 	e.enqueue(func() {
 		if ctx.Err() != nil {
@@ -85,28 +90,77 @@ func (e *engine) clearReadySetups() {
 }
 
 func enqueueHistoricalSetup(ctx context.Context, e *engine, key string, onCanceled func(), fn func()) {
-	enqueueReadySetup(ctx, e, onCanceled, func() {
-		now := time.Now()
-		if e.recentHistoricalRequests == nil {
-			e.recentHistoricalRequests = make(map[string]time.Time)
+	e.enqueue(func() { e.runHistoricalSetup(ctx, key, onCanceled, fn) })
+}
+
+// Called only by the actor, including pacing wakeups. Rechecking readiness
+// here prevents a parked request from entering a replacement bootstrap.
+func (e *engine) runHistoricalSetup(ctx context.Context, key string, onCanceled, fn func()) {
+	if ctx.Err() != nil {
+		if onCanceled != nil {
+			onCanceled()
 		}
-		e.pruneHistoricalRequests(now)
-		readyAt := e.nextHistoricalRequest
-		if last, ok := e.recentHistoricalRequests[key]; ok {
-			if identicalReadyAt := last.Add(historicalIdenticalSpacing); identicalReadyAt.After(readyAt) {
-				readyAt = identicalReadyAt
+		return
+	}
+	if !e.isReady() {
+		e.parkReadySetup(ctx, onCanceled, func() { e.runHistoricalSetup(ctx, key, onCanceled, fn) })
+		return
+	}
+	now := time.Now()
+	if e.recentHistoricalRequests == nil {
+		e.recentHistoricalRequests = make(map[string]time.Time)
+	}
+	e.pruneHistoricalRequests(now)
+	readyAt := e.nextHistoricalRequest
+	if last, ok := e.recentHistoricalRequests[key]; ok {
+		if identicalReadyAt := last.Add(historicalIdenticalSpacing); identicalReadyAt.After(readyAt) {
+			readyAt = identicalReadyAt
+		}
+	}
+	if wait := readyAt.Sub(now); wait > 0 {
+		e.parkHistoricalSetup(ctx, wait, key, onCanceled, fn)
+		return
+	}
+	e.nextHistoricalRequest = now.Add(historicalRequestSpacing)
+	e.recentHistoricalRequests[key] = now
+	fn()
+}
+
+// The actor owns both wakeups. Removing the wait before retrying or completing
+// makes a queued timer/cancellation callback harmless after its sibling wins.
+func (e *engine) parkHistoricalSetup(ctx context.Context, delay time.Duration, key string, onCanceled, fn func()) {
+	wait := &historicalWait{}
+	if e.historicalWaits == nil {
+		e.historicalWaits = make(map[*historicalWait]struct{})
+	}
+	e.historicalWaits[wait] = struct{}{}
+	wake := func() {
+		e.enqueue(func() {
+			if _, active := e.historicalWaits[wait]; !active {
+				return
 			}
-		}
-		if wait := readyAt.Sub(now); wait > 0 {
-			time.AfterFunc(wait, func() {
-				enqueueHistoricalSetup(ctx, e, key, onCanceled, fn)
-			})
-			return
-		}
-		e.nextHistoricalRequest = now.Add(historicalRequestSpacing)
-		e.recentHistoricalRequests[key] = now
-		fn()
-	})
+			delete(e.historicalWaits, wait)
+			wait.timer.Stop()
+			wait.stop()
+			if ctx.Err() != nil {
+				if onCanceled != nil {
+					onCanceled()
+				}
+				return
+			}
+			e.runHistoricalSetup(ctx, key, onCanceled, fn)
+		})
+	}
+	wait.timer = time.AfterFunc(delay, wake)
+	wait.stop = context.AfterFunc(ctx, wake)
+}
+
+func (e *engine) clearHistoricalWaits() {
+	for wait := range e.historicalWaits {
+		wait.timer.Stop()
+		wait.stop()
+	}
+	e.historicalWaits = nil
 }
 
 func enqueueClockSetup(ctx context.Context, e *engine, key string, onCanceled, onActive func(), fn func()) {

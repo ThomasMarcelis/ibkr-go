@@ -272,6 +272,7 @@ func newObservedMarketDataEngine(t *testing.T) (*engine, net.Conn) {
 		transportErr: make(chan transportLoss, 1), done: make(chan struct{}),
 		events: newObserver[Event](cfg.eventBuffer), transport: tr,
 		transportGeneration: 1,
+		bootstrap:           bootstrapState{readyReported: true},
 		serverVersion:       225, keyed: make(map[int]*route), singletons: make(map[string]*route),
 		orders:               make(map[int64]*orderRoute),
 		execDeliveries:       make(map[string]*execDelivery),

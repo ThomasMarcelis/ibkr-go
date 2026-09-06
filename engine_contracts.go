@@ -171,6 +171,9 @@ func (e *engine) MatchingSymbols(ctx context.Context, pattern string) ([]Matchin
 }
 
 func (e *engine) MarketRule(ctx context.Context, marketRuleID MarketRuleID) (MarketRuleResult, error) {
+	if marketRuleID <= 0 {
+		return MarketRuleResult{}, invalidOrderField("MarketRuleID", marketRuleID, "must be positive; zero means no market rule")
+	}
 	type result struct {
 		rule MarketRuleResult
 		err  error

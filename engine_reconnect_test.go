@@ -25,6 +25,7 @@ func TestConnectivity1101DropsLostWorkAndResubscribes(t *testing.T) {
 	resubscribed := 0
 	resumeErr := make(chan error, 1)
 	oneShotErr := make(chan error, 1)
+	singletonErr := make(chan error, 1)
 	preview := &previewRoute{result: make(chan previewResult, 1)}
 	auto := &route{
 		opKind:       OpQuotes,
@@ -65,6 +66,7 @@ func TestConnectivity1101DropsLostWorkAndResubscribes(t *testing.T) {
 		close: func(error) {},
 	}
 	e.keyed[3] = &route{close: func(err error) { oneShotErr <- err }}
+	e.singletons[singletonMarketRule] = &route{close: func(err error) { singletonErr <- err }}
 
 	e.handleAPIError(codec.APIError{Code: 1101, Message: "Connectivity restored - data lost."})
 
@@ -100,6 +102,9 @@ func TestConnectivity1101DropsLostWorkAndResubscribes(t *testing.T) {
 	if result := <-preview.result; !errors.Is(result.err, ErrInterrupted) {
 		t.Fatalf("preview error = %v, want ErrInterrupted", result.err)
 	}
+	if err := <-singletonErr; !errors.Is(err, ErrInterrupted) || len(e.singletons) != 0 {
+		t.Fatalf("singleton survived data loss: %v", err)
+	}
 	if got := e.Session().State; got != StateReady {
 		t.Fatalf("session state = %s, want %s", got, StateReady)
 	}
@@ -125,6 +130,8 @@ func TestConnectivity1100And1102GapAndRestoreOnce(t *testing.T) {
 		snapshot:       Snapshot{State: StateReady, ConnectionSeq: 1},
 	}
 
+	h := newOrderHandle(47, 4)
+	e.orders[47] = &orderRoute{orderID: 47, handle: h, working: true}
 	e.handleAPIError(codec.APIError{Code: 1100, Message: "Connectivity between IB and TWS has been lost."})
 	e.handleAPIError(codec.APIError{Code: 1100, Message: "Connectivity between IB and TWS has been lost."})
 	if got := e.Session().State; got != StateDegraded || gaps != 1 || !recoveryRoute.gapped {
@@ -134,6 +141,20 @@ func TestConnectivity1100And1102GapAndRestoreOnce(t *testing.T) {
 	e.handleAPIError(codec.APIError{Code: 1102, Message: "Connectivity restored - data maintained."})
 	if got := e.Session().State; got != StateReady || restored != 1 || recoveryRoute.gapped {
 		t.Fatalf("after 1102 state=%s restored=%d gapped=%t", got, restored, recoveryRoute.gapped)
+	}
+	for _, want := range []OrderLifecycleKind{OrderGap, OrderRestored} {
+		event := <-h.Events()
+		if event.Lifecycle == nil || event.Lifecycle.Kind != want {
+			t.Fatalf("order lifecycle = %+v, want %v", event, want)
+		}
+	}
+	if e.orders[47].gapped || e.orders[47].recoveryRequired {
+		t.Fatal("data-maintained restoration disabled replacement")
+	}
+	select {
+	case extra := <-h.Events():
+		t.Fatalf("duplicate lifecycle: %+v", extra)
+	default:
 	}
 }
 

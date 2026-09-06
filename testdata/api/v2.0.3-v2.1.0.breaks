@@ -1,0 +1,8 @@
+docs/migration-v2.1.md
+- FADataProfiles: removed
+- OrderAuction.Strategy: removed
+- OrderAuctionDetails.Strategy: removed
+- OrderTypeLimitOnOpen: removed
+- OrderTypeMarketOnOpen: removed
+- OrderTypePeggedToPrimary: removed
+- OrdersClient.Cancel: changed from func(context.Context, int64, ...CancelOption) error to func(context.Context, OrderTarget, ...CancelOption) error

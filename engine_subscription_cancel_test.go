@@ -123,6 +123,7 @@ func TestClosedUnkeyedStreamCannotBeReusedBeforeNewTransportGeneration(t *testin
 	newPeer, newClient := net.Pipe()
 	t.Cleanup(func() { _ = newPeer.Close() })
 	e.connectAttemptID = 7
+	e.bootstrap = bootstrapState{} // startConnect normally resets this before the result.
 	e.handleConnectResult(connectResult{
 		attempt: 7, reconnect: true, conn: newClient, serverVersion: 225,
 	})

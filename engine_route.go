@@ -453,8 +453,7 @@ func (e *engine) apiErr(opKind OpKind, msg codec.APIError) *APIError {
 
 func isOrderCancellationReply(code int) bool {
 	return code == ErrCodeCancelNotCancellableState || code == ErrCodeOrderCanceled ||
-		code == ErrCodeOrderToCancelNotFound || code == ErrCodeOrderCannotBeCancelled ||
-		code == ErrCodeImbalanceOnlyNotAllowed
+		code == ErrCodeOrderToCancelNotFound || code == ErrCodeOrderCannotBeCancelled
 }
 
 func (e *engine) handlePreviewAPIError(msg codec.APIError) bool {
@@ -510,15 +509,16 @@ func (e *engine) dispatchObservedOpenOrder(msg codec.OpenOrder) {
 	}
 
 	if orderAttributed {
+		orderRoute.handle.acknowledge()
 		if !e.ensureOrderStarted(orderRoute) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
-			return
-		}
-		if order.State.Status != OrderStatusInactive && order.State.Status != OrderStatusAPICancelled {
-			orderRoute.working = true
-		}
-		if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
-			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
+		} else {
+			if order.State.Status != OrderStatusInactive && order.State.Status != OrderStatusAPICancelled {
+				orderRoute.working = true
+			}
+			if !orderRoute.handle.emitOrder(cloneOpenOrder(order)) {
+				e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
+			}
 		}
 	}
 	if singletonObserved {
@@ -547,15 +547,16 @@ func (e *engine) dispatchObservedOrderStatus(msg codec.OrderStatus) {
 	}
 
 	if orderAttributed {
+		orderRoute.handle.acknowledge()
 		if !e.ensureOrderStarted(orderRoute) {
 			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
-			return
-		}
-		if status.Status != OrderStatusInactive && status.Status != OrderStatusAPICancelled {
-			orderRoute.working = true
-		}
-		if !orderRoute.handle.emitStatus(status) {
-			e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
+		} else {
+			if status.Status != OrderStatusInactive && status.Status != OrderStatusAPICancelled {
+				orderRoute.working = true
+			}
+			if !orderRoute.handle.emitStatus(status) {
+				e.closeOrderRoute(msg.OrderID, orderRoute, ErrSlowConsumer)
+			}
 		}
 	}
 	if singletonObserved {
@@ -630,15 +631,61 @@ type execDelivery struct {
 // last handle closes. The scan is bounded by the configured correlation limit.
 func (e *engine) forgetOrderExecutions(orderID int64) {
 	if len(e.orders) == 0 {
-		e.execDeliveries = make(map[string]*execDelivery)
-		e.pendingOrderFees = 0
+		e.clearOrderCorrelations()
 		return
 	}
 	for execID, st := range e.execDeliveries {
 		if st.orderID == orderID {
-			e.pendingOrderFees -= len(st.pending)
-			delete(e.execDeliveries, execID)
+			e.excludeOrderExecution(execID)
 		}
+	}
+}
+
+func (e *engine) clearOrderCorrelations() {
+	e.execDeliveries = make(map[string]*execDelivery)
+	e.pendingOrderFees = 0
+	e.excludedOrderExecutions = nil
+	e.excludedOrderExecFIFO = nil
+	e.excludedOrderExecNext = 0
+}
+
+func (e *engine) excludeOrderExecution(execID string) {
+	if len(e.orders) == 0 || execID == "" {
+		return
+	}
+	if st := e.execDeliveries[execID]; st != nil {
+		if owner := e.orders[st.orderID]; owner != nil && !owner.closed {
+			return // An existing positive claim outranks contradictory callbacks.
+		}
+		e.pendingOrderFees -= len(st.pending)
+		delete(e.execDeliveries, execID)
+	}
+	if _, exists := e.excludedOrderExecutions[execID]; exists {
+		return
+	}
+	limit := e.cfg.orderExecutionCorrelationLimit
+	if limit <= 0 {
+		return
+	}
+	if e.excludedOrderExecutions == nil {
+		e.excludedOrderExecutions = make(map[string]int)
+	}
+	slot := len(e.excludedOrderExecFIFO)
+	if slot < limit {
+		e.excludedOrderExecFIFO = append(e.excludedOrderExecFIFO, execID)
+	} else {
+		slot = e.excludedOrderExecNext
+		delete(e.excludedOrderExecutions, e.excludedOrderExecFIFO[slot])
+		e.excludedOrderExecFIFO[slot] = execID
+		e.excludedOrderExecNext = (slot + 1) % limit
+	}
+	e.excludedOrderExecutions[execID] = slot
+}
+
+func (e *engine) claimExcludedOrderExecution(execID string) {
+	if slot, exists := e.excludedOrderExecutions[execID]; exists {
+		delete(e.excludedOrderExecutions, execID)
+		e.excludedOrderExecFIFO[slot] = ""
 	}
 }
 
@@ -682,6 +729,9 @@ func (e *engine) routeCommissionReport(report codec.CommissionReport) {
 	}
 	st := e.execDeliveries[report.ExecID]
 	if st == nil {
+		if _, excluded := e.excludedOrderExecutions[report.ExecID]; excluded {
+			return
+		}
 		if len(e.execDeliveries) >= e.cfg.orderExecutionCorrelationLimit {
 			e.closeOrdersForCorrelationOverflow("distinct execution IDs")
 			return
@@ -736,16 +786,33 @@ func (e *engine) deliverCommissionToOrder(st *execDelivery, report codec.Commiss
 }
 
 func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
-	if m.OrderID == 0 {
-		return
-	}
 	or, ok := e.orders[m.OrderID]
 	if !ok || or.closed {
+		e.excludeOrderExecution(m.ExecID)
 		return
 	}
 	if !e.claimOrderCallbackStrings(or, m.ClientID, m.PermID) {
+		// Omission alone does not prove foreign ownership. Explicit client ID
+		// zero is valid; the integer-unset sentinel is not an identity.
+		permanent, _ := parseOptionalInt64(m.PermID, "execution permanent id")
+		if (m.ClientID != "" && m.ClientID != "2147483647") || (or.permID > 0 && permanent > 0) {
+			e.excludeOrderExecution(m.ExecID)
+		}
 		return
 	}
+	e.claimExcludedOrderExecution(m.ExecID)
+	// Per-order dispatch: a decode failure terminates only local observation;
+	// the order remains live and no cancellation frame is sent.
+	exec, err := fromCodecExecution(m)
+	if err != nil {
+		e.closeOrderRoute(m.OrderID, or, &ProtocolError{
+			Direction: "inbound",
+			Message:   fmt.Sprintf("execution detail order_id %d exec_id %s", m.OrderID, m.ExecID),
+			Err:       err,
+		})
+		return
+	}
+	or.handle.acknowledge()
 	or.working = true
 	if !e.ensureOrderStarted(or) {
 		e.closeOrderRoute(m.OrderID, or, ErrSlowConsumer)
@@ -761,17 +828,6 @@ func (e *engine) dispatchExecutionToOrder(m codec.ExecutionDetail) {
 	}
 	if st == nil && len(e.execDeliveries) >= e.cfg.orderExecutionCorrelationLimit {
 		e.closeOrderRoute(m.OrderID, or, e.orderCorrelationOverflow("distinct execution IDs"))
-		return
-	}
-	// Per-order dispatch: a decode failure terminates only local observation;
-	// the order remains live and no cancellation frame is sent.
-	exec, err := fromCodecExecution(m)
-	if err != nil {
-		e.closeOrderRoute(m.OrderID, or, &ProtocolError{
-			Direction: "inbound",
-			Message:   fmt.Sprintf("execution detail order_id %d exec_id %s", m.OrderID, m.ExecID),
-			Err:       err,
-		})
 		return
 	}
 	if !or.handle.emitExecution(exec) {
@@ -800,6 +856,9 @@ func (e *engine) claimOrderCallbackStrings(or *orderRoute, clientID, permID stri
 		// Preserve the pre-attribution failure path: the public projection will
 		// surface malformed identity fields as a protocol error on this route.
 		return true
+	}
+	if (clientID == "" || clientID == "2147483647") && (or.permID <= 0 || permanent <= 0) {
+		return false
 	}
 	return e.claimOrderCallback(or, client, permanent)
 }

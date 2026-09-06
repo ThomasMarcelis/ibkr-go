@@ -30,8 +30,10 @@ go test ./...
 
 All six must pass locally before opening a pull request. The default API
 check compares against the highest stable same-major tag reachable from HEAD,
-reading its manifest directly from that tag. It allows additions but rejects
-incompatible changes even if the working-tree manifest was regenerated.
+reading its manifest directly from that tag. It allows additions and rejects
+incompatible changes even if the working-tree manifest was regenerated, unless
+the exact baseline/candidate pair has a reviewed break record with migration
+evidence.
 `./scripts/check-api.sh --exact` compares against the single candidate manifest
 in `testdata/api`. Fetch full history and tags before compatibility checks;
 missing release evidence is an error.
@@ -138,11 +140,21 @@ Run `./scripts/check-api.sh --release <version>` on the candidate tree. It
 requires exact agreement with that candidate manifest and compatibility with
 the highest reachable stable same-major tag strictly older than the candidate.
 The candidate's own tag and prerelease tags cannot become its baseline.
-Incompatible changes need a new major version; never rewrite release history.
+Justified clean breaks may ship in a v2 minor release while the consumer base
+is small. Document every source and behavioral break, its benefit, alternatives,
+and migration; do not add compatibility shims. Keep the exact incompatible
+output from the pinned apidiff in
+`testdata/api/<baseline>-<candidate>.breaks`, with the repository-relative
+migration document path on its first line. The gate requires a nonempty migration
+document and exact agreement with every remaining line: missing, extra, or stale
+breaks fail. A record for another pair grants no allowance. Exact candidate and
+candidate-tag exclusion checks still apply; never rewrite release history.
+Behavioral breaks need manual review because apidiff cannot see them.
 
 Run the examples against the paper Gateway, write the CHANGELOG entry (link
 release-time documents at the tag), and update the README's release version
-and install commands. Preview the rendered README and Go documentation: check
+and install commands in README, examples/README, and migration docs only when
+publication makes that version available. Preview the rendered README and Go documentation: check
 setup links, copyable code, method-attached examples, and version-specific claims.
 
 The maintainer creates and pushes an **annotated** tag. The release workflow

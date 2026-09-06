@@ -180,3 +180,32 @@ func TestAPIMissingReleaseEvidenceFailsClosed(t *testing.T) {
 		r.check("release history is shallow")
 	})
 }
+
+func TestAPIDocumentedBreakRequiresExactPairAndEvidence(t *testing.T) {
+	for _, mode := range [][]string{nil, {"--release", "v2.1.0"}} {
+		t.Run(strings.Join(mode, " "), func(t *testing.T) {
+			r := newAPIRepo(t)
+			r.freeze("v2.1.0", "New\n")
+			record := "testdata/api/v2.0.0-v2.1.0.breaks"
+			r.check("missing "+record, mode...)
+			r.write(record, "docs/migration-v2.1.md\nremoved: Old\n")
+			r.check("lacks migration evidence", mode...)
+			r.write("docs/migration-v2.1.md", "Replace Old with New.\n")
+			r.check("", mode...)
+			r.write(record, "docs/migration-v2.1.md\nremoved: Different\n")
+			r.check("does not exactly match", mode...)
+			r.write(record, "docs/migration-v2.1.md\nremoved: Old\nremoved: Extra\n")
+			r.check("does not exactly match", mode...)
+			r.write(record, "docs/migration-v2.1.md\nremoved: Old\n")
+			r.freeze("v2.1.0", "Old\nNew\n")
+			r.check("does not exactly match", mode...) // Stale allowance fails, too.
+			r.freeze("v2.1.0", "New\n")
+			r.commit()
+			r.git("tag", "v2.1.0")
+			r.check("")                        // Historical allowance no longer applies to a v2.1.0 baseline.
+			r.check("", "--release", "v2.1.0") // Own tag remains excluded here.
+			r.freeze("v2.2.0", "Third\n")
+			r.check("missing testdata/api/v2.1.0-v2.2.0.breaks")
+		})
+	}
+}

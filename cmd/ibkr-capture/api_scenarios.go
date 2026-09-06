@@ -328,11 +328,15 @@ func envFlag(name string) bool {
 	return err == nil && value
 }
 
-func guardedCancelOrder(ctx context.Context, client *ibkr.Client, account string, orderID int64, operation string) error {
+func guardedCancelOrder(ctx context.Context, client *ibkr.Client, account string, ownerClientID int, orderID int64, operation string) error {
 	if err := requirePaperTradingSession(client, account, operation); err != nil {
 		return err
 	}
-	return client.Orders().Cancel(ctx, orderID)
+	if ownerClientID < 0 || int64(ownerClientID) > math.MaxInt32 {
+		return fmt.Errorf("owner client id %d is outside signed-int32 range", ownerClientID)
+	}
+	owner := ibkr.ClientID(ownerClientID) // #nosec G115 -- range checked above.
+	return client.Orders().Cancel(ctx, ibkr.OrderTarget{ClientID: owner, OrderID: orderID})
 }
 
 // apiScenarioWrapper identifies which capture wrapper a run function selected.
@@ -2600,10 +2604,10 @@ func runAPIOrderTypeMatrixAAPL(ctx context.Context, addr string, clientID int) e
 			{label: "invalid_order_type_reject", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderType("FEELINGS")), farBuy(anchor))},
 			{label: "moc_buy_fill_or_reject", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketOnClose), allowFill: true, cancelAfter: true},
 			{label: "loc_buy_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimitOnClose), marketableBuy(anchor)), allowFill: true, cancelAfter: true},
-			{label: "moo_buy_reject_or_queued", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeMarketOnOpen), cancelAfter: true},
-			{label: "loo_buy_reject_or_queued", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypeLimitOnOpen), marketableBuy(anchor)), cancelAfter: true},
+			{label: "moo_buy_reject_or_queued", order: baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderType("MOO")), cancelAfter: true},
+			{label: "loo_buy_reject_or_queued", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderType("LOO")), marketableBuy(anchor)), cancelAfter: true},
 			{label: "peg_mkt_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToMarket), farBuy(anchor)), cancelAfter: true},
-			{label: "peg_pri_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToPrimary), farBuy(anchor)), cancelAfter: true},
+			{label: "peg_pri_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderType("PEG PRI")), farBuy(anchor)), cancelAfter: true},
 			{label: "peg_mid_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToMid), farBuy(anchor)), cancelAfter: true},
 			{label: "peg_best_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedToBest), farBuy(anchor)), cancelAfter: true},
 			{label: "peg_bench_reject_or_rest", order: withLimit(baseAPIOrder(account, apiStockOrderQuantity, ibkr.ActionBuy, ibkr.OrderTypePeggedBenchmark), farBuy(anchor)), cancelAfter: true},
@@ -2726,7 +2730,7 @@ func runAPIOrderDirectCancelAAPL(ctx context.Context, addr string, clientID int)
 		recordAPIEvent("direct_cancel_start", "direct cancel resting", func(event *apiDriverEvent) {
 			event.OrderID = handle.OrderID()
 		})
-		if err := guardedCancelOrder(ctx, client, account, handle.OrderID(), "direct order cancellation"); err != nil {
+		if err := guardedCancelOrder(ctx, client, account, clientID, handle.OrderID(), "direct order cancellation"); err != nil {
 			return fmt.Errorf("direct cancel order %d: %w", handle.OrderID(), err)
 		}
 		recordAPIEvent("direct_cancel_sent", "direct cancel resting", func(event *apiDriverEvent) {
@@ -2932,7 +2936,7 @@ func runAPIOrderRejectsAAPL(ctx context.Context, addr string, clientID int) erro
 				_ = observeOrder(ctx, handle, tc.label+" cancel", 8*time.Second)
 			}
 		}
-		if err := guardedCancelOrder(ctx, client, account, 999999999, "reject unknown-order cancel"); err != nil {
+		if err := guardedCancelOrder(ctx, client, account, clientID, 999999999, "reject unknown-order cancel"); err != nil {
 			log.Printf("reject cancel unknown order returned: %v", err)
 		}
 		return nil
@@ -4532,7 +4536,7 @@ func runAPIReconnectActiveOrderAAPL(ctx context.Context, addr string, clientID i
 
 		orders, err := second.Orders().Open(ctx, ibkr.OpenOrdersScopeClient)
 		recordOpenOrdersResult("reconnect open client", orders, err)
-		cancelErr := guardedCancelOrder(ctx, second, account, orderID, "reconnect direct cancel")
+		cancelErr := guardedCancelOrder(ctx, second, account, clientID, orderID, "reconnect direct cancel")
 		if cancelErr != nil {
 			recordAPIEvent("direct_cancel_error", "reconnect resting", func(event *apiDriverEvent) {
 				event.OrderID = orderID
@@ -4580,7 +4584,7 @@ func runAPIClientID0OrderObservationAAPL(ctx context.Context, addr string, clien
 		recordSessionReady(addr, 0, account, observer)
 		orders, err := observer.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
 		recordOpenOrdersResult("client0 all open", orders, err)
-		cancelErr := guardedCancelOrder(ctx, observer, account, orderID, "client0 direct cancel")
+		cancelErr := guardedCancelOrder(ctx, observer, account, clientID, orderID, "client0 direct cancel")
 		if cancelErr != nil {
 			recordAPIEvent("direct_cancel_error", "client0 observed resting", func(event *apiDriverEvent) {
 				event.OrderID = orderID
@@ -4629,7 +4633,7 @@ func runAPICrossClientCancelAAPL(ctx context.Context, addr string, clientID int)
 		recordSessionReady(addr, cancellerID, account, canceller)
 		orders, err := canceller.Orders().Open(ctx, ibkr.OpenOrdersScopeAll)
 		recordOpenOrdersResult("cross-client all open", orders, err)
-		cancelErr := guardedCancelOrder(ctx, canceller, account, orderID, "cross-client direct cancel")
+		cancelErr := guardedCancelOrder(ctx, canceller, account, clientID, orderID, "cross-client direct cancel")
 		if cancelErr != nil {
 			recordAPIEvent("direct_cancel_error", "cross-client resting", func(event *apiDriverEvent) {
 				event.ClientID = cancellerID
@@ -5550,7 +5554,11 @@ func clearPaperOpenOrders(ctx context.Context, client *ibkr.Client, account, lab
 	cleared := len(openOrders)
 	var cleanupErr error
 	for _, openOrder := range openOrders {
-		if err := guardedCancelOrder(ctx, client, account, *openOrder.Order.OrderID, label+" targeted cancel"); err != nil {
+		if openOrder.Order.OrderID == nil || openOrder.Order.ClientID == nil {
+			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("%s cannot target an order with missing identity", label))
+			continue
+		}
+		if err := guardedCancelOrder(ctx, client, account, int(*openOrder.Order.ClientID), *openOrder.Order.OrderID, label+" targeted cancel"); err != nil {
 			cleanupErr = errors.Join(cleanupErr, fmt.Errorf("%s cancel order %d: %w", label, *openOrder.Order.OrderID, err))
 		}
 	}

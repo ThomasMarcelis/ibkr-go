@@ -56,6 +56,11 @@ type engine struct {
 	// no timer can determine when a fee has become irrelevant.
 	execDeliveries   map[string]*execDelivery
 	pendingOrderFees int
+	// Exclusions are an eviction-only FIFO, separately capped at the same
+	// limit. Foreign fills must not spend the lossless ownership budget.
+	excludedOrderExecutions map[string]int
+	excludedOrderExecFIFO   []string
+	excludedOrderExecNext   int
 	// executionEvents is a passive, client-wide observer. It owns no Gateway
 	// request and sees each execution-detail and commission callback before
 	// query correlation or per-order deduplication.
@@ -66,6 +71,7 @@ type engine struct {
 	malformedInboundSeen map[int]struct{}
 	dirtySingletons      map[string]uint64
 	readySetups          []*readySetup
+	historicalWaits      map[*historicalWait]struct{}
 
 	// Request IDs keep their independent low sequence but never enter the
 	// historical order interval conservatively bounded by orderIDLowWater and
@@ -139,7 +145,7 @@ type bootstrapState struct {
 
 const (
 	// Supported versions are the live-validated protocol train from the first
-	// fully current v2 layout through the API 10.48.01 ceiling.
+	// fully current v2 layout through the supported API 10.50.01 layouts.
 	minServerVersion = protocol.SupportedMinServerVersion
 	maxServerVersion = protocol.SupportedMaxServerVersion
 	bootstrapTimeout = 5 * time.Second

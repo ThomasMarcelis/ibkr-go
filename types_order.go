@@ -31,8 +31,6 @@ const (
 	OrderTypeStopLimit       OrderType = "STP LMT"
 	OrderTypeMarketOnClose   OrderType = "MOC"
 	OrderTypeLimitOnClose    OrderType = "LOC"
-	OrderTypeMarketOnOpen    OrderType = "MOO"
-	OrderTypeLimitOnOpen     OrderType = "LOO"
 	OrderTypeTrailingStop    OrderType = "TRAIL"
 	OrderTypeTrailingLimit   OrderType = "TRAIL LIMIT"
 	OrderTypeMarketIfTouched OrderType = "MIT"
@@ -40,7 +38,6 @@ const (
 	OrderTypeMarketToLimit   OrderType = "MTL"
 	OrderTypeRelative        OrderType = "REL"
 	OrderTypePeggedToMarket  OrderType = "PEG MKT"
-	OrderTypePeggedToPrimary OrderType = "PEG PRI"
 	OrderTypePeggedToMid     OrderType = "PEG MID"
 	OrderTypePeggedToBest    OrderType = "PEG BEST"
 	OrderTypePeggedBenchmark OrderType = "PEG BENCH"
@@ -79,10 +76,19 @@ const (
 type OpenOrdersScope string
 
 const (
-	OpenOrdersScopeAll    OpenOrdersScope = "all"    // all open orders across every client
+	OpenOrdersScopeAll    OpenOrdersScope = "all"    // one requested snapshot across clients; cross-client pushes require master configuration
 	OpenOrdersScopeClient OpenOrdersScope = "client" // only orders placed by this client ID
 	OpenOrdersScopeAuto   OpenOrdersScope = "auto"   // persistently bind future manual TWS orders; client ID 0 only, no snapshot
 )
+
+// OrderTarget identifies an order in its owning API client's order-ID
+// namespace. For an observed order, copy both identifiers from the broker echo
+// after checking their presence. Client ID zero is a real owner, not a wildcard.
+// A target names ownership; it does not prove an order is still cancellable.
+type OrderTarget struct {
+	ClientID ClientID
+	OrderID  int64
+}
 
 // OpenOrder is the typed open_order echo from the Gateway. Order uses the same
 // complete broker-echo model as [CompletedOrderResult], while State preserves
@@ -485,12 +491,16 @@ type Order struct {
 	AdvancedErrorOverride string                // override token for advanced-order warnings
 	ManualOrderTime       string                // manual order entry time for compliance
 	Deactivate            bool                  // submit the order inactive; requires server_version 216
-	PostOnly              bool                  // reject instead of taking liquidity; requires server_version 216
-	AllowPreOpen          bool                  // allow routing in the venue pre-open; requires server_version 216
-	IgnoreOpenAuction     bool                  // exclude the opening auction; requires server_version 216
-	RouteMarketableToBBO  *bool                 // nil = server default; requires server_version 217
-	SeekPriceImprovement  *bool                 // nil = server default; requires server_version 217
-	WhatIfType            *int                  // optional IBKR what-if mode; requires server_version 217
+	// PostOnly reprices one cent away from same-price hidden liquidity. An
+	// order priced through the opposite book becomes IOC at the better price
+	// under IBKR's field-139 semantics; it is not a reject-only guarantee.
+	// Requires server_version 216.
+	PostOnly             bool
+	AllowPreOpen         bool  // allow routing in the venue pre-open; requires server_version 216
+	IgnoreOpenAuction    bool  // exclude the opening auction; requires server_version 216
+	RouteMarketableToBBO *bool // nil = server default; requires server_version 217
+	SeekPriceImprovement *bool // nil = server default; requires server_version 217
+	WhatIfType           *int  // optional IBKR what-if mode; requires server_version 217
 }
 
 // PlaceOrderRequest pairs the [Contract] to trade with the [Order] instruction.
@@ -688,7 +698,6 @@ type OrderRoutingDetails struct {
 
 // OrderAuction contains BOX auction and pegged-to-stock price inputs.
 type OrderAuction struct {
-	Strategy        int
 	StartingPrice   *decimal.Decimal
 	StockRefPrice   *decimal.Decimal
 	Delta           *decimal.Decimal
@@ -698,7 +707,6 @@ type OrderAuction struct {
 
 // OrderAuctionDetails contains BOX auction and pegged-to-stock price echoes.
 type OrderAuctionDetails struct {
-	Strategy        *int
 	StartingPrice   *decimal.Decimal
 	StockRefPrice   *decimal.Decimal
 	Delta           *decimal.Decimal

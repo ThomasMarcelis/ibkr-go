@@ -101,7 +101,7 @@ func run() (err error) {
 		if !done {
 			cleanupCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			err = errors.Join(err, client.Orders().Cancel(cleanupCtx, bracket.Parent.OrderID()),
+			err = errors.Join(err, bracket.Parent.Cancel(cleanupCtx),
 				fmt.Errorf("reconcile bracket orders %d, %d, %d: cancellation outcomes are unconfirmed",
 					bracket.Parent.OrderID(), bracket.TakeProfit.OrderID(), bracket.StopLoss.OrderID()))
 		}

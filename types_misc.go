@@ -132,17 +132,14 @@ type ScannerResult struct {
 type FADataType int
 
 const (
-	FADataGroups   FADataType = 1 // account groups
-	FADataProfiles FADataType = 2 // allocation profiles (deprecated by IBKR in favor of groups)
-	FADataAliases  FADataType = 3 // account aliases
+	FADataGroups  FADataType = 1 // account groups
+	FADataAliases FADataType = 3 // account aliases
 )
 
 func (t FADataType) String() string {
 	switch t {
 	case FADataGroups:
 		return "Groups"
-	case FADataProfiles:
-		return "Profiles"
 	case FADataAliases:
 		return "Aliases"
 	default:
